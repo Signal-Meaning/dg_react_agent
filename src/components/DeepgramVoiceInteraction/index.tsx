@@ -717,6 +717,44 @@ function DeepgramVoiceInteraction(
     }
   };
 
+  // Connect for text-only interactions (no microphone)
+  const connectTextOnly = async (): Promise<void> => {
+    try {
+      log('ConnectTextOnly method called');
+      
+      // Connect transcription WebSocket if configured
+      if (transcriptionManagerRef.current) {
+        log('Connecting Transcription WebSocket...');
+        await transcriptionManagerRef.current.connect();
+        log('Transcription WebSocket connected');
+      } else {
+        log('Transcription manager not configured, skipping connection');
+      }
+      
+      // Connect agent WebSocket if configured
+      if (agentManagerRef.current) {
+        log('Connecting Agent WebSocket...');
+        await agentManagerRef.current.connect();
+        log('Agent WebSocket connected');
+      } else {
+        log('Agent manager not configured, skipping connection');
+      }
+      
+      // DO NOT start recording - this is text-only mode
+      log('Text-only connection established (no audio recording)');
+    } catch (error) {
+      log('Error within connectTextOnly method:', error);
+      handleError({
+        service: 'agent',
+        code: 'connection_error',
+        message: 'Failed to establish text-only connection',
+        details: error,
+      });
+      dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
+      throw error;
+    }
+  };
+
   // Stop the connection
   const stop = async (): Promise<void> => {
     log('Stopping voice interaction');
@@ -892,9 +930,25 @@ function DeepgramVoiceInteraction(
     });
   };
 
+  // Inject a user message to the agent
+  const injectUserMessage = (message: string): void => {
+    if (!agentManagerRef.current) {
+      log('Cannot inject user message: agent manager not initialized or not configured');
+      return;
+    }
+    
+    log('Injecting user message:', message);
+    
+    agentManagerRef.current.sendJSON({
+      type: 'InjectUserMessage',
+      content: message
+    });
+  };
+
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     start,
+    connectTextOnly,
     stop,
     updateAgentInstructions,
     interruptAgent,
@@ -902,6 +956,7 @@ function DeepgramVoiceInteraction(
     wake,
     toggleSleep,
     injectAgentMessage,
+    injectUserMessage,
   }));
 
   // Render nothing (headless component)

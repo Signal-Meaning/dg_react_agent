@@ -11,6 +11,7 @@ const packageJson = JSON.parse(readFileSync('./package.json', 'utf8'));
 
 export default {
   input: 'src/index.ts',
+  external: ['react', 'react-dom'],
   output: [
     {
       file: packageJson.main,
