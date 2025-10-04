@@ -206,6 +206,16 @@ export interface DeepgramVoiceInteractionHandle {
    * Inject a message directly to the agent
    */
   injectAgentMessage: (message: string) => void;
+  
+  /**
+   * Connect for text-only interactions (no microphone)
+   */
+  connectTextOnly: () => Promise<void>;
+  
+  /**
+   * Inject a user message to the agent
+   */
+  injectUserMessage: (message: string) => void;
 }
 
 // REMOVE the duplicate AgentState definition at the end of this file

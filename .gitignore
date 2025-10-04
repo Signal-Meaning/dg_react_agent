@@ -9,6 +9,9 @@ dist/
 dist-single-file/
 build/
 
+# Package files
+*.tgz
+
 # TypeScript cache
 *.tsbuildinfo
 
