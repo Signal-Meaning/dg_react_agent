@@ -106,7 +106,11 @@ export class WebSocketManager {
           }
           // Skip false values as they should be omitted rather than set to 'false'
         } else {
-          url.searchParams.append(key, String(value));
+          const stringValue = String(value);
+          // Skip empty string values as they can cause "bad response from server" errors
+          if (stringValue && stringValue.trim() !== '') {
+            url.searchParams.append(key, stringValue);
+          }
         }
       });
     }
