@@ -2,7 +2,7 @@
   "name": "deepgram-voice-interaction-react",
   "version": "0.1.0",
   "description": "A React component for real-time transcription and voice agent interactions using Deepgram APIs",
-  "main": "dist/index.esm.js",
+  "main": "dist/index.js",
   "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",
   "files": [
