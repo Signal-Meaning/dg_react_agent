@@ -1,12 +1,10 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useReducer, useRef } from 'react';
 import {
-  AgentOptions,
   AgentState,
   DeepgramError,
   DeepgramVoiceInteractionHandle,
   DeepgramVoiceInteractionProps,
   LLMResponse,
-  ServiceType,
   TranscriptResponse,
   UpdateInstructionsPayload
 } from '../../types';
@@ -14,7 +12,6 @@ import { WebSocketManager } from '../../utils/websocket/WebSocketManager';
 import { AudioManager } from '../../utils/audio/AudioManager';
 import {
   VoiceInteractionState,
-  StateEvent,
   initialState,
   stateReducer,
 } from '../../utils/state/VoiceInteractionState';
@@ -230,7 +227,7 @@ function DeepgramVoiceInteraction(
       } else {
         // Standard setup: Build queryParams object, excluding array types like keyterm and keywords
         log('Not using keyterm prompting. Building queryParams object excluding array types.');
-        const { keyterm, keywords, ...otherParams } = baseTranscriptionParams;
+        const { ...otherParams } = baseTranscriptionParams;
         
         // Ensure only primitive types are included in queryParams
         const filteredParams: Record<string, string | number | boolean> = {};
