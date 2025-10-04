@@ -43,8 +43,8 @@ describe('Module Export Validation', () => {
       // Check that the module exports the main component
       expect(cjsContent).toContain('DeepgramVoiceInteraction');
       
-      // Check that it's a valid CommonJS module
-      expect(cjsContent).toContain('module.exports');
+      // Check that it's a valid CommonJS module (minified files use exports.DeepgramVoiceInteraction)
+      expect(cjsContent).toMatch(/exports\.DeepgramVoiceInteraction|module\.exports/);
     });
   });
 
@@ -56,8 +56,8 @@ describe('Module Export Validation', () => {
       // Check that the main component is exported
       expect(esmContent).toContain('DeepgramVoiceInteraction');
       
-      // Check that it's a valid ES module (has export statements)
-      expect(esmContent).toMatch(/export\s+\{/);
+      // Check that it's a valid ES module (minified files use export{...} or exports.DeepgramVoiceInteraction)
+      expect(esmContent).toMatch(/export\s*\{|exports\.DeepgramVoiceInteraction/);
     });
   });
 
@@ -164,7 +164,7 @@ describe('Module Export Validation', () => {
       
       // Check that the module has the expected structure
       expect(cjsContent).toContain('DeepgramVoiceInteraction');
-      expect(cjsContent).toContain('module.exports');
+      expect(cjsContent).toMatch(/exports\.DeepgramVoiceInteraction|module\.exports/);
       
       // Check that it's a valid JavaScript file
       expect(() => {
