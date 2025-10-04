@@ -14,7 +14,7 @@ export default {
   external: ['react', 'react-dom'],
   output: [
     {
-      file: packageJson.main,
+      file: 'dist/index.js',
       format: 'cjs',
       sourcemap: true,
     },
