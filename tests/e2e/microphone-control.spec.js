@@ -1,5 +1,24 @@
 const { test, expect } = require('@playwright/test');
 
+/**
+ * E2E Tests for Microphone Control
+ * 
+ * IMPORTANT: These tests require a REAL Deepgram API key!
+ * 
+ * These tests use actual WebSocket connections to Deepgram services,
+ * not mocks. This provides authentic integration testing but requires
+ * valid API credentials in test-app/.env:
+ * 
+ * - VITE_DEEPGRAM_API_KEY: Your real Deepgram API key
+ * - VITE_DEEPGRAM_PROJECT_ID: Your Deepgram project ID
+ * 
+ * If tests fail with "connection closed" or "API key required" errors,
+ * check that your test-app/.env file has valid Deepgram credentials.
+ * 
+ * Why not use mocks? Real API testing catches integration issues
+ * and provides authentic component behavior validation.
+ */
+
 test.describe('Microphone Control', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');

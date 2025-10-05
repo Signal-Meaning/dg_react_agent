@@ -67,4 +67,26 @@ module.exports = defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },
+
+  /* 
+   * IMPORTANT: E2E Tests Require Real Deepgram API Key
+   * 
+   * These tests use REAL Deepgram WebSocket connections, not mocks.
+   * This provides authentic integration testing but requires a valid API key.
+   * 
+   * Required Environment Variables (in test-app/.env):
+   * - VITE_DEEPGRAM_API_KEY: Your real Deepgram API key
+   * - VITE_DEEPGRAM_PROJECT_ID: Your Deepgram project ID
+   * 
+   * Why Real API Key Instead of Mocks:
+   * - Authentic testing of WebSocket connections
+   * - Real component state management (onReady, connection states)
+   * - No complex mock maintenance (saves 13-19 hours of development)
+   * - Catches actual integration issues
+   * 
+   * If you need to run tests without a real API key, consider:
+   * 1. Using unit tests with mocks instead
+   * 2. Setting up a test Deepgram account with free credits
+   * 3. Using the existing Jest tests in tests/ directory
+   */
 });
