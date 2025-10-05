@@ -51,22 +51,22 @@ describe('Welcome-First Behavior - Simple Tests', () => {
     jest.clearAllMocks();
   });
 
-  test('should render without crashing when welcomeFirst is true', () => {
+  test('should render without crashing when autoConnect is true', () => {
     const { container } = render(
       <DeepgramVoiceInteraction
         {...defaultProps}
-        welcomeFirst={true}
+        autoConnect={true}
       />
     );
     
     expect(container).toBeInTheDocument();
   });
 
-  test('should render without crashing when welcomeFirst is false', () => {
+  test('should render without crashing when autoConnect is false', () => {
     const { container } = render(
       <DeepgramVoiceInteraction
         {...defaultProps}
-        welcomeFirst={false}
+        autoConnect={false}
       />
     );
     
@@ -110,25 +110,25 @@ describe('Welcome-First Behavior - Simple Tests', () => {
     }, { timeout: 1000 });
   });
 
-  test('should handle welcome-first props correctly', () => {
-    const onWelcomeReceived = jest.fn();
-    const onGreetingStarted = jest.fn();
-    const onGreetingComplete = jest.fn();
+  test('should handle auto-connect dual mode props correctly', () => {
+    const onConnectionReady = jest.fn();
+    const onAgentSpeaking = jest.fn();
+    const onAgentSilent = jest.fn();
     const onMicToggle = jest.fn();
     
     const { container } = render(
       <DeepgramVoiceInteraction
         {...defaultProps}
-        welcomeFirst={true}
+        autoConnect={true}
         microphoneEnabled={false}
-        onWelcomeReceived={onWelcomeReceived}
-        onGreetingStarted={onGreetingStarted}
-        onGreetingComplete={onGreetingComplete}
+        onConnectionReady={onConnectionReady}
+        onAgentSpeaking={onAgentSpeaking}
+        onAgentSilent={onAgentSilent}
         onMicToggle={onMicToggle}
       />
     );
     
     expect(container).toBeInTheDocument();
-    // The component should render without errors when all welcome-first props are provided
+    // The component should render without errors when all auto-connect dual mode props are provided
   });
 });

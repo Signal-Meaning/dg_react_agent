@@ -74,13 +74,13 @@ function DeepgramVoiceInteraction(
     onPlaybackStateChange,
     onError,
     debug = false,
-    // Welcome-first props
-    welcomeFirst,
+    // Auto-connect dual mode props
+    autoConnect,
     microphoneEnabled,
     onMicToggle,
-    onWelcomeReceived,
-    onGreetingStarted,
-    onGreetingComplete,
+    onConnectionReady,
+    onAgentSpeaking,
+    onAgentSilent,
   } = props;
 
   // Internal state
@@ -355,10 +355,10 @@ function DeepgramVoiceInteraction(
       // This should never happen due to the check at the beginning of the effect
     }
 
-    // Welcome-first auto-connect logic
-    if (welcomeFirst !== false && isAgentConfigured) {
-      log('Welcome-first mode enabled, auto-connecting to agent');
-      // Auto-connect to agent service for welcome-first behavior
+    // Auto-connect dual mode logic
+    if (autoConnect !== false && isAgentConfigured) {
+      log('Auto-connect dual mode enabled, establishing connection');
+      // Auto-connect to agent service to establish dual mode
       setTimeout(() => {
         if (agentManagerRef.current) {
           agentManagerRef.current.connect();
@@ -395,7 +395,7 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: false });
       dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
     };
-  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, debug, welcomeFirst]); 
+  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, debug, autoConnect]); 
 
   // Notify ready state changes ONLY when the value actually changes
   useEffect(() => {
@@ -608,13 +608,13 @@ function DeepgramVoiceInteraction(
         return;
       }
       
-      // Handle barge-in during greeting
+      // Handle barge-in during agent speaking
       if (state.greetingInProgress) {
-        log('User started speaking during greeting - aborting playback');
+        log('User started speaking during agent speech - aborting playback');
         if (audioManagerRef.current) {
           audioManagerRef.current.abortPlayback();
         }
-        onGreetingComplete?.();
+        onAgentSilent?.();
         dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
         dispatch({ type: 'GREETING_STARTED', started: false });
       }
@@ -634,12 +634,12 @@ function DeepgramVoiceInteraction(
       return;
     }
 
-    // Handle Welcome message for welcome-first behavior
+    // Handle Welcome message for dual mode connection
     if (data.type === 'Welcome') {
-      log('Welcome message received');
+      log('Welcome message received - dual mode connection established');
       if (!state.welcomeReceived) {
         dispatch({ type: 'WELCOME_RECEIVED', received: true });
-        onWelcomeReceived?.();
+        onConnectionReady?.();
         dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: true });
       }
       return;
@@ -654,11 +654,11 @@ function DeepgramVoiceInteraction(
     if (data.type === 'AgentStartedSpeaking') {
       sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
       dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
-      
-      // Track greeting start
+
+      // Track agent speaking
       if (state.greetingInProgress && !state.greetingStarted) {
         dispatch({ type: 'GREETING_STARTED', started: true });
-        onGreetingStarted?.();
+        onAgentSpeaking?.();
       }
       return;
     }
@@ -666,10 +666,10 @@ function DeepgramVoiceInteraction(
     if (data.type === 'AgentAudioDone') {
       sleepLog('Dispatching AGENT_STATE_CHANGE to idle (from AgentAudioDone)');
       dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
-      
-      // Track greeting completion
+
+      // Track agent silent
       if (state.greetingInProgress) {
-        onGreetingComplete?.();
+        onAgentSilent?.();
         dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
         dispatch({ type: 'GREETING_STARTED', started: false });
       }
