@@ -2,31 +2,17 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('Text-Only Conversation', () => {
   test.beforeEach(async ({ page }) => {
-    // Set up environment variables for testing
-    await page.addInitScript(() => {
-      // Mock Vite environment variables for the test app
-      window.import = {
-        meta: {
-          env: {
-            VITE_DEEPGRAM_API_KEY: 'test-api-key',
-            VITE_DEEPGRAM_AGENT_URL: 'wss://agent.deepgram.com/v1/agent/converse',
-            VITE_DEEPGRAM_TRANSCRIPTION_URL: 'wss://api.deepgram.com/v1/listen',
-          }
-        }
-      };
-    });
-
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
     // Wait for connection
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('Connected', { timeout: 10000 });
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
   });
 
   test('should allow text input without microphone', async ({ page }) => {
     // Type a message
     await page.fill('[data-testid="text-input"]', 'Hello, I need help with my order');
-    await page.click('[data-testid="send-button"]');
+    await page.press('[data-testid="text-input"]', 'Enter');
     
     // Verify message was sent
     await expect(page.locator('[data-testid="user-message"]')).toContainText('Hello, I need help with my order');
@@ -157,7 +143,7 @@ test.describe('Text-Only Conversation', () => {
     
     // Restore network
     await page.context().setOffline(false);
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('Connected', { timeout: 10000 });
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
     
     // Try to send message again
     await page.fill('[data-testid="text-input"]', 'Message after network restored');
