@@ -214,19 +214,24 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
     addLog(`Microphone ${enabled ? 'enabled' : 'disabled'}`);
   }, [addLog]);
 
-  const handleTextSubmit = useCallback(() => {
+  const handleTextSubmit = useCallback(async () => {
     if (!textInput.trim()) return;
     
     try {
-      addLog(`Sending text message: ${textInput}`);
+      addLog(`Sending text message to Deepgram agent: ${textInput}`);
       setUserMessage(textInput);
-      setTextInput('');
       
-      // Simulate agent response for testing
-      setTimeout(() => {
-        setAgentResponse(`I received your message: "${textInput}". How can I help you with that?`);
-        addLog('Agent responded to text message');
-      }, 1000);
+      // Send message to real Deepgram agent
+      if (deepgramRef.current) {
+        // Ensure text-only connection is established
+        await deepgramRef.current.connectTextOnly();
+        deepgramRef.current.injectUserMessage(textInput);
+        addLog('Message sent to Deepgram agent via injectUserMessage');
+      } else {
+        addLog('Error: DeepgramVoiceInteraction ref not available');
+      }
+      
+      setTextInput('');
     } catch (error) {
       addLog(`Error sending text message: ${(error as Error).message}`);
       console.error('Text submit error:', error);
