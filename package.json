@@ -13,6 +13,11 @@
     "build": "rollup -c",
     "dev": "rollup -c -w",
     "test": "jest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report",
     "lint": "eslint src --ext .ts,.tsx",
     "build:single-file": "node scripts/generate-single-file.js"
   },
@@ -31,6 +36,7 @@
   "devDependencies": {
     "@babel/preset-env": "^7.28.3",
     "@babel/preset-react": "^7.27.1",
+    "@playwright/test": "^1.55.1",
     "@rollup/plugin-commonjs": "^22.0.0",
     "@rollup/plugin-node-resolve": "^13.3.0",
     "@rollup/plugin-replace": "^6.0.2",

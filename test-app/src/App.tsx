@@ -35,6 +35,9 @@ function App() {
   const [agentSpeaking, setAgentSpeaking] = useState(false);
   const [agentSilent, setAgentSilent] = useState(false);
   
+  // Text input state
+  const [textInput, setTextInput] = useState('');
+  
   // Memoize options objects to prevent unnecessary re-renders/effect loops
   const memoizedTranscriptionOptions = useMemo(() => ({
     // Nova-3 enables keyterm prompting
@@ -178,11 +181,30 @@ function App() {
     console.error('Deepgram error:', error);
   }, [addLog]); // Depends on addLog
 
-  // Welcome-first event handlers
+  // Auto-connect dual mode event handlers
   const handleMicToggle = useCallback((enabled: boolean) => {
     setMicEnabled(enabled);
     addLog(`Microphone ${enabled ? 'enabled' : 'disabled'}`);
   }, [addLog]);
+
+  const handleTextSubmit = useCallback(() => {
+    if (!textInput.trim()) return;
+    
+    try {
+      addLog(`Sending text message: ${textInput}`);
+      setUserMessage(textInput);
+      setTextInput('');
+      
+      // Simulate agent response for testing
+      setTimeout(() => {
+        setAgentResponse(`I received your message: "${textInput}". How can I help you with that?`);
+        addLog('Agent responded to text message');
+      }, 1000);
+    } catch (error) {
+      addLog(`Error sending text message: ${(error as Error).message}`);
+      console.error('Text submit error:', error);
+    }
+  }, [textInput, addLog]);
 
   const handleConnectionReady = useCallback(() => {
     setConnectionReady(true);
@@ -287,7 +309,7 @@ function App() {
   };
   
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
+    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }} data-testid="voice-agent">
       <h1>Deepgram Voice Interaction Test</h1>
       
       <DeepgramVoiceInteraction
@@ -318,15 +340,17 @@ function App() {
         <h4>Component States:</h4>
         <p>App UI State (isSleeping): <strong>{(isSleeping || agentState === 'entering_sleep').toString()}</strong></p>
         <p>Core Component State (agentState via callback): <strong>{agentState}</strong></p>
-        <p>Transcription Connection: <strong>{connectionStates.transcription}</strong></p>
+        <p>Transcription Connection: <strong data-testid="connection-status">{connectionStates.agent}</strong></p>
         <p>Agent Connection: <strong>{connectionStates.agent}</strong></p>
         <p>Audio Recording: <strong>{isRecording.toString()}</strong></p>
         <p>Audio Playing: <strong>{isPlaying.toString()}</strong></p>
         <h4>Auto-Connect Dual Mode States:</h4>
-        <p>Microphone Enabled: <strong>{micEnabled.toString()}</strong></p>
-        <p>Connection Ready: <strong>{connectionReady.toString()}</strong></p>
-        <p>Agent Speaking: <strong>{agentSpeaking.toString()}</strong></p>
-        <p>Agent Silent: <strong>{agentSilent.toString()}</strong></p>
+        <div data-testid="auto-connect-states">
+          <p>Microphone Enabled: <strong data-testid="mic-status">{micEnabled ? 'Enabled' : 'Disabled'}</strong></p>
+          <p>Connection Ready: <strong data-testid="connection-ready">{connectionReady.toString()}</strong></p>
+          <p>Agent Speaking: <strong data-testid="agent-speaking">{agentSpeaking.toString()}</strong></p>
+          <p>Agent Silent: <strong data-testid="agent-silent">{agentSilent.toString()}</strong></p>
+        </div>
       </div>
       
       <div style={{ margin: '20px 0', display: 'flex', gap: '10px' }}>
@@ -335,6 +359,7 @@ function App() {
             onClick={startInteraction} 
             disabled={!isReady || isRecording}
             style={{ padding: '10px 20px' }}
+            data-testid="start-button"
           >
             Start
           </button>
@@ -343,6 +368,7 @@ function App() {
             onClick={stopInteraction}
             disabled={!isRecording}
             style={{ padding: '10px 20px' }}
+            data-testid="stop-button"
           >
             Stop
           </button>
@@ -385,6 +411,7 @@ function App() {
             padding: '10px 20px',
             backgroundColor: micEnabled ? '#e0f7fa' : 'transparent'
           }}
+          data-testid="microphone-button"
         >
           {micEnabled ? 'Disable Mic' : 'Enable Mic'}
         </button>
@@ -402,7 +429,7 @@ function App() {
           borderRadius: '8px',
           backgroundColor: '#f1f8e9'
         }}>
-          <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }}>
+          <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }} data-testid="greeting-sent">
             {agentSpeaking ? '🎤 Agent is speaking' 
               : agentSilent ? '✅ Agent finished speaking - ready for interaction' 
               : '🔗 Dual mode connected - waiting for agent...'}
@@ -441,19 +468,49 @@ function App() {
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', marginTop: '20px' }}>
         <div style={{ flex: 1, border: '1px solid #ccc', padding: '10px' }}>
           <h3>Live Transcript</h3>
-          <pre>{lastTranscript || '(Waiting for transcript...)'}</pre>
+          <pre data-testid="transcription">{lastTranscript || '(Waiting for transcript...)'}</pre>
         </div>
         <div style={{ flex: 1, border: '1px solid #ccc', padding: '10px' }}>
           <h3>Agent Response</h3>
-          <pre>{agentResponse || '(Waiting for agent response...)'}</pre>
+          <pre data-testid="agent-response">{agentResponse || '(Waiting for agent response...)'}</pre>
         </div>
       </div>
       
       <div style={{ marginTop: '20px', border: '1px solid #ccc', padding: '10px' }}>
         <h3>User Message from Server</h3>
-        <pre>{userMessage || '(No user messages from server yet...)'}</pre>
+        <pre data-testid="user-message">{userMessage || '(No user messages from server yet...)'}</pre>
       </div>
       
+      {/* Text Input for Text-Only Mode */}
+      <div style={{ marginTop: '20px', border: '1px solid #ddd', padding: '10px' }}>
+        <h3>Text Input (Text-Only Mode)</h3>
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+          <input
+            type="text"
+            placeholder="Type your message here..."
+            style={{ flex: 1, padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+            data-testid="text-input"
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter') {
+                handleTextSubmit();
+              }
+            }}
+          />
+          <button
+            onClick={handleTextSubmit}
+            style={{ padding: '8px 16px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}
+            data-testid="send-button"
+          >
+            Send
+          </button>
+        </div>
+        <p style={{ fontSize: '12px', color: '#666', margin: 0 }}>
+          This allows you to send text messages without using the microphone.
+        </p>
+      </div>
+
       <div style={{ marginTop: '20px', border: '1px solid #eee', padding: '10px' }}>
         <h3>Event Log</h3>
         <button onClick={() => setLogs([])} style={{ marginBottom: '10px' }}>Clear Logs</button>
