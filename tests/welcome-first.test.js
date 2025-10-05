@@ -3,6 +3,86 @@
  * @eslint-env jest
  */
 
+/**
+ * Welcome-First Behavior Integration Tests
+ * 
+ * This test suite validates the welcome-first functionality of the DeepgramVoiceInteraction component.
+ * The welcome-first feature enables the agent to automatically connect and greet users without
+ * requiring initial user interaction, providing a more natural conversation flow.
+ * 
+ * Key Features Tested:
+ * ===================
+ * 
+ * 1. AUTO-CONNECT BEHAVIOR
+ *    - When welcomeFirst=true: Agent automatically connects and sends greeting
+ *    - When welcomeFirst=false: Agent waits for user to initiate conversation
+ *    - Verifies proper WebSocket connection establishment
+ * 
+ * 2. MICROPHONE CONTROL
+ *    - Microphone starts disabled by default in welcome-first mode
+ *    - Users can enable/disable microphone via props or imperative handle
+ *    - Proper state management for microphone enabled/disabled states
+ * 
+ * 3. WELCOME MESSAGE HANDLING
+ *    - Handles Welcome message from server
+ *    - Tracks greeting progress (started, in-progress, completed)
+ *    - Calls appropriate callbacks (onWelcomeReceived, onGreetingStarted, onGreetingComplete)
+ * 
+ * 4. BARGE-IN SUPPORT
+ *    - Users can interrupt agent's greeting by speaking
+ *    - Properly aborts playback when user starts speaking during greeting
+ *    - Transitions to listening state after interruption
+ * 
+ * 5. SETTINGS SENDING
+ *    - Automatically sends agent settings with greeting when welcomeFirst=true
+ *    - Includes proper greeting text in settings payload
+ *    - Prevents duplicate settings from being sent
+ * 
+ * 6. MICROPHONE PROP CONTROL
+ *    - Responds to microphoneEnabled prop changes
+ *    - Maintains proper internal state synchronization
+ * 
+ * Test Architecture:
+ * =================
+ * 
+ * - Uses Jest with React Testing Library for component testing
+ * - Mocks WebSocketManager and AudioManager to isolate component logic
+ * - Tests focus on component behavior rather than external service integration
+ * - Each test group focuses on a specific aspect of welcome-first functionality
+ * 
+ * Mock Strategy:
+ * =============
+ * 
+ * - WebSocketManager: Mocked to simulate connection states and message handling
+ * - AudioManager: Mocked to simulate audio recording/playback without actual audio
+ * - Event listeners return unsubscribe functions to prevent memory leaks
+ * - Console methods mocked to reduce test output noise
+ * 
+ * Usage Example:
+ * =============
+ * 
+ * ```tsx
+ * <DeepgramVoiceInteraction
+ *   apiKey="your-api-key"
+ *   agentOptions={{
+ *     greeting: "Hello! How can I help you today?",
+ *     instructions: "You are a helpful assistant.",
+ *     voice: "aura-asteria-en"
+ *   }}
+ *   welcomeFirst={true}
+ *   microphoneEnabled={false}
+ *   onWelcomeReceived={() => console.log("Welcome received")}
+ *   onGreetingStarted={() => console.log("Greeting started")}
+ *   onGreetingComplete={() => console.log("Greeting complete")}
+ *   onMicToggle={(enabled) => console.log("Mic toggled:", enabled)}
+ * />
+ * ```
+ * 
+ * Note: These are integration tests that verify the component's behavior with mocked
+ * dependencies. For end-to-end testing with real API connections, see the Playwright
+ * tests in the main voice-commerce repository.
+ */
+
 import React from 'react';
 import { render, waitFor, act } from '@testing-library/react';
 import { DeepgramVoiceInteraction } from '../src';
@@ -10,6 +90,26 @@ import { DeepgramVoiceInteraction } from '../src';
 // Mock the WebSocketManager and AudioManager
 jest.mock('../src/utils/websocket/WebSocketManager');
 jest.mock('../src/utils/audio/AudioManager');
+
+// Set up default mocks that return unsubscribe functions
+const mockUnsubscribe = jest.fn();
+const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
+const { AudioManager } = require('../src/utils/audio/AudioManager');
+
+WebSocketManager.mockImplementation(() => ({
+  connect: jest.fn().mockResolvedValue(),
+  close: jest.fn(),
+  sendJSON: jest.fn(),
+  addEventListener: jest.fn().mockReturnValue(mockUnsubscribe)
+}));
+
+AudioManager.mockImplementation(() => ({
+  initialize: jest.fn().mockResolvedValue(),
+  startRecording: jest.fn().mockResolvedValue(),
+  stopRecording: jest.fn(),
+  addEventListener: jest.fn().mockReturnValue(mockUnsubscribe),
+  dispose: jest.fn()
+}));
 
 // Mock console methods to reduce noise in tests
 const originalConsoleLog = console.log;
@@ -47,25 +147,39 @@ describe('Welcome-First Behavior', () => {
     jest.clearAllMocks();
   });
 
-  describe('Auto-connect behavior', () => {
-    test('should auto-connect when welcomeFirst is true', async () => {
-      const mockConnect = jest.fn().mockResolvedValue();
-      const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
-      WebSocketManager.mockImplementation(() => ({
-        connect: mockConnect,
+  // Helper function to set up mocks consistently
+  const setupMocks = (overrides = {}) => {
+    const mockUnsubscribe = jest.fn();
+    const defaultMocks = {
+      WebSocketManager: {
+        connect: jest.fn().mockResolvedValue(),
         close: jest.fn(),
         sendJSON: jest.fn(),
-        addEventListener: jest.fn()
-      }));
-
-      const { AudioManager } = require('../src/utils/audio/AudioManager');
-      AudioManager.mockImplementation(() => ({
+        addEventListener: jest.fn().mockReturnValue(mockUnsubscribe)
+      },
+      AudioManager: {
         initialize: jest.fn().mockResolvedValue(),
         startRecording: jest.fn().mockResolvedValue(),
         stopRecording: jest.fn(),
-        addEventListener: jest.fn(),
+        addEventListener: jest.fn().mockReturnValue(mockUnsubscribe),
         dispose: jest.fn()
-      }));
+      }
+    };
+
+    const mocks = { ...defaultMocks, ...overrides };
+
+    const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
+    const { AudioManager } = require('../src/utils/audio/AudioManager');
+    
+    WebSocketManager.mockImplementation(() => mocks.WebSocketManager);
+    AudioManager.mockImplementation(() => mocks.AudioManager);
+
+    return { mocks, mockUnsubscribe };
+  };
+
+  describe('Auto-connect behavior', () => {
+    test('should auto-connect when welcomeFirst is true', async () => {
+      const { mocks } = setupMocks();
 
       render(
         <DeepgramVoiceInteraction
@@ -76,18 +190,20 @@ describe('Welcome-First Behavior', () => {
 
       // Wait for auto-connect to be triggered
       await waitFor(() => {
-        expect(mockConnect).toHaveBeenCalled();
+        expect(mocks.WebSocketManager.connect).toHaveBeenCalled();
       }, { timeout: 1000 });
     });
 
     test('should not auto-connect when welcomeFirst is false', async () => {
       const mockConnect = jest.fn().mockResolvedValue();
+      const mockUnsubscribe = jest.fn();
+      
       const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
       WebSocketManager.mockImplementation(() => ({
         connect: mockConnect,
         close: jest.fn(),
         sendJSON: jest.fn(),
-        addEventListener: jest.fn()
+        addEventListener: jest.fn().mockReturnValue(mockUnsubscribe)
       }));
 
       const { AudioManager } = require('../src/utils/audio/AudioManager');
@@ -95,7 +211,7 @@ describe('Welcome-First Behavior', () => {
         initialize: jest.fn().mockResolvedValue(),
         startRecording: jest.fn().mockResolvedValue(),
         stopRecording: jest.fn(),
-        addEventListener: jest.fn(),
+        addEventListener: jest.fn().mockReturnValue(mockUnsubscribe),
         dispose: jest.fn()
       }));
 
