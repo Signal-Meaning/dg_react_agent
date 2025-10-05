@@ -12,6 +12,33 @@ import {
 } from '../../src';
 
 function App() {
+  // Fail-fast check for required API key
+  const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
+  const projectId = import.meta.env.VITE_DEEPGRAM_PROJECT_ID;
+  
+  if (!apiKey || apiKey === 'your-deepgram-api-key-here' || apiKey.startsWith('test-')) {
+    return (
+      <div style={{ 
+        padding: '20px', 
+        backgroundColor: '#fee', 
+        border: '2px solid #f00', 
+        borderRadius: '8px',
+        margin: '20px',
+        fontFamily: 'monospace'
+      }}>
+        <h2>❌ Missing Deepgram API Key</h2>
+        <p><strong>E2E Tests require a REAL Deepgram API key!</strong></p>
+        <p>Please set the following in <code>test-app/.env</code>:</p>
+        <pre style={{ backgroundColor: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
+VITE_DEEPGRAM_API_KEY=your-real-deepgram-api-key
+VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
+        </pre>
+        <p>These tests use REAL WebSocket connections, not mocks, for authentic integration testing.</p>
+        <p>Get a free API key at: <a href="https://deepgram.com" target="_blank">https://deepgram.com</a></p>
+      </div>
+    );
+  }
+
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
   
   // State for UI
