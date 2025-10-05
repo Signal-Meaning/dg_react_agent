@@ -162,9 +162,9 @@ export interface DeepgramVoiceInteractionProps {
   };
 
   /**
-   * Welcome-first behavior options
+   * Auto-connect dual mode behavior options
    */
-  welcomeFirst?: boolean;
+  autoConnect?: boolean;
 
   /**
    * Whether microphone is enabled (controlled or initial state)
@@ -177,19 +177,19 @@ export interface DeepgramVoiceInteractionProps {
   onMicToggle?: (enabled: boolean) => void;
 
   /**
-   * Called when server's Welcome event arrives
+   * Called when dual mode connection is established and settings are sent
    */
-  onWelcomeReceived?: () => void;
+  onConnectionReady?: () => void;
 
   /**
-   * Called when the greeting TTS begins
+   * Called when agent starts speaking (TTS begins)
    */
-  onGreetingStarted?: () => void;
+  onAgentSpeaking?: () => void;
 
   /**
-   * Called when the greeting TTS completes (AgentAudioDone)
+   * Called when agent finishes speaking (AgentAudioDone)
    */
-  onGreetingComplete?: () => void;
+  onAgentSilent?: () => void;
 }
 
 /**

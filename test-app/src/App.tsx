@@ -29,11 +29,11 @@ function App() {
   });
   const [logs, setLogs] = useState<string[]>([]);
   
-  // Welcome-first state
+  // Auto-connect dual mode state
   const [micEnabled, setMicEnabled] = useState(false);
-  const [welcomeReceived, setWelcomeReceived] = useState(false);
-  const [greetingStarted, setGreetingStarted] = useState(false);
-  const [greetingComplete, setGreetingComplete] = useState(false);
+  const [connectionReady, setConnectionReady] = useState(false);
+  const [agentSpeaking, setAgentSpeaking] = useState(false);
+  const [agentSilent, setAgentSilent] = useState(false);
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
   const memoizedTranscriptionOptions = useMemo(() => ({
@@ -184,19 +184,19 @@ function App() {
     addLog(`Microphone ${enabled ? 'enabled' : 'disabled'}`);
   }, [addLog]);
 
-  const handleWelcomeReceived = useCallback(() => {
-    setWelcomeReceived(true);
-    addLog('Welcome message received from server');
+  const handleConnectionReady = useCallback(() => {
+    setConnectionReady(true);
+    addLog('Dual mode connection established and settings sent');
   }, [addLog]);
 
-  const handleGreetingStarted = useCallback(() => {
-    setGreetingStarted(true);
-    addLog('Greeting TTS started');
+  const handleAgentSpeaking = useCallback(() => {
+    setAgentSpeaking(true);
+    addLog('Agent started speaking');
   }, [addLog]);
 
-  const handleGreetingComplete = useCallback(() => {
-    setGreetingComplete(true);
-    addLog('Greeting TTS completed');
+  const handleAgentSilent = useCallback(() => {
+    setAgentSilent(true);
+    addLog('Agent finished speaking');
   }, [addLog]);
   
   // Control functions
@@ -304,13 +304,13 @@ function App() {
         onConnectionStateChange={handleConnectionStateChange}
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
-        // Welcome-first props
-        welcomeFirst={true}
+        // Auto-connect dual mode props
+        autoConnect={true}
         microphoneEnabled={micEnabled}
         onMicToggle={handleMicToggle}
-        onWelcomeReceived={handleWelcomeReceived}
-        onGreetingStarted={handleGreetingStarted}
-        onGreetingComplete={handleGreetingComplete}
+        onConnectionReady={handleConnectionReady}
+        onAgentSpeaking={handleAgentSpeaking}
+        onAgentSilent={handleAgentSilent}
         debug={true}
       />
       
@@ -322,11 +322,11 @@ function App() {
         <p>Agent Connection: <strong>{connectionStates.agent}</strong></p>
         <p>Audio Recording: <strong>{isRecording.toString()}</strong></p>
         <p>Audio Playing: <strong>{isPlaying.toString()}</strong></p>
-        <h4>Welcome-First States:</h4>
+        <h4>Auto-Connect Dual Mode States:</h4>
         <p>Microphone Enabled: <strong>{micEnabled.toString()}</strong></p>
-        <p>Welcome Received: <strong>{welcomeReceived.toString()}</strong></p>
-        <p>Greeting Started: <strong>{greetingStarted.toString()}</strong></p>
-        <p>Greeting Complete: <strong>{greetingComplete.toString()}</strong></p>
+        <p>Connection Ready: <strong>{connectionReady.toString()}</strong></p>
+        <p>Agent Speaking: <strong>{agentSpeaking.toString()}</strong></p>
+        <p>Agent Silent: <strong>{agentSilent.toString()}</strong></p>
       </div>
       
       <div style={{ margin: '20px 0', display: 'flex', gap: '10px' }}>
@@ -390,8 +390,8 @@ function App() {
         </button>
       </div>
       
-      {/* Welcome-first status */}
-      {welcomeReceived && (
+      {/* Auto-connect dual mode status */}
+      {connectionReady && (
         <div style={{
           margin: '20px 0',
           display: 'flex',
@@ -403,9 +403,9 @@ function App() {
           backgroundColor: '#f1f8e9'
         }}>
           <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }}>
-            {greetingStarted ? '🎤 Agent is greeting you' 
-              : greetingComplete ? '✅ Welcome complete - ready for interaction' 
-              : '👋 Welcome received - waiting for greeting...'}
+            {agentSpeaking ? '🎤 Agent is speaking' 
+              : agentSilent ? '✅ Agent finished speaking - ready for interaction' 
+              : '🔗 Dual mode connected - waiting for agent...'}
           </p>
           {!micEnabled && (
             <p style={{ margin: '0', fontStyle: 'italic', color: '#555' }}>
