@@ -34,3 +34,4 @@ test-results/
 playwright-report/
 
 guidance/
+test-results/.last-run.json

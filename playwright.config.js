@@ -61,7 +61,8 @@ module.exports = defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'cd test-app && npm run dev',
+    command: 'npm run dev',
+    cwd: './test-app',
     url: 'http://localhost:5173', // Vite default port
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
