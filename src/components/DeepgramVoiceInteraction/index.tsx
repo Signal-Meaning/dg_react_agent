@@ -8,8 +8,8 @@ import {
   TranscriptResponse,
   UpdateInstructionsPayload
 } from '../../types';
-import { WebSocketManager } from '../../utils/websocket/WebSocketManager';
-import { AudioManager } from '../../utils/audio/AudioManager';
+import { WebSocketManager, WebSocketEvent } from '../../utils/websocket/WebSocketManager';
+import { AudioManager, AudioEvent } from '../../utils/audio/AudioManager';
 import {
   VoiceInteractionState,
   initialState,
@@ -74,6 +74,13 @@ function DeepgramVoiceInteraction(
     onPlaybackStateChange,
     onError,
     debug = false,
+    // Welcome-first props
+    welcomeFirst,
+    microphoneEnabled,
+    onMicToggle,
+    onWelcomeReceived,
+    onGreetingStarted,
+    onGreetingComplete,
   } = props;
 
   // Internal state
@@ -99,14 +106,14 @@ function DeepgramVoiceInteraction(
   const prevIsPlayingRef = useRef<boolean | undefined>(undefined);
   
   // Debug logging
-  const log = (...args: any[]) => {
+  const log = (...args: unknown[]) => {
     if (debug) {
       console.log('[DeepgramVoiceInteraction]', ...args);
     }
   };
   
   // Targeted sleep/wake logging
-  const sleepLog = (...args: any[]) => {
+  const sleepLog = (...args: unknown[]) => {
     if (debug) {
       console.log('[SLEEP_CYCLE][CORE]', ...args);
     }
@@ -251,7 +258,7 @@ function DeepgramVoiceInteraction(
     });
 
     // Set up event listeners for transcription WebSocket
-      transcriptionUnsubscribe = transcriptionManagerRef.current.addEventListener((event) => {
+      transcriptionUnsubscribe = transcriptionManagerRef.current.addEventListener((event: WebSocketEvent) => {
       if (event.type === 'state') {
         log('Transcription state:', event.state);
         dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: event.state });
@@ -277,7 +284,7 @@ function DeepgramVoiceInteraction(
       });
 
     // Set up event listeners for agent WebSocket
-      agentUnsubscribe = agentManagerRef.current.addEventListener((event) => {
+      agentUnsubscribe = agentManagerRef.current.addEventListener((event: WebSocketEvent) => {
       if (event.type === 'state') {
         log('Agent state:', event.state);
         dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
@@ -308,7 +315,7 @@ function DeepgramVoiceInteraction(
       });
 
     // Set up event listeners for audio manager
-      audioUnsubscribe = audioManagerRef.current.addEventListener((event) => {
+      audioUnsubscribe = audioManagerRef.current.addEventListener((event: AudioEvent) => {
       if (event.type === 'ready') {
         log('Audio manager ready');
       } else if (event.type === 'recording') {
@@ -334,7 +341,7 @@ function DeepgramVoiceInteraction(
           // The actual WebSocket connections will be made in the start() method
         dispatch({ type: 'READY_STATE_CHANGE', isReady: true }); 
       })
-      .catch(error => {
+      .catch((error: Error) => {
         handleError({
           service: 'transcription',
           code: 'audio_init_error',
@@ -346,6 +353,17 @@ function DeepgramVoiceInteraction(
     } else {
       log('Neither transcription nor agent configured, skipping audio setup');
       // This should never happen due to the check at the beginning of the effect
+    }
+
+    // Welcome-first auto-connect logic
+    if (welcomeFirst !== false && isAgentConfigured) {
+      log('Welcome-first mode enabled, auto-connecting to agent');
+      // Auto-connect to agent service for welcome-first behavior
+      setTimeout(() => {
+        if (agentManagerRef.current) {
+          agentManagerRef.current.connect();
+        }
+      }, 100); // Small delay to ensure audio manager is ready
     }
 
     // Clean up
@@ -377,7 +395,7 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: false });
       dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
     };
-  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, debug]); 
+  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, debug, welcomeFirst]); 
 
   // Notify ready state changes ONLY when the value actually changes
   useEffect(() => {
@@ -406,11 +424,22 @@ function DeepgramVoiceInteraction(
     }
   }, [state.isPlaying, onPlaybackStateChange]);
 
+  // Type guard for transcription messages
+  const isTranscriptionMessage = (data: unknown): data is { type: string; [key: string]: unknown } => {
+    return typeof data === 'object' && data !== null && 'type' in data;
+  };
+
   // Handle transcription messages - only relevant if transcription is configured
-  const handleTranscriptionMessage = (data: any) => {
+  const handleTranscriptionMessage = (data: unknown) => {
     // Skip processing if transcription service isn't configured
     if (!transcriptionManagerRef.current) {
       log('Received unexpected transcription message but service is not configured:', data);
+      return;
+    }
+
+    // Type guard check
+    if (!isTranscriptionMessage(data)) {
+      log('Invalid transcription message format:', data);
       return;
     }
     
@@ -454,6 +483,12 @@ function DeepgramVoiceInteraction(
   const sendAgentSettings = () => {
     if (!agentManagerRef.current || !agentOptions) {
       log('Cannot send agent settings: agent manager not initialized or agentOptions not provided');
+      return;
+    }
+    
+    // Check if settings have already been sent (welcome-first behavior)
+    if (state.hasSentSettings) {
+      log('Settings already sent, skipping');
       return;
     }
     
@@ -505,13 +540,60 @@ function DeepgramVoiceInteraction(
     
     log('Sending agent settings:', settingsMessage);
     agentManagerRef.current.sendJSON(settingsMessage);
+    
+    // Mark settings as sent for welcome-first behavior
+    dispatch({ type: 'SETTINGS_SENT', sent: true });
+  };
+
+  // Microphone control function
+  const toggleMic = async (enable: boolean) => {
+    if (enable) {
+      if (!state.hasSentSettings) {
+        log('Cannot enable microphone before settings are sent');
+        return;
+      }
+      
+      if (audioManagerRef.current) {
+        log('Enabling microphone...');
+        await audioManagerRef.current.startRecording();
+        dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: true });
+        onMicToggle?.(true);
+        log('Microphone enabled');
+      }
+    } else {
+      if (audioManagerRef.current) {
+        log('Disabling microphone...');
+        audioManagerRef.current.stopRecording();
+        dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: false });
+        onMicToggle?.(false);
+        log('Microphone disabled');
+      }
+    }
+  };
+
+  // Handle microphoneEnabled prop changes
+  useEffect(() => {
+    if (microphoneEnabled !== undefined && microphoneEnabled !== state.micEnabledInternal) {
+      toggleMic(microphoneEnabled);
+    }
+  }, [microphoneEnabled]);
+
+  // Type guard for agent messages
+  const isAgentMessage = (data: unknown): data is { type: string; [key: string]: unknown } => {
+    return typeof data === 'object' && data !== null && 'type' in data;
   };
 
   // Handle agent messages - only relevant if agent is configured
-  const handleAgentMessage = (data: any) => {
+  const handleAgentMessage = (data: unknown) => {
     // Skip processing if agent service isn't configured
     if (!agentManagerRef.current) {
       log('Received unexpected agent message but service is not configured:', data);
+      return;
+    }
+
+    // Type guard check
+    if (!isAgentMessage(data)) {
+      log('Invalid agent message format:', data);
       return;
     }
     
@@ -524,6 +606,17 @@ function DeepgramVoiceInteraction(
       if (isSleepingOrEntering) {
         sleepLog('Ignoring UserStartedSpeaking event (state:', stateRef.current.agentState, ')');
         return;
+      }
+      
+      // Handle barge-in during greeting
+      if (state.greetingInProgress) {
+        log('User started speaking during greeting - aborting playback');
+        if (audioManagerRef.current) {
+          audioManagerRef.current.abortPlayback();
+        }
+        onGreetingComplete?.();
+        dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
+        dispatch({ type: 'GREETING_STARTED', started: false });
       }
       
       // Normal speech handling when not sleeping
@@ -540,6 +633,17 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'AGENT_STATE_CHANGE', state: 'listening' });
       return;
     }
+
+    // Handle Welcome message for welcome-first behavior
+    if (data.type === 'Welcome') {
+      log('Welcome message received');
+      if (!state.welcomeReceived) {
+        dispatch({ type: 'WELCOME_RECEIVED', received: true });
+        onWelcomeReceived?.();
+        dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: true });
+      }
+      return;
+    }
     
     if (data.type === 'AgentThinking') {
       sleepLog('Dispatching AGENT_STATE_CHANGE to thinking');
@@ -550,21 +654,36 @@ function DeepgramVoiceInteraction(
     if (data.type === 'AgentStartedSpeaking') {
       sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
       dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
+      
+      // Track greeting start
+      if (state.greetingInProgress && !state.greetingStarted) {
+        dispatch({ type: 'GREETING_STARTED', started: true });
+        onGreetingStarted?.();
+      }
       return;
     }
     
     if (data.type === 'AgentAudioDone') {
       sleepLog('Dispatching AGENT_STATE_CHANGE to idle (from AgentAudioDone)');
       dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+      
+      // Track greeting completion
+      if (state.greetingInProgress) {
+        onGreetingComplete?.();
+        dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
+        dispatch({ type: 'GREETING_STARTED', started: false });
+      }
       return;
     }
     
     // Handle conversation text
     if (data.type === 'ConversationText') {
+      const content = typeof data.content === 'string' ? data.content : '';
+      
       if (data.role === 'assistant') {
         const response: LLMResponse = {
           type: 'llm',
-          text: data.content || '',
+          text: content,
           metadata: data,
         };
         
@@ -574,7 +693,7 @@ function DeepgramVoiceInteraction(
       else if (data.role === 'user') {
         const response = {
           type: 'user' as const,
-          text: data.content || '',
+          text: content,
           metadata: data,
         };
         
@@ -587,8 +706,8 @@ function DeepgramVoiceInteraction(
     if (data.type === 'Error') {
       handleError({
         service: 'agent',
-        code: data.code || 'agent_error',
-        message: data.description || 'Unknown agent error',
+        code: typeof data.code === 'string' ? data.code : 'agent_error',
+        message: typeof data.description === 'string' ? data.description : 'Unknown agent error',
         details: data,
       });
       return;
@@ -596,7 +715,9 @@ function DeepgramVoiceInteraction(
     
     // Handle warnings
     if (data.type === 'Warning') {
-      log('Agent warning:', data.description, 'Code:', data.code);
+      const description = typeof data.description === 'string' ? data.description : 'Unknown warning';
+      const code = typeof data.code === 'string' ? data.code : 'unknown';
+      log('Agent warning:', description, 'Code:', code);
       return;
     }
   };
@@ -623,7 +744,7 @@ function DeepgramVoiceInteraction(
         .then(() => {
           log('Successfully queued audio buffer for playback');
         })
-        .catch(error => {
+        .catch((error: Error) => {
           log('Error queueing audio:', error);
         });
     } else {
@@ -690,11 +811,15 @@ function DeepgramVoiceInteraction(
         log('Agent manager not configured, skipping connection');
       }
       
-      // Start recording if audio manager is available (needed for either service)
+      // Start recording if audio manager is available and microphone is enabled
       if (audioManagerRef.current) {
-        log('Starting recording...');
-        await audioManagerRef.current.startRecording();
-        log('Recording started');
+        if (state.micEnabledInternal) {
+          log('Starting recording...');
+          await audioManagerRef.current.startRecording();
+          log('Recording started');
+        } else {
+          log('Microphone disabled, skipping recording start');
+        }
       } else {
         log('AudioManager not initialized, cannot start recording');
         throw new Error('Audio manager not available for recording');
@@ -954,6 +1079,7 @@ function DeepgramVoiceInteraction(
     toggleSleep,
     injectAgentMessage,
     injectUserMessage,
+    toggleMicrophone: toggleMic,
   }));
 
   // Render nothing (headless component)

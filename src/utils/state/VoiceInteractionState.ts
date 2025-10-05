@@ -38,6 +38,15 @@ export interface VoiceInteractionState {
    * Error state
    */
   error: string | null;
+
+  /**
+   * Welcome-first behavior state
+   */
+  micEnabledInternal: boolean;
+  hasSentSettings: boolean;
+  welcomeReceived: boolean;
+  greetingInProgress: boolean;
+  greetingStarted: boolean;
 }
 
 /**
@@ -50,7 +59,12 @@ export type StateEvent =
   | { type: 'RECORDING_STATE_CHANGE'; isRecording: boolean }
   | { type: 'PLAYBACK_STATE_CHANGE'; isPlaying: boolean }
   | { type: 'READY_STATE_CHANGE'; isReady: boolean }
-  | { type: 'ERROR'; message: string | null };
+  | { type: 'ERROR'; message: string | null }
+  | { type: 'MIC_ENABLED_CHANGE'; enabled: boolean }
+  | { type: 'SETTINGS_SENT'; sent: boolean }
+  | { type: 'WELCOME_RECEIVED'; received: boolean }
+  | { type: 'GREETING_PROGRESS_CHANGE'; inProgress: boolean }
+  | { type: 'GREETING_STARTED'; started: boolean };
 
 /**
  * Initial state
@@ -66,6 +80,11 @@ export const initialState: VoiceInteractionState = {
   isPlaying: false,
   isReady: false,
   error: null,
+  micEnabledInternal: false,
+  hasSentSettings: false,
+  welcomeReceived: false,
+  greetingInProgress: false,
+  greetingStarted: false,
 };
 
 /**
@@ -118,6 +137,36 @@ export function stateReducer(state: VoiceInteractionState, event: StateEvent): V
       return {
         ...state,
         error: event.message,
+      };
+
+    case 'MIC_ENABLED_CHANGE':
+      return {
+        ...state,
+        micEnabledInternal: event.enabled,
+      };
+
+    case 'SETTINGS_SENT':
+      return {
+        ...state,
+        hasSentSettings: event.sent,
+      };
+
+    case 'WELCOME_RECEIVED':
+      return {
+        ...state,
+        welcomeReceived: event.received,
+      };
+
+    case 'GREETING_PROGRESS_CHANGE':
+      return {
+        ...state,
+        greetingInProgress: event.inProgress,
+      };
+
+    case 'GREETING_STARTED':
+      return {
+        ...state,
+        greetingStarted: event.started,
       };
       
     default:
