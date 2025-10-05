@@ -4,11 +4,14 @@ test.describe('Text-Only Conversation', () => {
   test.beforeEach(async ({ page }) => {
     // Set up environment variables for testing
     await page.addInitScript(() => {
-      window.process = {
-        env: {
-          REACT_APP_DEEPGRAM_API_KEY: 'test-api-key',
-          REACT_APP_DEEPGRAM_AGENT_URL: 'wss://api.deepgram.com/v1/listen/stream',
-          REACT_APP_DEEPGRAM_TRANSCRIPTION_URL: 'wss://api.deepgram.com/v1/listen/stream',
+      // Mock Vite environment variables for the test app
+      window.import = {
+        meta: {
+          env: {
+            VITE_DEEPGRAM_API_KEY: 'test-api-key',
+            VITE_DEEPGRAM_AGENT_URL: 'wss://agent.deepgram.com/v1/agent/converse',
+            VITE_DEEPGRAM_TRANSCRIPTION_URL: 'wss://api.deepgram.com/v1/listen',
+          }
         }
       };
     });
