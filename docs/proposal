@@ -1,0 +1,293 @@
+I fetched the dg_react_agent repo and reviewed the file structure and code at a high level.  ￼ Below is a draft patch sketch (conceptual diff) for the dg_react_agent package, showing what changes you’d insert, where, and what logic to add to implement your “welcome-first, mic off until toggle, barge-in via server events” design.
+
+This is not a fully compiled, ready-to-run patch (since I don’t have the full code with all context), but it’s a precise guide with file/line references and inserted logic. You can adapt it in your local clone.
+
+⸻
+
+High-Level File Structure & Key Modules (in dg_react_agent)
+
+From the repository, key pieces include:
+	•	The React component (e.g. DeepgramVoiceInteraction.tsx or .tsx/.ts)
+	•	Agent / WebSocket / connection manager modules
+	•	Audio / microphone capture manager
+	•	Playback / audio output module
+	•	Utility / types modules
+	•	Example / demo / test app
+
+In the README you see that the component handles mic, audio, WebSocket, playback, injection, control APIs, etc.  ￼
+
+So the patch will touch all of these modules (mostly in the component and WebSocket message handler, audio manager, and playback). Let’s walk through a diff sketch.
+
+⸻
+
+Patch Sketch: Proposed Changes
+
+Below is a conceptual diff. Use +++ / --- style for additions/deletions. It is organized by module.
+
+⸻
+
+1. DeepgramVoiceInteraction.tsx (or whichever is the main component file)
+
+Add new props and internal state:
+
+--- interface DeepgramVoiceInteractionProps {  // existing
++  /**
++   * If true (default), automatically connect and send greeting via Settings.
++   * The microphone remains off until toggled explicitly.
++   */
++  welcomeFirst?: boolean;
+
++  /** Whether mic is enabled (controlled or initial state) */
++  microphoneEnabled?: boolean;
++  /** Called when mic is toggled on/off */
++  onMicToggle?: (enabled: boolean) => void;
+
++  /** Called when server’s Welcome event arrives */
++  onWelcomeReceived?: () => void;
++  /** Called when the greeting TTS begins */
++  onGreetingStarted?: () => void;
++  /** Called when the greeting TTS completes (AgentAudioDone) */
++  onGreetingComplete?: () => void;
+
+   // ... existing props ...
+ }
+
+In component state / internal refs:
+
+// inside the functional component / class
+const [micEnabledInternal, setMicEnabledInternal] = useState<boolean>(false);
+const [hasSentSettings, setHasSentSettings] = useState<boolean>(false);
+const [welcomeReceived, setWelcomeReceived] = useState<boolean>(false);
+const [greetingInProgress, setGreetingInProgress] = useState<boolean>(false);
+const [greetingStarted, setGreetingStarted] = useState<boolean>(false);
+
+Modify initialization / connection logic. Somewhere in a useEffect or initialization block:
+
+ useEffect(() => {
+-  // perhaps prior logic: wait for user to call start() or similar
++  // If welcome-first behavior, auto connect on mount
++  if (props.welcomeFirst !== false) {
++    agentManagerRef.current?.connect();
++  }
+ }, [/* dependencies */]);
+
+Guard sending of Settings so that Settings is sent automatically when connection is open:
+
+In whatever method handles “on WebSocket open” or “on agent connect ready”:
+
+   // inside connect / onOpen callback
+   if (!hasSentSettings) {
+     // build settings object
+     const settingsPayload = buildSettings(/* existing agentOptions, transcriptionOptions, etc */);
+
++    // because we do welcome-first mode, include greeting if defined
++    if (props.welcomeFirst !== false && props.agentOptions?.greeting) {
++      settingsPayload.agent = settingsPayload.agent || {};
++      settingsPayload.agent.greeting = props.agentOptions.greeting;
++    }
+
+     agentManagerRef.current?.sendSettings(settingsPayload);
+     setHasSentSettings(true);
+   }
+
+Modify mic / audio start logic so that mic is not automatically turned on on connect:
+
+   // existing logic after connect / settings
+-  audioManagerRef.current?.startRecording();
+-  setMicEnabledInternal(true);
++  // Only start audio if mic has been toggled on
++  if (micEnabledInternal) {
++    audioManagerRef.current?.startRecording();
++  }
+
+Add an effect to respond to prop changes for microphoneEnabled:
+
+useEffect(() => {
+  if (props.microphoneEnabled !== undefined && props.microphoneEnabled !== micEnabledInternal) {
+    toggleMic(props.microphoneEnabled);
+  }
+}, [props.microphoneEnabled]);
+
+Implement toggleMic internal method:
+
+function toggleMic(enable: boolean) {
+  if (enable) {
+    // only start if settings have been sent (i.e. server ready)
+    if (!hasSentSettings) {
+      console.warn("[DeepgramVoiceInteraction] Trying to enable mic before settings applied.");
+      // optionally delay or queue
+      return;
+    }
+    audioManagerRef.current?.startRecording();
+    setMicEnabledInternal(true);
+    props.onMicToggle?.(true);
+  } else {
+    audioManagerRef.current?.stopRecording();
+    setMicEnabledInternal(false);
+    props.onMicToggle?.(false);
+  }
+}
+
+
+⸻
+
+2. WebSocket / Agent message handling module (inside component or separate)
+
+Locate the switch / handler for messages (e.g. in onAgentMessage or similar). Modify it:
+
+switch (msg.type) {
+  case "Welcome":
++    if (!welcomeReceived) {
++      setWelcomeReceived(true);
++      props.onWelcomeReceived?.();
++      // mark greeting phase starting
++      setGreetingInProgress(true);
++    }
+    break;
+
+  case "AgentStartedSpeaking":
++    if (greetingInProgress && !greetingStarted) {
++      setGreetingStarted(true);
++      props.onGreetingStarted?.();
++    }
+    // existing code: start playback etc.
+    break;
+
+  case "AgentAudioDone":
++    if (greetingInProgress) {
++      props.onGreetingComplete?.();
++      setGreetingInProgress(false);
++      setGreetingStarted(false);
++    }
+    // existing logic, e.g. transition back to listening state
+    break;
+
+  case "UserStartedSpeaking":
+    // if mic is enabled and greeting is still in progress, this is barge-in
++    if (micEnabledInternal && greetingInProgress) {
++      // abort playback
++      audioPlayerRef.current?.abortPlayback();
++      // treat greeting as ended
++      props.onGreetingComplete?.();
++      setGreetingInProgress(false);
++      setGreetingStarted(false);
++    }
+    // proceed with user capture logic
+    break;
+
+  // ... other message handlers ...
+}
+
+You may need to add or modify audioPlayerRef.current.abortPlayback() or similar method; see next section.
+
+⸻
+
+3. Playback / Audio Player module
+
+In the audio / playback module (which takes TTS audio chunks and plays them), you need the ability to abort playback mid-stream.
+
+Add a method like:
+
+class AudioPlayer {
+  // existing fields, e.g. audioContext, buffer queue, etc.
+
+  abortPlayback() {
+    // stop current source(s)
+    if (this.currentSource) {
+      this.currentSource.stop();
+    }
+    // clear any queued buffers
+    this.queue = [];
+  }
+
+  // in playback logic, check if playback was aborted / cleared
+}
+
+Ensure that abortPlayback cleans up state so that further queued audio does not resume.
+
+⸻
+
+4. Audio / Microphone Manager module
+
+Modify the mic / capture manager so that it does not auto-start when connection begins. The existing code likely has a path like:
+
+// existing
+start() {
+  this.requestMicPermission();
+  this.captureStream = getUserMedia(...);
+  this.processor = ...
+  this.sendAudioLoop();
+}
+
+You’ll need to wrap that so that start() is only called when mic is toggled. Possibly separate “initialize” vs “start capturing” methods.
+
+If there is code like:
+
+// in initialization
+navigator.mediaDevices.getUserMedia().then(stream => {
+  // set up audio
+  this.startCapturing();
+});
+
+you may need to guard it:
+
+if (micEnabledInternal) {
+  // do getUserMedia and start capturing
+}
+
+Alternatively, decouple initialization (permission, audio graph) from actual streaming, so toggling mic later can trigger capturing.
+
+⸻
+
+5. Types / interfaces file
+
+Add types for new props, internal flags, and new callback functions:
+
+interface DeepgramVoiceInteractionProps {
+  welcomeFirst?: boolean;
+  microphoneEnabled?: boolean;
+  onMicToggle?: (enabled: boolean) => void;
+  onWelcomeReceived?: () => void;
+  onGreetingStarted?: () => void;
+  onGreetingComplete?: () => void;
+  // ... existing props ...
+}
+
+Add new internal state types if needed (e.g. greeting flags).
+
+⸻
+
+6. Example / Demo App
+
+In the demo or test example (e.g. src/App.tsx or demo), modify instantiation of DeepgramVoiceInteraction:
+
+<DeepgramVoiceInteraction
+  apiKey={...}
+  transcriptionOptions={...}
+  agentOptions={{
+    greeting: "Hello! How can I help you today?",
+    instructions: "...",
+    voice: "...",
+    // etc
+  }}
+  welcomeFirst={true}   // or default if you make it default
+  onWelcomeReceived={() => console.log("Welcome received")}
+  onGreetingStarted={() => console.log("Greeting started")}
+  onGreetingComplete={() => console.log("Greeting complete")}
+  onMicToggle={(enabled) => console.log("Mic toggled:", enabled)}
+  // other existing callbacks...
+/>
+<button onClick={() => toggle mic via props or ref}>Toggle Mic</button>
+
+Add in test scaffolding to simulate WebSocket messages (Welcome, AgentStartedSpeaking, AgentAudioDone, UserStartedSpeaking) and verify UI events.
+
+⸻
+
+Summary & Caveats
+	•	This patch sketch shows all the places you’d modify: React component props & state, connection & settings logic, WebSocket message handler, playback abort logic, audio manager, types, and demo app.
+	•	You must inspect and adapt to the real names of modules, methods, refs, and internal structure in your version of dg_react_agent.
+	•	The trickiest parts will be correct handling of aborting playback mid-greeting, race conditions between mic toggle and greeting, and ensuring that audio never starts prematurely.
+	•	You’ll need to be careful with reconnection / cleanup logic (reset flags, prevent double greeting).
+	•	You should also update tests / mocks to simulate the new flow and verify barge-in behavior.
+
+If you like, I can generate a fully fleshed-out patch (with file diffs) against a specific commit or version of dg_react_agent (if you share that version) so you can just apply it. Do you want me to produce that for your specific version?
