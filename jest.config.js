@@ -7,7 +7,7 @@ module.exports = {
     '<rootDir>/tests/**/*.test.ts',
     '<rootDir>/tests/**/*.test.tsx'
   ],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
   transform: {

@@ -170,7 +170,7 @@ export class AudioManager {
   /**
    * Logs a message if debug is enabled
    */
-  private log(...args: any[]): void {
+  private log(...args: unknown[]): void {
     if (this.options.debug) {
       console.log('[AudioManager]', ...args);
     }
@@ -557,6 +557,14 @@ export class AudioManager {
     
     this.log(`[clearAudioQueue] After: activeSourceNodes.length = ${this.activeSourceNodes.length}, startTimeRef.current = ${this.startTimeRef.current}`);
     this.log('✅ Audio queue cleared, all playback should have stopped');
+  }
+
+  /**
+   * Aborts current playback (alias for clearAudioQueue for welcome-first behavior)
+   */
+  public abortPlayback(): void {
+    this.log('Aborting playback (welcome-first barge-in)');
+    this.clearAudioQueue();
   }
   
   /**

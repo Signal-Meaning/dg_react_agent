@@ -49,7 +49,7 @@ export type {
 export interface LLMResponse {
   type: 'llm';
   text: string;
-  metadata?: any;
+  metadata?: unknown;
 }
 
 /**
@@ -58,7 +58,7 @@ export interface LLMResponse {
 export interface UserMessageResponse {
   type: 'user';
   text: string;
-  metadata?: any;
+  metadata?: unknown;
 }
 
 /**
@@ -160,6 +160,36 @@ export interface DeepgramVoiceInteractionProps {
      */
     wakeWords?: string[];
   };
+
+  /**
+   * Welcome-first behavior options
+   */
+  welcomeFirst?: boolean;
+
+  /**
+   * Whether microphone is enabled (controlled or initial state)
+   */
+  microphoneEnabled?: boolean;
+
+  /**
+   * Called when microphone is toggled on/off
+   */
+  onMicToggle?: (enabled: boolean) => void;
+
+  /**
+   * Called when server's Welcome event arrives
+   */
+  onWelcomeReceived?: () => void;
+
+  /**
+   * Called when the greeting TTS begins
+   */
+  onGreetingStarted?: () => void;
+
+  /**
+   * Called when the greeting TTS completes (AgentAudioDone)
+   */
+  onGreetingComplete?: () => void;
 }
 
 /**
@@ -216,6 +246,11 @@ export interface DeepgramVoiceInteractionHandle {
    * Inject a user message to the agent
    */
   injectUserMessage: (message: string) => void;
+
+  /**
+   * Toggle microphone on/off
+   */
+  toggleMicrophone: (enabled: boolean) => Promise<void>;
 }
 
 // REMOVE the duplicate AgentState definition at the end of this file

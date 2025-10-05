@@ -29,6 +29,12 @@ function App() {
   });
   const [logs, setLogs] = useState<string[]>([]);
   
+  // Welcome-first state
+  const [micEnabled, setMicEnabled] = useState(false);
+  const [welcomeReceived, setWelcomeReceived] = useState(false);
+  const [greetingStarted, setGreetingStarted] = useState(false);
+  const [greetingComplete, setGreetingComplete] = useState(false);
+  
   // Memoize options objects to prevent unnecessary re-renders/effect loops
   const memoizedTranscriptionOptions = useMemo(() => ({
     // Nova-3 enables keyterm prompting
@@ -171,6 +177,27 @@ function App() {
     addLog(`Error (${error.service}): ${error.message}`);
     console.error('Deepgram error:', error);
   }, [addLog]); // Depends on addLog
+
+  // Welcome-first event handlers
+  const handleMicToggle = useCallback((enabled: boolean) => {
+    setMicEnabled(enabled);
+    addLog(`Microphone ${enabled ? 'enabled' : 'disabled'}`);
+  }, [addLog]);
+
+  const handleWelcomeReceived = useCallback(() => {
+    setWelcomeReceived(true);
+    addLog('Welcome message received from server');
+  }, [addLog]);
+
+  const handleGreetingStarted = useCallback(() => {
+    setGreetingStarted(true);
+    addLog('Greeting TTS started');
+  }, [addLog]);
+
+  const handleGreetingComplete = useCallback(() => {
+    setGreetingComplete(true);
+    addLog('Greeting TTS completed');
+  }, [addLog]);
   
   // Control functions
   const startInteraction = async () => {
@@ -249,6 +276,15 @@ function App() {
       addLog('Error: Could not inject message, deepgramRef is null');
     }
   };
+
+  const toggleMicrophone = async () => {
+    try {
+      await deepgramRef.current?.toggleMicrophone(!micEnabled);
+    } catch (error) {
+      addLog(`Error toggling microphone: ${(error as Error).message}`);
+      console.error('Microphone toggle error:', error);
+    }
+  };
   
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
@@ -268,6 +304,13 @@ function App() {
         onConnectionStateChange={handleConnectionStateChange}
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
+        // Welcome-first props
+        welcomeFirst={true}
+        microphoneEnabled={micEnabled}
+        onMicToggle={handleMicToggle}
+        onWelcomeReceived={handleWelcomeReceived}
+        onGreetingStarted={handleGreetingStarted}
+        onGreetingComplete={handleGreetingComplete}
         debug={true}
       />
       
@@ -279,6 +322,11 @@ function App() {
         <p>Agent Connection: <strong>{connectionStates.agent}</strong></p>
         <p>Audio Recording: <strong>{isRecording.toString()}</strong></p>
         <p>Audio Playing: <strong>{isPlaying.toString()}</strong></p>
+        <h4>Welcome-First States:</h4>
+        <p>Microphone Enabled: <strong>{micEnabled.toString()}</strong></p>
+        <p>Welcome Received: <strong>{welcomeReceived.toString()}</strong></p>
+        <p>Greeting Started: <strong>{greetingStarted.toString()}</strong></p>
+        <p>Greeting Complete: <strong>{greetingComplete.toString()}</strong></p>
       </div>
       
       <div style={{ margin: '20px 0', display: 'flex', gap: '10px' }}>
@@ -330,8 +378,43 @@ function App() {
         >
           Inject Message
         </button>
+        <button 
+          onClick={toggleMicrophone}
+          disabled={!isReady}
+          style={{ 
+            padding: '10px 20px',
+            backgroundColor: micEnabled ? '#e0f7fa' : 'transparent'
+          }}
+        >
+          {micEnabled ? 'Disable Mic' : 'Enable Mic'}
+        </button>
       </div>
       
+      {/* Welcome-first status */}
+      {welcomeReceived && (
+        <div style={{
+          margin: '20px 0',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          padding: '10px',
+          border: '2px solid #4CAF50',
+          borderRadius: '8px',
+          backgroundColor: '#f1f8e9'
+        }}>
+          <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }}>
+            {greetingStarted ? '🎤 Agent is greeting you' 
+              : greetingComplete ? '✅ Welcome complete - ready for interaction' 
+              : '👋 Welcome received - waiting for greeting...'}
+          </p>
+          {!micEnabled && (
+            <p style={{ margin: '0', fontStyle: 'italic', color: '#555' }}>
+              Microphone disabled - click "Enable Mic" to start speaking
+            </p>
+          )}
+        </div>
+      )}
+
       {isRecording && (
         <div style={{
           margin: '20px 0',
