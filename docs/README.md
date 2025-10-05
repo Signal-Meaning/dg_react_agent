@@ -1,0 +1,165 @@
+# Deepgram Voice Agent - Auto-Connect Dual Mode
+
+## Overview
+
+The `dg_react_agent` package provides a React component for real-time transcription and voice agent interactions using Deepgram APIs. This implementation features **auto-connect dual mode** behavior that establishes both transcription and agent connections immediately when ready, submits settings, and provides controlled microphone access.
+
+## Core Features
+
+### Auto-Connect Dual Mode
+- **Immediate Connection**: Establishes both transcription and agent WebSocket connections automatically when component is ready
+- **Settings-First Approach**: Submits agent settings as soon as connection is established
+- **Microphone Control**: Microphone remains disabled until user explicitly enables it
+- **Text-Only Mode**: Supports text-driven conversations without requiring audio
+- **Barge-In Support**: Users can interrupt agent speech by starting to speak
+
+### Key Props
+
+```typescript
+interface DeepgramVoiceInteractionProps {
+  // Auto-connect dual mode
+  autoConnect?: boolean;                     // Auto-connect dual mode and send settings
+  microphoneEnabled?: boolean;               // Control microphone state
+  onMicToggle?: (enabled: boolean) => void; // Microphone toggle callback
+  onConnectionReady?: () => void;            // Dual mode connection established
+  onAgentSpeaking?: () => void;              // Agent started speaking
+  onAgentSilent?: () => void;                // Agent finished speaking
+  
+  // Existing props...
+  apiKey: string;
+  transcriptionOptions?: TranscriptionOptions;
+  agentOptions?: AgentOptions;
+  // ... other existing props
+}
+```
+
+## Protocol Flow
+
+1. Component mounts
+2. AudioManager initializes
+3. Dual mode WebSocket connections established automatically (if `autoConnect !== false`)
+4. Settings message sent immediately
+5. SettingsApplied received
+6. Welcome message sent (if greeting configured)
+7. Microphone remains disabled until user toggle
+
+## State Management
+
+The component tracks:
+- Dual mode connection status
+- Microphone enabled/disabled state
+- Agent speaking/silent states
+- Settings sent status
+- Connection ready status
+
+## Testing Strategy
+
+### Unit Tests (Jest)
+- Component rendering and prop handling
+- State management and transitions
+- Event handling and callbacks
+- Error conditions and edge cases
+
+### E2E Tests (Playwright)
+- Auto-connect dual mode functionality
+- Microphone control and permissions
+- Text-only conversation mode
+- Barge-in behavior during agent speech
+- API integration and error handling
+- Cross-platform compatibility
+
+### Test Files
+```
+tests/
+├── e2e/
+│   ├── auto-connect-dual-mode.spec.js
+│   ├── microphone-control.spec.js
+│   ├── text-only-conversation.spec.js
+│   └── barge-in-behavior.spec.js
+├── utils/
+│   ├── audio-helpers.js
+│   └── api-mocks.js
+└── welcome-first-simple.test.js
+```
+
+## Usage Example
+
+```tsx
+import { DeepgramVoiceInteraction } from 'deepgram-voice-interaction-react';
+
+function MyApp() {
+  const [micEnabled, setMicEnabled] = useState(false);
+  const [connectionReady, setConnectionReady] = useState(false);
+
+  return (
+    <DeepgramVoiceInteraction
+      apiKey="your-api-key"
+      autoConnect={true}
+      microphoneEnabled={micEnabled}
+      onMicToggle={setMicEnabled}
+      onConnectionReady={() => setConnectionReady(true)}
+      onAgentSpeaking={() => console.log('Agent speaking')}
+      onAgentSilent={() => console.log('Agent silent')}
+      agentOptions={{
+        greeting: "Hello! How can I help you today?",
+        instructions: "You are a helpful voice assistant.",
+        voice: "aura-asteria-en",
+      }}
+    />
+  );
+}
+```
+
+## Development
+
+### Running Tests
+```bash
+# Unit tests
+npm test
+
+# E2E tests
+npm run test:e2e
+
+# E2E tests with UI
+npm run test:e2e:ui
+
+# E2E tests in headed mode
+npm run test:e2e:headed
+```
+
+### Building
+```bash
+npm run build
+```
+
+## Implementation History
+
+This implementation was developed following Test-Driven Development (TDD) principles:
+
+1. **Protocol Analysis**: Documented actual vs. desired Deepgram Voice Agent protocol
+2. **Requirements Definition**: Specified auto-connect dual mode behavior
+3. **Implementation**: Modified core component with new props and state management
+4. **Testing**: Comprehensive unit and E2E test coverage
+5. **Documentation**: Consolidated documentation for maintainability
+
+## Success Criteria
+
+- ✅ Dual mode connection established automatically
+- ✅ Settings sent immediately upon connection
+- ✅ Microphone disabled by default
+- ✅ Text input works without microphone
+- ✅ User can interrupt agent speech
+- ✅ All existing functionality preserved
+- ✅ Comprehensive test coverage (>90%)
+- ✅ Cross-platform compatibility
+
+## API Reference
+
+See the TypeScript definitions in `src/types/index.ts` for complete API documentation.
+
+## Contributing
+
+1. Follow TDD principles - write tests first
+2. Maintain >90% test coverage
+3. Update documentation for any API changes
+4. Run full test suite before submitting PRs
