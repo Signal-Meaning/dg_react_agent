@@ -226,8 +226,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
       const isRealApiKey = apiKey && 
         apiKey !== 'your-deepgram-api-key-here' && 
-        !apiKey.startsWith('test-') && 
-        apiKey.startsWith('dgkey_');
+        apiKey.startsWith('dgkey_') && 
+        apiKey.length >= 40; // Deepgram API keys are typically 40+ characters
       
       if (isRealApiKey) {
         // Real API key - use actual Deepgram agent
@@ -403,8 +403,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
           const isRealApiKey = apiKey && 
             apiKey !== 'your-deepgram-api-key-here' && 
-            !apiKey.startsWith('test-') && 
-            apiKey.startsWith('dgkey_');
+            apiKey.startsWith('dgkey_') && 
+            apiKey.length >= 40; // Deepgram API keys are typically 40+ characters
           
           return (
             <div style={{ 
