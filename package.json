@@ -19,7 +19,10 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:report": "playwright show-report",
     "lint": "eslint src --ext .ts,.tsx",
-    "build:single-file": "node scripts/generate-single-file.js"
+    "build:single-file": "node scripts/generate-single-file.js",
+    "validate": "node scripts/validate-plugin.js",
+    "prebuild": "echo 'Skipping validation for now'",
+    "postbuild": "echo 'Build completed'"
   },
   "keywords": [
     "deepgram",

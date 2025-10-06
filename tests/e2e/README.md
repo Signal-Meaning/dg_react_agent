@@ -48,9 +48,51 @@ npm run test:e2e:ui
 
 ## Test Files
 
-- **`auto-connect-dual-mode.spec.js`** - Tests auto-connect behavior and dual mode functionality
-- **`microphone-control.spec.js`** - Tests microphone enable/disable and state management  
-- **`text-only-conversation.spec.js`** - Tests text-only conversation without audio
+- **`deepgram-ux-protocol.spec.js`** - UX-focused protocol validation tests (3 tests)
+- **`protocol-validation-modes.spec.js`** - Real API + Mock mode validation (2 tests)
+- **`api-key-validation.spec.js`** - API key validation and error handling
+- **`auto-connect-dual-mode.spec.js`** - Auto-connect behavior and dual mode functionality
+- **`microphone-control.spec.js`** - Microphone enable/disable and state management  
+- **`text-only-conversation.spec.js`** - Text-only conversation without audio
+- **`helpers/test-helpers.js`** - Shared test utilities (see below)
+
+## Writing New Tests
+
+### Using Test Helpers
+
+All tests should use the shared helpers in `helpers/test-helpers.js` for consistency:
+
+```javascript
+const {
+  SELECTORS,                    // Centralized UI selectors
+  setupTestPage,                // Navigate and wait for component load
+  waitForConnection,            // Wait for protocol handshake
+  waitForAgentGreeting,         // Wait for agent greeting
+  sendTextMessage,              // Send text via UI
+  installWebSocketCapture,      // Capture WebSocket messages
+  installMockWebSocket,         // Mock WebSocket for tests
+  assertConnectionHealthy,      // Verify connection state
+} = require('./helpers/test-helpers');
+
+test('my new test', async ({ page }) => {
+  // Setup
+  await setupTestPage(page);
+  await waitForConnection(page);
+  
+  // Action
+  await sendTextMessage(page, 'Hello');
+  
+  // Assert
+  await assertConnectionHealthy(page, expect);
+});
+```
+
+### Benefits of Using Helpers
+
+- ✅ **DRY**: No duplicated setup/assertion code
+- ✅ **Consistent**: All tests follow same patterns
+- ✅ **Maintainable**: Change once, affects all tests
+- ✅ **Readable**: High-level actions instead of low-level Playwright calls
 
 ## Troubleshooting
 
