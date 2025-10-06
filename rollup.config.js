@@ -1,5 +1,4 @@
 import resolve from '@rollup/plugin-node-resolve';
-import commonjs from '@rollup/plugin-commonjs';
 import typescript from '@rollup/plugin-typescript';
 import { terser } from 'rollup-plugin-terser';
 import peerDepsExternal from 'rollup-plugin-peer-deps-external';
@@ -11,12 +10,26 @@ const packageJson = JSON.parse(readFileSync('./package.json', 'utf8'));
 
 export default {
   input: 'src/index.ts',
-  external: ['react', 'react-dom'],
+  external: (id) => {
+    // Externalize React and React DOM and their subpaths
+    if (id === 'react' || id === 'react-dom') {
+      return true;
+    }
+    if (id.startsWith('react/') || id.startsWith('react-dom/')) {
+      return true;
+    }
+    // Externalize any other peer dependencies
+    if (id.startsWith('@types/')) {
+      return true;
+    }
+    return false;
+  },
   output: [
     {
       file: 'dist/index.js',
       format: 'cjs',
       sourcemap: false,
+      exports: 'named',
     },
     {
       file: packageJson.module,
@@ -41,9 +54,11 @@ export default {
     resolve({
       browser: true,
       extensions: ['.js', '.jsx', '.ts', '.tsx'],
+      preferBuiltins: false,
     }),
     
-    commonjs(),
+    // commonjs plugin removed to prevent React bundling
+    // React should be externalized, not processed by commonjs
     
     typescript({
       tsconfig: './tsconfig.json',
