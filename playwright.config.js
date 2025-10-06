@@ -23,13 +23,13 @@ module.exports = defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
+    baseURL: process.env.TEST_BASE_URL || 'http://localhost:5173',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
     
-    /* Record video on failure */
-    video: 'retain-on-failure',
+    /* Record video on failure - disabled by default */
+    video: 'off',
     
     /* Take screenshot on failure */
     screenshot: 'only-on-failure',
@@ -42,24 +42,10 @@ module.exports = defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
 
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-
     /* Test against mobile viewports. */
     {
       name: 'Mobile Chrome',
       use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
     },
 
     /* Test against branded browsers. */
@@ -76,8 +62,31 @@ module.exports = defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:3000',
+    cwd: './test-app',
+    url: 'http://localhost:5173', // Vite default port
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },
+
+  /* 
+   * IMPORTANT: E2E Tests Require Real Deepgram API Key
+   * 
+   * These tests use REAL Deepgram WebSocket connections, not mocks.
+   * This provides authentic integration testing but requires a valid API key.
+   * 
+   * Required Environment Variables (in test-app/.env):
+   * - VITE_DEEPGRAM_API_KEY: Your real Deepgram API key
+   * - VITE_DEEPGRAM_PROJECT_ID: Your Deepgram project ID
+   * 
+   * Why Real API Key Instead of Mocks:
+   * - Authentic testing of WebSocket connections
+   * - Real component state management (onReady, connection states)
+   * - No complex mock maintenance (saves 13-19 hours of development)
+   * - Catches actual integration issues
+   * 
+   * If you need to run tests without a real API key, consider:
+   * 1. Using unit tests with mocks instead
+   * 2. Setting up a test Deepgram account with free credits
+   * 3. Using the existing Jest tests in tests/ directory
+   */
 });

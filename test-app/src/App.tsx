@@ -12,6 +12,44 @@ import {
 } from '../../src';
 
 function App() {
+  // Fail-fast check for required API key
+  const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
+  const projectId = import.meta.env.VITE_DEEPGRAM_PROJECT_ID;
+  
+  // Check for test mode override (for Playwright tests)
+  const isTestMode = window.location.search.includes('test-mode=true');
+  const shouldShowError = isTestMode ? 
+    (window.testApiKey === 'missing' || window.testApiKey === 'placeholder' || window.testApiKey === 'test-prefix') :
+    (!apiKey || apiKey === 'your-deepgram-api-key-here' || apiKey.startsWith('test-'));
+  
+  if (shouldShowError) {
+    return (
+      <div style={{ 
+        padding: '20px', 
+        backgroundColor: '#fee', 
+        border: '2px solid #f00', 
+        borderRadius: '8px',
+        margin: '20px',
+        fontFamily: 'monospace'
+      }}>
+        <h2>⚠️ Deepgram API Key Status</h2>
+        <p><strong>This test app supports both REAL and MOCK modes:</strong></p>
+        <div style={{ margin: '15px 0', padding: '10px', backgroundColor: '#f0f8ff', borderRadius: '4px' }}>
+          <h4>🔴 Current Mode: MOCK</h4>
+          <p>Text messages will show simulated responses with <code>[MOCK]</code> prefix.</p>
+        </div>
+        <p><strong>To enable REAL Deepgram integration:</strong></p>
+        <p>Set the following in <code>test-app/.env</code>:</p>
+        <pre style={{ backgroundColor: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
+VITE_DEEPGRAM_API_KEY=your-real-deepgram-api-key
+VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
+        </pre>
+        <p>Get a free API key at: <a href="https://deepgram.com" target="_blank">https://deepgram.com</a></p>
+        <p><em>With a real API key, text messages will be sent to the actual Deepgram agent service.</em></p>
+      </div>
+    );
+  }
+
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
   
   // State for UI
@@ -187,19 +225,42 @@ function App() {
     addLog(`Microphone ${enabled ? 'enabled' : 'disabled'}`);
   }, [addLog]);
 
-  const handleTextSubmit = useCallback(() => {
+  const handleTextSubmit = useCallback(async () => {
     if (!textInput.trim()) return;
     
     try {
-      addLog(`Sending text message: ${textInput}`);
-      setUserMessage(textInput);
-      setTextInput('');
+      const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
+      const isRealApiKey = apiKey && 
+        apiKey !== 'your-deepgram-api-key-here' && 
+        apiKey.startsWith('dgkey_') && 
+        apiKey.length >= 40; // Deepgram API keys are typically 40+ characters
       
-      // Simulate agent response for testing
-      setTimeout(() => {
-        setAgentResponse(`I received your message: "${textInput}". How can I help you with that?`);
-        addLog('Agent responded to text message');
-      }, 1000);
+      if (isRealApiKey) {
+        // Real API key - use actual Deepgram agent
+        addLog(`Sending text message to REAL Deepgram agent: ${textInput}`);
+        setUserMessage(textInput);
+        
+        if (deepgramRef.current) {
+          // Ensure text-only connection is established
+          await deepgramRef.current.connectTextOnly();
+          deepgramRef.current.injectUserMessage(textInput);
+          addLog('Message sent to real Deepgram agent via injectUserMessage');
+        } else {
+          addLog('Error: DeepgramVoiceInteraction ref not available');
+        }
+      } else {
+        // Mock API key - use simulated responses
+        addLog(`Sending text message to MOCK agent: ${textInput}`);
+        setUserMessage(textInput);
+        
+        // Simulate agent response for testing with mock API key
+        setTimeout(() => {
+          setAgentResponse(`[MOCK] I received your message: "${textInput}". How can I help you with that?`);
+          addLog('Mock agent responded to text message');
+        }, 1000);
+      }
+      
+      setTextInput('');
     } catch (error) {
       addLog(`Error sending text message: ${(error as Error).message}`);
       console.error('Text submit error:', error);
@@ -342,6 +403,35 @@ function App() {
         <p>Core Component State (agentState via callback): <strong>{agentState}</strong></p>
         <p>Transcription Connection: <strong data-testid="connection-status">{connectionStates.agent}</strong></p>
         <p>Agent Connection: <strong>{connectionStates.agent}</strong></p>
+        
+        {/* API Mode Indicator */}
+        {(() => {
+          const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
+          const isRealApiKey = apiKey && 
+            apiKey !== 'your-deepgram-api-key-here' && 
+            apiKey.startsWith('dgkey_') && 
+            apiKey.length >= 40; // Deepgram API keys are typically 40+ characters
+          
+          return (
+            <div style={{ 
+              margin: '10px 0', 
+              padding: '8px', 
+              backgroundColor: isRealApiKey ? '#e8f5e8' : '#fff3cd', 
+              border: `1px solid ${isRealApiKey ? '#28a745' : '#ffc107'}`,
+              borderRadius: '4px'
+            }}>
+              <strong>
+                {isRealApiKey ? '🟢 REAL API Mode' : '🟡 MOCK API Mode'}
+              </strong>
+              <p style={{ margin: '5px 0 0 0', fontSize: '0.9em' }}>
+                {isRealApiKey 
+                  ? 'Text messages sent to actual Deepgram agent service' 
+                  : 'Text messages show simulated responses with [MOCK] prefix'
+                }
+              </p>
+            </div>
+          );
+        })()}
         <p>Audio Recording: <strong>{isRecording.toString()}</strong></p>
         <p>Audio Playing: <strong>{isPlaying.toString()}</strong></p>
         <h4>Auto-Connect Dual Mode States:</h4>
