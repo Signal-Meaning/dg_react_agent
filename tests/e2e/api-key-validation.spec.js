@@ -1,63 +1,26 @@
 const { test, expect } = require('@playwright/test');
+const { setupTestMode, expectMockMode, expectRealMode } = require('../utils/test-helpers');
 
 /**
  * API Key Validation Tests
  * 
  * These tests verify the fail-fast behavior when API keys are missing or invalid.
- * They mock the environment variables to test the error handling.
+ * They use test mode override to simulate different API key scenarios.
  */
 
 test.describe('API Key Validation', () => {
-  test('should show error when API key is missing', async ({ page }) => {
-    // Set test mode and missing API key
-    await page.addInitScript(() => {
-      window.testApiKey = 'missing';
+  const mockApiKeyScenarios = ['missing', 'placeholder', 'test-prefix'];
+
+  // Test all mock API key scenarios
+  mockApiKeyScenarios.forEach(scenario => {
+    test(`should show error when API key is ${scenario}`, async ({ page }) => {
+      await setupTestMode(page, scenario);
+      await expectMockMode(page);
     });
-
-    await page.goto('/?test-mode=true');
-    await page.waitForLoadState('networkidle');
-
-    // Should show the error banner
-    await expect(page.locator('h2')).toContainText('⚠️ Deepgram API Key Status');
-    await expect(page.locator('h4')).toContainText('🔴 Current Mode: MOCK');
-  });
-
-  test('should show error when API key is placeholder', async ({ page }) => {
-    // Set test mode and placeholder API key
-    await page.addInitScript(() => {
-      window.testApiKey = 'placeholder';
-    });
-
-    await page.goto('/?test-mode=true');
-    await page.waitForLoadState('networkidle');
-
-    // Should show the error banner
-    await expect(page.locator('h2')).toContainText('⚠️ Deepgram API Key Status');
-    await expect(page.locator('h4')).toContainText('🔴 Current Mode: MOCK');
-  });
-
-  test('should show error when API key starts with test-', async ({ page }) => {
-    // Set test mode and test-prefix API key
-    await page.addInitScript(() => {
-      window.testApiKey = 'test-prefix';
-    });
-
-    await page.goto('/?test-mode=true');
-    await page.waitForLoadState('networkidle');
-
-    // Should show the error banner
-    await expect(page.locator('h2')).toContainText('⚠️ Deepgram API Key Status');
-    await expect(page.locator('h4')).toContainText('🔴 Current Mode: MOCK');
   });
 
   test('should show setup instructions in error banner', async ({ page }) => {
-    // Set test mode and missing API key
-    await page.addInitScript(() => {
-      window.testApiKey = 'missing';
-    });
-
-    await page.goto('/?test-mode=true');
-    await page.waitForLoadState('networkidle');
+    await setupTestMode(page, 'missing');
 
     // Should show setup instructions
     await expect(page.locator('code').filter({ hasText: 'test-app/.env' })).toBeVisible();
@@ -66,16 +29,7 @@ test.describe('API Key Validation', () => {
   });
 
   test('should NOT show error with valid API key', async ({ page }) => {
-    // Set test mode and valid API key
-    await page.addInitScript(() => {
-      window.testApiKey = 'valid';
-    });
-
-    await page.goto('/?test-mode=true');
-    await page.waitForLoadState('networkidle');
-
-    // Should NOT show error banner - check that the main app is visible instead
-    await expect(page.locator('[data-testid="voice-agent"]')).toBeVisible();
-    // The main app should be visible, not the error banner
+    await setupTestMode(page, 'valid');
+    await expectRealMode(page);
   });
 });
