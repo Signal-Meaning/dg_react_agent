@@ -236,7 +236,7 @@ describe('Welcome-First Behavior', () => {
         initialize: jest.fn().mockResolvedValue(),
         startRecording: mockStartRecording,
         stopRecording: jest.fn(),
-        addEventListener: jest.fn(),
+        addEventListener: jest.fn().mockReturnValue(jest.fn()),
         dispose: jest.fn()
       }));
 
@@ -245,7 +245,7 @@ describe('Welcome-First Behavior', () => {
         connect: jest.fn().mockResolvedValue(),
         close: jest.fn(),
         sendJSON: jest.fn(),
-        addEventListener: jest.fn()
+        addEventListener: jest.fn().mockReturnValue(jest.fn())
       }));
 
       render(
@@ -269,7 +269,7 @@ describe('Welcome-First Behavior', () => {
         initialize: jest.fn().mockResolvedValue(),
         startRecording: mockStartRecording,
         stopRecording: mockStopRecording,
-        addEventListener: jest.fn(),
+        addEventListener: jest.fn().mockReturnValue(jest.fn()),
         dispose: jest.fn()
       }));
 
@@ -311,7 +311,7 @@ describe('Welcome-First Behavior', () => {
         initialize: jest.fn().mockResolvedValue(),
         startRecording: mockStartRecording,
         stopRecording: mockStopRecording,
-        addEventListener: jest.fn(),
+        addEventListener: jest.fn().mockReturnValue(jest.fn()),
         dispose: jest.fn()
       }));
 
@@ -363,7 +363,7 @@ describe('Welcome-First Behavior', () => {
         initialize: jest.fn().mockResolvedValue(),
         startRecording: jest.fn().mockResolvedValue(),
         stopRecording: jest.fn(),
-        addEventListener: jest.fn(),
+        addEventListener: jest.fn().mockReturnValue(jest.fn()),
         dispose: jest.fn()
       }));
 
@@ -405,7 +405,7 @@ describe('Welcome-First Behavior', () => {
         initialize: jest.fn().mockResolvedValue(),
         startRecording: jest.fn().mockResolvedValue(),
         stopRecording: jest.fn(),
-        addEventListener: jest.fn(),
+        addEventListener: jest.fn().mockReturnValue(jest.fn()),
         dispose: jest.fn()
       }));
 
@@ -452,7 +452,7 @@ describe('Welcome-First Behavior', () => {
         initialize: jest.fn().mockResolvedValue(),
         startRecording: jest.fn().mockResolvedValue(),
         stopRecording: jest.fn(),
-        addEventListener: jest.fn(),
+        addEventListener: jest.fn().mockReturnValue(jest.fn()),
         dispose: jest.fn()
       }));
 
@@ -493,7 +493,7 @@ describe('Welcome-First Behavior', () => {
         initialize: jest.fn().mockResolvedValue(),
         startRecording: jest.fn().mockResolvedValue(),
         stopRecording: jest.fn(),
-        addEventListener: jest.fn(),
+        addEventListener: jest.fn().mockReturnValue(jest.fn()),
         dispose: jest.fn(),
         abortPlayback: mockAbortPlayback
       }));
@@ -552,7 +552,7 @@ describe('Welcome-First Behavior', () => {
         initialize: jest.fn().mockResolvedValue(),
         startRecording: jest.fn().mockResolvedValue(),
         stopRecording: jest.fn(),
-        addEventListener: jest.fn(),
+        addEventListener: jest.fn().mockReturnValue(jest.fn()),
         dispose: jest.fn()
       }));
 
@@ -585,7 +585,7 @@ describe('Welcome-First Behavior', () => {
         initialize: jest.fn().mockResolvedValue(),
         startRecording: mockStartRecording,
         stopRecording: mockStopRecording,
-        addEventListener: jest.fn(),
+        addEventListener: jest.fn().mockReturnValue(jest.fn()),
         dispose: jest.fn()
       }));
 

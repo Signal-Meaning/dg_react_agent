@@ -187,6 +187,7 @@ function DeepgramVoiceInteraction(
     let transcriptionUnsubscribe: () => void = () => {};
     let agentUnsubscribe: () => void = () => {};
     let audioUnsubscribe: () => void = () => {};
+    let agentUnsubscribeFunc: () => void = () => {};
 
     // --- TRANSCRIPTION SETUP (CONDITIONAL) ---
     if (isTranscriptionConfigured) {
@@ -284,7 +285,7 @@ function DeepgramVoiceInteraction(
       });
 
     // Set up event listeners for agent WebSocket
-      agentUnsubscribe = agentManagerRef.current.addEventListener((event: WebSocketEvent) => {
+      const unsubscribeResult = agentManagerRef.current.addEventListener((event: WebSocketEvent) => {
       if (event.type === 'state') {
         log('Agent state:', event.state);
         dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
@@ -302,6 +303,8 @@ function DeepgramVoiceInteraction(
         handleError(event.error);
       }
     });
+      console.log('Agent unsubscribe result:', typeof unsubscribeResult, unsubscribeResult);
+      agentUnsubscribe = unsubscribeResult;
     } else {
       log('Agent service not configured, skipping setup');
     }
@@ -369,7 +372,9 @@ function DeepgramVoiceInteraction(
     // Clean up
     return () => {
       transcriptionUnsubscribe();
-      agentUnsubscribe();
+      if (isAgentConfigured && typeof agentUnsubscribe === 'function') {
+        agentUnsubscribe();
+      }
       audioUnsubscribe();
       
       if (transcriptionManagerRef.current) {
@@ -547,6 +552,7 @@ function DeepgramVoiceInteraction(
 
   // Microphone control function
   const toggleMic = async (enable: boolean) => {
+    console.log('toggleMic called with:', enable);
     if (enable) {
       if (!state.hasSentSettings) {
         log('Cannot enable microphone before settings are sent');
@@ -555,6 +561,7 @@ function DeepgramVoiceInteraction(
       
       if (audioManagerRef.current) {
         log('Enabling microphone...');
+        console.log('Calling startRecording on audioManagerRef.current');
         await audioManagerRef.current.startRecording();
         dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: true });
         onMicToggle?.(true);
