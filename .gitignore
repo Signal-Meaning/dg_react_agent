@@ -29,4 +29,9 @@ build/
 *.swo
 .DS_Store 
 
+# Test results
+test-results/
+playwright-report/
+
 guidance/
+test-results/.last-run.json
