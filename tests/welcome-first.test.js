@@ -195,37 +195,26 @@ describe('Welcome-First Behavior', () => {
     });
 
     test('should not auto-connect when welcomeFirst is false', async () => {
-      const mockConnect = jest.fn().mockResolvedValue();
-      const mockUnsubscribe = jest.fn();
+      // Use the setupMocks helper which works for other tests
+      const { mocks } = setupMocks();
       
-      const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
-      WebSocketManager.mockImplementation(() => ({
-        connect: mockConnect,
-        close: jest.fn(),
-        sendJSON: jest.fn(),
-        addEventListener: jest.fn().mockReturnValue(mockUnsubscribe)
-      }));
-
-      const { AudioManager } = require('../src/utils/audio/AudioManager');
-      AudioManager.mockImplementation(() => ({
-        initialize: jest.fn().mockResolvedValue(),
-        startRecording: jest.fn().mockResolvedValue(),
-        stopRecording: jest.fn(),
-        addEventListener: jest.fn().mockReturnValue(mockUnsubscribe),
-        dispose: jest.fn()
-      }));
-
-      render(
+      // Render the component
+      const { unmount } = render(
         <DeepgramVoiceInteraction
           {...defaultProps}
           welcomeFirst={false}
         />
       );
 
-      // Wait a bit to ensure no auto-connect happens
-      await new Promise(resolve => setTimeout(resolve, 200));
-      expect(mockConnect).not.toHaveBeenCalled();
-    }, 10000);
+      // Advance timers to trigger any setTimeout calls
+      jest.advanceTimersByTime(200);
+      
+      // Check that connect was not called
+      expect(mocks.WebSocketManager.connect).not.toHaveBeenCalled();
+      
+      // Clean up
+      unmount();
+    });
   });
 
   describe('Microphone control', () => {
@@ -265,6 +254,7 @@ describe('Welcome-First Behavior', () => {
       const mockStartRecording = jest.fn().mockResolvedValue();
       const mockStopRecording = jest.fn();
       const mockSendJSON = jest.fn();
+      const mockAddEventListener = jest.fn();
       
       const { AudioManager } = require('../src/utils/audio/AudioManager');
       AudioManager.mockImplementation(() => ({
@@ -280,7 +270,7 @@ describe('Welcome-First Behavior', () => {
         connect: jest.fn().mockResolvedValue(),
         close: jest.fn(),
         sendJSON: mockSendJSON,
-        addEventListener: jest.fn().mockReturnValue(jest.fn())
+        addEventListener: mockAddEventListener
       }));
 
       const ref = React.createRef();
@@ -296,6 +286,15 @@ describe('Welcome-First Behavior', () => {
       await waitFor(() => {
         expect(ref.current).toBeTruthy();
       });
+
+      // Simulate agent connection state change to trigger settings sending
+      const eventHandler = mockAddEventListener.mock.calls[0]?.[0];
+
+      if (eventHandler) {
+        act(() => {
+          eventHandler({ type: 'state', state: 'connected' });
+        });
+      }
 
       // Wait for settings to be sent (required for microphone toggle)
       await waitFor(() => {
@@ -546,12 +545,13 @@ describe('Welcome-First Behavior', () => {
   describe('Settings sending', () => {
     test('should include greeting in settings when welcomeFirst is true', async () => {
       const mockSendJSON = jest.fn();
+      const mockAddEventListener = jest.fn();
       const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
       WebSocketManager.mockImplementation(() => ({
         connect: jest.fn().mockResolvedValue(),
         close: jest.fn(),
         sendJSON: mockSendJSON,
-        addEventListener: jest.fn()
+        addEventListener: mockAddEventListener
       }));
 
       const { AudioManager } = require('../src/utils/audio/AudioManager');
@@ -570,6 +570,15 @@ describe('Welcome-First Behavior', () => {
         />
       );
 
+      // Simulate agent connection state change to trigger settings sending
+      const eventHandler = mockAddEventListener.mock.calls[0]?.[0];
+
+      if (eventHandler) {
+        act(() => {
+          eventHandler({ type: 'state', state: 'connected' });
+        });
+      }
+
       // Wait for settings to be sent
       await waitFor(() => {
         expect(mockSendJSON).toHaveBeenCalled();
@@ -587,6 +596,9 @@ describe('Welcome-First Behavior', () => {
     test('should respond to microphoneEnabled prop changes', async () => {
       const mockStartRecording = jest.fn().mockResolvedValue();
       const mockStopRecording = jest.fn();
+      const mockSendJSON = jest.fn();
+      const mockAddEventListener = jest.fn();
+      
       const { AudioManager } = require('../src/utils/audio/AudioManager');
       AudioManager.mockImplementation(() => ({
         initialize: jest.fn().mockResolvedValue(),
@@ -600,8 +612,8 @@ describe('Welcome-First Behavior', () => {
       WebSocketManager.mockImplementation(() => ({
         connect: jest.fn().mockResolvedValue(),
         close: jest.fn(),
-        sendJSON: jest.fn(),
-        addEventListener: jest.fn()
+        sendJSON: mockSendJSON,
+        addEventListener: mockAddEventListener
       }));
 
       const { rerender } = render(
@@ -611,6 +623,20 @@ describe('Welcome-First Behavior', () => {
           microphoneEnabled={false}
         />
       );
+
+      // Simulate agent connection state change to trigger settings sending
+      const eventHandler = mockAddEventListener.mock.calls[0]?.[0];
+
+      if (eventHandler) {
+        act(() => {
+          eventHandler({ type: 'state', state: 'connected' });
+        });
+      }
+
+      // Wait for settings to be sent
+      await waitFor(() => {
+        expect(mockSendJSON).toHaveBeenCalled();
+      });
 
       // Change microphoneEnabled to true
       rerender(
