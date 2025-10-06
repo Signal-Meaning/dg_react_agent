@@ -81,8 +81,6 @@ function DeepgramVoiceInteraction(
     onConnectionReady,
     onAgentSpeaking,
     onAgentSilent,
-    // Backward compatibility for old API
-    welcomeFirst,
   } = props;
 
   // Backward compatibility: map welcomeFirst to autoConnect
@@ -195,7 +193,6 @@ function DeepgramVoiceInteraction(
     let transcriptionUnsubscribe: () => void = () => {};
     let agentUnsubscribe: () => void = () => {};
     let audioUnsubscribe: () => void = () => {};
-    let agentUnsubscribeFunc: () => void = () => {};
 
     // --- TRANSCRIPTION SETUP (CONDITIONAL) ---
     if (isTranscriptionConfigured) {
@@ -367,11 +364,14 @@ function DeepgramVoiceInteraction(
     }
 
     // Auto-connect dual mode logic
+    console.log('Auto-connect check:', { effectiveAutoConnect, isAgentConfigured, agentManagerRef: !!agentManagerRef.current });
     if (effectiveAutoConnect !== false && isAgentConfigured) {
       log('Auto-connect dual mode enabled, establishing connection');
       // Auto-connect to agent service to establish dual mode
       setTimeout(() => {
+        console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current);
         if (agentManagerRef.current) {
+          console.log('Calling agentManagerRef.current.connect()');
           agentManagerRef.current.connect();
         }
       }, 100); // Small delay to ensure audio manager is ready

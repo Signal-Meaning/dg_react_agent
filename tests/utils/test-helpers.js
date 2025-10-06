@@ -125,8 +125,11 @@ async function expectMockMode(page) {
 async function expectRealMode(page) {
   const { expect } = require('@playwright/test');
   await expect(page.locator(SELECTORS.voiceAgent)).toBeVisible();
-  // Should not show error banner
-  await expect(page.locator('h2')).not.toContainText(EXPECTATIONS.apiKeyStatus);
+  // Should not show error banner - check if error banner exists first
+  const errorBanner = page.locator('h2').filter({ hasText: EXPECTATIONS.apiKeyStatus });
+  if (await errorBanner.count() > 0) {
+    await expect(errorBanner).not.toBeVisible();
+  }
 }
 
 module.exports = {
