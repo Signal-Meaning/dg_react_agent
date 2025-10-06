@@ -74,6 +74,8 @@ function DeepgramVoiceInteraction(
     onPlaybackStateChange,
     onError,
     debug = false,
+    // Backward compatibility
+    welcomeFirst,
     // Auto-connect dual mode props
     autoConnect,
     microphoneEnabled,
@@ -675,8 +677,10 @@ function DeepgramVoiceInteraction(
       // Track agent speaking
       if (state.greetingInProgress && !state.greetingStarted) {
         dispatch({ type: 'GREETING_STARTED', started: true });
-        onAgentSpeaking?.();
       }
+      
+      // Always call onAgentSpeaking when agent starts speaking
+      onAgentSpeaking?.();
       return;
     }
     
@@ -686,10 +690,12 @@ function DeepgramVoiceInteraction(
 
       // Track agent silent
       if (state.greetingInProgress) {
-        onAgentSilent?.();
         dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
         dispatch({ type: 'GREETING_STARTED', started: false });
       }
+      
+      // Always call onAgentSilent when agent finishes speaking
+      onAgentSilent?.();
       return;
     }
     
