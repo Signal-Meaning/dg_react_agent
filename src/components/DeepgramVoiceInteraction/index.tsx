@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useReducer, useRef } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useReducer, useRef } from 'react';
 import {
   AgentState,
   DeepgramError,
@@ -81,7 +81,15 @@ function DeepgramVoiceInteraction(
     onConnectionReady,
     onAgentSpeaking,
     onAgentSilent,
+    // Backward compatibility for old API
+    welcomeFirst,
   } = props;
+
+  // Backward compatibility: map welcomeFirst to autoConnect
+  const effectiveAutoConnect = useMemo(() => 
+    autoConnect !== undefined ? autoConnect : welcomeFirst, 
+    [autoConnect, welcomeFirst]
+  );
 
   // Internal state
   const [state, dispatch] = useReducer(stateReducer, initialState);
@@ -359,7 +367,7 @@ function DeepgramVoiceInteraction(
     }
 
     // Auto-connect dual mode logic
-    if (autoConnect !== false && isAgentConfigured) {
+    if (effectiveAutoConnect !== false && isAgentConfigured) {
       log('Auto-connect dual mode enabled, establishing connection');
       // Auto-connect to agent service to establish dual mode
       setTimeout(() => {
@@ -367,6 +375,8 @@ function DeepgramVoiceInteraction(
           agentManagerRef.current.connect();
         }
       }, 100); // Small delay to ensure audio manager is ready
+    } else {
+      log('Auto-connect disabled or agent not configured', { effectiveAutoConnect, isAgentConfigured });
     }
 
     // Clean up
@@ -400,7 +410,7 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: false });
       dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
     };
-  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, debug, autoConnect]); 
+  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, debug, effectiveAutoConnect]); 
 
   // Notify ready state changes ONLY when the value actually changes
   useEffect(() => {

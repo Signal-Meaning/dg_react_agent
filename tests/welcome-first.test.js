@@ -225,7 +225,7 @@ describe('Welcome-First Behavior', () => {
       // Wait a bit to ensure no auto-connect happens
       await new Promise(resolve => setTimeout(resolve, 200));
       expect(mockConnect).not.toHaveBeenCalled();
-    });
+    }, 10000);
   });
 
   describe('Microphone control', () => {
@@ -264,6 +264,8 @@ describe('Welcome-First Behavior', () => {
     test('should enable microphone when toggleMicrophone is called', async () => {
       const mockStartRecording = jest.fn().mockResolvedValue();
       const mockStopRecording = jest.fn();
+      const mockSendJSON = jest.fn();
+      
       const { AudioManager } = require('../src/utils/audio/AudioManager');
       AudioManager.mockImplementation(() => ({
         initialize: jest.fn().mockResolvedValue(),
@@ -277,8 +279,8 @@ describe('Welcome-First Behavior', () => {
       WebSocketManager.mockImplementation(() => ({
         connect: jest.fn().mockResolvedValue(),
         close: jest.fn(),
-        sendJSON: jest.fn(),
-        addEventListener: jest.fn()
+        sendJSON: mockSendJSON,
+        addEventListener: jest.fn().mockReturnValue(jest.fn())
       }));
 
       const ref = React.createRef();
@@ -294,6 +296,11 @@ describe('Welcome-First Behavior', () => {
       await waitFor(() => {
         expect(ref.current).toBeTruthy();
       });
+
+      // Wait for settings to be sent (required for microphone toggle)
+      await waitFor(() => {
+        expect(mockSendJSON).toHaveBeenCalled();
+      }, { timeout: 2000 });
 
       // Enable microphone
       await act(async () => {

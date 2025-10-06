@@ -165,6 +165,11 @@ export interface DeepgramVoiceInteractionProps {
    * Auto-connect dual mode behavior options
    */
   autoConnect?: boolean;
+  
+  /**
+   * @deprecated Use autoConnect instead. Backward compatibility for old API.
+   */
+  welcomeFirst?: boolean;
 
   /**
    * Whether microphone is enabled (controlled or initial state)
