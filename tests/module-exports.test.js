@@ -24,6 +24,8 @@ describe('Module Export Validation', () => {
       expect(fs.existsSync(path.join(distPath, 'index.js'))).toBe(true);
       expect(fs.existsSync(path.join(distPath, 'index.esm.js'))).toBe(true);
       expect(fs.existsSync(path.join(distPath, 'index.d.ts'))).toBe(true);
+      
+      console.log('Available files:', fs.readdirSync(distPath));
     });
 
     test('should have TypeScript definition files', () => {
@@ -36,28 +38,32 @@ describe('Module Export Validation', () => {
   });
 
   describe('CommonJS Module Exports', () => {
-    test('should have valid module structure', () => {
+    test('should have valid CommonJS module structure', () => {
       const cjsPath = path.join(distPath, 'index.js');
       const cjsContent = fs.readFileSync(cjsPath, 'utf8');
       
       // Check that the module exports the main component
       expect(cjsContent).toContain('DeepgramVoiceInteraction');
       
-      // Check that it's a valid CommonJS module (minified files use exports.DeepgramVoiceInteraction)
+      // Check that it's a valid CommonJS module
       expect(cjsContent).toMatch(/exports\.DeepgramVoiceInteraction|module\.exports/);
+      
+      console.log('CommonJS module validation passed');
     });
   });
 
   describe('ES Module Exports', () => {
-    test('should have valid ES module structure', async () => {
+    test('should have valid ES module structure', () => {
       const esmPath = path.join(distPath, 'index.esm.js');
       const esmContent = fs.readFileSync(esmPath, 'utf8');
       
       // Check that the main component is exported
       expect(esmContent).toContain('DeepgramVoiceInteraction');
       
-      // Check that it's a valid ES module (minified files use export{...} or exports.DeepgramVoiceInteraction)
-      expect(esmContent).toMatch(/export\s*\{|exports\.DeepgramVoiceInteraction/);
+      // Check that it's a valid ES module
+      expect(esmContent).toMatch(/export\s*\{/);
+      
+      console.log('ESM module validation passed');
     });
   });
 
@@ -158,19 +164,31 @@ describe('Module Export Validation', () => {
   });
 
   describe('Runtime Validation', () => {
-    test('should have valid module structure for runtime', () => {
+    test('should have valid CommonJS module for runtime', () => {
       const cjsPath = path.join(distPath, 'index.js');
       const cjsContent = fs.readFileSync(cjsPath, 'utf8');
       
       // Check that the module has the expected structure
       expect(cjsContent).toContain('DeepgramVoiceInteraction');
-      expect(cjsContent).toMatch(/exports\.DeepgramVoiceInteraction|module\.exports/);
       
       // Check that it's a valid JavaScript file
       expect(() => {
         // Just check that it's valid JavaScript syntax
         new Function(cjsContent);
       }).not.toThrow();
+      
+      console.log('CommonJS runtime validation passed');
+    });
+
+    test('should have valid ESM module for runtime', () => {
+      const esmPath = path.join(distPath, 'index.esm.js');
+      const esmContent = fs.readFileSync(esmPath, 'utf8');
+      
+      // Check that the module has the expected structure
+      expect(esmContent).toContain('DeepgramVoiceInteraction');
+      expect(esmContent).toMatch(/export\s*\{/);
+      
+      console.log('ESM runtime validation passed');
     });
   });
 });

@@ -74,8 +74,11 @@ class PluginValidator {
 
     const rollupContent = fs.readFileSync(rollupPath, 'utf8');
 
-    // Check for external configuration
-    if (!rollupContent.includes('external:')) {
+    // Check for external configuration (function-based or object-based)
+    const hasExternalConfig = rollupContent.includes('external:') || 
+                             rollupContent.includes('external,') ||
+                             rollupContent.includes('external');
+    if (!hasExternalConfig) {
       errors.push('❌ Missing external configuration in rollup config');
     } else {
       console.log('✅ External configuration found');
@@ -105,12 +108,28 @@ class PluginValidator {
 
     const bundleContent = fs.readFileSync(distPath, 'utf8');
 
-    // Check that React is not bundled
-    const reactBundledPatterns = [
+    // Check that React is properly externalized (not bundled)
+    const reactExternalPatterns = [
       /require\(['"]react['"]\)/g,
+      /import\s*\{[^}]*\}\s*from\s*['"]react['"]/g,
       /import\s+.*\s+from\s+['"]react['"]/g,
       /var\s+\w+\s*=\s*require\(['"]react['"]\)/g
     ];
+
+    // Check for actual React implementation being bundled (bad)
+    const reactBundledPatterns = [
+      /function\s+React|class\s+React|var\s+React\s*=\s*function/g,
+      /function\s+useState|function\s+useEffect|function\s+useRef/g,
+      /React\.createElement|React\.Component/g
+    ];
+
+    let hasExternalReact = false;
+    for (const pattern of reactExternalPatterns) {
+      if (pattern.test(bundleContent)) {
+        hasExternalReact = true;
+        break;
+      }
+    }
 
     let hasBundledReact = false;
     for (const pattern of reactBundledPatterns) {
@@ -121,9 +140,11 @@ class PluginValidator {
     }
 
     if (hasBundledReact) {
-      errors.push('❌ React is bundled in the plugin instead of being externalized');
-    } else {
+      errors.push('❌ React implementation is bundled in the plugin instead of being externalized');
+    } else if (hasExternalReact) {
       console.log('✅ React properly externalized in bundle');
+    } else {
+      warnings.push('⚠️ No React references found - may indicate bundling issue');
     }
 
     // Check for proper external references

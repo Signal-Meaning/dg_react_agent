@@ -358,7 +358,15 @@ function DeepgramVoiceInteraction(
           message: 'Failed to initialize audio',
           details: error,
         });
-        dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
+        
+        // For auto-connect dual mode, we should still be ready even if audio fails
+        // The user can still interact via text input and the agent will work
+        if (effectiveAutoConnect !== false && isAgentConfigured) {
+          log('AudioManager failed but auto-connect dual mode enabled, setting ready anyway');
+          dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
+        } else {
+          dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
+        }
       });
     } else {
       log('Neither transcription nor agent configured, skipping audio setup');
@@ -369,6 +377,11 @@ function DeepgramVoiceInteraction(
     console.log('Auto-connect check:', { effectiveAutoConnect, isAgentConfigured, agentManagerRef: !!agentManagerRef.current });
     if (effectiveAutoConnect !== false && isAgentConfigured) {
       log('Auto-connect dual mode enabled, establishing connection');
+      
+      // For auto-connect dual mode, set ready immediately since the user can interact via text
+      // even if audio is not available
+      dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
+      
       // Auto-connect to agent service to establish dual mode
       setTimeout(() => {
         console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current);
