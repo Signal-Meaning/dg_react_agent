@@ -251,19 +251,24 @@ export class WebSocketManager {
           }
         };
 
-        this.ws.onerror = (error) => {
-          this.log('WebSocket error:', error);
+        this.ws.onerror = (event) => {
+          this.log('WebSocket error event:', event);
+          const errorMessage = `WebSocket connection error for ${this.options.service}`;
           this.emit({ 
             type: 'error', 
             error: {
               service: this.options.service,
               code: 'websocket_error',
-              message: 'WebSocket connection error',
-              details: error,
+              message: errorMessage,
+              details: {
+                type: event.type,
+                target: event.target?.constructor?.name || 'WebSocket',
+                readyState: (event.target as WebSocket)?.readyState
+              }
             }
           });
           this.updateState('error');
-          reject(error);
+          reject(new Error(errorMessage));
         };
 
         this.ws.onclose = (event) => {

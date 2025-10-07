@@ -7,6 +7,10 @@
 // Export the main component
 export { default as DeepgramVoiceInteraction } from './components/DeepgramVoiceInteraction';
 
+// Export utilities for testing
+export { WebSocketManager } from './utils/websocket/WebSocketManager';
+export { AudioManager } from './utils/audio/AudioManager';
+
 // Export types
 export * from './types';
 

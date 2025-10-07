@@ -1,75 +1,91 @@
 import resolve from '@rollup/plugin-node-resolve';
 import typescript from '@rollup/plugin-typescript';
 import { terser } from 'rollup-plugin-terser';
-import peerDepsExternal from 'rollup-plugin-peer-deps-external';
 import cleaner from 'rollup-plugin-cleaner';
 import url from '@rollup/plugin-url';
-//import packageJson from './package.json' assert { type: 'json' };
+import commonjs from '@rollup/plugin-commonjs';
 import { readFileSync } from 'fs';
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf8'));
 
-export default {
-  input: 'src/index.ts',
-  external: (id) => {
-    // Externalize React and React DOM and their subpaths
-    if (id === 'react' || id === 'react-dom') {
-      return true;
-    }
-    if (id.startsWith('react/') || id.startsWith('react-dom/')) {
-      return true;
-    }
-    // Externalize any other peer dependencies
-    if (id.startsWith('@types/')) {
-      return true;
-    }
-    return false;
-  },
-  output: [
-    {
+const external = (id) => {
+  // Externalize React to use the same instance as the host app
+  if (id === 'react' || id === 'react-dom') {
+    return true;
+  }
+  if (id.startsWith('react/') || id.startsWith('react-dom/')) {
+    return true;
+  }
+  if (id === 'react/jsx-runtime' || id === 'react/jsx-dev-runtime') {
+    return true;
+  }
+  // Also externalize other peer dependencies
+  if (id === 'react-hook-form' || id.startsWith('react-hook-form/')) {
+    return true;
+  }
+  return false;
+};
+
+const plugins = [
+  
+  url({
+    include: ['**/*.js'],
+    limit: Infinity,
+    fileName: '[dirname][name][extname]',
+    publicPath: '/',
+  }),
+  
+  resolve({
+    browser: true,
+    extensions: ['.js', '.jsx', '.ts', '.tsx'],
+    preferBuiltins: false,
+  }),
+  
+  commonjs({
+    include: ['node_modules/**'],
+    exclude: ['node_modules/react/**', 'node_modules/react-dom/**']
+  }),
+  
+  typescript({
+    tsconfig: './tsconfig.json',
+    declaration: true,
+    declarationDir: 'dist',
+    compilerOptions: {
+      rootDir: 'src',
+    },
+  }),
+  
+  terser(),
+];
+
+export default [
+  // CommonJS build
+  {
+    input: 'src/index.ts',
+    external,
+    output: {
       file: 'dist/index.js',
       format: 'cjs',
-      sourcemap: false,
       exports: 'named',
+      sourcemap: false,
     },
-    {
-      file: packageJson.module,
+    plugins: [
+      ...plugins,
+      cleaner({
+        targets: ['./dist'],
+      }),
+    ],
+    preserveModules: false,
+  },
+  // ESM build
+  {
+    input: 'src/index.ts',
+    external,
+    output: {
+      file: 'dist/index.esm.js',
       format: 'esm',
       sourcemap: false,
     },
-  ],
-  plugins: [
-    cleaner({
-      targets: ['./dist'],
-    }),
-    
-    peerDepsExternal(),
-    
-    url({
-      include: ['**/*.js'],
-      limit: Infinity,
-      fileName: '[dirname][name][extname]',
-      publicPath: '/',
-    }),
-    
-    resolve({
-      browser: true,
-      extensions: ['.js', '.jsx', '.ts', '.tsx'],
-      preferBuiltins: false,
-    }),
-    
-    // commonjs plugin removed to prevent React bundling
-    // React should be externalized, not processed by commonjs
-    
-    typescript({
-      tsconfig: './tsconfig.json',
-      declaration: true,
-      declarationDir: 'dist',
-      compilerOptions: {
-        rootDir: 'src',
-      },
-    }),
-    
-    terser(),
-  ],
-  preserveModules: false,
-}; 
+    plugins,
+    preserveModules: false,
+  }
+]; 
