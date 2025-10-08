@@ -88,6 +88,49 @@ yarn add deepgram-react
 
 *(Note: For local development, adjust the path as needed.)*
 
+## Migration Guide
+
+### From v0.1.0 to v0.1.1
+
+**Breaking Change:** `autoConnect` prop behavior changed
+- **Before:** `autoConnect` defaulted to `undefined` and auto-connected
+- **After:** `autoConnect` defaults to `undefined` and does NOT auto-connect
+- **Fix:** Explicitly set `autoConnect={true}` if you want auto-connection behavior
+
+```tsx
+// Before (v0.1.0) - auto-connected by default
+<DeepgramVoiceInteraction
+  apiKey={apiKey}
+  agentOptions={agentOptions}
+/>
+
+// After (v0.1.1) - requires explicit autoConnect
+<DeepgramVoiceInteraction
+  apiKey={apiKey}
+  autoConnect={true}  // Add this for auto-connection
+  agentOptions={agentOptions}
+/>
+```
+
+## Quick Start
+
+```tsx
+import { DeepgramVoiceInteraction } from 'deepgram-voice-interaction-react';
+
+function App() {
+  return (
+    <DeepgramVoiceInteraction
+      apiKey="your-api-key"
+      agentOptions={{
+        instructions: "You are a helpful assistant",
+        voice: "aura-asteria-en"
+      }}
+      onAgentUtterance={(utterance) => console.log(utterance.text)}
+    />
+  );
+}
+```
+
 ## Getting Started
 
 This component simplifies complex interactions. Here's how to get started with common use cases:
@@ -138,6 +181,37 @@ const transcriptionOptions = useMemo(() => ({
 - Potential connection rate limiting
 
 **Development Warning:** In development mode, the component will warn you if it detects non-memoized options props.
+
+## Auto-Connect Behavior
+
+The `autoConnect` prop controls whether the component automatically establishes connections when ready:
+
+- `autoConnect={true}`: Automatically connects to services when ready (enables text-only interactions)
+- `autoConnect={false}`: Requires manual connection via `start()` method
+- `autoConnect={undefined}` (default): Same as `false` - no auto-connection
+
+**Important:** When `autoConnect` is `true`, the component will establish WebSocket connections immediately when ready, enabling text-only interactions even before microphone access is granted.
+
+```tsx
+// Auto-connect enabled (recommended for most use cases)
+<DeepgramVoiceInteraction
+  apiKey={apiKey}
+  autoConnect={true}
+  agentOptions={memoizedAgentOptions}
+/>
+
+// Manual connection control
+<DeepgramVoiceInteraction
+  apiKey={apiKey}
+  autoConnect={false}
+  agentOptions={memoizedAgentOptions}
+  onReady={(isReady) => {
+    if (isReady) {
+      deepgramRef.current?.start();
+    }
+  }}
+/>
+```
 
 ### 1. Basic Real-time Transcription (Transcription Only Mode)
 
@@ -424,6 +498,9 @@ export default CombinedInteraction;
 | `transcriptionOptions`  | `TranscriptionOptions`                                   | *        | Options for the transcription service. See `TranscriptionOptions` type & [Deepgram STT Docs][stt-docs]. **Omit completely** (not just `{}`) when not using transcription. |
 | `agentOptions`          | `AgentOptions`                                           | *        | Options for the agent service. See `AgentOptions` type & [Deepgram Agent Docs][agent-docs]. **Omit completely** (not just `{}`) when not using agent. |
 | `endpointConfig`        | `EndpointConfig` (`{ transcriptionUrl?, agentUrl? }`)    | No       | Override default Deepgram WebSocket URLs.                                                                 |
+| `autoConnect`           | `boolean`                                                | No       | Whether to automatically connect when ready. Default: `undefined` (no auto-connect).                     |
+| `microphoneEnabled`     | `boolean`                                                | No       | Whether microphone is enabled. Default: `false`.                                                          |
+| `sleepOptions`          | `SleepOptions`                                           | No       | Configuration for agent sleep behavior.                                                                   |
 | `onReady`               | `(isReady: boolean) => void`                             | No       | Called when the component is initialized and ready to start.                                              |
 | `onConnectionStateChange`| `(service: ServiceType, state: ConnectionState) => void` | No       | Called when WebSocket connection state changes for 'transcription' or 'agent'.                            |
 | `onTranscriptUpdate`    | `(transcriptData: TranscriptResponse) => void`           | No       | Called with live transcription results (interim & final).                                                 |
@@ -433,6 +510,10 @@ export default CombinedInteraction;
 | `onUserStartedSpeaking` | `() => void`                                             | No       | Called when user speech starts (VAD).                                                                     |
 | `onUserStoppedSpeaking` | `() => void`                                             | No       | Called when user speech stops (VAD).                                                                      |
 | `onPlaybackStateChange` | `(isPlaying: boolean) => void`                           | No       | Called when agent audio playback starts or stops.                                                         |
+| `onMicToggle`           | `(enabled: boolean) => void`                             | No       | Called when microphone state changes.                                                                     |
+| `onConnectionReady`     | `() => void`                                             | No       | Called when dual mode connection is established.                                                          |
+| `onAgentSpeaking`       | `() => void`                                             | No       | Called when agent starts speaking.                                                                        |
+| `onAgentSilent`         | `() => void`                                             | No       | Called when agent finishes speaking.                                                                      |
 | `onError`               | `(error: DeepgramError) => void`                         | No       | Called when an error occurs (mic, WebSocket, API, etc.).                                                  |
 | `debug`                 | `boolean`                                                | No       | Enable verbose logging to the browser console.                                                            |
 
@@ -503,9 +584,56 @@ The `agentOptions` prop allows detailed configuration of the voice agent. Refer 
 *   `greeting`: An optional initial greeting spoken by the agent.
 *   ... and more.
 
+## Performance Considerations
+
+### Memoization Requirements
+- Always memoize `agentOptions` and `transcriptionOptions` with `useMemo()`
+- Inline objects cause infinite re-initialization and poor performance
+- See [Critical: Options Props Must Be Memoized](#critical-options-props-must-be-memoized) section
+
+### Resource Usage
+- **Transcription Only**: Lightest weight, minimal resource usage
+- **Agent Only**: Moderate usage, includes audio playback
+- **Dual Mode**: Highest usage, two WebSocket connections + audio processing
+
+### Optimization Tips
+```tsx
+// ✅ Good: Memoized options
+const agentOptions = useMemo(() => ({
+  language: 'en',
+  listenModel: 'nova-3',
+  // ... other options
+}), []); // Empty dependency array for static config
+
+// ❌ Bad: Inline objects
+<DeepgramVoiceInteraction
+  agentOptions={{
+    language: 'en',
+    listenModel: 'nova-3',
+  }}
+/>
+```
+
 ## Browser Compatibility
 
 This component relies heavily on the **Web Audio API** (specifically `getUserMedia` and `AudioWorklet`) and the **WebSocket API**. It is primarily tested and optimized for modern **Chromium-based browsers** (Chrome, Edge). While it may work in other modern browsers like Firefox and Safari, full compatibility, especially concerning `AudioWorklet`, is not guaranteed.
+
+### Browser Support Matrix
+
+| Feature | Chrome | Firefox | Safari | Edge |
+|---------|:------:|:-------:|:------:|:----:|
+| Basic Transcription | ✅ | ✅ | ✅ | ✅ |
+| Voice Agent | ✅ | ⚠️ | ⚠️ | ✅ |
+| AudioWorklet | ✅ | ⚠️ | ⚠️ | ✅ |
+| WebSocket | ✅ | ✅ | ✅ | ✅ |
+| Microphone Access | ✅ | ✅ | ✅ | ✅ |
+
+**Legend:** ✅ Fully Supported | ⚠️ Limited Support | ❌ Not Supported
+
+**Notes:**
+- Firefox and Safari have limited AudioWorklet support
+- Voice agent functionality may be degraded on non-Chromium browsers
+- WebSocket connections work across all modern browsers
 
 ## Troubleshooting / Debugging
 
@@ -516,6 +644,148 @@ This component relies heavily on the **Web Audio API** (specifically `getUserMed
 *   **Console Errors:** Check the browser console for any JavaScript errors originating from the component or its dependencies.
 *   **Callback Handlers:** Ensure your callback functions passed as props (`onTranscriptUpdate`, `onError`, etc.) are correctly defined and handle the data/errors appropriately.
 *   **Mode Configuration:** If the wrong services are being initialized, verify that you're correctly including or omitting the `transcriptionOptions` and `agentOptions` props based on your needs.
+
+## Error Handling
+
+### Common Error Scenarios
+- **API Key Invalid**: Check `onError` callback for authentication errors
+- **Microphone Denied**: Handle permission errors gracefully
+- **Network Issues**: Implement retry logic for connection failures
+- **Invalid Options**: Validate options before passing to component
+
+### Error Recovery Patterns
+```tsx
+const handleError = (error) => {
+  switch (error.code) {
+    case 'invalid_api_key':
+      // Show API key input
+      setShowApiKeyInput(true);
+      break;
+    case 'microphone_denied':
+      // Show microphone permission request
+      setShowMicPermission(true);
+      break;
+    case 'connection_failed':
+      // Implement retry logic
+      setTimeout(() => {
+        deepgramRef.current?.start();
+      }, 1000);
+      break;
+    default:
+      console.error('Deepgram error:', error);
+  }
+};
+
+<DeepgramVoiceInteraction
+  apiKey={apiKey}
+  onError={handleError}
+  // ... other props
+/>
+```
+
+### Error Types
+- `DeepgramError`: Base error type with `code` and `message` properties
+- `MicrophoneError`: Microphone access or permission issues
+- `WebSocketError`: Connection or communication failures
+- `APIError`: Deepgram API-specific errors
+
+## Common Patterns
+
+### Voice Assistant with Text Fallback
+```tsx
+const [micEnabled, setMicEnabled] = useState(false);
+const [response, setResponse] = useState('');
+
+const agentOptions = useMemo(() => ({
+  instructions: "You are a helpful voice assistant.",
+  voice: "aura-asteria-en",
+  greeting: "Hello! How can I help you today?"
+}), []);
+
+return (
+  <DeepgramVoiceInteraction
+    apiKey={apiKey}
+    autoConnect={true}
+    microphoneEnabled={micEnabled}
+    onMicToggle={setMicEnabled}
+    agentOptions={agentOptions}
+    onAgentUtterance={(utterance) => setResponse(utterance.text)}
+  />
+);
+```
+
+### Transcription with Live Display
+```tsx
+const [transcript, setTranscript] = useState('');
+
+const transcriptionOptions = useMemo(() => ({
+  model: 'nova-2',
+  language: 'en-US',
+  interim_results: true
+}), []);
+
+return (
+  <div>
+    <DeepgramVoiceInteraction
+      apiKey={apiKey}
+      transcriptionOptions={transcriptionOptions}
+      onTranscriptUpdate={(data) => 
+        setTranscript(data.channel.alternatives[0].transcript)
+      }
+    />
+    <div>{transcript}</div>
+  </div>
+);
+```
+
+### Dual Mode with Full Control
+```tsx
+const [isReady, setIsReady] = useState(false);
+const [isConnected, setIsConnected] = useState(false);
+
+const agentOptions = useMemo(() => ({
+  instructions: "You are a meeting assistant.",
+  voice: "aura-asteria-en"
+}), []);
+
+const transcriptionOptions = useMemo(() => ({
+  model: 'nova-2',
+  language: 'en-US'
+}), []);
+
+return (
+  <DeepgramVoiceInteraction
+    apiKey={apiKey}
+    autoConnect={true}
+    agentOptions={agentOptions}
+    transcriptionOptions={transcriptionOptions}
+    onReady={setIsReady}
+    onConnectionReady={() => setIsConnected(true)}
+    onTranscriptUpdate={(data) => console.log('Transcript:', data)}
+    onAgentUtterance={(utterance) => console.log('Agent:', utterance.text)}
+  />
+);
+```
+
+## Frequently Asked Questions
+
+### Q: Why do I need to memoize options props?
+A: The component's useEffect depends on these props. Inline objects create new references on every render, causing infinite re-initialization loops.
+
+### Q: Can I use this without a microphone?
+A: Yes! Set `autoConnect={true}` and use text input. The agent will work without audio.
+
+### Q: How do I handle microphone permissions?
+A: The component handles this automatically. Check the `onError` callback for permission-related errors.
+
+### Q: Can I use custom Deepgram endpoints?
+A: Yes, use the `endpointConfig` prop to specify custom WebSocket URLs.
+
+### Q: What's the difference between transcription and agent modes?
+A: Transcription mode only converts speech to text. Agent mode provides AI conversation capabilities. Dual mode does both.
+
+### Q: How do I interrupt the agent while it's speaking?
+A: Use the `interruptAgent()` method or start speaking (if microphone is enabled) to interrupt.
 
 ## License
 
