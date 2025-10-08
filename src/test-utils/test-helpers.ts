@@ -138,7 +138,7 @@ export async function installWebSocketCapture(page: any) {
       };
       
       // Capture received messages
-      ws.addEventListener('message', (event) => {
+      ws.addEventListener('message', (event: MessageEvent) => {
         try {
           const parsed = JSON.parse(event.data);
           windowWithCapture.capturedReceivedMessages = windowWithCapture.capturedReceivedMessages || [];
