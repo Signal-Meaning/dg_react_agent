@@ -23,6 +23,37 @@ const DEFAULT_ENDPOINTS = {
 };
 
 /**
+ * Helper function to warn about non-memoized options in development mode
+ * @param propName - The name of the prop being checked
+ * @param options - The options object to check
+ */
+function warnAboutNonMemoizedOptions(propName: string, options: unknown): void {
+  if (!options || typeof options !== 'object') {
+    return;
+  }
+  
+  // Check if the object appears to be an inline object (not memoized)
+  // We use a heuristic: if the object has a constructor that's not Object
+  // or if it's not frozen, it might be an inline object
+  const isLikelyInlineObject = 
+    options.constructor === Object && 
+    !Object.isFrozen(options) &&
+    Object.getOwnPropertyNames(options).length > 0;
+  
+  if (isLikelyInlineObject) {
+    try {
+      console.warn(
+        `[DeepgramVoiceInteraction] ${propName} prop detected. ` +
+        'For optimal performance, memoize this prop with useMemo() to prevent unnecessary re-initialization. ' +
+        'See component documentation for details.'
+      );
+    } catch (error) {
+      // Silently fail if console.warn is not available
+    }
+  }
+}
+
+/**
  * DeepgramVoiceInteraction component
  * 
  * A headless React component for real-time transcription and/or agent interaction using Deepgram's WebSocket APIs.
@@ -192,20 +223,8 @@ function DeepgramVoiceInteraction(
 
     // Development warning for non-memoized options
     if (process.env.NODE_ENV === 'development') {
-      if (agentOptions && typeof agentOptions === 'object' && !Object.isFrozen(agentOptions)) {
-        console.warn(
-          '[DeepgramVoiceInteraction] agentOptions prop detected. ' +
-          'For optimal performance, memoize this prop with useMemo() to prevent unnecessary re-initialization. ' +
-          'See component documentation for details.'
-        );
-      }
-      if (transcriptionOptions && typeof transcriptionOptions === 'object' && !Object.isFrozen(transcriptionOptions)) {
-        console.warn(
-          '[DeepgramVoiceInteraction] transcriptionOptions prop detected. ' +
-          'For optimal performance, memoize this prop with useMemo() to prevent unnecessary re-initialization. ' +
-          'See component documentation for details.'
-        );
-      }
+      warnAboutNonMemoizedOptions('agentOptions', agentOptions);
+      warnAboutNonMemoizedOptions('transcriptionOptions', transcriptionOptions);
     }
 
     // Determine which services are being configured
