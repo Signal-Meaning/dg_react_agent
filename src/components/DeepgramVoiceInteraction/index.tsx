@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useReducer, useRef } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useReducer, useRef } from 'react';
 import {
   AgentState,
   DeepgramError,
@@ -74,8 +74,6 @@ function DeepgramVoiceInteraction(
     onPlaybackStateChange,
     onError,
     debug = false,
-    // Backward compatibility
-    welcomeFirst,
     // Auto-connect dual mode props
     autoConnect,
     microphoneEnabled,
@@ -84,12 +82,6 @@ function DeepgramVoiceInteraction(
     onAgentSpeaking,
     onAgentSilent,
   } = props;
-
-  // Backward compatibility: map welcomeFirst to autoConnect
-  const effectiveAutoConnect = useMemo(() => 
-    autoConnect !== undefined ? autoConnect : welcomeFirst, 
-    [autoConnect, welcomeFirst]
-  );
 
   // Internal state
   const [state, dispatch] = useReducer(stateReducer, initialState);
@@ -295,6 +287,9 @@ function DeepgramVoiceInteraction(
       const unsubscribeResult = agentManagerRef.current.addEventListener((event: WebSocketEvent) => {
       if (event.type === 'state') {
         log('Agent state:', event.state);
+        if (event.state === 'connected') {
+          console.info('🔗 [Protocol] Agent WebSocket connected');
+        }
         dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
         onConnectionStateChange?.('agent', event.state);
         
@@ -361,7 +356,7 @@ function DeepgramVoiceInteraction(
         
         // For auto-connect dual mode, we should still be ready even if audio fails
         // The user can still interact via text input and the agent will work
-        if (effectiveAutoConnect !== false && isAgentConfigured) {
+        if (autoConnect !== false && isAgentConfigured) {
           log('AudioManager failed but auto-connect dual mode enabled, setting ready anyway');
           dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
         } else {
@@ -374,8 +369,8 @@ function DeepgramVoiceInteraction(
     }
 
     // Auto-connect dual mode logic
-    console.log('Auto-connect check:', { effectiveAutoConnect, isAgentConfigured, agentManagerRef: !!agentManagerRef.current });
-    if (effectiveAutoConnect !== false && isAgentConfigured) {
+    console.log('Auto-connect check:', { autoConnect, isAgentConfigured, agentManagerRef: !!agentManagerRef.current });
+    if (autoConnect !== false && isAgentConfigured) {
       log('Auto-connect dual mode enabled, establishing connection');
       
       // For auto-connect dual mode, set ready immediately since the user can interact via text
@@ -391,7 +386,7 @@ function DeepgramVoiceInteraction(
         }
       }, 100); // Small delay to ensure audio manager is ready
     } else {
-      log('Auto-connect disabled or agent not configured', { effectiveAutoConnect, isAgentConfigured });
+      log('Auto-connect disabled or agent not configured', { autoConnect, isAgentConfigured });
     }
 
     // Clean up
@@ -425,7 +420,7 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: false });
       dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
     };
-  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, debug, effectiveAutoConnect]); 
+  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, debug, autoConnect]); 
 
   // Notify ready state changes ONLY when the value actually changes
   useEffect(() => {
@@ -568,6 +563,7 @@ function DeepgramVoiceInteraction(
       }
     };
     
+    console.info('📤 [Protocol] Sending agent settings:', settingsMessage);
     log('Sending agent settings:', settingsMessage);
     agentManagerRef.current.sendJSON(settingsMessage);
     
@@ -668,6 +664,7 @@ function DeepgramVoiceInteraction(
 
     // Handle Welcome message for dual mode connection
     if (data.type === 'Welcome') {
+      console.info('✅ [Protocol] Welcome message received - dual mode connection established');
       log('Welcome message received - dual mode connection established');
       if (!state.welcomeReceived) {
         dispatch({ type: 'WELCOME_RECEIVED', received: true });
