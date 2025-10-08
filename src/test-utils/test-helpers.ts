@@ -26,6 +26,7 @@ interface WindowWithWebSocketCapture extends Window {
   capturedWebSocketProtocols?: string | string[];
   capturedSentMessages?: WebSocketMessage[];
   capturedReceivedMessages?: WebSocketMessage[];
+  WebSocket?: new (url: string | URL, protocols?: string | string[]) => WebSocket;
 }
 
 // WebSocket data interface
@@ -129,6 +130,7 @@ export async function installWebSocketCapture(page: Page) {
     const windowWithCapture = window as WindowWithWebSocketCapture;
     
     const OriginalWebSocket = window.WebSocket;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).WebSocket = function(url: string, protocols?: string | string[]) {
       console.log('WebSocket created:', { url, protocols });
       windowWithCapture.capturedWebSocketUrl = url;
@@ -309,12 +311,17 @@ export async function installMockWebSocket(context: BrowserContext) {
     }
     
     // Mock static constants
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (MockWebSocket as any).CONNECTING = 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (MockWebSocket as any).OPEN = 1;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (MockWebSocket as any).CLOSING = 2;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (MockWebSocket as any).CLOSED = 3;
     
     // Replace global WebSocket
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).WebSocket = MockWebSocket;
     console.log('✅ WebSocket mock installed');
   });
