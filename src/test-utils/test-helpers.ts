@@ -5,6 +5,37 @@
  * and consistent testing patterns across the test suite.
  */
 
+// Type definitions for better type safety
+import type { Page, BrowserContext, expect as ExpectType } from '@playwright/test';
+
+// DOM types for EventListener
+type EventListener = (event: Event) => void;
+type EventListenerObject = { handleEvent(event: Event): void };
+
+// WebSocket message types
+interface WebSocketMessage {
+  timestamp: string;
+  type: string;
+  data?: unknown;
+  size?: number;
+}
+
+// Extended window interface for WebSocket capture
+interface WindowWithWebSocketCapture extends Window {
+  capturedWebSocketUrl?: string;
+  capturedWebSocketProtocols?: string | string[];
+  capturedSentMessages?: WebSocketMessage[];
+  capturedReceivedMessages?: WebSocketMessage[];
+}
+
+// WebSocket data interface
+interface WebSocketData {
+  url: string | undefined;
+  protocols: string | string[] | undefined;
+  sent: WebSocketMessage[];
+  received: WebSocketMessage[];
+}
+
 /**
  * Common test selectors
  */
@@ -26,20 +57,20 @@ export const SELECTORS = {
 
 /**
  * Navigate to the test app and wait for it to load
- * @param {import('@playwright/test').Page} page
+ * @param {Page} page - Playwright page object
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
-export async function setupTestPage(page: any, timeout = 10000) {
+export async function setupTestPage(page: Page, timeout = 10000) {
   await page.goto('/');
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
 }
 
 /**
  * Wait for connection to be established (auto-connect)
- * @param {import('@playwright/test').Page} page
+ * @param {Page} page - Playwright page object
  * @param {number} timeout - Timeout in ms (default: 5000)
  */
-export async function waitForConnection(page: any, timeout = 5000) {
+export async function waitForConnection(page: Page, timeout = 5000) {
   const connectionReady = page.locator(SELECTORS.connectionReady);
   await connectionReady.waitFor({ state: 'visible', timeout });
   await page.waitForFunction(
@@ -51,11 +82,10 @@ export async function waitForConnection(page: any, timeout = 5000) {
 
 /**
  * Wait for agent to finish greeting
- * @param {import('@playwright/test').Page} page
+ * @param {Page} page - Playwright page object
  * @param {number} timeout - Timeout in ms (default: 8000)
  */
-export async function waitForAgentGreeting(page: any, timeout = 8000) {
-  const greetingSent = page.locator(SELECTORS.greetingSent);
+export async function waitForAgentGreeting(page: Page, timeout = 8000) {
   await page.waitForFunction(
     (selector: string) => {
       const element = document.querySelector(selector);
@@ -69,11 +99,11 @@ export async function waitForAgentGreeting(page: any, timeout = 8000) {
 
 /**
  * Send a text message through the UI
- * @param {import('@playwright/test').Page} page
+ * @param {Page} page - Playwright page object
  * @param {string} message - The message to send
  * @returns {Promise<void>}
  */
-export async function sendTextMessage(page: any, message: string) {
+export async function sendTextMessage(page: Page, message: string) {
   const textInput = page.locator(SELECTORS.textInput);
   const sendButton = page.locator(SELECTORS.sendButton);
   
@@ -91,22 +121,15 @@ export async function sendTextMessage(page: any, message: string) {
 
 /**
  * Install WebSocket message capture in the browser context
- * @param {import('@playwright/test').Page} page
+ * @param {Page} page - Playwright page object
  */
-export async function installWebSocketCapture(page: any) {
+export async function installWebSocketCapture(page: Page) {
   await page.addInitScript(() => {
-    // Extend window interface for our custom properties
-    interface WindowWithWebSocketCapture extends Window {
-      capturedWebSocketUrl?: string;
-      capturedWebSocketProtocols?: string | string[];
-      capturedSentMessages?: Array<{timestamp: string, type: string, data?: any, size?: number}>;
-      capturedReceivedMessages?: Array<{timestamp: string, type: string, data?: any, size?: number}>;
-    }
-    
+    // Use the global interface defined above
     const windowWithCapture = window as WindowWithWebSocketCapture;
     
     const OriginalWebSocket = window.WebSocket;
-    (window as any).WebSocket = function(url: any, protocols: any) {
+    (window as any).WebSocket = function(url: string, protocols?: string | string[]) {
       console.log('WebSocket created:', { url, protocols });
       windowWithCapture.capturedWebSocketUrl = url;
       windowWithCapture.capturedWebSocketProtocols = protocols;
@@ -131,7 +154,7 @@ export async function installWebSocketCapture(page: any) {
           windowWithCapture.capturedSentMessages.push({
             timestamp: new Date().toISOString(),
             type: 'binary',
-            size: (data as any).byteLength || (data as any).length
+            size: (data as ArrayBufferLike).byteLength || (data as ArrayBuffer).byteLength || (data as string).length
           });
         }
         return originalSend.call(this, data);
@@ -154,7 +177,7 @@ export async function installWebSocketCapture(page: any) {
           windowWithCapture.capturedReceivedMessages.push({
             timestamp: new Date().toISOString(),
             type: 'binary',
-            size: (event.data as any).byteLength || (event.data as any).length
+            size: (event.data as ArrayBufferLike).byteLength || (event.data as ArrayBuffer).byteLength || (event.data as string).length
           });
         }
       });
@@ -166,12 +189,12 @@ export async function installWebSocketCapture(page: any) {
 
 /**
  * Get captured WebSocket messages from browser context
- * @param {import('@playwright/test').Page} page
- * @returns {Promise<{url: string, protocols: string[], sent: Array, received: Array}>}
+ * @param {Page} page - Playwright page object
+ * @returns {Promise<WebSocketData>}
  */
-export async function getCapturedWebSocketData(page: any) {
+export async function getCapturedWebSocketData(page: Page): Promise<WebSocketData> {
   return await page.evaluate(() => {
-    const windowWithCapture = window as any;
+    const windowWithCapture = window as WindowWithWebSocketCapture;
     return {
       url: windowWithCapture.capturedWebSocketUrl,
       protocols: windowWithCapture.capturedWebSocketProtocols,
@@ -183,25 +206,11 @@ export async function getCapturedWebSocketData(page: any) {
 
 /**
  * Install a mock WebSocket for testing without real API
- * @param {import('@playwright/test').BrowserContext} context
+ * @param {BrowserContext} context - Playwright browser context
  */
-export async function installMockWebSocket(context: any) {
+export async function installMockWebSocket(context: BrowserContext) {
   await context.addInitScript(() => {
     console.log('🔧 Installing WebSocket mock...');
-    
-    // Extend window interface for our custom properties
-    interface WindowWithWebSocketCapture extends Window {
-      capturedWebSocketUrl?: string;
-      capturedWebSocketProtocols?: string | string[];
-      capturedSentMessages?: Array<{timestamp: string, type: string, data?: any, size?: number}>;
-      capturedReceivedMessages?: Array<{timestamp: string, type: string, data?: any, size?: number}>;
-    }
-    
-    const windowWithCapture = window as WindowWithWebSocketCapture;
-    
-    // Store original WebSocket
-    const OriginalWebSocket = window.WebSocket;
-    let mockWs = null;
     
     // Create mock WebSocket
     class MockWebSocket extends EventTarget {
@@ -220,7 +229,6 @@ export async function installMockWebSocket(context: any) {
       constructor(url: string, protocols?: string | string[]) {
         super();
         console.log('🎭 MockWebSocket created:', url, protocols);
-        mockWs = this;
         this.url = url;
         this.protocols = protocols || '';
         this.readyState = 0; // CONNECTING
@@ -291,11 +299,11 @@ export async function installMockWebSocket(context: any) {
         if (this.onclose) this.onclose({ type: 'close', code: 1000, reason: 'Normal closure' } as CloseEvent);
       }
       
-      addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+      addEventListener(type: string, listener: EventListener | EventListenerObject) {
         super.addEventListener(type, listener);
       }
       
-      removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+      removeEventListener(type: string, listener: EventListener | EventListenerObject) {
         super.removeEventListener(type, listener);
       }
     }
@@ -314,10 +322,10 @@ export async function installMockWebSocket(context: any) {
 
 /**
  * Common assertions for connection state
- * @param {import('@playwright/test').Page} page
- * @param {import('@playwright/test').expect} expect
+ * @param {Page} page - Playwright page object
+ * @param {ExpectType} expect - Playwright expect function
  */
-export async function assertConnectionHealthy(page: any, expect: any) {
+export async function assertConnectionHealthy(page: Page, expect: typeof ExpectType) {
   const connectionStatus = page.locator(SELECTORS.connectionStatus);
   const connectionReady = page.locator(SELECTORS.connectionReady);
   
