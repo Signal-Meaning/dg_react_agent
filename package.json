@@ -7,7 +7,9 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "DEVELOPMENT.md",
+    "scripts/"
   ],
   "scripts": {
     "build": "rollup -c",
