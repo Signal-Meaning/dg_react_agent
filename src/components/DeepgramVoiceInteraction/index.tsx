@@ -172,9 +172,11 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    // Log which services are being configured
-    log(`Initializing in ${isTranscriptionConfigured && isAgentConfigured ? 'DUAL MODE' : 
-      isTranscriptionConfigured ? 'TRANSCRIPTION-ONLY MODE' : 'AGENT-ONLY MODE'}`);
+    // Log which services are being configured (always show this critical info)
+    const mode = isTranscriptionConfigured && isAgentConfigured ? 'DUAL MODE' : 
+      isTranscriptionConfigured ? 'TRANSCRIPTION-ONLY MODE' : 'AGENT-ONLY MODE';
+    console.log(`[DeepgramVoiceInteraction] Initializing in ${mode}`);
+    log(`Initializing in ${mode}`);
 
     // Prepare endpoints, using defaults ONLY if endpointConfig prop is not provided
     const currentEndpointConfig = endpointConfig || {};
@@ -564,6 +566,7 @@ function DeepgramVoiceInteraction(
     };
     
     console.info('📤 [Protocol] Sending agent settings:', settingsMessage);
+    console.log('[DeepgramVoiceInteraction] Sending agent settings:', settingsMessage);
     log('Sending agent settings:', settingsMessage);
     agentManagerRef.current.sendJSON(settingsMessage);
     

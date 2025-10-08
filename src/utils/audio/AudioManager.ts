@@ -277,6 +277,11 @@ export class AudioManager {
       await this.initialize();
     }
     
+    // Check if audioContext is available after initialization
+    if (!this.audioContext) {
+      throw new Error('AudioContext not available - initialization may have failed');
+    }
+    
     try {
       this.log('Requesting microphone access');
       
@@ -291,8 +296,8 @@ export class AudioManager {
       });
       
       // Connect microphone to AudioWorklet
-      this.sourceNode = this.audioContext!.createMediaStreamSource(this.microphoneStream);
-      this.workletNode = new AudioWorkletNode(this.audioContext!, 'microphone-processor');
+      this.sourceNode = this.audioContext.createMediaStreamSource(this.microphoneStream);
+      this.workletNode = new AudioWorkletNode(this.audioContext, 'microphone-processor');
       
       // Listen for audio data from the worklet
       this.workletNode.port.onmessage = (event: MessageEvent) => {
@@ -316,11 +321,11 @@ export class AudioManager {
       
       // Connect the nodes
       this.sourceNode.connect(this.workletNode);
-      this.workletNode.connect(this.audioContext!.destination);
+      this.workletNode.connect(this.audioContext.destination);
       
       // Resume the AudioContext if it's suspended
-      if (this.audioContext!.state === 'suspended') {
-        await this.audioContext!.resume();
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
       }
       
       // Start recording
@@ -387,13 +392,25 @@ export class AudioManager {
       this.log('AudioManager initialized from queueAudio');
     }
     
+    // Resume the AudioContext if it's suspended (required for playback)
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      this.log('AudioContext suspended, resuming for playback...');
+      await this.audioContext.resume();
+      this.log('AudioContext resumed successfully');
+    }
+    
     try {
       this.log(`Processing audio data (${data.byteLength} bytes)...`);
       this.log(`[queueAudio] Before: activeSourceNodes.length = ${this.activeSourceNodes.length}, startTimeRef.current = ${this.startTimeRef.current}`);
       
+      // Check if audioContext is available
+      if (!this.audioContext) {
+        throw new Error('AudioContext not available for audio playback');
+      }
+      
       // Create an audio buffer from the raw data
       const buffer = createAudioBuffer(
-        this.audioContext!, 
+        this.audioContext, 
         data, 
         this.options.outputSampleRate!
       );
@@ -406,7 +423,7 @@ export class AudioManager {
       
       // Play the buffer with precise timing
       const source = playAudioBuffer(
-        this.audioContext!, 
+        this.audioContext, 
         buffer, 
         this.startTimeRef, 
         this.analyzer || undefined
@@ -464,7 +481,7 @@ export class AudioManager {
       };
       
       this.log(`[queueAudio] After: activeSourceNodes.length = ${this.activeSourceNodes.length}, startTimeRef.current = ${this.startTimeRef.current}`);
-      this.log(`Audio scheduled to play at ${this.startTimeRef.current.toFixed(3)}s, current time: ${this.audioContext!.currentTime.toFixed(3)}s, active sources: ${this.activeSourceNodes.length}`);
+      this.log(`Audio scheduled to play at ${this.startTimeRef.current.toFixed(3)}s, current time: ${this.audioContext?.currentTime.toFixed(3) || 'N/A'}s, active sources: ${this.activeSourceNodes.length}`);
       
     } catch (error) {
       this.log('Failed to process audio:', error);
