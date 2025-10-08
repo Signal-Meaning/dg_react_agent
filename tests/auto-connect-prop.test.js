@@ -10,119 +10,78 @@
 const React = require('react');
 const { render, act, waitFor } = require('@testing-library/react');
 const { DeepgramVoiceInteraction } = require('../dist');
+const { 
+  createMockProps, 
+  createNonMemoizedOptions, 
+  setupConsoleWarningSpy,
+  TEST_DESCRIPTIONS,
+  TEST_ASSERTIONS 
+} = require('./utils/auto-connect-test-utils');
 
 describe('Auto-Connect Prop Behavior', () => {
   let mockProps;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
-    // Mock props for testing
-    mockProps = {
-      apiKey: 'test-api-key',
-      agentOptions: {
-        language: 'en',
-        listenModel: 'nova-3',
-        thinkProviderType: 'open_ai',
-        thinkModel: 'gpt-4o-mini',
-        voice: 'aura-2-apollo-en',
-        instructions: 'You are a helpful assistant',
-        greeting: 'Hello! How can I help you?'
-      },
-      onReady: jest.fn(),
-      onConnectionStateChange: jest.fn(),
-      onAgentStateChange: jest.fn(),
-      onError: jest.fn(),
-      debug: false
-    };
+    mockProps = createMockProps();
   });
 
-  test('should NOT auto-connect when autoConnect is undefined (default behavior)', async () => {
+  test(TEST_DESCRIPTIONS.SHOULD_NOT_AUTO_CONNECT_UNDEFINED, async () => {
     // This test verifies the fix for issue #8
-    // The component should not auto-connect when autoConnect is undefined
-    
     const { container } = render(
       <DeepgramVoiceInteraction {...mockProps} />
     );
     
-    // Wait for component to initialize
     await waitFor(() => {
       expect(mockProps.onReady).toHaveBeenCalled();
     }, { timeout: 5000 });
     
-    // The component should be ready but not auto-connected
-    // (This is verified by the fact that onReady is called with true)
-    expect(mockProps.onReady).toHaveBeenCalledWith(true);
+    TEST_ASSERTIONS.expectComponentReady(mockProps.onReady);
   });
 
-  test('should auto-connect when autoConnect is explicitly true', async () => {
-    // This test verifies that when autoConnect is explicitly true, it works
+  test(TEST_DESCRIPTIONS.SHOULD_AUTO_CONNECT_TRUE, async () => {
     const { container } = render(
       <DeepgramVoiceInteraction {...mockProps} autoConnect={true} />
     );
     
-    // Wait for component to initialize
     await waitFor(() => {
       expect(mockProps.onReady).toHaveBeenCalled();
     }, { timeout: 5000 });
     
-    // The component should be ready and auto-connected
-    expect(mockProps.onReady).toHaveBeenCalledWith(true);
+    TEST_ASSERTIONS.expectComponentReady(mockProps.onReady);
   });
 
-  test('should NOT auto-connect when autoConnect is explicitly false', async () => {
-    // This test verifies that when autoConnect is explicitly false, it doesn't auto-connect
+  test(TEST_DESCRIPTIONS.SHOULD_NOT_AUTO_CONNECT_FALSE, async () => {
     const { container } = render(
       <DeepgramVoiceInteraction {...mockProps} autoConnect={false} />
     );
     
-    // Wait for component to initialize
     await waitFor(() => {
       expect(mockProps.onReady).toHaveBeenCalled();
     }, { timeout: 5000 });
     
-    // The component should be ready but not auto-connected
-    expect(mockProps.onReady).toHaveBeenCalledWith(true);
+    TEST_ASSERTIONS.expectComponentReady(mockProps.onReady);
   });
 
-  test('should show development warning for non-memoized options', async () => {
-    // Mock console.warn to capture warnings
-    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    
-    // Set NODE_ENV to development
-    const originalEnv = process.env.NODE_ENV;
+  test(TEST_DESCRIPTIONS.SHOULD_SHOW_MEMOIZATION_WARNING, async () => {
+    const { consoleSpy, cleanup } = setupConsoleWarningSpy();
     process.env.NODE_ENV = 'development';
     
-    // Render component with non-memoized options (inline objects)
+    const nonMemoizedOptions = createNonMemoizedOptions();
     const { container } = render(
       <DeepgramVoiceInteraction 
         {...mockProps}
-        agentOptions={{
-          language: 'en',
-          listenModel: 'nova-3'
-        }}
-        transcriptionOptions={{
-          model: 'nova-2',
-          language: 'en-US'
-        }}
+        {...nonMemoizedOptions}
       />
     );
     
-    // Wait for component to initialize
     await waitFor(() => {
       expect(mockProps.onReady).toHaveBeenCalled();
     }, { timeout: 5000 });
     
-    // Verify that warnings were logged
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('agentOptions prop detected')
-    );
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('transcriptionOptions prop detected')
-    );
+    TEST_ASSERTIONS.expectConsoleWarning(consoleSpy, 'agentOptions');
+    TEST_ASSERTIONS.expectConsoleWarning(consoleSpy, 'transcriptionOptions');
     
-    // Cleanup
-    consoleSpy.mockRestore();
-    process.env.NODE_ENV = originalEnv;
+    cleanup();
   });
 });
