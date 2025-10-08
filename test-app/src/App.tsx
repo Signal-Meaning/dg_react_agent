@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useMemo } from 'react';
+import { useRef, useState, useCallback, useMemo } from 'react';
 import { 
   DeepgramVoiceInteraction, 
   DeepgramVoiceInteractionHandle,
@@ -9,7 +9,7 @@ import {
   ConnectionState,
   ServiceType,
   DeepgramError
-} from '../../src';
+} from 'deepgram-voice-interaction-react';
 
 function App() {
   // Fail-fast check for required API key
@@ -19,36 +19,11 @@ function App() {
   // Check for test mode override (for Playwright tests)
   const isTestMode = window.location.search.includes('test-mode=true');
   const shouldShowError = isTestMode ? 
-    (window.testApiKey === 'missing' || window.testApiKey === 'placeholder' || window.testApiKey === 'test-prefix') :
-    (!apiKey || apiKey === 'your-deepgram-api-key-here' || apiKey.startsWith('test-'));
-  
-  if (shouldShowError) {
-    return (
-      <div style={{ 
-        padding: '20px', 
-        backgroundColor: '#fee', 
-        border: '2px solid #f00', 
-        borderRadius: '8px',
-        margin: '20px',
-        fontFamily: 'monospace'
-      }}>
-        <h2>⚠️ Deepgram API Key Status</h2>
-        <p><strong>This test app supports both REAL and MOCK modes:</strong></p>
-        <div style={{ margin: '15px 0', padding: '10px', backgroundColor: '#f0f8ff', borderRadius: '4px' }}>
-          <h4>🔴 Current Mode: MOCK</h4>
-          <p>Text messages will show simulated responses with <code>[MOCK]</code> prefix.</p>
-        </div>
-        <p><strong>To enable REAL Deepgram integration:</strong></p>
-        <p>Set the following in <code>test-app/.env</code>:</p>
-        <pre style={{ backgroundColor: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
-VITE_DEEPGRAM_API_KEY=your-real-deepgram-api-key
-VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
-        </pre>
-        <p>Get a free API key at: <a href="https://deepgram.com" target="_blank">https://deepgram.com</a></p>
-        <p><em>With a real API key, text messages will be sent to the actual Deepgram agent service.</em></p>
-      </div>
-    );
-  }
+    ((window as Window & { testApiKey?: string }).testApiKey === 'missing' || 
+     (window as Window & { testApiKey?: string }).testApiKey === 'placeholder' || 
+     (window as Window & { testApiKey?: string }).testApiKey === 'test-prefix') :
+    (!apiKey || apiKey === 'your-deepgram-api-key-here' || apiKey.startsWith('test-') || 
+     !projectId || projectId === 'your-real-project-id');
 
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
   
@@ -369,8 +344,42 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
     }
   };
   
+  // Show error if API key or project ID is missing
+  if (shouldShowError) {
+    return (
+      <div style={{ 
+        padding: '20px', 
+        backgroundColor: '#fee', 
+        border: '2px solid #f00', 
+        borderRadius: '8px',
+        margin: '20px',
+        fontFamily: 'monospace'
+      }}>
+        <h2>⚠️ Deepgram API Key Status</h2>
+        <p><strong>This test app supports both REAL and MOCK modes:</strong></p>
+        <div style={{ margin: '15px 0', padding: '10px', backgroundColor: '#f0f8ff', borderRadius: '4px' }}>
+          <h4>🔴 Current Mode: MOCK</h4>
+          <p>Text messages will show simulated responses with <code>[MOCK]</code> prefix.</p>
+        </div>
+        <p><strong>To enable REAL Deepgram integration:</strong></p>
+        <p>Set the following in <code>test-app/.env</code>:</p>
+        <pre style={{ backgroundColor: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
+VITE_DEEPGRAM_API_KEY=your-real-deepgram-api-key
+VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
+        </pre>
+        <p>Get a free API key at: <a href="https://deepgram.com" target="_blank">https://deepgram.com</a></p>
+        <p><em>With a real API key, text messages will be sent to the actual Deepgram agent service.</em></p>
+      </div>
+    );
+  }
+  
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }} data-testid="voice-agent">
+    <div style={{ 
+      maxWidth: '800px', 
+      margin: '0 auto', 
+      padding: '20px',
+      pointerEvents: 'none' // Disable pointer events on container
+    }} data-testid="voice-agent">
       <h1>Deepgram Voice Interaction Test</h1>
       
       <DeepgramVoiceInteraction
@@ -443,12 +452,12 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         </div>
       </div>
       
-      <div style={{ margin: '20px 0', display: 'flex', gap: '10px' }}>
+      <div style={{ margin: '20px 0', display: 'flex', gap: '10px', pointerEvents: 'auto' }}>
         {!isRecording ? (
           <button 
             onClick={startInteraction} 
             disabled={!isReady || isRecording}
-            style={{ padding: '10px 20px' }}
+            style={{ padding: '10px 20px', pointerEvents: 'auto' }}
             data-testid="start-button"
           >
             Start
@@ -457,7 +466,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <button 
             onClick={stopInteraction}
             disabled={!isRecording}
-            style={{ padding: '10px 20px' }}
+            style={{ padding: '10px 20px', pointerEvents: 'auto' }}
             data-testid="stop-button"
           >
             Stop
@@ -466,14 +475,14 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <button 
           onClick={interruptAgent}
           disabled={!isRecording}
-          style={{ padding: '10px 20px' }}
+          style={{ padding: '10px 20px', pointerEvents: 'auto' }}
         >
           Interrupt Audio
         </button>
         <button 
           onClick={updateContext}
           disabled={!isRecording}
-          style={{ padding: '10px 20px' }}
+          style={{ padding: '10px 20px', pointerEvents: 'auto' }}
         >
           Update Context
         </button>
@@ -482,7 +491,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           disabled={!isRecording || agentState === 'entering_sleep'}
           style={{
             padding: '10px 20px',
-            backgroundColor: (isSleeping || agentState === 'entering_sleep') ? '#e0f7fa' : 'transparent'
+            backgroundColor: (isSleeping || agentState === 'entering_sleep') ? '#e0f7fa' : 'transparent',
+            pointerEvents: 'auto'
           }}
         >
           {(isSleeping || agentState === 'entering_sleep') ? 'Wake Up' : 'Put to Sleep'}
@@ -490,7 +500,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <button 
           onClick={injectMessage}
           disabled={!isRecording}
-          style={{ padding: '10px 20px' }}
+          style={{ padding: '10px 20px', pointerEvents: 'auto' }}
         >
           Inject Message
         </button>
@@ -499,7 +509,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           disabled={!isReady}
           style={{ 
             padding: '10px 20px',
-            backgroundColor: micEnabled ? '#e0f7fa' : 'transparent'
+            backgroundColor: micEnabled ? '#e0f7fa' : 'transparent',
+            pointerEvents: 'auto'
           }}
           data-testid="microphone-button"
         >
@@ -519,13 +530,20 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           borderRadius: '8px',
           backgroundColor: '#f1f8e9'
         }}>
-          <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }} data-testid="greeting-sent">
+          <p style={{ 
+            margin: '0 0 10px 0', 
+            fontWeight: 'bold'
+          }} data-testid="greeting-sent">
             {agentSpeaking ? '🎤 Agent is speaking' 
               : agentSilent ? '✅ Agent finished speaking - ready for interaction' 
               : '🔗 Dual mode connected - waiting for agent...'}
           </p>
           {!micEnabled && (
-            <p style={{ margin: '0', fontStyle: 'italic', color: '#555' }}>
+            <p style={{ 
+              margin: '0', 
+              fontStyle: 'italic', 
+              color: '#555'
+            }}>
               Microphone disabled - click "Enable Mic" to start speaking
             </p>
           )}
@@ -543,7 +561,10 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           borderRadius: '8px',
           backgroundColor: '#fff8f8'
         }}>
-          <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }}>
+          <p style={{ 
+            margin: '0 0 10px 0', 
+            fontWeight: 'bold'
+          }}>
             {isPlaying ? '🤖 Agent is speaking' 
               : agentState === 'listening' ? '👂 Agent listening' 
               : agentState === 'thinking' ? '🤔 Agent thinking' 
@@ -551,7 +572,11 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
               : '🎙️ Microphone active'}
           </p>
           {(agentState === 'sleeping' || agentState === 'entering_sleep') && 
-            <p style={{ margin: '0', fontStyle: 'italic', color: '#555' }}>(Ignoring audio input)</p>}
+            <p style={{ 
+              margin: '0', 
+              fontStyle: 'italic', 
+              color: '#555'
+            }}>(Ignoring audio input)</p>}
         </div>
       )}
       
@@ -572,13 +597,13 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       </div>
       
       {/* Text Input for Text-Only Mode */}
-      <div style={{ marginTop: '20px', border: '1px solid #ddd', padding: '10px' }}>
+      <div style={{ marginTop: '20px', border: '1px solid #ddd', padding: '10px', pointerEvents: 'auto' }}>
         <h3>Text Input (Text-Only Mode)</h3>
         <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
           <input
             type="text"
             placeholder="Type your message here..."
-            style={{ flex: 1, padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+            style={{ flex: 1, padding: '8px', border: '1px solid #ccc', borderRadius: '4px', pointerEvents: 'auto' }}
             data-testid="text-input"
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
@@ -590,7 +615,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           />
           <button
             onClick={handleTextSubmit}
-            style={{ padding: '8px 16px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}
+            style={{ padding: '8px 16px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', pointerEvents: 'auto' }}
             data-testid="send-button"
           >
             Send
@@ -601,9 +626,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         </p>
       </div>
 
-      <div style={{ marginTop: '20px', border: '1px solid #eee', padding: '10px' }}>
+      <div style={{ marginTop: '20px', border: '1px solid #eee', padding: '10px', pointerEvents: 'auto' }}>
         <h3>Event Log</h3>
-        <button onClick={() => setLogs([])} style={{ marginBottom: '10px' }}>Clear Logs</button>
+        <button onClick={() => setLogs([])} style={{ marginBottom: '10px', pointerEvents: 'auto' }}>Clear Logs</button>
         <pre style={{ maxHeight: '300px', overflowY: 'scroll', background: '#f9f9f9', padding: '5px' }}>
           {logs.join('\n')}
         </pre>
