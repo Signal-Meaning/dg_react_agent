@@ -9,7 +9,8 @@
     "dist",
     "README.md",
     "DEVELOPMENT.md",
-    "scripts/"
+    "scripts/",
+    "tests/"
   ],
   "scripts": {
     "build": "rollup -c",
