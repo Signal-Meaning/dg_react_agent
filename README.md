@@ -92,6 +92,53 @@ yarn add deepgram-react
 
 This component simplifies complex interactions. Here's how to get started with common use cases:
 
+## ⚠️ Critical: Options Props Must Be Memoized
+
+**IMPORTANT:** The `agentOptions` and `transcriptionOptions` props MUST be memoized using `useMemo` to prevent infinite re-initialization and poor performance.
+
+### ✅ Correct Usage (Required)
+```tsx
+const agentOptions = useMemo(() => ({
+  language: 'en',
+  listenModel: 'nova-3',
+  // ... other options
+}), []); // Empty dependency array for static config
+
+const transcriptionOptions = useMemo(() => ({
+  model: 'nova-2',
+  language: 'en-US',
+  // ... other options
+}), []);
+
+<DeepgramVoiceInteraction 
+  agentOptions={agentOptions}
+  transcriptionOptions={transcriptionOptions}
+/>
+```
+
+### ❌ Incorrect Usage (Causes Problems)
+```tsx
+// DON'T DO THIS - causes infinite re-initialization
+<DeepgramVoiceInteraction 
+  agentOptions={{
+    language: 'en',
+    listenModel: 'nova-3',
+  }}
+  transcriptionOptions={{
+    model: 'nova-2',
+    language: 'en-US',
+  }}
+/>
+```
+
+**Why?** The component's main useEffect depends on these props. Inline objects create new references on every render, causing the component to tear down and recreate WebSocket connections constantly, leading to:
+- Infinite re-initialization loops
+- Console spam with repeated logs
+- Poor performance and unnecessary network traffic
+- Potential connection rate limiting
+
+**Development Warning:** In development mode, the component will warn you if it detects non-memoized options props.
+
 ### 1. Basic Real-time Transcription (Transcription Only Mode)
 
 This example focuses solely on getting live transcripts from microphone input.
