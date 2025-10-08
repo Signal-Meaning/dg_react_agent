@@ -29,7 +29,7 @@ export const SELECTORS = {
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
-export async function setupTestPage(page, timeout = 10000) {
+export async function setupTestPage(page: any, timeout = 10000) {
   await page.goto('/');
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
 }
@@ -39,11 +39,11 @@ export async function setupTestPage(page, timeout = 10000) {
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 5000)
  */
-export async function waitForConnection(page, timeout = 5000) {
+export async function waitForConnection(page: any, timeout = 5000) {
   const connectionReady = page.locator(SELECTORS.connectionReady);
   await connectionReady.waitFor({ state: 'visible', timeout });
   await page.waitForFunction(
-    (selector) => document.querySelector(selector)?.textContent === 'true',
+    (selector: string) => document.querySelector(selector)?.textContent === 'true',
     SELECTORS.connectionReady,
     { timeout }
   );
@@ -54,10 +54,10 @@ export async function waitForConnection(page, timeout = 5000) {
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 8000)
  */
-export async function waitForAgentGreeting(page, timeout = 8000) {
+export async function waitForAgentGreeting(page: any, timeout = 8000) {
   const greetingSent = page.locator(SELECTORS.greetingSent);
   await page.waitForFunction(
-    (selector) => {
+    (selector: string) => {
       const element = document.querySelector(selector);
       const text = element?.textContent || '';
       return text.includes('Agent finished speaking') || text.includes('ready for interaction');
@@ -73,7 +73,7 @@ export async function waitForAgentGreeting(page, timeout = 8000) {
  * @param {string} message - The message to send
  * @returns {Promise<void>}
  */
-export async function sendTextMessage(page, message) {
+export async function sendTextMessage(page: any, message: string) {
   const textInput = page.locator(SELECTORS.textInput);
   const sendButton = page.locator(SELECTORS.sendButton);
   
@@ -83,7 +83,7 @@ export async function sendTextMessage(page, message) {
   // Wait for input to clear (confirms send)
   await textInput.waitFor({ state: 'visible', timeout: 1000 });
   await page.waitForFunction(
-    (selector) => document.querySelector(selector)?.value === '',
+    (selector: string) => (document.querySelector(selector) as HTMLInputElement)?.value === '',
     SELECTORS.textInput,
     { timeout: 1000 }
   );
@@ -93,13 +93,23 @@ export async function sendTextMessage(page, message) {
  * Install WebSocket message capture in the browser context
  * @param {import('@playwright/test').Page} page
  */
-export async function installWebSocketCapture(page) {
+export async function installWebSocketCapture(page: any) {
   await page.addInitScript(() => {
+    // Extend window interface for our custom properties
+    interface WindowWithWebSocketCapture extends Window {
+      capturedWebSocketUrl?: string;
+      capturedWebSocketProtocols?: string | string[];
+      capturedSentMessages?: Array<{timestamp: string, type: string, data?: any, size?: number}>;
+      capturedReceivedMessages?: Array<{timestamp: string, type: string, data?: any, size?: number}>;
+    }
+    
+    const windowWithCapture = window as WindowWithWebSocketCapture;
+    
     const OriginalWebSocket = window.WebSocket;
-    window.WebSocket = function(url, protocols) {
+    (window as any).WebSocket = function(url: any, protocols: any) {
       console.log('WebSocket created:', { url, protocols });
-      window.capturedWebSocketUrl = url;
-      window.capturedWebSocketProtocols = protocols;
+      windowWithCapture.capturedWebSocketUrl = url;
+      windowWithCapture.capturedWebSocketProtocols = protocols;
       
       const ws = new OriginalWebSocket(url, protocols);
       const originalSend = ws.send;
@@ -107,9 +117,9 @@ export async function installWebSocketCapture(page) {
       // Capture sent messages
       ws.send = function(data) {
         try {
-          const parsed = JSON.parse(data);
-          window.capturedSentMessages = window.capturedSentMessages || [];
-          window.capturedSentMessages.push({
+          const parsed = JSON.parse(data as string);
+          windowWithCapture.capturedSentMessages = windowWithCapture.capturedSentMessages || [];
+          windowWithCapture.capturedSentMessages.push({
             timestamp: new Date().toISOString(),
             type: parsed.type,
             data: parsed
@@ -117,11 +127,11 @@ export async function installWebSocketCapture(page) {
           console.log('WebSocket send:', parsed.type, parsed);
         } catch (e) {
           // Not JSON, might be binary audio data
-          window.capturedSentMessages = window.capturedSentMessages || [];
-          window.capturedSentMessages.push({
+          windowWithCapture.capturedSentMessages = windowWithCapture.capturedSentMessages || [];
+          windowWithCapture.capturedSentMessages.push({
             timestamp: new Date().toISOString(),
             type: 'binary',
-            size: data.byteLength || data.length
+            size: (data as any).byteLength || (data as any).length
           });
         }
         return originalSend.call(this, data);
@@ -131,8 +141,8 @@ export async function installWebSocketCapture(page) {
       ws.addEventListener('message', (event) => {
         try {
           const parsed = JSON.parse(event.data);
-          window.capturedReceivedMessages = window.capturedReceivedMessages || [];
-          window.capturedReceivedMessages.push({
+          windowWithCapture.capturedReceivedMessages = windowWithCapture.capturedReceivedMessages || [];
+          windowWithCapture.capturedReceivedMessages.push({
             timestamp: new Date().toISOString(),
             type: parsed.type,
             data: parsed
@@ -140,11 +150,11 @@ export async function installWebSocketCapture(page) {
           console.log('WebSocket receive:', parsed.type, parsed);
         } catch (e) {
           // Binary data
-          window.capturedReceivedMessages = window.capturedReceivedMessages || [];
-          window.capturedReceivedMessages.push({
+          windowWithCapture.capturedReceivedMessages = windowWithCapture.capturedReceivedMessages || [];
+          windowWithCapture.capturedReceivedMessages.push({
             timestamp: new Date().toISOString(),
             type: 'binary',
-            size: event.data.byteLength || event.data.length
+            size: (event.data as any).byteLength || (event.data as any).length
           });
         }
       });
@@ -159,22 +169,35 @@ export async function installWebSocketCapture(page) {
  * @param {import('@playwright/test').Page} page
  * @returns {Promise<{url: string, protocols: string[], sent: Array, received: Array}>}
  */
-export async function getCapturedWebSocketData(page) {
-  return await page.evaluate(() => ({
-    url: window.capturedWebSocketUrl,
-    protocols: window.capturedWebSocketProtocols,
-    sent: window.capturedSentMessages || [],
-    received: window.capturedReceivedMessages || []
-  }));
+export async function getCapturedWebSocketData(page: any) {
+  return await page.evaluate(() => {
+    const windowWithCapture = window as any;
+    return {
+      url: windowWithCapture.capturedWebSocketUrl,
+      protocols: windowWithCapture.capturedWebSocketProtocols,
+      sent: windowWithCapture.capturedSentMessages || [],
+      received: windowWithCapture.capturedReceivedMessages || []
+    };
+  });
 }
 
 /**
  * Install a mock WebSocket for testing without real API
  * @param {import('@playwright/test').BrowserContext} context
  */
-export async function installMockWebSocket(context) {
+export async function installMockWebSocket(context: any) {
   await context.addInitScript(() => {
     console.log('🔧 Installing WebSocket mock...');
+    
+    // Extend window interface for our custom properties
+    interface WindowWithWebSocketCapture extends Window {
+      capturedWebSocketUrl?: string;
+      capturedWebSocketProtocols?: string | string[];
+      capturedSentMessages?: Array<{timestamp: string, type: string, data?: any, size?: number}>;
+      capturedReceivedMessages?: Array<{timestamp: string, type: string, data?: any, size?: number}>;
+    }
+    
+    const windowWithCapture = window as WindowWithWebSocketCapture;
     
     // Store original WebSocket
     const OriginalWebSocket = window.WebSocket;
@@ -182,12 +205,24 @@ export async function installMockWebSocket(context) {
     
     // Create mock WebSocket
     class MockWebSocket extends EventTarget {
-      constructor(url, protocols) {
+      url: string;
+      protocols: string | string[];
+      readyState: number;
+      bufferedAmount: number;
+      extensions: string;
+      protocol: string;
+      binaryType: string;
+      onopen: ((event: Event) => void) | null = null;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onclose: ((event: CloseEvent) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+
+      constructor(url: string, protocols?: string | string[]) {
         super();
         console.log('🎭 MockWebSocket created:', url, protocols);
         mockWs = this;
         this.url = url;
-        this.protocols = protocols;
+        this.protocols = protocols || '';
         this.readyState = 0; // CONNECTING
         this.bufferedAmount = 0;
         this.extensions = '';
@@ -198,7 +233,7 @@ export async function installMockWebSocket(context) {
         setTimeout(() => {
           this.readyState = 1; // OPEN
           console.log('🎭 Mock WebSocket opened');
-          if (this.onopen) this.onopen({ type: 'open' });
+          if (this.onopen) this.onopen({ type: 'open' } as Event);
           
           // Send mock Welcome message
           setTimeout(() => {
@@ -208,7 +243,7 @@ export async function installMockWebSocket(context) {
             });
             console.log('🎭 Mock sending Welcome:', welcomeMsg);
             if (this.onmessage) {
-              this.onmessage({ data: welcomeMsg, type: 'message' });
+              this.onmessage({ data: welcomeMsg, type: 'message' } as MessageEvent);
             }
             
             // Send SettingsApplied
@@ -216,14 +251,14 @@ export async function installMockWebSocket(context) {
               const settingsMsg = JSON.stringify({ type: 'SettingsApplied' });
               console.log('🎭 Mock sending SettingsApplied');
               if (this.onmessage) {
-                this.onmessage({ data: settingsMsg, type: 'message' });
+                this.onmessage({ data: settingsMsg, type: 'message' } as MessageEvent);
               }
             }, 100);
           }, 100);
         }, 100);
       }
       
-      send(data) {
+      send(data: string | ArrayBufferLike | Blob | ArrayBufferView) {
         console.log('🎭 Mock WebSocket send:', typeof data === 'string' ? data.substring(0, 100) : 'binary');
         
         // Simulate response to text message
@@ -240,7 +275,7 @@ export async function installMockWebSocket(context) {
                 });
                 console.log('🎭 Mock sending agent response');
                 if (this.onmessage) {
-                  this.onmessage({ data: responseMsg, type: 'message' });
+                  this.onmessage({ data: responseMsg, type: 'message' } as MessageEvent);
                 }
               }, 500);
             }
@@ -253,26 +288,26 @@ export async function installMockWebSocket(context) {
       close() {
         console.log('🎭 Mock WebSocket closed');
         this.readyState = 3; // CLOSED
-        if (this.onclose) this.onclose({ type: 'close', code: 1000, reason: 'Normal closure' });
+        if (this.onclose) this.onclose({ type: 'close', code: 1000, reason: 'Normal closure' } as CloseEvent);
       }
       
-      addEventListener(type, listener) {
+      addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
         super.addEventListener(type, listener);
       }
       
-      removeEventListener(type, listener) {
+      removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
         super.removeEventListener(type, listener);
       }
     }
     
     // Mock static constants
-    MockWebSocket.CONNECTING = 0;
-    MockWebSocket.OPEN = 1;
-    MockWebSocket.CLOSING = 2;
-    MockWebSocket.CLOSED = 3;
+    (MockWebSocket as any).CONNECTING = 0;
+    (MockWebSocket as any).OPEN = 1;
+    (MockWebSocket as any).CLOSING = 2;
+    (MockWebSocket as any).CLOSED = 3;
     
     // Replace global WebSocket
-    window.WebSocket = MockWebSocket;
+    (window as any).WebSocket = MockWebSocket;
     console.log('✅ WebSocket mock installed');
   });
 }
@@ -282,7 +317,7 @@ export async function installMockWebSocket(context) {
  * @param {import('@playwright/test').Page} page
  * @param {import('@playwright/test').expect} expect
  */
-export async function assertConnectionHealthy(page, expect) {
+export async function assertConnectionHealthy(page: any, expect: any) {
   const connectionStatus = page.locator(SELECTORS.connectionStatus);
   const connectionReady = page.locator(SELECTORS.connectionReady);
   
