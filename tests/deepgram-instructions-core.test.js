@@ -3,7 +3,7 @@
  * @eslint-env jest
  */
 
-const { getDefaultInstructions, loadInstructionsFromFile } = require('../src/utils/instructions-loader.cjs');
+const { loadInstructionsFromFile } = require('../src/utils/instructions-loader.cjs');
 
 describe('DEEPGRAM_INSTRUCTIONS File and Environment Override - Core Functionality', () => {
   beforeEach(() => {
@@ -25,15 +25,12 @@ describe('DEEPGRAM_INSTRUCTIONS File and Environment Override - Core Functionali
       expect(instructions).toContain('voice assistant');
     });
 
-    it('should fallback to default instructions when file loading fails', async () => {
+    it('should throw error when file loading fails', async () => {
       // Arrange - try to load from non-existent file
       const nonExistentPath = '/non/existent/path/instructions.txt';
 
-      // Act
-      const instructions = await loadInstructionsFromFile(nonExistentPath);
-
-      // Assert
-      expect(instructions).toBe('You are a helpful voice assistant. Keep your responses concise and informative.');
+      // Act & Assert
+      await expect(loadInstructionsFromFile(nonExistentPath)).rejects.toThrow('No instructions found in file and no environment variable set');
     });
   });
 
@@ -50,7 +47,7 @@ describe('DEEPGRAM_INSTRUCTIONS File and Environment Override - Core Functionali
       expect(instructions).toBe(envInstructions);
     });
 
-    it('should handle empty environment variable', async () => {
+    it('should fallback to file when environment variable is empty', async () => {
       // Arrange
       process.env.DEEPGRAM_INSTRUCTIONS = '';
 
@@ -62,26 +59,13 @@ describe('DEEPGRAM_INSTRUCTIONS File and Environment Override - Core Functionali
     });
   });
 
-  describe('Default Instructions', () => {
-    it('should return default instructions', () => {
-      // Act
-      const defaultInstructions = getDefaultInstructions();
-
-      // Assert
-      expect(defaultInstructions).toBe('You are a helpful voice assistant. Keep your responses concise and informative.');
-    });
-  });
-
   describe('Error Handling', () => {
-    it('should handle file read errors gracefully', async () => {
+    it('should throw error when no instructions found', async () => {
       // Arrange - try to load from non-existent file
       const nonExistentPath = '/non/existent/path/instructions.txt';
 
-      // Act
-      const instructions = await loadInstructionsFromFile(nonExistentPath);
-
-      // Assert
-      expect(instructions).toBe('You are a helpful voice assistant. Keep your responses concise and informative.');
+      // Act & Assert
+      await expect(loadInstructionsFromFile(nonExistentPath)).rejects.toThrow('No instructions found in file and no environment variable set');
     });
   });
 });
