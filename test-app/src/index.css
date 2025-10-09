@@ -54,7 +54,7 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
-/* Hide Deepgram SDK's built-in microphone UI */
+/* Hide Deepgram SDK's built-in microphone UI - be more specific to avoid conflicts */
 [data-deepgram-microphone],
 [data-deepgram-ui],
 .deepgram-microphone,
@@ -64,13 +64,13 @@ button:focus-visible {
   display: none !important;
 }
 
-/* Hide any microphone icons that might be injected by Deepgram SDK */
-button[aria-label*="microphone"],
-button[aria-label*="mic"],
-button[title*="microphone"],
-button[title*="mic"],
-.microphone-button,
-.mic-button {
+/* Hide Deepgram SDK injected microphone buttons - but preserve voice-commerce UI */
+button[aria-label*="microphone"]:not([data-testid="microphone-button"]),
+button[aria-label*="mic"]:not([data-testid="microphone-button"]),
+button[title*="microphone"]:not([data-testid="microphone-button"]),
+button[title*="mic"]:not([data-testid="microphone-button"]),
+.microphone-button:not([data-testid="microphone-button"]),
+.mic-button:not([data-testid="microphone-button"]) {
   display: none !important;
 }
 
