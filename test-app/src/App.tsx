@@ -10,6 +10,7 @@ import {
   ServiceType,
   DeepgramError
 } from 'deepgram-voice-interaction-react';
+import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 
 function App() {
   // Fail-fast check for required API key
@@ -78,23 +79,38 @@ function App() {
     ]
   }), []); // Empty dependency array means this object is created only once
 
-  // Load instructions from environment variable
+  // Load instructions using the instructions-loader utility
   useEffect(() => {
-    const loadInstructions = () => {
-      setInstructionsLoading(true);
-      
-      // Use environment variable directly (no file reading needed)
-      const instructions = import.meta.env.VITE_DEEPGRAM_INSTRUCTIONS;
-      
-      if (instructions && instructions.trim()) {
-        setLoadedInstructions(instructions.trim());
-        addLog(`Loaded instructions from env: ${instructions.substring(0, 50)}...`);
-      } else {
-        // This should not happen if .env is properly configured
-        throw new Error('VITE_DEEPGRAM_INSTRUCTIONS environment variable is not set');
+    const loadInstructions = async () => {
+      try {
+        setInstructionsLoading(true);
+        
+        // Use the instructions-loader utility which handles:
+        // 1. Environment variable override (VITE_DEEPGRAM_INSTRUCTIONS)
+        // 2. File loading (instructions.txt)
+        // 3. Graceful fallback to default instructions
+        const instructions = await loadInstructionsFromFile();
+        
+        setLoadedInstructions(instructions);
+        addLog(`Loaded instructions via loader: ${instructions.substring(0, 50)}...`);
+      } catch (error) {
+        console.error('Failed to load instructions:', error);
+        addLog(`Failed to load instructions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        
+        // Fallback to environment variable directly if loader fails
+        const envInstructions = import.meta.env.VITE_DEEPGRAM_INSTRUCTIONS;
+        if (envInstructions && envInstructions.trim()) {
+          setLoadedInstructions(envInstructions.trim());
+          addLog(`Using fallback env instructions: ${envInstructions.substring(0, 50)}...`);
+        } else {
+          // Final fallback to default
+          const defaultInstructions = 'You are a helpful voice assistant. Keep your responses concise and informative.';
+          setLoadedInstructions(defaultInstructions);
+          addLog(`Using default instructions: ${defaultInstructions.substring(0, 50)}...`);
+        }
+      } finally {
+        setInstructionsLoading(false);
       }
-      
-      setInstructionsLoading(false);
     };
 
     loadInstructions();
@@ -658,7 +674,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <strong>Status:</strong> {instructionsLoading ? 'Loading...' : 'Loaded'}
         </div>
         <div style={{ marginBottom: '10px' }}>
-          <strong>Source:</strong> {import.meta.env.VITE_DEEPGRAM_INSTRUCTIONS ? 'Vite Environment' : 'Not Available'}
+          <strong>Source:</strong> {loadedInstructions ? 'Instructions Loader' : 'Not Available'}
         </div>
         <div style={{ marginBottom: '10px' }}>
           <strong>Instructions Preview:</strong>
