@@ -10,7 +10,7 @@ import {
   ServiceType,
   DeepgramError
 } from 'deepgram-voice-interaction-react';
-import { loadInstructionsFromFile } from '../src/utils/instructions-loader';
+import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 
 function App() {
   // Fail-fast check for required API key
@@ -55,6 +55,11 @@ function App() {
   
   // Text input state
   const [textInput, setTextInput] = useState('');
+  
+  // Helper to add logs - memoized
+  const addLog = useCallback((message: string) => {
+    setLogs(prev => [...prev, `${new Date().toISOString().substring(11, 19)} - ${message}`]);
+  }, []); // No dependencies, created once
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
   const memoizedTranscriptionOptions = useMemo(() => ({
@@ -116,11 +121,6 @@ function App() {
     agentUrl: 'wss://agent.deepgram.com/v1/agent/converse',
   }), []);
 
-  // Helper to add logs - memoized
-  const addLog = useCallback((message: string) => {
-    setLogs(prev => [...prev, `${new Date().toISOString().substring(11, 19)} - ${message}`]);
-  }, []); // No dependencies, created once
-  
   // Targeted sleep/wake logging for the App component
   const sleepLogApp = useCallback((message: string) => {
     addLog(`[SLEEP_CYCLE][APP] ${message}`);
