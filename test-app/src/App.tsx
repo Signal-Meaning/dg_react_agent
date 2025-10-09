@@ -111,7 +111,7 @@ function App() {
     //thinkEndpointUrl: 'https://api.openai.com/v1/chat/completions',
     //thinkApiKey: import.meta.env.VITE_THINK_API_KEY || '',
     voice: 'aura-2-apollo-en',
-    instructions: loadedInstructions || 'You are a helpful voice assistant. Keep your responses concise and informative.',
+    instructions: loadedInstructions,
     greeting: 'Hello! How can I assist you today?',
   }), [loadedInstructions]); // Include loadedInstructions in dependency array
 
