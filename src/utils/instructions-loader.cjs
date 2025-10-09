@@ -1,12 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_INSTRUCTIONS = 'You are a helpful voice assistant. Keep your responses concise and informative.';
-
-function getDefaultInstructions() {
-  return DEFAULT_INSTRUCTIONS;
-}
-
 function getEnvironmentInstructions() {
   if (typeof process !== 'undefined' && process.env?.DEEPGRAM_INSTRUCTIONS) {
     return process.env.DEEPGRAM_INSTRUCTIONS.trim();
@@ -50,10 +44,14 @@ async function loadInstructionsFromFile(filePath) {
       return fileContent.trim();
     }
 
-    return getDefaultInstructions();
+    throw new Error('No instructions found in file and no environment variable set');
   } catch (error) {
-    console.warn('Failed to load instructions from file, using default:', error.message);
-    return getDefaultInstructions();
+    console.error('Failed to load instructions:', error.message);
+    // If it's a file system error or no content found, throw our custom message
+    if (error.code === 'ENOENT' || error.message.includes('No instructions found')) {
+      throw new Error('No instructions found in file and no environment variable set');
+    }
+    throw error;
   }
 }
 
@@ -71,16 +69,18 @@ function loadInstructionsFromFileSync(filePath) {
       return fileContent.trim();
     }
 
-    return getDefaultInstructions();
+    throw new Error('No instructions found in file and no environment variable set');
   } catch (error) {
-    console.warn('Failed to load instructions from file, using default:', error);
-    return getDefaultInstructions();
+    console.error('Failed to load instructions:', error.message);
+    // If it's a file system error or no content found, throw our custom message
+    if (error.code === 'ENOENT' || error.message.includes('No instructions found')) {
+      throw new Error('No instructions found in file and no environment variable set');
+    }
+    throw error;
   }
 }
 
 module.exports = {
-  DEFAULT_INSTRUCTIONS,
-  getDefaultInstructions,
   loadInstructionsFromFile,
   loadInstructionsFromFileSync
 };
