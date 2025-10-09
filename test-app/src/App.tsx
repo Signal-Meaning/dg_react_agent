@@ -27,6 +27,35 @@ function App() {
 
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
   
+  // Show error if API key or project ID is missing
+  if (shouldShowError) {
+    return (
+      <div style={{ 
+        padding: '20px', 
+        backgroundColor: '#fee', 
+        border: '2px solid #f00', 
+        borderRadius: '8px',
+        margin: '20px',
+        fontFamily: 'monospace'
+      }}>
+        <h2>⚠️ Deepgram API Key Status</h2>
+        <p><strong>This test app supports both REAL and MOCK modes:</strong></p>
+        <div style={{ margin: '15px 0', padding: '10px', backgroundColor: '#f0f8ff', borderRadius: '4px' }}>
+          <h4>🔴 Current Mode: MOCK</h4>
+          <p>Text messages will show simulated responses with <code>[MOCK]</code> prefix.</p>
+        </div>
+        <p><strong>To enable REAL Deepgram integration:</strong></p>
+        <p>Set the following in <code>test-app/.env</code>:</p>
+        <pre style={{ backgroundColor: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
+VITE_DEEPGRAM_API_KEY=your-real-deepgram-api-key
+VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
+        </pre>
+        <p>Get a free API key at: <a href="https://deepgram.com" target="_blank">https://deepgram.com</a></p>
+        <p><em>With a real API key, text messages will be sent to the actual Deepgram agent service.</em></p>
+      </div>
+    );
+  }
+  
   // State for UI
   const [isReady, setIsReady] = useState(false);
   const [lastTranscript, setLastTranscript] = useState('');
@@ -344,34 +373,6 @@ function App() {
     }
   };
   
-  // Show error if API key or project ID is missing
-  if (shouldShowError) {
-    return (
-      <div style={{ 
-        padding: '20px', 
-        backgroundColor: '#fee', 
-        border: '2px solid #f00', 
-        borderRadius: '8px',
-        margin: '20px',
-        fontFamily: 'monospace'
-      }}>
-        <h2>⚠️ Deepgram API Key Status</h2>
-        <p><strong>This test app supports both REAL and MOCK modes:</strong></p>
-        <div style={{ margin: '15px 0', padding: '10px', backgroundColor: '#f0f8ff', borderRadius: '4px' }}>
-          <h4>🔴 Current Mode: MOCK</h4>
-          <p>Text messages will show simulated responses with <code>[MOCK]</code> prefix.</p>
-        </div>
-        <p><strong>To enable REAL Deepgram integration:</strong></p>
-        <p>Set the following in <code>test-app/.env</code>:</p>
-        <pre style={{ backgroundColor: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
-VITE_DEEPGRAM_API_KEY=your-real-deepgram-api-key
-VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
-        </pre>
-        <p>Get a free API key at: <a href="https://deepgram.com" target="_blank">https://deepgram.com</a></p>
-        <p><em>With a real API key, text messages will be sent to the actual Deepgram agent service.</em></p>
-      </div>
-    );
-  }
   
   return (
     <div style={{ 
