@@ -54,6 +54,26 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* Hide Deepgram SDK's built-in microphone UI */
+[data-deepgram-microphone],
+[data-deepgram-ui],
+.deepgram-microphone,
+.deepgram-ui,
+#deepgram-microphone,
+#deepgram-ui {
+  display: none !important;
+}
+
+/* Hide any microphone icons that might be injected by Deepgram SDK */
+button[aria-label*="microphone"],
+button[aria-label*="mic"],
+button[title*="microphone"],
+button[title*="mic"],
+.microphone-button,
+.mic-button {
+  display: none !important;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
