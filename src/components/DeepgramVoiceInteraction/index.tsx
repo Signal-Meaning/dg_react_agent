@@ -407,32 +407,21 @@ function DeepgramVoiceInteraction(
       }
     });
 
-    // Initialize audio manager
+    // Component is ready immediately when configured - AudioManager is not a prerequisite
+    // The component can accept text interactions and manual connections without audio
+    dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
+    
+    // Initialize AudioManager in the background for audio features
     audioManagerRef.current.initialize()
       .then(() => {
-        log('AudioManager initialized successfully in useEffect');
-          
-          // Determine if the component is ready based on configured services
-          // For now, we consider it ready as soon as the audio manager is ready
-          // The actual WebSocket connections will be made in the start() method
-        dispatch({ type: 'READY_STATE_CHANGE', isReady: true }); 
+        log('AudioManager initialized successfully in background');
+        // Don't change isReady here - it's already true
+        // AudioManager readiness can be tracked separately if needed
       })
       .catch((error: Error) => {
-        handleError({
-          service: 'transcription',
-          code: 'audio_init_error',
-          message: 'Failed to initialize audio',
-          details: error,
-        });
-        
-        // For auto-connect dual mode, we should still be ready even if audio fails
-        // The user can still interact via text input and the agent will work
-        if (autoConnect === true && isAgentConfigured) {
-          log('AudioManager failed but auto-connect dual mode enabled, setting ready anyway');
-          dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
-        } else {
-          dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
-        }
+        log('AudioManager failed to initialize in background:', error);
+        // Don't change isReady here - component can still work without audio
+        // Audio features will be disabled, but text interactions still work
       });
     } else {
       log('Neither transcription nor agent configured, skipping audio setup');
@@ -458,6 +447,7 @@ function DeepgramVoiceInteraction(
       }, 100); // Small delay to ensure audio manager is ready
     } else {
       log('Auto-connect disabled or agent not configured', { autoConnect, isAgentConfigured });
+      // Component is already ready from the AudioManager initialization above
     }
 
     // Clean up
@@ -661,6 +651,12 @@ function DeepgramVoiceInteraction(
         log('Microphone enabled');
       }
     } else {
+      // Interrupt any ongoing TTS playback when stopping recording
+      if (agentManagerRef.current) {
+        log('Interrupting agent when stopping microphone');
+        interruptAgent();
+      }
+        
       if (audioManagerRef.current) {
         log('Disabling microphone...');
         audioManagerRef.current.stopRecording();

@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useMemo } from 'react';
+import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { 
   DeepgramVoiceInteraction, 
   DeepgramVoiceInteractionHandle,
@@ -10,6 +10,7 @@ import {
   ServiceType,
   DeepgramError
 } from 'deepgram-voice-interaction-react';
+import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 
 function App() {
   // Fail-fast check for required API key
@@ -42,6 +43,10 @@ function App() {
   });
   const [logs, setLogs] = useState<string[]>([]);
   
+  // Instructions state
+  const [loadedInstructions, setLoadedInstructions] = useState<string>('');
+  const [instructionsLoading, setInstructionsLoading] = useState(true);
+  
   // Auto-connect dual mode state
   const [micEnabled, setMicEnabled] = useState(false);
   const [connectionReady, setConnectionReady] = useState(false);
@@ -50,6 +55,11 @@ function App() {
   
   // Text input state
   const [textInput, setTextInput] = useState('');
+  
+  // Helper to add logs - memoized
+  const addLog = useCallback((message: string) => {
+    setLogs(prev => [...prev, `${new Date().toISOString().substring(11, 19)} - ${message}`]);
+  }, []); // No dependencies, created once
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
   const memoizedTranscriptionOptions = useMemo(() => ({
@@ -69,6 +79,43 @@ function App() {
     ]
   }), []); // Empty dependency array means this object is created only once
 
+  // Load instructions using the instructions-loader utility
+  useEffect(() => {
+    const loadInstructions = async () => {
+      try {
+        setInstructionsLoading(true);
+        
+        // Use the instructions-loader utility which handles:
+        // 1. Environment variable override (VITE_DEEPGRAM_INSTRUCTIONS)
+        // 2. File loading (instructions.txt)
+        // 3. Graceful fallback to default instructions
+        const instructions = await loadInstructionsFromFile();
+        
+        setLoadedInstructions(instructions);
+        addLog(`Loaded instructions via loader: ${instructions.substring(0, 50)}...`);
+      } catch (error) {
+        console.error('Failed to load instructions:', error);
+        addLog(`Failed to load instructions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        
+        // Fallback to environment variable directly if loader fails
+        const envInstructions = import.meta.env.VITE_DEEPGRAM_INSTRUCTIONS;
+        if (envInstructions && envInstructions.trim()) {
+          setLoadedInstructions(envInstructions.trim());
+          addLog(`Using fallback env instructions: ${envInstructions.substring(0, 50)}...`);
+        } else {
+          // Final fallback to default
+          const defaultInstructions = 'You are a helpful voice assistant. Keep your responses concise and informative.';
+          setLoadedInstructions(defaultInstructions);
+          addLog(`Using default instructions: ${defaultInstructions.substring(0, 50)}...`);
+        }
+      } finally {
+        setInstructionsLoading(false);
+      }
+    };
+
+    loadInstructions();
+  }, [addLog]);
+
   const memoizedAgentOptions = useMemo(() => ({
     language: 'en',
     // Agent can use a different model for listening if desired, 
@@ -81,9 +128,9 @@ function App() {
     //thinkEndpointUrl: 'https://api.openai.com/v1/chat/completions',
     //thinkApiKey: import.meta.env.VITE_THINK_API_KEY || '',
     voice: 'aura-2-apollo-en',
-    instructions: 'You are a helpful voice assistant. Keep your responses concise and informative.',
+    instructions: loadedInstructions,
     greeting: 'Hello! How can I assist you today?',
-  }), []); // Empty dependency array means this object is created only once
+  }), [loadedInstructions]); // Include loadedInstructions in dependency array
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
@@ -91,11 +138,6 @@ function App() {
     agentUrl: 'wss://agent.deepgram.com/v1/agent/converse',
   }), []);
 
-  // Helper to add logs - memoized
-  const addLog = useCallback((message: string) => {
-    setLogs(prev => [...prev, `${new Date().toISOString().substring(11, 19)} - ${message}`]);
-  }, []); // No dependencies, created once
-  
   // Targeted sleep/wake logging for the App component
   const sleepLogApp = useCallback((message: string) => {
     addLog(`[SLEEP_CYCLE][APP] ${message}`);
@@ -378,7 +420,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       maxWidth: '800px', 
       margin: '0 auto', 
       padding: '20px',
-      pointerEvents: 'none' // Disable pointer events on container
+      pointerEvents: 'auto' // Allow pointer events for E2E tests
     }} data-testid="voice-agent">
       <h1>Deepgram Voice Interaction Test</h1>
       
@@ -624,6 +666,30 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <p style={{ fontSize: '12px', color: '#666', margin: 0 }}>
           This allows you to send text messages without using the microphone.
         </p>
+      </div>
+
+      <div style={{ marginTop: '20px', border: '1px solid #eee', padding: '10px', pointerEvents: 'auto' }}>
+        <h3>Instructions Status</h3>
+        <div style={{ marginBottom: '10px' }}>
+          <strong>Status:</strong> {instructionsLoading ? 'Loading...' : 'Loaded'}
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <strong>Source:</strong> {loadedInstructions ? 'Instructions Loader' : 'Not Available'}
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <strong>Instructions Preview:</strong>
+          <div style={{ 
+            maxHeight: '100px', 
+            overflowY: 'scroll', 
+            background: '#f9f9f9', 
+            padding: '5px', 
+            marginTop: '5px',
+            fontSize: '12px',
+            border: '1px solid #ddd'
+          }}>
+            {loadedInstructions || 'No instructions loaded'}
+          </div>
+        </div>
       </div>
 
       <div style={{ marginTop: '20px', border: '1px solid #eee', padding: '10px', pointerEvents: 'auto' }}>

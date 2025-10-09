@@ -33,7 +33,7 @@ describe('Auto-Connect Prop Behavior', () => {
     );
     
     await waitFor(() => {
-      expect(mockProps.onReady).toHaveBeenCalled();
+      expect(mockProps.onReady).toHaveBeenCalledWith(true);
     }, { timeout: 5000 });
     
     TEST_ASSERTIONS.expectComponentReady(mockProps.onReady);
@@ -57,7 +57,7 @@ describe('Auto-Connect Prop Behavior', () => {
     );
     
     await waitFor(() => {
-      expect(mockProps.onReady).toHaveBeenCalled();
+      expect(mockProps.onReady).toHaveBeenCalledWith(true);
     }, { timeout: 5000 });
     
     TEST_ASSERTIONS.expectComponentReady(mockProps.onReady);

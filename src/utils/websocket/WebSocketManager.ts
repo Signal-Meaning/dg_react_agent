@@ -276,10 +276,13 @@ export class WebSocketManager {
           this.stopKeepalive();
           window.clearTimeout(this.connectionTimeoutId!);
           this.connectionTimeoutId = null;
+          
+          // Check if we were connected before updating state
+          const wasConnected = this.connectionState === 'connected';
           this.updateState('closed');
           
-          // Only attempt to reconnect if we were previously connected
-          if (this.connectionState === 'connected' && this.reconnectAttempts < this.maxReconnectAttempts) {
+          // Attempt reconnection if we were previously connected and haven't exceeded max attempts
+          if (wasConnected && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.attemptReconnect();
           }
         };
