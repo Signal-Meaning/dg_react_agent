@@ -33,6 +33,7 @@ global.AudioContext = class MockAudioContext {
   constructor() {
     this.state = 'running';
     this.sampleRate = 44100;
+    this.currentTime = 0;
   }
   
   createGain() {
@@ -56,6 +57,7 @@ global.AudioContext = class MockAudioContext {
   
   createBuffer() {
     return {
+      duration: 1.0,
       getChannelData: jest.fn(() => new Float32Array(1024))
     };
   }
@@ -74,6 +76,11 @@ global.AudioContext = class MockAudioContext {
       connect: jest.fn(),
       disconnect: jest.fn()
     };
+  }
+  
+  close() {
+    this.state = 'closed';
+    return Promise.resolve();
   }
 };
 
