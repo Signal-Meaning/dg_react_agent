@@ -185,3 +185,4 @@ class AudioTestHelpers {
 }
 
 module.exports = AudioTestHelpers;
+

@@ -7,10 +7,14 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "DEVELOPMENT.md",
+    "scripts/",
+    "tests/"
   ],
   "scripts": {
     "build": "rollup -c",
+    "build:watch": "rollup -c -w",
     "dev": "rollup -c -w",
     "test": "jest",
     "test:e2e": "playwright test",
@@ -19,7 +23,14 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:report": "playwright show-report",
     "lint": "eslint src --ext .ts,.tsx",
-    "build:single-file": "node scripts/generate-single-file.js"
+    "build:single-file": "node scripts/generate-single-file.js",
+    "validate": "node scripts/validate-plugin.js",
+    "prebuild": "echo 'Skipping validation for now'",
+    "postbuild": "echo 'Build completed'",
+    "package:local": "./scripts/package-for-local.sh",
+    "workflow": "./scripts/dev-workflow.sh",
+    "clean": "rm -rf dist/ && rm -f *.tgz",
+    "status": "./scripts/dev-workflow.sh status"
   },
   "keywords": [
     "deepgram",

@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useReducer, useRef } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useReducer, useRef } from 'react';
 import {
   AgentState,
   DeepgramError,
@@ -21,6 +21,37 @@ const DEFAULT_ENDPOINTS = {
   transcriptionUrl: 'wss://api.deepgram.com/v1/listen',
   agentUrl: 'wss://agent.deepgram.com/v1/agent/converse',
 };
+
+/**
+ * Helper function to warn about non-memoized options in development mode
+ * @param propName - The name of the prop being checked
+ * @param options - The options object to check
+ */
+function warnAboutNonMemoizedOptions(propName: string, options: unknown): void {
+  if (!options || typeof options !== 'object') {
+    return;
+  }
+  
+  // Check if the object appears to be an inline object (not memoized)
+  // We use a heuristic: if the object has a constructor that's not Object
+  // or if it's not frozen, it might be an inline object
+  const isLikelyInlineObject = 
+    options.constructor === Object && 
+    !Object.isFrozen(options) &&
+    Object.getOwnPropertyNames(options).length > 0;
+  
+  if (isLikelyInlineObject) {
+    try {
+      console.warn(
+        `[DeepgramVoiceInteraction] ${propName} prop detected. ` +
+        'For optimal performance, memoize this prop with useMemo() to prevent unnecessary re-initialization. ' +
+        'See component documentation for details.'
+      );
+    } catch (error) {
+      // Silently fail if console.warn is not available
+    }
+  }
+}
 
 /**
  * DeepgramVoiceInteraction component
@@ -52,6 +83,38 @@ const DEFAULT_ENDPOINTS = {
  * IMPORTANT: To use a specific mode, you must completely OMIT (not pass) the options prop
  * for any service you don't want to use. Passing an empty object ({}) will still initialize
  * that service.
+ * 
+ * CRITICAL: Options Props Must Be Memoized
+ * =======================================
+ * 
+ * The `agentOptions` and `transcriptionOptions` props MUST be memoized using `useMemo` to prevent
+ * unnecessary re-initialization and infinite reconnection loops.
+ * 
+ * ✅ CORRECT Usage:
+ * ```tsx
+ * const agentOptions = useMemo(() => ({
+ *   language: 'en',
+ *   listenModel: 'nova-3',
+ *   // ... other options
+ * }), []); // Empty dependency array for static config
+ * 
+ * <DeepgramVoiceInteraction agentOptions={agentOptions} />
+ * ```
+ * 
+ * ❌ INCORRECT Usage (causes infinite re-initialization):
+ * ```tsx
+ * <DeepgramVoiceInteraction 
+ *   agentOptions={{
+ *     language: 'en',
+ *     listenModel: 'nova-3',
+ *     // ... other options
+ *   }}
+ * />
+ * ```
+ * 
+ * This is because the component's main useEffect depends on these props, and inline objects
+ * create new references on every render, causing the component to tear down and recreate
+ * WebSocket connections constantly.
  */
 function DeepgramVoiceInteraction(
   props: DeepgramVoiceInteractionProps,
@@ -74,8 +137,6 @@ function DeepgramVoiceInteraction(
     onPlaybackStateChange,
     onError,
     debug = false,
-    // Backward compatibility
-    welcomeFirst,
     // Auto-connect dual mode props
     autoConnect,
     microphoneEnabled,
@@ -84,12 +145,6 @@ function DeepgramVoiceInteraction(
     onAgentSpeaking,
     onAgentSilent,
   } = props;
-
-  // Backward compatibility: map welcomeFirst to autoConnect
-  const effectiveAutoConnect = useMemo(() => 
-    autoConnect !== undefined ? autoConnect : welcomeFirst, 
-    [autoConnect, welcomeFirst]
-  );
 
   // Internal state
   const [state, dispatch] = useReducer(stateReducer, initialState);
@@ -166,6 +221,12 @@ function DeepgramVoiceInteraction(
       return;
     }
 
+    // Development warning for non-memoized options
+    if (process.env.NODE_ENV === 'development') {
+      warnAboutNonMemoizedOptions('agentOptions', agentOptions);
+      warnAboutNonMemoizedOptions('transcriptionOptions', transcriptionOptions);
+    }
+
     // Determine which services are being configured
     const isTranscriptionConfigured = !!transcriptionOptions;
     const isAgentConfigured = !!agentOptions;
@@ -180,9 +241,11 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    // Log which services are being configured
-    log(`Initializing in ${isTranscriptionConfigured && isAgentConfigured ? 'DUAL MODE' : 
-      isTranscriptionConfigured ? 'TRANSCRIPTION-ONLY MODE' : 'AGENT-ONLY MODE'}`);
+    // Log which services are being configured (always show this critical info)
+    const mode = isTranscriptionConfigured && isAgentConfigured ? 'DUAL MODE' : 
+      isTranscriptionConfigured ? 'TRANSCRIPTION-ONLY MODE' : 'AGENT-ONLY MODE';
+    console.log(`[DeepgramVoiceInteraction] Initializing in ${mode}`);
+    log(`Initializing in ${mode}`);
 
     // Prepare endpoints, using defaults ONLY if endpointConfig prop is not provided
     const currentEndpointConfig = endpointConfig || {};
@@ -295,6 +358,9 @@ function DeepgramVoiceInteraction(
       const unsubscribeResult = agentManagerRef.current.addEventListener((event: WebSocketEvent) => {
       if (event.type === 'state') {
         log('Agent state:', event.state);
+        if (event.state === 'connected') {
+          console.info('🔗 [Protocol] Agent WebSocket connected');
+        }
         dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
         onConnectionStateChange?.('agent', event.state);
         
@@ -358,7 +424,15 @@ function DeepgramVoiceInteraction(
           message: 'Failed to initialize audio',
           details: error,
         });
-        dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
+        
+        // For auto-connect dual mode, we should still be ready even if audio fails
+        // The user can still interact via text input and the agent will work
+        if (autoConnect === true && isAgentConfigured) {
+          log('AudioManager failed but auto-connect dual mode enabled, setting ready anyway');
+          dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
+        } else {
+          dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
+        }
       });
     } else {
       log('Neither transcription nor agent configured, skipping audio setup');
@@ -366,9 +440,14 @@ function DeepgramVoiceInteraction(
     }
 
     // Auto-connect dual mode logic
-    console.log('Auto-connect check:', { effectiveAutoConnect, isAgentConfigured, agentManagerRef: !!agentManagerRef.current });
-    if (effectiveAutoConnect !== false && isAgentConfigured) {
+    console.log('Auto-connect check:', { autoConnect, isAgentConfigured, agentManagerRef: !!agentManagerRef.current });
+    if (autoConnect === true && isAgentConfigured) {
       log('Auto-connect dual mode enabled, establishing connection');
+      
+      // For auto-connect dual mode, set ready immediately since the user can interact via text
+      // even if audio is not available
+      dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
+      
       // Auto-connect to agent service to establish dual mode
       setTimeout(() => {
         console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current);
@@ -378,7 +457,7 @@ function DeepgramVoiceInteraction(
         }
       }, 100); // Small delay to ensure audio manager is ready
     } else {
-      log('Auto-connect disabled or agent not configured', { effectiveAutoConnect, isAgentConfigured });
+      log('Auto-connect disabled or agent not configured', { autoConnect, isAgentConfigured });
     }
 
     // Clean up
@@ -412,7 +491,7 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: false });
       dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
     };
-  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, debug, effectiveAutoConnect]); 
+  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, debug, autoConnect]); 
 
   // Notify ready state changes ONLY when the value actually changes
   useEffect(() => {
@@ -555,6 +634,8 @@ function DeepgramVoiceInteraction(
       }
     };
     
+    console.info('📤 [Protocol] Sending agent settings:', settingsMessage);
+    console.log('[DeepgramVoiceInteraction] Sending agent settings:', settingsMessage);
     log('Sending agent settings:', settingsMessage);
     agentManagerRef.current.sendJSON(settingsMessage);
     
@@ -655,6 +736,7 @@ function DeepgramVoiceInteraction(
 
     // Handle Welcome message for dual mode connection
     if (data.type === 'Welcome') {
+      console.info('✅ [Protocol] Welcome message received - dual mode connection established');
       log('Welcome message received - dual mode connection established');
       if (!state.welcomeReceived) {
         dispatch({ type: 'WELCOME_RECEIVED', received: true });
