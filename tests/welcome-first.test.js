@@ -14,8 +14,8 @@
  * ===================
  * 
  * 1. AUTO-CONNECT BEHAVIOR
- *    - When welcomeFirst=true: Agent automatically connects and sends greeting
- *    - When welcomeFirst=false: Agent waits for user to initiate conversation
+ *    - When autoConnect=true: Agent automatically connects and sends greeting
+ *    - When autoConnect=false: Agent waits for user to initiate conversation
  *    - Verifies proper WebSocket connection establishment
  * 
  * 2. MICROPHONE CONTROL
@@ -34,7 +34,7 @@
  *    - Transitions to listening state after interruption
  * 
  * 5. SETTINGS SENDING
- *    - Automatically sends agent settings with greeting when welcomeFirst=true
+ *    - Automatically sends agent settings with greeting when autoConnect=true
  *    - Includes proper greeting text in settings payload
  *    - Prevents duplicate settings from being sent
  * 
@@ -69,7 +69,7 @@
  *     instructions: "You are a helpful assistant.",
  *     voice: "aura-asteria-en"
  *   }}
- *   welcomeFirst={true}
+ *   autoConnect={true}
  *   microphoneEnabled={false}
  *   onWelcomeReceived={() => console.log("Welcome received")}
  *   onGreetingStarted={() => console.log("Greeting started")}
@@ -178,13 +178,13 @@ describe('Welcome-First Behavior', () => {
   };
 
   describe('Auto-connect behavior', () => {
-    test('should auto-connect when welcomeFirst is true', async () => {
+    test('should auto-connect when autoConnect is true', async () => {
       const { mocks } = setupMocks();
 
       render(
         <DeepgramVoiceInteraction
           {...defaultProps}
-          welcomeFirst={true}
+          autoConnect={true}
         />
       );
 
@@ -194,7 +194,7 @@ describe('Welcome-First Behavior', () => {
       }, { timeout: 1000 });
     });
 
-    test('should not auto-connect when welcomeFirst is false', async () => {
+    test('should not auto-connect when autoConnect is false', async () => {
       // Use the setupMocks helper which works for other tests
       const { mocks } = setupMocks();
       
@@ -202,7 +202,7 @@ describe('Welcome-First Behavior', () => {
       const { unmount } = render(
         <DeepgramVoiceInteraction
           {...defaultProps}
-          welcomeFirst={false}
+          autoConnect={false}
         />
       );
 
@@ -240,7 +240,7 @@ describe('Welcome-First Behavior', () => {
       render(
         <DeepgramVoiceInteraction
           {...defaultProps}
-          welcomeFirst={true}
+          autoConnect={true}
         />
       );
 
@@ -278,7 +278,7 @@ describe('Welcome-First Behavior', () => {
         <DeepgramVoiceInteraction
           ref={ref}
           {...defaultProps}
-          welcomeFirst={true}
+          autoConnect={true}
         />
       );
 
@@ -334,7 +334,7 @@ describe('Welcome-First Behavior', () => {
         <DeepgramVoiceInteraction
           ref={ref}
           {...defaultProps}
-          welcomeFirst={true}
+          autoConnect={true}
         />
       );
 
@@ -376,7 +376,7 @@ describe('Welcome-First Behavior', () => {
       render(
         <DeepgramVoiceInteraction
           {...defaultProps}
-          welcomeFirst={true}
+          autoConnect={true}
           onWelcomeReceived={onWelcomeReceived}
         />
       );
@@ -418,7 +418,7 @@ describe('Welcome-First Behavior', () => {
       render(
         <DeepgramVoiceInteraction
           {...defaultProps}
-          welcomeFirst={true}
+          autoConnect={true}
           onGreetingStarted={onGreetingStarted}
         />
       );
@@ -465,7 +465,7 @@ describe('Welcome-First Behavior', () => {
       render(
         <DeepgramVoiceInteraction
           {...defaultProps}
-          welcomeFirst={true}
+          autoConnect={true}
           onGreetingComplete={onGreetingComplete}
         />
       );
@@ -516,7 +516,7 @@ describe('Welcome-First Behavior', () => {
       render(
         <DeepgramVoiceInteraction
           {...defaultProps}
-          welcomeFirst={true}
+          autoConnect={true}
           onGreetingComplete={onGreetingComplete}
         />
       );
@@ -543,7 +543,7 @@ describe('Welcome-First Behavior', () => {
   });
 
   describe('Settings sending', () => {
-    test('should include greeting in settings when welcomeFirst is true', async () => {
+    test('should include greeting in settings when autoConnect is true', async () => {
       const mockSendJSON = jest.fn();
       const mockAddEventListener = jest.fn();
       const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
@@ -566,7 +566,7 @@ describe('Welcome-First Behavior', () => {
       render(
         <DeepgramVoiceInteraction
           {...defaultProps}
-          welcomeFirst={true}
+          autoConnect={true}
         />
       );
 
@@ -619,7 +619,7 @@ describe('Welcome-First Behavior', () => {
       const { rerender } = render(
         <DeepgramVoiceInteraction
           {...defaultProps}
-          welcomeFirst={true}
+          autoConnect={true}
           microphoneEnabled={false}
         />
       );
@@ -642,7 +642,7 @@ describe('Welcome-First Behavior', () => {
       rerender(
         <DeepgramVoiceInteraction
           {...defaultProps}
-          welcomeFirst={true}
+          autoConnect={true}
           microphoneEnabled={true}
         />
       );
