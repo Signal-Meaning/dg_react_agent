@@ -752,7 +752,14 @@ function DeepgramVoiceInteraction(
       if (!state.welcomeReceived) {
         dispatch({ type: 'WELCOME_RECEIVED', received: true });
         onConnectionReady?.();
-        dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: true });
+        
+        // Only trigger greeting for new connections, not reconnections
+        if (state.isNewConnection) {
+          log('New connection - triggering greeting flow');
+          dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: true });
+        } else {
+          log('Reconnection detected - skipping greeting');
+        }
       }
       return;
     }
