@@ -10,7 +10,6 @@ import {
   ServiceType,
   DeepgramError
 } from 'deepgram-voice-interaction-react';
-import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 
 function App() {
   // Fail-fast check for required API key
@@ -79,21 +78,23 @@ function App() {
     ]
   }), []); // Empty dependency array means this object is created only once
 
-  // Load instructions from file or environment variable
+  // Load instructions from environment variable
   useEffect(() => {
-    const loadInstructions = async () => {
-      try {
-        setInstructionsLoading(true);
-        const instructions = await loadInstructionsFromFile();
-        setLoadedInstructions(instructions);
-        addLog(`Loaded instructions: ${instructions.substring(0, 50)}...`);
-      } catch (error) {
-        console.error('Failed to load instructions:', error);
-        addLog(`Failed to load instructions: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        throw new Error(`Failed to load instructions: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      } finally {
-        setInstructionsLoading(false);
+    const loadInstructions = () => {
+      setInstructionsLoading(true);
+      
+      // Use environment variable directly (no file reading needed)
+      const instructions = import.meta.env.VITE_DEEPGRAM_INSTRUCTIONS;
+      
+      if (instructions && instructions.trim()) {
+        setLoadedInstructions(instructions.trim());
+        addLog(`Loaded instructions from env: ${instructions.substring(0, 50)}...`);
+      } else {
+        // This should not happen if .env is properly configured
+        throw new Error('VITE_DEEPGRAM_INSTRUCTIONS environment variable is not set');
       }
+      
+      setInstructionsLoading(false);
     };
 
     loadInstructions();
@@ -403,7 +404,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       maxWidth: '800px', 
       margin: '0 auto', 
       padding: '20px',
-      pointerEvents: 'none' // Disable pointer events on container
+      pointerEvents: 'auto' // Allow pointer events for E2E tests
     }} data-testid="voice-agent">
       <h1>Deepgram Voice Interaction Test</h1>
       
@@ -657,9 +658,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <strong>Status:</strong> {instructionsLoading ? 'Loading...' : 'Loaded'}
         </div>
         <div style={{ marginBottom: '10px' }}>
-          <strong>Source:</strong> {process.env.DEEPGRAM_INSTRUCTIONS ? 'Environment Variable' : 
-                                   import.meta.env.DEEPGRAM_INSTRUCTIONS ? 'Vite Environment' : 
-                                   'File (instructions.txt)'}
+          <strong>Source:</strong> {import.meta.env.VITE_DEEPGRAM_INSTRUCTIONS ? 'Vite Environment' : 'Not Available'}
         </div>
         <div style={{ marginBottom: '10px' }}>
           <strong>Instructions Preview:</strong>
