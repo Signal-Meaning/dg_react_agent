@@ -1,0 +1,138 @@
+/**
+ * Instructions Loader Utility
+ * 
+ * This module provides functionality to load DEEPGRAM_INSTRUCTIONS from a file
+ * with environment variable override support.
+ */
+
+import fs from 'fs';
+import path from 'path';
+
+/**
+ * Default instructions fallback
+ */
+export const DEFAULT_INSTRUCTIONS = 'You are a helpful voice assistant. Keep your responses concise and informative.';
+
+/**
+ * Get the default instructions
+ * @returns {string} Default instructions string
+ */
+export function getDefaultInstructions(): string {
+  return DEFAULT_INSTRUCTIONS;
+}
+
+/**
+ * Load instructions from file with environment variable override
+ * 
+ * Priority order:
+ * 1. DEEPGRAM_INSTRUCTIONS environment variable (if set)
+ * 2. File content from default instructions file
+ * 3. Default fallback instructions
+ * 
+ * @param {string} filePath - Optional custom file path (defaults to instructions.txt)
+ * @returns {Promise<string>} The instructions string
+ */
+export async function loadInstructionsFromFile(filePath?: string): Promise<string> {
+  try {
+    // Check for environment variable override first
+    const envInstructions = getEnvironmentInstructions();
+    if (envInstructions) {
+      return envInstructions;
+    }
+
+    // Load from file
+    const instructionsFilePath = filePath || getDefaultInstructionsFilePath();
+    const fileContent = await readInstructionsFile(instructionsFilePath);
+    
+    if (fileContent && fileContent.trim()) {
+      return fileContent.trim();
+    }
+
+    // Fallback to default instructions
+    return getDefaultInstructions();
+  } catch (error) {
+    console.warn('Failed to load instructions from file, using default:', error);
+    return getDefaultInstructions();
+  }
+}
+
+/**
+ * Get instructions from environment variables
+ * Supports both Node.js process.env and Vite import.meta.env
+ * @returns {string|null} Environment instructions or null if not set
+ */
+function getEnvironmentInstructions(): string | null {
+  // Check Node.js environment
+  if (typeof process !== 'undefined' && process.env?.DEEPGRAM_INSTRUCTIONS) {
+    return process.env.DEEPGRAM_INSTRUCTIONS.trim();
+  }
+
+  // Check Vite environment (for frontend builds)
+  if (typeof import.meta !== 'undefined' && import.meta.env?.DEEPGRAM_INSTRUCTIONS) {
+    return import.meta.env.DEEPGRAM_INSTRUCTIONS.trim();
+  }
+
+  return null;
+}
+
+/**
+ * Get the default instructions file path
+ * @returns {string} Path to the default instructions file
+ */
+function getDefaultInstructionsFilePath(): string {
+  // In a browser environment, we can't read files directly
+  // This would typically be handled by bundlers or build processes
+  if (typeof window !== 'undefined') {
+    throw new Error('File reading not supported in browser environment');
+  }
+
+  // For Node.js environments, look for instructions.txt in the project root
+  const projectRoot = process.cwd();
+  return path.join(projectRoot, 'instructions.txt');
+}
+
+/**
+ * Read instructions from file
+ * @param {string} filePath - Path to the instructions file
+ * @returns {Promise<string>} File content
+ */
+async function readInstructionsFile(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    fs.readFile(filePath, 'utf8', (err, data) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(data);
+      }
+    });
+  });
+}
+
+/**
+ * Synchronous version for environments that support it
+ * @param {string} filePath - Optional custom file path
+ * @returns {string} The instructions string
+ */
+export function loadInstructionsFromFileSync(filePath?: string): string {
+  try {
+    // Check for environment variable override first
+    const envInstructions = getEnvironmentInstructions();
+    if (envInstructions) {
+      return envInstructions;
+    }
+
+    // Load from file synchronously
+    const instructionsFilePath = filePath || getDefaultInstructionsFilePath();
+    const fileContent = fs.readFileSync(instructionsFilePath, 'utf8');
+    
+    if (fileContent && fileContent.trim()) {
+      return fileContent.trim();
+    }
+
+    // Fallback to default instructions
+    return getDefaultInstructions();
+  } catch (error) {
+    console.warn('Failed to load instructions from file, using default:', error);
+    return getDefaultInstructions();
+  }
+}

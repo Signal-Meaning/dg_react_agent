@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useMemo } from 'react';
+import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { 
   DeepgramVoiceInteraction, 
   DeepgramVoiceInteractionHandle,
@@ -10,6 +10,7 @@ import {
   ServiceType,
   DeepgramError
 } from 'deepgram-voice-interaction-react';
+import { loadInstructionsFromFile } from '../src/utils/instructions-loader';
 
 function App() {
   // Fail-fast check for required API key
@@ -42,6 +43,10 @@ function App() {
   });
   const [logs, setLogs] = useState<string[]>([]);
   
+  // Instructions state
+  const [loadedInstructions, setLoadedInstructions] = useState<string>('');
+  const [instructionsLoading, setInstructionsLoading] = useState(true);
+  
   // Auto-connect dual mode state
   const [micEnabled, setMicEnabled] = useState(false);
   const [connectionReady, setConnectionReady] = useState(false);
@@ -69,6 +74,26 @@ function App() {
     ]
   }), []); // Empty dependency array means this object is created only once
 
+  // Load instructions from file or environment variable
+  useEffect(() => {
+    const loadInstructions = async () => {
+      try {
+        setInstructionsLoading(true);
+        const instructions = await loadInstructionsFromFile();
+        setLoadedInstructions(instructions);
+        addLog(`Loaded instructions: ${instructions.substring(0, 50)}...`);
+      } catch (error) {
+        console.error('Failed to load instructions:', error);
+        setLoadedInstructions('You are a helpful voice assistant. Keep your responses concise and informative.');
+        addLog('Using default instructions due to loading error');
+      } finally {
+        setInstructionsLoading(false);
+      }
+    };
+
+    loadInstructions();
+  }, [addLog]);
+
   const memoizedAgentOptions = useMemo(() => ({
     language: 'en',
     // Agent can use a different model for listening if desired, 
@@ -81,9 +106,9 @@ function App() {
     //thinkEndpointUrl: 'https://api.openai.com/v1/chat/completions',
     //thinkApiKey: import.meta.env.VITE_THINK_API_KEY || '',
     voice: 'aura-2-apollo-en',
-    instructions: 'You are a helpful voice assistant. Keep your responses concise and informative.',
+    instructions: loadedInstructions || 'You are a helpful voice assistant. Keep your responses concise and informative.',
     greeting: 'Hello! How can I assist you today?',
-  }), []); // Empty dependency array means this object is created only once
+  }), [loadedInstructions]); // Include loadedInstructions in dependency array
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
@@ -624,6 +649,32 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <p style={{ fontSize: '12px', color: '#666', margin: 0 }}>
           This allows you to send text messages without using the microphone.
         </p>
+      </div>
+
+      <div style={{ marginTop: '20px', border: '1px solid #eee', padding: '10px', pointerEvents: 'auto' }}>
+        <h3>Instructions Status</h3>
+        <div style={{ marginBottom: '10px' }}>
+          <strong>Status:</strong> {instructionsLoading ? 'Loading...' : 'Loaded'}
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <strong>Source:</strong> {process.env.DEEPGRAM_INSTRUCTIONS ? 'Environment Variable' : 
+                                   import.meta.env.DEEPGRAM_INSTRUCTIONS ? 'Vite Environment' : 
+                                   'File (instructions.txt)'}
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <strong>Instructions Preview:</strong>
+          <div style={{ 
+            maxHeight: '100px', 
+            overflowY: 'scroll', 
+            background: '#f9f9f9', 
+            padding: '5px', 
+            marginTop: '5px',
+            fontSize: '12px',
+            border: '1px solid #ddd'
+          }}>
+            {loadedInstructions || 'No instructions loaded'}
+          </div>
+        </div>
       </div>
 
       <div style={{ marginTop: '20px', border: '1px solid #eee', padding: '10px', pointerEvents: 'auto' }}>
