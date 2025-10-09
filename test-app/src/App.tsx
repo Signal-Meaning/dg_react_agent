@@ -89,8 +89,8 @@ function App() {
         addLog(`Loaded instructions: ${instructions.substring(0, 50)}...`);
       } catch (error) {
         console.error('Failed to load instructions:', error);
-        setLoadedInstructions('You are a helpful voice assistant. Keep your responses concise and informative.');
-        addLog('Using default instructions due to loading error');
+        addLog(`Failed to load instructions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`Failed to load instructions: ${error instanceof Error ? error.message : 'Unknown error'}`);
       } finally {
         setInstructionsLoading(false);
       }
