@@ -481,7 +481,7 @@ export class AudioManager {
       };
       
       this.log(`[queueAudio] After: activeSourceNodes.length = ${this.activeSourceNodes.length}, startTimeRef.current = ${this.startTimeRef.current}`);
-      this.log(`Audio scheduled to play at ${this.startTimeRef.current.toFixed(3)}s, current time: ${this.audioContext?.currentTime.toFixed(3) || 'N/A'}s, active sources: ${this.activeSourceNodes.length}`);
+      this.log(`Audio scheduled to play at ${this.startTimeRef.current?.toFixed?.(3) || 'undefined'}s, current time: ${this.audioContext?.currentTime?.toFixed?.(3) || 'N/A'}s, active sources: ${this.activeSourceNodes.length}`);
       
     } catch (error) {
       this.log('Failed to process audio:', error);
@@ -513,7 +513,7 @@ export class AudioManager {
     // Reset the timing reference to stop future scheduling
     const oldTime = this.startTimeRef.current;
     this.startTimeRef.current = this.audioContext.currentTime;
-    this.log(`⏱️ Reset timing reference from ${oldTime.toFixed(3)}s to ${this.startTimeRef.current.toFixed(3)}s`);
+    this.log(`⏱️ Reset timing reference from ${oldTime?.toFixed?.(3) || 'undefined'}s to ${this.startTimeRef.current.toFixed(3)}s`);
     
     // Stop all active source nodes
     this.log(`🔇 Attempting to stop ${this.activeSourceNodes.length} active audio sources`);
