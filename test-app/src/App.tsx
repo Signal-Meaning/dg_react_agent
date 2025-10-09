@@ -84,8 +84,8 @@ function App() {
         addLog(`Loaded instructions: ${instructions.substring(0, 50)}...`);
       } catch (error) {
         console.error('Failed to load instructions:', error);
-        setLoadedInstructions(''); // No fallback - let the component handle empty instructions
-        addLog('No instructions loaded - please set DEEPGRAM_INSTRUCTIONS env var or create instructions.txt');
+        setLoadedInstructions(''); // No fallback - component will use default
+        addLog('No instructions loaded - using default instructions. Set DEEPGRAM_INSTRUCTIONS env var or create instructions.txt for custom instructions.');
       } finally {
         setInstructionsLoading(false);
       }
@@ -106,7 +106,7 @@ function App() {
     //thinkEndpointUrl: 'https://api.openai.com/v1/chat/completions',
     //thinkApiKey: import.meta.env.VITE_THINK_API_KEY || '',
     voice: 'aura-2-apollo-en',
-    instructions: loadedInstructions,
+    instructions: loadedInstructions || 'You are a helpful voice assistant. Keep your responses concise and informative.',
     greeting: 'Hello! How can I assist you today?',
   }), [loadedInstructions]); // Include loadedInstructions in dependency array
 
