@@ -9,25 +9,11 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * Default instructions fallback
- */
-export const DEFAULT_INSTRUCTIONS = 'You are a helpful voice assistant. Keep your responses concise and informative.';
-
-/**
- * Get the default instructions
- * @returns {string} Default instructions string
- */
-export function getDefaultInstructions(): string {
-  return DEFAULT_INSTRUCTIONS;
-}
-
-/**
  * Load instructions from file with environment variable override
  * 
  * Priority order:
  * 1. DEEPGRAM_INSTRUCTIONS environment variable (if set)
  * 2. File content from default instructions file
- * 3. Default fallback instructions
  * 
  * @param {string} filePath - Optional custom file path (defaults to instructions.txt)
  * @returns {Promise<string>} The instructions string
@@ -48,11 +34,14 @@ export async function loadInstructionsFromFile(filePath?: string): Promise<strin
       return fileContent.trim();
     }
 
-    // Fallback to default instructions
-    return getDefaultInstructions();
+    throw new Error('No instructions found in file and no environment variable set');
   } catch (error) {
-    console.warn('Failed to load instructions from file, using default:', error);
-    return getDefaultInstructions();
+    console.error('Failed to load instructions:', error);
+    // If it's a file system error or no content found, throw our custom message
+    if (error instanceof Error && (error.message.includes('ENOENT') || error.message.includes('No instructions found'))) {
+      throw new Error('No instructions found in file and no environment variable set');
+    }
+    throw error;
   }
 }
 
@@ -129,10 +118,13 @@ export function loadInstructionsFromFileSync(filePath?: string): string {
       return fileContent.trim();
     }
 
-    // Fallback to default instructions
-    return getDefaultInstructions();
+    throw new Error('No instructions found in file and no environment variable set');
   } catch (error) {
-    console.warn('Failed to load instructions from file, using default:', error);
-    return getDefaultInstructions();
+    console.error('Failed to load instructions:', error);
+    // If it's a file system error or no content found, throw our custom message
+    if (error instanceof Error && (error.message.includes('ENOENT') || error.message.includes('No instructions found'))) {
+      throw new Error('No instructions found in file and no environment variable set');
+    }
+    throw error;
   }
 }
