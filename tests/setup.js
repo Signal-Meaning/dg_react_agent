@@ -106,7 +106,7 @@ global.navigator = {
 // Mock console methods to reduce noise in tests
 global.console = {
   ...console,
-  log: jest.fn(),
+  // log: jest.fn(),  // Temporarily disabled for debugging
   warn: jest.fn(),
   error: jest.fn()
 };
