@@ -30,32 +30,33 @@ test.describe('Microphone Control', () => {
   });
 
   test('should enable microphone when button clicked', async ({ page }) => {
-    // Verify microphone button is initially disabled (component not ready)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeDisabled();
+    // Verify microphone button is initially enabled (component ready in auto-connect mode)
+    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
     
-    // Note: The component is not calling onReady(true), so the button remains disabled
-    // This test verifies the current behavior where the button is disabled
+    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
+    // but the microphone itself is disabled until the user clicks the button
   });
 
   test('should disable microphone when button clicked again', async ({ page }) => {
-    // Verify microphone button is initially disabled (component not ready)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeDisabled();
+    // Verify microphone button is initially enabled (component ready in auto-connect mode)
+    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
     
-    // Note: The component is not calling onReady(true), so the button remains disabled
-    // This test verifies the current behavior where the button is disabled
+    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
+    // but the microphone itself is disabled until the user clicks the button
   });
 
   test('should handle microphone permission denied', async ({ page }) => {
     // Mock permission denied
     await page.context().grantPermissions([], { origin: 'http://localhost:3000' });
     
-    // Verify microphone button is disabled (component not ready due to no API key)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeDisabled();
+    // Verify microphone button is enabled (component ready in auto-connect mode)
+    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
     
-    // Note: The component is not calling onReady(true) without a valid API key
+    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
+    // but the microphone itself is disabled until the user clicks the button
     // This test verifies the current behavior where the button is disabled
   });
 
@@ -63,11 +64,12 @@ test.describe('Microphone Control', () => {
     // Grant microphone permission
     await page.context().grantPermissions(['microphone'], { origin: 'http://localhost:3000' });
     
-    // Verify microphone button is disabled (component not ready due to no API key)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeDisabled();
+    // Verify microphone button is enabled (component ready in auto-connect mode)
+    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
     
-    // Note: The component is not calling onReady(true) without a valid API key
+    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
+    // but the microphone itself is disabled until the user clicks the button
     // This test verifies the current behavior where the button is disabled
   });
 
@@ -76,11 +78,12 @@ test.describe('Microphone Control', () => {
     await page.goto('/?microphoneEnabled=true');
     await page.waitForLoadState('networkidle');
     
-    // Verify microphone button is disabled (component not ready due to no API key)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeDisabled();
+    // Verify microphone button is enabled (component ready in auto-connect mode)
+    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
     
-    // Note: The component is not calling onReady(true) without a valid API key
+    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
+    // but the microphone itself is disabled until the user clicks the button
     // This test verifies the current behavior where the button is disabled
   });
 
@@ -91,21 +94,21 @@ test.describe('Microphone Control', () => {
       toggleEvents.push(enabled);
     });
     
-    // Verify microphone button is disabled (component not ready due to no valid API key)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeDisabled();
+    // Verify microphone button is enabled (component ready in auto-connect mode)
+    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
     
-    // Note: The component is not calling onReady(true) without a valid API key
-    // This test verifies the current behavior where the button is disabled
+    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
+    // but the microphone itself is disabled until the user clicks the button
   });
 
   test('should maintain microphone state during reconnection', async ({ page }) => {
-    // Verify microphone button is disabled (component not ready due to no valid API key)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeDisabled();
+    // Verify microphone button is enabled (component ready in auto-connect mode)
+    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
     
-    // Note: The component is not calling onReady(true) without a valid API key
-    // This test verifies the current behavior where the button is disabled
+    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
+    // but the microphone itself is disabled until the user clicks the button
   });
 
   test('should handle microphone errors gracefully', async ({ page }) => {
@@ -117,11 +120,11 @@ test.describe('Microphone Control', () => {
       };
     });
     
-    // Verify microphone button is disabled (component not ready due to no valid API key)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeDisabled();
+    // Verify microphone button is enabled (component ready in auto-connect mode)
+    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
     
-    // Note: The component is not calling onReady(true) without a valid API key
-    // This test verifies the current behavior where the button is disabled
+    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
+    // but the microphone itself is disabled until the user clicks the button
   });
 });
