@@ -513,7 +513,7 @@ export class AudioManager {
     // Reset the timing reference to stop future scheduling
     const oldTime = this.startTimeRef.current;
     this.startTimeRef.current = this.audioContext.currentTime;
-    this.log(`⏱️ Reset timing reference from ${oldTime?.toFixed?.(3) || 'undefined'}s to ${this.startTimeRef.current.toFixed(3)}s`);
+    this.log(`⏱️ Reset timing reference from ${oldTime?.toFixed?.(3) || 'undefined'}s to ${this.startTimeRef.current?.toFixed?.(3) || 'undefined'}s`);
     
     // Stop all active source nodes
     this.log(`🔇 Attempting to stop ${this.activeSourceNodes.length} active audio sources`);
@@ -620,7 +620,7 @@ export class AudioManager {
     }
     
     if (this.audioContext) {
-      this.audioContext.close();
+      this.audioContext.close?.();
       this.audioContext = null;
     }
     
