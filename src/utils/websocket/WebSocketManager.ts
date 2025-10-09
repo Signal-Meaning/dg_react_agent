@@ -4,7 +4,7 @@ import { ConnectionState, DeepgramError, ServiceType } from '../../types';
  * Event types emitted by the WebSocketManager
  */
 export type WebSocketEvent = 
-  | { type: 'state'; state: ConnectionState }
+  | { type: 'state'; state: ConnectionState; isReconnection?: boolean }
   | { type: 'message'; data: any }
   | { type: 'binary'; data: ArrayBuffer }
   | { type: 'error'; error: DeepgramError };
@@ -71,6 +71,7 @@ export class WebSocketManager {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000; // Start with 1 second
+  private hasEverConnected = false;
 
   /**
    * Creates a new WebSocketManager
@@ -145,9 +146,9 @@ export class WebSocketManager {
   /**
    * Updates the connection state and emits a state event
    */
-  private updateState(state: ConnectionState): void {
+  private updateState(state: ConnectionState, isReconnection?: boolean): void {
     this.connectionState = state;
-    this.emit({ type: 'state', state });
+    this.emit({ type: 'state', state, isReconnection });
   }
 
   /**
@@ -194,7 +195,12 @@ export class WebSocketManager {
           this.log('WebSocket connected');
           window.clearTimeout(this.connectionTimeoutId!);
           this.connectionTimeoutId = null;
-          this.updateState('connected');
+          
+          // Track if this is a reconnection
+          const isReconnection = this.hasEverConnected;
+          this.hasEverConnected = true;
+          
+          this.updateState('connected', isReconnection);
           this.startKeepalive();
           this.reconnectAttempts = 0;
           resolve();

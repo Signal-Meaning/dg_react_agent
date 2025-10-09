@@ -360,7 +360,18 @@ function DeepgramVoiceInteraction(
         log('Agent state:', event.state);
         if (event.state === 'connected') {
           console.info('🔗 [Protocol] Agent WebSocket connected');
+          
+          // Handle reconnection logic
+          if (event.isReconnection) {
+            log('Agent WebSocket reconnected - resetting greeting state');
+            dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
+            dispatch({ type: 'RESET_GREETING_STATE' });
+          } else {
+            log('Agent WebSocket connected for first time');
+            dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: true });
+          }
         }
+        
         dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
         onConnectionStateChange?.('agent', event.state);
         
@@ -382,9 +393,12 @@ function DeepgramVoiceInteraction(
       log('Agent service not configured, skipping setup');
     }
 
-    // --- AUDIO SETUP (NEEDED FOR EITHER SERVICE) ---
+    // --- AUDIO SETUP (CONDITIONAL) ---
     // We need audio for recording (transcription) or playback (agent)
-    if (isTranscriptionConfigured || isAgentConfigured) {
+    // For AGENT-ONLY mode, we can skip AudioManager initialization if we only need text interactions
+    const needsAudioManager = isTranscriptionConfigured || (isAgentConfigured && agentOptions?.voice);
+    
+    if (needsAudioManager) {
       // Create audio manager
       audioManagerRef.current = new AudioManager({
         debug,
@@ -424,8 +438,9 @@ function DeepgramVoiceInteraction(
         // Audio features will be disabled, but text interactions still work
       });
     } else {
-      log('Neither transcription nor agent configured, skipping audio setup');
-      // This should never happen due to the check at the beginning of the effect
+      log('AudioManager not needed for this configuration, skipping setup');
+      // For text-only agent interactions, we can be ready immediately
+      dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
     }
 
     // Auto-connect dual mode logic
@@ -737,7 +752,14 @@ function DeepgramVoiceInteraction(
       if (!state.welcomeReceived) {
         dispatch({ type: 'WELCOME_RECEIVED', received: true });
         onConnectionReady?.();
-        dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: true });
+        
+        // Only trigger greeting for new connections, not reconnections
+        if (state.isNewConnection) {
+          log('New connection - triggering greeting flow');
+          dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: true });
+        } else {
+          log('Reconnection detected - skipping greeting');
+        }
       }
       return;
     }
@@ -892,6 +914,8 @@ function DeepgramVoiceInteraction(
           log('Error initializing AudioManager:', error);
           throw error;
         }
+      } else {
+        log('AudioManager not configured, skipping initialization');
       }
 
       // Connect transcription WebSocket if configured
@@ -922,8 +946,7 @@ function DeepgramVoiceInteraction(
           log('Microphone disabled, skipping recording start');
         }
       } else {
-        log('AudioManager not initialized, cannot start recording');
-        throw new Error('Audio manager not available for recording');
+        log('AudioManager not available for recording - this is expected for text-only agent interactions');
       }
       
       log('Start method completed successfully');
