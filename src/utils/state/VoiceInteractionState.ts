@@ -38,15 +38,37 @@ export interface VoiceInteractionState {
    * Error state
    */
   error: string | null;
-
+  
   /**
-   * Welcome-first behavior state
+   * Internal microphone enabled state
    */
   micEnabledInternal: boolean;
+  
+  /**
+   * Whether settings have been sent to the agent
+   */
   hasSentSettings: boolean;
+  
+  /**
+   * Whether welcome message has been received
+   */
   welcomeReceived: boolean;
+  
+  /**
+   * Whether greeting is currently in progress
+   */
   greetingInProgress: boolean;
+  
+  /**
+   * Whether greeting has started
+   */
   greetingStarted: boolean;
+  
+  /**
+   * Connection session tracking
+   */
+  isNewConnection: boolean;
+  hasEstablishedSession: boolean;
 }
 
 /**
@@ -64,7 +86,10 @@ export type StateEvent =
   | { type: 'SETTINGS_SENT'; sent: boolean }
   | { type: 'WELCOME_RECEIVED'; received: boolean }
   | { type: 'GREETING_PROGRESS_CHANGE'; inProgress: boolean }
-  | { type: 'GREETING_STARTED'; started: boolean };
+  | { type: 'GREETING_STARTED'; started: boolean }
+  | { type: 'CONNECTION_TYPE_CHANGE'; isNew: boolean }
+  | { type: 'SESSION_ESTABLISHED'; established: boolean }
+  | { type: 'RESET_GREETING_STATE' };
 
 /**
  * Initial state
@@ -85,6 +110,8 @@ export const initialState: VoiceInteractionState = {
   welcomeReceived: false,
   greetingInProgress: false,
   greetingStarted: false,
+  isNewConnection: true,
+  hasEstablishedSession: false,
 };
 
 /**
@@ -169,6 +196,26 @@ export function stateReducer(state: VoiceInteractionState, event: StateEvent): V
         greetingStarted: event.started,
       };
       
+    case 'CONNECTION_TYPE_CHANGE':
+      return {
+        ...state,
+        isNewConnection: event.isNew,
+      };
+      
+    case 'SESSION_ESTABLISHED':
+      return {
+        ...state,
+        hasEstablishedSession: event.established,
+      };
+      
+    case 'RESET_GREETING_STATE':
+      return {
+        ...state,
+        welcomeReceived: false,
+        greetingInProgress: false,
+        greetingStarted: false,
+      };
+      
     default:
       return state;
   }
@@ -210,4 +257,4 @@ export const derivedStates = {
     
     return 'closed';
   },
-}; 
+};
