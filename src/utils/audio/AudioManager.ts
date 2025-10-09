@@ -218,6 +218,11 @@ export class AudioManager {
         latencyHint: 'interactive',
       });
       
+      // Check if AudioWorklet is supported
+      if (!this.audioContext.audioWorklet) {
+        throw new Error('AudioWorklet is not supported in this environment');
+      }
+      
       // Create analyzer for volume normalization
       if (this.options.normalizeVolume) {
         this.analyzer = this.audioContext.createAnalyser();
@@ -236,8 +241,13 @@ export class AudioManager {
       objectUrl = URL.createObjectURL(blob);
       this.log('Created Object URL for AudioWorklet:', objectUrl);
 
-      // Load the AudioWorklet processor using the Object URL
-      await this.audioContext.audioWorklet.addModule(objectUrl);
+      // Load the AudioWorklet processor using the Object URL with timeout
+      const addModulePromise = this.audioContext.audioWorklet.addModule(objectUrl);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('AudioWorklet module loading timeout')), 5000);
+      });
+      
+      await Promise.race([addModulePromise, timeoutPromise]);
       this.log('AudioWorklet loaded using Object URL');
       
       this.isInitialized = true;
