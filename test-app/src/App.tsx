@@ -53,6 +53,9 @@ function App() {
   const [agentSpeaking, setAgentSpeaking] = useState(false);
   const [agentSilent, setAgentSilent] = useState(false);
   
+  // TTS control state
+  const [ttsEnabled, setTtsEnabled] = useState(true);
+  
   // Text input state
   const [textInput, setTextInput] = useState('');
   
@@ -298,6 +301,12 @@ function App() {
     setAgentSilent(true);
     addLog('Agent finished speaking');
   }, [addLog]);
+
+  // TTS control event handler
+  const handleTtsToggle = useCallback((enabled: boolean) => {
+    setTtsEnabled(enabled);
+    addLog(`TTS ${enabled ? 'enabled' : 'disabled'}`);
+  }, [addLog]);
   
   // Control functions
   const startInteraction = async () => {
@@ -445,6 +454,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onConnectionReady={handleConnectionReady}
         onAgentSpeaking={handleAgentSpeaking}
         onAgentSilent={handleAgentSilent}
+        // TTS control props
+        ttsEnabled={ttsEnabled}
+        onTtsToggle={handleTtsToggle}
         debug={true}
       />
       
@@ -558,6 +570,18 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         >
           {micEnabled ? 'Disable Mic' : 'Enable Mic'}
         </button>
+        <button 
+          onClick={() => deepgramRef.current?.toggleTts()}
+          disabled={!isReady}
+          style={{ 
+            padding: '10px 20px',
+            backgroundColor: ttsEnabled ? '#e8f5e8' : '#ffe8e8',
+            pointerEvents: 'auto'
+          }}
+          data-testid="tts-button"
+        >
+          {ttsEnabled ? '🔊 TTS On' : '🔇 TTS Off'}
+        </button>
       </div>
       
       {/* Auto-connect dual mode status */}
@@ -579,6 +603,13 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             {agentSpeaking ? '🎤 Agent is speaking' 
               : agentSilent ? '✅ Agent finished speaking - ready for interaction' 
               : '🔗 Dual mode connected - waiting for agent...'}
+          </p>
+          <p style={{ 
+            margin: '0 0 10px 0', 
+            fontSize: '14px',
+            color: '#666'
+          }}>
+            TTS: {ttsEnabled ? '🔊 Enabled' : '🔇 Disabled'}
           </p>
           {!micEnabled && (
             <p style={{ 

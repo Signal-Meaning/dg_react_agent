@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useReducer, useRef } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useReducer, useRef, useState, useCallback } from 'react';
 import {
   AgentState,
   DeepgramError,
@@ -144,10 +144,16 @@ function DeepgramVoiceInteraction(
     onConnectionReady,
     onAgentSpeaking,
     onAgentSilent,
+    // TTS control props
+    ttsEnabled = true,
+    onTtsToggle,
   } = props;
 
   // Internal state
   const [state, dispatch] = useReducer(stateReducer, initialState);
+  
+  // TTS control state
+  const [ttsEnabledState, setTtsEnabledState] = useState(ttsEnabled);
   
   // Ref to hold the latest state value, avoiding stale closures in callbacks
   const stateRef = useRef<VoiceInteractionState>(state);
@@ -201,6 +207,11 @@ function DeepgramVoiceInteraction(
       return () => clearTimeout(timerId);
     }
   }, [state]);
+
+  // Sync TTS state when prop changes
+  useEffect(() => {
+    setTtsEnabledState(ttsEnabled);
+  }, [ttsEnabled]);
 
   // Handle errors
   const handleError = (error: DeepgramError) => {
@@ -855,6 +866,12 @@ function DeepgramVoiceInteraction(
     
     log(`handleAgentAudio called! Received buffer of ${data.byteLength} bytes`);
     
+    // Skip audio playback if TTS is disabled
+    if (!ttsEnabledState) {
+      log('TTS disabled - skipping audio playback');
+      return;
+    }
+    
     // Skip audio playback if we're waiting for user voice after sleep
     if (isWaitingForUserVoiceAfterSleep.current) {
       log('Skipping audio playback because waiting for user voice after sleep');
@@ -1191,6 +1208,31 @@ function DeepgramVoiceInteraction(
     });
   };
 
+  // TTS control methods
+  const enableTts = useCallback(() => {
+    log('Enabling TTS');
+    setTtsEnabledState(true);
+    onTtsToggle?.(true);
+  }, [onTtsToggle]);
+
+  const disableTts = useCallback(() => {
+    log('Disabling TTS');
+    setTtsEnabledState(false);
+    // Stop any current playback
+    if (audioManagerRef.current) {
+      audioManagerRef.current.abortPlayback();
+    }
+    onTtsToggle?.(false);
+  }, [onTtsToggle]);
+
+  const toggleTts = useCallback(() => {
+    if (ttsEnabledState) {
+      disableTts();
+    } else {
+      enableTts();
+    }
+  }, [ttsEnabledState, disableTts, enableTts]);
+
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     start,
@@ -1204,6 +1246,9 @@ function DeepgramVoiceInteraction(
     injectAgentMessage,
     injectUserMessage,
     toggleMicrophone: toggleMic,
+    enableTts,
+    disableTts,
+    toggleTts,
   }));
 
   // Render nothing (headless component)

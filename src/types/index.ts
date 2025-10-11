@@ -190,6 +190,17 @@ export interface DeepgramVoiceInteractionProps {
    * Called when agent finishes speaking (AgentAudioDone)
    */
   onAgentSilent?: () => void;
+
+  /**
+   * Whether TTS (Text-to-Speech) audio playback is enabled
+   * @default true
+   */
+  ttsEnabled?: boolean;
+
+  /**
+   * Called when TTS enabled state changes
+   */
+  onTtsToggle?: (enabled: boolean) => void;
 }
 
 /**
@@ -251,6 +262,21 @@ export interface DeepgramVoiceInteractionHandle {
    * Toggle microphone on/off
    */
   toggleMicrophone: (enabled: boolean) => Promise<void>;
+
+  /**
+   * Enable TTS audio playback
+   */
+  enableTts: () => void;
+
+  /**
+   * Disable TTS audio playback
+   */
+  disableTts: () => void;
+
+  /**
+   * Toggle TTS audio playback on/off
+   */
+  toggleTts: () => void;
 }
 
 // REMOVE the duplicate AgentState definition at the end of this file
