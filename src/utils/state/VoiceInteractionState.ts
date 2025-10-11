@@ -1,4 +1,4 @@
-import { AgentState, ConnectionState, ServiceType } from '../../types';
+import { AgentState, ConnectionState, ServiceType, ConversationMessage } from '../../types';
 
 /**
  * State of the voice interaction component
@@ -69,6 +69,12 @@ export interface VoiceInteractionState {
    */
   isNewConnection: boolean;
   hasEstablishedSession: boolean;
+  
+  /**
+   * Conversation context for lazy reconnection
+   */
+  conversationHistory: ConversationMessage[];
+  sessionId: string | null;
 }
 
 /**
@@ -89,7 +95,10 @@ export type StateEvent =
   | { type: 'GREETING_STARTED'; started: boolean }
   | { type: 'CONNECTION_TYPE_CHANGE'; isNew: boolean }
   | { type: 'SESSION_ESTABLISHED'; established: boolean }
-  | { type: 'RESET_GREETING_STATE' };
+  | { type: 'RESET_GREETING_STATE' }
+  | { type: 'ADD_CONVERSATION_MESSAGE'; message: ConversationMessage }
+  | { type: 'SET_SESSION_ID'; sessionId: string }
+  | { type: 'CLEAR_CONVERSATION_HISTORY' };
 
 /**
  * Initial state
@@ -112,6 +121,8 @@ export const initialState: VoiceInteractionState = {
   greetingStarted: false,
   isNewConnection: true,
   hasEstablishedSession: false,
+  conversationHistory: [],
+  sessionId: null,
 };
 
 /**
@@ -214,6 +225,24 @@ export function stateReducer(state: VoiceInteractionState, event: StateEvent): V
         welcomeReceived: false,
         greetingInProgress: false,
         greetingStarted: false,
+      };
+      
+    case 'ADD_CONVERSATION_MESSAGE':
+      return {
+        ...state,
+        conversationHistory: [...state.conversationHistory, event.message],
+      };
+      
+    case 'SET_SESSION_ID':
+      return {
+        ...state,
+        sessionId: event.sessionId,
+      };
+      
+    case 'CLEAR_CONVERSATION_HISTORY':
+      return {
+        ...state,
+        conversationHistory: [],
       };
       
     default:

@@ -40,11 +40,26 @@ setTimeout(() => {
 
 ### Context Preservation Validation
 
-The test validates context preservation by:
+**CRITICAL TEST PRINCIPLE:** The agent's response to the second message must demonstrate understanding of the first message. If context is lost, the agent will give generic responses instead of contextually relevant ones.
 
-1. **Sending related messages** - First message about "laptop for programming", second about "MacBook Pro with M3 chip"
-2. **Checking response content** - Looking for references to both the original context and the new message
-3. **Verifying conversation flow** - Ensuring the agent doesn't treat the second message as a new conversation
+**Test Scenarios:**
+- **Filmmaker**: "I'm a filmmaker working on documentary projects" → "What equipment would you recommend?"
+  - **Success**: Agent recommends filmmaking equipment (cameras, lenses, tripods, microphones, lighting, editing software, drones, gimbals, audio recorders)
+  - **Failure**: Agent gives generic hardware advice or asks "What kind of equipment do you need?"
+
+- **Teacher**: "I'm a third-grade teacher planning a science unit" → "What experiments would be appropriate?"
+  - **Success**: Agent recommends age-appropriate experiments (simple, easy, basic, safe, hands-on, visual experiments for 8-year-olds)
+  - **Failure**: Agent gives generic science experiments or asks "What age group are you teaching?"
+
+- **Scientist**: "I'm a scientist researching climate change" → "What equipment do I need for field research?"
+  - **Success**: Agent recommends scientific field equipment (sensors, data loggers, weather stations, sampling equipment, portable/durable gear)
+  - **Failure**: Agent gives generic equipment advice or asks "What kind of research are you doing?"
+
+**Validation Logic:**
+1. **Context Keywords**: Check for references to the profession/role from the first message
+2. **Specific Equipment/Advice**: Verify the response contains contextually relevant recommendations
+3. **Generic Response Detection**: Fail if the agent gives generic advice that could apply to anyone
+4. **Continuation Flow**: Ensure the agent doesn't treat the second message as a new conversation
 
 ### WebSocket Monitoring
 
@@ -133,7 +148,7 @@ The test provides detailed console output:
 🧪 Starting WebSocket timeout and context preservation test...
 📝 Step 1: Sending first message...
 ✅ First message sent and displayed
-🤖 First agent response received: I can help you find a laptop...
+🤖 First agent response received: That sounds exciting! What type of documentaries...
 ⏰ Step 3: Advancing timer to force WebSocket timeout...
 🔌 Initial WebSocket connections: 5 sent, 8 received
 🔍 Step 4: Checking for connection timeout...
@@ -141,7 +156,7 @@ The test provides detailed console output:
 ✅ Step 4: Connection timeout observed
 📝 Step 5: Sending second message to trigger reconnection...
 ✅ Second message sent and displayed
-🤖 Second agent response received: For programming work, the MacBook Pro M3...
+🤖 Second agent response received: For video editing hardware, I'd recommend...
 ✅ Step 6: Context preservation verified - agent referenced previous conversation
 🎉 WebSocket timeout and context preservation test completed successfully!
 ```

@@ -287,9 +287,14 @@ export class WebSocketManager {
           const wasConnected = this.connectionState === 'connected';
           this.updateState('closed');
           
-          // Attempt reconnection if we were previously connected and haven't exceeded max attempts
-          if (wasConnected && this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.attemptReconnect();
+          // LAZY RECONNECTION: Do not attempt automatic reconnection
+          // Connections will timeout naturally and require manual reconnection
+          // via resumeWithText() or resumeWithAudio() methods
+          if (wasConnected) {
+            this.log('🔄 [LAZY_RECONNECT] Connection closed - lazy reconnection enabled, waiting for manual trigger');
+            this.log(`🔄 [LAZY_RECONNECT] Close details: code=${event.code}, reason='${event.reason}', wasClean=${event.wasClean}`);
+            this.log(`🔄 [LAZY_RECONNECT] Previous connection state: ${this.connectionState}`);
+            this.log(`🔄 [LAZY_RECONNECT] Reconnect attempts would have been: ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
           }
         };
       } catch (error) {

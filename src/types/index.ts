@@ -8,7 +8,7 @@
 import type { ConnectionState, ServiceType, EndpointConfig, DeepgramError } from './connection';
 import type { TranscriptionOptions, TranscriptResponse } from './transcription';
 // Import AgentState specifically because DeepgramVoiceInteractionProps uses it directly
-import type { AgentState, AgentOptions, UpdateInstructionsPayload } from './agent';
+import type { AgentState, AgentOptions, UpdateInstructionsPayload, ConversationMessage } from './agent';
 
 // Re-export all types from specific files
 export * from './agent';
@@ -251,6 +251,21 @@ export interface DeepgramVoiceInteractionHandle {
    * Toggle microphone on/off
    */
   toggleMicrophone: (enabled: boolean) => Promise<void>;
+  
+  /**
+   * Resume conversation with text input (lazy reconnection)
+   */
+  resumeWithText: (text: string) => Promise<void>;
+  
+  /**
+   * Resume conversation with audio input (lazy reconnection)
+   */
+  resumeWithAudio: () => Promise<void>;
+  
+  /**
+   * Connect with conversation context (for lazy reconnection)
+   */
+  connectWithContext: (sessionId: string, history: ConversationMessage[], options: AgentOptions) => Promise<void>;
 }
 
 // REMOVE the duplicate AgentState definition at the end of this file
