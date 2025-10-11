@@ -463,12 +463,22 @@ function DeepgramVoiceInteraction(
       // even if audio is not available
       dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
       
-      // Auto-connect to agent service to establish dual mode
-      setTimeout(() => {
-        console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current);
+      // Auto-connect to both transcription and agent services to establish dual mode
+      setTimeout(async () => {
+        console.log('Auto-connect timeout executing, connecting both services...');
+        
+        // Connect transcription WebSocket if configured
+        if (transcriptionManagerRef.current) {
+          console.log('Auto-connect: Connecting Transcription WebSocket...');
+          await transcriptionManagerRef.current.connect();
+          log('Auto-connect: Transcription WebSocket connected');
+        }
+        
+        // Connect agent WebSocket if configured
         if (agentManagerRef.current) {
-          console.log('Calling agentManagerRef.current.connect()');
-          agentManagerRef.current.connect();
+          console.log('Auto-connect: Connecting Agent WebSocket...');
+          await agentManagerRef.current.connect();
+          log('Auto-connect: Agent WebSocket connected');
         }
       }, 100); // Small delay to ensure audio manager is ready
     } else {
@@ -652,6 +662,16 @@ function DeepgramVoiceInteraction(
     
     console.info('📤 [Protocol] Sending agent settings:', settingsMessage);
     console.log('[DeepgramVoiceInteraction] Sending agent settings:', settingsMessage);
+    
+    // Debug logging for think configuration
+    console.log('🔍 Think Configuration Debug:');
+    console.log('  thinkEndpointUrl:', agentOptions.thinkEndpointUrl);
+    console.log('  thinkApiKey loaded:', !!agentOptions.thinkApiKey);
+    console.log('  thinkApiKey length:', agentOptions.thinkApiKey?.length || 0);
+    console.log('  thinkApiKey starts with sk-:', agentOptions.thinkApiKey?.startsWith('sk-') || false);
+    console.log('  Both URL and Key present:', !!(agentOptions.thinkEndpointUrl && agentOptions.thinkApiKey));
+    console.log('  Final think config:', settingsMessage.agent.think);
+    
     log('Sending agent settings:', settingsMessage);
     agentManagerRef.current.sendJSON(settingsMessage);
     
@@ -810,6 +830,12 @@ function DeepgramVoiceInteraction(
       return;
     }
     
+    if (data.type === 'SpeakUpdated') {
+      log('Speak settings updated by agent');
+      console.info('✅ [Protocol] SpeakUpdated received');
+      return;
+    }
+    
     // Handle conversation text
     if (data.type === 'ConversationText') {
       const content = typeof data.content === 'string' ? data.content : '';
@@ -865,12 +891,6 @@ function DeepgramVoiceInteraction(
     }
     
     log(`handleAgentAudio called! Received buffer of ${data.byteLength} bytes`);
-    
-    // Skip audio playback if TTS is disabled
-    if (!ttsEnabledState) {
-      log('TTS disabled - skipping audio playback');
-      return;
-    }
     
     // Skip audio playback if we're waiting for user voice after sleep
     if (isWaitingForUserVoiceAfterSleep.current) {
@@ -1208,22 +1228,50 @@ function DeepgramVoiceInteraction(
     });
   };
 
-  // TTS control methods
+  // Send UpdateSpeak message to server to control TTS
+  const sendUpdateSpeak = useCallback((enabled: boolean) => {
+    if (enabled) {
+      // Enable TTS: ensure agent connection is established
+      if (!agentManagerRef.current) {
+        log('Cannot enable TTS: agent manager not initialized');
+        return;
+      }
+      
+      if (agentManagerRef.current.getConnectionState() !== 'connected') {
+        log('Enabling TTS: connecting agent WebSocket');
+        agentManagerRef.current.connect();
+      } else {
+        log('TTS already enabled: agent WebSocket connected');
+      }
+    } else {
+      // Disable TTS: disconnect agent WebSocket
+      if (agentManagerRef.current) {
+        log('Disabling TTS: disconnecting agent WebSocket');
+        agentManagerRef.current.close();
+      }
+    }
+  }, []);
+
+  // TTS control methods - server-side only (no client-side muting)
   const enableTts = useCallback(() => {
-    log('Enabling TTS');
+    log('Enabling TTS (server-side only)');
     setTtsEnabledState(true);
+    
+    // Server-side: Enable TTS by setting the model
+    sendUpdateSpeak(true);
+    
     onTtsToggle?.(true);
-  }, [onTtsToggle]);
+  }, [onTtsToggle, sendUpdateSpeak]);
 
   const disableTts = useCallback(() => {
-    log('Disabling TTS');
+    log('Disabling TTS (server-side only)');
     setTtsEnabledState(false);
-    // Stop any current playback
-    if (audioManagerRef.current) {
-      audioManagerRef.current.abortPlayback();
-    }
+    
+    // Server-side: Disable TTS by setting model to null
+    sendUpdateSpeak(false);
+    
     onTtsToggle?.(false);
-  }, [onTtsToggle]);
+  }, [onTtsToggle, sendUpdateSpeak]);
 
   const toggleTts = useCallback(() => {
     if (ttsEnabledState) {

@@ -26,7 +26,7 @@ export function getDefaultInstructions(): string {
  * 
  * Priority order:
  * 1. DEEPGRAM_INSTRUCTIONS environment variable (if set)
- * 2. File content from default instructions file
+ * 2. File content from default instructions file (Node.js only)
  * 3. Default fallback instructions
  * 
  * @param {string} filePath - Optional custom file path (defaults to instructions.txt)
@@ -40,7 +40,12 @@ export async function loadInstructionsFromFile(filePath?: string): Promise<strin
       return envInstructions;
     }
 
-    // Load from file
+    // In browser environment, skip file reading and use default
+    if (typeof window !== 'undefined') {
+      return getDefaultInstructions();
+    }
+
+    // Load from file (Node.js only)
     const instructionsFilePath = filePath || getDefaultInstructionsFilePath();
     const fileContent = await readInstructionsFile(instructionsFilePath);
     
@@ -121,7 +126,12 @@ export function loadInstructionsFromFileSync(filePath?: string): string {
       return envInstructions;
     }
 
-    // Load from file synchronously
+    // In browser environment, skip file reading and use default
+    if (typeof window !== 'undefined') {
+      return getDefaultInstructions();
+    }
+
+    // Load from file synchronously (Node.js only)
     const instructionsFilePath = filePath || getDefaultInstructionsFilePath();
     const fileContent = fs.readFileSync(instructionsFilePath, 'utf8');
     

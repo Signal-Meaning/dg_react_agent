@@ -17,6 +17,13 @@ function App() {
   const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
   const projectId = import.meta.env.VITE_DEEPGRAM_PROJECT_ID;
   
+  // Debug logging for environment variables (server-side only)
+  console.log('🔍 Environment Variables Debug:');
+  console.log('  VITE_DEEPGRAM_API_KEY loaded:', !!apiKey);
+  console.log('  VITE_DEEPGRAM_PROJECT_ID loaded:', !!projectId);
+  console.log('  API Key not test prefix:', !apiKey?.startsWith('test-'));
+  console.log('  API Key length >= 20:', apiKey?.length >= 20);
+  
   // Check for test mode override (for Playwright tests)
   const isTestMode = window.location.search.includes('test-mode=true');
   const shouldShowError = isTestMode ? 
@@ -25,6 +32,21 @@ function App() {
      (window as Window & { testApiKey?: string }).testApiKey === 'test-prefix') :
     (!apiKey || apiKey === 'your-deepgram-api-key-here' || apiKey.startsWith('test-') || 
      !projectId || projectId === 'your-real-project-id');
+
+  // Debug logging for mode determination
+  console.log('🔍 Mode Determination Debug:');
+  console.log('  isTestMode:', isTestMode);
+  console.log('  shouldShowError:', shouldShowError);
+  console.log('  API Key validation:', {
+    exists: !!apiKey,
+    notPlaceholder: apiKey !== 'your-deepgram-api-key-here',
+    notTestPrefix: !apiKey?.startsWith('test-'),
+    lengthValid: apiKey?.length >= 20
+  });
+  console.log('  Project ID validation:', {
+    exists: !!projectId,
+    notPlaceholder: projectId !== 'your-real-project-id'
+  });
 
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
   
@@ -119,21 +141,32 @@ function App() {
     loadInstructions();
   }, [addLog]);
 
-  const memoizedAgentOptions = useMemo(() => ({
-    language: 'en',
-    // Agent can use a different model for listening if desired, 
-    // keyterms only affect the transcription service input.
-    listenModel: 'nova-3', 
-    thinkProviderType: 'open_ai',
-    // Default model is `gpt-4o-mini` but other models can be provided such as `gpt-4.1-mini`
-    thinkModel: 'gpt-4o-mini',
-    // Uncomment the following lines to use custom endpoint URL and API key values for the Voice Agent `think` message
-    //thinkEndpointUrl: 'https://api.openai.com/v1/chat/completions',
-    //thinkApiKey: import.meta.env.VITE_THINK_API_KEY || '',
-    voice: 'aura-2-apollo-en',
-    instructions: loadedInstructions,
-    greeting: 'Hello! How can I assist you today?',
-  }), [loadedInstructions]); // Include loadedInstructions in dependency array
+  const memoizedAgentOptions = useMemo(() => {
+    const options = {
+      language: 'en',
+      // Agent can use a different model for listening if desired, 
+      // keyterms only affect the transcription service input.
+      listenModel: 'nova-3', 
+      thinkProviderType: 'open_ai',
+      // Default model is `gpt-4o-mini` but other models can be provided such as `gpt-4.1-mini`
+      thinkModel: 'gpt-4o-mini',
+      // Uncomment the following lines to use custom endpoint URL and API key values for the Voice Agent `think` message
+      thinkEndpointUrl: 'https://api.openai.com/v1/chat/completions',
+      thinkApiKey: import.meta.env.VITE_OPENAI_API_KEY || '',
+      voice: 'aura-2-apollo-en',
+      instructions: loadedInstructions,
+      greeting: 'Hello! How can I assist you today?',
+    };
+    
+    // Debug logging
+    console.log('🔍 Agent Options Debug:');
+    console.log('  thinkEndpointUrl:', options.thinkEndpointUrl);
+    console.log('  thinkApiKey loaded:', !!options.thinkApiKey);
+    console.log('  thinkApiKey length:', options.thinkApiKey?.length || 0);
+    console.log('  thinkApiKey starts with sk-:', options.thinkApiKey?.startsWith('sk-') || false);
+    
+    return options;
+  }, [loadedInstructions]); // Include loadedInstructions in dependency array
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
@@ -185,10 +218,14 @@ function App() {
         ? `Speaker ${speakerId}: ${text}` 
         : text;
       
-      setLastTranscript(displayText);
-      
       if (deepgramResponse.is_final) {
+        // Final result goes to User Message from Server
+        setUserMessage(displayText);
         addLog(`Final transcript: ${displayText}`);
+      } else {
+        // Interim result goes to Live Transcript
+        setLastTranscript(displayText);
+        console.log(`Interim transcript: ${displayText}`);
       }
     }
   }, [addLog]); // Depends on addLog
@@ -252,8 +289,8 @@ function App() {
       const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
       const isRealApiKey = apiKey && 
         apiKey !== 'your-deepgram-api-key-here' && 
-        apiKey.startsWith('dgkey_') && 
-        apiKey.length >= 40; // Deepgram API keys are typically 40+ characters
+        !apiKey.startsWith('test-') && 
+        apiKey.length >= 20; // Deepgram API keys are typically 20+ characters
       
       if (isRealApiKey) {
         // Real API key - use actual Deepgram agent
@@ -295,17 +332,20 @@ function App() {
   const handleAgentSpeaking = useCallback(() => {
     setAgentSpeaking(true);
     addLog('Agent started speaking');
+    console.log('🔊 Agent speaking - TTS should be playing audio');
   }, [addLog]);
 
   const handleAgentSilent = useCallback(() => {
     setAgentSilent(true);
     addLog('Agent finished speaking');
+    console.log('🔇 Agent silent - TTS audio should have finished');
   }, [addLog]);
 
   // TTS control event handler
   const handleTtsToggle = useCallback((enabled: boolean) => {
     setTtsEnabled(enabled);
     addLog(`TTS ${enabled ? 'enabled' : 'disabled'}`);
+    console.log(`🔊 TTS ${enabled ? 'ENABLED' : 'DISABLED'} - Audio playback ${enabled ? 'should work' : 'blocked'}`);
   }, [addLog]);
   
   // Control functions
@@ -400,25 +440,38 @@ function App() {
     return (
       <div style={{ 
         padding: '20px', 
-        backgroundColor: '#fee', 
+        backgroundColor: '#2d1b1b', 
         border: '2px solid #f00', 
         borderRadius: '8px',
         margin: '20px',
-        fontFamily: 'monospace'
+        fontFamily: 'monospace',
+        color: '#e2e8f0'
       }}>
-        <h2>⚠️ Deepgram API Key Status</h2>
+        <h2 style={{ color: '#e2e8f0' }}>⚠️ Deepgram API Key Status</h2>
         <p><strong>This test app supports both REAL and MOCK modes:</strong></p>
-        <div style={{ margin: '15px 0', padding: '10px', backgroundColor: '#f0f8ff', borderRadius: '4px' }}>
-          <h4>🔴 Current Mode: MOCK</h4>
-          <p>Text messages will show simulated responses with <code>[MOCK]</code> prefix.</p>
+        <div style={{ 
+          margin: '15px 0', 
+          padding: '10px', 
+          backgroundColor: '#1a202c', 
+          borderRadius: '4px',
+          border: '1px solid #4a5568'
+        }}>
+          <h4 style={{ color: '#e2e8f0' }}>🔴 Current Mode: MOCK</h4>
+          <p style={{ color: '#e2e8f0' }}>Text messages will show simulated responses with <code style={{ backgroundColor: '#4a5568', padding: '2px 4px', borderRadius: '2px' }}>[MOCK]</code> prefix.</p>
         </div>
         <p><strong>To enable REAL Deepgram integration:</strong></p>
-        <p>Set the following in <code>test-app/.env</code>:</p>
-        <pre style={{ backgroundColor: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
+        <p>Set the following in <code style={{ backgroundColor: '#4a5568', padding: '2px 4px', borderRadius: '2px' }}>test-app/.env</code>:</p>
+        <pre style={{ 
+          backgroundColor: '#2d3748', 
+          padding: '10px', 
+          borderRadius: '4px',
+          color: '#e2e8f0',
+          border: '1px solid #4a5568'
+        }}>
 VITE_DEEPGRAM_API_KEY=your-real-deepgram-api-key
 VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         </pre>
-        <p>Get a free API key at: <a href="https://deepgram.com" target="_blank">https://deepgram.com</a></p>
+        <p>Get a free API key at: <a href="https://deepgram.com" target="_blank" style={{ color: '#63b3ed' }}>https://deepgram.com</a></p>
         <p><em>With a real API key, text messages will be sent to the actual Deepgram agent service.</em></p>
       </div>
     );
@@ -470,33 +523,59 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         {/* API Mode Indicator */}
         {(() => {
           const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
+          const projectId = import.meta.env.VITE_DEEPGRAM_PROJECT_ID;
           const isRealApiKey = apiKey && 
             apiKey !== 'your-deepgram-api-key-here' && 
-            apiKey.startsWith('dgkey_') && 
-            apiKey.length >= 40; // Deepgram API keys are typically 40+ characters
+            !apiKey.startsWith('test-') && 
+            apiKey.length >= 20; // Deepgram API keys are typically 20+ characters
           
           return (
             <div style={{ 
               margin: '10px 0', 
               padding: '8px', 
-              backgroundColor: isRealApiKey ? '#e8f5e8' : '#fff3cd', 
-              border: `1px solid ${isRealApiKey ? '#28a745' : '#ffc107'}`,
+              backgroundColor: '#2d1b1b', 
+              border: '1px solid #ff9800', 
               borderRadius: '4px'
             }}>
-              <strong>
+              <strong style={{ color: '#e2e8f0' }}>
                 {isRealApiKey ? '🟢 REAL API Mode' : '🟡 MOCK API Mode'}
               </strong>
-              <p style={{ margin: '5px 0 0 0', fontSize: '0.9em' }}>
+              <p style={{ 
+                margin: '5px 0 0 0', 
+                fontSize: '0.9em',
+                color: '#e2e8f0'
+              }}>
                 {isRealApiKey 
                   ? 'Text messages sent to actual Deepgram agent service' 
                   : 'Text messages show simulated responses with [MOCK] prefix'
                 }
               </p>
+              
+              {/* Debug Information */}
+              <div style={{ 
+                marginTop: '10px', 
+                padding: '8px', 
+                backgroundColor: '#2d3748', 
+                border: '1px solid #4a5568', 
+                borderRadius: '4px',
+                fontSize: '0.8em',
+                fontFamily: 'monospace',
+                color: '#e2e8f0'
+              }}>
+                <strong>🔍 Debug Info:</strong><br/>
+                API Key loaded: {apiKey ? '✅' : '❌'}<br/>
+                Project ID loaded: {projectId ? '✅' : '❌'}<br/>
+                Key not test prefix: {!apiKey?.startsWith('test-') ? '✅' : '❌'}<br/>
+                Key length ≥ 20: {apiKey?.length >= 20 ? '✅' : '❌'}<br/>
+                Key not placeholder: {apiKey !== 'your-deepgram-api-key-here' ? '✅' : '❌'}<br/>
+                Project ID not placeholder: {projectId !== 'your-real-project-id' ? '✅' : '❌'}
+              </div>
             </div>
           );
         })()}
         <p>Audio Recording: <strong>{isRecording.toString()}</strong></p>
         <p>Audio Playing: <strong>{isPlaying.toString()}</strong></p>
+        <p>Auto-Connect Mode: <strong>{true ? 'Enabled' : 'Disabled'}</strong></p>
         <h4>Auto-Connect Dual Mode States:</h4>
         <div data-testid="auto-connect-states">
           <p>Microphone Enabled: <strong data-testid="mic-status">{micEnabled ? 'Enabled' : 'Disabled'}</strong></p>
@@ -511,7 +590,13 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <button 
             onClick={startInteraction} 
             disabled={!isReady || isRecording}
-            style={{ padding: '10px 20px', pointerEvents: 'auto' }}
+            style={{ 
+              padding: '10px 20px', 
+              backgroundColor: 'transparent',
+              color: '#e2e8f0',
+              border: '1px solid #4a5568',
+              pointerEvents: 'auto' 
+            }}
             data-testid="start-button"
           >
             Start
@@ -520,7 +605,13 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <button 
             onClick={stopInteraction}
             disabled={!isRecording}
-            style={{ padding: '10px 20px', pointerEvents: 'auto' }}
+            style={{ 
+              padding: '10px 20px', 
+              backgroundColor: 'transparent',
+              color: '#e2e8f0',
+              border: '1px solid #4a5568',
+              pointerEvents: 'auto' 
+            }}
             data-testid="stop-button"
           >
             Stop
@@ -529,14 +620,26 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <button 
           onClick={interruptAgent}
           disabled={!isRecording}
-          style={{ padding: '10px 20px', pointerEvents: 'auto' }}
+          style={{ 
+            padding: '10px 20px', 
+            backgroundColor: 'transparent',
+            color: '#e2e8f0',
+            border: '1px solid #4a5568',
+            pointerEvents: 'auto' 
+          }}
         >
           Interrupt Audio
         </button>
         <button 
           onClick={updateContext}
           disabled={!isRecording}
-          style={{ padding: '10px 20px', pointerEvents: 'auto' }}
+          style={{ 
+            padding: '10px 20px', 
+            backgroundColor: 'transparent',
+            color: '#e2e8f0',
+            border: '1px solid #4a5568',
+            pointerEvents: 'auto' 
+          }}
         >
           Update Context
         </button>
@@ -545,7 +648,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           disabled={!isRecording || agentState === 'entering_sleep'}
           style={{
             padding: '10px 20px',
-            backgroundColor: (isSleeping || agentState === 'entering_sleep') ? '#e0f7fa' : 'transparent',
+            backgroundColor: (isSleeping || agentState === 'entering_sleep') ? '#2d5a2d' : 'transparent',
+            color: (isSleeping || agentState === 'entering_sleep') ? '#ffffff' : '#e2e8f0',
+            border: '1px solid #4a5568',
             pointerEvents: 'auto'
           }}
         >
@@ -554,7 +659,13 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <button 
           onClick={injectMessage}
           disabled={!isRecording}
-          style={{ padding: '10px 20px', pointerEvents: 'auto' }}
+          style={{ 
+            padding: '10px 20px', 
+            backgroundColor: 'transparent',
+            color: '#e2e8f0',
+            border: '1px solid #4a5568',
+            pointerEvents: 'auto' 
+          }}
         >
           Inject Message
         </button>
@@ -563,7 +674,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           disabled={!isReady}
           style={{ 
             padding: '10px 20px',
-            backgroundColor: micEnabled ? '#e0f7fa' : 'transparent',
+            backgroundColor: micEnabled ? '#2d5a2d' : 'transparent',
+            color: micEnabled ? '#ffffff' : '#e2e8f0',
+            border: '1px solid #4a5568',
             pointerEvents: 'auto'
           }}
           data-testid="microphone-button"
@@ -575,7 +688,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           disabled={!isReady}
           style={{ 
             padding: '10px 20px',
-            backgroundColor: ttsEnabled ? '#e8f5e8' : '#ffe8e8',
+            backgroundColor: ttsEnabled ? '#2d5a2d' : '#5a2d2d',
+            color: '#ffffff',
+            border: '1px solid #4a5568',
             pointerEvents: 'auto'
           }}
           data-testid="tts-button"
@@ -594,7 +709,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           padding: '10px',
           border: '2px solid #4CAF50',
           borderRadius: '8px',
-          backgroundColor: '#f1f8e9'
+          backgroundColor: '#1a202c',
+          color: '#e2e8f0'
         }}>
           <p style={{ 
             margin: '0 0 10px 0', 
@@ -607,7 +723,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <p style={{ 
             margin: '0 0 10px 0', 
             fontSize: '14px',
-            color: '#666'
+            color: '#e2e8f0'
           }}>
             TTS: {ttsEnabled ? '🔊 Enabled' : '🔇 Disabled'}
           </p>
@@ -615,7 +731,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             <p style={{ 
               margin: '0', 
               fontStyle: 'italic', 
-              color: '#555'
+              color: '#e2e8f0'
             }}>
               Microphone disabled - click "Enable Mic" to start speaking
             </p>
@@ -632,23 +748,25 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           padding: '10px',
           border: '2px solid #ff3333',
           borderRadius: '8px',
-          backgroundColor: '#fff8f8'
+          backgroundColor: '#2d1b1b',
+          color: '#e2e8f0'
         }}>
           <p style={{ 
             margin: '0 0 10px 0', 
-            fontWeight: 'bold'
+            fontWeight: 'bold',
+            color: '#e2e8f0'
           }}>
             {isPlaying ? '🤖 Agent is speaking' 
               : agentState === 'listening' ? '👂 Agent listening' 
               : agentState === 'thinking' ? '🤔 Agent thinking' 
               : (agentState === 'sleeping' || agentState === 'entering_sleep') ? '😴 Agent sleeping' 
-              : '🎙️ Microphone active'}
+              : '🎙️ Recording audio'}
           </p>
           {(agentState === 'sleeping' || agentState === 'entering_sleep') && 
             <p style={{ 
               margin: '0', 
               fontStyle: 'italic', 
-              color: '#555'
+              color: '#e2e8f0'
             }}>(Ignoring audio input)</p>}
         </div>
       )}
@@ -694,7 +812,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             Send
           </button>
         </div>
-        <p style={{ fontSize: '12px', color: '#666', margin: 0 }}>
+        <p style={{ fontSize: '12px', color: '#e2e8f0', margin: 0 }}>
           This allows you to send text messages without using the microphone.
         </p>
       </div>
@@ -712,11 +830,14 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <div style={{ 
             maxHeight: '100px', 
             overflowY: 'scroll', 
-            background: '#f9f9f9', 
-            padding: '5px', 
+            background: '#2d3748', 
+            padding: '10px', 
             marginTop: '5px',
             fontSize: '12px',
-            border: '1px solid #ddd'
+            border: '1px solid #4a5568',
+            color: '#e2e8f0',
+            borderRadius: '4px',
+            whiteSpace: 'pre-wrap'
           }}>
             {loadedInstructions || 'No instructions loaded'}
           </div>
@@ -725,8 +846,31 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
 
       <div style={{ marginTop: '20px', border: '1px solid #eee', padding: '10px', pointerEvents: 'auto' }}>
         <h3>Event Log</h3>
-        <button onClick={() => setLogs([])} style={{ marginBottom: '10px', pointerEvents: 'auto' }}>Clear Logs</button>
-        <pre style={{ maxHeight: '300px', overflowY: 'scroll', background: '#f9f9f9', padding: '5px' }}>
+        <button 
+          onClick={() => setLogs([])} 
+          style={{ 
+            marginBottom: '10px', 
+            padding: '8px 16px',
+            backgroundColor: 'transparent',
+            color: '#e2e8f0',
+            border: '1px solid #4a5568',
+            borderRadius: '4px',
+            pointerEvents: 'auto' 
+          }}
+        >
+          Clear Logs
+        </button>
+        <pre style={{ 
+          maxHeight: '300px', 
+          overflowY: 'scroll', 
+          background: '#2d3748', 
+          padding: '10px', 
+          color: '#e2e8f0',
+          border: '1px solid #4a5568',
+          borderRadius: '4px',
+          fontSize: '12px',
+          lineHeight: '1.4'
+        }}>
           {logs.join('\n')}
         </pre>
       </div>
