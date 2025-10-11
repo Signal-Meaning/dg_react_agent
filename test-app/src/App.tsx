@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
+import DeepgramVoiceInteraction from '../../src/components/DeepgramVoiceInteraction';
 import { 
-  DeepgramVoiceInteraction, 
   DeepgramVoiceInteractionHandle,
   TranscriptResponse,
   LLMResponse,
@@ -9,7 +9,7 @@ import {
   ConnectionState,
   ServiceType,
   DeepgramError
-} from 'deepgram-voice-interaction-react';
+} from '../../src/types';
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 
 function App() {
@@ -23,7 +23,7 @@ function App() {
     ((window as Window & { testApiKey?: string }).testApiKey === 'missing' || 
      (window as Window & { testApiKey?: string }).testApiKey === 'placeholder' || 
      (window as Window & { testApiKey?: string }).testApiKey === 'test-prefix') :
-    (!apiKey || apiKey === 'your-deepgram-api-key-here' || apiKey.startsWith('test-') || 
+    (!apiKey || apiKey === 'your-deepgram-api-key-here' || apiKey === 'your_actual_deepgram_api_key_here' || apiKey.startsWith('test-') || 
      !projectId || projectId === 'your-real-project-id');
 
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
@@ -249,19 +249,18 @@ function App() {
       const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
       const isRealApiKey = apiKey && 
         apiKey !== 'your-deepgram-api-key-here' && 
-        apiKey.startsWith('dgkey_') && 
-        apiKey.length >= 40; // Deepgram API keys are typically 40+ characters
+        apiKey !== 'your_actual_deepgram_api_key_here' &&
+        apiKey.length >= 30; // Deepgram API keys are typically 30+ characters
       
       if (isRealApiKey) {
-        // Real API key - use actual Deepgram agent
-        addLog(`Sending text message to REAL Deepgram agent: ${textInput}`);
+        // Real API key - use lazy reconnect with text
+        addLog(`🔄 [LAZY_RECONNECT] Resuming conversation with text: ${textInput}`);
         setUserMessage(textInput);
         
         if (deepgramRef.current) {
-          // Ensure text-only connection is established
-          await deepgramRef.current.connectTextOnly();
-          deepgramRef.current.injectUserMessage(textInput);
-          addLog('Message sent to real Deepgram agent via injectUserMessage');
+          // Use lazy reconnect method instead of direct injection
+          await deepgramRef.current.resumeWithText(textInput);
+          addLog('✅ [LAZY_RECONNECT] Text message sent via resumeWithText');
         } else {
           addLog('Error: DeepgramVoiceInteraction ref not available');
         }
@@ -379,7 +378,16 @@ function App() {
 
   const toggleMicrophone = async () => {
     try {
-      await deepgramRef.current?.toggleMicrophone(!micEnabled);
+      if (!micEnabled) {
+        // Enable microphone with lazy reconnect
+        addLog('🔄 [LAZY_RECONNECT] Resuming conversation with audio');
+        await deepgramRef.current?.resumeWithAudio();
+        addLog('✅ [LAZY_RECONNECT] Audio conversation resumed');
+      } else {
+        // Disable microphone
+        await deepgramRef.current?.toggleMicrophone(false);
+        addLog('Microphone disabled');
+      }
     } catch (error) {
       addLog(`Error toggling microphone: ${(error as Error).message}`);
       console.error('Microphone toggle error:', error);
@@ -391,26 +399,39 @@ function App() {
     return (
       <div style={{ 
         padding: '20px', 
-        backgroundColor: '#fee', 
-        border: '2px solid #f00', 
+        backgroundColor: '#1a202c', 
+        border: '1px solid #2d3748', 
         borderRadius: '8px',
         margin: '20px',
-        fontFamily: 'monospace'
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        color: '#e2e8f0',
+        fontSize: '14px',
+        lineHeight: '1.5'
       }}>
-        <h2>⚠️ Deepgram API Key Status</h2>
-        <p><strong>This test app supports both REAL and MOCK modes:</strong></p>
-        <div style={{ margin: '15px 0', padding: '10px', backgroundColor: '#f0f8ff', borderRadius: '4px' }}>
-          <h4>🔴 Current Mode: MOCK</h4>
-          <p>Text messages will show simulated responses with <code>[MOCK]</code> prefix.</p>
+        <h2 style={{ margin: '0 0 15px 0', color: '#fbb6ce', fontSize: '18px' }}>⚠️ Deepgram API Key Status</h2>
+        <p style={{ margin: '0 0 15px 0' }}><strong>This test app supports both REAL and MOCK modes:</strong></p>
+        <div style={{ margin: '15px 0', padding: '15px', backgroundColor: '#2d3748', borderRadius: '6px', border: '1px solid #4a5568' }}>
+          <h4 style={{ margin: '0 0 10px 0', color: '#fc8181', fontSize: '16px' }}>🔴 Current Mode: MOCK</h4>
+          <p style={{ margin: '0', color: '#a0aec0' }}>Text messages will show simulated responses with <code style={{ backgroundColor: '#4a5568', padding: '2px 4px', borderRadius: '3px', fontSize: '13px', color: '#e2e8f0' }}>[MOCK]</code> prefix.</p>
         </div>
-        <p><strong>To enable REAL Deepgram integration:</strong></p>
-        <p>Set the following in <code>test-app/.env</code>:</p>
-        <pre style={{ backgroundColor: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
+        <p style={{ margin: '15px 0 10px 0' }}><strong>To enable REAL Deepgram integration:</strong></p>
+        <p style={{ margin: '0 0 10px 0' }}>Set the following in <code style={{ backgroundColor: '#4a5568', padding: '2px 4px', borderRadius: '3px', fontSize: '13px', color: '#e2e8f0' }}>test-app/.env</code>:</p>
+        <pre style={{ 
+          backgroundColor: '#2d3748', 
+          padding: '15px', 
+          borderRadius: '6px', 
+          border: '1px solid #4a5568',
+          fontSize: '13px',
+          lineHeight: '1.4',
+          overflow: 'auto',
+          margin: '10px 0',
+          color: '#e2e8f0'
+        }}>
 VITE_DEEPGRAM_API_KEY=your-real-deepgram-api-key
 VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         </pre>
-        <p>Get a free API key at: <a href="https://deepgram.com" target="_blank">https://deepgram.com</a></p>
-        <p><em>With a real API key, text messages will be sent to the actual Deepgram agent service.</em></p>
+        <p style={{ margin: '15px 0 10px 0' }}>Get a free API key at: <a href="https://deepgram.com" target="_blank" style={{ color: '#63b3ed', textDecoration: 'none' }}>https://deepgram.com</a></p>
+        <p style={{ margin: '0', fontStyle: 'italic', color: '#a0aec0' }}>With a real API key, text messages will be sent to the actual Deepgram agent service.</p>
       </div>
     );
   }
@@ -460,21 +481,22 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
           const isRealApiKey = apiKey && 
             apiKey !== 'your-deepgram-api-key-here' && 
-            apiKey.startsWith('dgkey_') && 
-            apiKey.length >= 40; // Deepgram API keys are typically 40+ characters
+            apiKey !== 'your_actual_deepgram_api_key_here' &&
+            apiKey.length >= 30; // Deepgram API keys are typically 30+ characters
           
           return (
             <div style={{ 
               margin: '10px 0', 
               padding: '8px', 
-              backgroundColor: isRealApiKey ? '#e8f5e8' : '#fff3cd', 
-              border: `1px solid ${isRealApiKey ? '#28a745' : '#ffc107'}`,
-              borderRadius: '4px'
+              backgroundColor: isRealApiKey ? '#1a4d1a' : '#2d3748', 
+              border: `1px solid ${isRealApiKey ? '#48bb78' : '#4a5568'}`,
+              borderRadius: '4px',
+              color: isRealApiKey ? '#9ae6b4' : '#e2e8f0'
             }}>
               <strong>
                 {isRealApiKey ? '🟢 REAL API Mode' : '🟡 MOCK API Mode'}
               </strong>
-              <p style={{ margin: '5px 0 0 0', fontSize: '0.9em' }}>
+              <p style={{ margin: '5px 0 0 0', fontSize: '0.9em', color: isRealApiKey ? '#9ae6b4' : '#a0aec0' }}>
                 {isRealApiKey 
                   ? 'Text messages sent to actual Deepgram agent service' 
                   : 'Text messages show simulated responses with [MOCK] prefix'
@@ -568,9 +590,10 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           flexDirection: 'column',
           alignItems: 'center',
           padding: '10px',
-          border: '2px solid #4CAF50',
+          border: '2px solid #48bb78',
           borderRadius: '8px',
-          backgroundColor: '#f1f8e9'
+          backgroundColor: '#1a4d1a',
+          color: '#9ae6b4'
         }}>
           <p style={{ 
             margin: '0 0 10px 0', 
@@ -584,7 +607,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             <p style={{ 
               margin: '0', 
               fontStyle: 'italic', 
-              color: '#555'
+              color: '#a0aec0'
             }}>
               Microphone disabled - click "Enable Mic" to start speaking
             </p>
@@ -681,21 +704,22 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <div style={{ 
             maxHeight: '100px', 
             overflowY: 'scroll', 
-            background: '#f9f9f9', 
+            background: '#2d3748', 
             padding: '5px', 
             marginTop: '5px',
             fontSize: '12px',
-            border: '1px solid #ddd'
+            border: '1px solid #4a5568',
+            color: '#e2e8f0'
           }}>
             {loadedInstructions || 'No instructions loaded'}
           </div>
         </div>
       </div>
 
-      <div style={{ marginTop: '20px', border: '1px solid #eee', padding: '10px', pointerEvents: 'auto' }}>
-        <h3>Event Log</h3>
-        <button onClick={() => setLogs([])} style={{ marginBottom: '10px', pointerEvents: 'auto' }}>Clear Logs</button>
-        <pre style={{ maxHeight: '300px', overflowY: 'scroll', background: '#f9f9f9', padding: '5px' }}>
+      <div style={{ marginTop: '20px', border: '1px solid #4a5568', padding: '10px', pointerEvents: 'auto', backgroundColor: '#1a202c' }}>
+        <h3 style={{ color: '#e2e8f0' }}>Event Log</h3>
+        <button onClick={() => setLogs([])} style={{ marginBottom: '10px', pointerEvents: 'auto', backgroundColor: '#4a5568', color: '#e2e8f0', border: '1px solid #2d3748', padding: '5px 10px', borderRadius: '4px' }}>Clear Logs</button>
+        <pre style={{ maxHeight: '300px', overflowY: 'scroll', background: '#2d3748', padding: '5px', color: '#e2e8f0', border: '1px solid #4a5568', borderRadius: '4px' }}>
           {logs.join('\n')}
         </pre>
       </div>

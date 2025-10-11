@@ -6,7 +6,10 @@ import {
   DeepgramVoiceInteractionProps,
   LLMResponse,
   TranscriptResponse,
-  UpdateInstructionsPayload
+  UpdateInstructionsPayload,
+  ConversationMessage,
+  ConversationRole,
+  AgentOptions
 } from '../../types';
 import { WebSocketManager, WebSocketEvent } from '../../utils/websocket/WebSocketManager';
 import { AudioManager, AudioEvent } from '../../utils/audio/AudioManager';
@@ -635,7 +638,8 @@ function DeepgramVoiceInteraction(
             model: agentOptions.voice || 'aura-asteria-en'
           }
         },
-        greeting: agentOptions.greeting
+        greeting: agentOptions.greeting,
+        context: state.conversationHistory // Include conversation context if available
       }
     };
     
@@ -802,6 +806,15 @@ function DeepgramVoiceInteraction(
     // Handle conversation text
     if (data.type === 'ConversationText') {
       const content = typeof data.content === 'string' ? data.content : '';
+      
+      // Track conversation messages for lazy reconnection
+      const conversationMessage: ConversationMessage = {
+        role: data.role as ConversationRole,
+        content: content,
+        timestamp: Date.now()
+      };
+      dispatch({ type: 'ADD_CONVERSATION_MESSAGE', message: conversationMessage });
+      log(`🔄 [LAZY_RECONNECT] Tracked conversation message: ${data.role} - "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`);
       
       if (data.role === 'assistant') {
         const response: LLMResponse = {
@@ -1191,6 +1204,167 @@ function DeepgramVoiceInteraction(
     });
   };
 
+  // Resume conversation with text input (lazy reconnection)
+  const resumeWithText = async (text: string): Promise<void> => {
+    log('🔄 [LAZY_RECONNECT] Resuming conversation with text:', text);
+    log(`🔄 [LAZY_RECONNECT] Current conversation history length: ${state.conversationHistory.length}`);
+    log(`🔄 [LAZY_RECONNECT] Current session ID: ${state.sessionId || 'None'}`);
+    
+    try {
+      // Generate session ID if not exists
+      const sessionId = state.sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      log(`🔄 [LAZY_RECONNECT] Using session ID: ${sessionId}`);
+      
+      // Add user message to conversation history
+      const userMessage: ConversationMessage = {
+        role: 'user',
+        content: text,
+        timestamp: Date.now()
+      };
+      
+      dispatch({ type: 'ADD_CONVERSATION_MESSAGE', message: userMessage });
+      dispatch({ type: 'SET_SESSION_ID', sessionId });
+      log(`🔄 [LAZY_RECONNECT] Added user message to history: "${text}"`);
+      
+      // Connect with context
+      log(`🔄 [LAZY_RECONNECT] Connecting with context (${state.conversationHistory.length + 1} messages)`);
+      await connectWithContext(sessionId, [...state.conversationHistory, userMessage], agentOptions!);
+      
+      // Send the text message
+      if (agentManagerRef.current) {
+        log(`🔄 [LAZY_RECONNECT] Sending InjectUserMessage: "${text}"`);
+        agentManagerRef.current.sendJSON({
+          type: 'InjectUserMessage',
+          content: text
+        });
+      }
+      
+      log('✅ [LAZY_RECONNECT] Successfully resumed conversation with text');
+    } catch (error) {
+      log('❌ [LAZY_RECONNECT] Error resuming conversation with text:', error);
+      handleError({
+        service: 'agent',
+        code: 'resume_text_error',
+        message: 'Failed to resume conversation with text',
+        details: error,
+      });
+      throw error;
+    }
+  };
+
+  // Resume conversation with audio input (lazy reconnection)
+  const resumeWithAudio = async (): Promise<void> => {
+    log('🔄 [LAZY_RECONNECT] Resuming conversation with audio');
+    log(`🔄 [LAZY_RECONNECT] Current conversation history length: ${state.conversationHistory.length}`);
+    log(`🔄 [LAZY_RECONNECT] Current session ID: ${state.sessionId || 'None'}`);
+    log(`🔄 [LAZY_RECONNECT] Agent manager state: ${agentManagerRef.current?.getState() || 'null'}`);
+    
+    try {
+      // Generate session ID if not exists
+      const sessionId = state.sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      log(`🔄 [LAZY_RECONNECT] Using session ID: ${sessionId}`);
+      
+      dispatch({ type: 'SET_SESSION_ID', sessionId });
+      
+      // Connect with context
+      log(`🔄 [LAZY_RECONNECT] Connecting with context (${state.conversationHistory.length} messages)`);
+      await connectWithContext(sessionId, state.conversationHistory, agentOptions!);
+      
+      // Enable microphone for audio input
+      log(`🔄 [LAZY_RECONNECT] Enabling microphone for audio input`);
+      await toggleMic(true);
+      
+      log('✅ [LAZY_RECONNECT] Successfully resumed conversation with audio');
+    } catch (error) {
+      log('❌ [LAZY_RECONNECT] Error resuming conversation with audio:', error);
+      handleError({
+        service: 'agent',
+        code: 'resume_audio_error',
+        message: 'Failed to resume conversation with audio',
+        details: error,
+      });
+      throw error;
+    }
+  };
+
+  // Connect with conversation context (for lazy reconnection)
+  const connectWithContext = async (sessionId: string, history: ConversationMessage[], options: AgentOptions): Promise<void> => {
+    log('🔄 [LAZY_RECONNECT] Connecting with conversation context:', { sessionId, historyLength: history.length });
+    log(`🔄 [LAZY_RECONNECT] Agent options: ${JSON.stringify(options, null, 2)}`);
+    
+    try {
+      // Connect agent WebSocket if not already connected
+      if (agentManagerRef.current && agentManagerRef.current.getState() !== 'connected') {
+        log(`🔄 [LAZY_RECONNECT] Agent WebSocket not connected (${agentManagerRef.current.getState()}), connecting...`);
+        await agentManagerRef.current.connect();
+        log('✅ [LAZY_RECONNECT] Agent WebSocket connected with context');
+      } else {
+        log(`🔄 [LAZY_RECONNECT] Agent WebSocket already connected (${agentManagerRef.current?.getState()})`);
+      }
+      
+      // Send settings with conversation context
+      if (agentManagerRef.current) {
+        const settingsMessage = {
+          type: 'Settings',
+          audio: {
+            input: {
+              encoding: 'linear16',
+              sample_rate: 16000
+            },
+            output: {
+              encoding: 'linear16',
+              sample_rate: 24000
+            }
+          },
+          agent: {
+            language: options.language || 'en',
+            listen: {
+              provider: {
+                type: 'deepgram',
+                model: options.listenModel || 'nova-2'
+              }
+            },
+            think: {
+              provider: {
+                type: options.thinkProviderType || 'open_ai',
+                model: options.thinkModel || 'gpt-4o-mini'
+              },
+              prompt: options.instructions || 'You are a helpful voice assistant.',
+              ...(options.thinkEndpointUrl && options.thinkApiKey ? {
+                endpoint: {
+                  url: options.thinkEndpointUrl,
+                  headers: {
+                    authorization: `bearer ${options.thinkApiKey}`,
+                  },
+                }
+              } : {})
+            },
+            speak: {
+              provider: {
+                type: 'deepgram',
+                model: options.voice || 'aura-asteria-en'
+              }
+            },
+            greeting: options.greeting,
+            context: history // NEW: Include conversation context
+          }
+        };
+        
+        log(`🔄 [LAZY_RECONNECT] Sending settings with conversation context (${history.length} messages):`, settingsMessage);
+        agentManagerRef.current.sendJSON(settingsMessage);
+        
+        // Mark settings as sent
+        dispatch({ type: 'SETTINGS_SENT', sent: true });
+        log('✅ [LAZY_RECONNECT] Settings sent with conversation context');
+      }
+      
+      log('✅ [LAZY_RECONNECT] Successfully connected with conversation context');
+    } catch (error) {
+      log('❌ [LAZY_RECONNECT] Error connecting with context:', error);
+      throw error;
+    }
+  };
+
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     start,
@@ -1204,6 +1378,9 @@ function DeepgramVoiceInteraction(
     injectAgentMessage,
     injectUserMessage,
     toggleMicrophone: toggleMic,
+    resumeWithText,
+    resumeWithAudio,
+    connectWithContext,
   }));
 
   // Render nothing (headless component)

@@ -45,6 +45,23 @@ export enum AgentResponseType {
 export type ConversationRole = 'user' | 'assistant';
 
 /**
+ * Conversation message for context preservation
+ */
+export interface ConversationMessage {
+  role: ConversationRole;
+  content: string;
+  timestamp?: number;
+}
+
+/**
+ * Conversation context for lazy reconnection
+ */
+export interface ConversationContext {
+  sessionId: string;
+  history: ConversationMessage[];
+}
+
+/**
  * Settings message as per the spec
  */
 export interface AgentSettingsMessage {
@@ -100,6 +117,7 @@ export interface AgentSettingsMessage {
       };
     };
     greeting?: string;
+    context?: ConversationMessage[]; // NEW: conversation context for lazy reconnection
   };
 }
 

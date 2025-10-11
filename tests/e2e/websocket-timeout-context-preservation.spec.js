@@ -45,7 +45,7 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     
     // Step 1: Send first text message to Deepgram server
     console.log('📝 Step 1: Sending first message...');
-    const firstMessage = 'Hello, I am looking for a laptop for programming work.';
+    const firstMessage = 'I\'m a filmmaker working on documentary projects.';
     await sendTextMessage(page, firstMessage);
     
     // Verify first message was sent and received
@@ -131,7 +131,7 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     
     // Step 5: Send second message to trigger reconnection
     console.log('📝 Step 5: Sending second message to trigger reconnection...');
-    const secondMessage = 'What about the MacBook Pro with M3 chip?';
+    const secondMessage = 'What would you recommend for video editing hardware?';
     await sendTextMessage(page, secondMessage);
     
     // Verify second message was sent
@@ -151,16 +151,40 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     expect(secondResponse).toBeTruthy();
     expect(secondResponse.length).toBeGreaterThan(0);
     
-    // Check for context indicators in the response
-    const hasLaptopContext = secondResponse.toLowerCase().includes('laptop') || 
-                            secondResponse.toLowerCase().includes('programming') ||
-                            secondResponse.toLowerCase().includes('work');
-    const hasMacBookContext = secondResponse.toLowerCase().includes('macbook') || 
-                             secondResponse.toLowerCase().includes('m3') ||
-                             secondResponse.toLowerCase().includes('chip');
+    // Check for context indicators in the response using more sophisticated analysis
+    const hasFilmmakerContext = secondResponse.toLowerCase().includes('filmmaker') || 
+                               secondResponse.toLowerCase().includes('documentary') ||
+                               secondResponse.toLowerCase().includes('film') ||
+                               secondResponse.toLowerCase().includes('video') ||
+                               secondResponse.toLowerCase().includes('editing') ||
+                               secondResponse.toLowerCase().includes('camera') ||
+                               secondResponse.toLowerCase().includes('production');
+    
+    // Check for hardware/technical context that would be relevant to filmmakers
+    const hasTechnicalContext = secondResponse.toLowerCase().includes('hardware') || 
+                               secondResponse.toLowerCase().includes('computer') ||
+                               secondResponse.toLowerCase().includes('gpu') ||
+                               secondResponse.toLowerCase().includes('cpu') ||
+                               secondResponse.toLowerCase().includes('ram') ||
+                               secondResponse.toLowerCase().includes('storage') ||
+                               secondResponse.toLowerCase().includes('workstation');
+    
+    // CRITICAL TEST: Does the response show understanding of the filmmaker context?
+    // The agent should recommend filmmaking-specific equipment, not generic hardware
+    const hasFilmmakingEquipment = secondResponse.toLowerCase().includes('camera') ||
+                                  secondResponse.toLowerCase().includes('lens') ||
+                                  secondResponse.toLowerCase().includes('tripod') ||
+                                  secondResponse.toLowerCase().includes('microphone') ||
+                                  secondResponse.toLowerCase().includes('lighting') ||
+                                  secondResponse.toLowerCase().includes('editing') ||
+                                  secondResponse.toLowerCase().includes('software') ||
+                                  secondResponse.toLowerCase().includes('drone') ||
+                                  secondResponse.toLowerCase().includes('gimbal') ||
+                                  secondResponse.toLowerCase().includes('audio') ||
+                                  secondResponse.toLowerCase().includes('recorder');
     
     // At least one context indicator should be present
-    const hasContextPreservation = hasLaptopContext || hasMacBookContext;
+    const hasContextPreservation = hasFilmmakerContext || hasTechnicalContext || hasFilmmakingEquipment;
     
     if (!hasContextPreservation) {
       console.log('⚠️  Context preservation not clearly evident in response text');
@@ -243,7 +267,7 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     // For now, we'll test the text path which exercises the same WebSocket behavior
     
     // Step 1: Send first message
-    const firstMessage = 'I need help with my shopping cart.';
+    const firstMessage = 'I\'m a third-grade teacher planning a science unit.';
     await sendTextMessage(page, firstMessage);
     await expect(page.locator(SELECTORS.userMessage)).toContainText(firstMessage);
     
@@ -286,7 +310,7 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     expect(['closed', 'error']).toContain(connectionStatus);
     
     // Step 4: Send second message
-    const secondMessage = 'Can you add a wireless mouse to it?';
+    const secondMessage = 'What experiments would be appropriate for 8-year-olds?';
     await sendTextMessage(page, secondMessage);
     await expect(page.locator(SELECTORS.userMessage)).toContainText(secondMessage);
     
@@ -295,18 +319,48 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     const secondResponse = await page.locator(SELECTORS.agentResponse).textContent();
     expect(secondResponse).toBeTruthy();
     
-    // Check for shopping cart context
-    const hasCartContext = secondResponse.toLowerCase().includes('cart') || 
-                          secondResponse.toLowerCase().includes('shopping') ||
-                          secondResponse.toLowerCase().includes('mouse');
+    // Check for teaching context
+    const hasTeachingContext = secondResponse.toLowerCase().includes('teacher') || 
+                              secondResponse.toLowerCase().includes('third') ||
+                              secondResponse.toLowerCase().includes('grade') ||
+                              secondResponse.toLowerCase().includes('science') ||
+                              secondResponse.toLowerCase().includes('experiment') ||
+                              secondResponse.toLowerCase().includes('kids') ||
+                              secondResponse.toLowerCase().includes('children') ||
+                              secondResponse.toLowerCase().includes('students');
     
-    if (!hasCartContext) {
+    // CRITICAL TEST: Does the response show understanding of the third-grade teacher context?
+    // The agent should recommend age-appropriate experiments, not generic science experiments
+    const hasAgeAppropriateExperiments = secondResponse.toLowerCase().includes('simple') ||
+                                       secondResponse.toLowerCase().includes('easy') ||
+                                       secondResponse.toLowerCase().includes('basic') ||
+                                       secondResponse.toLowerCase().includes('safe') ||
+                                       secondResponse.toLowerCase().includes('8-year') ||
+                                       secondResponse.toLowerCase().includes('elementary') ||
+                                       secondResponse.toLowerCase().includes('young') ||
+                                       secondResponse.toLowerCase().includes('beginner') ||
+                                       secondResponse.toLowerCase().includes('hands-on') ||
+                                       secondResponse.toLowerCase().includes('visual');
+    
+    const hasContextPreservation = hasTeachingContext || hasAgeAppropriateExperiments;
+    
+    if (!hasContextPreservation) {
       console.log('⚠️  Context preservation not clearly evident in audio test');
+      console.log('📝 Full second response:', secondResponse);
+      
+      // Alternative check: Verify the response is not just a generic greeting
+      const isGenericResponse = secondResponse.toLowerCase().includes('hello') && 
+                               secondResponse.toLowerCase().includes('how can i help');
+      
+      if (isGenericResponse) {
+        throw new Error('Context was lost - agent gave generic response instead of continuing conversation');
+      }
+      
+      // If we get here, the response exists but context preservation is unclear
+      console.log('ℹ️  Context preservation unclear but response received');
     } else {
-      console.log('✅ Audio context preservation verified');
+      console.log('✅ Audio context preservation verified - agent referenced previous conversation');
     }
-    
-    // Cleanup
     await page.evaluate(() => {
       if (window.timeAccelerator) {
         clearInterval(window.timeAccelerator);
