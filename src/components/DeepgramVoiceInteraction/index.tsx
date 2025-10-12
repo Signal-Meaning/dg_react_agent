@@ -518,11 +518,20 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
       
       // Auto-connect to agent service to establish dual mode
-      setTimeout(() => {
+      setTimeout(async () => {
         console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current);
         if (agentManagerRef.current) {
           console.log('Calling agentManagerRef.current.connect()');
-          agentManagerRef.current.connect();
+          try {
+            await agentManagerRef.current.connect();
+            // Ensure settings are sent after connection is established
+            if (agentManagerRef.current.getState() === 'connected') {
+              log('Auto-connect: Connection established, sending settings');
+              sendAgentSettings();
+            }
+          } catch (error) {
+            log('Auto-connect failed:', error);
+          }
         }
       }, 100); // Small delay to ensure audio manager is ready
     } else {
