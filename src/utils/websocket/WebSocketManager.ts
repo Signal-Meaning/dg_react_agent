@@ -419,7 +419,7 @@ export class WebSocketManager {
   /**
    * Resets the idle timeout (call when activity occurs)
    */
-  private resetIdleTimeout(): void {
+  public resetIdleTimeout(): void {
     if (this.options.idleTimeout && this.options.idleTimeout > 0) {
       this.stopIdleTimeout();
       this.startIdleTimeout();
