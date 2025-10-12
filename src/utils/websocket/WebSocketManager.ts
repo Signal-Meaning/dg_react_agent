@@ -215,9 +215,6 @@ export class WebSocketManager {
         };
 
         this.ws.onmessage = (event) => {
-          // Reset idle timeout on any message received
-          this.resetIdleTimeout();
-          
           // Log the type of data received for every message
           this.log(`Received message data type: ${typeof event.data}, is ArrayBuffer: ${event.data instanceof ArrayBuffer}, is Blob: ${event.data instanceof Blob}`);
           
@@ -427,6 +424,17 @@ export class WebSocketManager {
   }
 
   /**
+   * Resets the idle timeout only on user activity (not agent responses)
+   * This prevents timeouts during natural conversation flow
+   */
+  private resetIdleTimeoutOnUserActivity(): void {
+    if (this.options.idleTimeout && this.options.idleTimeout > 0) {
+      this.stopIdleTimeout();
+      this.startIdleTimeout();
+    }
+  }
+
+  /**
    * Sends a JSON message over the WebSocket
    */
   public sendJSON(data: any): boolean {
@@ -438,8 +446,8 @@ export class WebSocketManager {
     try {
       this.log('Sending JSON:', data);
       this.ws.send(JSON.stringify(data));
-      // Reset idle timeout when sending messages
-      this.resetIdleTimeout();
+      // Reset idle timeout when sending messages (user activity)
+      this.resetIdleTimeoutOnUserActivity();
       return true;
     } catch (error) {
       this.log('Error sending JSON:', error);
@@ -459,8 +467,8 @@ export class WebSocketManager {
     try {
       this.log(`Sending binary data: ${data instanceof ArrayBuffer ? data.byteLength : data.size} bytes`);
       this.ws.send(data);
-      // Reset idle timeout when sending messages
-      this.resetIdleTimeout();
+      // Reset idle timeout when sending messages (user activity)
+      this.resetIdleTimeoutOnUserActivity();
       return true;
     } catch (error) {
       this.log('Error sending binary data:', error);
