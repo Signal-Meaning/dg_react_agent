@@ -3,6 +3,17 @@
  * This test should FAIL before the context fix and PASS after the fix is applied.
  */
 
+// Utility function for transforming conversation history
+const transformConversationHistory = (history) => {
+  return {
+    messages: history.map(message => ({
+      type: "History",
+      role: message.role === 'assistant' ? 'assistant' : 'user',
+      content: message.content
+    }))
+  };
+};
+
 describe('Context Preservation Validation', () => {
   let mockAgentManager;
   let mockState;
@@ -62,15 +73,6 @@ describe('Context Preservation Validation', () => {
     });
 
     // STEP 4: Simulate the connectWithContext method behavior with correct Deepgram API format
-    const transformConversationHistory = (history) => {
-      return {
-        messages: history.map(message => ({
-          type: "History",
-          role: message.role === 'assistant' ? 'assistant' : 'user',
-          content: message.content
-        }))
-      };
-    };
 
     const connectWithContext = (sessionId, history, options) => {
       const settingsMessage = {
@@ -179,15 +181,6 @@ describe('Context Preservation Validation', () => {
     });
 
     // Simulate connectWithContext with teacher history and correct Deepgram API format
-    const transformConversationHistory = (history) => {
-      return {
-        messages: history.map(message => ({
-          type: "History",
-          role: message.role === 'assistant' ? 'assistant' : 'user',
-          content: message.content
-        }))
-      };
-    };
 
     const connectWithContext = (sessionId, history, options) => {
       const settingsMessage = {
