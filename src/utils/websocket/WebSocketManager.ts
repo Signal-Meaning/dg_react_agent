@@ -53,7 +53,7 @@ export interface WebSocketManagerOptions {
  * Default WebSocketManager options
  */
 const DEFAULT_OPTIONS: Partial<WebSocketManagerOptions> = {
-  keepaliveInterval: 2000, // 2 seconds - frequent pings for better connection health monitoring
+  keepaliveInterval: 0, // Disabled by default for lazy reconnection - connections timeout naturally
   connectionTimeout: 10000, // 10 seconds - reasonable timeout for connection establishment
   debug: false,
 };
@@ -329,11 +329,16 @@ export class WebSocketManager {
       this.stopKeepalive();
     }
     
-    this.keepaliveIntervalId = window.setInterval(() => {
-      this.sendKeepalive();
-    }, this.options.keepaliveInterval);
+    // Only start keepalive if interval is greater than 0
+    if (this.options.keepaliveInterval && this.options.keepaliveInterval > 0) {
+      this.keepaliveIntervalId = window.setInterval(() => {
+        this.sendKeepalive();
+      }, this.options.keepaliveInterval);
 
-    this.log('Started keepalive interval');
+      this.log('Started keepalive interval');
+    } else {
+      this.log('Keepalive disabled - connections will timeout naturally');
+    }
   }
 
   /**
