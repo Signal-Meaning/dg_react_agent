@@ -142,6 +142,7 @@ function DeepgramVoiceInteraction(
     onUserMessage,
     onUserStartedSpeaking,
     onUserStoppedSpeaking,
+    onKeepalive,
     onPlaybackStateChange,
     onError,
     debug = false,
@@ -401,7 +402,7 @@ function DeepgramVoiceInteraction(
       } else if (event.type === 'message') {
         // Handle keepalive messages for logging
         if (event.data.type === 'KeepAlive') {
-          console.log(`💓 [KEEPALIVE] ${event.data.service} keepalive sent`);
+          onKeepalive?.(event.data.service);
           return;
         }
         

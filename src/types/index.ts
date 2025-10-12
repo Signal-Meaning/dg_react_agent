@@ -127,6 +127,11 @@ export interface DeepgramVoiceInteractionProps {
   onUserStartedSpeaking?: () => void;
   
   /**
+   * Called when a keepalive message is sent (for logging purposes)
+   */
+  onKeepalive?: (service: ServiceType) => void;
+  
+  /**
    * Called when the user stops speaking (based on VAD/endpointing)
    */
   onUserStoppedSpeaking?: () => void;
