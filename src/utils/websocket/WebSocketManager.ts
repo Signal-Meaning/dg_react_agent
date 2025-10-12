@@ -356,7 +356,7 @@ export class WebSocketManager {
       
       // Emit keepalive event for test-app logging
       this.emit({ 
-        type: 'message', 
+        type: 'keepalive', 
         data: { 
           type: 'KeepAlive', 
           timestamp: Date.now(),
