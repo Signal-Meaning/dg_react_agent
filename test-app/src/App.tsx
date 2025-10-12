@@ -250,7 +250,8 @@ function App() {
       const isRealApiKey = apiKey && 
         apiKey !== 'your-deepgram-api-key-here' && 
         apiKey !== 'your_actual_deepgram_api_key_here' &&
-        apiKey.length >= 30; // Deepgram API keys are typically 30+ characters
+        !apiKey.startsWith('test-') && 
+        apiKey.length >= 20; // Deepgram API keys are typically 20+ characters
       
       if (isRealApiKey) {
         // Real API key - use lazy reconnect with text
@@ -482,7 +483,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           const isRealApiKey = apiKey && 
             apiKey !== 'your-deepgram-api-key-here' && 
             apiKey !== 'your_actual_deepgram_api_key_here' &&
-            apiKey.length >= 30; // Deepgram API keys are typically 30+ characters
+            !apiKey.startsWith('test-') && 
+            apiKey.length >= 20; // Deepgram API keys are typically 20+ characters
           
           return (
             <div style={{ 
@@ -579,6 +581,25 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           data-testid="microphone-button"
         >
           {micEnabled ? 'Disable Mic' : 'Enable Mic'}
+        </button>
+        <button 
+          onClick={() => {
+            deepgramRef.current?.triggerTimeoutForTesting();
+            addLog('🧪 [TEST] Manually triggered connection timeout');
+          }}
+          disabled={!isReady}
+          style={{ 
+            padding: '10px 20px',
+            backgroundColor: '#ff6b6b',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            pointerEvents: 'auto'
+          }}
+          title="Manually trigger connection timeout for testing lazy reconnection"
+        >
+          🧪 Test Timeout
         </button>
       </div>
       
@@ -720,7 +741,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <h3 style={{ color: '#e2e8f0' }}>Event Log</h3>
         <button onClick={() => setLogs([])} style={{ marginBottom: '10px', pointerEvents: 'auto', backgroundColor: '#4a5568', color: '#e2e8f0', border: '1px solid #2d3748', padding: '5px 10px', borderRadius: '4px' }}>Clear Logs</button>
         <pre style={{ maxHeight: '300px', overflowY: 'scroll', background: '#2d3748', padding: '5px', color: '#e2e8f0', border: '1px solid #4a5568', borderRadius: '4px' }}>
-          {logs.join('\n')}
+          {logs.slice().reverse().join('\n')}
         </pre>
       </div>
     </div>
