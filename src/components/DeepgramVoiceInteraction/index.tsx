@@ -141,6 +141,9 @@ function DeepgramVoiceInteraction(
     onAgentUtterance,
     onUserMessage,
     onUserStartedSpeaking,
+    onUserStoppedSpeaking,
+    onUtteranceEnd,
+    onVADEvent,
     onKeepalive,
     onPlaybackStateChange,
     onError,
@@ -811,6 +814,9 @@ function DeepgramVoiceInteraction(
       clearAudio();
       onUserStartedSpeaking?.();
       
+      // Update VAD state
+      dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: true });
+      
       // Re-enable keepalives when user starts speaking
       updateKeepaliveState(true);
       
@@ -933,6 +939,98 @@ function DeepgramVoiceInteraction(
       const description = typeof data.description === 'string' ? data.description : 'Unknown warning';
       const code = typeof data.code === 'string' ? data.code : 'unknown';
       log('Agent warning:', description, 'Code:', code);
+      return;
+    }
+
+    // Handle UserStoppedSpeaking events
+    if (data.type === 'UserStoppedSpeaking') {
+      log('UserStoppedSpeaking message received');
+      if (isSleepingOrEntering) {
+        sleepLog('Ignoring UserStoppedSpeaking event (state:', stateRef.current.agentState, ')');
+        return;
+      }
+      
+      // Call the callback with timestamp if available
+      const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
+      onUserStoppedSpeaking?.({ timestamp });
+      
+      // Update VAD state
+      dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
+      
+      // Disable keepalives when user stops speaking
+      updateKeepaliveState(false);
+      
+      // Transition to thinking state if currently listening
+      if (stateRef.current.agentState === 'listening') {
+        sleepLog('Dispatching AGENT_STATE_CHANGE to thinking (from UserStoppedSpeaking)');
+        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
+      }
+      return;
+    }
+
+    // Handle UtteranceEnd events from Deepgram's end-of-speech detection
+    if (data.type === 'UtteranceEnd') {
+      log('UtteranceEnd message received:', data);
+      if (isSleepingOrEntering) {
+        sleepLog('Ignoring UtteranceEnd event (state:', stateRef.current.agentState, ')');
+        return;
+      }
+      
+      // Call the callback with channel and lastWordEnd data
+      const channel = Array.isArray(data.channel) ? data.channel : [0, 1];
+      const lastWordEnd = typeof data.last_word_end === 'number' ? data.last_word_end : 0;
+      onUtteranceEnd?.({ channel, lastWordEnd });
+      
+      // Update VAD state
+      dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
+      dispatch({ type: 'UTTERANCE_END', data: { channel, lastWordEnd } });
+      
+      // Also call onUserStoppedSpeaking for backward compatibility
+      const timestamp = Date.now();
+      onUserStoppedSpeaking?.({ timestamp });
+      
+      // Disable keepalives when utterance ends
+      updateKeepaliveState(false);
+      
+      // Transition to thinking state if currently listening
+      if (stateRef.current.agentState === 'listening') {
+        sleepLog('Dispatching AGENT_STATE_CHANGE to thinking (from UtteranceEnd)');
+        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
+      }
+      return;
+    }
+
+    // Handle VAD events from transcription service
+    if (data.type === 'VADEvent') {
+      log('VADEvent message received:', data);
+      
+      // Call the callback with VAD event data
+      const speechDetected = typeof data.speech_detected === 'boolean' ? data.speech_detected : false;
+      const confidence = typeof data.confidence === 'number' ? data.confidence : undefined;
+      const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
+      onVADEvent?.({ speechDetected, confidence, timestamp });
+      
+      // Handle speech detection state changes
+      if (speechDetected) {
+        // User started speaking
+        onUserStartedSpeaking?.();
+        dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: true });
+        updateKeepaliveState(true);
+        
+        if (stateRef.current.agentState === 'idle' || stateRef.current.agentState === 'sleeping') {
+          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'listening' });
+        }
+      } else {
+        // User stopped speaking
+        const stopTimestamp = Date.now();
+        onUserStoppedSpeaking?.({ timestamp: stopTimestamp });
+        dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
+        updateKeepaliveState(false);
+        
+        if (stateRef.current.agentState === 'listening') {
+          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
+        }
+      }
       return;
     }
   };
