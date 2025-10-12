@@ -141,7 +141,6 @@ function DeepgramVoiceInteraction(
     onAgentUtterance,
     onUserMessage,
     onUserStartedSpeaking,
-    onUserStoppedSpeaking,
     onKeepalive,
     onPlaybackStateChange,
     onError,
@@ -163,14 +162,15 @@ function DeepgramVoiceInteraction(
   
   // Ref to track if we're in the middle of a lazy reconnection
   const isLazyReconnectingRef = useRef<boolean>(false);
+  
+  // Ref to track connection type immediately and synchronously
+  const isNewConnectionRef = useRef<boolean>(true);
 
   // Managers - these may be null if the service is not required
   const transcriptionManagerRef = useRef<WebSocketManager | null>(null);
   const agentManagerRef = useRef<WebSocketManager | null>(null);
   const audioManagerRef = useRef<AudioManager | null>(null);
   
-  // Tracking user speaking state
-  const userSpeakingRef = useRef(false);
   
   // Track if we're waiting for user voice after waking from sleep
   const isWaitingForUserVoiceAfterSleep = useRef(false);
@@ -223,6 +223,9 @@ function DeepgramVoiceInteraction(
 
   // Initialize the component based on provided options
   useEffect(() => {
+    // Initialize connection type ref for first connection
+    isNewConnectionRef.current = true;
+    
     // Validate API key
     if (!apiKey) {
       handleError({
@@ -588,27 +591,6 @@ function DeepgramVoiceInteraction(
         stateRef.current.agentState === 'entering_sleep'
       );
       
-    if (data.type === 'VADEvent') {
-      const isSpeaking = data.is_speech;
-      if (isSleepingOrEntering) {
-        sleepLog('Ignoring VAD event (state:', stateRef.current.agentState, ')');
-        return;
-      }
-      
-      // Reset idle timeout when user is speaking (VAD detects activity)
-      if (isSpeaking && agentManagerRef.current) {
-        agentManagerRef.current.resetIdleTimeout();
-      }
-      
-      if (isSpeaking && !userSpeakingRef.current) {
-        userSpeakingRef.current = true;
-        onUserStartedSpeaking?.();
-      } else if (!isSpeaking && userSpeakingRef.current) {
-        userSpeakingRef.current = false;
-        onUserStoppedSpeaking?.();
-      }
-      return;
-    }
 
     if (data.type === 'Results' || data.type === 'Transcript') {
       if (isSleepingOrEntering) {
@@ -632,7 +614,11 @@ function DeepgramVoiceInteraction(
   // Check if WebSocket connection needs reconnection
   const needsReconnection = (): boolean => {
     const isWebSocketOpen = agentManagerRef.current?.isConnected() || false;
-    return !agentManagerRef.current || !state.hasSentSettings || !isWebSocketOpen;
+    
+    // Only reconnect if WebSocket is actually closed or manager doesn't exist
+    const needsReconnect = !agentManagerRef.current || !isWebSocketOpen;
+    console.log(`🔍 [needsReconnection] agentManagerRef.current: ${!!agentManagerRef.current}, isConnected: ${isWebSocketOpen}, hasSentSettings: ${state.hasSentSettings}, needsReconnect: ${needsReconnect}`);
+    return needsReconnect;
   };
 
   // Send agent settings after connection is established - only if agent is configured
@@ -721,6 +707,10 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: true });
         onMicToggle?.(true);
         log('Microphone enabled');
+        // Reset idle timeout when microphone is enabled (user activity)
+        if (agentManagerRef.current) {
+          agentManagerRef.current.resetIdleTimeout();
+        }
       }
     } else {
       // Interrupt any ongoing TTS playback when stopping recording
@@ -735,6 +725,10 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: false });
         onMicToggle?.(false);
         log('Microphone disabled');
+        // Reset idle timeout when microphone is disabled (user activity)
+        if (agentManagerRef.current) {
+          agentManagerRef.current.resetIdleTimeout();
+        }
       }
     }
   };
@@ -814,7 +808,7 @@ function DeepgramVoiceInteraction(
         onConnectionReady?.();
         
         // Only trigger greeting for new connections, not reconnections
-        if (state.isNewConnection) {
+        if (isNewConnectionRef.current) {
           log('New connection - triggering greeting flow');
           dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: true });
         } else {
@@ -1269,6 +1263,10 @@ function DeepgramVoiceInteraction(
     // Set lazy reconnection flag
     isLazyReconnectingRef.current = true;
     
+    // Mark this as a reconnection immediately (synchronous)
+    isNewConnectionRef.current = false;
+    dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
+    
     try {
       // Generate session ID if not exists
       const sessionId = state.sessionId || generateSessionId();
@@ -1336,6 +1334,10 @@ function DeepgramVoiceInteraction(
     
     // Set lazy reconnection flag
     isLazyReconnectingRef.current = true;
+    
+    // Mark this as a reconnection immediately (synchronous)
+    isNewConnectionRef.current = false;
+    dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
     
     try {
       // Generate session ID if not exists
