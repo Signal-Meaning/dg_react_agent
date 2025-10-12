@@ -53,8 +53,8 @@ export interface WebSocketManagerOptions {
  * Default WebSocketManager options
  */
 const DEFAULT_OPTIONS: Partial<WebSocketManagerOptions> = {
-  keepaliveInterval: 10000, // 10 seconds - frequent pings to maintain connection
-  connectionTimeout: 30000, // 30 seconds - enough time to establish connection
+  keepaliveInterval: 2000, // 2 seconds - frequent pings for better connection health monitoring
+  connectionTimeout: 10000, // 10 seconds - reasonable timeout for connection establishment
   debug: false,
 };
 
