@@ -54,6 +54,12 @@ function App() {
   const [agentSpeaking, setAgentSpeaking] = useState(false);
   const [agentSilent, setAgentSilent] = useState(false);
   
+  // VAD state
+  const [userStoppedSpeaking, setUserStoppedSpeaking] = useState<string | null>(null);
+  const [utteranceEnd, setUtteranceEnd] = useState<string | null>(null);
+  const [vadEvent, setVadEvent] = useState<string | null>(null);
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  
   // Text input state
   const [textInput, setTextInput] = useState('');
   
@@ -243,6 +249,29 @@ function App() {
     addLog(`Error (${error.service}): ${error.message}`);
     console.error('Deepgram error:', error);
   }, [addLog]); // Depends on addLog
+
+  // VAD event handlers
+  const handleUserStoppedSpeaking = useCallback((data: { timestamp?: number }) => {
+    const timestamp = data.timestamp ? new Date(data.timestamp).toISOString().substring(11, 19) : 'unknown';
+    setUserStoppedSpeaking(timestamp);
+    setIsUserSpeaking(false);
+    addLog(`🎤 User stopped speaking at ${timestamp}`);
+  }, [addLog]);
+
+  const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
+    const channelStr = data.channel.join(',');
+    setUtteranceEnd(`Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
+    setIsUserSpeaking(false);
+    addLog(`🔚 UtteranceEnd detected - Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
+  }, [addLog]);
+
+  const handleVADEvent = useCallback((data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => {
+    const timestamp = data.timestamp ? new Date(data.timestamp).toISOString().substring(11, 19) : 'unknown';
+    const confidence = data.confidence ? ` (${(data.confidence * 100).toFixed(1)}%)` : '';
+    setVadEvent(`${data.speechDetected ? 'Speech detected' : 'No speech'} at ${timestamp}${confidence}`);
+    setIsUserSpeaking(data.speechDetected);
+    addLog(`🎯 VAD Event: ${data.speechDetected ? 'Speech detected' : 'No speech'} at ${timestamp}${confidence}`);
+  }, [addLog]);
 
   // Auto-connect dual mode event handlers
   const handleMicToggle = useCallback((enabled: boolean) => {
@@ -476,6 +505,13 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onConnectionReady={handleConnectionReady}
         onAgentSpeaking={handleAgentSpeaking}
         onAgentSilent={handleAgentSilent}
+        // VAD event props
+        onUserStoppedSpeaking={handleUserStoppedSpeaking}
+        onUtteranceEnd={handleUtteranceEnd}
+        onVADEvent={handleVADEvent}
+        // VAD configuration
+        utteranceEndMs={1000}
+        interimResults={true}
         debug={false}
       />
       
@@ -524,6 +560,14 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <p>Connection Ready: <strong data-testid="connection-ready">{connectionReady.toString()}</strong></p>
           <p>Agent Speaking: <strong data-testid="agent-speaking">{agentSpeaking.toString()}</strong></p>
           <p>Agent Silent: <strong data-testid="agent-silent">{agentSilent.toString()}</strong></p>
+        </div>
+        
+        <h4>VAD (Voice Activity Detection) States:</h4>
+        <div data-testid="vad-states">
+          <p>User Speaking: <strong data-testid="user-speaking">{isUserSpeaking.toString()}</strong></p>
+          <p>User Stopped Speaking: <strong data-testid="user-stopped-speaking">{userStoppedSpeaking || 'Not detected'}</strong></p>
+          <p>Utterance End: <strong data-testid="utterance-end">{utteranceEnd || 'Not detected'}</strong></p>
+          <p>VAD Event: <strong data-testid="vad-event">{vadEvent || 'Not detected'}</strong></p>
         </div>
       </div>
       
