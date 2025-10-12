@@ -4,6 +4,20 @@
 
 This proposal addresses the implementation of comprehensive Voice Activity Detection (VAD) event handling in the `dg_react_agent` component. Currently, the component handles `UserStartedSpeaking` events from the Deepgram Agent API, but lacks proper handling for `UserStoppedSpeaking` events and other VAD-related events that provide crucial information about user speech patterns.
 
+### Deepgram End-of-Speech Detection Context
+
+According to [Deepgram's End of Speech Detection documentation](https://developers.deepgram.com/docs/understanding-end-of-speech-detection), Deepgram provides multiple approaches for detecting when a speaker has finished speaking:
+
+1. **Endpointing**: Uses audio-based Voice Activity Detection (VAD) to detect silence periods
+2. **UtteranceEnd**: Analyzes word timings to detect gaps in speech, providing more reliable detection in noisy environments
+
+The `UtteranceEnd` feature is particularly relevant to our implementation as it sends a JSON message over the WebSocket with the following structure:
+```json
+{"type":"UtteranceEnd", "channel": [0,2], "last_word_end": 3.1}
+```
+
+This feature addresses limitations of traditional endpointing in noisy environments and provides more accurate end-of-speech detection by analyzing word timings rather than relying solely on audio silence detection.
+
 ## Current State Analysis
 
 ### ✅ Currently Implemented
@@ -14,9 +28,10 @@ This proposal addresses the implementation of comprehensive Voice Activity Detec
 
 ### ❌ Missing Implementation
 - `UserStoppedSpeaking` event handling from agent messages
-- `EndOfUtterance` event handling (if available in Deepgram API)
+- `UtteranceEnd` event handling from Deepgram's [end-of-speech detection](https://developers.deepgram.com/docs/understanding-end-of-speech-detection) feature
 - Proper VAD event handling from transcription service
 - State management for user speaking status
+- Integration with Deepgram's `utterance_end_ms` parameter for configurable end-of-speech detection
 - Comprehensive testing for VAD event scenarios
 
 ## Proposed Design
@@ -51,11 +66,15 @@ if (data.type === 'UserStoppedSpeaking') {
   }
 }
 
-if (data.type === 'EndOfUtterance') {
-  // Handle end of utterance (if available in Deepgram API)
+if (data.type === 'UtteranceEnd') {
+  // Handle UtteranceEnd from Deepgram's end-of-speech detection
+  // Reference: https://developers.deepgram.com/docs/understanding-end-of-speech-detection
   onUserStoppedSpeaking?.();
   dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
-  dispatch({ type: 'END_OF_UTTERANCE' });
+  dispatch({ type: 'UTTERANCE_END', data: { 
+    channel: data.channel, 
+    lastWordEnd: data.last_word_end 
+  }});
 }
 ```
 
@@ -89,7 +108,7 @@ export type StateEvent =
   // ... existing events
   
   | { type: 'USER_SPEAKING_STATE_CHANGE'; isSpeaking: boolean }
-  | { type: 'END_OF_UTTERANCE' }
+  | { type: 'UTTERANCE_END'; data: { channel: number[]; lastWordEnd: number } }
   | { type: 'UPDATE_SPEECH_DURATION'; duration: number }
   | { type: 'RESET_SPEECH_TIMER' };
 ```
@@ -102,7 +121,7 @@ export enum AgentResponseType {
   // ... existing types
   
   USER_STOPPED_SPEAKING = 'UserStoppedSpeaking',
-  END_OF_UTTERANCE = 'EndOfUtterance',
+  UTTERANCE_END = 'UtteranceEnd', // Deepgram's end-of-speech detection
   VAD_EVENT = 'VADEvent'
 }
 ```
@@ -114,10 +133,10 @@ export interface UserStoppedSpeakingResponse {
   timestamp?: number;
 }
 
-export interface EndOfUtteranceResponse {
-  type: AgentResponseType.END_OF_UTTERANCE;
-  timestamp?: number;
-  duration?: number;
+export interface UtteranceEndResponse {
+  type: AgentResponseType.UTTERANCE_END;
+  channel: number[]; // [channel_index, total_channels]
+  last_word_end: number; // End timestamp of last word
 }
 
 export interface VADEventResponse {
@@ -141,9 +160,10 @@ export interface DeepgramVoiceInteractionProps {
   onUserStoppedSpeaking?: () => void;
   
   /**
-   * Called when end of utterance is detected
+   * Called when UtteranceEnd is detected from Deepgram's end-of-speech detection
+   * Reference: https://developers.deepgram.com/docs/understanding-end-of-speech-detection
    */
-  onEndOfUtterance?: (data: { duration?: number; timestamp?: number }) => void;
+  onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
   
   /**
    * Called when VAD event is received from transcription service
@@ -157,7 +177,34 @@ export interface DeepgramVoiceInteractionProps {
 }
 ```
 
-### 5. Enhanced Transcription VAD Handling
+### 5. Deepgram UtteranceEnd Configuration
+
+#### UtteranceEnd Parameter Integration
+Based on [Deepgram's documentation](https://developers.deepgram.com/docs/understanding-end-of-speech-detection), the `UtteranceEnd` feature requires:
+
+1. **Query Parameter**: `utterance_end_ms=1234` (minimum 1000ms recommended)
+2. **Required Setting**: `interim_results=true` must be enabled
+3. **WebSocket Message**: Receives `{"type":"UtteranceEnd", "channel": [0,2], "last_word_end": 3.1}`
+
+#### Proposed Configuration Enhancement
+```typescript
+export interface TranscriptionOptions {
+  // ... existing options
+  
+  /**
+   * Enable UtteranceEnd detection for more reliable end-of-speech detection
+   * Reference: https://developers.deepgram.com/docs/understanding-end-of-speech-detection
+   */
+  utteranceEndMs?: number; // Default: 1000ms (minimum recommended)
+  
+  /**
+   * Enable interim results (required for UtteranceEnd)
+   */
+  interimResults?: boolean; // Default: true when utteranceEndMs is set
+}
+```
+
+### 6. Enhanced Transcription VAD Handling
 
 #### Current Implementation
 ```typescript
@@ -300,33 +347,34 @@ class VADTestHelpers {
 ### Phase 1: Core VAD Event Handling (Week 1)
 1. **Add missing agent response types**
    - `UserStoppedSpeaking`
-   - `EndOfUtterance` (if available)
+   - `UtteranceEnd` (from [Deepgram's end-of-speech detection](https://developers.deepgram.com/docs/understanding-end-of-speech-detection))
    - Enhanced VAD event types
 
 2. **Enhance state management**
    - Add user speaking state tracking
    - Add speech duration tracking
-   - Add new state events
+   - Add new state events including `UTTERANCE_END`
 
 3. **Update component message handling**
    - Handle `UserStoppedSpeaking` events
-   - Handle `EndOfUtterance` events
+   - Handle `UtteranceEnd` events with channel and last_word_end data
    - Update state transitions
 
 ### Phase 2: Enhanced Callbacks and Props (Week 2)
 1. **Add new callback props**
    - `onUserStoppedSpeaking`
-   - `onEndOfUtterance`
+   - `onUtteranceEnd` (for Deepgram's UtteranceEnd events)
    - `onVADEvent`
    - `onUserSpeakingStateChange`
 
 2. **Enhance existing callbacks**
    - Add timestamp and duration data
    - Improve callback consistency
+   - Integrate with Deepgram's `utterance_end_ms` parameter
 
 3. **Update component interface**
    - Add new props to TypeScript definitions
-   - Update documentation
+   - Update documentation with Deepgram references
 
 ### Phase 3: Transcription VAD Integration (Week 3)
 1. **Enhanced transcription VAD handling**
@@ -358,11 +406,12 @@ class VADTestHelpers {
 
 ### Functional Requirements
 - ✅ `UserStoppedSpeaking` events are properly handled
-- ✅ `EndOfUtterance` events are handled (if available in API)
+- ✅ `UtteranceEnd` events from [Deepgram's end-of-speech detection](https://developers.deepgram.com/docs/understanding-end-of-speech-detection) are handled
 - ✅ VAD events from transcription service are processed
 - ✅ User speaking state is accurately tracked
-- ✅ All new callbacks are properly invoked
+- ✅ All new callbacks are properly invoked including `onUtteranceEnd`
 - ✅ State transitions are consistent and logical
+- ✅ Integration with Deepgram's `utterance_end_ms` parameter works correctly
 
 ### Non-Functional Requirements
 - ✅ No performance degradation
@@ -418,8 +467,10 @@ This proposal provides a comprehensive approach to implementing full VAD event h
 
 The enhanced VAD handling will enable:
 - More natural conversation flows
-- Better user experience with accurate speech detection
+- Better user experience with accurate speech detection using [Deepgram's UtteranceEnd](https://developers.deepgram.com/docs/understanding-end-of-speech-detection)
 - Enhanced debugging capabilities
 - Improved integration with voice commerce applications
+- More reliable end-of-speech detection in noisy environments (addressing endpointing limitations)
+- Word-timing based speech detection rather than relying solely on audio silence
 
-The proposed design maintains backward compatibility while providing a clear path forward for applications that need comprehensive VAD event handling.
+The proposed design maintains backward compatibility while providing a clear path forward for applications that need comprehensive VAD event handling, leveraging Deepgram's advanced end-of-speech detection capabilities.
