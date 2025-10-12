@@ -669,6 +669,11 @@ function DeepgramVoiceInteraction(
 
   // Send agent settings after connection is established - only if agent is configured
   const sendAgentSettings = () => {
+    log('🔧 [sendAgentSettings] Called');
+    log(`🔧 [sendAgentSettings] agentManagerRef.current: ${!!agentManagerRef.current}`);
+    log(`🔧 [sendAgentSettings] agentOptions: ${!!agentOptions}`);
+    log(`🔧 [sendAgentSettings] hasSentSettings: ${state.hasSentSettings}`);
+    
     if (!agentManagerRef.current || !agentOptions) {
       log('Cannot send agent settings: agent manager not initialized or agentOptions not provided');
       return;
@@ -739,24 +744,30 @@ function DeepgramVoiceInteraction(
 
   // Microphone control function
   const toggleMic = async (enable: boolean) => {
-    console.log('toggleMic called with:', enable);
+    console.log('🎤 [toggleMic] called with:', enable);
+    console.log('🎤 [toggleMic] hasSentSettings:', state.hasSentSettings);
+    console.log('🎤 [toggleMic] audioManagerRef.current:', !!audioManagerRef.current);
+    
     if (enable) {
       if (!state.hasSentSettings) {
-        log('Cannot enable microphone before settings are sent');
+        log('❌ Cannot enable microphone before settings are sent');
+        log('❌ hasSentSettings is false - settings need to be sent first');
         return;
       }
       
       if (audioManagerRef.current) {
-        log('Enabling microphone...');
+        log('✅ Enabling microphone...');
         console.log('Calling startRecording on audioManagerRef.current');
         await audioManagerRef.current.startRecording();
         dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: true });
         onMicToggle?.(true);
-        log('Microphone enabled');
+        log('✅ Microphone enabled');
         // Reset idle timeout when microphone is enabled (user activity)
         if (agentManagerRef.current) {
           agentManagerRef.current.resetIdleTimeout();
         }
+      } else {
+        log('❌ Cannot enable microphone: audioManagerRef.current is null');
       }
     } else {
       // Interrupt any ongoing TTS playback when stopping recording
