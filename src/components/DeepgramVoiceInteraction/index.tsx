@@ -174,6 +174,9 @@ function DeepgramVoiceInteraction(
   const agentManagerRef = useRef<WebSocketManager | null>(null);
   const audioManagerRef = useRef<AudioManager | null>(null);
   
+  // Track if auto-connect has been attempted to prevent multiple attempts
+  const autoConnectAttemptedRef = useRef(false);
+  
   
   // Track if we're waiting for user voice after waking from sleep
   const isWaitingForUserVoiceAfterSleep = useRef(false);
@@ -422,10 +425,13 @@ function DeepgramVoiceInteraction(
         }
         
         // Send settings message when connection is established (unless we're lazy reconnecting)
-        if (event.state === 'connected' && !isLazyReconnectingRef.current) {
+        if (event.state === 'connected' && !isLazyReconnectingRef.current && !state.hasSentSettings) {
+          log('Connection established, sending settings via connection state handler');
           sendAgentSettings();
         } else if (event.state === 'connected' && isLazyReconnectingRef.current) {
           lazyLog('Skipping automatic settings send - lazy reconnection in progress');
+        } else if (event.state === 'connected' && state.hasSentSettings) {
+          log('Connection established but settings already sent, skipping');
         }
       } else if (event.type === 'keepalive') {
         // Handle keepalive messages for logging
@@ -496,7 +502,9 @@ function DeepgramVoiceInteraction(
 
     // Auto-connect dual mode logic
     console.log('Auto-connect check:', { autoConnect, isAgentConfigured, agentManagerRef: !!agentManagerRef.current });
-    if (autoConnect === true && isAgentConfigured) {
+    if (autoConnect === true && isAgentConfigured && !autoConnectAttemptedRef.current) {
+      autoConnectAttemptedRef.current = true; // Mark as attempted
+      
       // Validate API key before attempting connection
       const isValidApiKey = apiKey && 
         apiKey !== 'your-deepgram-api-key-here' && 
@@ -524,10 +532,14 @@ function DeepgramVoiceInteraction(
           console.log('Calling agentManagerRef.current.connect()');
           try {
             await agentManagerRef.current.connect();
+            // Wait a bit for the connection to be fully established
+            await new Promise(resolve => setTimeout(resolve, 100));
             // Ensure settings are sent after connection is established
             if (agentManagerRef.current.getState() === 'connected') {
               log('Auto-connect: Connection established, sending settings');
               sendAgentSettings();
+            } else {
+              log('Auto-connect: Connection not fully established yet');
             }
           } catch (error) {
             log('Auto-connect failed:', error);
