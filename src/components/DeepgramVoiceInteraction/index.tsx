@@ -595,6 +595,11 @@ function DeepgramVoiceInteraction(
         return;
       }
       
+      // Reset idle timeout when user is speaking (VAD detects activity)
+      if (isSpeaking && agentManagerRef.current) {
+        agentManagerRef.current.resetIdleTimeout();
+      }
+      
       if (isSpeaking && !userSpeakingRef.current) {
         userSpeakingRef.current = true;
         onUserStartedSpeaking?.();
@@ -716,10 +721,6 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: true });
         onMicToggle?.(true);
         log('Microphone enabled');
-        // Reset idle timeout when microphone is enabled (user activity)
-        if (agentManagerRef.current) {
-          agentManagerRef.current.resetIdleTimeout();
-        }
       }
     } else {
       // Interrupt any ongoing TTS playback when stopping recording
@@ -734,10 +735,6 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: false });
         onMicToggle?.(false);
         log('Microphone disabled');
-        // Reset idle timeout when microphone is disabled (user activity)
-        if (agentManagerRef.current) {
-          agentManagerRef.current.resetIdleTimeout();
-        }
       }
     }
   };
