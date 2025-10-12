@@ -637,94 +637,198 @@ describe('Dual-Mode VAD Handling', () => {
 
 **Implementation**: Implement dual-mode handling
 
-### Phase 4: End-to-End & Edge Case Tests (Week 4)
+### Phase 4: Real API Integration & Refactoring (Week 4)
 
-#### 4.1 Complete Speech Cycle Tests (Day 1-2)
-**Test-First Approach**: Define complete user workflows
+#### 4.1 Refactor Existing Tests for Real API Integration (Day 1-2)
+**Test-First Approach**: Refactor existing tests to include real API variants
+
+**Phase 2.2: Message Processing Tests** → **Real API Integration**
+```typescript
+// tests/messages/vad-message-processing.test.ts (Enhanced)
+describe('VAD Message Processing', () => {
+  // Simple API key detection
+  const isRealAPITesting = !!process.env.DEEPGRAM_API_KEY && 
+                          process.env.DEEPGRAM_API_KEY !== 'mock';
+
+  // Mock tests (always run)
+  describe('Mock-Based Tests', () => {
+    it('should process UserStoppedSpeaking message from agent service', () => {
+      // Existing mock-based test for fast feedback
+    });
+  });
+
+  // Real API tests (only when API key is available)
+  if (isRealAPITesting) {
+    describe('Real API Integration Tests', () => {
+      it('should process real UserStoppedSpeaking from Deepgram Agent API', async () => {
+        const ws = new WebSocket(`wss://agent.deepgram.com/v1/agent/converse?api_key=${process.env.DEEPGRAM_API_KEY}`);
+        // Test with real WebSocket connection and actual Deepgram messages
+        // Validate that real messages match our expected formats
+      });
+    });
+  } else {
+    describe('Real API Integration Tests', () => {
+      it('should skip real API tests when no API key is provided', () => {
+        pending('DEEPGRAM_API_KEY required for real API tests');
+      });
+    });
+  }
+});
+```
+
+**Phase 3.2: WebSocket Integration Tests** → **Real WebSocket Testing**
+```typescript
+// tests/integration/websocket-integration.test.ts (Enhanced)
+describe('WebSocket Integration Tests', () => {
+  const isRealAPITesting = !!process.env.DEEPGRAM_API_KEY && 
+                          process.env.DEEPGRAM_API_KEY !== 'mock';
+
+  describe('Mock WebSocket Tests', () => {
+    it('should handle UserStoppedSpeaking message from agent WebSocket', () => {
+      // Existing mock-based test for isolated testing
+    });
+  });
+
+  if (isRealAPITesting) {
+    describe('Real WebSocket Integration Tests', () => {
+      it('should handle real WebSocket connection states', async () => {
+        // Test with actual WebSocket connections to Deepgram
+        // Validate real connection handling and message parsing
+      });
+    });
+  }
+});
+```
+
+**Phase 3.3: Dual-Mode VAD Tests** → **Real Dual-Service Testing**
+```typescript
+// tests/integration/dual-mode-vad.test.ts (Enhanced)
+describe('Dual-Mode VAD Tests', () => {
+  const isRealAPITesting = !!process.env.DEEPGRAM_API_KEY && 
+                          process.env.DEEPGRAM_API_KEY !== 'mock';
+
+  describe('Mock Dual-Mode Tests', () => {
+    it('should coordinate VADEvent from transcription with UserStoppedSpeaking from agent', () => {
+      // Existing mock-based test for controlled scenarios
+    });
+  });
+
+  if (isRealAPITesting) {
+    describe('Real Dual-Service Integration Tests', () => {
+      it('should coordinate real VAD events from both services', async () => {
+        // Test with actual transcription + agent WebSocket connections
+        // Validate real service coordination and conflict resolution
+      });
+    });
+  }
+});
+```
+
+**Implementation**: Refactor existing tests to include real API variants
+
+#### 4.2 Real Component Integration Tests (Day 3-4)
+**Test-First Approach**: Test actual component with real APIs
 
 ```typescript
-// tests/e2e/complete-speech-cycle.spec.js
-test.describe('Complete VAD Speech Cycle', () => {
-  test('should handle complete user speech cycle with UtteranceEnd', async ({ page }) => {
-    // Setup component with VAD callbacks
-    await setupVADTestPage(page);
+// tests/integration/real-component-integration.test.tsx
+describe('Real Component Integration Tests', () => {
+  it('should handle real microphone integration and audio streaming', async () => {
+    const { componentRef } = renderComponent({
+      apiKey: process.env.DEEPGRAM_API_KEY,
+      utteranceEndMs: 1500,
+      interimResults: true
+    });
+
+    // Test with actual microphone access and audio streaming
+    await simulateRealMicrophoneInput(componentRef);
     
-    // Start speaking
-    await simulateUserStartedSpeaking(page);
-    await expect(page.locator('[data-testid="user-speaking"]')).toBeVisible();
+    // Verify real audio is being processed
+    expect(getAudioStreamState(componentRef)).toBe('active');
+  });
+
+  it('should execute real callbacks in component context', async () => {
+    const mockOnUtteranceEnd = jest.fn();
+    const { componentRef } = renderComponent({
+      onUtteranceEnd: mockOnUtteranceEnd
+    });
+
+    // Simulate real UtteranceEnd from Deepgram
+    await simulateRealUtteranceEnd(componentRef, {
+      channel: [0, 1],
+      last_word_end: 2.5
+    });
+
+    expect(mockOnUtteranceEnd).toHaveBeenCalledWith({
+      channel: [0, 1],
+      lastWordEnd: 2.5
+    });
+  });
+});
+```
+
+**Implementation**: Implement real component integration
+
+#### 4.3 End-to-End User Workflow Tests (Day 5)
+**Test-First Approach**: Define complete user workflows with real APIs
+
+```typescript
+// tests/e2e/real-user-workflows.spec.js
+test.describe('Real User Workflow Tests', () => {
+  test('should handle complete user workflow: speak → detect → respond', async ({ page }) => {
+    // Setup component with real Deepgram API key
+    await setupRealVADTestPage(page, {
+      apiKey: process.env.DEEPGRAM_API_KEY,
+      utteranceEndMs: 1000
+    });
     
-    // Stop speaking (trigger UtteranceEnd)
-    await simulateUtteranceEnd(page, { channel: [0, 1], last_word_end: 2.5 });
-    await expect(page.locator('[data-testid="user-speaking"]')).toBeHidden();
+    // Start speaking (real microphone input)
+    await simulateRealUserSpeech(page, "Hello, how are you?");
     
-    // Verify agent responds
+    // Verify UtteranceEnd detection
+    await expect(page.locator('[data-testid="utterance-end-detected"]')).toBeVisible();
+    
+    // Verify agent responds with real speech-to-text
     await expect(page.locator('[data-testid="agent-response"]')).toBeVisible();
   });
-});
-```
 
-**Implementation**: Implement complete speech cycle handling
-
-#### 4.2 Edge Case Tests (Day 3-4)
-**Test-First Approach**: Define edge case behavior
-
-```typescript
-// tests/e2e/vad-edge-cases.spec.js
-test.describe('VAD Edge Cases', () => {
-  test('should handle rapid speech start/stop cycles', async ({ page }) => {
-    await setupVADTestPage(page);
+  test('should handle real speech-to-text processing', async ({ page }) => {
+    await setupRealVADTestPage(page);
     
-    // Rapid cycles
-    for (let i = 0; i < 5; i++) {
-      await simulateUserStartedSpeaking(page);
-      await page.waitForTimeout(100);
-      await simulateUtteranceEnd(page, { channel: [0, 1], last_word_end: i * 0.5 });
-    }
+    // Speak actual words
+    await simulateRealUserSpeech(page, "What is the weather today?");
     
-    // Verify state consistency
-    await expect(page.locator('[data-testid="user-speaking"]')).toBeHidden();
-  });
-
-  test('should handle UtteranceEnd in noisy environment', async ({ page }) => {
-    await setupVADTestPage(page, { backgroundNoise: true });
-    
-    await simulateUserStartedSpeaking(page);
-    await simulateBackgroundNoise(page);
-    await simulateUtteranceEnd(page, { channel: [0, 1], last_word_end: 3.0 });
-    
-    // Should still detect end of speech despite noise
-    await expect(page.locator('[data-testid="user-speaking"]')).toBeHidden();
+    // Verify transcription accuracy
+    await expect(page.locator('[data-testid="transcription"]')).toContainText("weather");
   });
 });
 ```
 
-**Implementation**: Implement edge case handling
-
-#### 4.3 Performance & Reliability Tests (Day 5)
-**Test-First Approach**: Define performance requirements
-
-```typescript
-// tests/performance/vad-performance.test.ts
-describe('VAD Performance Tests', () => {
-  it('should handle high-frequency VAD events without performance degradation', async () => {
-    const startTime = performance.now();
-    
-    // Simulate 100 rapid VAD events
-    for (let i = 0; i < 100; i++) {
-      await simulateVADEvent({ speech_detected: i % 2 === 0 });
-    }
-    
-    const endTime = performance.now();
-    expect(endTime - startTime).toBeLessThan(1000); // Should complete in <1s
-  });
-});
-```
-
-**Implementation**: Optimize performance based on test requirements
+**Implementation**: Implement complete user workflows with real APIs
 
 ### Test Infrastructure & Utilities
 
-#### Mock Strategy
+#### Simple Testing Strategy: Mock + Real API
+```typescript
+// Simple approach: If API key exists and is valid → run real API tests
+// If API key is mocked/undefined → run mock tests only
+const isRealAPITesting = !!process.env.DEEPGRAM_API_KEY && 
+                        process.env.DEEPGRAM_API_KEY !== 'mock';
+
+// In test files - standard Jest pattern
+describe('VAD Tests', () => {
+  if (isRealAPITesting) {
+    describe('Real API Tests', () => {
+      // Real API tests
+    });
+  }
+
+  describe('Mock Tests', () => {
+    // Mock tests (always run)
+  });
+});
+```
+
+#### Mock Strategy (Fast Unit Testing)
 ```typescript
 // tests/utils/vad-mocks.ts
 export class VADTestMocks {
@@ -747,40 +851,77 @@ export class VADTestMocks {
 }
 ```
 
-#### Test Helpers
+#### Real API Test Helpers
 ```typescript
-// tests/utils/vad-test-helpers.ts
-export class VADTestHelpers {
-  static async simulateUtteranceEnd(page: Page, data: { channel: number[], last_word_end: number }) {
-    await page.evaluate((data) => {
-      window.dispatchEvent(new CustomEvent('utteranceEnd', { detail: data }));
-    }, data);
+// tests/utils/vad-real-api-helpers.ts
+export class VADRealAPIHelpers {
+  static async createRealWebSocketConnection(apiKey: string): Promise<WebSocket> {
+    const ws = new WebSocket(`wss://agent.deepgram.com/v1/agent/converse?api_key=${apiKey}`);
+    return new Promise((resolve, reject) => {
+      ws.onopen = () => resolve(ws);
+      ws.onerror = reject;
+    });
   }
 
-  static async verifyUserSpeakingState(page: Page, expectedState: boolean) {
-    const element = page.locator('[data-testid="user-speaking"]');
-    if (expectedState) {
-      await expect(element).toBeVisible();
-    } else {
-      await expect(element).toBeHidden();
-    }
+  static async simulateRealUtteranceEnd(ws: WebSocket, data: { channel: number[], last_word_end: number }) {
+    const message = {
+      type: 'UtteranceEnd',
+      channel: data.channel,
+      last_word_end: data.last_word_end
+    };
+    ws.send(JSON.stringify(message));
+  }
+
+  static async waitForRealVADEvent(ws: WebSocket, timeout = 5000): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Timeout waiting for VAD event')), timeout);
+      
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'UtteranceEnd' || data.type === 'UserStoppedSpeaking') {
+          clearTimeout(timer);
+          resolve(data);
+        }
+      };
+    });
   }
 }
 ```
 
+#### Environment Control (Simplified)
+```bash
+# Mock tests only (default)
+npm test
+
+# Real API tests (when API key is set)
+DEEPGRAM_API_KEY=your_real_key npm test
+
+# Force mock tests (even with API key)
+DEEPGRAM_API_KEY=mock npm test
+```
+
 ### Success Metrics
 
-#### Test Coverage Requirements
-- **Unit Tests**: >95% coverage for all VAD-related functions
-- **Integration Tests**: >90% coverage for component interactions
-- **E2E Tests**: Complete coverage of user workflows
-- **Edge Cases**: 100% coverage of identified edge cases
+#### Test Coverage Requirements (Dual Strategy)
+- **Mock Unit Tests**: >95% coverage for all VAD-related functions (fast feedback)
+- **Real API Integration Tests**: >90% coverage for component interactions (validation)
+- **E2E Tests**: Complete coverage of user workflows (both mock and real)
+- **Edge Cases**: 100% coverage of identified edge cases through test-driven discovery
 
 #### Performance Benchmarks
-- **Event Processing**: <10ms per VAD event
-- **State Updates**: <5ms per state transition
-- **Memory Usage**: No memory leaks during extended VAD event processing
-- **WebSocket Latency**: <50ms for UtteranceEnd message processing
+- **Event Processing**: <10ms per VAD event (mock tests)
+- **Real API Latency**: <100ms for UtteranceEnd message processing (real API tests)
+- **State Updates**: <5ms per state transition (mock tests)
+- **Memory Usage**: No memory leaks during extended VAD event processing (both)
+- **WebSocket Latency**: <50ms for UtteranceEnd message processing (real API tests)
+
+#### Test Execution Strategy (Simplified)
+- **Development**: Mock tests for fast feedback (<1s per test)
+- **CI/CD**: Mock tests + selective real API tests for validation
+- **Pre-Release**: Full real API test suite for integration validation
+- **Environment Control**: 
+  - `DEEPGRAM_API_KEY` - If set and not 'mock', enables real API tests
+  - No additional environment variables needed
 
 This test-driven, bottoms-up approach ensures robust VAD event handling through comprehensive test coverage and incremental implementation validation.
 
@@ -859,22 +1000,24 @@ This test-driven, bottoms-up approach ensures robust VAD event handling through 
 
 ## Conclusion
 
-This proposal provides a comprehensive **test-driven development approach** to implementing full VAD event handling in the `dg_react_agent` component. The **bottoms-up testing strategy** ensures robust, reliable implementation through comprehensive test coverage before any production code is written.
+This proposal provides a comprehensive **test-driven development approach** to implementing full VAD event handling in the `dg_react_agent` component. The **bottoms-up testing strategy** with **dual mock/real API testing** ensures robust, reliable implementation through comprehensive test coverage before any production code is written.
 
 ### Test-Driven Development Benefits
 
-The **Red → Green → Refactor** cycle ensures:
-- **Quality Assurance**: Every feature is validated by tests before implementation
+The **Red → Green → Refactor** cycle with **dual testing strategy** ensures:
+- **Quality Assurance**: Every feature is validated by both mock and real API tests
 - **Risk Mitigation**: Comprehensive test coverage minimizes production bugs
 - **Confidence**: Developers can refactor and improve code knowing tests will catch regressions
 - **Documentation**: Tests serve as living documentation of expected behavior
 - **Incremental Progress**: Each test validates a specific piece of functionality
+- **Fast Feedback**: Mock tests provide immediate feedback during development
+- **Real Validation**: Real API tests validate actual integration behavior
 
 ### Enhanced VAD Handling Capabilities
 
-The test-driven implementation will enable:
+The test-driven implementation with **refactored existing tests** will enable:
 - More natural conversation flows (validated by E2E speech cycle tests)
-- Better user experience with accurate speech detection using [Deepgram's UtteranceEnd](https://developers.deepgram.com/docs/understanding-end-of-speech-detection) (validated by integration tests)
+- Better user experience with accurate speech detection using [Deepgram's UtteranceEnd](https://developers.deepgram.com/docs/understanding-end-of-speech-detection) (validated by real API integration tests)
 - Enhanced debugging capabilities (validated by comprehensive logging tests)
 - Improved integration with voice commerce applications (validated by dual-mode tests)
 - More reliable end-of-speech detection in noisy environments (validated by edge case tests)
@@ -882,11 +1025,25 @@ The test-driven implementation will enable:
 
 ### Implementation Confidence
 
-The **test-first, bottoms-up approach** provides:
-- **95%+ Unit Test Coverage**: Ensures individual components work correctly
-- **90%+ Integration Coverage**: Validates component interactions
+The **test-first, bottoms-up approach with dual testing strategy** provides:
+- **95%+ Mock Unit Test Coverage**: Ensures individual components work correctly (fast feedback)
+- **90%+ Real API Integration Coverage**: Validates component interactions (real validation)
 - **100% Edge Case Coverage**: Discovers and handles complex scenarios
-- **Performance Benchmarks**: Validates performance requirements
+- **Performance Benchmarks**: Validates performance requirements (both mock and real)
 - **Backward Compatibility**: Maintains existing functionality through regression tests
+- **No Test Duplication**: Refactored existing tests rather than creating duplicates
+- **Environment Flexibility**: Mock tests for development, real API tests for validation
 
-The proposed design maintains backward compatibility while providing a clear, **test-validated path forward** for applications that need comprehensive VAD event handling, leveraging Deepgram's advanced end-of-speech detection capabilities with confidence through comprehensive test coverage.
+### Simplified Testing Strategy Benefits
+
+The **refactored approach** provides:
+- **Efficient Development**: Mock tests for fast feedback during development
+- **Real Validation**: Real API tests for integration validation
+- **No Duplication**: Enhanced existing tests rather than creating new ones
+- **Simple Execution**: Single environment variable controls test mode
+- **Standard Patterns**: Uses familiar Jest patterns instead of custom utilities
+- **Comprehensive Coverage**: Both isolated and integrated testing scenarios
+- **Cost Effective**: Mock tests reduce API usage costs during development
+- **No Over-Engineering**: Simple, maintainable approach without unnecessary complexity
+
+The proposed design maintains backward compatibility while providing a clear, **test-validated path forward** for applications that need comprehensive VAD event handling, leveraging Deepgram's advanced end-of-speech detection capabilities with confidence through comprehensive test coverage and efficient development workflow.

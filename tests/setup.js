@@ -6,6 +6,9 @@
 
 /* eslint-env jest */
 
+// Load environment variables from .env file for all tests
+require('dotenv').config();
+
 // Mock WebSocket for testing
 class MockWebSocket {
   constructor(url) {
