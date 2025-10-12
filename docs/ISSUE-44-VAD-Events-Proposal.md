@@ -342,65 +342,447 @@ class VADTestHelpers {
 }
 ```
 
-## Implementation Plan
+## Test-Driven Development Implementation Plan
 
-### Phase 1: Core VAD Event Handling (Week 1)
-1. **Add missing agent response types**
-   - `UserStoppedSpeaking`
-   - `UtteranceEnd` (from [Deepgram's end-of-speech detection](https://developers.deepgram.com/docs/understanding-end-of-speech-detection))
-   - Enhanced VAD event types
+### Development Philosophy: Test-First, Bottoms-Up Approach
 
-2. **Enhance state management**
-   - Add user speaking state tracking
-   - Add speech duration tracking
-   - Add new state events including `UTTERANCE_END`
+This implementation follows a **Test-Driven Development (TDD)** methodology with a **bottoms-up testing strategy**, ensuring robust, reliable VAD event handling through comprehensive test coverage before implementation.
 
-3. **Update component message handling**
-   - Handle `UserStoppedSpeaking` events
-   - Handle `UtteranceEnd` events with channel and last_word_end data
-   - Update state transitions
+#### TDD Cycle: Red → Green → Refactor
+1. **Red**: Write failing tests that define expected behavior
+2. **Green**: Implement minimal code to make tests pass
+3. **Refactor**: Improve code while keeping tests green
 
-### Phase 2: Enhanced Callbacks and Props (Week 2)
-1. **Add new callback props**
-   - `onUserStoppedSpeaking`
-   - `onUtteranceEnd` (for Deepgram's UtteranceEnd events)
-   - `onVADEvent`
-   - `onUserSpeakingStateChange`
+#### Bottoms-Up Testing Strategy
+- **Unit Tests First**: Start with smallest, most isolated components
+- **Integration Tests Second**: Test component interactions
+- **E2E Tests Last**: Validate complete user workflows
+- **Mock-Heavy Approach**: Isolate components for reliable testing
 
-2. **Enhance existing callbacks**
-   - Add timestamp and duration data
-   - Improve callback consistency
-   - Integrate with Deepgram's `utterance_end_ms` parameter
+### Phase 1: Foundation Tests & Type Definitions (Week 1)
 
-3. **Update component interface**
-   - Add new props to TypeScript definitions
-   - Update documentation with Deepgram references
+#### 1.1 Type Definition Tests (Day 1-2)
+**Test-First Approach**: Define expected types through failing tests
 
-### Phase 3: Transcription VAD Integration (Week 3)
-1. **Enhanced transcription VAD handling**
-   - Process VAD events from transcription service
-   - Integrate with agent VAD events
-   - Handle dual-mode VAD scenarios
+```typescript
+// tests/types/vad-events.test.ts
+describe('VAD Event Type Definitions', () => {
+  it('should define UserStoppedSpeakingResponse type', () => {
+    const response: UserStoppedSpeakingResponse = {
+      type: 'UserStoppedSpeaking',
+      timestamp: 1234567890
+    };
+    expect(response.type).toBe('UserStoppedSpeaking');
+  });
 
-2. **State synchronization**
-   - Ensure consistent state across services
-   - Handle conflicting VAD events
+  it('should define UtteranceEndResponse with Deepgram structure', () => {
+    const response: UtteranceEndResponse = {
+      type: 'UtteranceEnd',
+      channel: [0, 2],
+      last_word_end: 3.1
+    };
+    expect(response.channel).toEqual([0, 2]);
+    expect(response.last_word_end).toBe(3.1);
+  });
+});
+```
 
-### Phase 4: Testing and Validation (Week 4)
-1. **Unit test implementation**
-   - Test all new event handlers
-   - Test state management
-   - Test callback invocations
+**Implementation**: Create type definitions to make tests pass
 
-2. **Integration test implementation**
-   - E2E VAD event scenarios
-   - Cross-service VAD handling
-   - Edge case testing
+#### 1.2 State Management Tests (Day 3-4)
+**Test-First Approach**: Define state behavior through tests
 
-3. **Documentation updates**
-   - Update README with new callbacks
-   - Add VAD event examples
-   - Update API documentation
+```typescript
+// tests/state/vad-state.test.ts
+describe('VAD State Management', () => {
+  it('should track user speaking state', () => {
+    const initialState = { isUserSpeaking: false };
+    const action = { type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: true };
+    const newState = stateReducer(initialState, action);
+    expect(newState.isUserSpeaking).toBe(true);
+  });
+
+  it('should handle UtteranceEnd state updates', () => {
+    const initialState = { isUserSpeaking: true };
+    const action = { 
+      type: 'UTTERANCE_END', 
+      data: { channel: [0, 1], lastWordEnd: 2.5 } 
+    };
+    const newState = stateReducer(initialState, action);
+    expect(newState.isUserSpeaking).toBe(false);
+  });
+});
+```
+
+**Implementation**: Implement state reducer to make tests pass
+
+#### 1.3 Event Handler Tests (Day 5)
+**Test-First Approach**: Define event handling behavior
+
+```typescript
+// tests/handlers/vad-handlers.test.ts
+describe('VAD Event Handlers', () => {
+  it('should handle UserStoppedSpeaking events', () => {
+    const mockCallback = jest.fn();
+    const handler = createVADEventHandler({ onUserStoppedSpeaking: mockCallback });
+    
+    handler.handleEvent({ type: 'UserStoppedSpeaking' });
+    
+    expect(mockCallback).toHaveBeenCalled();
+  });
+
+  it('should handle UtteranceEnd events with channel data', () => {
+    const mockCallback = jest.fn();
+    const handler = createVADEventHandler({ onUtteranceEnd: mockCallback });
+    
+    const event = { type: 'UtteranceEnd', channel: [0, 2], last_word_end: 3.1 };
+    handler.handleEvent(event);
+    
+    expect(mockCallback).toHaveBeenCalledWith({
+      channel: [0, 2],
+      lastWordEnd: 3.1
+    });
+  });
+});
+```
+
+**Implementation**: Create event handlers to make tests pass
+
+### Phase 2: Component Integration Tests (Week 2)
+
+#### 2.1 Component Props Tests (Day 1-2)
+**Test-First Approach**: Define component interface through tests
+
+```typescript
+// tests/components/vad-props.test.tsx
+describe('VAD Component Props', () => {
+  it('should accept onUserStoppedSpeaking callback', () => {
+    const mockCallback = jest.fn();
+    render(
+      <DeepgramVoiceInteraction
+        apiKey="test-key"
+        onUserStoppedSpeaking={mockCallback}
+      />
+    );
+    // Test that component accepts the prop without errors
+  });
+
+  it('should accept onUtteranceEnd callback with proper typing', () => {
+    const mockCallback = jest.fn();
+    render(
+      <DeepgramVoiceInteraction
+        apiKey="test-key"
+        onUtteranceEnd={mockCallback}
+      />
+    );
+    // Test that component accepts the prop with correct typing
+  });
+});
+```
+
+**Implementation**: Add props to component interface
+
+#### 2.2 Message Processing Tests (Day 3-4)
+**Test-First Approach**: Define message processing behavior
+
+```typescript
+// tests/components/message-processing.test.tsx
+describe('VAD Message Processing', () => {
+  it('should process UserStoppedSpeaking messages', async () => {
+    const mockCallback = jest.fn();
+    const { componentRef } = renderComponent({
+      onUserStoppedSpeaking: mockCallback
+    });
+
+    // Simulate WebSocket message
+    await simulateWebSocketMessage(componentRef, {
+      type: 'UserStoppedSpeaking'
+    });
+
+    expect(mockCallback).toHaveBeenCalled();
+  });
+
+  it('should process UtteranceEnd messages with channel data', async () => {
+    const mockCallback = jest.fn();
+    const { componentRef } = renderComponent({
+      onUtteranceEnd: mockCallback
+    });
+
+    await simulateWebSocketMessage(componentRef, {
+      type: 'UtteranceEnd',
+      channel: [0, 2],
+      last_word_end: 3.1
+    });
+
+    expect(mockCallback).toHaveBeenCalledWith({
+      channel: [0, 2],
+      lastWordEnd: 3.1
+    });
+  });
+});
+```
+
+**Implementation**: Implement message processing logic
+
+#### 2.3 State Transition Tests (Day 5)
+**Test-First Approach**: Define state transition behavior
+
+```typescript
+// tests/components/state-transitions.test.tsx
+describe('VAD State Transitions', () => {
+  it('should transition to thinking state after UserStoppedSpeaking', async () => {
+    const { componentRef } = renderComponent();
+    
+    // Start in listening state
+    await setAgentState(componentRef, 'listening');
+    
+    // Trigger UserStoppedSpeaking
+    await simulateWebSocketMessage(componentRef, {
+      type: 'UserStoppedSpeaking'
+    });
+    
+    // Verify state transition
+    expect(getAgentState(componentRef)).toBe('thinking');
+  });
+});
+```
+
+**Implementation**: Implement state transition logic
+
+### Phase 3: Integration & Configuration Tests (Week 3)
+
+#### 3.1 Deepgram Configuration Tests (Day 1-2)
+**Test-First Approach**: Define configuration behavior
+
+```typescript
+// tests/integration/deepgram-config.test.ts
+describe('Deepgram UtteranceEnd Configuration', () => {
+  it('should enable utterance_end_ms parameter', () => {
+    const config = createTranscriptionConfig({
+      utteranceEndMs: 1500
+    });
+    
+    expect(config.utterance_end_ms).toBe(1500);
+    expect(config.interim_results).toBe(true);
+  });
+
+  it('should default utterance_end_ms to 1000ms', () => {
+    const config = createTranscriptionConfig({
+      utteranceEndMs: undefined
+    });
+    
+    expect(config.utterance_end_ms).toBe(1000);
+  });
+});
+```
+
+**Implementation**: Implement configuration logic
+
+#### 3.2 WebSocket Integration Tests (Day 3-4)
+**Test-First Approach**: Define WebSocket behavior
+
+```typescript
+// tests/integration/websocket-vad.test.ts
+describe('WebSocket VAD Integration', () => {
+  it('should handle UtteranceEnd messages from Deepgram', async () => {
+    const mockWebSocket = createMockWebSocket();
+    const mockCallback = jest.fn();
+    
+    const manager = new WebSocketManager({
+      onUtteranceEnd: mockCallback
+    });
+    
+    // Simulate Deepgram UtteranceEnd message
+    mockWebSocket.simulateMessage({
+      type: 'UtteranceEnd',
+      channel: [0, 1],
+      last_word_end: 2.5
+    });
+    
+    expect(mockCallback).toHaveBeenCalledWith({
+      channel: [0, 1],
+      lastWordEnd: 2.5
+    });
+  });
+});
+```
+
+**Implementation**: Implement WebSocket message handling
+
+#### 3.3 Dual-Mode VAD Tests (Day 5)
+**Test-First Approach**: Define dual-mode behavior
+
+```typescript
+// tests/integration/dual-mode-vad.test.tsx
+describe('Dual-Mode VAD Handling', () => {
+  it('should handle VAD events from both transcription and agent', async () => {
+    const mockCallback = jest.fn();
+    const { componentRef } = renderComponent({
+      transcriptionOptions: { utteranceEndMs: 1000 },
+      agentOptions: { greeting: 'Hello' },
+      onUtteranceEnd: mockCallback
+    });
+
+    // Simulate UtteranceEnd from transcription service
+    await simulateTranscriptionMessage(componentRef, {
+      type: 'UtteranceEnd',
+      channel: [0, 1],
+      last_word_end: 1.5
+    });
+
+    expect(mockCallback).toHaveBeenCalled();
+  });
+});
+```
+
+**Implementation**: Implement dual-mode handling
+
+### Phase 4: End-to-End & Edge Case Tests (Week 4)
+
+#### 4.1 Complete Speech Cycle Tests (Day 1-2)
+**Test-First Approach**: Define complete user workflows
+
+```typescript
+// tests/e2e/complete-speech-cycle.spec.js
+test.describe('Complete VAD Speech Cycle', () => {
+  test('should handle complete user speech cycle with UtteranceEnd', async ({ page }) => {
+    // Setup component with VAD callbacks
+    await setupVADTestPage(page);
+    
+    // Start speaking
+    await simulateUserStartedSpeaking(page);
+    await expect(page.locator('[data-testid="user-speaking"]')).toBeVisible();
+    
+    // Stop speaking (trigger UtteranceEnd)
+    await simulateUtteranceEnd(page, { channel: [0, 1], last_word_end: 2.5 });
+    await expect(page.locator('[data-testid="user-speaking"]')).toBeHidden();
+    
+    // Verify agent responds
+    await expect(page.locator('[data-testid="agent-response"]')).toBeVisible();
+  });
+});
+```
+
+**Implementation**: Implement complete speech cycle handling
+
+#### 4.2 Edge Case Tests (Day 3-4)
+**Test-First Approach**: Define edge case behavior
+
+```typescript
+// tests/e2e/vad-edge-cases.spec.js
+test.describe('VAD Edge Cases', () => {
+  test('should handle rapid speech start/stop cycles', async ({ page }) => {
+    await setupVADTestPage(page);
+    
+    // Rapid cycles
+    for (let i = 0; i < 5; i++) {
+      await simulateUserStartedSpeaking(page);
+      await page.waitForTimeout(100);
+      await simulateUtteranceEnd(page, { channel: [0, 1], last_word_end: i * 0.5 });
+    }
+    
+    // Verify state consistency
+    await expect(page.locator('[data-testid="user-speaking"]')).toBeHidden();
+  });
+
+  test('should handle UtteranceEnd in noisy environment', async ({ page }) => {
+    await setupVADTestPage(page, { backgroundNoise: true });
+    
+    await simulateUserStartedSpeaking(page);
+    await simulateBackgroundNoise(page);
+    await simulateUtteranceEnd(page, { channel: [0, 1], last_word_end: 3.0 });
+    
+    // Should still detect end of speech despite noise
+    await expect(page.locator('[data-testid="user-speaking"]')).toBeHidden();
+  });
+});
+```
+
+**Implementation**: Implement edge case handling
+
+#### 4.3 Performance & Reliability Tests (Day 5)
+**Test-First Approach**: Define performance requirements
+
+```typescript
+// tests/performance/vad-performance.test.ts
+describe('VAD Performance Tests', () => {
+  it('should handle high-frequency VAD events without performance degradation', async () => {
+    const startTime = performance.now();
+    
+    // Simulate 100 rapid VAD events
+    for (let i = 0; i < 100; i++) {
+      await simulateVADEvent({ speech_detected: i % 2 === 0 });
+    }
+    
+    const endTime = performance.now();
+    expect(endTime - startTime).toBeLessThan(1000); // Should complete in <1s
+  });
+});
+```
+
+**Implementation**: Optimize performance based on test requirements
+
+### Test Infrastructure & Utilities
+
+#### Mock Strategy
+```typescript
+// tests/utils/vad-mocks.ts
+export class VADTestMocks {
+  static createMockWebSocket() {
+    return {
+      simulateMessage: jest.fn(),
+      simulateUtteranceEnd: jest.fn(),
+      simulateUserStoppedSpeaking: jest.fn()
+    };
+  }
+
+  static createMockDeepgramResponse(type: string, data: any) {
+    return {
+      type,
+      channel: data.channel || [0, 1],
+      last_word_end: data.last_word_end || 1.0,
+      timestamp: Date.now()
+    };
+  }
+}
+```
+
+#### Test Helpers
+```typescript
+// tests/utils/vad-test-helpers.ts
+export class VADTestHelpers {
+  static async simulateUtteranceEnd(page: Page, data: { channel: number[], last_word_end: number }) {
+    await page.evaluate((data) => {
+      window.dispatchEvent(new CustomEvent('utteranceEnd', { detail: data }));
+    }, data);
+  }
+
+  static async verifyUserSpeakingState(page: Page, expectedState: boolean) {
+    const element = page.locator('[data-testid="user-speaking"]');
+    if (expectedState) {
+      await expect(element).toBeVisible();
+    } else {
+      await expect(element).toBeHidden();
+    }
+  }
+}
+```
+
+### Success Metrics
+
+#### Test Coverage Requirements
+- **Unit Tests**: >95% coverage for all VAD-related functions
+- **Integration Tests**: >90% coverage for component interactions
+- **E2E Tests**: Complete coverage of user workflows
+- **Edge Cases**: 100% coverage of identified edge cases
+
+#### Performance Benchmarks
+- **Event Processing**: <10ms per VAD event
+- **State Updates**: <5ms per state transition
+- **Memory Usage**: No memory leaks during extended VAD event processing
+- **WebSocket Latency**: <50ms for UtteranceEnd message processing
+
+This test-driven, bottoms-up approach ensures robust VAD event handling through comprehensive test coverage and incremental implementation validation.
 
 ## Success Criteria
 
@@ -420,57 +802,91 @@ class VADTestHelpers {
 - ✅ Clear documentation and examples
 - ✅ Type safety maintained
 
-### Testing Requirements
-- ✅ Unit tests for all new functionality
-- ✅ Integration tests for VAD event scenarios
-- ✅ E2E tests for complete speech cycles
-- ✅ Edge case testing (rapid events, timeouts, etc.)
-- ✅ Cross-service VAD handling tests
+### Testing Requirements (TDD-Driven)
+- ✅ **Test-First Development**: All functionality defined by failing tests before implementation
+- ✅ **Bottoms-Up Testing**: Unit tests → Integration tests → E2E tests progression
+- ✅ **Comprehensive Coverage**: >95% unit test coverage, >90% integration coverage
+- ✅ **Edge Case Coverage**: 100% coverage of identified edge cases through test-driven discovery
+- ✅ **Performance Testing**: Benchmarked performance requirements validated through tests
+- ✅ **Mock-Heavy Approach**: Isolated component testing with comprehensive mocking
 
-## Risk Assessment
+## Risk Assessment (TDD-Mitigated)
 
-### Low Risk
-- Adding new callback props (backward compatible)
-- Adding new state properties (internal only)
-- Adding new event types (extending existing pattern)
+### Low Risk (TDD Protected)
+- Adding new callback props (backward compatible, test-defined)
+- Adding new state properties (internal only, state tests validate)
+- Adding new event types (extending existing pattern, type tests ensure correctness)
 
-### Medium Risk
-- State transition logic changes
-- Cross-service VAD event handling
-- Performance impact of additional state tracking
+### Medium Risk (TDD Mitigated)
+- State transition logic changes (comprehensive state transition tests)
+- Cross-service VAD event handling (integration tests validate behavior)
+- Performance impact of additional state tracking (performance tests benchmark)
 
-### High Risk
-- Breaking changes to existing callback behavior
-- State synchronization issues between services
-- Complex edge cases in rapid speech scenarios
+### High Risk (TDD Minimized)
+- Breaking changes to existing callback behavior (backward compatibility tests)
+- State synchronization issues between services (dual-mode integration tests)
+- Complex edge cases in rapid speech scenarios (edge case tests discover and validate)
 
-## Mitigation Strategies
+### TDD Risk Mitigation Benefits
+- **Early Bug Detection**: Tests catch issues before they reach production
+- **Regression Prevention**: Comprehensive test suite prevents breaking changes
+- **Confidence in Refactoring**: Tests ensure code improvements don't break functionality
+- **Documentation Through Tests**: Tests serve as living documentation of expected behavior
+- **Incremental Validation**: Each test validates a specific piece of functionality
 
-1. **Backward Compatibility**
-   - All new props are optional
-   - Existing behavior unchanged
-   - Gradual migration path
+## Mitigation Strategies (TDD-Enhanced)
 
-2. **State Consistency**
-   - Comprehensive state validation
-   - Clear state transition rules
-   - Extensive testing of edge cases
+1. **Test-Driven Backward Compatibility**
+   - All new props are optional (validated by prop tests)
+   - Existing behavior unchanged (validated by regression tests)
+   - Gradual migration path (validated by integration tests)
 
-3. **Performance**
-   - Minimal state updates
-   - Efficient event handling
-   - Performance monitoring
+2. **Test-Driven State Consistency**
+   - Comprehensive state validation (state reducer tests)
+   - Clear state transition rules (state transition tests)
+   - Extensive testing of edge cases (edge case test discovery)
+
+3. **Test-Driven Performance**
+   - Minimal state updates (performance benchmark tests)
+   - Efficient event handling (event processing tests)
+   - Performance monitoring (continuous performance testing)
+
+4. **TDD-Specific Mitigation**
+   - **Red-Green-Refactor Cycle**: Ensures incremental, validated development
+   - **Mock-Heavy Testing**: Isolates components for reliable testing
+   - **Bottoms-Up Approach**: Builds confidence through layered testing
+   - **Test Coverage Requirements**: Ensures comprehensive validation
 
 ## Conclusion
 
-This proposal provides a comprehensive approach to implementing full VAD event handling in the `dg_react_agent` component. The phased implementation plan ensures minimal risk while delivering significant value in terms of user experience and developer capabilities.
+This proposal provides a comprehensive **test-driven development approach** to implementing full VAD event handling in the `dg_react_agent` component. The **bottoms-up testing strategy** ensures robust, reliable implementation through comprehensive test coverage before any production code is written.
 
-The enhanced VAD handling will enable:
-- More natural conversation flows
-- Better user experience with accurate speech detection using [Deepgram's UtteranceEnd](https://developers.deepgram.com/docs/understanding-end-of-speech-detection)
-- Enhanced debugging capabilities
-- Improved integration with voice commerce applications
-- More reliable end-of-speech detection in noisy environments (addressing endpointing limitations)
-- Word-timing based speech detection rather than relying solely on audio silence
+### Test-Driven Development Benefits
 
-The proposed design maintains backward compatibility while providing a clear path forward for applications that need comprehensive VAD event handling, leveraging Deepgram's advanced end-of-speech detection capabilities.
+The **Red → Green → Refactor** cycle ensures:
+- **Quality Assurance**: Every feature is validated by tests before implementation
+- **Risk Mitigation**: Comprehensive test coverage minimizes production bugs
+- **Confidence**: Developers can refactor and improve code knowing tests will catch regressions
+- **Documentation**: Tests serve as living documentation of expected behavior
+- **Incremental Progress**: Each test validates a specific piece of functionality
+
+### Enhanced VAD Handling Capabilities
+
+The test-driven implementation will enable:
+- More natural conversation flows (validated by E2E speech cycle tests)
+- Better user experience with accurate speech detection using [Deepgram's UtteranceEnd](https://developers.deepgram.com/docs/understanding-end-of-speech-detection) (validated by integration tests)
+- Enhanced debugging capabilities (validated by comprehensive logging tests)
+- Improved integration with voice commerce applications (validated by dual-mode tests)
+- More reliable end-of-speech detection in noisy environments (validated by edge case tests)
+- Word-timing based speech detection rather than relying solely on audio silence (validated by performance tests)
+
+### Implementation Confidence
+
+The **test-first, bottoms-up approach** provides:
+- **95%+ Unit Test Coverage**: Ensures individual components work correctly
+- **90%+ Integration Coverage**: Validates component interactions
+- **100% Edge Case Coverage**: Discovers and handles complex scenarios
+- **Performance Benchmarks**: Validates performance requirements
+- **Backward Compatibility**: Maintains existing functionality through regression tests
+
+The proposed design maintains backward compatibility while providing a clear, **test-validated path forward** for applications that need comprehensive VAD event handling, leveraging Deepgram's advanced end-of-speech detection capabilities with confidence through comprehensive test coverage.
