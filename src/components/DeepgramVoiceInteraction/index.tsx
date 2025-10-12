@@ -425,13 +425,17 @@ function DeepgramVoiceInteraction(
         }
         
         // Send settings message when connection is established (unless we're lazy reconnecting)
-        if (event.state === 'connected' && !isLazyReconnectingRef.current && !state.hasSentSettings) {
+        // Only send settings if they haven't been sent AND we're not in auto-connect mode
+        // (auto-connect will handle settings sending via its own timeout)
+        if (event.state === 'connected' && !isLazyReconnectingRef.current && !state.hasSentSettings && !autoConnect) {
           log('Connection established, sending settings via connection state handler');
           sendAgentSettings();
         } else if (event.state === 'connected' && isLazyReconnectingRef.current) {
           lazyLog('Skipping automatic settings send - lazy reconnection in progress');
         } else if (event.state === 'connected' && state.hasSentSettings) {
           log('Connection established but settings already sent, skipping');
+        } else if (event.state === 'connected' && autoConnect) {
+          log('Connection established but auto-connect will handle settings sending, skipping');
         }
       } else if (event.type === 'keepalive') {
         // Handle keepalive messages for logging
