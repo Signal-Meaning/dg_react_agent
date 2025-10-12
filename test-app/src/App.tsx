@@ -42,6 +42,7 @@ function App() {
     agent: 'closed'
   });
   const [logs, setLogs] = useState<string[]>([]);
+  const [currentKeepalive, setCurrentKeepalive] = useState<string | null>(null);
   
   // Instructions state
   const [loadedInstructions, setLoadedInstructions] = useState<string>('');
@@ -59,6 +60,13 @@ function App() {
   // Helper to add logs - memoized
   const addLog = useCallback((message: string) => {
     setLogs(prev => [...prev, `${new Date().toISOString().substring(11, 19)} - ${message}`]);
+    // Clear keepalive when a real event occurs
+    setCurrentKeepalive(null);
+  }, []); // No dependencies, created once
+  
+  // Helper to update keepalive - memoized
+  const updateKeepalive = useCallback((message: string) => {
+    setCurrentKeepalive(`${new Date().toISOString().substring(11, 19)} - ${message}`);
   }, []); // No dependencies, created once
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
@@ -460,7 +468,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onConnectionStateChange={handleConnectionStateChange}
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
-        onKeepalive={(service) => addLog(`💓 [KEEPALIVE] ${service} keepalive sent`)}
+        onKeepalive={(service) => updateKeepalive(`💓 [KEEPALIVE] ${service} keepalive sent`)}
         // Auto-connect dual mode props
         autoConnect={true}
         microphoneEnabled={micEnabled}
@@ -740,9 +748,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
 
       <div style={{ marginTop: '20px', border: '1px solid #4a5568', padding: '10px', pointerEvents: 'auto', backgroundColor: '#1a202c' }}>
         <h3 style={{ color: '#e2e8f0' }}>Event Log</h3>
-        <button onClick={() => setLogs([])} style={{ marginBottom: '10px', pointerEvents: 'auto', backgroundColor: '#4a5568', color: '#e2e8f0', border: '1px solid #2d3748', padding: '5px 10px', borderRadius: '4px' }}>Clear Logs</button>
+        <button onClick={() => { setLogs([]); setCurrentKeepalive(null); }} style={{ marginBottom: '10px', pointerEvents: 'auto', backgroundColor: '#4a5568', color: '#e2e8f0', border: '1px solid #2d3748', padding: '5px 10px', borderRadius: '4px' }}>Clear Logs</button>
         <pre style={{ maxHeight: '300px', overflowY: 'scroll', background: '#2d3748', padding: '5px', color: '#e2e8f0', border: '1px solid #4a5568', borderRadius: '4px' }}>
-          {logs.slice().reverse().join('\n')}
+          {currentKeepalive ? [currentKeepalive, ...logs.slice().reverse()].join('\n') : logs.slice().reverse().join('\n')}
         </pre>
       </div>
     </div>
