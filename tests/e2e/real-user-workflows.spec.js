@@ -1,4 +1,8 @@
 const { test, expect } = require('@playwright/test');
+const path = require('path');
+
+// Load environment variables from test-app/.env
+require('dotenv').config({ path: path.join(__dirname, '../../test-app/.env') });
 
 /**
  * Real User Workflow Tests
@@ -11,13 +15,13 @@ const { test, expect } = require('@playwright/test');
  * 2. Green: Implement minimal code to make tests pass
  * 3. Refactor: Improve code while keeping tests green
  * 
- * These tests use real Deepgram API when DEEPGRAM_API_KEY is available,
+ * These tests use real Deepgram API when VITE_DEEPGRAM_API_KEY is available,
  * otherwise they skip with appropriate messaging.
  */
 
 // Simple API key detection
-const isRealAPITesting = !!process.env.DEEPGRAM_API_KEY && 
-                        process.env.DEEPGRAM_API_KEY !== 'mock';
+const isRealAPITesting = !!process.env.VITE_DEEPGRAM_API_KEY && 
+                        process.env.VITE_DEEPGRAM_API_KEY !== 'mock';
 
 /**
  * Setup a test page with VAD configuration
@@ -26,7 +30,7 @@ const isRealAPITesting = !!process.env.DEEPGRAM_API_KEY &&
  */
 async function setupRealVADTestPage(page, options = {}) {
   const defaultOptions = {
-    apiKey: process.env.DEEPGRAM_API_KEY || 'test-key',
+    apiKey: process.env.VITE_DEEPGRAM_API_KEY || 'test-key',
     utteranceEndMs: 1000,
     interimResults: true,
     ...options
@@ -120,13 +124,13 @@ test.describe('Real User Workflow Tests', () => {
     test('should handle complete user workflow: speak → detect → respond', async ({ page }) => {
       // Skip if no real API key
       if (!isRealAPITesting) {
-        test.skip(true, 'DEEPGRAM_API_KEY required for real API tests');
+        test.skip(true, 'VITE_DEEPGRAM_API_KEY required for real API tests');
         return;
       }
 
       // Setup component with real Deepgram API key
       await setupRealVADTestPage(page, {
-        apiKey: process.env.DEEPGRAM_API_KEY,
+        apiKey: process.env.VITE_DEEPGRAM_API_KEY,
         utteranceEndMs: 1000
       });
       
@@ -150,7 +154,7 @@ test.describe('Real User Workflow Tests', () => {
     test('should handle real speech-to-text processing', async ({ page }) => {
       // Skip if no real API key
       if (!isRealAPITesting) {
-        test.skip(true, 'DEEPGRAM_API_KEY required for real API tests');
+        test.skip(true, 'VITE_DEEPGRAM_API_KEY required for real API tests');
         return;
       }
 
@@ -178,7 +182,7 @@ test.describe('Real User Workflow Tests', () => {
     test('should handle VAD event processing with real API', async ({ page }) => {
       // Skip if no real API key
       if (!isRealAPITesting) {
-        test.skip(true, 'DEEPGRAM_API_KEY required for real API tests');
+        test.skip(true, 'VITE_DEEPGRAM_API_KEY required for real API tests');
         return;
       }
 
