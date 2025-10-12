@@ -503,7 +503,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
               border: `1px solid ${isRealApiKey ? '#48bb78' : '#4a5568'}`,
               borderRadius: '4px',
               color: isRealApiKey ? '#9ae6b4' : '#e2e8f0'
-            }}>
+            }} data-testid="api-mode-indicator">
               <strong>
                 {isRealApiKey ? '🟢 REAL API Mode' : '🟡 MOCK API Mode'}
               </strong>

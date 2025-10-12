@@ -230,7 +230,7 @@ async function installMockWebSocket(context) {
         if (typeof data === 'string') {
           try {
             const parsed = JSON.parse(data);
-            if (parsed.type === 'UserText') {
+            if (parsed.type === 'UserText' || parsed.type === 'InjectUserMessage') {
               // Send mock agent response
               setTimeout(() => {
                 const responseMsg = JSON.stringify({

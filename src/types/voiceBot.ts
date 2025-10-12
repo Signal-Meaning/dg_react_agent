@@ -4,11 +4,11 @@
 import { AgentState } from './agent';
 
 /**
- * Conversation message types
+ * Conversation message types (legacy - use ConversationMessage from agent.ts instead)
  */
 export type UserMessage = { user: string };
 export type AssistantMessage = { assistant: string };
-export type ConversationMessage = UserMessage | AssistantMessage;
+// Note: ConversationMessage is now defined in agent.ts with the correct structure
 
 /**
  * Latency message for tracking response times
@@ -22,7 +22,7 @@ export interface LatencyMessage {
 /**
  * All message types that can be in the voice bot state
  */
-export type VoiceBotMessage = ConversationMessage | LatencyMessage;
+export type VoiceBotMessage = UserMessage | AssistantMessage | LatencyMessage;
 
 /**
  * Behind the scenes event types
@@ -107,11 +107,11 @@ export type VoiceBotAction =
   | { type: VoiceBotActionType.SET_PARAMS_ON_COPY_URL; payload: boolean };
 
 /**
- * Type guard for conversation messages
+ * Type guard for conversation messages (legacy)
  */
 export function isConversationMessage(
   voiceBotMessage: VoiceBotMessage
-): voiceBotMessage is ConversationMessage {
+): voiceBotMessage is UserMessage | AssistantMessage {
   return isUserMessage(voiceBotMessage as UserMessage) ||
     isAssistantMessage(voiceBotMessage as AssistantMessage);
 }
@@ -126,19 +126,19 @@ export function isLatencyMessage(
 }
 
 /**
- * Type guard for user messages
+ * Type guard for user messages (legacy)
  */
 export function isUserMessage(
-  conversationMessage: ConversationMessage
+  conversationMessage: UserMessage | AssistantMessage
 ): conversationMessage is UserMessage {
   return (conversationMessage as UserMessage).user !== undefined;
 }
 
 /**
- * Type guard for assistant messages
+ * Type guard for assistant messages (legacy)
  */
 export function isAssistantMessage(
-  conversationMessage: ConversationMessage
+  conversationMessage: UserMessage | AssistantMessage
 ): conversationMessage is AssistantMessage {
   return (conversationMessage as AssistantMessage).assistant !== undefined;
 } 
