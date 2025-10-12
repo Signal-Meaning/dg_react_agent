@@ -75,6 +75,32 @@ export interface VoiceInteractionState {
    */
   conversationHistory: ConversationMessage[];
   sessionId: string | null;
+
+  /**
+   * VAD (Voice Activity Detection) state properties
+   */
+  /**
+   * Current user speaking status
+   */
+  isUserSpeaking: boolean;
+  
+  /**
+   * Timestamp of last user speech activity
+   */
+  lastUserSpeechTime: number | null;
+  
+  /**
+   * Duration of current speech session
+   */
+  currentSpeechDuration: number | null;
+
+  /**
+   * UtteranceEnd data from Deepgram
+   */
+  utteranceEndData?: {
+    channel: number[];
+    lastWordEnd: number;
+  };
 }
 
 /**
@@ -98,7 +124,11 @@ export type StateEvent =
   | { type: 'RESET_GREETING_STATE' }
   | { type: 'ADD_CONVERSATION_MESSAGE'; message: ConversationMessage }
   | { type: 'SET_SESSION_ID'; sessionId: string }
-  | { type: 'CLEAR_CONVERSATION_HISTORY' };
+  | { type: 'CLEAR_CONVERSATION_HISTORY' }
+  | { type: 'USER_SPEAKING_STATE_CHANGE'; isSpeaking: boolean }
+  | { type: 'UTTERANCE_END'; data: { channel: number[]; lastWordEnd: number } }
+  | { type: 'UPDATE_SPEECH_DURATION'; duration: number }
+  | { type: 'RESET_SPEECH_TIMER' };
 
 /**
  * Initial state
@@ -123,6 +153,11 @@ export const initialState: VoiceInteractionState = {
   hasEstablishedSession: false,
   conversationHistory: [],
   sessionId: null,
+  
+  // VAD state properties
+  isUserSpeaking: false,
+  lastUserSpeechTime: null,
+  currentSpeechDuration: null,
 };
 
 /**
@@ -243,6 +278,42 @@ export function stateReducer(state: VoiceInteractionState, event: StateEvent): V
       return {
         ...state,
         conversationHistory: [],
+      };
+      
+    case 'USER_SPEAKING_STATE_CHANGE':
+      // Handle malformed actions gracefully
+      if (typeof event.isSpeaking !== 'boolean') {
+        return state;
+      }
+      return {
+        ...state,
+        isUserSpeaking: event.isSpeaking,
+        lastUserSpeechTime: event.isSpeaking ? Date.now() : state.lastUserSpeechTime,
+      };
+      
+    case 'UTTERANCE_END':
+      return {
+        ...state,
+        isUserSpeaking: false,
+        utteranceEndData: {
+          channel: event.data.channel,
+          lastWordEnd: event.data.lastWordEnd,
+        },
+      };
+      
+    case 'UPDATE_SPEECH_DURATION':
+      return {
+        ...state,
+        currentSpeechDuration: event.duration,
+      };
+      
+    case 'RESET_SPEECH_TIMER':
+      return {
+        ...state,
+        isUserSpeaking: false,
+        lastUserSpeechTime: null,
+        currentSpeechDuration: null,
+        utteranceEndData: undefined,
       };
       
     default:

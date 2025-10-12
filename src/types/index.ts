@@ -131,10 +131,6 @@ export interface DeepgramVoiceInteractionProps {
    */
   onKeepalive?: (service: ServiceType) => void;
   
-  /**
-   * Called when the user stops speaking (based on VAD/endpointing)
-   */
-  onUserStoppedSpeaking?: () => void;
   
   /**
    * Called when an error occurs
@@ -195,6 +191,42 @@ export interface DeepgramVoiceInteractionProps {
    * Called when agent finishes speaking (AgentAudioDone)
    */
   onAgentSilent?: () => void;
+
+  /**
+   * VAD (Voice Activity Detection) Event Callbacks
+   */
+  
+  /**
+   * Called when UserStoppedSpeaking is detected from Deepgram Agent API
+   * Enhanced version with timestamp data
+   */
+  onUserStoppedSpeaking?: (data: { timestamp?: number }) => void;
+  
+  /**
+   * Called when UtteranceEnd is detected from Deepgram's end-of-speech detection
+   * Reference: https://developers.deepgram.com/docs/understanding-end-of-speech-detection
+   */
+  onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
+  
+  /**
+   * Called when VAD events are received from transcription service
+   */
+  onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
+
+  /**
+   * VAD Configuration Options
+   */
+  
+  /**
+   * Enable UtteranceEnd detection for more reliable end-of-speech detection
+   * Reference: https://developers.deepgram.com/docs/understanding-end-of-speech-detection
+   */
+  utteranceEndMs?: number; // Default: 1000ms (minimum recommended)
+
+  /**
+   * Enable interim results (required for UtteranceEnd)
+   */
+  interimResults?: boolean; // Default: true when utteranceEndMs is set
 }
 
 /**

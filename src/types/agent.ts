@@ -30,6 +30,9 @@ export enum AgentResponseType {
   SPEAK_UPDATED = 'SpeakUpdated',
   CONVERSATION_TEXT = 'ConversationText',
   USER_STARTED_SPEAKING = 'UserStartedSpeaking',
+  USER_STOPPED_SPEAKING = 'UserStoppedSpeaking',
+  UTTERANCE_END = 'UtteranceEnd',
+  VAD_EVENT = 'VADEvent',
   AGENT_THINKING = 'AgentThinking',
   FUNCTION_CALL_REQUEST = 'FunctionCallRequest',
   FUNCTION_CALL_RESPONSE = 'FunctionCallResponse',
@@ -236,6 +239,34 @@ export interface UserStartedSpeakingResponse {
 }
 
 /**
+ * User stopped speaking notification
+ */
+export interface UserStoppedSpeakingResponse {
+  type: AgentResponseType.USER_STOPPED_SPEAKING;
+  timestamp?: number;
+}
+
+/**
+ * UtteranceEnd response from Deepgram's end-of-speech detection
+ * Reference: https://developers.deepgram.com/docs/understanding-end-of-speech-detection
+ */
+export interface UtteranceEndResponse {
+  type: AgentResponseType.UTTERANCE_END;
+  channel: number[]; // [channel_index, total_channels]
+  last_word_end: number; // End timestamp of last word
+}
+
+/**
+ * VAD event response from transcription service
+ */
+export interface VADEventResponse {
+  type: AgentResponseType.VAD_EVENT;
+  speech_detected: boolean;
+  confidence?: number;
+  timestamp?: number;
+}
+
+/**
  * Agent thinking notification
  */
 export interface AgentThinkingResponse {
@@ -319,6 +350,9 @@ export type AgentIncomingMessage =
   | SpeakUpdatedResponse
   | ConversationTextResponse
   | UserStartedSpeakingResponse
+  | UserStoppedSpeakingResponse
+  | UtteranceEndResponse
+  | VADEventResponse
   | AgentThinkingResponse
   | FunctionCallRequestResponse
   | FunctionCallResponseFromServer
