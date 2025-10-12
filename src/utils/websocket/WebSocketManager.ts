@@ -44,6 +44,11 @@ export interface WebSocketManagerOptions {
   connectionTimeout?: number;
   
   /**
+   * Maximum time of inactivity before closing the connection (in ms)
+   */
+  idleTimeout?: number;
+  
+  /**
    * Enable verbose logging
    */
   debug?: boolean;
@@ -55,6 +60,7 @@ export interface WebSocketManagerOptions {
 const DEFAULT_OPTIONS: Partial<WebSocketManagerOptions> = {
   keepaliveInterval: 0, // Disabled by default for lazy reconnection - connections timeout naturally
   connectionTimeout: 10000, // 10 seconds - reasonable timeout for connection establishment
+  idleTimeout: 10000, // 10 seconds - close connection after 10 seconds of inactivity
   debug: false,
 };
 
@@ -67,6 +73,7 @@ export class WebSocketManager {
   private eventListeners: Array<(event: WebSocketEvent) => void> = [];
   private keepaliveIntervalId: number | null = null;
   private connectionTimeoutId: number | null = null;
+  private idleTimeoutId: number | null = null;
   private connectionState: ConnectionState = 'closed';
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
@@ -202,11 +209,15 @@ export class WebSocketManager {
           
           this.updateState('connected', isReconnection);
           this.startKeepalive();
+          this.startIdleTimeout();
           this.reconnectAttempts = 0;
           resolve();
         };
 
         this.ws.onmessage = (event) => {
+          // Reset idle timeout on any message received
+          this.resetIdleTimeout();
+          
           // Log the type of data received for every message
           this.log(`Received message data type: ${typeof event.data}, is ArrayBuffer: ${event.data instanceof ArrayBuffer}, is Blob: ${event.data instanceof Blob}`);
           
@@ -280,6 +291,7 @@ export class WebSocketManager {
         this.ws.onclose = (event) => {
           this.log(`WebSocket closed: code=${event.code}, reason='${event.reason}', wasClean=${event.wasClean}`);
           this.stopKeepalive();
+          this.stopIdleTimeout();
           window.clearTimeout(this.connectionTimeoutId!);
           this.connectionTimeoutId = null;
           
@@ -376,6 +388,45 @@ export class WebSocketManager {
   }
 
   /**
+   * Starts the idle timeout
+   */
+  private startIdleTimeout(): void {
+    if (this.idleTimeoutId !== null) {
+      this.stopIdleTimeout();
+    }
+    
+    if (this.options.idleTimeout && this.options.idleTimeout > 0) {
+      this.idleTimeoutId = window.setTimeout(() => {
+        this.log(`Idle timeout reached (${this.options.idleTimeout}ms) - closing connection`);
+        this.close();
+      }, this.options.idleTimeout);
+
+      this.log(`Started idle timeout (${this.options.idleTimeout}ms)`);
+    }
+  }
+
+  /**
+   * Stops the idle timeout
+   */
+  private stopIdleTimeout(): void {
+    if (this.idleTimeoutId !== null) {
+      window.clearTimeout(this.idleTimeoutId);
+      this.idleTimeoutId = null;
+      this.log('Stopped idle timeout');
+    }
+  }
+
+  /**
+   * Resets the idle timeout (call when activity occurs)
+   */
+  private resetIdleTimeout(): void {
+    if (this.options.idleTimeout && this.options.idleTimeout > 0) {
+      this.stopIdleTimeout();
+      this.startIdleTimeout();
+    }
+  }
+
+  /**
    * Sends a JSON message over the WebSocket
    */
   public sendJSON(data: any): boolean {
@@ -387,6 +438,8 @@ export class WebSocketManager {
     try {
       this.log('Sending JSON:', data);
       this.ws.send(JSON.stringify(data));
+      // Reset idle timeout when sending messages
+      this.resetIdleTimeout();
       return true;
     } catch (error) {
       this.log('Error sending JSON:', error);
@@ -406,6 +459,8 @@ export class WebSocketManager {
     try {
       this.log(`Sending binary data: ${data instanceof ArrayBuffer ? data.byteLength : data.size} bytes`);
       this.ws.send(data);
+      // Reset idle timeout when sending messages
+      this.resetIdleTimeout();
       return true;
     } catch (error) {
       this.log('Error sending binary data:', error);
@@ -445,6 +500,7 @@ export class WebSocketManager {
   public close(): void {
     this.log('Closing WebSocket');
     this.stopKeepalive();
+    this.stopIdleTimeout();
     
     if (this.connectionTimeoutId !== null) {
       window.clearTimeout(this.connectionTimeoutId);
