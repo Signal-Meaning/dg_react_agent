@@ -5,8 +5,13 @@
  * with environment variable override support.
  */
 
-import fs from 'fs';
-import path from 'path';
+// Only import Node.js modules in Node.js environment
+let fs: any, path: any;
+if (typeof window === 'undefined') {
+  // Node.js environment
+  fs = require('fs');
+  path = require('path');
+}
 
 /**
  * Default instructions fallback
@@ -68,8 +73,8 @@ function getEnvironmentInstructions(): string | null {
   }
 
   // Check Vite environment (for frontend builds)
-  if (typeof import.meta !== 'undefined' && import.meta.env?.DEEPGRAM_INSTRUCTIONS) {
-    return import.meta.env.DEEPGRAM_INSTRUCTIONS.trim();
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env?.DEEPGRAM_INSTRUCTIONS) {
+    return (import.meta as any).env.DEEPGRAM_INSTRUCTIONS.trim();
   }
 
   return null;
@@ -97,8 +102,13 @@ function getDefaultInstructionsFilePath(): string {
  * @returns {Promise<string>} File content
  */
 async function readInstructionsFile(filePath: string): Promise<string> {
+  // Check if we're in a browser environment
+  if (typeof window !== 'undefined') {
+    throw new Error('File reading not supported in browser environment');
+  }
+  
   return new Promise((resolve, reject) => {
-    fs.readFile(filePath, 'utf8', (err, data) => {
+    fs.readFile(filePath, 'utf8', (err: any, data: any) => {
       if (err) {
         reject(err);
       } else {
@@ -119,6 +129,11 @@ export function loadInstructionsFromFileSync(filePath?: string): string {
     const envInstructions = getEnvironmentInstructions();
     if (envInstructions) {
       return envInstructions;
+    }
+
+    // Check if we're in a browser environment
+    if (typeof window !== 'undefined') {
+      throw new Error('File reading not supported in browser environment');
     }
 
     // Load from file synchronously
