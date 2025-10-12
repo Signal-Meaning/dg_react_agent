@@ -1503,6 +1503,7 @@ function DeepgramVoiceInteraction(
 
   // Resume conversation with audio input (lazy reconnection)
   const resumeWithAudio = async (): Promise<void> => {
+    lazyLog('🔍 [resumeWithAudio] Function called - starting execution');
     lazyLog('Resuming conversation with audio');
     lazyLog(`Current conversation history length: ${state.conversationHistory.length}`);
     lazyLog(`Current session ID: ${state.sessionId || 'None'}`);
@@ -1523,7 +1524,9 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'SET_SESSION_ID', sessionId });
       
       // Check if we need to reconnect
+      lazyLog(`🔍 [resumeWithAudio] About to call needsReconnection()`);
       const shouldReconnect = needsReconnection();
+      lazyLog(`🔍 [resumeWithAudio] needsReconnection() returned: ${shouldReconnect}`);
       lazyLog(`Audio connection check: needsReconnection=${shouldReconnect}`);
       
       if (shouldReconnect) {
