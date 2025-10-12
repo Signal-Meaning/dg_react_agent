@@ -21,7 +21,10 @@ WebSocketManager.mockImplementation(() => ({
   connect: jest.fn().mockResolvedValue(),
   close: jest.fn(),
   sendJSON: jest.fn(),
-  addEventListener: jest.fn().mockReturnValue(mockUnsubscribe)
+  addEventListener: jest.fn().mockReturnValue(mockUnsubscribe),
+  resetIdleTimeout: jest.fn(),
+  startKeepalive: jest.fn(),
+  stopKeepalive: jest.fn()
 }));
 
 AudioManager.mockImplementation(() => ({

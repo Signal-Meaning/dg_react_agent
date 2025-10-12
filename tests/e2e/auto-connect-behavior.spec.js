@@ -65,8 +65,9 @@ test.describe('Auto-Connect Behavior E2E Tests', () => {
     // Wait for the component to become ready
     await page.waitForSelector('[data-testid="start-button"]:not([disabled])', { timeout: 10000 });
     
-    // Check that API mode indicator is shown
-    const apiModeIndicator = page.locator('text=🟡 MOCK API Mode');
+    // Check that API mode indicator is shown (should be REAL mode since we have a real API key)
+    const apiModeIndicator = page.locator('[data-testid="api-mode-indicator"]');
     await expect(apiModeIndicator).toBeVisible();
+    await expect(apiModeIndicator).toContainText('🟢 REAL API Mode');
   });
 });
