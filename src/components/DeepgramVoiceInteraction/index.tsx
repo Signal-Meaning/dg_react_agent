@@ -609,9 +609,14 @@ function DeepgramVoiceInteraction(
   };
 
   // Transform internal conversation history to Deepgram API format
-  const transformConversationHistory = (history: ConversationMessage[]): string => {
-    // Try sending as a simple string format first
-    return history.map(message => `${message.role}: ${message.content}`).join('\n');
+  const transformConversationHistory = (history: ConversationMessage[]): {messages: Array<{type: string, role: string, content: string}>} => {
+    return {
+      messages: history.map(message => ({
+        type: "History",
+        role: message.role === 'assistant' ? 'assistant' : 'user',
+        content: message.content
+      }))
+    };
   };
 
   // Send agent settings after connection is established - only if agent is configured
@@ -669,15 +674,14 @@ function DeepgramVoiceInteraction(
             model: agentOptions.voice || 'aura-asteria-en'
           }
         },
-        greeting: agentOptions.greeting
-        // TODO: Context field format still not correct - API keeps rejecting it
-        // context: transformConversationHistory(state.conversationHistory) // Try string format for context
+        greeting: agentOptions.greeting,
+        context: transformConversationHistory(state.conversationHistory) // Include conversation context in correct Deepgram API format
       }
     };
     
-    log('📤 [Protocol] Sending agent settings (context disabled - API format issue):', { 
+    log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
       conversationHistoryLength: state.conversationHistory.length,
-      contextString: transformConversationHistory(state.conversationHistory)
+      contextMessages: transformConversationHistory(state.conversationHistory).messages
     });
     agentManagerRef.current.sendJSON(settingsMessage);
     
@@ -1423,18 +1427,17 @@ function DeepgramVoiceInteraction(
                 model: options.voice || 'aura-asteria-en'
               }
             },
-            greeting: options.greeting
-            // TODO: Context field format still not correct - API keeps rejecting it
-            // context: transformConversationHistory(history) // Try string format for context
+            greeting: options.greeting,
+            context: transformConversationHistory(history) // Include conversation context in correct Deepgram API format
           }
         };
         
-        log(`🔄 [LAZY_RECONNECT] Sending settings (context disabled - API format issue):`, settingsMessage);
+        log(`🔄 [LAZY_RECONNECT] Sending settings with context (correct Deepgram API format):`, settingsMessage);
         agentManagerRef.current.sendJSON(settingsMessage);
         
         // Mark settings as sent
         dispatch({ type: 'SETTINGS_SENT', sent: true });
-        log('✅ [LAZY_RECONNECT] Settings sent (context disabled - API format issue)');
+        log('✅ [LAZY_RECONNECT] Settings sent with conversation context (correct Deepgram API format)');
       } else if (state.hasSentSettings) {
         log('🔄 [LAZY_RECONNECT] Settings already sent, skipping duplicate');
       }

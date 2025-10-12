@@ -61,12 +61,15 @@ describe('Context Preservation Validation', () => {
       return true;
     });
 
-    // STEP 4: Simulate the connectWithContext method behavior with proper context transformation
+    // STEP 4: Simulate the connectWithContext method behavior with correct Deepgram API format
     const transformConversationHistory = (history) => {
-      return history.map(message => ({
-        role: message.role === 'assistant' ? 'assistant' : 'user',
-        content: message.content
-      }));
+      return {
+        messages: history.map(message => ({
+          type: "History",
+          role: message.role === 'assistant' ? 'assistant' : 'user',
+          content: message.content
+        }))
+      };
     };
 
     const connectWithContext = (sessionId, history, options) => {
@@ -89,7 +92,7 @@ describe('Context Preservation Validation', () => {
             provider: { type: 'deepgram', model: 'aura-asteria-en' }
           },
           greeting: options.greeting,
-          context: transformConversationHistory(history) // Properly transformed context
+          context: transformConversationHistory(history) // Correct Deepgram API format
         }
       };
       
@@ -108,32 +111,35 @@ describe('Context Preservation Validation', () => {
 
     connectWithContext('test-session', mockState.conversationHistory, agentOptions);
 
-    // STEP 6: Validate that context was preserved in proper Deepgram API format
+    // STEP 6: Validate that context was preserved in correct Deepgram API format
     expect(settingsSent).not.toBeNull();
     expect(settingsSent.type).toBe('Settings');
     expect(settingsSent.agent).toBeDefined();
     expect(settingsSent.agent.context).toBeDefined();
-    expect(Array.isArray(settingsSent.agent.context)).toBe(true);
+    expect(settingsSent.agent.context.messages).toBeDefined();
+    expect(Array.isArray(settingsSent.agent.context.messages)).toBe(true);
     
-    // Validate the context contains the filmmaker conversation in proper format
-    expect(settingsSent.agent.context.length).toBe(2);
+    // Validate the context contains the filmmaker conversation in correct format
+    expect(settingsSent.agent.context.messages.length).toBe(2);
     
-    // Check user message about being a filmmaker (no timestamp/metadata)
-    const userMessage = settingsSent.agent.context.find(msg => msg.role === 'user');
+    // Check user message about being a filmmaker (with correct Deepgram format)
+    const userMessage = settingsSent.agent.context.messages.find(msg => msg.role === 'user');
     expect(userMessage).toBeDefined();
+    expect(userMessage.type).toBe('History');
     expect(userMessage.content).toContain('filmmaker');
     expect(userMessage.content).toContain('camera');
     expect(userMessage.timestamp).toBeUndefined(); // No internal metadata
     
     // Check assistant response about filmmaker considerations
-    const assistantMessage = settingsSent.agent.context.find(msg => msg.role === 'assistant');
+    const assistantMessage = settingsSent.agent.context.messages.find(msg => msg.role === 'assistant');
     expect(assistantMessage).toBeDefined();
+    expect(assistantMessage.type).toBe('History');
     expect(assistantMessage.content).toContain('filmmaker');
     expect(assistantMessage.content).toContain('sensor');
     expect(assistantMessage.content).toContain('budget');
     expect(assistantMessage.timestamp).toBeUndefined(); // No internal metadata
 
-    console.log('✅ Context preservation test PASSED - Agent will have filmmaker context in proper API format');
+    console.log('✅ Context preservation test PASSED - Agent will have filmmaker context in correct Deepgram API format');
   });
 
   test('should preserve context across disconnection - Teacher Scenario', () => {
@@ -172,12 +178,15 @@ describe('Context Preservation Validation', () => {
       return true;
     });
 
-    // Simulate connectWithContext with teacher history and proper transformation
+    // Simulate connectWithContext with teacher history and correct Deepgram API format
     const transformConversationHistory = (history) => {
-      return history.map(message => ({
-        role: message.role === 'assistant' ? 'assistant' : 'user',
-        content: message.content
-      }));
+      return {
+        messages: history.map(message => ({
+          type: "History",
+          role: message.role === 'assistant' ? 'assistant' : 'user',
+          content: message.content
+        }))
+      };
     };
 
     const connectWithContext = (sessionId, history, options) => {
@@ -200,7 +209,7 @@ describe('Context Preservation Validation', () => {
             provider: { type: 'deepgram', model: 'aura-asteria-en' }
           },
           greeting: options.greeting,
-          context: transformConversationHistory(history) // Properly transformed context
+          context: transformConversationHistory(history) // Correct Deepgram API format
         }
       };
       
@@ -218,26 +227,29 @@ describe('Context Preservation Validation', () => {
 
     connectWithContext('test-session', mockState.conversationHistory, agentOptions);
 
-    // Validate context preservation in proper Deepgram API format
+    // Validate context preservation in correct Deepgram API format
     expect(settingsSent).not.toBeNull();
     expect(settingsSent.agent.context).toBeDefined();
-    expect(settingsSent.agent.context.length).toBe(3);
+    expect(settingsSent.agent.context.messages).toBeDefined();
+    expect(settingsSent.agent.context.messages.length).toBe(3);
 
-    // Validate teacher-specific context in proper format
-    const contextMessages = settingsSent.agent.context;
+    // Validate teacher-specific context in correct format
+    const contextMessages = settingsSent.agent.context.messages;
     const teacherMessage = contextMessages.find(msg => 
       msg.role === 'user' && msg.content.includes('third-grade teacher')
     );
     expect(teacherMessage).toBeDefined();
+    expect(teacherMessage.type).toBe('History');
     expect(teacherMessage.timestamp).toBeUndefined(); // No internal metadata
     
     const classroomMessage = contextMessages.find(msg =>
       msg.role === 'user' && msg.content.includes('stay in their seats')
     );
     expect(classroomMessage).toBeDefined();
+    expect(classroomMessage.type).toBe('History');
     expect(classroomMessage.timestamp).toBeUndefined(); // No internal metadata
 
-    console.log('✅ Teacher context preservation test PASSED - Proper API format');
+    console.log('✅ Teacher context preservation test PASSED - Correct Deepgram API format');
   });
 
   test('should fail without context - demonstrates the problem', () => {
