@@ -435,9 +435,17 @@ function App() {
         
         if (deepgramRef.current) {
           console.log('🎤 [APP] deepgramRef.current exists, calling resumeWithAudio()');
-          await deepgramRef.current.resumeWithAudio();
-          console.log('🎤 [APP] resumeWithAudio() completed successfully');
-          addLog('✅ [LAZY_RECONNECT] Audio conversation resumed');
+          console.log('🎤 [APP] deepgramRef.current methods:', Object.keys(deepgramRef.current));
+          
+          if (typeof deepgramRef.current.resumeWithAudio === 'function') {
+            console.log('🎤 [APP] resumeWithAudio method exists, calling it');
+            await deepgramRef.current.resumeWithAudio();
+            console.log('🎤 [APP] resumeWithAudio() completed successfully');
+            addLog('✅ [LAZY_RECONNECT] Audio conversation resumed');
+          } else {
+            console.log('🎤 [APP] resumeWithAudio method does not exist!');
+            addLog('❌ [APP] resumeWithAudio method not found on ref');
+          }
         } else {
           console.log('🎤 [APP] deepgramRef.current is null!');
           addLog('❌ [APP] deepgramRef.current is null - cannot resume audio');
