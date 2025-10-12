@@ -401,7 +401,7 @@ function DeepgramVoiceInteraction(
       } else if (event.type === 'message') {
         // Handle keepalive messages for logging
         if (event.data.type === 'KeepAlive') {
-          log(`💓 [KEEPALIVE] ${event.data.service} keepalive sent`);
+          console.log(`💓 [KEEPALIVE] ${event.data.service} keepalive sent`);
           return;
         }
         
