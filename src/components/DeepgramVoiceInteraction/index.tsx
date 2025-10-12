@@ -399,13 +399,10 @@ function DeepgramVoiceInteraction(
         } else if (event.state === 'connected' && isLazyReconnectingRef.current) {
           lazyLog('Skipping automatic settings send - lazy reconnection in progress');
         }
-      } else if (event.type === 'message') {
+      } else if (event.type === 'keepalive') {
         // Handle keepalive messages for logging
-        if (event.data.type === 'KeepAlive') {
-          onKeepalive?.(event.data.service);
-          return;
-        }
-        
+        onKeepalive?.(event.data.service);
+      } else if (event.type === 'message') {
         handleAgentMessage(event.data);
       } else if (event.type === 'binary') {
         handleAgentAudio(event.data);
