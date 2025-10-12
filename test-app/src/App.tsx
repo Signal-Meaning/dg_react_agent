@@ -93,6 +93,14 @@ function App() {
     ]
   }), []); // Empty dependency array means this object is created only once
 
+  // Monitor deepgramRef changes - only log once when it becomes available
+  useEffect(() => {
+    if (deepgramRef.current) {
+      console.log('🔗 [APP] DeepgramVoiceInteraction ref is now available');
+      addLog('🔗 [APP] DeepgramVoiceInteraction ref is now available');
+    }
+  }, [addLog]); // Remove deepgramRef.current from dependencies to avoid infinite loop
+
   // Load instructions using the instructions-loader utility
   useEffect(() => {
     const loadInstructions = async () => {
@@ -416,17 +424,32 @@ function App() {
 
   const toggleMicrophone = async () => {
     try {
+      console.log('🎤 [APP] toggleMicrophone called');
+      console.log('🎤 [APP] micEnabled:', micEnabled);
+      console.log('🎤 [APP] deepgramRef.current:', !!deepgramRef.current);
+      
       if (!micEnabled) {
         // Enable microphone with lazy reconnect
         addLog('🔄 [LAZY_RECONNECT] Resuming conversation with audio');
-        await deepgramRef.current?.resumeWithAudio();
-        addLog('✅ [LAZY_RECONNECT] Audio conversation resumed');
+        console.log('🎤 [APP] About to call resumeWithAudio()');
+        
+        if (deepgramRef.current) {
+          console.log('🎤 [APP] deepgramRef.current exists, calling resumeWithAudio()');
+          await deepgramRef.current.resumeWithAudio();
+          console.log('🎤 [APP] resumeWithAudio() completed successfully');
+          addLog('✅ [LAZY_RECONNECT] Audio conversation resumed');
+        } else {
+          console.log('🎤 [APP] deepgramRef.current is null!');
+          addLog('❌ [APP] deepgramRef.current is null - cannot resume audio');
+        }
       } else {
         // Disable microphone
+        console.log('🎤 [APP] Disabling microphone');
         await deepgramRef.current?.toggleMicrophone(false);
         addLog('Microphone disabled');
       }
     } catch (error) {
+      console.log('🎤 [APP] Error in toggleMicrophone:', error);
       addLog(`Error toggling microphone: ${(error as Error).message}`);
       console.error('Microphone toggle error:', error);
     }

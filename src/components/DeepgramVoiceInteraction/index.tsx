@@ -1584,12 +1584,20 @@ function DeepgramVoiceInteraction(
     
     try {
       // Connect agent WebSocket if not already connected
-      if (agentManagerRef.current && agentManagerRef.current.getState() !== 'connected') {
-        lazyLog(`Agent WebSocket not connected (${agentManagerRef.current.getState()}), connecting...`);
+      const currentState = agentManagerRef.current?.getState();
+      lazyLog(`🔍 [connectWithContext] Current agent state: ${currentState}`);
+      
+      if (agentManagerRef.current && currentState !== 'connected') {
+        lazyLog(`🔍 [connectWithContext] Agent WebSocket not connected (${currentState}), connecting...`);
         await agentManagerRef.current.connect();
+        lazyLog(`🔍 [connectWithContext] Agent WebSocket connect() completed`);
+        
+        // Check state after connection
+        const newState = agentManagerRef.current.getState();
+        lazyLog(`🔍 [connectWithContext] Agent state after connect(): ${newState}`);
         lazyLog('Agent WebSocket connected with context');
       } else {
-        lazyLog(`Agent WebSocket already connected (${agentManagerRef.current?.getState()})`);
+        lazyLog(`🔍 [connectWithContext] Agent WebSocket already connected (${currentState})`);
       }
       
       // Send settings with conversation context only if not already sent
