@@ -58,9 +58,9 @@ export interface WebSocketManagerOptions {
  * Default WebSocketManager options
  */
 const DEFAULT_OPTIONS: Partial<WebSocketManagerOptions> = {
-  keepaliveInterval: 0, // Disabled by default for lazy reconnection - connections timeout naturally
+  keepaliveInterval: 5000, // 5 seconds - keep connection alive to prevent server timeout
   connectionTimeout: 10000, // 10 seconds - reasonable timeout for connection establishment
-  idleTimeout: 10000, // 10 seconds - reasonable timeout for testing lazy reconnection
+  idleTimeout: 10000, // 10 seconds - client-side timeout for lazy reconnection testing
   debug: false,
 };
 
