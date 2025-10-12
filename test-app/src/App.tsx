@@ -460,6 +460,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onConnectionStateChange={handleConnectionStateChange}
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
+        onKeepalive={(service) => addLog(`💓 [KEEPALIVE] ${service} keepalive sent`)}
         // Auto-connect dual mode props
         autoConnect={true}
         microphoneEnabled={micEnabled}
