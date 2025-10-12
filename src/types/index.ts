@@ -266,6 +266,11 @@ export interface DeepgramVoiceInteractionHandle {
    * Connect with conversation context (for lazy reconnection)
    */
   connectWithContext: (sessionId: string, history: ConversationMessage[], options: AgentOptions) => Promise<void>;
+  
+  /**
+   * Manually trigger connection timeout for testing lazy reconnection
+   */
+  triggerTimeoutForTesting: () => void;
 }
 
 // REMOVE the duplicate AgentState definition at the end of this file

@@ -154,6 +154,9 @@ function DeepgramVoiceInteraction(
   
   // Ref to hold the latest state value, avoiding stale closures in callbacks
   const stateRef = useRef<VoiceInteractionState>(state);
+  
+  // Ref to track if we're in the middle of a lazy reconnection
+  const isLazyReconnectingRef = useRef<boolean>(false);
 
   // Managers - these may be null if the service is not required
   const transcriptionManagerRef = useRef<WebSocketManager | null>(null);
@@ -378,9 +381,17 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
         onConnectionStateChange?.('agent', event.state);
         
-        // Send settings message when connection is established
-        if (event.state === 'connected') {
+        // Reset settings flag when connection closes for lazy reconnection
+        if (event.state === 'closed') {
+          dispatch({ type: 'SETTINGS_SENT', sent: false });
+          log('🔄 [LAZY_RECONNECT] Reset hasSentSettings flag due to connection close');
+        }
+        
+        // Send settings message when connection is established (unless we're lazy reconnecting)
+        if (event.state === 'connected' && !isLazyReconnectingRef.current) {
           sendAgentSettings();
+        } else if (event.state === 'connected' && isLazyReconnectingRef.current) {
+          log('🔄 [LAZY_RECONNECT] Skipping automatic settings send - lazy reconnection in progress');
         }
       } else if (event.type === 'message') {
         handleAgentMessage(event.data);
@@ -449,6 +460,20 @@ function DeepgramVoiceInteraction(
     // Auto-connect dual mode logic
     console.log('Auto-connect check:', { autoConnect, isAgentConfigured, agentManagerRef: !!agentManagerRef.current });
     if (autoConnect === true && isAgentConfigured) {
+      // Validate API key before attempting connection
+      const isValidApiKey = apiKey && 
+        apiKey !== 'your-deepgram-api-key-here' && 
+        apiKey !== 'your_actual_deepgram_api_key_here' &&
+        !apiKey.startsWith('test-') && 
+        apiKey.length >= 20;
+      
+      if (!isValidApiKey) {
+        log('⚠️ Auto-connect skipped: Invalid or missing API key');
+        log(`API key status: ${apiKey ? `"${apiKey.substring(0, 10)}..."` : 'undefined'}`);
+        dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
+        return;
+      }
+      
       log('Auto-connect dual mode enabled, establishing connection');
       
       // For auto-connect dual mode, set ready immediately since the user can interact via text
@@ -583,6 +608,12 @@ function DeepgramVoiceInteraction(
     }
   };
 
+  // Transform internal conversation history to Deepgram API format
+  const transformConversationHistory = (history: ConversationMessage[]): string => {
+    // Try sending as a simple string format first
+    return history.map(message => `${message.role}: ${message.content}`).join('\n');
+  };
+
   // Send agent settings after connection is established - only if agent is configured
   const sendAgentSettings = () => {
     if (!agentManagerRef.current || !agentOptions) {
@@ -638,14 +669,16 @@ function DeepgramVoiceInteraction(
             model: agentOptions.voice || 'aura-asteria-en'
           }
         },
-        greeting: agentOptions.greeting,
-        context: state.conversationHistory // Include conversation context if available
+        greeting: agentOptions.greeting
+        // TODO: Context field format still not correct - API keeps rejecting it
+        // context: transformConversationHistory(state.conversationHistory) // Try string format for context
       }
     };
     
-    console.info('📤 [Protocol] Sending agent settings:', settingsMessage);
-    console.log('[DeepgramVoiceInteraction] Sending agent settings:', settingsMessage);
-    log('Sending agent settings:', settingsMessage);
+    log('📤 [Protocol] Sending agent settings (context disabled - API format issue):', { 
+      conversationHistoryLength: state.conversationHistory.length,
+      contextString: transformConversationHistory(state.conversationHistory)
+    });
     agentManagerRef.current.sendJSON(settingsMessage);
     
     // Mark settings as sent for welcome-first behavior
@@ -700,6 +733,9 @@ function DeepgramVoiceInteraction(
 
   // Handle agent messages - only relevant if agent is configured
   const handleAgentMessage = (data: unknown) => {
+    // Debug: Log all agent messages
+    log(`🔍 [DEBUG] Received agent message:`, data);
+    
     // Skip processing if agent service isn't configured
     if (!agentManagerRef.current) {
       log('Received unexpected agent message but service is not configured:', data);
@@ -1210,6 +1246,9 @@ function DeepgramVoiceInteraction(
     log(`🔄 [LAZY_RECONNECT] Current conversation history length: ${state.conversationHistory.length}`);
     log(`🔄 [LAZY_RECONNECT] Current session ID: ${state.sessionId || 'None'}`);
     
+    // Set lazy reconnection flag
+    isLazyReconnectingRef.current = true;
+    
     try {
       // Generate session ID if not exists
       const sessionId = state.sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -1226,17 +1265,35 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'SET_SESSION_ID', sessionId });
       log(`🔄 [LAZY_RECONNECT] Added user message to history: "${text}"`);
       
-      // Connect with context
-      log(`🔄 [LAZY_RECONNECT] Connecting with context (${state.conversationHistory.length + 1} messages)`);
-      await connectWithContext(sessionId, [...state.conversationHistory, userMessage], agentOptions!);
+      // Check if we need to reconnect or just send the message
+      const isWebSocketOpen = agentManagerRef.current?.isConnected() || false;
+      const needsReconnection = !agentManagerRef.current || 
+        !state.hasSentSettings ||
+        !isWebSocketOpen;
       
-      // Send the text message
+      log(`🔄 [LAZY_RECONNECT] Connection check: agentManager=${!!agentManagerRef.current}, hasSentSettings=${state.hasSentSettings}, wsOpen=${isWebSocketOpen}, needsReconnection=${needsReconnection}`);
+      
+      if (needsReconnection) {
+        // Connect with context
+        log(`🔄 [LAZY_RECONNECT] Connecting with context (${state.conversationHistory.length + 1} messages)`);
+        await connectWithContext(sessionId, [...state.conversationHistory, userMessage], agentOptions!);
+      } else {
+        log(`🔄 [LAZY_RECONNECT] Connection already established, skipping settings`);
+      }
+      
+      // Send the text message with a small delay to allow agent to process reconnection
       if (agentManagerRef.current) {
         log(`🔄 [LAZY_RECONNECT] Sending InjectUserMessage: "${text}"`);
-        agentManagerRef.current.sendJSON({
-          type: 'InjectUserMessage',
-          content: text
-        });
+        // Add small delay to allow agent to fully process reconnection
+        setTimeout(() => {
+          if (agentManagerRef.current) {
+            agentManagerRef.current.sendJSON({
+              type: 'InjectUserMessage',
+              content: text
+            });
+            log(`🔄 [LAZY_RECONNECT] InjectUserMessage sent after delay: "${text}"`);
+          }
+        }, 500); // 500ms delay
       }
       
       log('✅ [LAZY_RECONNECT] Successfully resumed conversation with text');
@@ -1249,6 +1306,9 @@ function DeepgramVoiceInteraction(
         details: error,
       });
       throw error;
+    } finally {
+      // Clear lazy reconnection flag
+      isLazyReconnectingRef.current = false;
     }
   };
 
@@ -1259,6 +1319,9 @@ function DeepgramVoiceInteraction(
     log(`🔄 [LAZY_RECONNECT] Current session ID: ${state.sessionId || 'None'}`);
     log(`🔄 [LAZY_RECONNECT] Agent manager state: ${agentManagerRef.current?.getState() || 'null'}`);
     
+    // Set lazy reconnection flag
+    isLazyReconnectingRef.current = true;
+    
     try {
       // Generate session ID if not exists
       const sessionId = state.sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -1266,9 +1329,21 @@ function DeepgramVoiceInteraction(
       
       dispatch({ type: 'SET_SESSION_ID', sessionId });
       
-      // Connect with context
-      log(`🔄 [LAZY_RECONNECT] Connecting with context (${state.conversationHistory.length} messages)`);
-      await connectWithContext(sessionId, state.conversationHistory, agentOptions!);
+      // Check if we need to reconnect or just enable mic
+      const isWebSocketOpen = agentManagerRef.current?.isConnected() || false;
+      const needsReconnection = !agentManagerRef.current || 
+        !state.hasSentSettings ||
+        !isWebSocketOpen;
+      
+      log(`🔄 [LAZY_RECONNECT] Audio connection check: agentManager=${!!agentManagerRef.current}, hasSentSettings=${state.hasSentSettings}, wsOpen=${isWebSocketOpen}, needsReconnection=${needsReconnection}`);
+      
+      if (needsReconnection) {
+        // Connect with context
+        log(`🔄 [LAZY_RECONNECT] Connecting with context (${state.conversationHistory.length} messages)`);
+        await connectWithContext(sessionId, state.conversationHistory, agentOptions!);
+      } else {
+        log(`🔄 [LAZY_RECONNECT] Connection already established, skipping settings`);
+      }
       
       // Enable microphone for audio input
       log(`🔄 [LAZY_RECONNECT] Enabling microphone for audio input`);
@@ -1284,6 +1359,9 @@ function DeepgramVoiceInteraction(
         details: error,
       });
       throw error;
+    } finally {
+      // Clear lazy reconnection flag
+      isLazyReconnectingRef.current = false;
     }
   };
 
@@ -1302,8 +1380,8 @@ function DeepgramVoiceInteraction(
         log(`🔄 [LAZY_RECONNECT] Agent WebSocket already connected (${agentManagerRef.current?.getState()})`);
       }
       
-      // Send settings with conversation context
-      if (agentManagerRef.current) {
+      // Send settings with conversation context only if not already sent
+      if (agentManagerRef.current && !state.hasSentSettings) {
         const settingsMessage = {
           type: 'Settings',
           audio: {
@@ -1345,17 +1423,20 @@ function DeepgramVoiceInteraction(
                 model: options.voice || 'aura-asteria-en'
               }
             },
-            greeting: options.greeting,
-            context: history // NEW: Include conversation context
+            greeting: options.greeting
+            // TODO: Context field format still not correct - API keeps rejecting it
+            // context: transformConversationHistory(history) // Try string format for context
           }
         };
         
-        log(`🔄 [LAZY_RECONNECT] Sending settings with conversation context (${history.length} messages):`, settingsMessage);
+        log(`🔄 [LAZY_RECONNECT] Sending settings (context disabled - API format issue):`, settingsMessage);
         agentManagerRef.current.sendJSON(settingsMessage);
         
         // Mark settings as sent
         dispatch({ type: 'SETTINGS_SENT', sent: true });
-        log('✅ [LAZY_RECONNECT] Settings sent with conversation context');
+        log('✅ [LAZY_RECONNECT] Settings sent (context disabled - API format issue)');
+      } else if (state.hasSentSettings) {
+        log('🔄 [LAZY_RECONNECT] Settings already sent, skipping duplicate');
       }
       
       log('✅ [LAZY_RECONNECT] Successfully connected with conversation context');
@@ -1381,6 +1462,11 @@ function DeepgramVoiceInteraction(
     resumeWithText,
     resumeWithAudio,
     connectWithContext,
+    triggerTimeoutForTesting: () => {
+      if (agentManagerRef.current) {
+        agentManagerRef.current.triggerTimeoutForTesting();
+      }
+    },
   }));
 
   // Render nothing (headless component)
