@@ -60,7 +60,7 @@ export interface WebSocketManagerOptions {
 const DEFAULT_OPTIONS: Partial<WebSocketManagerOptions> = {
   keepaliveInterval: 0, // Disabled by default for lazy reconnection - connections timeout naturally
   connectionTimeout: 10000, // 10 seconds - reasonable timeout for connection establishment
-  idleTimeout: 30000, // 30 seconds - reasonable timeout for natural conversation flow
+  idleTimeout: 10000, // 10 seconds - reasonable timeout for testing lazy reconnection
   debug: false,
 };
 
@@ -215,6 +215,9 @@ export class WebSocketManager {
         };
 
         this.ws.onmessage = (event) => {
+          // Reset idle timeout on any message received (correct behavior)
+          this.resetIdleTimeout();
+          
           // Log the type of data received for every message
           this.log(`Received message data type: ${typeof event.data}, is ArrayBuffer: ${event.data instanceof ArrayBuffer}, is Blob: ${event.data instanceof Blob}`);
           
@@ -446,8 +449,8 @@ export class WebSocketManager {
     try {
       this.log('Sending JSON:', data);
       this.ws.send(JSON.stringify(data));
-      // Reset idle timeout when sending messages (user activity)
-      this.resetIdleTimeoutOnUserActivity();
+      // Reset idle timeout when sending messages (correct behavior)
+      this.resetIdleTimeout();
       return true;
     } catch (error) {
       this.log('Error sending JSON:', error);
@@ -467,8 +470,8 @@ export class WebSocketManager {
     try {
       this.log(`Sending binary data: ${data instanceof ArrayBuffer ? data.byteLength : data.size} bytes`);
       this.ws.send(data);
-      // Reset idle timeout when sending messages (user activity)
-      this.resetIdleTimeoutOnUserActivity();
+      // Reset idle timeout when sending messages (correct behavior)
+      this.resetIdleTimeout();
       return true;
     } catch (error) {
       this.log('Error sending binary data:', error);
