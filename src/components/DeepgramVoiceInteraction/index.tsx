@@ -1563,7 +1563,12 @@ function DeepgramVoiceInteraction(
       
       lazyLog('Successfully resumed conversation with audio');
     } catch (error) {
-      lazyLog('Error resuming conversation with audio:', error);
+      lazyLog('❌ [resumeWithAudio] Error resuming conversation with audio:', error);
+      lazyLog('❌ [resumeWithAudio] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        name: error instanceof Error ? error.name : 'Unknown error type'
+      });
       handleError({
         service: 'agent',
         code: 'resume_audio_error',
@@ -1660,7 +1665,12 @@ function DeepgramVoiceInteraction(
       
       lazyLog('Successfully connected with conversation context');
     } catch (error) {
-      lazyLog('Error connecting with context:', error);
+      lazyLog('❌ [connectWithContext] Error connecting with context:', error);
+      lazyLog('❌ [connectWithContext] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        name: error instanceof Error ? error.name : 'Unknown error type'
+      });
       throw error;
     }
   };
