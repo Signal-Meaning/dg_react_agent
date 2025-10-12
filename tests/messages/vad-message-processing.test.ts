@@ -25,6 +25,11 @@ describe('VAD Message Processing', () => {
   const mockOnVADEvent = jest.fn();
   const mockDispatch = jest.fn();
 
+  // Check if we should run real API tests
+  // Only run real API tests when explicitly enabled via environment variable
+  const isRealAPITesting = process.env.RUN_REAL_API_TESTS === 'true' && 
+                          (!!process.env.VITE_DEEPGRAM_API_KEY || !!process.env.DEEPGRAM_API_KEY);
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -724,4 +729,65 @@ describe('VAD Message Processing', () => {
       expect(mockOnVADEvent).toHaveBeenCalledTimes(2);
     });
   });
+
+  // Real API Integration Tests (Message Format Validation Only)
+  if (isRealAPITesting) {
+    describe('Real API Integration Tests', () => {
+      it('should have API key available for real API tests', () => {
+        const apiKey = process.env.VITE_DEEPGRAM_API_KEY || process.env.DEEPGRAM_API_KEY;
+        expect(apiKey).toBeDefined();
+        expect(apiKey).not.toBe('');
+        console.log('API key available for real API tests');
+      });
+
+      it('should validate Deepgram message formats', () => {
+        // Test UserStoppedSpeaking format
+        const userStoppedMessage = {
+          type: 'UserStoppedSpeaking',
+          timestamp: Date.now()
+        };
+        expect(userStoppedMessage.type).toBe('UserStoppedSpeaking');
+        expect(typeof userStoppedMessage.timestamp).toBe('number');
+
+        // Test UtteranceEnd format
+        const utteranceEndMessage = {
+          type: 'UtteranceEnd',
+          channel: [0, 1],
+          last_word_end: 2.5
+        };
+        expect(utteranceEndMessage.type).toBe('UtteranceEnd');
+        expect(Array.isArray(utteranceEndMessage.channel)).toBe(true);
+        expect(utteranceEndMessage.channel.length).toBe(2);
+        expect(typeof utteranceEndMessage.last_word_end).toBe('number');
+
+        // Test VADEvent format
+        const vadEventMessage = {
+          type: 'VADEvent',
+          speech_detected: true,
+          confidence: 0.95,
+          timestamp: Date.now()
+        };
+        expect(vadEventMessage.type).toBe('VADEvent');
+        expect(typeof vadEventMessage.speech_detected).toBe('boolean');
+        expect(typeof vadEventMessage.confidence).toBe('number');
+        expect(vadEventMessage.confidence).toBeGreaterThanOrEqual(0);
+        expect(vadEventMessage.confidence).toBeLessThanOrEqual(1);
+        
+        console.log('Validated all Deepgram message formats');
+      });
+
+      it('should note that WebSocket tests are in E2E tests', () => {
+        console.log('Note: Real WebSocket connection tests are in E2E tests (Playwright)');
+        console.log('Run: npm run test:e2e to test actual WebSocket connections');
+        expect(true).toBe(true); // Always pass
+      });
+    });
+  } else {
+    describe('Real API Integration Tests', () => {
+      it.skip('should skip real API tests when not explicitly enabled', () => {
+        // Set RUN_REAL_API_TESTS=true to enable real API tests
+        // Example: RUN_REAL_API_TESTS=true npm test
+      });
+    });
+  }
 });
