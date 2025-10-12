@@ -175,6 +175,28 @@ function DeepgramVoiceInteraction(
   // Track if we're waiting for user voice after waking from sleep
   const isWaitingForUserVoiceAfterSleep = useRef(false);
   
+  // Track keepalive state - disable after UserStoppedSpeaking to allow natural timeout
+  const keepaliveEnabledRef = useRef(true);
+  
+  // Control keepalives based on user speaking state
+  const updateKeepaliveState = (enabled: boolean) => {
+    if (enabled && !keepaliveEnabledRef.current) {
+      // Enable keepalives
+      keepaliveEnabledRef.current = true;
+      if (agentManagerRef.current) {
+        agentManagerRef.current.startKeepalive();
+        log('Keepalives enabled');
+      }
+    } else if (!enabled && keepaliveEnabledRef.current) {
+      // Disable keepalives
+      keepaliveEnabledRef.current = false;
+      if (agentManagerRef.current) {
+        agentManagerRef.current.stopKeepalive();
+        log('Keepalives disabled - allowing natural timeout');
+      }
+    }
+  };
+  
   // Refs to track previous state values to prevent redundant callback calls
   const prevIsReadyRef = useRef<boolean | undefined>(undefined);
   const prevAgentStateRef = useRef<AgentState | undefined>(undefined);
@@ -789,6 +811,9 @@ function DeepgramVoiceInteraction(
       clearAudio();
       onUserStartedSpeaking?.();
       
+      // Re-enable keepalives when user starts speaking
+      updateKeepaliveState(true);
+      
       if (isWaitingForUserVoiceAfterSleep.current) {
         log('User started speaking after wake - resetting waiting flag');
         isWaitingForUserVoiceAfterSleep.current = false;
@@ -821,6 +846,10 @@ function DeepgramVoiceInteraction(
     if (data.type === 'AgentThinking') {
       sleepLog('Dispatching AGENT_STATE_CHANGE to thinking');
       dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
+      
+      // Disable keepalives when agent starts thinking (user stopped speaking)
+      updateKeepaliveState(false);
+      
       return;
     }
     

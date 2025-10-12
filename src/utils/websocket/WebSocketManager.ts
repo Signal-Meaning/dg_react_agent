@@ -7,6 +7,7 @@ export type WebSocketEvent =
   | { type: 'state'; state: ConnectionState; isReconnection?: boolean }
   | { type: 'message'; data: any }
   | { type: 'binary'; data: ArrayBuffer }
+  | { type: 'keepalive'; data: { type: string; timestamp: number; service: ServiceType } }
   | { type: 'error'; error: DeepgramError };
 
 /**
@@ -336,7 +337,7 @@ export class WebSocketManager {
   /**
    * Starts the keepalive interval
    */
-  private startKeepalive(): void {
+  public startKeepalive(): void {
     if (this.keepaliveIntervalId !== null) {
       this.stopKeepalive();
     }
@@ -356,7 +357,7 @@ export class WebSocketManager {
   /**
    * Stops the keepalive interval
    */
-  private stopKeepalive(): void {
+  public stopKeepalive(): void {
     if (this.keepaliveIntervalId !== null) {
       window.clearInterval(this.keepaliveIntervalId);
       this.keepaliveIntervalId = null;
