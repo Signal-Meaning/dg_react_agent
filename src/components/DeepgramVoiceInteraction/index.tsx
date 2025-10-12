@@ -656,14 +656,6 @@ function DeepgramVoiceInteraction(
           sample_rate: 24000
         }
       },
-      text: {
-        input: {
-          encoding: 'utf8'
-        },
-        output: {
-          encoding: 'utf8'
-        }
-      },
       agent: {
         language: agentOptions.language || 'en',
         listen: {
