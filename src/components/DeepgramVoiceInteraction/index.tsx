@@ -1503,6 +1503,7 @@ function DeepgramVoiceInteraction(
 
   // Resume conversation with audio input (lazy reconnection)
   const resumeWithAudio = async (): Promise<void> => {
+    console.log('🔍 [resumeWithAudio] Function called - starting execution');
     lazyLog('🔍 [resumeWithAudio] Function called - starting execution');
     lazyLog('Resuming conversation with audio');
     lazyLog(`Current conversation history length: ${state.conversationHistory.length}`);
