@@ -467,7 +467,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onConnectionReady={handleConnectionReady}
         onAgentSpeaking={handleAgentSpeaking}
         onAgentSilent={handleAgentSilent}
-        debug={true}
+        debug={false}
       />
       
       <div style={{ border: '1px solid blue', padding: '10px', margin: '15px 0' }}>
