@@ -60,7 +60,7 @@ export interface WebSocketManagerOptions {
 const DEFAULT_OPTIONS: Partial<WebSocketManagerOptions> = {
   keepaliveInterval: 0, // Disabled by default for lazy reconnection - connections timeout naturally
   connectionTimeout: 10000, // 10 seconds - reasonable timeout for connection establishment
-  idleTimeout: 10000, // 10 seconds - close connection after 10 seconds of inactivity
+  idleTimeout: 5000, // 5 seconds - close connection before server audio timeout (~8s)
   debug: false,
 };
 
