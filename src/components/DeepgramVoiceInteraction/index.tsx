@@ -788,6 +788,16 @@ function DeepgramVoiceInteraction(
         return;
       }
       
+      // Stop keepalives to allow natural connection timeout
+      if (agentManagerRef.current) {
+        console.log('🎯 [VAD] Stopping keepalives after UtteranceEnd - connection will timeout naturally');
+        console.log('🎯 [VAD] Agent manager state before stopKeepalive:', agentManagerRef.current.getState());
+        agentManagerRef.current.stopKeepalive();
+        console.log('🎯 [VAD] stopKeepalive() called successfully');
+      } else {
+        console.log('🎯 [VAD] ERROR: agentManagerRef.current is null - cannot stop keepalives');
+      }
+      
       // Call the callback with channel and lastWordEnd data
       const channel = Array.isArray(data.channel) ? data.channel : [0, 1];
       const lastWordEnd = typeof data.last_word_end === 'number' ? data.last_word_end : 0;
