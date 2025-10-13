@@ -736,14 +736,21 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    // Check if connection is already established and settings might have been sent
-    if (agentManagerRef.current && agentManagerRef.current.getState() === 'connected') {
-      console.log('🔧 [sendAgentSettings] Connection already established, checking if settings were sent');
-      // If connection is already established, assume settings were sent
-      hasSentSettingsRef.current = true;
-      console.log('🔧 [sendAgentSettings] Assuming settings already sent for existing connection');
-      return;
-    }
+        // Check if connection is already established and settings might have been sent
+        if (agentManagerRef.current && agentManagerRef.current.getState() === 'connected') {
+          console.log('🔧 [sendAgentSettings] Connection already established, checking if settings were sent');
+          console.log('🔧 [sendAgentSettings] hasSentSettingsRef.current:', hasSentSettingsRef.current);
+          console.log('🔧 [sendAgentSettings] state.hasSentSettings:', state.hasSentSettings);
+          
+          // Only assume settings were sent if we haven't explicitly tracked them
+          if (!hasSentSettingsRef.current && !state.hasSentSettings) {
+            console.log('🔧 [sendAgentSettings] Connection established but no settings tracked, sending them now');
+            // Don't return, continue to send settings
+          } else {
+            console.log('🔧 [sendAgentSettings] Settings already tracked as sent, skipping');
+            return;
+          }
+        }
     
     // Mark as sent immediately to prevent duplicate calls
     hasSentSettingsRef.current = true;
@@ -1198,8 +1205,14 @@ function DeepgramVoiceInteraction(
 
   // Send audio data to WebSockets - conditionally route based on configuration
   const sendAudioData = (data: ArrayBuffer) => {
+    console.log('🎵 [sendAudioData] Called with data size:', data.byteLength);
+    console.log('🎵 [sendAudioData] hasSentSettingsRef.current:', hasSentSettingsRef.current);
+    console.log('🎵 [sendAudioData] state.hasSentSettings:', state.hasSentSettings);
+    console.log('🎵 [sendAudioData] agentManagerRef.current?.getState():', agentManagerRef.current?.getState());
+    
     // Send to transcription service if configured and connected
     if (transcriptionManagerRef.current?.getState() === 'connected') {
+      console.log('🎵 [sendAudioData] Sending to transcription service');
       transcriptionManagerRef.current.sendBinary(data);
     }
     
@@ -1211,9 +1224,21 @@ function DeepgramVoiceInteraction(
       stateRef.current.agentState === 'entering_sleep';
       
       if (agentManagerRef.current.getState() === 'connected' && !isSleepingOrEntering) {
-      agentManagerRef.current.sendBinary(data);
-    } else if (isSleepingOrEntering) {
-      sleepLog('Skipping sendAudioData to agent (state:', stateRef.current.agentState, ')');
+        // CRITICAL: Don't send audio data before settings are sent
+        if (!hasSentSettingsRef.current) {
+          console.log('🎵 [sendAudioData] ❌ CRITICAL: Cannot send audio data before settings are sent!');
+          console.log('🎵 [sendAudioData] ❌ hasSentSettingsRef.current:', hasSentSettingsRef.current);
+          console.log('🎵 [sendAudioData] ❌ state.hasSentSettings:', state.hasSentSettings);
+          return; // Don't send audio data
+        }
+        
+        console.log('🎵 [sendAudioData] ✅ Settings confirmed, sending to agent service');
+        agentManagerRef.current.sendBinary(data);
+      } else if (isSleepingOrEntering) {
+        console.log('🎵 [sendAudioData] Skipping agent service - sleeping state:', stateRef.current.agentState);
+        sleepLog('Skipping sendAudioData to agent (state:', stateRef.current.agentState, ')');
+      } else {
+        console.log('🎵 [sendAudioData] Skipping agent service - not connected:', agentManagerRef.current.getState());
       }
     }
   };
