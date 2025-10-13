@@ -575,14 +575,8 @@ function DeepgramVoiceInteraction(
           try {
             await agentManagerRef.current.connect();
             
-            // Wait for connection to be fully established
-            let connectionWaitAttempts = 0;
-            const maxConnectionWait = 20; // 2 seconds max wait
-            while (agentManagerRef.current.getState() !== 'connected' && connectionWaitAttempts < maxConnectionWait) {
-              console.log(`Auto-connect: Waiting for connection... attempt ${connectionWaitAttempts + 1}/${maxConnectionWait}`);
-              await new Promise(resolve => setTimeout(resolve, 100));
-              connectionWaitAttempts++;
-            }
+            // Wait for connection to be fully established (simplified)
+            await new Promise(resolve => setTimeout(resolve, 200)); // Simple wait
             
             // Ensure settings are sent after connection is established
             if (agentManagerRef.current.getState() === 'connected') {
@@ -1232,21 +1226,8 @@ function DeepgramVoiceInteraction(
           console.log('🎵 [sendAudioData] ❌ CRITICAL: Cannot send audio data before settings are sent!');
           console.log('🎵 [sendAudioData] ❌ hasSentSettingsRef.current:', hasSentSettingsRef.current);
           console.log('🎵 [sendAudioData] ❌ state.hasSentSettings:', state.hasSentSettings);
-          console.log('🎵 [sendAudioData] ❌ Attempting to send settings now...');
-          
-          // Try to send settings if they haven't been sent yet
-          sendAgentSettings();
-          
-          // Wait a bit for settings to be processed
-          setTimeout(() => {
-            if (hasSentSettingsRef.current) {
-              console.log('🎵 [sendAudioData] ✅ Settings sent, retrying audio data');
-              agentManagerRef.current.sendBinary(data);
-            } else {
-              console.log('🎵 [sendAudioData] ❌ Settings still not sent after retry');
-            }
-          }, 100);
-          return; // Don't send audio data immediately
+          console.log('🎵 [sendAudioData] ❌ Dropping audio data - settings not sent');
+          return; // Drop audio data - don't retry to avoid infinite loops
         }
         
         console.log('🎵 [sendAudioData] ✅ Settings confirmed, sending to agent service');
