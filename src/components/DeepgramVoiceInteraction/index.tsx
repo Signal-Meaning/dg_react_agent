@@ -176,6 +176,7 @@ function DeepgramVoiceInteraction(
   
   // Track if auto-connect has been attempted to prevent multiple attempts
   const autoConnectAttemptedRef = useRef(false);
+  const hasSentSettingsRef = useRef(false);
   
   
   // Track if we're waiting for user voice after waking from sleep
@@ -421,6 +422,7 @@ function DeepgramVoiceInteraction(
         // Reset settings flag when connection closes for lazy reconnection
         if (event.state === 'closed') {
           dispatch({ type: 'SETTINGS_SENT', sent: false });
+          hasSentSettingsRef.current = false; // Reset ref when connection closes
           lazyLog('Reset hasSentSettings flag due to connection close');
         }
         
@@ -692,10 +694,14 @@ function DeepgramVoiceInteraction(
     }
     
     // Check if settings have already been sent (welcome-first behavior)
-    if (state.hasSentSettings) {
-      console.log('🔧 [sendAgentSettings] Settings already sent, skipping');
+    // Use a ref to avoid stale closure issues
+    if (hasSentSettingsRef.current) {
+      console.log('🔧 [sendAgentSettings] Settings already sent (via ref), skipping');
       return;
     }
+    
+    // Mark as sent immediately to prevent duplicate calls
+    hasSentSettingsRef.current = true;
     
     // Build the Settings message based on agentOptions
     const settingsMessage = {
