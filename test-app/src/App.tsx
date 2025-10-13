@@ -553,7 +553,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
         onUtteranceEnd={handleUtteranceEnd}
         onVADEvent={handleVADEvent}
-        debug={false}
+        debug={true}
       />
       
       <div style={{ border: '1px solid blue', padding: '10px', margin: '15px 0' }}>

@@ -155,7 +155,7 @@ export class AudioManager {
   // Improved audio playback variables
   private startTimeRef = { current: 0 };
   private analyzer: AnalyserNode | null = null;
-  private analyzerData: Uint8Array | null = null;
+  // private analyzerData: Uint8Array | null = null; // Unused for now
   private currentSource: AudioBufferSourceNode | null = null;
   private activeSourceNodes: AudioBufferSourceNode[] = []; // Track all active/scheduled sources
   
@@ -227,7 +227,7 @@ export class AudioManager {
       if (this.options.normalizeVolume) {
         this.analyzer = this.audioContext.createAnalyser();
         this.analyzer.fftSize = 1024;
-        this.analyzerData = new Uint8Array(this.analyzer.frequencyBinCount);
+        // this.analyzerData = new Uint8Array(this.analyzer.frequencyBinCount); // Unused for now
         this.log('Created audio analyzer for volume normalization');
       }
       
@@ -626,7 +626,7 @@ export class AudioManager {
     if (this.analyzer) {
       this.analyzer.disconnect();
       this.analyzer = null;
-      this.analyzerData = null;
+      // this.analyzerData = null; // Unused for now
     }
     
     if (this.audioContext) {
