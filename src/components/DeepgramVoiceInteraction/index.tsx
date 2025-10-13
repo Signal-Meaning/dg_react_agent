@@ -844,6 +844,17 @@ function DeepgramVoiceInteraction(
         try {
           await audioManagerRef.current.startRecording();
           console.log('✅ startRecording completed successfully');
+          
+          // Wait for settings to be processed by Deepgram before allowing audio data
+          if (settingsSentTimeRef.current) {
+            const timeSinceSettings = Date.now() - settingsSentTimeRef.current;
+            if (timeSinceSettings < 500) {
+              const waitTime = 500 - timeSinceSettings;
+              console.log(`⏳ Waiting ${waitTime}ms for settings to be processed by Deepgram...`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+          }
+          
           console.log('🎤 [toggleMic] Dispatching MIC_ENABLED_CHANGE with enabled: true');
           dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: true });
           console.log('🎤 [toggleMic] Calling onMicToggle with true');
