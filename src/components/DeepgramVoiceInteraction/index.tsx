@@ -574,14 +574,22 @@ function DeepgramVoiceInteraction(
           console.log('Calling agentManagerRef.current.connect()');
           try {
             await agentManagerRef.current.connect();
-            // Wait a bit for the connection to be fully established
-            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Wait for connection to be fully established
+            let connectionWaitAttempts = 0;
+            const maxConnectionWait = 20; // 2 seconds max wait
+            while (agentManagerRef.current.getState() !== 'connected' && connectionWaitAttempts < maxConnectionWait) {
+              console.log(`Auto-connect: Waiting for connection... attempt ${connectionWaitAttempts + 1}/${maxConnectionWait}`);
+              await new Promise(resolve => setTimeout(resolve, 100));
+              connectionWaitAttempts++;
+            }
+            
             // Ensure settings are sent after connection is established
             if (agentManagerRef.current.getState() === 'connected') {
               log('Auto-connect: Connection established, sending settings');
               sendAgentSettings();
             } else {
-              log('Auto-connect: Connection not fully established yet');
+              log('Auto-connect: Connection not fully established after waiting');
             }
           } catch (error) {
             log('Auto-connect failed:', error);
@@ -723,6 +731,7 @@ function DeepgramVoiceInteraction(
     console.log(`🔧 [sendAgentSettings] agentManagerRef.current: ${!!agentManagerRef.current}`);
     console.log(`🔧 [sendAgentSettings] agentOptions: ${!!agentOptions}`);
     console.log(`🔧 [sendAgentSettings] hasSentSettings: ${state.hasSentSettings}`);
+    console.log(`🔧 [sendAgentSettings] hasSentSettingsRef.current: ${hasSentSettingsRef.current}`);
     
     if (!agentManagerRef.current || !agentOptions) {
       console.log('🔧 [sendAgentSettings] Cannot send agent settings: agent manager not initialized or agentOptions not provided');
@@ -733,6 +742,12 @@ function DeepgramVoiceInteraction(
     // Use a ref to avoid stale closure issues
     if (hasSentSettingsRef.current) {
       console.log('🔧 [sendAgentSettings] Settings already sent (via ref), skipping');
+      return;
+    }
+    
+    // Check if connection is ready
+    if (agentManagerRef.current.getState() !== 'connected') {
+      console.log('🔧 [sendAgentSettings] Connection not ready, skipping');
       return;
     }
     
@@ -1217,7 +1232,21 @@ function DeepgramVoiceInteraction(
           console.log('🎵 [sendAudioData] ❌ CRITICAL: Cannot send audio data before settings are sent!');
           console.log('🎵 [sendAudioData] ❌ hasSentSettingsRef.current:', hasSentSettingsRef.current);
           console.log('🎵 [sendAudioData] ❌ state.hasSentSettings:', state.hasSentSettings);
-          return; // Don't send audio data
+          console.log('🎵 [sendAudioData] ❌ Attempting to send settings now...');
+          
+          // Try to send settings if they haven't been sent yet
+          sendAgentSettings();
+          
+          // Wait a bit for settings to be processed
+          setTimeout(() => {
+            if (hasSentSettingsRef.current) {
+              console.log('🎵 [sendAudioData] ✅ Settings sent, retrying audio data');
+              agentManagerRef.current.sendBinary(data);
+            } else {
+              console.log('🎵 [sendAudioData] ❌ Settings still not sent after retry');
+            }
+          }, 100);
+          return; // Don't send audio data immediately
         }
         
         console.log('🎵 [sendAudioData] ✅ Settings confirmed, sending to agent service');
