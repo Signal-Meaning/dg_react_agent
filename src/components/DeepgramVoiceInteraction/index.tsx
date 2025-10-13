@@ -742,7 +742,7 @@ function DeepgramVoiceInteraction(
           console.log('🔧 [sendAgentSettings] hasSentSettingsRef.current:', hasSentSettingsRef.current);
           console.log('🔧 [sendAgentSettings] state.hasSentSettings:', state.hasSentSettings);
           
-          // Only assume settings were sent if we haven't explicitly tracked them
+          // Always send settings if we haven't explicitly tracked them as sent
           if (!hasSentSettingsRef.current && !state.hasSentSettings) {
             console.log('🔧 [sendAgentSettings] Connection established but no settings tracked, sending them now');
             // Don't return, continue to send settings
@@ -808,9 +808,11 @@ function DeepgramVoiceInteraction(
       contextMessages: transformConversationHistory(state.conversationHistory).messages
     });
     agentManagerRef.current.sendJSON(settingsMessage);
+    console.log('📤 [Protocol] Settings message sent successfully');
     
     // Mark settings as sent for welcome-first behavior
     dispatch({ type: 'SETTINGS_SENT', sent: true });
+    console.log('📤 [Protocol] Settings sent state updated to true');
   };
 
   // Microphone control function
