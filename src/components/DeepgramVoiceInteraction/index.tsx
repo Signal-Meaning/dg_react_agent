@@ -355,12 +355,12 @@ function DeepgramVoiceInteraction(
       // Add VAD configuration if provided
       if (transcriptionOptions.utterance_end_ms) {
         baseTranscriptionParams.utterance_end_ms = transcriptionOptions.utterance_end_ms;
-        log(`VAD: utterance_end_ms set to ${transcriptionOptions.utterance_end_ms}ms`);
+        console.log(`VAD: utterance_end_ms set to ${transcriptionOptions.utterance_end_ms}ms`);
       }
       
       if (transcriptionOptions.interim_results !== undefined) {
         baseTranscriptionParams.interim_results = transcriptionOptions.interim_results;
-        log(`VAD: interim_results set to ${transcriptionOptions.interim_results}`);
+        console.log(`VAD: interim_results set to ${transcriptionOptions.interim_results}`);
       }
 
       // Check for Nova-3 Keyterm Prompting conditions
@@ -411,7 +411,7 @@ function DeepgramVoiceInteraction(
       }
       
       // Log final transcription URL with VAD parameters
-      log('Final transcription URL:', transcriptionUrl);
+      console.log('Final transcription URL:', transcriptionUrl);
       if (useKeytermPrompting) {
         log('Using keyterm prompting - VAD params in URL');
       } else {
