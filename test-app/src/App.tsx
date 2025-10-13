@@ -86,8 +86,8 @@ function App() {
     diarize: true, 
     channels: 1,
     // VAD configuration for Voice Activity Detection events
-    utteranceEndMs: 1000, // Enable UtteranceEnd detection
-    interimResults: true,  // Required for UtteranceEnd
+    // utteranceEndMs: 1000, // Enable UtteranceEnd detection
+    // interimResults: true,  // Required for UtteranceEnd
     // Add keyterms that might be tricky for standard models
     keyterm: [
       "Casella", // Proper noun

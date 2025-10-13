@@ -594,9 +594,15 @@ function DeepgramVoiceInteraction(
             // Wait for connection to be fully established (simplified)
             await new Promise(resolve => setTimeout(resolve, 200)); // Simple wait
             
-            // Connection established - settings will be sent by component when needed
+            // Send settings immediately after connection to enable greeting
             if (agentManagerRef.current.getState() === 'connected') {
-              log('Auto-connect: Connection established, ready for settings');
+              log('Auto-connect: Connection established, sending settings for greeting');
+              // Only send settings if they haven't been sent yet
+              if (!hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
+                sendAgentSettings();
+              } else {
+                log('Auto-connect: Settings already sent, skipping');
+              }
             } else {
               log('Auto-connect: Connection not fully established after waiting');
             }
