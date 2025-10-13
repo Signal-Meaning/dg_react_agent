@@ -338,7 +338,9 @@ function DeepgramVoiceInteraction(
 
     // --- TRANSCRIPTION SETUP (CONDITIONAL) ---
     if (isTranscriptionConfigured) {
-      log('🔧 [TRANSCRIPTION] Starting transcription setup');
+      if (!transcriptionManagerRef.current) {
+        try {
+          log('🔧 [TRANSCRIPTION] Starting transcription setup');
       let transcriptionUrl = endpoints.transcriptionUrl;
       let transcriptionQueryParams: Record<string, string | boolean | number> = {};
 
@@ -437,6 +439,17 @@ function DeepgramVoiceInteraction(
         handleError(event.error);
       }
     });
+        } catch (error) {
+          console.error('Exception in transcription setup:', error);
+          handleError({
+            service: 'transcription',
+            code: 'setup_error',
+            message: `Transcription setup failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          });
+        }
+      } else {
+        log('Transcription manager already exists, skipping setup');
+      }
     } else {
       log('Transcription service not configured, skipping setup');
     }

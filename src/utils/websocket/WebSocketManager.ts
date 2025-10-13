@@ -78,7 +78,7 @@ export class WebSocketManager {
   private connectionState: ConnectionState = 'closed';
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
-  private reconnectDelay = 1000; // Start with 1 second
+  // private reconnectDelay = 1000; // Start with 1 second - Unused for now
   private hasEverConnected = false;
 
   /**
@@ -321,18 +321,18 @@ export class WebSocketManager {
   /**
    * Attempt to reconnect with exponential backoff
    */
-  private attemptReconnect(): void {
-    this.reconnectAttempts++;
-    const delay = Math.min(30000, this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1));
-    
-    this.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-    
-    setTimeout(() => {
-      this.connect().catch(error => {
-        this.log('Reconnection failed:', error);
-      });
-    }, delay);
-  }
+  // private attemptReconnect(): void { // Unused for now
+  //   this.reconnectAttempts++;
+  //   const delay = Math.min(30000, this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1));
+  //   
+  //   this.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+  //   
+  //   setTimeout(() => {
+  //     this.connect().catch(error => {
+  //       this.log('Reconnection failed:', error);
+  //     });
+  //   }, delay);
+  // }
 
   /**
    * Starts the keepalive interval
@@ -431,12 +431,12 @@ export class WebSocketManager {
    * Resets the idle timeout only on user activity (not agent responses)
    * This prevents timeouts during natural conversation flow
    */
-  private resetIdleTimeoutOnUserActivity(): void {
-    if (this.options.idleTimeout && this.options.idleTimeout > 0) {
-      this.stopIdleTimeout();
-      this.startIdleTimeout();
-    }
-  }
+  // private resetIdleTimeoutOnUserActivity(): void { // Unused for now
+  //   if (this.options.idleTimeout && this.options.idleTimeout > 0) {
+  //     this.stopIdleTimeout();
+  //     this.startIdleTimeout();
+  //   }
+  // }
 
   /**
    * Sends a JSON message over the WebSocket
