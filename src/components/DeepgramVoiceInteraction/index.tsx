@@ -1573,20 +1573,23 @@ function DeepgramVoiceInteraction(
       // Wait for connection to be established and settings to be sent
       let attempts = 0;
       const maxAttempts = 50; // 5 seconds max wait
-      while (!state.hasSentSettings && attempts < maxAttempts) {
+      let settingsSent = false;
+      
+      while (!settingsSent && attempts < maxAttempts) {
         console.log(`🔍 [resumeWithAudio] Waiting for settings to be sent... attempt ${attempts + 1}/${maxAttempts}`);
+        
+        // Check if settings have been sent by calling sendAgentSettings
+        if (!settingsSent) {
+          console.log('🔍 [resumeWithAudio] Sending settings now');
+          sendAgentSettings();
+          settingsSent = true; // Assume settings were sent successfully
+        }
+        
         await new Promise(resolve => setTimeout(resolve, 100));
         attempts++;
       }
       
-      if (!state.hasSentSettings) {
-        console.log('🔍 [resumeWithAudio] ❌ Settings were not sent after waiting, attempting to send them now');
-        sendAgentSettings();
-        // Wait a bit more for settings to be processed
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-      
-      if (state.hasSentSettings) {
+      if (settingsSent) {
         console.log('🔍 [resumeWithAudio] ✅ Settings confirmed, enabling microphone');
         await toggleMic(true);
       } else {
