@@ -362,6 +362,10 @@ export class WebSocketManager {
       window.clearInterval(this.keepaliveIntervalId);
       this.keepaliveIntervalId = null;
       this.log('Stopped keepalive interval');
+      console.log('🔧 [WebSocketManager] Keepalive interval cleared and stopped');
+    } else {
+      this.log('No keepalive interval to stop');
+      console.log('🔧 [WebSocketManager] No keepalive interval was running to stop');
     }
   }
 
