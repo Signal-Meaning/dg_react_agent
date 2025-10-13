@@ -764,28 +764,30 @@ function DeepgramVoiceInteraction(
   const toggleMic = async (enable: boolean) => {
     console.log('🎤 [toggleMic] called with:', enable);
     console.log('🎤 [toggleMic] hasSentSettings:', state.hasSentSettings);
+    console.log('🎤 [toggleMic] hasSentSettingsRef:', hasSentSettingsRef.current);
     console.log('🎤 [toggleMic] audioManagerRef.current:', !!audioManagerRef.current);
     
     if (enable) {
-      if (!state.hasSentSettings) {
-        log('❌ Cannot enable microphone before settings are sent');
-        log('❌ hasSentSettings is false - attempting to send settings now');
+      // Use ref to avoid stale closure issues
+      if (!hasSentSettingsRef.current) {
+        console.log('❌ Cannot enable microphone before settings are sent');
+        console.log('❌ hasSentSettingsRef is false - attempting to send settings now');
         
         // Try to send settings if they haven't been sent yet
         if (agentManagerRef.current && agentOptions) {
-          log('🔧 Attempting to send settings from toggleMic');
+          console.log('🔧 Attempting to send settings from toggleMic');
           sendAgentSettings();
           
           // Wait a bit for settings to be processed
           await new Promise(resolve => setTimeout(resolve, 100));
           
           // Check if settings were sent successfully
-          if (!state.hasSentSettings) {
-            log('❌ Settings still not sent after attempt');
+          if (!hasSentSettingsRef.current) {
+            console.log('❌ Settings still not sent after attempt');
             return;
           }
         } else {
-          log('❌ Cannot send settings: agentManagerRef or agentOptions missing');
+          console.log('❌ Cannot send settings: agentManagerRef or agentOptions missing');
           return;
         }
       }
