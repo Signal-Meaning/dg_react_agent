@@ -627,19 +627,6 @@ function DeepgramVoiceInteraction(
         autoConnectAttemptedRef.current = true; // Mark as attempted
         
         console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current);
-        
-        // Connect transcription service if configured
-        if (transcriptionManagerRef.current) {
-          console.log('Auto-connect: Connecting transcription service');
-          try {
-            await transcriptionManagerRef.current.connect();
-            console.log('Auto-connect: Transcription service connected');
-          } catch (error) {
-            console.log('Auto-connect: Failed to connect transcription service:', error);
-          }
-        }
-        
-        // Connect agent service if configured
         if (agentManagerRef.current) {
           console.log('Calling agentManagerRef.current.connect()');
           try {
@@ -928,6 +915,17 @@ function DeepgramVoiceInteraction(
         try {
           await audioManagerRef.current.startRecording();
           console.log('✅ startRecording completed successfully');
+          
+          // Connect transcription service for VAD events when microphone starts
+          if (transcriptionManagerRef.current && transcriptionManagerRef.current.getState() !== 'connected') {
+            console.log('🎤 [VAD] Connecting transcription service for VAD events');
+            try {
+              await transcriptionManagerRef.current.connect();
+              console.log('🎤 [VAD] Transcription service connected for VAD events');
+            } catch (error) {
+              console.log('🎤 [VAD] Failed to connect transcription service:', error);
+            }
+          }
           
           // Wait for settings to be processed by Deepgram before allowing audio data
           if (settingsSentTimeRef.current) {
