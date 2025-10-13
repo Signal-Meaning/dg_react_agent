@@ -793,9 +793,15 @@ function DeepgramVoiceInteraction(
       }
       
       if (audioManagerRef.current) {
-        log('✅ Enabling microphone...');
+        console.log('✅ Enabling microphone...');
         console.log('Calling startRecording on audioManagerRef.current');
-        await audioManagerRef.current.startRecording();
+        try {
+          await audioManagerRef.current.startRecording();
+          console.log('✅ startRecording completed successfully');
+        } catch (error) {
+          console.log('❌ startRecording failed:', error);
+          throw error;
+        }
         dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: true });
         onMicToggle?.(true);
         log('✅ Microphone enabled');
