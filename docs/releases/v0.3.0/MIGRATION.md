@@ -1,8 +1,8 @@
-# Migration Guide: v0.x to v1.0.0
+# Migration Guide: v0.2.1 to v0.3.0
 
 ## Overview
 
-This guide helps you migrate from dg_react_agent v0.x to v1.0.0. While v1.0.0 introduces significant new features, most existing implementations should work with minimal changes.
+This guide helps you migrate from dg_react_agent v0.2.1 to v0.3.0. While v0.3.0 introduces significant new features, all existing implementations will work without changes as this is a backward-compatible release.
 
 ## Breaking Changes
 
