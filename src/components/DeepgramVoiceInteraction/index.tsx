@@ -274,6 +274,12 @@ function DeepgramVoiceInteraction(
 
   // Handle errors
   const handleError = (error: DeepgramError) => {
+    console.log('🚨 [ERROR] Deepgram error received:', error);
+    console.log('🚨 [ERROR] Error service:', error.service);
+    console.log('🚨 [ERROR] Error code:', error.code);
+    console.log('🚨 [ERROR] Error message:', error.message);
+    console.log('🚨 [ERROR] Error details:', error.details);
+    
     log('Error:', error);
     dispatch({ type: 'ERROR', message: error.message });
     onError?.(error);
@@ -490,6 +496,9 @@ function DeepgramVoiceInteraction(
         
         // Reset settings flag when connection closes for lazy reconnection
         if (event.state === 'closed') {
+          console.log('🔧 [Connection] Agent connection closed - checking for errors or reasons');
+          console.log('🔧 [Connection] Connection close event details:', event);
+          
           dispatch({ type: 'SETTINGS_SENT', sent: false });
           hasSentSettingsRef.current = false; // Reset ref when connection closes
           (window as any).globalSettingsSent = false; // Reset global flag when connection closes
