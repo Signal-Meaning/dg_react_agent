@@ -429,7 +429,7 @@ function DeepgramVoiceInteraction(
         // Send settings message when connection is established (unless we're lazy reconnecting)
         // Only send settings if they haven't been sent AND we're not in auto-connect mode
         // (auto-connect will handle settings sending via its own timeout)
-        if (event.state === 'connected' && !isLazyReconnectingRef.current && !state.hasSentSettings && !autoConnect) {
+        if (event.state === 'connected' && !isLazyReconnectingRef.current && !hasSentSettingsRef.current && !autoConnect) {
           log('Connection established, sending settings via connection state handler');
           sendAgentSettings();
         } else if (event.state === 'connected' && isLazyReconnectingRef.current) {
@@ -509,8 +509,6 @@ function DeepgramVoiceInteraction(
     // Auto-connect dual mode logic
     console.log('Auto-connect check:', { autoConnect, isAgentConfigured, agentManagerRef: !!agentManagerRef.current });
     if (autoConnect === true && isAgentConfigured && !autoConnectAttemptedRef.current) {
-      autoConnectAttemptedRef.current = true; // Mark as attempted
-      
       // Validate API key before attempting connection
       const isValidApiKey = apiKey && 
         apiKey !== 'your-deepgram-api-key-here' && 
@@ -533,6 +531,13 @@ function DeepgramVoiceInteraction(
       
       // Auto-connect to agent service to establish dual mode
       setTimeout(async () => {
+        // Check again inside setTimeout to prevent multiple executions
+        if (autoConnectAttemptedRef.current) {
+          console.log('Auto-connect already attempted, skipping');
+          return;
+        }
+        autoConnectAttemptedRef.current = true; // Mark as attempted
+        
         console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current);
         if (agentManagerRef.current) {
           console.log('Calling agentManagerRef.current.connect()');
