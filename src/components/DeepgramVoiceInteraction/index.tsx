@@ -736,22 +736,6 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-        // Check if connection is already established and settings might have been sent
-        if (agentManagerRef.current && agentManagerRef.current.getState() === 'connected') {
-          console.log('🔧 [sendAgentSettings] Connection already established, checking if settings were sent');
-          console.log('🔧 [sendAgentSettings] hasSentSettingsRef.current:', hasSentSettingsRef.current);
-          console.log('🔧 [sendAgentSettings] state.hasSentSettings:', state.hasSentSettings);
-          
-          // Always send settings if we haven't explicitly tracked them as sent
-          if (!hasSentSettingsRef.current && !state.hasSentSettings) {
-            console.log('🔧 [sendAgentSettings] Connection established but no settings tracked, sending them now');
-            // Don't return, continue to send settings
-          } else {
-            console.log('🔧 [sendAgentSettings] Settings already tracked as sent, skipping');
-            return;
-          }
-        }
-    
     // Mark as sent immediately to prevent duplicate calls
     hasSentSettingsRef.current = true;
     console.log('🔧 [sendAgentSettings] hasSentSettingsRef set to true');
