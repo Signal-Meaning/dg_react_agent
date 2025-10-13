@@ -663,12 +663,20 @@ function DeepgramVoiceInteraction(
 
   // Check if WebSocket connection needs reconnection
   const needsReconnection = (): boolean => {
-    const isWebSocketOpen = agentManagerRef.current?.isConnected() || false;
-    
-    // Only reconnect if WebSocket is actually closed or manager doesn't exist
-    const needsReconnect = !agentManagerRef.current || !isWebSocketOpen;
-    console.log(`🔍 [needsReconnection] agentManagerRef.current: ${!!agentManagerRef.current}, isConnected: ${isWebSocketOpen}, hasSentSettings: ${state.hasSentSettings}, needsReconnect: ${needsReconnect}`);
-    return needsReconnect;
+    try {
+      console.log(`🔍 [needsReconnection] About to call isConnected()`);
+      const isWebSocketOpen = agentManagerRef.current?.isConnected() || false;
+      console.log(`🔍 [needsReconnection] isConnected() returned: ${isWebSocketOpen}`);
+      
+      // Only reconnect if WebSocket is actually closed or manager doesn't exist
+      const needsReconnect = !agentManagerRef.current || !isWebSocketOpen;
+      console.log(`🔍 [needsReconnection] agentManagerRef.current: ${!!agentManagerRef.current}, isConnected: ${isWebSocketOpen}, hasSentSettings: ${state.hasSentSettings}, needsReconnect: ${needsReconnect}`);
+      return needsReconnect;
+    } catch (error) {
+      console.log(`🔍 [needsReconnection] Error calling isConnected():`, error);
+      // If there's an error, assume we need to reconnect
+      return true;
+    }
   };
 
   // Send agent settings after connection is established - only if agent is configured
