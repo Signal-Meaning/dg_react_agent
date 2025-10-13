@@ -178,6 +178,9 @@ function DeepgramVoiceInteraction(
   const autoConnectAttemptedRef = useRef(false);
   const hasSentSettingsRef = useRef(false);
   
+  // Track when settings were sent to add proper delay
+  const settingsSentTimeRef = useRef<number | null>(null);
+  
   // Global flag to prevent multiple auto-connect attempts across component re-initializations
   if (!(window as any).globalAutoConnectAttempted) {
     (window as any).globalAutoConnectAttempted = false;
@@ -448,6 +451,7 @@ function DeepgramVoiceInteraction(
         if (event.state === 'closed') {
           dispatch({ type: 'SETTINGS_SENT', sent: false });
           hasSentSettingsRef.current = false; // Reset ref when connection closes
+          settingsSentTimeRef.current = null; // Reset settings time
           console.log('🔧 [Connection] hasSentSettingsRef reset to false due to connection close');
           lazyLog('Reset hasSentSettings flag due to connection close');
         }
@@ -736,6 +740,7 @@ function DeepgramVoiceInteraction(
     
     // Mark as sent immediately to prevent duplicate calls
     hasSentSettingsRef.current = true;
+    settingsSentTimeRef.current = Date.now();
     console.log('🔧 [sendAgentSettings] hasSentSettingsRef set to true');
     
     // Build the Settings message based on agentOptions
@@ -1210,12 +1215,18 @@ function DeepgramVoiceInteraction(
       stateRef.current.agentState === 'entering_sleep';
       
       if (agentManagerRef.current.getState() === 'connected' && !isSleepingOrEntering) {
-        // Check if settings have been sent (with warning but allow in test environment)
+        // Check if settings have been sent and enough time has passed
         if (!hasSentSettingsRef.current) {
-          console.log('🎵 [sendAudioData] ⚠️ WARNING: Settings not tracked as sent, but allowing audio data');
-          console.log('🎵 [sendAudioData] ⚠️ hasSentSettingsRef.current:', hasSentSettingsRef.current);
-          console.log('🎵 [sendAudioData] ⚠️ state.hasSentSettings:', state.hasSentSettings);
-          // Don't return - allow audio data to be sent for testing
+          console.log('🎵 [sendAudioData] ❌ CRITICAL: Cannot send audio data before settings are sent!');
+          console.log('🎵 [sendAudioData] ❌ hasSentSettingsRef.current:', hasSentSettingsRef.current);
+          console.log('🎵 [sendAudioData] ❌ state.hasSentSettings:', state.hasSentSettings);
+          return; // Don't send audio data
+        }
+        
+        // Wait for settings to be processed by Deepgram (minimum 500ms)
+        if (settingsSentTimeRef.current && Date.now() - settingsSentTimeRef.current < 500) {
+          console.log('🎵 [sendAudioData] ⏳ Waiting for settings to be processed by Deepgram...');
+          return; // Don't send audio data yet
         }
         
         console.log('🎵 [sendAudioData] ✅ Settings confirmed, sending to agent service');
