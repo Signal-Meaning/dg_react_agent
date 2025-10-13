@@ -65,6 +65,12 @@ export interface TranscriptionOptions {
   keyterm?: string[];
   
   /**
+   * Utterance end detection timeout in milliseconds
+   * @see https://developers.deepgram.com/docs/utterance-end-detection
+   */
+  utterance_end_ms?: number;
+  
+  /**
    * Any other parameters supported by Deepgram API
    */
   [key: string]: any;

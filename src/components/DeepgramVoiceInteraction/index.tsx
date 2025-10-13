@@ -338,6 +338,7 @@ function DeepgramVoiceInteraction(
 
     // --- TRANSCRIPTION SETUP (CONDITIONAL) ---
     if (isTranscriptionConfigured) {
+      log('🔧 [TRANSCRIPTION] Starting transcription setup');
       let transcriptionUrl = endpoints.transcriptionUrl;
       let transcriptionQueryParams: Record<string, string | boolean | number> = {};
 
@@ -350,14 +351,14 @@ function DeepgramVoiceInteraction(
     };
 
       // Add VAD configuration if provided
-      if (transcriptionOptions.utteranceEndMs) {
-        baseTranscriptionParams.utterance_end_ms = transcriptionOptions.utteranceEndMs;
-        log(`VAD: utterance_end_ms set to ${transcriptionOptions.utteranceEndMs}ms`);
+      if (transcriptionOptions.utterance_end_ms) {
+        baseTranscriptionParams.utterance_end_ms = transcriptionOptions.utterance_end_ms;
+        log(`VAD: utterance_end_ms set to ${transcriptionOptions.utterance_end_ms}ms`);
       }
       
-      if (transcriptionOptions.interimResults !== undefined) {
-        baseTranscriptionParams.interim_results = transcriptionOptions.interimResults;
-        log(`VAD: interim_results set to ${transcriptionOptions.interimResults}`);
+      if (transcriptionOptions.interim_results !== undefined) {
+        baseTranscriptionParams.interim_results = transcriptionOptions.interim_results;
+        log(`VAD: interim_results set to ${transcriptionOptions.interim_results}`);
       }
 
       // Check for Nova-3 Keyterm Prompting conditions
@@ -405,6 +406,14 @@ function DeepgramVoiceInteraction(
           }
         }
         transcriptionQueryParams = filteredParams;
+      }
+      
+      // Log final transcription URL with VAD parameters
+      log('Final transcription URL:', transcriptionUrl);
+      if (useKeytermPrompting) {
+        log('Using keyterm prompting - VAD params in URL');
+      } else {
+        log('Using queryParams - VAD params:', transcriptionQueryParams);
       }
       
       // Create Transcription WebSocket manager
@@ -471,6 +480,22 @@ function DeepgramVoiceInteraction(
           settingsSentTimeRef.current = null; // Reset settings time
           console.log('🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
           lazyLog('Reset hasSentSettings flag due to connection close');
+          
+          // Disable microphone when connection closes (async operation)
+          if (audioManagerRef.current && audioManagerRef.current.isRecordingActive()) {
+            console.log('🔧 [Connection] Connection closed, disabling microphone');
+            // Use setTimeout to avoid blocking the event handler
+            setTimeout(async () => {
+              try {
+                await audioManagerRef.current?.stopRecording();
+                dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: false });
+                onMicToggle?.(false);
+                console.log('🔧 [Connection] Microphone disabled due to connection close');
+              } catch (error) {
+                console.log('🔧 [Connection] Error disabling microphone:', error);
+              }
+            }, 0);
+          }
         }
         
         // Send settings message when connection is established (unless we're lazy reconnecting)
@@ -836,7 +861,7 @@ function DeepgramVoiceInteraction(
     
     if (enable) {
       // Use ref to avoid stale closure issues
-      if (!hasSentSettingsRef.current) {
+      if (!hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
         console.log('❌ Cannot enable microphone before settings are sent');
         console.log('❌ hasSentSettingsRef is false - attempting to send settings now');
         
@@ -849,7 +874,7 @@ function DeepgramVoiceInteraction(
           await new Promise(resolve => setTimeout(resolve, 100));
           
           // Check if settings were sent successfully
-          if (!hasSentSettingsRef.current) {
+          if (!hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
             console.log('❌ Settings still not sent after attempt');
             return;
           }
@@ -857,6 +882,11 @@ function DeepgramVoiceInteraction(
           console.log('❌ Cannot send settings: agentManagerRef or agentOptions missing');
           return;
         }
+      } else if (hasSentSettingsRef.current || (window as any).globalSettingsSent) {
+        console.log('✅ Settings already sent, proceeding with microphone enable');
+      } else {
+        console.log('❌ Cannot enable microphone: settings not sent and cannot be sent');
+        return;
       }
       
       if (audioManagerRef.current) {
@@ -1232,46 +1262,64 @@ function DeepgramVoiceInteraction(
 
   // Send audio data to WebSockets - conditionally route based on configuration
   const sendAudioData = (data: ArrayBuffer) => {
-    console.log('🎵 [sendAudioData] Called with data size:', data.byteLength);
-    console.log('🎵 [sendAudioData] hasSentSettingsRef.current:', hasSentSettingsRef.current);
-    console.log('🎵 [sendAudioData] state.hasSentSettings:', state.hasSentSettings);
-    console.log('🎵 [sendAudioData] agentManagerRef.current?.getState():', agentManagerRef.current?.getState());
+    // Debug logging only (reduce console spam)
+    if (debug) {
+      console.log('🎵 [sendAudioData] Called with data size:', data.byteLength);
+      console.log('🎵 [sendAudioData] hasSentSettingsRef.current:', hasSentSettingsRef.current);
+      console.log('🎵 [sendAudioData] state.hasSentSettings:', state.hasSentSettings);
+      console.log('🎵 [sendAudioData] agentManagerRef.current?.getState():', agentManagerRef.current?.getState());
+    }
     
     // Send to transcription service if configured and connected
     if (transcriptionManagerRef.current?.getState() === 'connected') {
-      console.log('🎵 [sendAudioData] Sending to transcription service');
+      if (debug) console.log('🎵 [sendAudioData] Sending to transcription service');
       transcriptionManagerRef.current.sendBinary(data);
     }
     
     // Send to agent service if configured, connected, and not in sleep mode
     if (agentManagerRef.current) {
-    // Check if sleeping or entering sleep before sending to agent
-    const isSleepingOrEntering = 
-      stateRef.current.agentState === 'sleeping' || 
-      stateRef.current.agentState === 'entering_sleep';
+      const connectionState = agentManagerRef.current.getState();
       
-      if (agentManagerRef.current.getState() === 'connected' && !isSleepingOrEntering) {
+      // Early return for closed connections to prevent log spam
+      if (connectionState === 'closed') {
+        if (debug) console.log('🎵 [sendAudioData] Skipping agent service - not connected:', connectionState);
+        return;
+      }
+      
+      // Check if sleeping or entering sleep before sending to agent
+      const isSleepingOrEntering = 
+        stateRef.current.agentState === 'sleeping' || 
+        stateRef.current.agentState === 'entering_sleep';
+        
+      if (connectionState === 'connected' && !isSleepingOrEntering) {
         // Check if settings have been sent and enough time has passed
         if (!hasSentSettingsRef.current) {
-          console.log('🎵 [sendAudioData] ❌ CRITICAL: Cannot send audio data before settings are sent!');
-          console.log('🎵 [sendAudioData] ❌ hasSentSettingsRef.current:', hasSentSettingsRef.current);
-          console.log('🎵 [sendAudioData] ❌ state.hasSentSettings:', state.hasSentSettings);
+          if (debug) {
+            console.log('🎵 [sendAudioData] ❌ CRITICAL: Cannot send audio data before settings are sent!');
+            console.log('🎵 [sendAudioData] ❌ hasSentSettingsRef.current:', hasSentSettingsRef.current);
+            console.log('🎵 [sendAudioData] ❌ state.hasSentSettings:', state.hasSentSettings);
+          }
           return; // Don't send audio data
         }
         
         // Wait for settings to be processed by Deepgram (minimum 500ms)
         if (settingsSentTimeRef.current && Date.now() - settingsSentTimeRef.current < 500) {
-          console.log('🎵 [sendAudioData] ⏳ Waiting for settings to be processed by Deepgram...');
+          if (debug) console.log('🎵 [sendAudioData] ⏳ Waiting for settings to be processed by Deepgram...');
           return; // Don't send audio data yet
         }
         
-        console.log('🎵 [sendAudioData] ✅ Settings confirmed, sending to agent service');
+        if (debug) console.log('🎵 [sendAudioData] ✅ Settings confirmed, sending to agent service');
         agentManagerRef.current.sendBinary(data);
+        
+        // Log successful audio transmission (always show this for debugging)
+        console.log('🎵 [AUDIO] Audio data sent to Deepgram agent service');
       } else if (isSleepingOrEntering) {
-        console.log('🎵 [sendAudioData] Skipping agent service - sleeping state:', stateRef.current.agentState);
-        sleepLog('Skipping sendAudioData to agent (state:', stateRef.current.agentState, ')');
+        if (debug) {
+          console.log('🎵 [sendAudioData] Skipping agent service - sleeping state:', stateRef.current.agentState);
+          sleepLog('Skipping sendAudioData to agent (state:', stateRef.current.agentState, ')');
+        }
       } else {
-        console.log('🎵 [sendAudioData] Skipping agent service - not connected:', agentManagerRef.current.getState());
+        if (debug) console.log('🎵 [sendAudioData] Skipping agent service - not connected:', connectionState);
       }
     }
   };
@@ -1706,8 +1754,11 @@ function DeepgramVoiceInteraction(
       while (!settingsSent && attempts < maxAttempts) {
         console.log(`🔍 [resumeWithAudio] Waiting for settings to be sent... attempt ${attempts + 1}/${maxAttempts}`);
         
-        // Check if settings have been sent by calling sendAgentSettings
-        if (!settingsSent) {
+        // Check if settings have already been sent (avoid duplicate)
+        if (hasSentSettingsRef.current || (window as any).globalSettingsSent) {
+          console.log('🔍 [resumeWithAudio] Settings already sent, skipping duplicate');
+          settingsSent = true;
+        } else {
           console.log('🔍 [resumeWithAudio] Sending settings now');
           sendAgentSettings();
           settingsSent = true; // Assume settings were sent successfully
@@ -1882,6 +1933,7 @@ function DeepgramVoiceInteraction(
     resumeWithText,
     resumeWithAudio,
     connectWithContext,
+    sendAudioData, // Expose sendAudioData for testing and external use
     triggerTimeoutForTesting: () => {
       if (agentManagerRef.current) {
         agentManagerRef.current.triggerTimeoutForTesting();
