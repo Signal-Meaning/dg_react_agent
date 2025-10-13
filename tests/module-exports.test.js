@@ -115,7 +115,7 @@ describe('Module Export Validation', () => {
         'onUserMessage?: (message: UserMessageResponse) => void',
         'onPlaybackStateChange?: (isPlaying: boolean) => void',
         'onUserStartedSpeaking?: () => void',
-        'onUserStoppedSpeaking?: () => void',
+        'onUserStoppedSpeaking?: (data: {',
         'onError?: (error: DeepgramError) => void',
         'debug?: boolean'
       ];

@@ -82,18 +82,20 @@ async function setupAudioMocks(page) {
       window.AudioContext = class MockAudioContext extends originalAudioContext {
         constructor() {
           super();
-          // Override the read-only audioWorklet property
-          Object.defineProperty(this, 'audioWorklet', {
-            value: {
-              addModule: (url) => {
-                console.log('🎤 [MOCK] AudioWorklet.addModule called - simulating success');
-                return Promise.resolve();
-              }
-            },
-            writable: false,
-            enumerable: true,
-            configurable: false
-          });
+          // Override the read-only audioWorklet property only if not already defined
+          if (!this.hasOwnProperty('audioWorklet')) {
+            Object.defineProperty(this, 'audioWorklet', {
+              value: {
+                addModule: (url) => {
+                  console.log('🎤 [MOCK] AudioWorklet.addModule called - simulating success');
+                  return Promise.resolve();
+                }
+              },
+              writable: false,
+              enumerable: true,
+              configurable: true // Allow redefinition to prevent errors
+            });
+          }
         }
         
         // Mock createMediaStreamSource to bypass MediaStream validation
