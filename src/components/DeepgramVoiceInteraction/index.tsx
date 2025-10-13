@@ -205,11 +205,7 @@ function DeepgramVoiceInteraction(
   }
   
   // Debug: Log component initialization (but limit frequency to avoid spam)
-  const initTime = Date.now();
-  if (!(window as any).lastComponentInitTime || initTime - (window as any).lastComponentInitTime > 1000) {
-    console.log('🔧 [Component] DeepgramVoiceInteraction component initialized');
-    (window as any).lastComponentInitTime = initTime;
-  }
+  // Moved inside useEffect to only log when component actually initializes, not on every render
   
   
   // Track if we're waiting for user voice after waking from sleep
@@ -285,6 +281,13 @@ function DeepgramVoiceInteraction(
 
   // Initialize the component based on provided options
   useEffect(() => {
+    // Debug: Log component initialization (but limit frequency to avoid spam)
+    const initTime = Date.now();
+    if (!(window as any).lastComponentInitTime || initTime - (window as any).lastComponentInitTime > 1000) {
+      console.log('🔧 [Component] DeepgramVoiceInteraction component initialized');
+      (window as any).lastComponentInitTime = initTime;
+    }
+    
     // Initialize connection type ref for first connection
     isNewConnectionRef.current = true;
     
