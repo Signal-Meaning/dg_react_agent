@@ -1539,8 +1539,8 @@ function DeepgramVoiceInteraction(
       // Check if we need to reconnect
       lazyLog(`🔍 [resumeWithAudio] About to call needsReconnection()`);
       const shouldReconnect = needsReconnection();
-      lazyLog(`🔍 [resumeWithAudio] needsReconnection() returned: ${shouldReconnect}`);
-      lazyLog(`🔍 [resumeWithAudio] About to check if shouldReconnect is true`);
+      console.log(`🔍 [resumeWithAudio] needsReconnection() returned: ${shouldReconnect}`);
+      console.log(`🔍 [resumeWithAudio] About to check if shouldReconnect is true`);
       lazyLog(`Audio connection check: needsReconnection=${shouldReconnect}`);
       
       if (shouldReconnect) {
