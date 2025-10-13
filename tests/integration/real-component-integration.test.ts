@@ -183,9 +183,9 @@ describe('Real Component Integration Tests', () => {
     });
   } else {
     describe('Real API Integration Tests', () => {
-      it('should skip real API tests when no API key is provided', () => {
-        pending('DEEPGRAM_API_KEY required for real API tests');
-      });
+        it.skip('should skip real API tests when no API key is provided', () => {
+          // DEEPGRAM_API_KEY required for real API tests
+        });
     });
   }
 
