@@ -1312,8 +1312,10 @@ function DeepgramVoiceInteraction(
     
     // Send to transcription service if configured and connected
     if (transcriptionManagerRef.current?.getState() === 'connected') {
-      if (debug) console.log('🎵 [sendAudioData] Sending to transcription service');
+      console.log('🎵 [TRANSCRIPTION] Sending audio data to transcription service for VAD events');
       transcriptionManagerRef.current.sendBinary(data);
+    } else {
+      console.log('🎵 [TRANSCRIPTION] Transcription service not connected, state:', transcriptionManagerRef.current?.getState());
     }
     
     // Send to agent service if configured, connected, and not in sleep mode
