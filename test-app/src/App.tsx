@@ -43,6 +43,7 @@ function App() {
   });
   const [logs, setLogs] = useState<string[]>([]);
   const [currentKeepalive, setCurrentKeepalive] = useState<string | null>(null);
+  const [micLoading, setMicLoading] = useState(false);
   
   // Instructions state
   const [loadedInstructions, setLoadedInstructions] = useState<string>('');
@@ -430,6 +431,7 @@ function App() {
       
       if (!micEnabled) {
         // Enable microphone with lazy reconnect
+        setMicLoading(true);
         addLog('🔄 [LAZY_RECONNECT] Resuming conversation with audio');
         console.log('🎤 [APP] About to call resumeWithAudio()');
         
@@ -450,6 +452,7 @@ function App() {
           console.log('🎤 [APP] deepgramRef.current is null!');
           addLog('❌ [APP] deepgramRef.current is null - cannot resume audio');
         }
+        setMicLoading(false);
       } else {
         // Disable microphone
         console.log('🎤 [APP] Disabling microphone');
@@ -460,6 +463,7 @@ function App() {
       console.log('🎤 [APP] Error in toggleMicrophone:', error);
       addLog(`Error toggling microphone: ${(error as Error).message}`);
       console.error('Microphone toggle error:', error);
+      setMicLoading(false);
     }
   };
   
@@ -656,15 +660,23 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         </button>
         <button 
           onClick={toggleMicrophone}
-          disabled={!isReady}
+          disabled={!isReady || micLoading}
           style={{ 
             padding: '10px 20px',
             backgroundColor: micEnabled ? '#e0f7fa' : 'transparent',
-            pointerEvents: 'auto'
+            pointerEvents: 'auto',
+            position: 'relative'
           }}
           data-testid="microphone-button"
         >
-          {micEnabled ? 'Disable Mic' : 'Enable Mic'}
+          {micLoading ? (
+            <>
+              <span style={{ marginRight: '8px' }}>⏳</span>
+              Connecting...
+            </>
+          ) : (
+            micEnabled ? 'Disable Mic' : 'Enable Mic'
+          )}
         </button>
         <button 
           onClick={() => {

@@ -1592,7 +1592,7 @@ function DeepgramVoiceInteraction(
         // Wait for auto-connect to complete if it's in progress
         console.log(`🔍 [resumeWithAudio] Checking if auto-connect is in progress...`);
         let autoConnectWaitAttempts = 0;
-        const maxAutoConnectWait = 20; // 2 seconds max wait (reduced from 10 seconds)
+        const maxAutoConnectWait = 5; // 0.5 seconds max wait (reduced from 2 seconds)
         
         while (agentManagerRef.current?.getState() !== 'connected' && autoConnectWaitAttempts < maxAutoConnectWait) {
           console.log(`🔍 [resumeWithAudio] Waiting for auto-connect to complete... attempt ${autoConnectWaitAttempts + 1}/${maxAutoConnectWait}`);
