@@ -349,6 +349,17 @@ function DeepgramVoiceInteraction(
       channels: transcriptionOptions.channels || 1,
     };
 
+      // Add VAD configuration if provided
+      if (transcriptionOptions.utteranceEndMs) {
+        baseTranscriptionParams.utterance_end_ms = transcriptionOptions.utteranceEndMs;
+        log(`VAD: utterance_end_ms set to ${transcriptionOptions.utteranceEndMs}ms`);
+      }
+      
+      if (transcriptionOptions.interimResults !== undefined) {
+        baseTranscriptionParams.interim_results = transcriptionOptions.interimResults;
+        log(`VAD: interim_results set to ${transcriptionOptions.interimResults}`);
+      }
+
       // Check for Nova-3 Keyterm Prompting conditions
       const useKeytermPrompting = 
         baseTranscriptionParams.model === 'nova-3' &&
