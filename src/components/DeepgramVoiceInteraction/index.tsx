@@ -178,8 +178,17 @@ function DeepgramVoiceInteraction(
   const autoConnectAttemptedRef = useRef(false);
   const hasSentSettingsRef = useRef(false);
   
-  // Debug: Log component initialization
-  console.log('🔧 [Component] DeepgramVoiceInteraction component initialized');
+  // Global flag to prevent multiple auto-connect attempts across component re-initializations
+  if (!(window as any).globalAutoConnectAttempted) {
+    (window as any).globalAutoConnectAttempted = false;
+  }
+  
+  // Debug: Log component initialization (but limit frequency to avoid spam)
+  const initTime = Date.now();
+  if (!(window as any).lastComponentInitTime || initTime - (window as any).lastComponentInitTime > 1000) {
+    console.log('🔧 [Component] DeepgramVoiceInteraction component initialized');
+    (window as any).lastComponentInitTime = initTime;
+  }
   
   
   // Track if we're waiting for user voice after waking from sleep
@@ -512,7 +521,7 @@ function DeepgramVoiceInteraction(
 
     // Auto-connect dual mode logic
     console.log('Auto-connect check:', { autoConnect, isAgentConfigured, agentManagerRef: !!agentManagerRef.current });
-    if (autoConnect === true && isAgentConfigured && !autoConnectAttemptedRef.current) {
+    if (autoConnect === true && isAgentConfigured && !autoConnectAttemptedRef.current && !(window as any).globalAutoConnectAttempted) {
       // Validate API key before attempting connection
       const isValidApiKey = apiKey && 
         apiKey !== 'your-deepgram-api-key-here' && 
@@ -536,11 +545,12 @@ function DeepgramVoiceInteraction(
       // Auto-connect to agent service to establish dual mode
       setTimeout(async () => {
         // Check again inside setTimeout to prevent multiple executions
-        if (autoConnectAttemptedRef.current) {
+        if (autoConnectAttemptedRef.current || (window as any).globalAutoConnectAttempted) {
           console.log('Auto-connect already attempted, skipping');
           return;
         }
         autoConnectAttemptedRef.current = true; // Mark as attempted
+        (window as any).globalAutoConnectAttempted = true; // Mark globally as attempted
         
         console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current);
         if (agentManagerRef.current) {
@@ -1582,7 +1592,7 @@ function DeepgramVoiceInteraction(
         // Wait for auto-connect to complete if it's in progress
         console.log(`🔍 [resumeWithAudio] Checking if auto-connect is in progress...`);
         let autoConnectWaitAttempts = 0;
-        const maxAutoConnectWait = 100; // 10 seconds max wait
+        const maxAutoConnectWait = 20; // 2 seconds max wait (reduced from 10 seconds)
         
         while (agentManagerRef.current?.getState() !== 'connected' && autoConnectWaitAttempts < maxAutoConnectWait) {
           console.log(`🔍 [resumeWithAudio] Waiting for auto-connect to complete... attempt ${autoConnectWaitAttempts + 1}/${maxAutoConnectWait}`);
