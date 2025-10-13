@@ -1544,23 +1544,23 @@ function DeepgramVoiceInteraction(
       lazyLog(`Audio connection check: needsReconnection=${shouldReconnect}`);
       
       if (shouldReconnect) {
-        lazyLog(`🔍 [resumeWithAudio] shouldReconnect is true, entering reconnection logic`);
+        console.log(`🔍 [resumeWithAudio] shouldReconnect is true, entering reconnection logic`);
         // Wait for auto-connect to complete if it's in progress
-        lazyLog(`🔍 [resumeWithAudio] Checking if auto-connect is in progress...`);
+        console.log(`🔍 [resumeWithAudio] Checking if auto-connect is in progress...`);
         let autoConnectWaitAttempts = 0;
         const maxAutoConnectWait = 100; // 10 seconds max wait
         
         while (agentManagerRef.current?.getState() !== 'connected' && autoConnectWaitAttempts < maxAutoConnectWait) {
-          lazyLog(`🔍 [resumeWithAudio] Waiting for auto-connect to complete... attempt ${autoConnectWaitAttempts + 1}/${maxAutoConnectWait}`);
+          console.log(`🔍 [resumeWithAudio] Waiting for auto-connect to complete... attempt ${autoConnectWaitAttempts + 1}/${maxAutoConnectWait}`);
           await new Promise(resolve => setTimeout(resolve, 100));
           autoConnectWaitAttempts++;
         }
         
         if (agentManagerRef.current?.getState() === 'connected') {
-          lazyLog(`🔍 [resumeWithAudio] Auto-connect completed, skipping manual connection`);
+          console.log(`🔍 [resumeWithAudio] Auto-connect completed, skipping manual connection`);
         } else {
           // Connect with context if auto-connect didn't complete
-          lazyLog(`🔍 [resumeWithAudio] Auto-connect didn't complete, connecting with context (${state.conversationHistory.length} messages)`);
+          console.log(`🔍 [resumeWithAudio] Auto-connect didn't complete, connecting with context (${state.conversationHistory.length} messages)`);
           await connectWithContext(sessionId, state.conversationHistory, agentOptions!);
         }
       } else {
