@@ -1532,9 +1532,11 @@ function DeepgramVoiceInteraction(
       lazyLog(`🔍 [resumeWithAudio] About to call needsReconnection()`);
       const shouldReconnect = needsReconnection();
       lazyLog(`🔍 [resumeWithAudio] needsReconnection() returned: ${shouldReconnect}`);
+      lazyLog(`🔍 [resumeWithAudio] About to check if shouldReconnect is true`);
       lazyLog(`Audio connection check: needsReconnection=${shouldReconnect}`);
       
       if (shouldReconnect) {
+        lazyLog(`🔍 [resumeWithAudio] shouldReconnect is true, entering reconnection logic`);
         // Wait for auto-connect to complete if it's in progress
         lazyLog(`🔍 [resumeWithAudio] Checking if auto-connect is in progress...`);
         let autoConnectWaitAttempts = 0;
