@@ -788,14 +788,15 @@ function DeepgramVoiceInteraction(
         return;
       }
       
-      // Stop keepalives to allow natural connection timeout
+      // Disable idle timeout resets to allow natural connection closure
+      console.log('🎯 [VAD] UtteranceEnd detected - disabling idle timeout resets for natural connection closure');
+      
+      // Disable idle timeout resets for both services
       if (agentManagerRef.current) {
-        console.log('🎯 [VAD] Stopping keepalives after UtteranceEnd - connection will timeout naturally');
-        console.log('🎯 [VAD] Agent manager state before stopKeepalive:', agentManagerRef.current.getState());
-        agentManagerRef.current.stopKeepalive();
-        console.log('🎯 [VAD] stopKeepalive() called successfully');
-      } else {
-        console.log('🎯 [VAD] ERROR: agentManagerRef.current is null - cannot stop keepalives');
+        agentManagerRef.current.disableIdleTimeoutResets();
+      }
+      if (transcriptionManagerRef.current) {
+        transcriptionManagerRef.current.disableIdleTimeoutResets();
       }
       
       // Call the callback with channel and lastWordEnd data
@@ -1367,12 +1368,12 @@ function DeepgramVoiceInteraction(
     }
     
     // Send to transcription service if configured and connected
-    if (transcriptionManagerRef.current?.getState() === 'connected') {
-      console.log('🎵 [TRANSCRIPTION] Sending audio data to transcription service for VAD events');
-      transcriptionManagerRef.current.sendBinary(data);
-    } else {
-      console.log('🎵 [TRANSCRIPTION] Transcription service not connected, state:', transcriptionManagerRef.current?.getState());
-    }
+      if (transcriptionManagerRef.current?.getState() === 'connected') {
+        lazyLog('🎵 [TRANSCRIPTION] Sending audio data to transcription service for VAD events');
+        transcriptionManagerRef.current.sendBinary(data);
+      } else {
+        lazyLog('🎵 [TRANSCRIPTION] Transcription service not connected, state:', transcriptionManagerRef.current?.getState());
+      }
     
     // Send to agent service if configured, connected, and not in sleep mode
     if (agentManagerRef.current) {
@@ -1409,8 +1410,8 @@ function DeepgramVoiceInteraction(
         if (debug) console.log('🎵 [sendAudioData] ✅ Settings confirmed, sending to agent service');
         agentManagerRef.current.sendBinary(data);
         
-        // Log successful audio transmission (always show this for debugging)
-        console.log('🎵 [AUDIO] Audio data sent to Deepgram agent service');
+        // Log successful audio transmission (debug level)
+        lazyLog('🎵 [AUDIO] Audio data sent to Deepgram agent service');
       } else if (isSleepingOrEntering) {
         if (debug) {
           console.log('🎵 [sendAudioData] Skipping agent service - sleeping state:', stateRef.current.agentState);
