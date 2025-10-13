@@ -1616,9 +1616,34 @@ function DeepgramVoiceInteraction(
       lazyLog(`🔍 [connectWithContext] Current agent state: ${currentState}`);
       
       if (agentManagerRef.current && currentState !== 'connected') {
-        lazyLog(`🔍 [connectWithContext] Agent WebSocket not connected (${currentState}), connecting...`);
-        await agentManagerRef.current.connect();
-        lazyLog(`🔍 [connectWithContext] Agent WebSocket connect() completed`);
+        // Check if we're already connecting (to avoid conflicts with auto-connect)
+        if (currentState === 'connecting') {
+          lazyLog(`🔍 [connectWithContext] Agent WebSocket is already connecting, waiting for connection...`);
+          
+          // Wait for connection to complete
+          let waitAttempts = 0;
+          const maxWaitAttempts = 50; // 5 seconds max wait
+          while (agentManagerRef.current.getState() !== 'connected' && waitAttempts < maxWaitAttempts) {
+            lazyLog(`🔍 [connectWithContext] Waiting for connection... attempt ${waitAttempts + 1}/${maxWaitAttempts}`);
+            await new Promise(resolve => setTimeout(resolve, 100));
+            waitAttempts++;
+          }
+          
+          const finalState = agentManagerRef.current.getState();
+          lazyLog(`🔍 [connectWithContext] Final agent state after waiting: ${finalState}`);
+          
+          if (finalState === 'connected') {
+            lazyLog(`🔍 [connectWithContext] Agent WebSocket connected successfully via waiting`);
+          } else {
+            lazyLog(`🔍 [connectWithContext] Agent WebSocket failed to connect after waiting, attempting manual connection`);
+            await agentManagerRef.current.connect();
+            lazyLog(`🔍 [connectWithContext] Agent WebSocket connect() completed`);
+          }
+        } else {
+          lazyLog(`🔍 [connectWithContext] Agent WebSocket not connected (${currentState}), connecting...`);
+          await agentManagerRef.current.connect();
+          lazyLog(`🔍 [connectWithContext] Agent WebSocket connect() completed`);
+        }
         
         // Check state after connection
         const newState = agentManagerRef.current.getState();
