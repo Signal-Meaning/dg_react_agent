@@ -1614,8 +1614,10 @@ function DeepgramVoiceInteraction(
       // Connect agent WebSocket if not already connected
       const currentState = agentManagerRef.current?.getState();
       lazyLog(`🔍 [connectWithContext] Current agent state: ${currentState}`);
+      lazyLog(`🔍 [connectWithContext] About to check if connection is needed`);
       
       if (agentManagerRef.current && currentState !== 'connected') {
+        lazyLog(`🔍 [connectWithContext] Entering connection logic for state: ${currentState}`);
         // Check if we're already connecting (to avoid conflicts with auto-connect)
         if (currentState === 'connecting') {
           lazyLog(`🔍 [connectWithContext] Agent WebSocket is already connecting, waiting for connection...`);
