@@ -284,9 +284,12 @@ function App() {
 
   // Auto-connect dual mode event handlers
   const handleMicToggle = useCallback((enabled: boolean) => {
+    console.log('🎤 [APP] handleMicToggle called with enabled:', enabled);
+    console.log('🎤 [APP] Current micEnabled state:', micEnabled);
     setMicEnabled(enabled);
+    console.log('🎤 [APP] setMicEnabled called with:', enabled);
     addLog(`Microphone ${enabled ? 'enabled' : 'disabled'}`);
-  }, [addLog]);
+  }, [addLog, micEnabled]);
 
   const handleTextSubmit = useCallback(async () => {
     if (!textInput.trim()) return;
