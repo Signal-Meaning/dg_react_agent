@@ -1858,6 +1858,13 @@ function DeepgramVoiceInteraction(
       
       if (settingsSent) {
         console.log('🔍 [resumeWithAudio] ✅ Settings confirmed, enabling microphone');
+        
+        // Check if agent is actually connected before enabling microphone
+        if (!agentManagerRef.current || agentManagerRef.current.getState() !== 'connected') {
+          console.log('🔍 [resumeWithAudio] ❌ Cannot enable microphone: agent not connected, state:', agentManagerRef.current?.getState());
+          throw new Error(`Agent not connected (state: ${agentManagerRef.current?.getState()})`);
+        }
+        
         await toggleMic(true);
       } else {
         console.log('🔍 [resumeWithAudio] ❌ Cannot enable microphone: settings still not sent');
