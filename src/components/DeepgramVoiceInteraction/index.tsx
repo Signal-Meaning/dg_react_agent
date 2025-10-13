@@ -1136,10 +1136,23 @@ function DeepgramVoiceInteraction(
     
     // Handle errors
     if (data.type === 'Error') {
+      const errorCode = typeof data.code === 'string' ? data.code : 'agent_error';
+      const errorMessage = typeof data.description === 'string' ? data.description : 'Unknown agent error';
+      
+      // Handle SETTINGS_ALREADY_APPLIED as a warning, not an error
+      if (errorCode === 'SETTINGS_ALREADY_APPLIED') {
+        log('⚠️ [Agent] Settings already applied - this is normal during reconnection:', errorMessage);
+        // Mark settings as sent to prevent further attempts
+        hasSentSettingsRef.current = true;
+        (window as any).globalSettingsSent = true;
+        dispatch({ type: 'SETTINGS_SENT', sent: true });
+        return;
+      }
+      
       handleError({
         service: 'agent',
-        code: typeof data.code === 'string' ? data.code : 'agent_error',
-        message: typeof data.description === 'string' ? data.description : 'Unknown agent error',
+        code: errorCode,
+        message: errorMessage,
         details: data,
       });
       return;
