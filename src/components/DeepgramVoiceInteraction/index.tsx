@@ -681,19 +681,19 @@ function DeepgramVoiceInteraction(
 
   // Send agent settings after connection is established - only if agent is configured
   const sendAgentSettings = () => {
-    log('🔧 [sendAgentSettings] Called');
-    log(`🔧 [sendAgentSettings] agentManagerRef.current: ${!!agentManagerRef.current}`);
-    log(`🔧 [sendAgentSettings] agentOptions: ${!!agentOptions}`);
-    log(`🔧 [sendAgentSettings] hasSentSettings: ${state.hasSentSettings}`);
+    console.log('🔧 [sendAgentSettings] Called');
+    console.log(`🔧 [sendAgentSettings] agentManagerRef.current: ${!!agentManagerRef.current}`);
+    console.log(`🔧 [sendAgentSettings] agentOptions: ${!!agentOptions}`);
+    console.log(`🔧 [sendAgentSettings] hasSentSettings: ${state.hasSentSettings}`);
     
     if (!agentManagerRef.current || !agentOptions) {
-      log('Cannot send agent settings: agent manager not initialized or agentOptions not provided');
+      console.log('🔧 [sendAgentSettings] Cannot send agent settings: agent manager not initialized or agentOptions not provided');
       return;
     }
     
     // Check if settings have already been sent (welcome-first behavior)
     if (state.hasSentSettings) {
-      log('Settings already sent, skipping');
+      console.log('🔧 [sendAgentSettings] Settings already sent, skipping');
       return;
     }
     
@@ -744,7 +744,7 @@ function DeepgramVoiceInteraction(
       }
     };
     
-    log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
+    console.log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
       conversationHistoryLength: state.conversationHistory.length,
       contextMessages: transformConversationHistory(state.conversationHistory).messages
     });
