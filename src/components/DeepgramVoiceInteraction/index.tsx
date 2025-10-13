@@ -733,6 +733,9 @@ function DeepgramVoiceInteraction(
 
   // Handle transcription messages - only relevant if transcription is configured
   const handleTranscriptionMessage = (data: unknown) => {
+    // Debug: Log all transcription messages
+    console.log('📝 [TRANSCRIPTION] Message received:', data);
+    
     // Skip processing if transcription service isn't configured
     if (!transcriptionManagerRef.current) {
       log('Received unexpected transcription message but service is not configured:', data);
@@ -761,6 +764,34 @@ function DeepgramVoiceInteraction(
       
       const transcript = data as unknown as TranscriptResponse;
       onTranscriptUpdate?.(transcript);
+      return;
+    }
+
+    // Handle VAD events from transcription service
+    if (data.type === 'UserStoppedSpeaking') {
+      console.log('🎤 [VAD] UserStoppedSpeaking message received from transcription service');
+      if (isSleepingOrEntering) {
+        sleepLog('Ignoring UserStoppedSpeaking event (state:', stateRef.current.agentState, ')');
+        return;
+      }
+      
+      // Call the callback with timestamp if available
+      const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
+      onUserStoppedSpeaking?.({ timestamp });
+      return;
+    }
+
+    if (data.type === 'UtteranceEnd') {
+      console.log('🎯 [VAD] UtteranceEnd message received from transcription service:', data);
+      if (isSleepingOrEntering) {
+        sleepLog('Ignoring UtteranceEnd event (state:', stateRef.current.agentState, ')');
+        return;
+      }
+      
+      // Call the callback with channel and lastWordEnd data
+      const channel = Array.isArray(data.channel) ? data.channel : [0, 1];
+      const lastWordEnd = typeof data.last_word_end === 'number' ? data.last_word_end : 0;
+      onUtteranceEnd?.({ channel, lastWordEnd });
       return;
     }
   };
