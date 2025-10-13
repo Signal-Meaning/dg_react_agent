@@ -876,8 +876,14 @@ function DeepgramVoiceInteraction(
     console.log('🎤 [toggleMic] audioManagerRef.current:', !!audioManagerRef.current);
     
     if (enable) {
-      // Use ref to avoid stale closure issues
-      if (!hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
+      // Check if agent is connected first
+      if (!agentManagerRef.current || agentManagerRef.current.getState() !== 'connected') {
+        console.log('❌ Cannot enable microphone - agent not connected, state:', agentManagerRef.current?.getState());
+        return;
+      }
+      
+      // Use ref to avoid stale closure issues, but also check state
+      if (!hasSentSettingsRef.current && !(window as any).globalSettingsSent && !state.hasSentSettings) {
         console.log('❌ Cannot enable microphone before settings are sent');
         console.log('❌ hasSentSettingsRef is false - attempting to send settings now');
         
@@ -898,7 +904,7 @@ function DeepgramVoiceInteraction(
           console.log('❌ Cannot send settings: agentManagerRef or agentOptions missing');
           return;
         }
-      } else if (hasSentSettingsRef.current || (window as any).globalSettingsSent) {
+      } else if (hasSentSettingsRef.current || (window as any).globalSettingsSent || state.hasSentSettings) {
         console.log('✅ Settings already sent, proceeding with microphone enable');
       } else {
         console.log('❌ Cannot enable microphone: settings not sent and cannot be sent');
