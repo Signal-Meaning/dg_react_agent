@@ -181,6 +181,11 @@ function DeepgramVoiceInteraction(
   // Track when settings were sent to add proper delay
   const settingsSentTimeRef = useRef<number | null>(null);
   
+  // Global flag to prevent settings from being sent multiple times across component instances
+  if (!(window as any).globalSettingsSent) {
+    (window as any).globalSettingsSent = false;
+  }
+  
   // Global flag to prevent multiple auto-connect attempts across component re-initializations
   if (!(window as any).globalAutoConnectAttempted) {
     (window as any).globalAutoConnectAttempted = false;
@@ -451,15 +456,16 @@ function DeepgramVoiceInteraction(
         if (event.state === 'closed') {
           dispatch({ type: 'SETTINGS_SENT', sent: false });
           hasSentSettingsRef.current = false; // Reset ref when connection closes
+          (window as any).globalSettingsSent = false; // Reset global flag when connection closes
           settingsSentTimeRef.current = null; // Reset settings time
-          console.log('🔧 [Connection] hasSentSettingsRef reset to false due to connection close');
+          console.log('🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
           lazyLog('Reset hasSentSettings flag due to connection close');
         }
         
         // Send settings message when connection is established (unless we're lazy reconnecting)
         // Only send settings if they haven't been sent AND we're not in auto-connect mode
         // (auto-connect will handle settings sending via its own timeout)
-        if (event.state === 'connected' && !isLazyReconnectingRef.current && !hasSentSettingsRef.current && !autoConnect) {
+        if (event.state === 'connected' && !isLazyReconnectingRef.current && !hasSentSettingsRef.current && !(window as any).globalSettingsSent && !autoConnect) {
           log('Connection established, sending settings via connection state handler');
           sendAgentSettings();
         } else if (event.state === 'connected' && isLazyReconnectingRef.current) {
@@ -732,16 +738,19 @@ function DeepgramVoiceInteraction(
     }
     
     // Check if settings have already been sent (welcome-first behavior)
-    // Use a ref to avoid stale closure issues
-    if (hasSentSettingsRef.current) {
-      console.log('🔧 [sendAgentSettings] Settings already sent (via ref), skipping');
+    // Use both ref and global flag to avoid stale closure issues and cross-component duplicates
+    if (hasSentSettingsRef.current || (window as any).globalSettingsSent) {
+      console.log('🔧 [sendAgentSettings] Settings already sent (via ref or global), skipping');
+      console.log('🔧 [sendAgentSettings] hasSentSettingsRef.current:', hasSentSettingsRef.current);
+      console.log('🔧 [sendAgentSettings] globalSettingsSent:', (window as any).globalSettingsSent);
       return;
     }
     
-    // Mark as sent immediately to prevent duplicate calls
+    // Mark as sent immediately to prevent duplicate calls (both locally and globally)
     hasSentSettingsRef.current = true;
+    (window as any).globalSettingsSent = true;
     settingsSentTimeRef.current = Date.now();
-    console.log('🔧 [sendAgentSettings] hasSentSettingsRef set to true');
+    console.log('🔧 [sendAgentSettings] hasSentSettingsRef and globalSettingsSent set to true');
     
     // Build the Settings message based on agentOptions
     const settingsMessage = {
