@@ -627,6 +627,19 @@ function DeepgramVoiceInteraction(
         autoConnectAttemptedRef.current = true; // Mark as attempted
         
         console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current);
+        
+        // Connect transcription service if configured
+        if (transcriptionManagerRef.current) {
+          console.log('Auto-connect: Connecting transcription service');
+          try {
+            await transcriptionManagerRef.current.connect();
+            console.log('Auto-connect: Transcription service connected');
+          } catch (error) {
+            console.log('Auto-connect: Failed to connect transcription service:', error);
+          }
+        }
+        
+        // Connect agent service if configured
         if (agentManagerRef.current) {
           console.log('Calling agentManagerRef.current.connect()');
           try {
