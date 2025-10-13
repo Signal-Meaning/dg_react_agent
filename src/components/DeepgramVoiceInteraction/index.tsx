@@ -857,7 +857,9 @@ function DeepgramVoiceInteraction(
         try {
           await audioManagerRef.current.startRecording();
           console.log('✅ startRecording completed successfully');
+          console.log('🎤 [toggleMic] Dispatching MIC_ENABLED_CHANGE with enabled: true');
           dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: true });
+          console.log('🎤 [toggleMic] Calling onMicToggle with true');
           onMicToggle?.(true);
           log('✅ Microphone enabled');
           // Reset idle timeout when microphone is enabled (user activity)
