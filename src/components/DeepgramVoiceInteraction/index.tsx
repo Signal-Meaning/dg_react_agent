@@ -1568,29 +1568,29 @@ function DeepgramVoiceInteraction(
       }
       
       // Enable microphone for audio input
-      lazyLog(`Enabling microphone for audio input`);
+      console.log(`🔍 [resumeWithAudio] Enabling microphone for audio input`);
       
       // Wait for connection to be established and settings to be sent
       let attempts = 0;
       const maxAttempts = 50; // 5 seconds max wait
       while (!state.hasSentSettings && attempts < maxAttempts) {
-        lazyLog(`Waiting for settings to be sent... attempt ${attempts + 1}/${maxAttempts}`);
+        console.log(`🔍 [resumeWithAudio] Waiting for settings to be sent... attempt ${attempts + 1}/${maxAttempts}`);
         await new Promise(resolve => setTimeout(resolve, 100));
         attempts++;
       }
       
       if (!state.hasSentSettings) {
-        lazyLog('❌ Settings were not sent after waiting, attempting to send them now');
+        console.log('🔍 [resumeWithAudio] ❌ Settings were not sent after waiting, attempting to send them now');
         sendAgentSettings();
         // Wait a bit more for settings to be processed
         await new Promise(resolve => setTimeout(resolve, 200));
       }
       
       if (state.hasSentSettings) {
-        lazyLog('✅ Settings confirmed, enabling microphone');
+        console.log('🔍 [resumeWithAudio] ✅ Settings confirmed, enabling microphone');
         await toggleMic(true);
       } else {
-        lazyLog('❌ Cannot enable microphone: settings still not sent');
+        console.log('🔍 [resumeWithAudio] ❌ Cannot enable microphone: settings still not sent');
         throw new Error('Settings were not sent after multiple attempts');
       }
       
