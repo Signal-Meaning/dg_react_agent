@@ -585,15 +585,38 @@ function DeepgramVoiceInteraction(
     // The component can accept text interactions and manual connections without audio
     dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
     
-    // Initialize AudioManager in the background for audio features
+    // Initialize AudioManager for playback readiness (Issue #43 fix)
+    // This ensures AudioContext is ready when greeting audio arrives
     audioManagerRef.current.initialize()
       .then(() => {
-        log('AudioManager initialized successfully in background');
-        // Don't change isReady here - it's already true
-        // AudioManager readiness can be tracked separately if needed
+        log('AudioManager initialized successfully for playback readiness');
+        
+        // CRITICAL FIX for Issue #43: Ensure AudioContext is ready for playback
+        // AudioContext may be suspended until user interaction, but we need it ready for greetings
+        if (audioManagerRef.current && audioManagerRef.current.getAudioContext) {
+          const audioContext = audioManagerRef.current.getAudioContext();
+          
+          // Expose AudioContext to window for testing (Issue #43 investigation)
+          if (typeof window !== 'undefined') {
+            (window as any).audioContext = audioContext;
+            log('AudioContext exposed to window for testing');
+          }
+          
+          if (audioContext && audioContext.state === 'suspended') {
+            log('AudioContext is suspended - attempting to resume for greeting playback');
+            audioContext.resume().then(() => {
+              log('AudioContext resumed successfully - ready for greeting audio playback');
+            }).catch((error: Error) => {
+              log('Failed to resume AudioContext:', error);
+              log('Note: AudioContext may require user interaction to resume');
+            });
+          } else {
+            log(`AudioContext is already ${audioContext?.state} - ready for greeting audio playback`);
+          }
+        }
       })
       .catch((error: Error) => {
-        log('AudioManager failed to initialize in background:', error);
+        log('AudioManager failed to initialize:', error);
         // Don't change isReady here - component can still work without audio
         // Audio features will be disabled, but text interactions still work
       });
