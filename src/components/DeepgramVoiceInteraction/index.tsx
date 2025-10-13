@@ -189,11 +189,7 @@ function DeepgramVoiceInteraction(
   }
   (window as any).componentInitializationCount++;
   
-  // Skip initialization if we've already initialized too many times (HMR issue)
-  if ((window as any).componentInitializationCount > 20) {
-    console.log('🔧 [Component] Skipping initialization due to excessive HMR re-initializations');
-    return null;
-  }
+  // Remove HMR prevention logic - it's causing React hook errors
   
   // Global flag to track if audio is currently being captured
   if (!(window as any).audioCaptureInProgress) {
@@ -562,12 +558,11 @@ function DeepgramVoiceInteraction(
       // Auto-connect to agent service to establish dual mode
       setTimeout(async () => {
         // Check again inside setTimeout to prevent multiple executions
-        if (autoConnectAttemptedRef.current || (window as any).globalAutoConnectAttempted) {
+        if (autoConnectAttemptedRef.current) {
           console.log('Auto-connect already attempted, skipping');
           return;
         }
         autoConnectAttemptedRef.current = true; // Mark as attempted
-        (window as any).globalAutoConnectAttempted = true; // Mark globally as attempted
         
         console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current);
         if (agentManagerRef.current) {
