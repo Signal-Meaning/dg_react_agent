@@ -651,4 +651,12 @@ export class AudioManager {
   public isPlaybackActive(): boolean {
     return this.isPlaying;
   }
+  
+  /**
+   * Gets the AudioContext instance for playback readiness checks
+   * Used to ensure AudioContext is ready before greeting audio arrives
+   */
+  public getAudioContext(): AudioContext | null {
+    return this.audioContext;
+  }
 } 
