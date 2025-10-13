@@ -183,6 +183,29 @@ function DeepgramVoiceInteraction(
     (window as any).globalAutoConnectAttempted = false;
   }
   
+  // Global flag to prevent multiple component initializations during HMR
+  if (!(window as any).componentInitializationCount) {
+    (window as any).componentInitializationCount = 0;
+  }
+  (window as any).componentInitializationCount++;
+  
+  // Skip initialization if we've already initialized too many times (HMR issue)
+  if ((window as any).componentInitializationCount > 10) {
+    console.log('🔧 [Component] Skipping initialization due to excessive HMR re-initializations');
+    return null;
+  }
+  
+  // Skip initialization if audio capture is in progress (HMR issue)
+  if ((window as any).audioCaptureInProgress) {
+    console.log('🔧 [Component] Skipping initialization due to audio capture in progress');
+    return null;
+  }
+  
+  // Global flag to track if audio is currently being captured
+  if (!(window as any).audioCaptureInProgress) {
+    (window as any).audioCaptureInProgress = false;
+  }
+  
   // Debug: Log component initialization (but limit frequency to avoid spam)
   const initTime = Date.now();
   if (!(window as any).lastComponentInitTime || initTime - (window as any).lastComponentInitTime > 1000) {
@@ -824,19 +847,24 @@ function DeepgramVoiceInteraction(
       if (audioManagerRef.current) {
         console.log('✅ Enabling microphone...');
         console.log('Calling startRecording on audioManagerRef.current');
+        
+        // Set global flag to prevent HMR disruption
+        (window as any).audioCaptureInProgress = true;
+        
         try {
           await audioManagerRef.current.startRecording();
           console.log('✅ startRecording completed successfully');
+          dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: true });
+          onMicToggle?.(true);
+          log('✅ Microphone enabled');
+          // Reset idle timeout when microphone is enabled (user activity)
+          if (agentManagerRef.current) {
+            agentManagerRef.current.resetIdleTimeout();
+          }
         } catch (error) {
           console.log('❌ startRecording failed:', error);
+          (window as any).audioCaptureInProgress = false;
           throw error;
-        }
-        dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: true });
-        onMicToggle?.(true);
-        log('✅ Microphone enabled');
-        // Reset idle timeout when microphone is enabled (user activity)
-        if (agentManagerRef.current) {
-          agentManagerRef.current.resetIdleTimeout();
         }
       } else {
         log('❌ Cannot enable microphone: audioManagerRef.current is null');
@@ -854,6 +882,10 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: false });
         onMicToggle?.(false);
         log('Microphone disabled');
+        
+        // Reset global flag
+        (window as any).audioCaptureInProgress = false;
+        
         // Reset idle timeout when microphone is disabled (user activity)
         if (agentManagerRef.current) {
           agentManagerRef.current.resetIdleTimeout();
