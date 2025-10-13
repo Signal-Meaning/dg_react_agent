@@ -1194,7 +1194,7 @@ function DeepgramVoiceInteraction(
 
     // Handle UserStoppedSpeaking events
     if (data.type === 'UserStoppedSpeaking') {
-      log('🎤 [VAD] UserStoppedSpeaking message received');
+      console.log('🎤 [VAD] UserStoppedSpeaking message received');
       if (isSleepingOrEntering) {
         sleepLog('Ignoring UserStoppedSpeaking event (state:', stateRef.current.agentState, ')');
         return;
@@ -1220,7 +1220,7 @@ function DeepgramVoiceInteraction(
 
     // Handle UtteranceEnd events from Deepgram's end-of-speech detection
     if (data.type === 'UtteranceEnd') {
-      log('🎯 [VAD] UtteranceEnd message received:', data);
+      console.log('🎯 [VAD] UtteranceEnd message received:', data);
       if (isSleepingOrEntering) {
         sleepLog('Ignoring UtteranceEnd event (state:', stateRef.current.agentState, ')');
         return;
