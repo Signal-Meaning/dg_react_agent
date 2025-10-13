@@ -178,6 +178,9 @@ function DeepgramVoiceInteraction(
   const autoConnectAttemptedRef = useRef(false);
   const hasSentSettingsRef = useRef(false);
   
+  // Debug: Log component initialization
+  console.log('🔧 [Component] DeepgramVoiceInteraction component initialized');
+  
   
   // Track if we're waiting for user voice after waking from sleep
   const isWaitingForUserVoiceAfterSleep = useRef(false);
@@ -423,6 +426,7 @@ function DeepgramVoiceInteraction(
         if (event.state === 'closed') {
           dispatch({ type: 'SETTINGS_SENT', sent: false });
           hasSentSettingsRef.current = false; // Reset ref when connection closes
+          console.log('🔧 [Connection] hasSentSettingsRef reset to false due to connection close');
           lazyLog('Reset hasSentSettings flag due to connection close');
         }
         
@@ -705,8 +709,18 @@ function DeepgramVoiceInteraction(
       return;
     }
     
+    // Check if connection is already established and settings might have been sent
+    if (agentManagerRef.current && agentManagerRef.current.getState() === 'connected') {
+      console.log('🔧 [sendAgentSettings] Connection already established, checking if settings were sent');
+      // If connection is already established, assume settings were sent
+      hasSentSettingsRef.current = true;
+      console.log('🔧 [sendAgentSettings] Assuming settings already sent for existing connection');
+      return;
+    }
+    
     // Mark as sent immediately to prevent duplicate calls
     hasSentSettingsRef.current = true;
+    console.log('🔧 [sendAgentSettings] hasSentSettingsRef set to true');
     
     // Build the Settings message based on agentOptions
     const settingsMessage = {
