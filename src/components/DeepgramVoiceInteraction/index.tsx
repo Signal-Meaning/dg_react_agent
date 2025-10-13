@@ -852,8 +852,9 @@ function DeepgramVoiceInteraction(
 
   // Handle agent messages - only relevant if agent is configured
   const handleAgentMessage = (data: unknown) => {
-    // Debug: Log all agent messages
-    log(`🔍 [DEBUG] Received agent message:`, data);
+    // Debug: Log all agent messages with type
+    const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as any).type : 'unknown';
+    log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
     
     // Skip processing if agent service isn't configured
     if (!agentManagerRef.current) {
@@ -872,7 +873,7 @@ function DeepgramVoiceInteraction(
       stateRef.current.agentState === 'entering_sleep';
 
     if (data.type === 'UserStartedSpeaking') {
-      sleepLog('UserStartedSpeaking message received');
+      log('🎤 [VAD] UserStartedSpeaking message received');
       if (isSleepingOrEntering) {
         sleepLog('Ignoring UserStartedSpeaking event (state:', stateRef.current.agentState, ')');
         return;
@@ -1024,7 +1025,7 @@ function DeepgramVoiceInteraction(
 
     // Handle UserStoppedSpeaking events
     if (data.type === 'UserStoppedSpeaking') {
-      log('UserStoppedSpeaking message received');
+      log('🎤 [VAD] UserStoppedSpeaking message received');
       if (isSleepingOrEntering) {
         sleepLog('Ignoring UserStoppedSpeaking event (state:', stateRef.current.agentState, ')');
         return;
@@ -1050,7 +1051,7 @@ function DeepgramVoiceInteraction(
 
     // Handle UtteranceEnd events from Deepgram's end-of-speech detection
     if (data.type === 'UtteranceEnd') {
-      log('UtteranceEnd message received:', data);
+      log('🎯 [VAD] UtteranceEnd message received:', data);
       if (isSleepingOrEntering) {
         sleepLog('Ignoring UtteranceEnd event (state:', stateRef.current.agentState, ')');
         return;
