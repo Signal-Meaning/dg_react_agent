@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { setupTestPage } = require('./helpers/audio-mocks');
 
 /**
  * Microphone Functionality Test
@@ -9,7 +10,8 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('Microphone Functionality Tests', () => {
   test('should actually enable microphone when button is clicked', async ({ page }) => {
-    // Mock getUserMedia to simulate successful microphone access
+    // Set up test page with audio mocks
+    await setupTestPage(page);
     await page.addInitScript(() => {
       // Create a proper MediaStream mock that AudioContext will accept
       class MockMediaStreamTrack {
@@ -269,5 +271,86 @@ test.describe('Microphone Functionality Tests', () => {
     expect(userSpeaking).toBe('false');
     
     console.log('VAD elements verified - microphone should be ready for audio input');
+  });
+
+  test('should verify transcription setup happens during initialization', async ({ page }) => {
+    // Capture console logs from the beginning
+    const consoleLogs = [];
+    page.on('console', msg => {
+      consoleLogs.push(`${msg.type()}: ${msg.text()}`);
+    });
+    
+    // Navigate to test app
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    
+    // Wait for component to initialize
+    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    
+    // Wait for connection to be established
+    await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
+    
+    // Wait a bit more for all initialization to complete
+    await page.waitForTimeout(2000);
+    
+    // Filter for transcription setup logs
+    const transcriptionSetupLogs = consoleLogs.filter(log => 
+      log.includes('[TRANSCRIPTION] Starting transcription setup') ||
+      log.includes('VAD: utterance_end_ms set to') ||
+      log.includes('VAD: interim_results set to') ||
+      log.includes('Final transcription URL:')
+    );
+    
+    // Filter for VAD configuration specifically
+    const vadConfigLogs = consoleLogs.filter(log => 
+      log.includes('VAD: utterance_end_ms set to 1000ms') ||
+      log.includes('VAD: interim_results set to true')
+    );
+    
+    // Display all console logs for debugging
+    console.log('\n=== ALL CONSOLE LOGS ===');
+    consoleLogs.forEach(log => console.log(log));
+    console.log('=== END CONSOLE LOGS ===\n');
+    
+    // Display transcription setup logs
+    console.log('\n=== TRANSCRIPTION SETUP LOGS ===');
+    transcriptionSetupLogs.forEach(log => console.log(log));
+    console.log('=== END TRANSCRIPTION SETUP LOGS ===\n');
+    
+    // Display VAD configuration logs
+    console.log('\n=== VAD CONFIGURATION LOGS ===');
+    vadConfigLogs.forEach(log => console.log(log));
+    console.log('=== END VAD CONFIGURATION LOGS ===\n');
+    
+    // Check for component initialization mode
+    const dualModeLogs = consoleLogs.filter(log => 
+      log.includes('Initializing in DUAL MODE')
+    );
+    
+    console.log('\n=== COMPONENT MODE LOGS ===');
+    dualModeLogs.forEach(log => console.log(log));
+    console.log('=== END COMPONENT MODE LOGS ===\n');
+    
+    // Verify component is in dual mode
+    expect(dualModeLogs.length).toBeGreaterThan(0);
+    
+    // This is the critical test - transcription setup should happen
+    if (transcriptionSetupLogs.length === 0) {
+      console.log('❌ FAILURE: No transcription setup logs found!');
+      console.log('This means transcriptionOptions is not being passed to the component.');
+      console.log('Expected logs:');
+      console.log('  - [TRANSCRIPTION] Starting transcription setup');
+      console.log('  - VAD: utterance_end_ms set to 1000ms');
+      console.log('  - VAD: interim_results set to true');
+      console.log('  - Final transcription URL: [URL with VAD parameters]');
+    }
+    
+    // Verify transcription setup happened
+    expect(transcriptionSetupLogs.length).toBeGreaterThan(0);
+    
+    // Specifically check for VAD configuration
+    expect(vadConfigLogs.length).toBeGreaterThan(0);
+    
+    console.log('✅ SUCCESS: Transcription setup verified');
   });
 });

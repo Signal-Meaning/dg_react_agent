@@ -86,8 +86,7 @@ function App() {
     diarize: true, 
     channels: 1,
     // VAD configuration for Voice Activity Detection events
-    // utteranceEndMs: 1000, // Enable UtteranceEnd detection
-    // interimResults: true,  // Required for UtteranceEnd
+    utterance_end_ms: 1000, // Enable UtteranceEnd detection
     // Add keyterms that might be tricky for standard models
     keyterm: [
       "Casella", // Proper noun
@@ -102,6 +101,10 @@ function App() {
     if (deepgramRef.current) {
       console.log('🔗 [APP] DeepgramVoiceInteraction ref is now available');
       addLog('🔗 [APP] DeepgramVoiceInteraction ref is now available');
+      
+      // Expose ref globally for E2E tests
+      (window as any).deepgramRef = deepgramRef;
+      console.log('🔗 [APP] Exposed deepgramRef globally for E2E tests');
     }
   }, [addLog]); // Remove deepgramRef.current from dependencies to avoid infinite loop
 
@@ -550,9 +553,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
         onUtteranceEnd={handleUtteranceEnd}
         onVADEvent={handleVADEvent}
-        // VAD configuration
-        utteranceEndMs={1000}
-        interimResults={true}
         debug={false}
       />
       
