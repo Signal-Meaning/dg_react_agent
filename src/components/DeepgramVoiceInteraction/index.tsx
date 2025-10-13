@@ -190,14 +190,8 @@ function DeepgramVoiceInteraction(
   (window as any).componentInitializationCount++;
   
   // Skip initialization if we've already initialized too many times (HMR issue)
-  if ((window as any).componentInitializationCount > 10) {
+  if ((window as any).componentInitializationCount > 20) {
     console.log('🔧 [Component] Skipping initialization due to excessive HMR re-initializations');
-    return null;
-  }
-  
-  // Skip initialization if audio capture is in progress (HMR issue)
-  if ((window as any).audioCaptureInProgress) {
-    console.log('🔧 [Component] Skipping initialization due to audio capture in progress');
     return null;
   }
   
