@@ -412,8 +412,7 @@ export class WebSocketManager {
         this.close();
       }, this.options.idleTimeout);
 
-      this.log(`Started idle timeout (${this.options.idleTimeout}ms)`);
-      console.log(`🔧 [WebSocketManager] Started idle timeout (${this.options.idleTimeout}ms) for ${this.options.service}`);
+      this.log(`Started idle timeout (${this.options.idleTimeout}ms) for ${this.options.service}`);
     }
   }
 
@@ -446,10 +445,10 @@ export class WebSocketManager {
         
         // Only reset if there's actual transcript content
         if (hasTranscript) {
-          console.log(`🔧 [WebSocketManager] Resetting idle timeout - meaningful transcript: "${data.alternatives[0].transcript}"`);
+          this.log(`Resetting idle timeout - meaningful transcript: "${data.alternatives[0].transcript}"`);
           return true;
         } else {
-          console.log(`🔧 [WebSocketManager] NOT resetting idle timeout - empty transcript`);
+          this.log(`NOT resetting idle timeout - empty transcript`);
           return false;
         }
       }
@@ -466,11 +465,11 @@ export class WebSocketManager {
    */
   public resetIdleTimeout(): void {
     if (this.options.idleTimeout && this.options.idleTimeout > 0 && !this.idleTimeoutDisabled) {
-      console.log(`🔧 [WebSocketManager] Resetting idle timeout for ${this.options.service}`);
+      this.log(`Resetting idle timeout for ${this.options.service}`);
       this.stopIdleTimeout();
       this.startIdleTimeout();
     } else if (this.idleTimeoutDisabled) {
-      console.log(`🔧 [WebSocketManager] NOT resetting idle timeout for ${this.options.service} - disabled after UtteranceEnd`);
+      this.log(`NOT resetting idle timeout for ${this.options.service} - disabled after UtteranceEnd`);
     }
   }
 
