@@ -28,7 +28,7 @@ jobs:
           node-version: '20'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@signal-meaning'
-          token: ${{ secrets.GITHUB_PACKAGES_TOKEN }}
+          token: ${{ secrets.NPM_PACKAGES_TOKEN }}
           
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
