@@ -23,9 +23,10 @@ import { render, act } from '@testing-library/react';
 import { DeepgramVoiceInteraction } from '../../src';
 import { DeepgramVoiceInteractionHandle } from '../../src/types';
 
-// Simple API key detection
+// Simple API key detection - only run real API tests in local development
 const isRealAPITesting = !!process.env.DEEPGRAM_API_KEY && 
-                        process.env.DEEPGRAM_API_KEY !== 'mock';
+                        process.env.DEEPGRAM_API_KEY !== 'mock' &&
+                        process.env.CI !== 'true';
 
 describe('Real Component Integration Tests', () => {
   // Mock functions for testing
@@ -86,6 +87,15 @@ describe('Real Component Integration Tests', () => {
           <DeepgramVoiceInteraction
             ref={componentRef}
             apiKey={process.env.DEEPGRAM_API_KEY!}
+            agentOptions={{
+              language: 'en',
+              listenModel: 'nova-2',
+              thinkProviderType: 'open_ai',
+              thinkModel: 'gpt-4o-mini',
+              voice: 'aura-asteria-en',
+              instructions: 'You are a helpful assistant.',
+              greeting: 'Hello! How can I help you today?'
+            }}
             utteranceEndMs={1500}
             interimResults={true}
             debug={true}
@@ -113,6 +123,15 @@ describe('Real Component Integration Tests', () => {
           <DeepgramVoiceInteraction
             ref={componentRef}
             apiKey={process.env.DEEPGRAM_API_KEY!}
+            agentOptions={{
+              language: 'en',
+              listenModel: 'nova-2',
+              thinkProviderType: 'open_ai',
+              thinkModel: 'gpt-4o-mini',
+              voice: 'aura-asteria-en',
+              instructions: 'You are a helpful assistant.',
+              greeting: 'Hello! How can I help you today?'
+            }}
             onUtteranceEnd={mockOnUtteranceEnd}
             onUserStoppedSpeaking={mockOnUserStoppedSpeaking}
             onVADEvent={mockOnVADEvent}
@@ -152,6 +171,15 @@ describe('Real Component Integration Tests', () => {
           <DeepgramVoiceInteraction
             ref={componentRef}
             apiKey={process.env.DEEPGRAM_API_KEY!}
+            agentOptions={{
+              language: 'en',
+              listenModel: 'nova-2',
+              thinkProviderType: 'open_ai',
+              thinkModel: 'gpt-4o-mini',
+              voice: 'aura-asteria-en',
+              instructions: 'You are a helpful assistant.',
+              greeting: 'Hello! How can I help you today?'
+            }}
             onUtteranceEnd={mockOnUtteranceEnd}
             utteranceEndMs={1000}
             interimResults={true}
