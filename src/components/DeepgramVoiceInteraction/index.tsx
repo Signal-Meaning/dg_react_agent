@@ -873,6 +873,17 @@ function DeepgramVoiceInteraction(
         return;
       }
       
+      // Disable idle timeout resets to prevent connection timeout during speech
+      console.log('🎤 [VAD] UserStoppedSpeaking detected - disabling idle timeout resets to prevent connection timeout');
+      
+      // Disable idle timeout resets for both services
+      if (agentManagerRef.current) {
+        agentManagerRef.current.disableIdleTimeoutResets();
+      }
+      if (transcriptionManagerRef.current) {
+        transcriptionManagerRef.current.disableIdleTimeoutResets();
+      }
+      
       // Call the callback with timestamp if available
       const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
       onUserStoppedSpeaking?.({ timestamp });
@@ -1403,6 +1414,17 @@ function DeepgramVoiceInteraction(
       const confidence = typeof data.confidence === 'number' ? data.confidence : undefined;
       const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
       onVADEvent?.({ speechDetected, confidence, timestamp });
+      
+      // Disable idle timeout resets to prevent connection timeout during speech
+      console.log('🎯 [VAD] VADEvent detected - disabling idle timeout resets to prevent connection timeout');
+      
+      // Disable idle timeout resets for both services
+      if (agentManagerRef.current) {
+        agentManagerRef.current.disableIdleTimeoutResets();
+      }
+      if (transcriptionManagerRef.current) {
+        transcriptionManagerRef.current.disableIdleTimeoutResets();
+      }
       
       // Handle speech detection state changes
       if (speechDetected) {
