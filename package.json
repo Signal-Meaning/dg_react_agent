@@ -17,6 +17,7 @@
     "build": "rollup -c",
     "build:watch": "rollup -c -w",
     "dev": "rollup -c -w",
+    "pretest": "npm run build",
     "test": "jest",
     "test:mock": "jest",
     "test:real": "RUN_REAL_API_TESTS=true jest",
