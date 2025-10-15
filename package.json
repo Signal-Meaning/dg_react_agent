@@ -1,5 +1,5 @@
 {
-  "name": "deepgram-voice-interaction-react",
+  "name": "@signal-meaning/deepgram-voice-interaction-react",
   "version": "0.3.2",
   "description": "A React component for real-time transcription and voice agent interactions using Deepgram APIs",
   "main": "dist/index.js",
@@ -34,7 +34,7 @@
     "workflow": "./scripts/dev-workflow.sh",
     "clean": "rm -rf dist/ && rm -f *.tgz",
     "status": "./scripts/dev-workflow.sh status",
-    "prepublishOnly": "echo 'Publishing is disabled. Use npm run package:local for local packaging.' && exit 1"
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "deepgram",
@@ -48,6 +48,9 @@
   ],
   "author": "Deepgram",
   "license": "MIT",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "devDependencies": {
     "@babel/core": "^7.28.4",
     "@babel/preset-env": "^7.28.3",
