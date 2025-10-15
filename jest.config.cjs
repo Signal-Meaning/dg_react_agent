@@ -22,5 +22,8 @@ module.exports = {
     '!src/test-app/**/*'
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html']
+  coverageReporters: ['text', 'lcov', 'html'],
+  fakeTimers: {
+    enableGlobally: true
+  }
 };

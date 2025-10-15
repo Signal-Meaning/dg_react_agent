@@ -129,7 +129,4 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-// Setup timers before each test
-beforeEach(() => {
-  jest.useFakeTimers();
-});
+// Fake timers are now enabled globally in jest.config.cjs
