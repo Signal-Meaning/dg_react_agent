@@ -48,13 +48,8 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-# Run tests first
-print_status "Running tests to ensure package quality..."
-if npm test; then
-    print_success "All tests passed!"
-else
-    print_warning "Some tests failed, but continuing with packaging..."
-fi
+# Note: Tests are run separately in CI, so we skip them here
+print_status "Skipping tests (assumed to be run separately)..."
 
 # Build the package
 print_status "Building the package..."
