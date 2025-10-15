@@ -66,7 +66,10 @@ function App() {
   
   // Helper to add logs - memoized
   const addLog = useCallback((message: string) => {
-    setLogs(prev => [...prev, `${new Date().toISOString().substring(11, 19)} - ${message}`]);
+    const timestampedMessage = `${new Date().toISOString().substring(11, 19)} - ${message}`;
+    setLogs(prev => [...prev, timestampedMessage]);
+    // Also log to console for debugging
+    console.log(timestampedMessage);
     // Don't clear keepalive - let it persist in the log history
   }, []); // No dependencies, created once
   
@@ -76,7 +79,8 @@ function App() {
     setCurrentKeepalive(timestampedMessage);
     // Add to logs so it persists (this replaces the current keepalive in the display)
     setLogs(prev => [...prev, timestampedMessage]);
-    // Debug log removed - this was appearing when debug mode was off
+    // Also log to console for debugging
+    console.log(timestampedMessage);
   }, []); // No dependencies, created once
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
@@ -192,9 +196,6 @@ function App() {
   }, [addLog]); // Depends on addLog
   
   const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
-    // Note: Detailed logging moved to component level with debug mode
-    // This handler now focuses on state updates only
-
     // Use type assertion to handle the actual structure from Deepgram
     // which differs from our TranscriptResponse type
     const deepgramResponse = transcript as unknown as {
@@ -226,9 +227,11 @@ function App() {
       
       setLastTranscript(displayText);
       
-      // Note: Final transcript logging is handled by user message handler to avoid duplication
+      // Log transcript to event log (and console via addLog)
+      const transcriptType = deepgramResponse.is_final ? 'final' : 'interim';
+      addLog(`[TRANSCRIPT] "${text}" (${transcriptType})`);
     }
-  }, []); // No dependencies needed
+  }, [addLog]); // Include addLog in dependencies
   
   const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
     setAgentResponse(utterance.text);
