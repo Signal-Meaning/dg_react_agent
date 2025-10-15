@@ -33,7 +33,8 @@
     "package:local": "./scripts/package-for-local.sh",
     "workflow": "./scripts/dev-workflow.sh",
     "clean": "rm -rf dist/ && rm -f *.tgz",
-    "status": "./scripts/dev-workflow.sh status"
+    "status": "./scripts/dev-workflow.sh status",
+    "prepublishOnly": "echo 'Publishing is disabled. Use npm run package:local for local packaging.' && exit 1"
   },
   "keywords": [
     "deepgram",
