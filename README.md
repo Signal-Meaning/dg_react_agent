@@ -2,7 +2,7 @@
 
 A headless React component designed to drastically simplify the integration of Deepgram's real-time transcription and voice agent capabilities into web applications. It handles the low-level complexities of WebSocket connections, browser microphone access, and agent audio playback, allowing you to focus on building your application's UI and logic.
 
-[![npm version](https://badge.fury.io/js/deepgram-react.svg)](https://badge.fury.io/js/deepgram-react) <!-- Placeholder - update if published -->
+[![npm version](https://img.shields.io/npm/v/@signal-meaning/deepgram-voice-interaction-react?registry_uri=https://npm.pkg.github.com)](https://npm.pkg.github.com/@signal-meaning/deepgram-voice-interaction-react)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Features
@@ -80,13 +80,50 @@ Choose your mode based on these criteria:
 
 ## Installation
 
+This package is published to the private GitHub Package Registry. To install it, you'll need to configure npm to use the GitHub Package Registry for the `@signal-meaning` scope.
+
+### 1. Configure npm for GitHub Package Registry
+
+Create or update your `.npmrc` file in your project root:
+
 ```bash
-npm install deepgram-react
-# or
-yarn add deepgram-react
+# GitHub Package Registry configuration
+@signal-meaning:registry=https://npm.pkg.github.com
+# Authentication token for GitHub Package Registry
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-*(Note: For local development, adjust the path as needed.)*
+### 2. Set up authentication
+
+You'll need a GitHub Personal Access Token with `read:packages` permission. Set it as an environment variable:
+
+```bash
+export GITHUB_TOKEN=your_github_token_here
+```
+
+Or add it to your `.env` file:
+
+```bash
+GITHUB_TOKEN=your_github_token_here
+```
+
+### 3. Install the package
+
+```bash
+npm install @signal-meaning/deepgram-voice-interaction-react
+# or
+yarn add @signal-meaning/deepgram-voice-interaction-react
+```
+
+### Alternative: Login with npm
+
+Instead of using environment variables, you can also authenticate using npm login:
+
+```bash
+npm login --scope=@signal-meaning --registry=https://npm.pkg.github.com
+```
+
+When prompted, use your GitHub username and your Personal Access Token as the password.
 
 ## Migration Guide
 
@@ -115,7 +152,7 @@ yarn add deepgram-react
 ## Quick Start
 
 ```tsx
-import { DeepgramVoiceInteraction } from 'deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
 
 function App() {
   return (
@@ -220,13 +257,13 @@ This example focuses solely on getting live transcripts from microphone input.
 ```tsx
 import React, { useRef, useState, useCallback, useMemo } from 'react';
 // Adjust import path based on your setup (package vs local)
-import { DeepgramVoiceInteraction } from 'deepgram-react'; 
+import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react'; 
 import type { 
   DeepgramVoiceInteractionHandle, 
   TranscriptResponse,
   TranscriptionOptions,
   DeepgramError 
-} from 'deepgram-react';
+} from '@signal-meaning/deepgram-voice-interaction-react';
 
 function SimpleTranscriber() {
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
@@ -302,7 +339,7 @@ This example focuses on interacting with a voice agent, using its responses.
 ```tsx
 import React, { useRef, useState, useCallback, useMemo } from 'react';
 // Adjust import path based on your setup (package vs local)
-import { DeepgramVoiceInteraction } from 'deepgram-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
 import type { 
   DeepgramVoiceInteractionHandle, 
   AgentState, 
@@ -310,7 +347,7 @@ import type {
   AgentOptions,
   DeepgramError,
   UserMessageResponse // Added for the new callback
-} from 'deepgram-react';
+} from '@signal-meaning/deepgram-voice-interaction-react';
 
 function SimpleAgent() {
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
@@ -403,10 +440,10 @@ Leverage both services simultaneously. Get live transcripts *while* interacting 
 
 ```tsx
 // (Combine imports, state, callbacks, and controls from examples 1 & 2)
-import { DeepgramVoiceInteraction } from 'deepgram-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
 import type { 
   // ... include UserMessageResponse ... 
-} from 'deepgram-react';
+} from '@signal-meaning/deepgram-voice-interaction-react';
 // ...
 
 function CombinedInteraction() {

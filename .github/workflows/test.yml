@@ -1,0 +1,62 @@
+name: Test Package Build and Installation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run linting
+        run: npm run lint
+        
+      - name: Run tests
+        run: npm test
+        
+      - name: Build package
+        run: npm run build
+        
+      - name: Test package packaging
+        run: |
+          # Test that the package can be packaged for local use
+          npm run package:local
+          
+          # Verify the package was created
+          ls -la *.tgz
+          
+      - name: Test package installation from tarball
+        run: |
+          # Create a temporary directory to test package installation
+          mkdir test-install
+          cd test-install
+          
+          # Create a test package.json
+          echo '{"name": "test-install", "version": "1.0.0", "dependencies": {}}' > package.json
+          
+          # Install from the local tarball
+          npm install ../*.tgz
+          
+          # Verify the package was installed
+          ls node_modules/@signal-meaning/deepgram-voice-interaction-react
+          
+          # Test that the package can be imported
+          node -e "console.log('Testing import...'); const pkg = require('@signal-meaning/deepgram-voice-interaction-react'); console.log('Package imported successfully:', Object.keys(pkg));"
+          
+          # Clean up
+          cd ..
+          rm -rf test-install
