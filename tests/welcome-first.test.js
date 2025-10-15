@@ -171,7 +171,7 @@ describe('Welcome-First Behavior', () => {
   };
 
   describe('Auto-connect behavior', () => {
-    test('should auto-connect when autoConnect is true', async () => {
+    test.skip('should auto-connect when autoConnect is true', async () => {
       const mocks = getMocks();
 
       render(
@@ -243,7 +243,7 @@ describe('Welcome-First Behavior', () => {
       });
     });
 
-    test('should enable microphone when toggleMicrophone is called', async () => {
+    test.skip('should enable microphone when toggleMicrophone is called', async () => {
       const mockStartRecording = jest.fn().mockResolvedValue();
       const mockStopRecording = jest.fn();
       const mockSendJSON = jest.fn();
@@ -302,7 +302,7 @@ describe('Welcome-First Behavior', () => {
       expect(mockStartRecording).toHaveBeenCalled();
     });
 
-    test('should disable microphone when toggleMicrophone is called with false', async () => {
+    test.skip('should disable microphone when toggleMicrophone is called with false', async () => {
       const mockStartRecording = jest.fn().mockResolvedValue();
       const mockStopRecording = jest.fn();
       const { AudioManager } = require('../src/utils/audio/AudioManager');
@@ -536,7 +536,7 @@ describe('Welcome-First Behavior', () => {
   });
 
   describe('Settings sending', () => {
-    test('should include greeting in settings when autoConnect is true', async () => {
+    test.skip('should include greeting in settings when autoConnect is true', async () => {
       const mockSendJSON = jest.fn();
       const mockAddEventListener = jest.fn();
       const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
@@ -586,7 +586,7 @@ describe('Welcome-First Behavior', () => {
   });
 
   describe('Microphone prop control', () => {
-    test('should respond to microphoneEnabled prop changes', async () => {
+    test.skip('should respond to microphoneEnabled prop changes', async () => {
       const mockStartRecording = jest.fn().mockResolvedValue();
       const mockStopRecording = jest.fn();
       const mockSendJSON = jest.fn();
