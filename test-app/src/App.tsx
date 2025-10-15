@@ -226,9 +226,7 @@ function App() {
       
       setLastTranscript(displayText);
       
-      if (deepgramResponse.is_final) {
-        addLog(`Final transcript: ${displayText}`);
-      }
+      // Note: Final transcript logging is handled by user message handler to avoid duplication
     }
   }, [addLog]); // Depends on addLog
   
@@ -239,8 +237,8 @@ function App() {
   
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
     setUserMessage(message.text);
-    // Note: User message logging is handled by transcript handler to avoid duplication
-  }, []); // No dependencies needed
+    addLog(`User message from server: ${message.text}`);
+  }, [addLog]);
   
   const handleAgentStateChange = useCallback((state: AgentState) => {
     const prevState = agentState; // Capture previous state for comparison
