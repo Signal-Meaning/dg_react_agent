@@ -213,3 +213,97 @@ The logs show that the package creation process completes successfully, but ther
 3. **There's an error in the GitHub Actions step itself** that's not visible in the logs
 
 The next step is to examine the complete GitHub Actions logs to find the actual source of the exit code 1.
+
+## 🔄 Issue Recurrence - Latest Logs (Oct 15, 2024)
+
+**Status**: Issue has recurred with identical symptoms. Added comment to GitHub issue #81 with latest logs.
+
+### Latest Log Output
+```text
+> @signal-meaning/deepgram-voice-interaction-react@0.3.2 package:local
+> ./scripts/package-for-local.sh
+📦 Packaging dg_react_agent for local development...
+[INFO] Skipping tests (assumed to be run separately)...
+[INFO] Building the package...
+> @signal-meaning/deepgram-voice-interaction-react@0.3.2 prebuild
+> echo 'Skipping validation for now'
+Skipping validation for now
+> @signal-meaning/deepgram-voice-interaction-react@0.3.2 build
+> rollup -c
+
+src/index.ts → dist/index.js...
+(!) Plugin typescript: @rollup/plugin-typescript: Rollup 'sourcemap' option must be set to generate source maps.
+created dist/index.js in 3.7s
+
+src/index.ts → dist/index.esm.js...
+(!) Plugin typescript: @rollup/plugin-typescript: Rollup 'sourcemap' option must be set to generate source maps.
+created dist/index.esm.js in 866ms
+> @signal-meaning/deepgram-voice-interaction-react@0.3.2 postbuild
+> echo 'Build completed'
+Build completed
+[INFO] Updating test-app dependencies...
+added 187 packages, and audited 189 packages in 3s
+45 packages are looking for funding
+  run `npm fund` for details
+4 vulnerabilities (3 low, 1 moderate)
+To address all issues, run:
+  npm audit fix
+Run `npm audit` for details.
+[INFO] Creating package tarball...
+npm notice
+npm notice 📦  @signal-meaning/deepgram-voice-interaction-react@0.3.2
+npm notice Tarball Contents
+npm notice 9.2kB DEVELOPMENT.md
+npm notice 39.9kB README.md
+npm notice 287B dist/components/DeepgramVoiceInteraction/index.d.ts
+npm notice 438B dist/constants/documentation.d.ts
+npm notice 419B dist/index.d.ts
+npm notice 85.1kB dist/index.esm.js
+npm notice 85.4kB dist/index.js
+npm notice 791B dist/test-utils.d.ts
+npm notice 2.8kB dist/test-utils/test-helpers.d.ts
+npm notice 4.4kB tests/utils/test-helpers.js
+npm notice 8.7kB tests/websocket-error-simple.test.js
+npm notice 3.8kB tests/welcome-first-simple.test.js
+npm notice 21.0kB tests/welcome-first.test.js
+npm notice Tarball Details
+npm notice name: @signal-meaning/deepgram-voice-interaction-react
+npm notice version: 0.3.2
+npm notice filename: signal-meaning-deepgram-voice-interaction-react-0.3.2.tgz
+npm notice package size: 224.2 kB
+npm notice unpacked size: 1.1 MB
+npm notice shasum: 375f2795f799f71d8e38380d804a6f019c68278e
+npm notice integrity: sha512-pAtnHd+wvKloB[...]Bq9Q4QQ8szgjg==
+npm notice total files: 113
+npm notice
+[SUCCESS] Created package: signal-meaning-deepgram-voice-interaction-react-0.3.2.tgz
+[INFO] Package details:
+-rw-r--r-- 1 runner runner 219K Oct 15 22:14 signal-meaning-deepgram-voice-interaction-react-0.3.2.tgz
+[SUCCESS] ✅ Package created successfully!
+[INFO] To install this package in another project:
+  npm install ./signal-meaning-deepgram-voice-interaction-react-0.3.2.tgz
+[INFO] To install in a parent directory project:
+  npm install ./dg_react_agent/signal-meaning-deepgram-voice-interaction-react-0.3.2.tgz
+[INFO] Package file location: /home/runner/work/dg_react_agent/dg_react_agent/signal-meaning-deepgram-voice-interaction-react-0.3.2.tgz
+Error: Process completed with exit code 1
+```
+
+### Key Observations from Latest Run
+1. **Same Pattern**: Package creation appears successful but exits with code 1
+2. **No Error Messages**: No visible error output in the logs
+3. **Package Created**: Tarball is successfully generated (219K)
+4. **Build Success**: All build steps complete without errors
+5. **Mysterious Exit**: The "Error: Process completed with exit code 1" appears at the very end
+
+### Next Steps for Investigation
+1. **Examine the packaging script** (`scripts/package-for-local.sh`) for potential issues
+2. **Check GitHub Actions step configuration** for hidden error conditions
+3. **Add debug logging** to identify exactly where the exit code 1 originates
+4. **Test locally** to see if the issue reproduces in the development environment
+
+### Progress Update
+- [x] **Issue Reopened**: Added comment to GitHub issue #81 with latest logs
+- [x] **Documentation Updated**: This document now contains both original and latest logs
+- [ ] **Script Analysis**: Need to examine `scripts/package-for-local.sh` for root cause
+- [ ] **Local Testing**: Need to reproduce the issue locally
+- [ ] **Fix Implementation**: Once root cause is identified, implement solution
