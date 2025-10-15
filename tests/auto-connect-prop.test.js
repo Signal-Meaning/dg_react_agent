@@ -9,7 +9,7 @@
 
 const React = require('react');
 const { render, act, waitFor } = require('@testing-library/react');
-const { DeepgramVoiceInteraction } = require('../dist');
+const { DeepgramVoiceInteraction } = require('../src');
 const { 
   createMockProps, 
   createNonMemoizedOptions, 
@@ -17,6 +17,43 @@ const {
   TEST_DESCRIPTIONS,
   TEST_ASSERTIONS 
 } = require('./utils/auto-connect-test-utils');
+
+// Force mock mode in CI environment
+if (process.env.CI === 'true') {
+  process.env.NODE_ENV = 'test';
+  process.env.DEEPGRAM_API_KEY = 'mock';
+  process.env.VITE_DEEPGRAM_API_KEY = 'mock';
+  process.env.RUN_REAL_API_TESTS = 'false';
+}
+
+// Mock the WebSocketManager and AudioManager to prevent real API calls
+jest.mock('../src/utils/websocket/WebSocketManager');
+jest.mock('../src/utils/audio/AudioManager');
+
+const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
+const { AudioManager } = require('../src/utils/audio/AudioManager');
+
+// Set up default mocks that return unsubscribe functions
+const mockUnsubscribe = jest.fn();
+
+WebSocketManager.mockImplementation(() => ({
+  connect: jest.fn().mockResolvedValue(),
+  close: jest.fn(),
+  sendJSON: jest.fn(),
+  addEventListener: jest.fn().mockReturnValue(mockUnsubscribe),
+  resetIdleTimeout: jest.fn(),
+  startKeepalive: jest.fn(),
+  stopKeepalive: jest.fn(),
+  getState: jest.fn().mockReturnValue('connected')
+}));
+
+AudioManager.mockImplementation(() => ({
+  initialize: jest.fn().mockResolvedValue(),
+  startRecording: jest.fn().mockResolvedValue(),
+  stopRecording: jest.fn(),
+  addEventListener: jest.fn().mockReturnValue(mockUnsubscribe),
+  dispose: jest.fn()
+}));
 
 describe('Auto-Connect Prop Behavior', () => {
   let mockProps;
