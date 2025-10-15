@@ -76,7 +76,7 @@ function App() {
     setCurrentKeepalive(timestampedMessage);
     // Add to logs so it persists (this replaces the current keepalive in the display)
     setLogs(prev => [...prev, timestampedMessage]);
-    console.log('🔧 [DEBUG] Keepalive logged:', message);
+    // Debug log removed - this was appearing when debug mode was off
   }, []); // No dependencies, created once
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
@@ -108,20 +108,20 @@ function App() {
       hasLoggedRef.current = true;
       
       // Expose ref globally for E2E tests
-      (window as any).deepgramRef = deepgramRef;
+      (window as Window & { deepgramRef?: typeof deepgramRef }).deepgramRef = deepgramRef;
       console.log('🔗 [APP] Exposed deepgramRef globally for E2E tests');
     }
-  }, []); // Empty dependency array - only run once
+  }, [addLog]); // Include addLog in dependencies
 
   // Load instructions using the instructions-loader utility
   const hasLoadedInstructions = useRef(false);
   useEffect(() => {
     if (hasLoadedInstructions.current) {
-      console.log('🔧 [DEBUG] Instructions already loaded, skipping');
+      // Debug log removed - this was appearing when debug mode was off
       return;
     }
     
-    console.log('🔧 [DEBUG] Loading instructions...');
+    // Debug log removed - this was appearing when debug mode was off
     const loadInstructions = async () => {
       try {
         setInstructionsLoading(true);
@@ -172,7 +172,7 @@ function App() {
     voice: 'aura-2-apollo-en',
     instructions: loadedInstructions || 'You are a helpful voice assistant. Keep your responses concise and informative.',
     greeting: 'Hello! How can I assist you today?',
-  }), []); // Remove loadedInstructions dependency to prevent re-initialization
+  }), [loadedInstructions]); // Include loadedInstructions dependency
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
@@ -228,7 +228,7 @@ function App() {
       
       // Note: Final transcript logging is handled by user message handler to avoid duplication
     }
-  }, [addLog]); // Depends on addLog
+  }, []); // No dependencies needed
   
   const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
     setAgentResponse(utterance.text);
@@ -285,7 +285,7 @@ function App() {
   }, [addLog]);
 
   const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
-    console.log('🔧 [DEBUG] UtteranceEnd handler called:', data);
+    // Debug log removed - this was appearing when debug mode was off
     const channelStr = data.channel.join(',');
     setUtteranceEnd(`Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
     setIsUserSpeaking(false);
