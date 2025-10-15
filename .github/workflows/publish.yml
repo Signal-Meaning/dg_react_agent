@@ -40,9 +40,13 @@ jobs:
         run: echo "Tests are run separately in the test workflow"
         
       - name: Publish to GitHub Package Registry
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PACKAGES_TOKEN }}
         run: npm publish
           
       - name: Verify package installation
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PACKAGES_TOKEN }}
         run: |
           # Create a temporary directory to test package installation
           mkdir test-install
