@@ -9,7 +9,8 @@ import {
   UpdateInstructionsPayload,
   ConversationMessage,
   ConversationRole,
-  AgentOptions
+  AgentOptions,
+  ConnectionState
 } from '../../types';
 import { WebSocketManager, WebSocketEvent } from '../../utils/websocket/WebSocketManager';
 import { AudioManager, AudioEvent } from '../../utils/audio/AudioManager';
@@ -213,6 +214,9 @@ function DeepgramVoiceInteraction(
   
   // Track keepalive state - disable after UserStoppedSpeaking to allow natural timeout
   const keepaliveEnabledRef = useRef(true);
+  
+  // Track last connection states to prevent duplicate logging
+  const lastConnectionStates = useRef<{ transcription?: ConnectionState; agent?: ConnectionState }>({});
   
   // Control keepalives based on user speaking state
   const updateKeepaliveState = (enabled: boolean) => {
@@ -434,16 +438,34 @@ function DeepgramVoiceInteraction(
       service: 'transcription',
         queryParams: useKeytermPrompting ? undefined : transcriptionQueryParams, 
       debug,
+      keepaliveInterval: 0, // Disable keepalives for transcription service
     });
 
     // Set up event listeners for transcription WebSocket
       transcriptionUnsubscribe = transcriptionManagerRef.current.addEventListener((event: WebSocketEvent) => {
       if (event.type === 'state') {
-        log('Transcription state:', event.state);
-        dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: event.state });
-        onConnectionStateChange?.('transcription', event.state);
+        // Only log and dispatch if state actually changed
+        if (debug) {
+          console.log('🔧 [DEBUG] Transcription state event:', event.state, 'Previous:', lastConnectionStates.current.transcription);
+        }
+        if (lastConnectionStates.current.transcription !== event.state) {
+          log('Transcription state:', event.state);
+          dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: event.state });
+          onConnectionStateChange?.('transcription', event.state);
+          lastConnectionStates.current.transcription = event.state;
+        } else {
+          if (debug) {
+            console.log('🔧 [DEBUG] Transcription state unchanged, skipping:', event.state);
+          }
+        }
       } else if (event.type === 'message') {
         handleTranscriptionMessage(event.data);
+      } else if (event.type === 're_enable_idle_timeout') {
+        // Re-enable idle timeout resets for the other service when one detects meaningful activity
+        console.log('🔄 [IDLE_TIMEOUT] Re-enabling idle timeout resets for agent service due to transcription activity');
+        if (agentManagerRef.current) {
+          agentManagerRef.current.enableIdleTimeoutResets();
+        }
       } else if (event.type === 'error') {
         handleError(event.error);
       }
@@ -476,48 +498,69 @@ function DeepgramVoiceInteraction(
     // Set up event listeners for agent WebSocket
       const unsubscribeResult = agentManagerRef.current.addEventListener((event: WebSocketEvent) => {
       if (event.type === 'state') {
-        log('Agent state:', event.state);
-        if (event.state === 'connected') {
-          console.info('🔗 [Protocol] Agent WebSocket connected');
+        // Only log and dispatch if state actually changed
+        if (debug) {
+          console.log('🔧 [DEBUG] Agent state event:', event.state, 'Previous:', lastConnectionStates.current.agent);
+        }
+        if (lastConnectionStates.current.agent !== event.state) {
+          log('Agent state:', event.state);
+          if (event.state === 'connected') {
+            console.info('🔗 [Protocol] Agent WebSocket connected');
+            
+            // Handle reconnection logic
+            if (event.isReconnection) {
+              log('Agent WebSocket reconnected - resetting greeting state');
+              dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
+              dispatch({ type: 'RESET_GREETING_STATE' });
+            } else {
+              log('Agent WebSocket connected for first time');
+              dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: true });
+            }
+          }
           
-          // Handle reconnection logic
-          if (event.isReconnection) {
-            log('Agent WebSocket reconnected - resetting greeting state');
-            dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
-            dispatch({ type: 'RESET_GREETING_STATE' });
-          } else {
-            log('Agent WebSocket connected for first time');
-            dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: true });
+          dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
+          onConnectionStateChange?.('agent', event.state);
+          lastConnectionStates.current.agent = event.state;
+        } else {
+          if (debug) {
+            console.log('🔧 [DEBUG] Agent state unchanged, skipping:', event.state);
           }
         }
         
-        dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
-        onConnectionStateChange?.('agent', event.state);
-        
         // Reset settings flag when connection closes for lazy reconnection
         if (event.state === 'closed') {
-          console.log('🔧 [Connection] Agent connection closed - checking for errors or reasons');
-          console.log('🔧 [Connection] Connection close event details:', event);
+          if (debug) {
+            console.log('🔧 [Connection] Agent connection closed - checking for errors or reasons');
+            console.log('🔧 [Connection] Connection close event details:', event);
+          }
           
           dispatch({ type: 'SETTINGS_SENT', sent: false });
           hasSentSettingsRef.current = false; // Reset ref when connection closes
           (window as any).globalSettingsSent = false; // Reset global flag when connection closes
           settingsSentTimeRef.current = null; // Reset settings time
-          console.log('🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
+          if (debug) {
+            console.log('🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
+          }
           lazyLog('Reset hasSentSettings flag due to connection close');
           
           // Disable microphone when connection closes (async operation)
           if (audioManagerRef.current && audioManagerRef.current.isRecordingActive()) {
-            console.log('🔧 [Connection] Connection closed, disabling microphone');
+            if (debug) {
+              console.log('🔧 [Connection] Connection closed, disabling microphone');
+            }
             // Use setTimeout to avoid blocking the event handler
             setTimeout(async () => {
               try {
                 await audioManagerRef.current?.stopRecording();
                 dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: false });
                 onMicToggle?.(false);
-                console.log('🔧 [Connection] Microphone disabled due to connection close');
+                if (debug) {
+                  console.log('🔧 [Connection] Microphone disabled due to connection close');
+                }
               } catch (error) {
-                console.log('🔧 [Connection] Error disabling microphone:', error);
+                if (debug) {
+                  console.log('🔧 [Connection] Error disabling microphone:', error);
+                }
               }
             }, 0);
           }
@@ -538,11 +581,20 @@ function DeepgramVoiceInteraction(
         }
       } else if (event.type === 'keepalive') {
         // Handle keepalive messages for logging
+        if (debug) {
+          console.log('🔧 [DEBUG] Agent keepalive event received:', event.data.service);
+        }
         onKeepalive?.(event.data.service);
       } else if (event.type === 'message') {
         handleAgentMessage(event.data);
       } else if (event.type === 'binary') {
         handleAgentAudio(event.data);
+      } else if (event.type === 're_enable_idle_timeout') {
+        // Re-enable idle timeout resets for the other service when one detects meaningful activity
+        console.log('🔄 [IDLE_TIMEOUT] Re-enabling idle timeout resets for transcription service due to agent activity');
+        if (transcriptionManagerRef.current) {
+          transcriptionManagerRef.current.enableIdleTimeoutResets();
+        }
       } else if (event.type === 'error') {
         handleError(event.error);
       }
@@ -627,7 +679,7 @@ function DeepgramVoiceInteraction(
     }
 
     // Auto-connect dual mode logic
-    console.log('Auto-connect check:', { autoConnect, isAgentConfigured, agentManagerRef: !!agentManagerRef.current });
+    console.log('Auto-connect check:', { autoConnect, isAgentConfigured, isTranscriptionConfigured, agentManagerRef: !!agentManagerRef.current, transcriptionManagerRef: !!transcriptionManagerRef.current });
     if (autoConnect === true && isAgentConfigured && !autoConnectAttemptedRef.current && !(window as any).globalAutoConnectAttempted) {
       // Validate API key before attempting connection
       const isValidApiKey = apiKey && 
@@ -649,7 +701,7 @@ function DeepgramVoiceInteraction(
       // even if audio is not available
       dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
       
-      // Auto-connect to agent service to establish dual mode
+      // Auto-connect to both services in dual mode
       setTimeout(async () => {
         // Check again inside setTimeout to prevent multiple executions
         if (autoConnectAttemptedRef.current) {
@@ -658,11 +710,21 @@ function DeepgramVoiceInteraction(
         }
         autoConnectAttemptedRef.current = true; // Mark as attempted
         
-        console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current);
-        if (agentManagerRef.current) {
-          console.log('Calling agentManagerRef.current.connect()');
-          try {
+        console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current, 'transcriptionManagerRef.current:', !!transcriptionManagerRef.current);
+        
+        try {
+          // Connect transcription service if configured
+          if (transcriptionManagerRef.current) {
+            console.log('Auto-connect: Connecting transcription service...');
+            await transcriptionManagerRef.current.connect();
+            console.log('Auto-connect: Transcription service connected');
+          }
+          
+          // Connect agent service if configured
+          if (agentManagerRef.current) {
+            console.log('Auto-connect: Connecting agent service...');
             await agentManagerRef.current.connect();
+            console.log('Auto-connect: Agent service connected');
             
             // Wait for connection to be fully established (simplified)
             await new Promise(resolve => setTimeout(resolve, 200)); // Simple wait
@@ -679,9 +741,9 @@ function DeepgramVoiceInteraction(
             } else {
               log('Auto-connect: Connection not fully established after waiting');
             }
-          } catch (error) {
-            log('Auto-connect failed:', error);
           }
+        } catch (error) {
+          log('Auto-connect failed:', error);
         }
       }, 100); // Small delay to ensure audio manager is ready
     } else {
@@ -756,8 +818,19 @@ function DeepgramVoiceInteraction(
 
   // Handle transcription messages - only relevant if transcription is configured
   const handleTranscriptionMessage = (data: unknown) => {
-    // Debug: Log all transcription messages
-    console.log('📝 [TRANSCRIPTION] Message received:', data);
+    // Add simplified transcript log for better readability - always show with [TRANSCRIPT] prefix
+    if (typeof data === 'object' && data !== null && 'alternatives' in data) {
+      const transcriptData = data as { alternatives?: Array<{ transcript?: string }>; is_final?: boolean };
+      const transcript = transcriptData.alternatives?.[0]?.transcript;
+      if (transcript && transcript.trim()) {
+        console.log(`[TRANSCRIPT] "${transcript}" ${transcriptData.is_final ? '(final)' : '(interim)'}`);
+      }
+    }
+    
+    // Debug: Log all transcription messages (only in debug mode)
+    if (props.debug) {
+      console.log('📝 [TRANSCRIPTION] Message received:', data);
+    }
     
     // Skip processing if transcription service isn't configured
     if (!transcriptionManagerRef.current) {
@@ -785,6 +858,8 @@ function DeepgramVoiceInteraction(
         return;
       }
       
+      // Don't re-enable idle timeout resets here
+      // Let WebSocketManager handle it based on message content
       const transcript = data as unknown as TranscriptResponse;
       onTranscriptUpdate?.(transcript);
       return;
@@ -1077,6 +1152,10 @@ function DeepgramVoiceInteraction(
     const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as any).type : 'unknown';
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
     
+    // Don't re-enable idle timeout resets here
+    // Let WebSocketManager handle meaningful message detection
+    // After UtteranceEnd, only new connection should re-enable
+    
     // Skip processing if agent service isn't configured
     if (!agentManagerRef.current) {
       log('Received unexpected agent message but service is not configured:', data);
@@ -1352,6 +1431,9 @@ function DeepgramVoiceInteraction(
 
   // Handle agent audio - only relevant if agent is configured
   const handleAgentAudio = (data: ArrayBuffer) => {
+    // Don't re-enable idle timeout resets here
+    // After UtteranceEnd, only new connection should re-enable
+    
     // Skip processing if agent service isn't configured
     if (!agentManagerRef.current) {
       log('Received unexpected agent audio but service is not configured');
@@ -1865,45 +1947,58 @@ function DeepgramVoiceInteraction(
         lazyLog(`Connection already established, skipping settings`);
       }
       
-      // Enable microphone for audio input
-      console.log(`🔍 [resumeWithAudio] Enabling microphone for audio input`);
+      // Wait for connection and Welcome message
+      console.log(`🔍 [resumeWithAudio] Waiting for connection and Welcome message`);
       
-      // Wait for connection to be established and settings to be sent
-      let attempts = 0;
-      const maxAttempts = 50; // 5 seconds max wait
-      let settingsSent = false;
+      let readyAttempts = 0;
+      const maxReadyAttempts = 50; // 5 seconds max wait
+      let welcomeReady = false;
       
-      while (!settingsSent && attempts < maxAttempts) {
-        console.log(`🔍 [resumeWithAudio] Waiting for settings to be sent... attempt ${attempts + 1}/${maxAttempts}`);
+      while (!welcomeReady && readyAttempts < maxReadyAttempts) {
+        const currentState = agentManagerRef.current?.getState();
+        const welcomeReceived = state.welcomeReceived;
         
-        // Check if settings have already been sent (avoid duplicate)
-        if (hasSentSettingsRef.current || (window as any).globalSettingsSent) {
-          console.log('🔍 [resumeWithAudio] Settings already sent, skipping duplicate');
-          settingsSent = true;
+        console.log(`🔍 [resumeWithAudio] Checking connection readiness... attempt ${readyAttempts + 1}/${maxReadyAttempts}`);
+        console.log(`  - Connection state: ${currentState}`);
+        console.log(`  - Welcome received: ${welcomeReceived}`);
+        
+        // Connection must be established and Welcome received
+        if (currentState === 'connected' && welcomeReceived) {
+          console.log('🔍 [resumeWithAudio] ✅ Connection ready, Welcome received');
+          welcomeReady = true;
         } else {
-          console.log('🔍 [resumeWithAudio] Sending settings now');
-          sendAgentSettings();
-          settingsSent = true; // Assume settings were sent successfully
+          await new Promise(resolve => setTimeout(resolve, 100));
+          readyAttempts++;
         }
-        
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
       }
       
-      if (settingsSent) {
-        console.log('🔍 [resumeWithAudio] ✅ Settings confirmed, enabling microphone');
-        
-        // Check if agent is actually connected before enabling microphone
-        if (!agentManagerRef.current || agentManagerRef.current.getState() !== 'connected') {
-          console.log('🔍 [resumeWithAudio] ❌ Cannot enable microphone: agent not connected, state:', agentManagerRef.current?.getState());
-          throw new Error(`Agent not connected (state: ${agentManagerRef.current?.getState()})`);
-        }
-        
-        await toggleMic(true);
-      } else {
-        console.log('🔍 [resumeWithAudio] ❌ Cannot enable microphone: settings still not sent');
-        throw new Error('Settings were not sent after multiple attempts');
+      if (!welcomeReady) {
+        console.log('🔍 [resumeWithAudio] ❌ Connection/Welcome not ready');
+        throw new Error('Connection failed: timeout waiting for Welcome message');
       }
+      
+      // Now send settings (during lazy reconnection, automatic settings send is skipped)
+      console.log('🔍 [resumeWithAudio] Sending settings for lazy reconnection');
+      if (!hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
+        sendAgentSettings();
+        // Wait for settings to be processed
+        await new Promise(resolve => setTimeout(resolve, 200));
+      } else {
+        console.log('🔍 [resumeWithAudio] Settings already sent');
+      }
+      
+      // Wait a bit more to ensure connection is stable after settings
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Final check before enabling microphone
+      console.log('🔍 [resumeWithAudio] ✅ All checks passed, enabling microphone');
+      
+      if (!agentManagerRef.current || agentManagerRef.current.getState() !== 'connected') {
+        console.log('🔍 [resumeWithAudio] ❌ Cannot enable microphone: agent not connected, state:', agentManagerRef.current?.getState());
+        throw new Error(`Agent not connected (state: ${agentManagerRef.current?.getState()})`);
+      }
+      
+      await toggleMic(true);
       
       lazyLog('Successfully resumed conversation with audio');
     } catch (error) {
@@ -2027,8 +2122,11 @@ function DeepgramVoiceInteraction(
         lazyLog(`Sending settings with context (correct Deepgram API format):`, settingsMessage);
         agentManagerRef.current.sendJSON(settingsMessage);
         
-        // Mark settings as sent
+        // Mark settings as sent (both state and refs for consistency)
         dispatch({ type: 'SETTINGS_SENT', sent: true });
+        hasSentSettingsRef.current = true;
+        (window as any).globalSettingsSent = true;
+        settingsSentTimeRef.current = Date.now();
         lazyLog('Settings sent with conversation context (correct Deepgram API format)');
       } else if (state.hasSentSettings) {
         lazyLog('Settings already sent, skipping duplicate');

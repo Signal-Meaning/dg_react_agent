@@ -66,14 +66,21 @@ function App() {
   
   // Helper to add logs - memoized
   const addLog = useCallback((message: string) => {
-    setLogs(prev => [...prev, `${new Date().toISOString().substring(11, 19)} - ${message}`]);
-    // Clear keepalive when a real event occurs
-    setCurrentKeepalive(null);
+    const timestampedMessage = `${new Date().toISOString().substring(11, 19)} - ${message}`;
+    setLogs(prev => [...prev, timestampedMessage]);
+    // Also log to console for debugging
+    console.log(timestampedMessage);
+    // Don't clear keepalive - let it persist in the log history
   }, []); // No dependencies, created once
   
   // Helper to update keepalive - memoized
   const updateKeepalive = useCallback((message: string) => {
-    setCurrentKeepalive(`${new Date().toISOString().substring(11, 19)} - ${message}`);
+    const timestampedMessage = `${new Date().toISOString().substring(11, 19)} - ${message}`;
+    setCurrentKeepalive(timestampedMessage);
+    // Add to logs so it persists (this replaces the current keepalive in the display)
+    setLogs(prev => [...prev, timestampedMessage]);
+    // Also log to console for debugging
+    console.log(timestampedMessage);
   }, []); // No dependencies, created once
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
@@ -97,19 +104,28 @@ function App() {
   }), []); // Empty dependency array means this object is created only once
 
   // Monitor deepgramRef changes - only log once when it becomes available
+  const hasLoggedRef = useRef(false);
   useEffect(() => {
-    if (deepgramRef.current) {
+    if (deepgramRef.current && !hasLoggedRef.current) {
       console.log('🔗 [APP] DeepgramVoiceInteraction ref is now available');
       addLog('🔗 [APP] DeepgramVoiceInteraction ref is now available');
+      hasLoggedRef.current = true;
       
       // Expose ref globally for E2E tests
-      (window as any).deepgramRef = deepgramRef;
+      (window as Window & { deepgramRef?: typeof deepgramRef }).deepgramRef = deepgramRef;
       console.log('🔗 [APP] Exposed deepgramRef globally for E2E tests');
     }
-  }, [addLog]); // Remove deepgramRef.current from dependencies to avoid infinite loop
+  }, [addLog]); // Include addLog in dependencies
 
   // Load instructions using the instructions-loader utility
+  const hasLoadedInstructions = useRef(false);
   useEffect(() => {
+    if (hasLoadedInstructions.current) {
+      // Debug log removed - this was appearing when debug mode was off
+      return;
+    }
+    
+    // Debug log removed - this was appearing when debug mode was off
     const loadInstructions = async () => {
       try {
         setInstructionsLoading(true);
@@ -139,11 +155,12 @@ function App() {
         }
       } finally {
         setInstructionsLoading(false);
+        hasLoadedInstructions.current = true;
       }
     };
 
     loadInstructions();
-  }, [addLog]);
+  }, [addLog]); // Include addLog in dependencies
 
   const memoizedAgentOptions = useMemo(() => ({
     language: 'en',
@@ -159,7 +176,7 @@ function App() {
     voice: 'aura-2-apollo-en',
     instructions: loadedInstructions || 'You are a helpful voice assistant. Keep your responses concise and informative.',
     greeting: 'Hello! How can I assist you today?',
-  }), []); // Remove loadedInstructions dependency to prevent re-initialization
+  }), [loadedInstructions]); // Include loadedInstructions dependency
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
@@ -179,9 +196,6 @@ function App() {
   }, [addLog]); // Depends on addLog
   
   const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
-    // Log the full transcript structure for debugging
-    console.log('Full transcript response:', transcript);
-
     // Use type assertion to handle the actual structure from Deepgram
     // which differs from our TranscriptResponse type
     const deepgramResponse = transcript as unknown as {
@@ -213,11 +227,11 @@ function App() {
       
       setLastTranscript(displayText);
       
-      if (deepgramResponse.is_final) {
-        addLog(`Final transcript: ${displayText}`);
-      }
+      // Log transcript to event log (and console via addLog)
+      const transcriptType = deepgramResponse.is_final ? 'final' : 'interim';
+      addLog(`[TRANSCRIPT] "${text}" (${transcriptType})`);
     }
-  }, [addLog]); // Depends on addLog
+  }, [addLog]); // Include addLog in dependencies
   
   const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
     setAgentResponse(utterance.text);
@@ -227,7 +241,7 @@ function App() {
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
     setUserMessage(message.text);
     addLog(`User message from server: ${message.text}`);
-  }, [addLog]); // Depends on addLog
+  }, [addLog]);
   
   const handleAgentStateChange = useCallback((state: AgentState) => {
     const prevState = agentState; // Capture previous state for comparison
@@ -274,10 +288,11 @@ function App() {
   }, [addLog]);
 
   const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
+    // Debug log removed - this was appearing when debug mode was off
     const channelStr = data.channel.join(',');
     setUtteranceEnd(`Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
     setIsUserSpeaking(false);
-    addLog(`🔚 UtteranceEnd detected - Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
+    addLog(`🔚 UtteranceEnd detected`);
   }, [addLog]);
 
   const handleVADEvent = useCallback((data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => {
@@ -310,13 +325,13 @@ function App() {
       
       if (isRealApiKey) {
         // Real API key - use lazy reconnect with text
-        addLog(`🔄 [LAZY_RECONNECT] Resuming conversation with text: ${textInput}`);
+        addLog(`Resuming conversation with text: ${textInput}`);
         setUserMessage(textInput);
         
         if (deepgramRef.current) {
           // Use lazy reconnect method instead of direct injection
           await deepgramRef.current.resumeWithText(textInput);
-          addLog('✅ [LAZY_RECONNECT] Text message sent via resumeWithText');
+          addLog('Text message sent');
         } else {
           addLog('Error: DeepgramVoiceInteraction ref not available');
         }
@@ -441,7 +456,7 @@ function App() {
       if (!micEnabled) {
         // Enable microphone with lazy reconnect
         setMicLoading(true);
-        addLog('🔄 [LAZY_RECONNECT] Resuming conversation with audio');
+        addLog('Resuming conversation with audio');
         console.log('🎤 [APP] About to call resumeWithAudio()');
         
         if (deepgramRef.current) {
@@ -452,7 +467,7 @@ function App() {
             console.log('🎤 [APP] resumeWithAudio method exists, calling it');
             await deepgramRef.current.resumeWithAudio();
             console.log('🎤 [APP] resumeWithAudio() completed successfully');
-            addLog('✅ [LAZY_RECONNECT] Audio conversation resumed');
+            addLog('Audio conversation resumed');
           } else {
             console.log('🎤 [APP] resumeWithAudio method does not exist!');
             addLog('❌ [APP] resumeWithAudio method not found on ref');
@@ -839,7 +854,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         </div>
       </div>
 
-      <div style={{ marginTop: '20px', border: '1px solid #4a5568', padding: '10px', pointerEvents: 'auto', backgroundColor: '#1a202c' }}>
+      <div data-testid="event-log" style={{ marginTop: '20px', border: '1px solid #4a5568', padding: '10px', pointerEvents: 'auto', backgroundColor: '#1a202c' }}>
         <h3 style={{ color: '#e2e8f0' }}>Event Log</h3>
         <button onClick={() => { setLogs([]); setCurrentKeepalive(null); }} style={{ marginBottom: '10px', pointerEvents: 'auto', backgroundColor: '#4a5568', color: '#e2e8f0', border: '1px solid #2d3748', padding: '5px 10px', borderRadius: '4px' }}>Clear Logs</button>
         <pre style={{ maxHeight: '300px', overflowY: 'scroll', background: '#2d3748', padding: '5px', color: '#e2e8f0', border: '1px solid #4a5568', borderRadius: '4px' }}>
