@@ -17,8 +17,9 @@
 - **Impact**: Package publishing now works reliably, enabling consistent releases
 
 ### 📦 **Package Distribution**
-- **Registry**: GitHub Package Registry (`@signal-meaning/deepgram-voice-interaction-react`)
-- **Installation**: `npm install @signal-meaning/deepgram-voice-interaction-react@0.3.2`
+- **Registry**: GitHub Package Registry (Private)
+- **Package**: `@signal-meaning/deepgram-voice-interaction-react@0.3.2`
+- **Installation**: See setup instructions below
 - **Size**: ~225KB (compressed)
 - **Files**: 113 files including dist, docs, tests, and scripts
 
@@ -27,13 +28,29 @@
 ## 🛠️ **Integration Guide**
 
 ### **Quick Start**
-```bash
-# Install the package
-npm install @signal-meaning/deepgram-voice-interaction-react@0.3.2
 
-# Basic usage
+#### **1. Configure GitHub Package Registry Access**
+```bash
+# Create .npmrc file in your project root
+echo "@signal-meaning:registry=https://npm.pkg.github.com" >> .npmrc
+echo "//npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN" >> .npmrc
+```
+
+#### **2. Install the Package**
+```bash
+# Install the private package
+npm install @signal-meaning/deepgram-voice-interaction-react@0.3.2
+```
+
+#### **3. Basic Usage**
+```typescript
 import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
 ```
+
+#### **4. GitHub Token Setup**
+- **Personal Access Token**: Create with `read:packages` permission
+- **Organization Access**: Ensure your GitHub account has access to Signal-Meaning organization
+- **Token Location**: Replace `YOUR_GITHUB_TOKEN` in `.npmrc` with your actual token
 
 ### **Voice-Commerce Specific Configuration**
 ```typescript
@@ -232,10 +249,17 @@ npm run dev
 ```
 
 ### **Common Issues & Solutions**
-1. **Microphone Permission Denied**: Guide users to enable microphone access
-2. **API Key Invalid**: Verify Deepgram API key configuration
-3. **Network Issues**: Implement retry logic and user feedback
-4. **Audio Quality**: Check microphone permissions and browser compatibility
+1. **Package Access Denied**: 
+   - Verify GitHub organization access
+   - Check token has `read:packages` permission
+   - Ensure `.npmrc` is configured correctly
+2. **Authentication Failed**: 
+   - Regenerate GitHub token if expired
+   - Verify token is correctly placed in `.npmrc`
+3. **Microphone Permission Denied**: Guide users to enable microphone access
+4. **API Key Invalid**: Verify Deepgram API key configuration
+5. **Network Issues**: Implement retry logic and user feedback
+6. **Audio Quality**: Check microphone permissions and browser compatibility
 
 ---
 
@@ -261,10 +285,13 @@ npm run dev
 ## 🚀 **Next Steps for Voice-Commerce Team**
 
 ### **Immediate Actions**
-1. **Install Package**: `npm install @signal-meaning/deepgram-voice-interaction-react@0.3.2`
-2. **Review Examples**: Check `test-app` for integration patterns
-3. **Configure Agent**: Set up commerce-specific instructions and voice
-4. **Test Integration**: Verify microphone, transcription, and agent responses
+1. **Get GitHub Access**: Request access to Signal-Meaning organization on GitHub
+2. **Create GitHub Token**: Generate personal access token with `read:packages` permission
+3. **Configure .npmrc**: Set up GitHub Package Registry authentication
+4. **Install Package**: `npm install @signal-meaning/deepgram-voice-interaction-react@0.3.2`
+5. **Review Examples**: Check `test-app` for integration patterns
+6. **Configure Agent**: Set up commerce-specific instructions and voice
+7. **Test Integration**: Verify microphone, transcription, and agent responses
 
 ### **Development Phase**
 1. **UI Integration**: Build voice commerce interface around the component
