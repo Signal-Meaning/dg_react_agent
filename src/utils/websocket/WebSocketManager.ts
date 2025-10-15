@@ -8,6 +8,7 @@ export type WebSocketEvent =
   | { type: 'message'; data: any }
   | { type: 'binary'; data: ArrayBuffer }
   | { type: 'keepalive'; data: { type: string; timestamp: number; service: ServiceType } }
+  | { type: 're_enable_idle_timeout'; service: ServiceType }
   | { type: 'error'; error: DeepgramError };
 
 /**
@@ -210,6 +211,7 @@ export class WebSocketManager {
           this.hasEverConnected = true;
           
           this.updateState('connected', isReconnection);
+          this.enableIdleTimeoutResets(); // Re-enable idle timeout resets on new connection
           this.startKeepalive();
           this.startIdleTimeout();
           this.reconnectAttempts = 0;
@@ -229,7 +231,19 @@ export class WebSocketManager {
               // Only reset idle timeout on meaningful messages
               const shouldResetTimeout = this.shouldResetIdleTimeout(data);
               if (shouldResetTimeout) {
-                this.resetIdleTimeout();
+                // If there's meaningful content, re-enable idle timeout resets
+                // This allows continued conversation after UtteranceEnd
+                if (this.idleTimeoutDisabled) {
+                  this.log(`Re-enabling idle timeout resets due to meaningful activity: ${data.type}`);
+                  this.enableIdleTimeoutResets();
+                  
+                  // Also notify the component to re-enable the other service
+                  // This ensures both agent and transcription services stay in sync
+                  console.log(`🔄 [WebSocketManager] Emitting re_enable_idle_timeout event for ${this.options.service}`);
+                  this.emit({ type: 're_enable_idle_timeout', service: this.options.service });
+                } else {
+                  this.resetIdleTimeout();
+                }
               }
               
               this.emit({ type: 'message', data });
@@ -479,6 +493,18 @@ export class WebSocketManager {
   public disableIdleTimeoutResets(): void {
     this.idleTimeoutDisabled = true;
     console.log(`🔧 [WebSocketManager] Disabled idle timeout resets for ${this.options.service} - connection will timeout naturally`);
+    // Start the idle timeout immediately since resets are disabled
+    this.startIdleTimeout();
+  }
+
+  /**
+   * Re-enables idle timeout resets (for reconnection scenarios)
+   */
+  public enableIdleTimeoutResets(): void {
+    this.idleTimeoutDisabled = false;
+    console.log(`🔧 [WebSocketManager] Re-enabled idle timeout resets for ${this.options.service}`);
+    // Also reset the idle timeout to give a fresh start
+    this.resetIdleTimeout();
   }
 
   /**

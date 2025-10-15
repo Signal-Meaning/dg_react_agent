@@ -34,6 +34,11 @@ npx playwright test tests/e2e/auto-connect-dual-mode.spec.js
 
 # Run with UI
 npm run test:e2e:ui
+
+# Run specific test categories
+npx playwright test --grep "Timeout"        # All timeout-related tests
+npx playwright test --grep "Idle Timeout"   # Idle timeout specific tests
+npx playwright test --grep "Microphone"     # All microphone tests
 ```
 
 ## Why Real API Key Instead of Mocks?
@@ -48,13 +53,46 @@ npm run test:e2e:ui
 
 ## Test Files
 
+### Protocol & Connection Tests
 - **`deepgram-ux-protocol.spec.js`** - UX-focused protocol validation tests (3 tests)
 - **`protocol-validation-modes.spec.js`** - Real API + Mock mode validation (2 tests)
 - **`api-key-validation.spec.js`** - API key validation and error handling
 - **`auto-connect-dual-mode.spec.js`** - Auto-connect behavior and dual mode functionality
+- **`auto-connect-behavior.spec.js`** - Auto-connect property behavior validation
+- **`auto-connect-prop-behavior.spec.js`** - Auto-connect prop edge cases
+
+### Timeout & Reconnection Tests
+- **`websocket-timeout-context-preservation.spec.js`** - Context preservation across timeout with TEXT input (accelerated time)
+- **`idle-timeout-behavior.spec.js`** - Idle timeout behavior in various scenarios (reconnection, active conversation)
+- **`microphone-reliability.spec.js`** - Microphone state reliability with manual timeout trigger
+
+### Microphone & Audio Tests
 - **`microphone-control.spec.js`** - Microphone enable/disable and state management  
+- **`microphone-functionality.spec.js`** - Microphone feature validation
+- **`simple-mic-test.spec.js`** - Simple microphone state tests
+- **`greeting-audio-timing.spec.js`** - Audio greeting timing and AudioContext initialization
+
+### Conversation & Interaction Tests
 - **`text-only-conversation.spec.js`** - Text-only conversation without audio
+- **`real-user-workflows.spec.js`** - Real-world user interaction workflows
+
+### VAD (Voice Activity Detection) Tests
+- **`vad-websocket-events.spec.js`** - VAD event WebSocket validation
+- **`diagnostic-vad.spec.js`** - VAD diagnostic tests
+- **`manual-vad-workflow.spec.js`** - Manual VAD workflow testing
+
+### Configuration & Setup Tests
+- **`deepgram-instructions-file.spec.js`** - Custom instructions file loading
+
+### Diagnostic & Error Tests
+- **`manual-diagnostic.spec.js`** - Manual testing diagnostics
+- **`js-error-test.spec.js`** - JavaScript error detection
+- **`react-error-test.spec.js`** - React error boundary testing
+- **`page-content.spec.js`** - Basic page content validation
+
+### Test Utilities
 - **`helpers/test-helpers.js`** - Shared test utilities (see below)
+- **`helpers/audio-mocks.js`** - Audio API mocking utilities
 
 ## Writing New Tests
 
@@ -93,6 +131,48 @@ test('my new test', async ({ page }) => {
 - ✅ **Consistent**: All tests follow same patterns
 - ✅ **Maintainable**: Change once, affects all tests
 - ✅ **Readable**: High-level actions instead of low-level Playwright calls
+
+## Notable Test Scenarios
+
+### Idle Timeout Behavior
+
+**File:** `idle-timeout-behavior.spec.js`
+
+**Purpose:** Comprehensive test suite for idle timeout behavior in realistic conversation scenarios.
+
+**Test Cases:**
+
+#### 1. Microphone Activation After Idle Timeout (Issue #58)
+Validates that users can reactivate the microphone after connection times out.
+
+**Scenario:**
+1. Component auto-connects successfully
+2. No user activity for 12 seconds (triggers 10s idle timeout)
+3. User clicks microphone button to start voice input
+4. Expected: Connection re-establishes and microphone enables
+
+**Status:** ✅ PASSING (Issue #58 fixed)
+
+#### 2. Active Conversation Continuity
+Validates that connection stays alive during active conversation with natural pauses.
+
+**Scenario:**
+1. User speaks (triggers UtteranceEnd after brief pause)
+2. User continues speaking after pause
+3. Expected: Connection stays alive, doesn't timeout mid-conversation
+4. Tests that idle timeout resets on any activity (user OR agent)
+
+**Status:** ✅ PASSING (validates fix for premature timeout bug)
+
+**Why These Tests are Important:**
+- **Real-world scenarios**: Tests natural conversation flows with pauses
+- **Different from `websocket-timeout-context-preservation.spec.js`**: That test uses TEXT input with accelerated time (15 min keepalive timeout)
+- **Different from `microphone-reliability.spec.js`**: That test uses manual "Trigger Timeout" button
+
+**Run:**
+```bash
+npx playwright test tests/e2e/idle-timeout-behavior.spec.js
+```
 
 ## Troubleshooting
 
