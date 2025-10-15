@@ -31,14 +31,11 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
         
-      - name: Install peer dependencies for testing
-        run: npm install react@^18.0.0 react-dom@^18.0.0 --legacy-peer-deps
-        
       - name: Build package
         run: npm run build
         
-      - name: Run tests
-        run: npm test
+      - name: Skip tests (already run in test workflow)
+        run: echo "Tests are run separately in the test workflow"
         
       - name: Publish to GitHub Package Registry
         run: npm publish
