@@ -67,13 +67,16 @@ function App() {
   // Helper to add logs - memoized
   const addLog = useCallback((message: string) => {
     setLogs(prev => [...prev, `${new Date().toISOString().substring(11, 19)} - ${message}`]);
-    // Clear keepalive when a real event occurs
-    setCurrentKeepalive(null);
+    // Don't clear keepalive - let it persist in the log history
   }, []); // No dependencies, created once
   
   // Helper to update keepalive - memoized
   const updateKeepalive = useCallback((message: string) => {
-    setCurrentKeepalive(`${new Date().toISOString().substring(11, 19)} - ${message}`);
+    const timestampedMessage = `${new Date().toISOString().substring(11, 19)} - ${message}`;
+    setCurrentKeepalive(timestampedMessage);
+    // Add to logs so it persists (this replaces the current keepalive in the display)
+    setLogs(prev => [...prev, timestampedMessage]);
+    console.log('🔧 [DEBUG] Keepalive logged:', message);
   }, []); // No dependencies, created once
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
@@ -97,19 +100,28 @@ function App() {
   }), []); // Empty dependency array means this object is created only once
 
   // Monitor deepgramRef changes - only log once when it becomes available
+  const hasLoggedRef = useRef(false);
   useEffect(() => {
-    if (deepgramRef.current) {
+    if (deepgramRef.current && !hasLoggedRef.current) {
       console.log('🔗 [APP] DeepgramVoiceInteraction ref is now available');
       addLog('🔗 [APP] DeepgramVoiceInteraction ref is now available');
+      hasLoggedRef.current = true;
       
       // Expose ref globally for E2E tests
       (window as any).deepgramRef = deepgramRef;
       console.log('🔗 [APP] Exposed deepgramRef globally for E2E tests');
     }
-  }, [addLog]); // Remove deepgramRef.current from dependencies to avoid infinite loop
+  }, []); // Empty dependency array - only run once
 
   // Load instructions using the instructions-loader utility
+  const hasLoadedInstructions = useRef(false);
   useEffect(() => {
+    if (hasLoadedInstructions.current) {
+      console.log('🔧 [DEBUG] Instructions already loaded, skipping');
+      return;
+    }
+    
+    console.log('🔧 [DEBUG] Loading instructions...');
     const loadInstructions = async () => {
       try {
         setInstructionsLoading(true);
@@ -139,11 +151,12 @@ function App() {
         }
       } finally {
         setInstructionsLoading(false);
+        hasLoadedInstructions.current = true;
       }
     };
 
     loadInstructions();
-  }, [addLog]);
+  }, [addLog]); // Include addLog in dependencies
 
   const memoizedAgentOptions = useMemo(() => ({
     language: 'en',
@@ -179,8 +192,8 @@ function App() {
   }, [addLog]); // Depends on addLog
   
   const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
-    // Log the full transcript structure for debugging
-    console.log('Full transcript response:', transcript);
+    // Note: Detailed logging moved to component level with debug mode
+    // This handler now focuses on state updates only
 
     // Use type assertion to handle the actual structure from Deepgram
     // which differs from our TranscriptResponse type
@@ -226,8 +239,8 @@ function App() {
   
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
     setUserMessage(message.text);
-    addLog(`User message from server: ${message.text}`);
-  }, [addLog]); // Depends on addLog
+    // Note: User message logging is handled by transcript handler to avoid duplication
+  }, []); // No dependencies needed
   
   const handleAgentStateChange = useCallback((state: AgentState) => {
     const prevState = agentState; // Capture previous state for comparison
@@ -274,10 +287,11 @@ function App() {
   }, [addLog]);
 
   const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
+    console.log('🔧 [DEBUG] UtteranceEnd handler called:', data);
     const channelStr = data.channel.join(',');
     setUtteranceEnd(`Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
     setIsUserSpeaking(false);
-    addLog(`🔚 UtteranceEnd detected - Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
+    addLog(`🔚 UtteranceEnd detected`);
   }, [addLog]);
 
   const handleVADEvent = useCallback((data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => {
@@ -310,13 +324,13 @@ function App() {
       
       if (isRealApiKey) {
         // Real API key - use lazy reconnect with text
-        addLog(`🔄 [LAZY_RECONNECT] Resuming conversation with text: ${textInput}`);
+        addLog(`Resuming conversation with text: ${textInput}`);
         setUserMessage(textInput);
         
         if (deepgramRef.current) {
           // Use lazy reconnect method instead of direct injection
           await deepgramRef.current.resumeWithText(textInput);
-          addLog('✅ [LAZY_RECONNECT] Text message sent via resumeWithText');
+          addLog('Text message sent');
         } else {
           addLog('Error: DeepgramVoiceInteraction ref not available');
         }
@@ -441,7 +455,7 @@ function App() {
       if (!micEnabled) {
         // Enable microphone with lazy reconnect
         setMicLoading(true);
-        addLog('🔄 [LAZY_RECONNECT] Resuming conversation with audio');
+        addLog('Resuming conversation with audio');
         console.log('🎤 [APP] About to call resumeWithAudio()');
         
         if (deepgramRef.current) {
@@ -452,7 +466,7 @@ function App() {
             console.log('🎤 [APP] resumeWithAudio method exists, calling it');
             await deepgramRef.current.resumeWithAudio();
             console.log('🎤 [APP] resumeWithAudio() completed successfully');
-            addLog('✅ [LAZY_RECONNECT] Audio conversation resumed');
+            addLog('Audio conversation resumed');
           } else {
             console.log('🎤 [APP] resumeWithAudio method does not exist!');
             addLog('❌ [APP] resumeWithAudio method not found on ref');

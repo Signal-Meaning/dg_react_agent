@@ -9,7 +9,8 @@ import {
   UpdateInstructionsPayload,
   ConversationMessage,
   ConversationRole,
-  AgentOptions
+  AgentOptions,
+  ConnectionState
 } from '../../types';
 import { WebSocketManager, WebSocketEvent } from '../../utils/websocket/WebSocketManager';
 import { AudioManager, AudioEvent } from '../../utils/audio/AudioManager';
@@ -213,6 +214,9 @@ function DeepgramVoiceInteraction(
   
   // Track keepalive state - disable after UserStoppedSpeaking to allow natural timeout
   const keepaliveEnabledRef = useRef(true);
+  
+  // Track last connection states to prevent duplicate logging
+  const lastConnectionStates = useRef<{ transcription?: ConnectionState; agent?: ConnectionState }>({});
   
   // Control keepalives based on user speaking state
   const updateKeepaliveState = (enabled: boolean) => {
@@ -434,14 +438,22 @@ function DeepgramVoiceInteraction(
       service: 'transcription',
         queryParams: useKeytermPrompting ? undefined : transcriptionQueryParams, 
       debug,
+      keepaliveInterval: 0, // Disable keepalives for transcription service
     });
 
     // Set up event listeners for transcription WebSocket
       transcriptionUnsubscribe = transcriptionManagerRef.current.addEventListener((event: WebSocketEvent) => {
       if (event.type === 'state') {
-        log('Transcription state:', event.state);
-        dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: event.state });
-        onConnectionStateChange?.('transcription', event.state);
+        // Only log and dispatch if state actually changed
+        console.log('🔧 [DEBUG] Transcription state event:', event.state, 'Previous:', lastConnectionStates.current.transcription);
+        if (lastConnectionStates.current.transcription !== event.state) {
+          log('Transcription state:', event.state);
+          dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: event.state });
+          onConnectionStateChange?.('transcription', event.state);
+          lastConnectionStates.current.transcription = event.state;
+        } else {
+          console.log('🔧 [DEBUG] Transcription state unchanged, skipping:', event.state);
+        }
       } else if (event.type === 'message') {
         handleTranscriptionMessage(event.data);
       } else if (event.type === 're_enable_idle_timeout') {
@@ -482,23 +494,30 @@ function DeepgramVoiceInteraction(
     // Set up event listeners for agent WebSocket
       const unsubscribeResult = agentManagerRef.current.addEventListener((event: WebSocketEvent) => {
       if (event.type === 'state') {
-        log('Agent state:', event.state);
-        if (event.state === 'connected') {
-          console.info('🔗 [Protocol] Agent WebSocket connected');
-          
-          // Handle reconnection logic
-          if (event.isReconnection) {
-            log('Agent WebSocket reconnected - resetting greeting state');
-            dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
-            dispatch({ type: 'RESET_GREETING_STATE' });
-          } else {
-            log('Agent WebSocket connected for first time');
-            dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: true });
+        // Only log and dispatch if state actually changed
+        console.log('🔧 [DEBUG] Agent state event:', event.state, 'Previous:', lastConnectionStates.current.agent);
+        if (lastConnectionStates.current.agent !== event.state) {
+          log('Agent state:', event.state);
+          if (event.state === 'connected') {
+            console.info('🔗 [Protocol] Agent WebSocket connected');
+            
+            // Handle reconnection logic
+            if (event.isReconnection) {
+              log('Agent WebSocket reconnected - resetting greeting state');
+              dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
+              dispatch({ type: 'RESET_GREETING_STATE' });
+            } else {
+              log('Agent WebSocket connected for first time');
+              dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: true });
+            }
           }
+          
+          dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
+          onConnectionStateChange?.('agent', event.state);
+          lastConnectionStates.current.agent = event.state;
+        } else {
+          console.log('🔧 [DEBUG] Agent state unchanged, skipping:', event.state);
         }
-        
-        dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
-        onConnectionStateChange?.('agent', event.state);
         
         // Reset settings flag when connection closes for lazy reconnection
         if (event.state === 'closed') {
@@ -544,6 +563,7 @@ function DeepgramVoiceInteraction(
         }
       } else if (event.type === 'keepalive') {
         // Handle keepalive messages for logging
+        console.log('🔧 [DEBUG] Agent keepalive event received:', event.data.service);
         onKeepalive?.(event.data.service);
       } else if (event.type === 'message') {
         handleAgentMessage(event.data);
@@ -768,8 +788,19 @@ function DeepgramVoiceInteraction(
 
   // Handle transcription messages - only relevant if transcription is configured
   const handleTranscriptionMessage = (data: unknown) => {
-    // Debug: Log all transcription messages
-    console.log('📝 [TRANSCRIPTION] Message received:', data);
+    // Add simplified transcript log for better readability
+    if (typeof data === 'object' && data !== null && 'alternatives' in data) {
+      const transcriptData = data as { alternatives?: Array<{ transcript?: string }>; is_final?: boolean };
+      const transcript = transcriptData.alternatives?.[0]?.transcript;
+      if (transcript && transcript.trim()) {
+        console.log(`Transcript: "${transcript}" ${transcriptData.is_final ? '(final)' : '(interim)'}`);
+      }
+    }
+    
+    // Debug: Log all transcription messages (only in debug mode)
+    if (props.debug) {
+      console.log('📝 [TRANSCRIPTION] Message received:', data);
+    }
     
     // Skip processing if transcription service isn't configured
     if (!transcriptionManagerRef.current) {
