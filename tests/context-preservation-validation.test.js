@@ -93,7 +93,8 @@ describe('Context Preservation Validation', () => {
           speak: {
             provider: { type: 'deepgram', model: 'aura-asteria-en' }
           },
-          greeting: options.greeting,
+          // Don't include greeting for lazy reconnection - we're resuming a conversation, not starting new
+          // greeting: options.greeting,
           context: transformConversationHistory(history) // Correct Deepgram API format
         }
       };
@@ -201,7 +202,8 @@ describe('Context Preservation Validation', () => {
           speak: {
             provider: { type: 'deepgram', model: 'aura-asteria-en' }
           },
-          greeting: options.greeting,
+          // Don't include greeting for lazy reconnection - we're resuming a conversation, not starting new
+          // greeting: options.greeting,
           context: transformConversationHistory(history) // Correct Deepgram API format
         }
       };
@@ -295,8 +297,9 @@ describe('Context Preservation Validation', () => {
           },
           speak: {
             provider: { type: 'deepgram', model: 'aura-asteria-en' }
-          },
-          greeting: options.greeting
+          }
+          // Don't include greeting for lazy reconnection - we're resuming a conversation, not starting new
+          // greeting: options.greeting
           // context: history // COMMENTED OUT - This was the problem!
         }
       };
@@ -378,7 +381,8 @@ describe('Context Preservation Validation', () => {
           speak: {
             provider: { type: 'deepgram', model: 'aura-asteria-en' }
           },
-          greeting: options.greeting,
+          // Don't include greeting for lazy reconnection - we're resuming a conversation, not starting new
+          // greeting: options.greeting,
           context: history // FIXED: Context is now included!
         }
       };

@@ -2071,8 +2071,9 @@ function DeepgramVoiceInteraction(
         lazyLog(`🔍 [connectWithContext] Agent WebSocket already connected (${currentState})`);
       }
       
-      // Send settings with conversation context only if not already sent
-      if (agentManagerRef.current && !state.hasSentSettings) {
+      // Send settings with conversation context for lazy reconnection
+      // Always send settings during lazy reconnection to ensure proper context
+      if (agentManagerRef.current) {
         const settingsMessage = {
           type: 'Settings',
           audio: {
@@ -2114,7 +2115,8 @@ function DeepgramVoiceInteraction(
                 model: options.voice || 'aura-asteria-en'
               }
             },
-            greeting: options.greeting,
+            // Don't include greeting for lazy reconnection - we're resuming a conversation, not starting new
+            // greeting: options.greeting,
             context: transformConversationHistory(history) // Include conversation context in correct Deepgram API format
           }
         };
@@ -2128,8 +2130,6 @@ function DeepgramVoiceInteraction(
         (window as any).globalSettingsSent = true;
         settingsSentTimeRef.current = Date.now();
         lazyLog('Settings sent with conversation context (correct Deepgram API format)');
-      } else if (state.hasSentSettings) {
-        lazyLog('Settings already sent, skipping duplicate');
       }
       
       lazyLog('Successfully connected with conversation context');
