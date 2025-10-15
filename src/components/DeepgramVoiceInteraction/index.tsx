@@ -679,7 +679,7 @@ function DeepgramVoiceInteraction(
     }
 
     // Auto-connect dual mode logic
-    console.log('Auto-connect check:', { autoConnect, isAgentConfigured, agentManagerRef: !!agentManagerRef.current });
+    console.log('Auto-connect check:', { autoConnect, isAgentConfigured, isTranscriptionConfigured, agentManagerRef: !!agentManagerRef.current, transcriptionManagerRef: !!transcriptionManagerRef.current });
     if (autoConnect === true && isAgentConfigured && !autoConnectAttemptedRef.current && !(window as any).globalAutoConnectAttempted) {
       // Validate API key before attempting connection
       const isValidApiKey = apiKey && 
@@ -701,7 +701,7 @@ function DeepgramVoiceInteraction(
       // even if audio is not available
       dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
       
-      // Auto-connect to agent service to establish dual mode
+      // Auto-connect to both services in dual mode
       setTimeout(async () => {
         // Check again inside setTimeout to prevent multiple executions
         if (autoConnectAttemptedRef.current) {
@@ -710,11 +710,21 @@ function DeepgramVoiceInteraction(
         }
         autoConnectAttemptedRef.current = true; // Mark as attempted
         
-        console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current);
-        if (agentManagerRef.current) {
-          console.log('Calling agentManagerRef.current.connect()');
-          try {
+        console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current, 'transcriptionManagerRef.current:', !!transcriptionManagerRef.current);
+        
+        try {
+          // Connect transcription service if configured
+          if (transcriptionManagerRef.current) {
+            console.log('Auto-connect: Connecting transcription service...');
+            await transcriptionManagerRef.current.connect();
+            console.log('Auto-connect: Transcription service connected');
+          }
+          
+          // Connect agent service if configured
+          if (agentManagerRef.current) {
+            console.log('Auto-connect: Connecting agent service...');
             await agentManagerRef.current.connect();
+            console.log('Auto-connect: Agent service connected');
             
             // Wait for connection to be fully established (simplified)
             await new Promise(resolve => setTimeout(resolve, 200)); // Simple wait
@@ -731,9 +741,9 @@ function DeepgramVoiceInteraction(
             } else {
               log('Auto-connect: Connection not fully established after waiting');
             }
-          } catch (error) {
-            log('Auto-connect failed:', error);
           }
+        } catch (error) {
+          log('Auto-connect failed:', error);
         }
       }, 100); // Small delay to ensure audio manager is ready
     } else {
