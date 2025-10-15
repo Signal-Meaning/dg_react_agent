@@ -445,14 +445,18 @@ function DeepgramVoiceInteraction(
       transcriptionUnsubscribe = transcriptionManagerRef.current.addEventListener((event: WebSocketEvent) => {
       if (event.type === 'state') {
         // Only log and dispatch if state actually changed
-        console.log('🔧 [DEBUG] Transcription state event:', event.state, 'Previous:', lastConnectionStates.current.transcription);
+        if (debug) {
+          console.log('🔧 [DEBUG] Transcription state event:', event.state, 'Previous:', lastConnectionStates.current.transcription);
+        }
         if (lastConnectionStates.current.transcription !== event.state) {
           log('Transcription state:', event.state);
           dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: event.state });
           onConnectionStateChange?.('transcription', event.state);
           lastConnectionStates.current.transcription = event.state;
         } else {
-          console.log('🔧 [DEBUG] Transcription state unchanged, skipping:', event.state);
+          if (debug) {
+            console.log('🔧 [DEBUG] Transcription state unchanged, skipping:', event.state);
+          }
         }
       } else if (event.type === 'message') {
         handleTranscriptionMessage(event.data);
@@ -495,7 +499,9 @@ function DeepgramVoiceInteraction(
       const unsubscribeResult = agentManagerRef.current.addEventListener((event: WebSocketEvent) => {
       if (event.type === 'state') {
         // Only log and dispatch if state actually changed
-        console.log('🔧 [DEBUG] Agent state event:', event.state, 'Previous:', lastConnectionStates.current.agent);
+        if (debug) {
+          console.log('🔧 [DEBUG] Agent state event:', event.state, 'Previous:', lastConnectionStates.current.agent);
+        }
         if (lastConnectionStates.current.agent !== event.state) {
           log('Agent state:', event.state);
           if (event.state === 'connected') {
@@ -516,33 +522,45 @@ function DeepgramVoiceInteraction(
           onConnectionStateChange?.('agent', event.state);
           lastConnectionStates.current.agent = event.state;
         } else {
-          console.log('🔧 [DEBUG] Agent state unchanged, skipping:', event.state);
+          if (debug) {
+            console.log('🔧 [DEBUG] Agent state unchanged, skipping:', event.state);
+          }
         }
         
         // Reset settings flag when connection closes for lazy reconnection
         if (event.state === 'closed') {
-          console.log('🔧 [Connection] Agent connection closed - checking for errors or reasons');
-          console.log('🔧 [Connection] Connection close event details:', event);
+          if (debug) {
+            console.log('🔧 [Connection] Agent connection closed - checking for errors or reasons');
+            console.log('🔧 [Connection] Connection close event details:', event);
+          }
           
           dispatch({ type: 'SETTINGS_SENT', sent: false });
           hasSentSettingsRef.current = false; // Reset ref when connection closes
           (window as any).globalSettingsSent = false; // Reset global flag when connection closes
           settingsSentTimeRef.current = null; // Reset settings time
-          console.log('🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
+          if (debug) {
+            console.log('🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
+          }
           lazyLog('Reset hasSentSettings flag due to connection close');
           
           // Disable microphone when connection closes (async operation)
           if (audioManagerRef.current && audioManagerRef.current.isRecordingActive()) {
-            console.log('🔧 [Connection] Connection closed, disabling microphone');
+            if (debug) {
+              console.log('🔧 [Connection] Connection closed, disabling microphone');
+            }
             // Use setTimeout to avoid blocking the event handler
             setTimeout(async () => {
               try {
                 await audioManagerRef.current?.stopRecording();
                 dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: false });
                 onMicToggle?.(false);
-                console.log('🔧 [Connection] Microphone disabled due to connection close');
+                if (debug) {
+                  console.log('🔧 [Connection] Microphone disabled due to connection close');
+                }
               } catch (error) {
-                console.log('🔧 [Connection] Error disabling microphone:', error);
+                if (debug) {
+                  console.log('🔧 [Connection] Error disabling microphone:', error);
+                }
               }
             }, 0);
           }
@@ -563,7 +581,9 @@ function DeepgramVoiceInteraction(
         }
       } else if (event.type === 'keepalive') {
         // Handle keepalive messages for logging
-        console.log('🔧 [DEBUG] Agent keepalive event received:', event.data.service);
+        if (debug) {
+          console.log('🔧 [DEBUG] Agent keepalive event received:', event.data.service);
+        }
         onKeepalive?.(event.data.service);
       } else if (event.type === 'message') {
         handleAgentMessage(event.data);
@@ -788,12 +808,12 @@ function DeepgramVoiceInteraction(
 
   // Handle transcription messages - only relevant if transcription is configured
   const handleTranscriptionMessage = (data: unknown) => {
-    // Add simplified transcript log for better readability
+    // Add simplified transcript log for better readability - always show with [TRANSCRIPT] prefix
     if (typeof data === 'object' && data !== null && 'alternatives' in data) {
       const transcriptData = data as { alternatives?: Array<{ transcript?: string }>; is_final?: boolean };
       const transcript = transcriptData.alternatives?.[0]?.transcript;
       if (transcript && transcript.trim()) {
-        log(`Transcript: "${transcript}" ${transcriptData.is_final ? '(final)' : '(interim)'}`);
+        console.log(`[TRANSCRIPT] "${transcript}" ${transcriptData.is_final ? '(final)' : '(interim)'}`);
       }
     }
     
