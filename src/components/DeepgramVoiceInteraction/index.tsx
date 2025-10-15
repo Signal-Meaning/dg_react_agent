@@ -1990,12 +1990,71 @@ function DeepgramVoiceInteraction(
       // Wait a bit more to ensure connection is stable after settings
       await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Final check before enabling microphone
+      // Final check before enabling microphone - add connection stability check
       console.log('🔍 [resumeWithAudio] ✅ All checks passed, enabling microphone');
       
       if (!agentManagerRef.current || agentManagerRef.current.getState() !== 'connected') {
         console.log('🔍 [resumeWithAudio] ❌ Cannot enable microphone: agent not connected, state:', agentManagerRef.current?.getState());
         throw new Error(`Agent not connected (state: ${agentManagerRef.current?.getState()})`);
+      }
+      
+      // Additional connection stability check - wait for connection to remain stable
+      console.log('🔍 [resumeWithAudio] Performing connection stability check...');
+      let stabilityCheckAttempts = 0;
+      const maxStabilityChecks = 10; // 1 second max wait
+      let connectionStable = false;
+      
+      while (stabilityCheckAttempts < maxStabilityChecks && !connectionStable) {
+        const currentState = agentManagerRef.current?.getState();
+        console.log(`🔍 [resumeWithAudio] Stability check ${stabilityCheckAttempts + 1}/${maxStabilityChecks}: state=${currentState}`);
+        
+        if (currentState === 'connected') {
+          // Wait a bit more to ensure connection stays stable
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const stateAfterWait = agentManagerRef.current?.getState();
+          console.log(`🔍 [resumeWithAudio] State after stability wait: ${stateAfterWait}`);
+          
+          if (stateAfterWait === 'connected') {
+            connectionStable = true;
+            console.log('🔍 [resumeWithAudio] ✅ Connection is stable, proceeding with microphone enable');
+          } else {
+            console.log('🔍 [resumeWithAudio] ❌ Connection became unstable, retrying...');
+            stabilityCheckAttempts++;
+          }
+        } else {
+          console.log('🔍 [resumeWithAudio] ❌ Connection not stable, retrying...');
+          stabilityCheckAttempts++;
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      if (!connectionStable) {
+        console.log('🔍 [resumeWithAudio] ❌ Connection failed stability check after maximum attempts');
+        
+        // Try one more reconnection attempt if stability check fails
+        console.log('🔍 [resumeWithAudio] Attempting one more reconnection...');
+        try {
+          if (agentManagerRef.current) {
+            await agentManagerRef.current.connect();
+            console.log('🔍 [resumeWithAudio] Reconnection attempt completed');
+            
+            // Wait a bit for the connection to stabilize
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Check if the reconnection was successful
+            const finalState = agentManagerRef.current.getState();
+            if (finalState !== 'connected') {
+              throw new Error('Connection failed stability check - connection closed immediately after establishment');
+            }
+            
+            console.log('🔍 [resumeWithAudio] ✅ Reconnection successful, proceeding with microphone enable');
+          } else {
+            throw new Error('Connection failed stability check - connection closed immediately after establishment');
+          }
+        } catch (reconnectError) {
+          console.log('🔍 [resumeWithAudio] ❌ Reconnection attempt failed:', reconnectError);
+          throw new Error('Connection failed stability check - connection closed immediately after establishment');
+        }
       }
       
       await toggleMic(true);
@@ -2008,10 +2067,23 @@ function DeepgramVoiceInteraction(
         stack: error instanceof Error ? error.stack : 'No stack trace',
         name: error instanceof Error ? error.name : 'Unknown error type'
       });
+      
+      // Provide more specific error messages based on the error type
+      let errorMessage = 'Failed to resume conversation with audio';
+      if (error instanceof Error) {
+        if (error.message.includes('Connection failed stability check')) {
+          errorMessage = 'Connection closed immediately after establishment. Please try again.';
+        } else if (error.message.includes('Agent not connected')) {
+          errorMessage = 'Agent connection lost. Please check your connection and try again.';
+        } else if (error.message.includes('resume_audio_error')) {
+          errorMessage = 'Microphone activation failed. Please try again.';
+        }
+      }
+      
       handleError({
         service: 'agent',
         code: 'resume_audio_error',
-        message: 'Failed to resume conversation with audio',
+        message: errorMessage,
         details: error,
       });
       throw error;
