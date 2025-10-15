@@ -130,7 +130,7 @@ afterAll(() => {
 });
 
 describe('Welcome-First Behavior', () => {
-  const mockApiKey = 'test-api-key';
+  const mockApiKey = 'test-api-key-that-is-long-enough-for-validation';
   const mockAgentOptions = {
     language: 'en',
     listenModel: 'nova-2',
@@ -151,43 +151,28 @@ describe('Welcome-First Behavior', () => {
     jest.clearAllMocks();
   });
 
-  // Helper function to set up mocks consistently
-  const setupMocks = (overrides = {}) => {
-    const mockUnsubscribe = jest.fn();
-    const defaultMocks = {
-      WebSocketManager: {
-        connect: jest.fn().mockResolvedValue(),
-        close: jest.fn(),
-        sendJSON: jest.fn(),
-        addEventListener: jest.fn().mockReturnValue(mockUnsubscribe),
-        resetIdleTimeout: jest.fn(),
-        startKeepalive: jest.fn(),
-        stopKeepalive: jest.fn(),
-        getState: jest.fn().mockReturnValue('connected')
-      },
-      AudioManager: {
-        initialize: jest.fn().mockResolvedValue(),
-        startRecording: jest.fn().mockResolvedValue(),
-        stopRecording: jest.fn(),
-        addEventListener: jest.fn().mockReturnValue(mockUnsubscribe),
-        dispose: jest.fn()
-      }
-    };
-
-    const mocks = { ...defaultMocks, ...overrides };
-
+  // Helper function to get the current mock instances
+  const getMocks = () => {
     const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
     const { AudioManager } = require('../src/utils/audio/AudioManager');
     
-    WebSocketManager.mockImplementation(() => mocks.WebSocketManager);
-    AudioManager.mockImplementation(() => mocks.AudioManager);
-
-    return { mocks, mockUnsubscribe };
+    // Get the mock implementation functions
+    const WebSocketManagerMock = WebSocketManager.getMockImplementation();
+    const AudioManagerMock = AudioManager.getMockImplementation();
+    
+    // Create instances to get the mock functions
+    const wsMock = WebSocketManagerMock();
+    const audioMock = AudioManagerMock();
+    
+    return {
+      WebSocketManager: wsMock,
+      AudioManager: audioMock
+    };
   };
 
   describe('Auto-connect behavior', () => {
     test('should auto-connect when autoConnect is true', async () => {
-      const { mocks } = setupMocks();
+      const mocks = getMocks();
 
       render(
         <DeepgramVoiceInteraction
@@ -203,8 +188,8 @@ describe('Welcome-First Behavior', () => {
     });
 
     test('should not auto-connect when autoConnect is false', async () => {
-      // Use the setupMocks helper which works for other tests
-      const { mocks } = setupMocks();
+      // Use the getMocks helper which works for other tests
+      const mocks = getMocks();
       
       // Render the component
       const { unmount } = render(
