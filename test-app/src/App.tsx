@@ -854,7 +854,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         </div>
       </div>
 
-      <div style={{ marginTop: '20px', border: '1px solid #4a5568', padding: '10px', pointerEvents: 'auto', backgroundColor: '#1a202c' }}>
+      <div data-testid="event-log" style={{ marginTop: '20px', border: '1px solid #4a5568', padding: '10px', pointerEvents: 'auto', backgroundColor: '#1a202c' }}>
         <h3 style={{ color: '#e2e8f0' }}>Event Log</h3>
         <button onClick={() => { setLogs([]); setCurrentKeepalive(null); }} style={{ marginBottom: '10px', pointerEvents: 'auto', backgroundColor: '#4a5568', color: '#e2e8f0', border: '1px solid #2d3748', padding: '5px 10px', borderRadius: '4px' }}>Clear Logs</button>
         <pre style={{ maxHeight: '300px', overflowY: 'scroll', background: '#2d3748', padding: '5px', color: '#e2e8f0', border: '1px solid #4a5568', borderRadius: '4px' }}>
