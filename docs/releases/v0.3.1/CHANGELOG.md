@@ -1,6 +1,6 @@
-# dg_react_agent v0.4.0 Release Notes
+# dg_react_agent v0.3.1 Release Notes
 
-## 🎉 Minor Release: v0.4.0
+## 🎉 Patch Release: v0.3.1
 
 **Release Date**: October 15, 2025  
 **Previous Version**: v0.3.0  
@@ -8,7 +8,7 @@
 
 ## Overview
 
-dg_react_agent v0.4.0 introduces critical bug fixes and new TTS capabilities, significantly improving the user experience with reliable microphone reconnection and text-to-speech functionality without audio recording requirements.
+dg_react_agent v0.3.1 introduces critical bug fixes, significantly improving the user experience with reliable microphone reconnection and enhanced error handling.
 
 ## 🐛 Bug Fixes
 
@@ -27,20 +27,6 @@ dg_react_agent v0.4.0 introduces critical bug fixes and new TTS capabilities, si
 - **Error Messages**: Clear, actionable error messages for different failure scenarios
 - **Race Condition Prevention**: Eliminates timing issues in reconnection flow
 
-## ✨ New Features
-
-### TTS without STT Capability (Issue #24)
-- **Agent-Only Mode**: Component can operate with only `agentOptions` (no `transcriptionOptions`)
-- **connectTextOnly()**: Method enables TTS without any audio recording
-- **Auto-Connect Dual Mode**: Establishes connection for TTS with user interaction
-- **Text Input Interface**: Users can send text messages and receive audio responses
-
-### Enhanced Audio Capabilities
-- **Independent TTS**: Text-to-speech works without speech-to-text dependency
-- **Browser Autoplay Compliance**: Proper handling of browser audio policies
-- **User Interaction Requirements**: Clear user gesture requirements for audio playback
-- **Seamless Integration**: Works with existing auto-connect functionality
-
 ## 🔧 Technical Improvements
 
 ### Connection Management
@@ -49,27 +35,19 @@ dg_react_agent v0.4.0 introduces critical bug fixes and new TTS capabilities, si
 - **Error Recovery**: Enhanced error handling and recovery mechanisms
 - **State Management**: Improved connection state tracking
 
-### Audio Pipeline
-- **TTS Independence**: Audio playback without microphone requirements
-- **Browser Compatibility**: Proper AudioContext management
-- **User Gesture Handling**: Compliance with browser autoplay policies
-- **Performance Optimization**: Reduced unnecessary audio initialization
-
 ### Testing & Quality
 - **Comprehensive Tests**: New test suite for connection stability
 - **Error Handling Tests**: Tests for various failure scenarios
-- **Integration Tests**: End-to-end testing of new functionality
+- **Integration Tests**: End-to-end testing of bug fixes
 - **Backward Compatibility**: All existing tests continue to pass
 
 ## 📋 What's New
 
 ### Added
-- `connectTextOnly()` method for TTS without STT
 - Connection stability verification system
 - Retry mechanism for unstable connections
 - Enhanced error messages for microphone reconnection
-- Agent-Only Mode documentation
-- Comprehensive test coverage for new features
+- Comprehensive test coverage for bug fixes
 
 ### Fixed
 - Microphone reconnection after connection timeout
@@ -81,15 +59,12 @@ dg_react_agent v0.4.0 introduces critical bug fixes and new TTS capabilities, si
 ### Improved
 - Error messages for better user feedback
 - Connection reliability and stability
-- TTS functionality without audio recording
-- Browser autoplay policy compliance
 - Overall user experience
 
 ## 🧪 Testing
 
 ### Test Coverage
 - **Connection Stability Tests**: Verify reconnection reliability
-- **TTS Independence Tests**: Confirm TTS works without STT
 - **Error Handling Tests**: Test various failure scenarios
 - **Integration Tests**: End-to-end functionality verification
 - **Backward Compatibility**: All existing tests pass
@@ -97,29 +72,23 @@ dg_react_agent v0.4.0 introduces critical bug fixes and new TTS capabilities, si
 ### Test Results
 - ✅ All existing tests continue to pass
 - ✅ New tests verify microphone reconnection fix
-- ✅ New tests verify TTS independence functionality
 - ✅ Context preservation tests pass
 - ✅ Reconnection scenario tests pass
 
 ## 📚 Documentation Updates
 
 ### Component Documentation
-- **Agent-Only Mode**: Updated component usage documentation
-- **connectTextOnly()**: Added method documentation
-- **TTS Capabilities**: Enhanced audio functionality documentation
-- **Migration Guide**: Updated for v0.4.0 changes
+- **Error Handling**: Enhanced error message documentation
+- **Connection Stability**: Updated reconnection documentation
+- **Migration Guide**: Updated for v0.3.1 changes
 
 ### API Documentation
-- **New Methods**: Documented `connectTextOnly()` method
-- **Configuration Options**: Updated for Agent-Only Mode
 - **Error Handling**: Enhanced error message documentation
-- **Examples**: Added TTS-only usage examples
+- **Connection Methods**: Updated reconnection method documentation
 
 ## 🔗 Related Issues
 
 - **Closes #58**: Microphone button fails to reconnect after connection timeout
-- **Closes #24**: Investigate enabling TTS without audio recording
-- **Related to #43**: Greeting audio timing (solution identified)
 
 ## 📦 Dependencies
 
@@ -129,36 +98,9 @@ dg_react_agent v0.4.0 introduces critical bug fixes and new TTS capabilities, si
 
 ## 🚀 Migration Guide
 
-### From v0.3.0 to v0.4.0
+### From v0.3.0 to v0.3.1
 
-No breaking changes - this is a minor version with full backward compatibility.
-
-### New Capabilities
-
-#### TTS without STT
-```tsx
-// Agent-Only Mode (TTS without STT)
-const agentOptions = useMemo(() => ({
-  language: 'en',
-  listenModel: 'nova-2',
-  voice: 'aura-asteria-en',
-  instructions: 'You are a helpful voice assistant.'
-}), []);
-
-<DeepgramVoiceInteraction 
-  agentOptions={agentOptions}
-  // No transcriptionOptions - enables Agent-Only Mode
-/>
-```
-
-#### Text-Only Connection
-```tsx
-// Connect for text-only interactions
-await deepgramRef.current.connectTextOnly();
-
-// Send text and receive audio response
-await deepgramRef.current.resumeWithText("Hello, how are you?");
-```
+No breaking changes - this is a patch version with full backward compatibility.
 
 ### Enhanced Error Handling
 ```tsx
@@ -171,6 +113,11 @@ onError={(error) => {
   }
 }}
 ```
+
+### Improved Connection Reliability
+- **Automatic Retry**: Connection failures now automatically retry
+- **Stability Checks**: Enhanced verification before enabling microphone
+- **Better Error Messages**: More specific error messages for troubleshooting
 
 ## 🎯 Performance Impact
 
@@ -195,4 +142,4 @@ For questions or issues with v0.4.0:
 
 ---
 
-**Full Changelog**: [v0.3.0...v0.4.0](https://github.com/Signal-Meaning/dg_react_agent/compare/v0.3.0...v0.4.0)
+**Full Changelog**: [v0.3.0...v0.3.1](https://github.com/Signal-Meaning/dg_react_agent/compare/v0.3.0...v0.3.1)
