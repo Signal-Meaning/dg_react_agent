@@ -82,11 +82,12 @@ echo "  npm install ./dg_react_agent/$PACKAGE_FILE"
 echo ""
 print_status "Package file location: $(pwd)/$PACKAGE_FILE"
 
-# Ask if user wants to keep the file (only in interactive mode)
+# Default behavior: keep the file (non-interactive mode)
+# Only ask for cleanup in interactive mode
 if [ -t 0 ]; then
-    read -p "Do you want to keep the .tgz file? (Y/n): " -n 1 -r
+    read -p "Do you want to clean up the .tgz file? (y/N): " -n 1 -r
     echo
-    if [[ $REPLY =~ ^[Nn]$ ]]; then
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
         print_status "Cleaning up .tgz file..."
         rm -f $PACKAGE_FILE
         print_success "Cleanup completed"
@@ -94,5 +95,5 @@ if [ -t 0 ]; then
         print_success "Package file kept: $PACKAGE_FILE"
     fi
 else
-    print_success "Package file kept: $PACKAGE_FILE (non-interactive mode)"
+    print_success "Package file kept: $PACKAGE_FILE"
 fi
