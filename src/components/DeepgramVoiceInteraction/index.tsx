@@ -793,7 +793,7 @@ function DeepgramVoiceInteraction(
       const transcriptData = data as { alternatives?: Array<{ transcript?: string }>; is_final?: boolean };
       const transcript = transcriptData.alternatives?.[0]?.transcript;
       if (transcript && transcript.trim()) {
-        console.log(`Transcript: "${transcript}" ${transcriptData.is_final ? '(final)' : '(interim)'}`);
+        log(`Transcript: "${transcript}" ${transcriptData.is_final ? '(final)' : '(interim)'}`);
       }
     }
     
