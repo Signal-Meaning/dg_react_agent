@@ -28,6 +28,7 @@
  * DIFFERENTIATORS:
  * - websocket-timeout-context-preservation.spec.js: Tests TEXT input after accelerated timeout (15min)
  * - microphone-reliability.spec.js: Tests manual timeout trigger button workflow
+ * - vad-redundancy-and-agent-timeout.spec.js: Tests VAD signal redundancy and agent state timeout behavior
  * - This suite: Tests natural idle timeout behavior in realistic conversation flows
  */
 

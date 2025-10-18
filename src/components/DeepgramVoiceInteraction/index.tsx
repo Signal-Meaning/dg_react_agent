@@ -242,6 +242,41 @@ function DeepgramVoiceInteraction(
   const prevAgentStateRef = useRef<AgentState | undefined>(undefined);
   const prevIsPlayingRef = useRef<boolean | undefined>(undefined);
   
+  // VAD event tracking for redundancy detection
+  const vadEventHistory = useRef<Array<{ type: string; speechDetected: boolean; timestamp: number; source: string }>>([]);
+  
+  // Track VAD events and detect redundancy/conflicts
+  const trackVADEvent = (event: { type: string; speechDetected: boolean; timestamp: number; source: string }) => {
+    vadEventHistory.current.push(event);
+    
+    // Keep only recent events (last 5 seconds)
+    const fiveSecondsAgo = Date.now() - 5000;
+    vadEventHistory.current = vadEventHistory.current.filter(e => e.timestamp > fiveSecondsAgo);
+    
+    // Detect redundancy for same event type
+    const recentEvents = vadEventHistory.current.filter(e => 
+      e.timestamp > Date.now() - 1000 && // Last 1 second
+      e.speechDetected === event.speechDetected // Same speech state
+    );
+    
+    if (recentEvents.length > 1) {
+      console.log('🔄 [VAD] Redundant signals detected:', recentEvents.map(e => `${e.source}:${e.type}`));
+    }
+    
+    // Detect conflicts (opposite speech states within short time)
+    const conflictingEvents = vadEventHistory.current.filter(e => 
+      e.timestamp > Date.now() - 2000 && // Last 2 seconds
+      e.speechDetected !== event.speechDetected // Opposite speech state
+    );
+    
+    if (conflictingEvents.length > 0) {
+      console.warn('⚠️ [VAD] Conflicting signals detected:', {
+        current: `${event.source}:${event.type} (${event.speechDetected})`,
+        conflicts: conflictingEvents.map(e => `${e.source}:${e.type} (${e.speechDetected})`)
+      });
+    }
+  };
+  
   // Debug logging
   const log = (...args: unknown[]) => {
     if (debug) {
@@ -1264,6 +1299,15 @@ function DeepgramVoiceInteraction(
       // Disable keepalives when agent starts thinking (user stopped speaking)
       updateKeepaliveState(false);
       
+      // Disable idle timeout resets during agent thinking
+      console.log('🎯 [AGENT] AgentThinking - disabling idle timeout resets during thinking');
+      if (agentManagerRef.current) {
+        agentManagerRef.current.disableIdleTimeoutResets();
+      }
+      if (transcriptionManagerRef.current) {
+        transcriptionManagerRef.current.disableIdleTimeoutResets();
+      }
+      
       return;
     }
     
@@ -1274,6 +1318,15 @@ function DeepgramVoiceInteraction(
       // Track agent speaking
       if (state.greetingInProgress && !state.greetingStarted) {
         dispatch({ type: 'GREETING_STARTED', started: true });
+      }
+      
+      // Disable idle timeout resets during agent speaking
+      console.log('🎯 [AGENT] AgentStartedSpeaking - disabling idle timeout resets during speaking');
+      if (agentManagerRef.current) {
+        agentManagerRef.current.disableIdleTimeoutResets();
+      }
+      if (transcriptionManagerRef.current) {
+        transcriptionManagerRef.current.disableIdleTimeoutResets();
       }
       
       // Always call onAgentSpeaking when agent starts speaking
@@ -1289,6 +1342,20 @@ function DeepgramVoiceInteraction(
       if (state.greetingInProgress) {
         dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
         dispatch({ type: 'GREETING_STARTED', started: false });
+      }
+      
+      // Re-enable idle timeout resets when agent finishes (if user is not speaking)
+      console.log('🎯 [AGENT] AgentAudioDone - checking if should re-enable idle timeout resets');
+      if (!stateRef.current.isUserSpeaking) {
+        console.log('🎯 [AGENT] User not speaking - re-enabling idle timeout resets for natural timeout');
+        if (agentManagerRef.current) {
+          agentManagerRef.current.enableIdleTimeoutResets();
+        }
+        if (transcriptionManagerRef.current) {
+          transcriptionManagerRef.current.enableIdleTimeoutResets();
+        }
+      } else {
+        console.log('🎯 [AGENT] User is speaking - keeping idle timeout resets disabled');
       }
       
       // Always call onAgentSilent when agent finishes speaking
@@ -1375,6 +1442,10 @@ function DeepgramVoiceInteraction(
       const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
       onUserStoppedSpeaking?.({ timestamp });
       
+      // Track VAD event for redundancy detection
+      const vadEvent = { type: 'UserStoppedSpeaking', speechDetected: false, timestamp, source: 'agent' };
+      trackVADEvent(vadEvent);
+      
       // Update VAD state
       dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
       
@@ -1402,12 +1473,16 @@ function DeepgramVoiceInteraction(
       const lastWordEnd = typeof data.last_word_end === 'number' ? data.last_word_end : 0;
       onUtteranceEnd?.({ channel, lastWordEnd });
       
+      // Track VAD event for redundancy detection
+      const timestamp = Date.now();
+      const vadEvent = { type: 'UtteranceEnd', speechDetected: false, timestamp, source: 'transcription' };
+      trackVADEvent(vadEvent);
+      
       // Update VAD state
       dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
       dispatch({ type: 'UTTERANCE_END', data: { channel, lastWordEnd } });
       
       // Also call onUserStoppedSpeaking for backward compatibility
-      const timestamp = Date.now();
       onUserStoppedSpeaking?.({ timestamp });
       
       // Disable keepalives when utterance ends
@@ -1430,6 +1505,10 @@ function DeepgramVoiceInteraction(
       const confidence = typeof data.confidence === 'number' ? data.confidence : undefined;
       const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
       onVADEvent?.({ speechDetected, confidence, timestamp });
+      
+      // Track VAD event for redundancy detection
+      const vadEvent = { type: 'VADEvent', speechDetected, timestamp, source: 'transcription' };
+      trackVADEvent(vadEvent);
       
       // Handle speech detection state changes
       if (speechDetected) {
