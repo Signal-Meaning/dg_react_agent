@@ -682,6 +682,17 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <button 
           onClick={toggleMicrophone}
           disabled={!isReady || micLoading}
+          onMouseDown={() => {
+            // Enable audio context on user interaction (required for autoplay)
+            if (typeof window !== 'undefined' && window.AudioContext) {
+              const audioContext = new AudioContext();
+              if (audioContext.state === 'suspended') {
+                audioContext.resume().then(() => {
+                  console.log('AudioContext enabled via microphone button interaction');
+                });
+              }
+            }
+          }}
           style={{ 
             padding: '10px 20px',
             backgroundColor: micEnabled ? '#e0f7fa' : 'transparent',
@@ -716,7 +727,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           }}
           title="Manually trigger connection timeout for testing lazy reconnection"
         >
-          🧪 Test Timeout
+          Trigger Timeout
         </button>
       </div>
       
@@ -805,11 +816,22 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
           <input
             type="text"
-            placeholder="Type your message here..."
+            placeholder="Type your message here... (Click here to enable audio for this session)"
             style={{ flex: 1, padding: '8px', border: '1px solid #ccc', borderRadius: '4px', pointerEvents: 'auto' }}
             data-testid="text-input"
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
+            onFocus={() => {
+              // Enable audio context on user interaction (required for autoplay)
+              if (typeof window !== 'undefined' && window.AudioContext) {
+                const audioContext = new AudioContext();
+                if (audioContext.state === 'suspended') {
+                  audioContext.resume().then(() => {
+                    console.log('AudioContext enabled via text input focus');
+                  });
+                }
+              }
+            }}
             onKeyPress={(e) => {
               if (e.key === 'Enter') {
                 handleTextSubmit();
