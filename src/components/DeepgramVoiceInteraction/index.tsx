@@ -1431,20 +1431,19 @@ function DeepgramVoiceInteraction(
       const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
       onVADEvent?.({ speechDetected, confidence, timestamp });
       
-      // Disable idle timeout resets to prevent connection timeout during speech
-      console.log('🎯 [VAD] VADEvent detected - disabling idle timeout resets to prevent connection timeout');
-      
-      // Disable idle timeout resets for both services
-      if (agentManagerRef.current) {
-        agentManagerRef.current.disableIdleTimeoutResets();
-      }
-      if (transcriptionManagerRef.current) {
-        transcriptionManagerRef.current.disableIdleTimeoutResets();
-      }
-      
       // Handle speech detection state changes
       if (speechDetected) {
-        // User started speaking
+        // User started speaking - re-enable idle timeout resets
+        console.log('🎯 [VAD] VADEvent speechDetected: true - re-enabling idle timeout resets');
+        
+        // Re-enable idle timeout resets for both services
+        if (agentManagerRef.current) {
+          agentManagerRef.current.enableIdleTimeoutResets();
+        }
+        if (transcriptionManagerRef.current) {
+          transcriptionManagerRef.current.enableIdleTimeoutResets();
+        }
+        
         onUserStartedSpeaking?.();
         dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: true });
         updateKeepaliveState(true);
@@ -1453,7 +1452,9 @@ function DeepgramVoiceInteraction(
           dispatch({ type: 'AGENT_STATE_CHANGE', state: 'listening' });
         }
       } else {
-        // User stopped speaking
+        // User stopped speaking - keep idle timeout resets disabled to allow natural timeout
+        console.log('🎯 [VAD] VADEvent speechDetected: false - keeping idle timeout resets disabled');
+        
         const stopTimestamp = Date.now();
         onUserStoppedSpeaking?.({ timestamp: stopTimestamp });
         dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
