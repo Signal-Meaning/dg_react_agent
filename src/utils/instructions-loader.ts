@@ -88,12 +88,18 @@ function getDefaultInstructionsFilePath(): string {
   // In a browser environment, we can't read files directly
   // This would typically be handled by bundlers or build processes
   if (typeof window !== 'undefined') {
-    throw new Error('File reading not supported in browser environment');
+    // Return a fallback path for browser environments
+    return 'instructions.txt';
   }
 
   // For Node.js environments, look for instructions.txt in the project root
-  const projectRoot = process.cwd();
-  return path.join(projectRoot, 'instructions.txt');
+  if (typeof process !== 'undefined' && process.cwd) {
+    const projectRoot = process.cwd();
+    return path.join(projectRoot, 'instructions.txt');
+  }
+  
+  // Fallback
+  return 'instructions.txt';
 }
 
 /**

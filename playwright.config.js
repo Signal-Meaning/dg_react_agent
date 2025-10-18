@@ -66,6 +66,10 @@ module.exports = defineConfig({
     url: 'http://localhost:5173', // Vite default port
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
+    env: {
+      VITE_DEEPGRAM_API_KEY: 'test-api-key-for-e2e-testing',
+      VITE_DEEPGRAM_PROJECT_ID: 'test-project-id-for-e2e-testing'
+    }
   },
 
   /* 

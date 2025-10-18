@@ -18,10 +18,17 @@ function getEnvironmentInstructions() {
 function getDefaultInstructionsFilePath() {
   // Check if we're in a real browser environment (not Jest with jsdom)
   if (typeof window !== 'undefined' && typeof process === 'undefined') {
-    throw new Error('File reading not supported in browser environment');
+    // Return a fallback path for browser environments
+    return 'instructions.txt';
   }
-  const projectRoot = process.cwd();
-  return path.join(projectRoot, 'instructions.txt');
+  
+  if (typeof process !== 'undefined' && process.cwd) {
+    const projectRoot = process.cwd();
+    return path.join(projectRoot, 'instructions.txt');
+  }
+  
+  // Fallback
+  return 'instructions.txt';
 }
 
 function readInstructionsFile(filePath) {

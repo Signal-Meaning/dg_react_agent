@@ -49,7 +49,7 @@ test.describe('Simple Microphone State Tests', () => {
     await page.waitForTimeout(2000);
     
     // Find timeout button
-    const timeoutButton = page.locator('button:has-text("Trigger Timeout")');
+    const timeoutButton = page.locator('button:has-text("Test Timeout")');
     await expect(timeoutButton).toBeVisible({ timeout: 10000 });
     
     // Click timeout button
