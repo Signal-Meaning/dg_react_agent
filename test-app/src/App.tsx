@@ -56,10 +56,15 @@ function App() {
   const [agentSilent, setAgentSilent] = useState(false);
   
   // VAD state
+  const [userStartedSpeaking, setUserStartedSpeaking] = useState<string | null>(null);
   const [userStoppedSpeaking, setUserStoppedSpeaking] = useState<string | null>(null);
   const [utteranceEnd, setUtteranceEnd] = useState<string | null>(null);
   const [vadEvent, setVadEvent] = useState<string | null>(null);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  
+  // VAD state from transcription service (SpeechStarted/SpeechStopped)
+  const [speechStarted, setSpeechStarted] = useState<string | null>(null);
+  const [speechStopped, setSpeechStopped] = useState<string | null>(null);
   
   // Text input state
   const [textInput, setTextInput] = useState('');
@@ -85,15 +90,16 @@ function App() {
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
   const memoizedTranscriptionOptions = useMemo(() => ({
-    // Nova-3 enables keyterm prompting
-    model: 'nova-3', 
-    language: 'en-US',
-    smart_format: true,
-    interim_results: true,
-    diarize: true, 
-    channels: 1,
+    // Use environment variables with sensible defaults
+    model: import.meta.env.VITE_TRANSCRIPTION_MODEL || 'nova-3', 
+    language: import.meta.env.VITE_TRANSCRIPTION_LANGUAGE || 'en-US',
+    smart_format: import.meta.env.VITE_TRANSCRIPTION_SMART_FORMAT === 'true' || true,
+    interim_results: import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS === 'true' || true,
+    diarize: import.meta.env.VITE_TRANSCRIPTION_DIARIZE === 'true' || true, 
+    channels: parseInt(import.meta.env.VITE_TRANSCRIPTION_CHANNELS || '1', 10),
     // VAD configuration for Voice Activity Detection events
-    utterance_end_ms: 1000, // Enable UtteranceEnd detection
+    vad_events: import.meta.env.VITE_TRANSCRIPTION_VAD_EVENTS === 'true' || true, // Enable VAD events from transcription service
+    utterance_end_ms: parseInt(import.meta.env.VITE_TRANSCRIPTION_UTTERANCE_END_MS || '1000', 10), // Enable UtteranceEnd detection
     // Add keyterms that might be tricky for standard models
     keyterm: [
       "Casella", // Proper noun
@@ -163,25 +169,26 @@ function App() {
   }, [addLog]); // Include addLog in dependencies
 
   const memoizedAgentOptions = useMemo(() => ({
-    language: 'en',
+    // Use environment variables with sensible defaults
+    language: import.meta.env.VITE_AGENT_LANGUAGE || 'en',
     // Agent can use a different model for listening if desired, 
     // keyterms only affect the transcription service input.
-    listenModel: 'nova-3', 
+    listenModel: import.meta.env.VITE_AGENT_MODEL || 'nova-3', 
     thinkProviderType: 'open_ai',
     // Default model is `gpt-4o-mini` but other models can be provided such as `gpt-4.1-mini`
-    thinkModel: 'gpt-4o-mini',
+    thinkModel: import.meta.env.VITE_AGENT_THINK_MODEL || 'gpt-4o-mini',
     // Uncomment the following lines to use custom endpoint URL and API key values for the Voice Agent `think` message
     //thinkEndpointUrl: 'https://api.openai.com/v1/chat/completions',
     //thinkApiKey: import.meta.env.VITE_THINK_API_KEY || '',
-    voice: 'aura-2-apollo-en',
+    voice: import.meta.env.VITE_AGENT_VOICE || 'aura-2-apollo-en',
     instructions: loadedInstructions || 'You are a helpful voice assistant. Keep your responses concise and informative.',
-    greeting: 'Hello! How can I assist you today?',
+    greeting: import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?',
   }), [loadedInstructions]); // Include loadedInstructions dependency
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
-    transcriptionUrl: 'wss://api.deepgram.com/v1/listen',
-    agentUrl: 'wss://agent.deepgram.com/v1/agent/converse',
+    transcriptionUrl: import.meta.env.VITE_TRANSCRIPTION_URL || 'wss://api.deepgram.com/v1/listen',
+    agentUrl: import.meta.env.VITE_AGENT_URL || 'wss://agent.deepgram.com/v1/agent/converse',
   }), []);
 
   // Targeted sleep/wake logging for the App component
@@ -279,12 +286,19 @@ function App() {
     console.error('Deepgram error:', error);
   }, [addLog]); // Depends on addLog
 
-  // VAD event handlers
+  // VAD event handlers - clearly marked by source
+  const handleUserStartedSpeaking = useCallback(() => {
+    const timestamp = new Date().toISOString().substring(11, 19);
+    setUserStartedSpeaking(timestamp);
+    setIsUserSpeaking(true);
+    addLog(`🎤 [AGENT] User started speaking at ${timestamp}`);
+  }, [addLog]);
+
   const handleUserStoppedSpeaking = useCallback((data: { timestamp?: number }) => {
     const timestamp = data.timestamp ? new Date(data.timestamp).toISOString().substring(11, 19) : 'unknown';
     setUserStoppedSpeaking(timestamp);
     setIsUserSpeaking(false);
-    addLog(`🎤 User stopped speaking at ${timestamp}`);
+    addLog(`🎤 [AGENT] User stopped speaking at ${timestamp}`);
   }, [addLog]);
 
   const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
@@ -292,7 +306,7 @@ function App() {
     const channelStr = data.channel.join(',');
     setUtteranceEnd(`Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
     setIsUserSpeaking(false);
-    addLog(`🔚 UtteranceEnd detected`);
+    addLog(`🔚 [TRANSCRIPTION] UtteranceEnd detected`);
   }, [addLog]);
 
   const handleVADEvent = useCallback((data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => {
@@ -300,7 +314,19 @@ function App() {
     const confidence = data.confidence ? ` (${(data.confidence * 100).toFixed(1)}%)` : '';
     setVadEvent(`${data.speechDetected ? 'Speech detected' : 'No speech'} at ${timestamp}${confidence}`);
     setIsUserSpeaking(data.speechDetected);
-    addLog(`🎯 VAD Event: ${data.speechDetected ? 'Speech detected' : 'No speech'} at ${timestamp}${confidence}`);
+    addLog(`🎯 [TRANSCRIPTION] VAD Event: ${data.speechDetected ? 'Speech detected' : 'No speech'} at ${timestamp}${confidence}`);
+  }, [addLog]);
+
+  const handleSpeechStarted = useCallback((event: { channel: number[]; timestamp: number }) => {
+    const timestamp = new Date().toISOString().substring(11, 19);
+    setSpeechStarted(`Transcription: ${timestamp}`);
+    addLog(`🎤 [TRANSCRIPTION] Speech Started: ${JSON.stringify(event)}`);
+  }, [addLog]);
+
+  const handleSpeechStopped = useCallback((event: { channel: number[]; timestamp: number }) => {
+    const timestamp = new Date().toISOString().substring(11, 19);
+    setSpeechStopped(`Transcription: ${timestamp}`);
+    addLog(`🎤 [TRANSCRIPTION] Speech Stopped: ${JSON.stringify(event)}`);
   }, [addLog]);
 
   // Auto-connect dual mode event handlers
@@ -564,8 +590,11 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onConnectionReady={handleConnectionReady}
         onAgentSpeaking={handleAgentSpeaking}
         onAgentSilent={handleAgentSilent}
-        // VAD event props
+        // VAD event props - clearly marked by source
+        onUserStartedSpeaking={handleUserStartedSpeaking}
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
+        onSpeechStarted={handleSpeechStarted}
+        onSpeechStopped={handleSpeechStopped}
         onUtteranceEnd={handleUtteranceEnd}
         onVADEvent={handleVADEvent}
         debug={false} // Testing if transcription works without debug
@@ -621,7 +650,14 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <h4>VAD (Voice Activity Detection) States:</h4>
         <div data-testid="vad-states">
           <p>User Speaking: <strong data-testid="user-speaking">{isUserSpeaking.toString()}</strong></p>
+          
+          <h5>From Agent WebSocket:</h5>
+          <p>User Started Speaking: <strong data-testid="user-started-speaking">{userStartedSpeaking || 'Not detected'}</strong></p>
           <p>User Stopped Speaking: <strong data-testid="user-stopped-speaking">{userStoppedSpeaking || 'Not detected'}</strong></p>
+          
+          <h5>From Transcription WebSocket:</h5>
+          <p>Speech Started: <strong data-testid="speech-started">{speechStarted || 'Not detected'}</strong></p>
+          <p>Speech Stopped: <strong data-testid="speech-stopped">{speechStopped || 'Not detected'}</strong></p>
           <p>Utterance End: <strong data-testid="utterance-end">{utteranceEnd || 'Not detected'}</strong></p>
           <p>VAD Event: <strong data-testid="vad-event">{vadEvent || 'Not detected'}</strong></p>
         </div>

@@ -117,30 +117,59 @@ class AudioSimulator {
   }
 
   /**
-   * Generate and cache new audio sample using Deepgram TTS
-   * @param {string} phrase - Text to generate
-   * @param {number} silenceMs - Silence duration
-   * @returns {Promise<ArrayBuffer>} - Generated audio data
+   * Load pre-generated audio sample from fixtures
+   * @param {string} phrase - Text phrase to load
+   * @param {number} silenceMs - Silence duration (unused, kept for compatibility)
+   * @returns {Promise<ArrayBuffer>} - Audio data
    */
   static async generateAndCacheSample(phrase, silenceMs) {
-    console.log('🎤 [Audio] Generating new audio sample:', { phrase, silenceMs });
+    console.log('🎤 [Audio] Loading pre-generated audio sample:', { phrase, silenceMs });
     
+    // Load from pre-generated samples - fail if not found
+    const sampleData = await AudioSimulator.loadPreGeneratedSample(phrase);
+    if (!sampleData) {
+      throw new Error(`Pre-generated audio sample not found for phrase: "${phrase}". Run 'npm run generate-test-audio' to generate samples.`);
+    }
+    
+    // Cache the sample
+    if (!AudioSimulator.sampleCache) {
+      AudioSimulator.sampleCache = new Map();
+    }
+    AudioSimulator.sampleCache.set(phrase, sampleData);
+    return sampleData;
+  }
+
+  /**
+   * Load pre-generated audio sample from fixtures
+   * @param {string} phrase - Text phrase to load
+   * @returns {Promise<ArrayBuffer|null>} - Audio data or null if not found
+   */
+  static async loadPreGeneratedSample(phrase) {
     try {
-      const audioData = await TTSGenerator.generateVADTestAudio(phrase, {
-        offsetSilence: silenceMs,
-        onsetSilence: 300
-      });
-
-      // Cache the sample
-      if (!AudioSimulator.sampleCache) {
-        AudioSimulator.sampleCache = new Map();
+      // This will be called from the browser context, so we need to fetch the file
+      const response = await fetch(`/audio-samples/index.json`);
+      if (!response.ok) {
+        throw new Error(`Failed to load audio samples: ${response.status}`);
       }
-      AudioSimulator.sampleCache.set(phrase, audioData);
-
-      return audioData;
+      
+      const samples = await response.json();
+      const sampleData = samples[phrase];
+      
+      if (!sampleData) {
+        throw new Error(`Sample not found for phrase: ${phrase}`);
+      }
+      
+      // Convert base64 back to ArrayBuffer
+      const binaryString = atob(sampleData.audioData);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      return bytes.buffer;
     } catch (error) {
-      // Throw error instead of using fallback
-      throw new Error(`Audio generation failed: ${error.message}`);
+      console.log('⚠️ [Audio] Failed to load pre-generated sample:', error.message);
+      return null;
     }
   }
 
