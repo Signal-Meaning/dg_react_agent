@@ -117,10 +117,11 @@ test.describe('Manual VAD Workflow Tests', () => {
       });
     });
     
-    // Simulate speech
-    await page.evaluate(() => {
-      const audioData = new ArrayBuffer(8192);
-      window.dispatchEvent(new CustomEvent('simulate-audio-data', { detail: audioData }));
+    // Simulate speech with realistic audio
+    const AudioTestHelpers = require('../utils/audio-helpers');
+    await AudioTestHelpers.simulateVADSpeech(page, 'Manual VAD workflow test', {
+      silenceDuration: 1000,
+      onsetSilence: 300
     });
     
     // Wait for VAD events

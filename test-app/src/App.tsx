@@ -716,7 +716,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           }}
           title="Manually trigger connection timeout for testing lazy reconnection"
         >
-          🧪 Test Timeout
+          🧪 Trigger Timeout
         </button>
       </div>
       

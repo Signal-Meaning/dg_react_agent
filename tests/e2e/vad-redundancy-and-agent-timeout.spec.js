@@ -66,22 +66,18 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     await page.click(SELECTORS.micButton);
     await page.waitForTimeout(1000);
     
-    // Start speaking
-    console.log('Step 1: Starting user speech...');
-    await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      if (deepgramComponent && deepgramComponent.sendAudioData) {
-        const audioData = new ArrayBuffer(8192);
-        deepgramComponent.sendAudioData(audioData);
-      }
+    // Start speaking with realistic audio
+    console.log('Step 1: Starting user speech with realistic audio...');
+    const AudioTestHelpers = require('../utils/audio-helpers');
+    await AudioTestHelpers.simulateVADSpeech(page, 'Testing VAD redundancy detection', {
+      silenceDuration: 1000,
+      onsetSilence: 300
     });
     await page.waitForTimeout(2000);
     
     // Stop speaking (should trigger multiple VAD signals)
     console.log('Step 2: Stopping user speech...');
-    await page.evaluate(() => {
-      // Stop sending audio data
-    });
+    // The realistic audio already includes proper silence padding for VAD events
     await page.waitForTimeout(3000); // Wait for all signals to arrive
     
     // Analyze signal redundancy
