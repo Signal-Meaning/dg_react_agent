@@ -142,7 +142,7 @@ function DeepgramVoiceInteraction(
     onAgentUtterance,
     onUserMessage,
     onUserStartedSpeaking,
-    onUserStoppedSpeaking,
+    // onUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
     onUtteranceEnd,
     onVADEvent,
     onKeepalive,
@@ -1019,30 +1019,8 @@ function DeepgramVoiceInteraction(
       return;
     }
 
-    // Handle VAD events from transcription service
-    if (data.type === 'UserStoppedSpeaking') {
-      console.log('🎤 [VAD] UserStoppedSpeaking message received from transcription service');
-      if (isSleepingOrEntering) {
-        sleepLog('Ignoring UserStoppedSpeaking event (state:', stateRef.current.agentState, ')');
-        return;
-      }
-      
-      // Disable idle timeout resets to prevent connection timeout during speech
-      console.log('🎤 [VAD] UserStoppedSpeaking detected - disabling idle timeout resets to prevent connection timeout');
-      
-      // Disable idle timeout resets for both services
-      if (agentManagerRef.current) {
-        agentManagerRef.current.disableIdleTimeoutResets();
-      }
-      if (transcriptionManagerRef.current) {
-        transcriptionManagerRef.current.disableIdleTimeoutResets();
-      }
-      
-      // Call the callback with timestamp if available
-      const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
-      onUserStoppedSpeaking?.({ timestamp });
-      return;
-    }
+    // Note: UserStoppedSpeaking is not a real Deepgram event - removed handler
+    // Use UtteranceEnd for speech end detection instead
 
     if (data.type === 'UtteranceEnd') {
       console.log('🎯 [VAD] UtteranceEnd message received from transcription service:', data);
@@ -1096,33 +1074,8 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    // Handle SpeechStopped event from transcription service
-    if (data.type === 'SpeechStopped') {
-      console.log('🎯 [VAD] SpeechStopped message received from transcription service:', data);
-      if (isSleepingOrEntering) {
-        sleepLog('Ignoring SpeechStopped event (state:', stateRef.current.agentState, ')');
-        return;
-      }
-      
-      // Call the specific SpeechStopped callback
-      if (props.onSpeechStopped) {
-        props.onSpeechStopped({ 
-          channel: data.channel as number[], 
-          timestamp: data.timestamp as number 
-        });
-      }
-      
-      // User stopped speaking
-      const stopTimestamp = Date.now();
-      onUserStoppedSpeaking?.({ timestamp: stopTimestamp });
-      dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
-      updateKeepaliveState(false);
-      
-      if (stateRef.current.agentState === 'listening') {
-        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
-      }
-      return;
-    }
+    // Note: SpeechStopped is not a real Deepgram event - removed handler
+    // Use UtteranceEnd for speech end detection instead
   };
 
   // Lazy reconnection logging helper
@@ -1572,35 +1525,8 @@ function DeepgramVoiceInteraction(
       return;
     }
 
-    // Handle UserStoppedSpeaking events
-    if (data.type === 'UserStoppedSpeaking') {
-      console.log('🎤 [VAD] UserStoppedSpeaking message received');
-      if (isSleepingOrEntering) {
-        sleepLog('Ignoring UserStoppedSpeaking event (state:', stateRef.current.agentState, ')');
-        return;
-      }
-      
-      // Call the callback with timestamp if available
-      const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
-      onUserStoppedSpeaking?.({ timestamp });
-      
-      // Track VAD event for redundancy detection
-      const vadEvent = { type: 'UserStoppedSpeaking', speechDetected: false, timestamp, source: 'agent' };
-      trackVADEvent(vadEvent);
-      
-      // Update VAD state
-      dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
-      
-      // Disable keepalives when user stops speaking
-      updateKeepaliveState(false);
-      
-      // Transition to thinking state if currently listening
-      if (stateRef.current.agentState === 'listening') {
-        sleepLog('Dispatching AGENT_STATE_CHANGE to thinking (from UserStoppedSpeaking)');
-        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
-      }
-      return;
-    }
+    // Note: UserStoppedSpeaking is not a real Deepgram event - removed handler
+    // Use UtteranceEnd for speech end detection instead
 
     // Handle UtteranceEnd events from Deepgram's end-of-speech detection
     if (data.type === 'UtteranceEnd') {
@@ -1624,8 +1550,7 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
       dispatch({ type: 'UTTERANCE_END', data: { channel, lastWordEnd } });
       
-      // Also call onUserStoppedSpeaking for backward compatibility
-      onUserStoppedSpeaking?.({ timestamp });
+      // Note: onUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
       
       // Disable keepalives when utterance ends
       updateKeepaliveState(false);
@@ -1639,7 +1564,7 @@ function DeepgramVoiceInteraction(
     }
 
     // Handle VAD events from transcription service (vad type)
-    // NOTE: SpeechStarted/SpeechStopped are handled in handleTranscriptionMessage
+    // NOTE: SpeechStarted is handled in handleTranscriptionMessage (SpeechStopped is not a real Deepgram event)
     console.log('🔍 [DEBUG] Checking for VAD event type:', data.type);
     if (data.type === 'vad') {
       console.log('🎯 [VAD] VADEvent message received:', data);
@@ -1675,7 +1600,7 @@ function DeepgramVoiceInteraction(
         console.log('🎯 [VAD] VADEvent speechDetected: false - keeping idle timeout resets disabled');
         
         const stopTimestamp = Date.now();
-        onUserStoppedSpeaking?.({ timestamp: stopTimestamp });
+        // onUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
         dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
         updateKeepaliveState(false);
         

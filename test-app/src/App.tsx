@@ -57,14 +57,14 @@ function App() {
   
   // VAD state
   const [userStartedSpeaking, setUserStartedSpeaking] = useState<string | null>(null);
-  const [userStoppedSpeaking, setUserStoppedSpeaking] = useState<string | null>(null);
+  // userStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
   const [utteranceEnd, setUtteranceEnd] = useState<string | null>(null);
   const [vadEvent, setVadEvent] = useState<string | null>(null);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   
-  // VAD state from transcription service (SpeechStarted/SpeechStopped)
+  // VAD state from transcription service (SpeechStarted/UtteranceEnd)
   const [speechStarted, setSpeechStarted] = useState<string | null>(null);
-  const [speechStopped, setSpeechStopped] = useState<string | null>(null);
+  // speechStopped removed - SpeechStopped is not a real Deepgram event
   
   // Text input state
   const [textInput, setTextInput] = useState('');
@@ -294,12 +294,7 @@ function App() {
     addLog(`🎤 [AGENT] User started speaking at ${timestamp}`);
   }, [addLog]);
 
-  const handleUserStoppedSpeaking = useCallback((data: { timestamp?: number }) => {
-    const timestamp = data.timestamp ? new Date(data.timestamp).toISOString().substring(11, 19) : 'unknown';
-    setUserStoppedSpeaking(timestamp);
-    setIsUserSpeaking(false);
-    addLog(`🎤 [AGENT] User stopped speaking at ${timestamp}`);
-  }, [addLog]);
+  // handleUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
 
   const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
     // Debug log removed - this was appearing when debug mode was off
@@ -323,11 +318,7 @@ function App() {
     addLog(`🎤 [TRANSCRIPTION] Speech Started: ${JSON.stringify(event)}`);
   }, [addLog]);
 
-  const handleSpeechStopped = useCallback((event: { channel: number[]; timestamp: number }) => {
-    const timestamp = new Date().toISOString().substring(11, 19);
-    setSpeechStopped(`Transcription: ${timestamp}`);
-    addLog(`🎤 [TRANSCRIPTION] Speech Stopped: ${JSON.stringify(event)}`);
-  }, [addLog]);
+  // handleSpeechStopped removed - SpeechStopped is not a real Deepgram event
 
   // Auto-connect dual mode event handlers
   const handleMicToggle = useCallback((enabled: boolean) => {
@@ -592,9 +583,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onAgentSilent={handleAgentSilent}
         // VAD event props - clearly marked by source
         onUserStartedSpeaking={handleUserStartedSpeaking}
-        onUserStoppedSpeaking={handleUserStoppedSpeaking}
+        // onUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
         onSpeechStarted={handleSpeechStarted}
-        onSpeechStopped={handleSpeechStopped}
+        // onSpeechStopped removed - not a real Deepgram event
         onUtteranceEnd={handleUtteranceEnd}
         onVADEvent={handleVADEvent}
         debug={false} // Testing if transcription works without debug
@@ -653,11 +644,11 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           
           <h5>From Agent WebSocket:</h5>
           <p>User Started Speaking: <strong data-testid="user-started-speaking">{userStartedSpeaking || 'Not detected'}</strong></p>
-          <p>User Stopped Speaking: <strong data-testid="user-stopped-speaking">{userStoppedSpeaking || 'Not detected'}</strong></p>
+          <p>User Stopped Speaking: <strong data-testid="user-stopped-speaking">Not a real Deepgram event</strong></p>
           
           <h5>From Transcription WebSocket:</h5>
           <p>Speech Started: <strong data-testid="speech-started">{speechStarted || 'Not detected'}</strong></p>
-          <p>Speech Stopped: <strong data-testid="speech-stopped">{speechStopped || 'Not detected'}</strong></p>
+          <p>Speech Stopped: <strong data-testid="speech-stopped">Not a real Deepgram event</strong></p>
           <p>Utterance End: <strong data-testid="utterance-end">{utteranceEnd || 'Not detected'}</strong></p>
           <p>VAD Event: <strong data-testid="vad-event">{vadEvent || 'Not detected'}</strong></p>
         </div>

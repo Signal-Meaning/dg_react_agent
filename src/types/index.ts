@@ -196,11 +196,8 @@ export interface DeepgramVoiceInteractionProps {
    * VAD (Voice Activity Detection) Event Callbacks
    */
   
-  /**
-   * Called when UserStoppedSpeaking is detected from Deepgram Agent API
-   * Enhanced version with timestamp data
-   */
-  onUserStoppedSpeaking?: (data: { timestamp?: number }) => void;
+  // onUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
+  // Use onUtteranceEnd for speech end detection instead
   
   /**
    * Called when UtteranceEnd is detected from Deepgram's end-of-speech detection
@@ -213,10 +210,8 @@ export interface DeepgramVoiceInteractionProps {
    */
   onSpeechStarted?: (data: { channel: number[]; timestamp: number }) => void;
   
-  /**
-   * Called when SpeechStopped is detected from Deepgram Transcription API
-   */
-  onSpeechStopped?: (data: { channel: number[]; timestamp: number }) => void;
+  // Note: onSpeechStopped removed - SpeechStopped is not a real Deepgram event
+  // Use onUtteranceEnd for speech end detection instead
   
   /**
    * Called when VAD events are received from transcription service
