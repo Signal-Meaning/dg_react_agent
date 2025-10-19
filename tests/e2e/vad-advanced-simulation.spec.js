@@ -12,7 +12,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
-const { setupTestPage } = require('./helpers/audio-mocks');
+const { setupTestPage, simulateUserGesture } = require('./helpers/audio-mocks');
 const AudioTestHelpers = require('../utils/audio-helpers');
 const AudioSimulator = require('../utils/audio-simulator');
 const AudioFileLoader = require('../utils/audio-file-loader');
@@ -24,6 +24,9 @@ test.describe('Advanced VAD Audio Simulation', () => {
 
   test('should support both TTS and pre-recorded audio sources', async ({ page }) => {
     console.log('🧪 Testing hybrid audio source support...');
+    
+    // Simulate user gesture before microphone interaction
+    await simulateUserGesture(page);
     
     // Enable microphone
     await page.click('[data-testid="microphone-button"]');

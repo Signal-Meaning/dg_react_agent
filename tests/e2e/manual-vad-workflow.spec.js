@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { setupTestPage, simulateSpeech } = require('./helpers/audio-mocks');
+const { setupTestPage, simulateUserGesture, simulateSpeech } = require('./helpers/audio-mocks');
 
 /**
  * Manual VAD Workflow Test
@@ -18,6 +18,9 @@ test.describe('Manual VAD Workflow Tests', () => {
   test('should handle complete manual workflow: speak → silence → timeout', async ({ page }) => {
     // Set up test page with audio mocks
     await setupTestPage(page);
+    
+    // Simulate user gesture before microphone interaction
+    await simulateUserGesture(page);
     
     // Step 1: Turn on microphone
     console.log('Step 1: Turning on microphone...');
@@ -79,6 +82,12 @@ test.describe('Manual VAD Workflow Tests', () => {
   });
 
   test('should detect VAD events during manual workflow', async ({ page }) => {
+    // Set up test page with audio mocks
+    await setupTestPage(page);
+    
+    // Simulate user gesture before microphone interaction
+    await simulateUserGesture(page);
+    
     // Enable microphone
     await page.click('[data-testid="microphone-button"]');
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Enabled', { timeout: 10000 });
@@ -145,6 +154,12 @@ test.describe('Manual VAD Workflow Tests', () => {
   });
 
   test('should show VAD events in console logs during manual workflow', async ({ page }) => {
+    // Set up test page with audio mocks
+    await setupTestPage(page);
+    
+    // Simulate user gesture before microphone interaction
+    await simulateUserGesture(page);
+    
     // Enable microphone
     await page.click('[data-testid="microphone-button"]');
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Enabled', { timeout: 10000 });
