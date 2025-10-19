@@ -1599,7 +1599,6 @@ function DeepgramVoiceInteraction(
         // User stopped speaking - keep idle timeout resets disabled to allow natural timeout
         console.log('🎯 [VAD] VADEvent speechDetected: false - keeping idle timeout resets disabled');
         
-        const stopTimestamp = Date.now();
         // onUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
         dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
         updateKeepaliveState(false);
