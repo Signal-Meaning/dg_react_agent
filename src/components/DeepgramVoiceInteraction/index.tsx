@@ -372,7 +372,7 @@ function DeepgramVoiceInteraction(
     isNewConnectionRef.current = true;
     
     // Check if we're in a CI environment or package import context
-    const isCIEnvironment = process.env.CI === 'true' || process.env.NODE_ENV === 'test';
+    const isCIEnvironment = typeof process !== 'undefined' && (process.env.CI === 'true' || process.env.NODE_ENV === 'test');
     const isPackageImport = typeof window === 'undefined' || !window.document;
     
     // Validate API key
@@ -392,7 +392,7 @@ function DeepgramVoiceInteraction(
     }
 
     // Development warning for non-memoized options
-    if (process.env.NODE_ENV === 'development') {
+    if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
       warnAboutNonMemoizedOptions('agentOptions', agentOptions);
       warnAboutNonMemoizedOptions('transcriptionOptions', transcriptionOptions);
     }

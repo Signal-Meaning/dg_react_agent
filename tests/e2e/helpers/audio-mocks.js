@@ -98,6 +98,17 @@ async function setupAudioMocks(page) {
           }
         }
         
+        // Override resume to always succeed (bypass user gesture requirement)
+        resume() {
+          console.log('🎤 [MOCK] AudioContext.resume() called - allowing without user gesture');
+          return Promise.resolve();
+        }
+        
+        // Override state to always return 'running' (bypass suspended state)
+        get state() {
+          return 'running';
+        }
+        
         // Mock createMediaStreamSource to bypass MediaStream validation
         createMediaStreamSource(stream) {
           console.log('🎤 [MOCK] createMediaStreamSource called - simulating success');
@@ -168,27 +179,43 @@ async function setupTestPage(page) {
  * Simulates audio data being sent to Deepgram
  * @param {import('@playwright/test').Page} page - The Playwright page instance
  * @param {string} description - Description of the simulated speech
+ * @param {Object} options - Simulation options
+ * @param {boolean} options.useRealisticAudio - Use TTS-generated audio instead of empty buffer
+ * @param {string} options.phrase - Text to speak (if using realistic audio)
  */
-async function simulateSpeech(page, description = 'simulated speech') {
-  await page.evaluate((desc) => {
-    // Simulate audio data being sent to Deepgram
-    // This mimics what happens when the AudioWorkletNode processes audio
-    const audioData = new ArrayBuffer(8192);
-    
-    // Find the DeepgramVoiceInteraction component and trigger audio data
-    const deepgramComponent = window.deepgramRef?.current;
-    if (deepgramComponent && deepgramComponent.sendAudioData) {
-      console.log(`🎤 [TEST] Sending simulated audio data to Deepgram: ${desc}`);
-      deepgramComponent.sendAudioData(audioData);
-    } else {
-      console.log('🎤 [TEST] DeepgramVoiceInteraction not found or sendAudioData not available');
-      console.log('🎤 [TEST] window.deepgramRef:', !!window.deepgramRef);
-      console.log('🎤 [TEST] window.deepgramRef.current:', !!window.deepgramRef?.current);
-      if (window.deepgramRef?.current) {
-        console.log('🎤 [TEST] Available methods:', Object.keys(window.deepgramRef.current));
+async function simulateSpeech(page, description = 'simulated speech', options = {}) {
+  const { useRealisticAudio = false, phrase = 'Hello' } = options;
+  
+  if (useRealisticAudio) {
+    // Use VAD Audio Simulator for realistic speech
+    const AudioSimulator = require('../../utils/audio-simulator');
+    await AudioSimulator.simulateSpeech(page, phrase, {
+      silenceDuration: 1000,
+      onsetSilence: 300
+    });
+    console.log(`🎤 [TEST] Simulated realistic speech: ${phrase}`);
+  } else {
+    // Legacy empty buffer simulation
+    await page.evaluate((desc) => {
+      // Simulate audio data being sent to Deepgram
+      // This mimics what happens when the AudioWorkletNode processes audio
+      const audioData = new ArrayBuffer(8192);
+      
+      // Find the DeepgramVoiceInteraction component and trigger audio data
+      const deepgramComponent = window.deepgramRef?.current;
+      if (deepgramComponent && deepgramComponent.sendAudioData) {
+        console.log(`🎤 [TEST] Sending simulated audio data to Deepgram: ${desc}`);
+        deepgramComponent.sendAudioData(audioData);
+      } else {
+        console.log('🎤 [TEST] DeepgramVoiceInteraction not found or sendAudioData not available');
+        console.log('🎤 [TEST] window.deepgramRef:', !!window.deepgramRef);
+        console.log('🎤 [TEST] window.deepgramRef.current:', !!window.deepgramRef?.current);
+        if (window.deepgramRef?.current) {
+          console.log('🎤 [TEST] Available methods:', Object.keys(window.deepgramRef.current));
+        }
       }
-    }
-  }, description);
+    }, description);
+  }
 }
 
 module.exports = {
