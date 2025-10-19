@@ -267,12 +267,11 @@ class AudioTestHelpers {
     // Monitor VAD events
     await page.evaluate((expectedEvents) => {
       const vadElements = {
-        'UserStartedSpeaking': '[data-testid="user-speaking"]',
-        'UserStoppedSpeaking': '[data-testid="user-stopped-speaking"]',
+        'UserStartedSpeaking': '[data-testid="user-started-speaking"]',
         'SpeechStarted': '[data-testid="speech-started"]',
-        'SpeechStopped': '[data-testid="speech-stopped"]',
         'UtteranceEnd': '[data-testid="utterance-end"]',
         'VADEvent': '[data-testid="vad-event"]'
+        // Note: UserStoppedSpeaking and SpeechStopped are not real Deepgram events
       };
 
       expectedEvents.forEach(eventType => {

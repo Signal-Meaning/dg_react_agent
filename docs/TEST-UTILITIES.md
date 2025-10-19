@@ -101,10 +101,10 @@ The `AudioTestHelpers` class provides utilities for detecting and monitoring VAD
 
 - `UserStartedSpeaking` - From Deepgram Agent API
 - `UserStoppedSpeaking` - From Deepgram Agent API  
-- `SpeechStarted` - From Deepgram Transcription API
-- `SpeechStopped` - From Deepgram Transcription API
-- `UtteranceEnd` - From Deepgram Transcription API
+- `SpeechStarted` - From Deepgram Transcription API ✅ **REAL EVENT**
+- `UtteranceEnd` - From Deepgram Transcription API ✅ **REAL EVENT**
 - `VADEvent` - Legacy VAD events
+- ~~`SpeechStopped`~~ - ❌ **DOES NOT EXIST** (fictional event)
 
 #### Key Methods
 
@@ -120,7 +120,7 @@ const vadEvents = await AudioTestHelpers.waitForVADEvents(page, [
   'UserStartedSpeaking',
   'UserStoppedSpeaking',
   'SpeechStarted', 
-  'SpeechStopped'
+  'UtteranceEnd'  // Use UtteranceEnd instead of fictional SpeechStopped
 ], 5000);
 
 // Simulate speech and detect events
@@ -200,7 +200,7 @@ test('should trigger VAD events', async ({ page }) => {
     'UserStartedSpeaking',
     'UserStoppedSpeaking',
     'SpeechStarted',
-    'SpeechStopped'
+    'UtteranceEnd'  // Use UtteranceEnd instead of fictional SpeechStopped
   ], 5000);
   
   // Verify events
@@ -210,7 +210,7 @@ test('should trigger VAD events', async ({ page }) => {
     type === 'UserStartedSpeaking' || type === 'SpeechStarted'
   );
   const hasStoppedEvent = eventTypes.some(type => 
-    type === 'UserStoppedSpeaking' || type === 'SpeechStopped'
+    type === 'UserStoppedSpeaking' || type === 'UtteranceEnd'
   );
   
   expect(hasStartedEvent).toBe(true);

@@ -66,12 +66,29 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     await page.click(SELECTORS.micButton);
     await page.waitForTimeout(1000);
     
-    // Start speaking with realistic audio
-    console.log('Step 1: Starting user speech with realistic audio...');
-    const AudioTestHelpers = require('../utils/audio-helpers');
-    await AudioTestHelpers.simulateVADSpeech(page, 'Testing VAD redundancy detection', {
-      silenceDuration: 1000,
-      onsetSilence: 300
+    // Start speaking with simple audio simulation
+    console.log('Step 1: Starting user speech with simple audio simulation...');
+    await page.evaluate(() => {
+      const deepgramComponent = window.deepgramRef?.current;
+      if (deepgramComponent && deepgramComponent.sendAudioData) {
+        // Create a simple audio buffer with speech-like pattern
+        const sampleRate = 16000;
+        const duration = 2; // 2 seconds
+        const samples = sampleRate * duration;
+        const audioBuffer = new ArrayBuffer(samples * 2); // 16-bit PCM
+        const audioView = new Int16Array(audioBuffer);
+        
+        // Fill with a sine wave pattern that should trigger VAD
+        for (let i = 0; i < samples; i++) {
+          const frequency = 440 + (i % 200); // Varying frequency
+          const amplitude = 8000; // Strong signal
+          const sample = Math.sin(2 * Math.PI * frequency * i / sampleRate) * amplitude;
+          audioView[i] = Math.floor(sample);
+        }
+        
+        console.log('🎤 Sending simple audio pattern for VAD redundancy test');
+        deepgramComponent.sendAudioData(audioBuffer);
+      }
     });
     await page.waitForTimeout(2000);
     

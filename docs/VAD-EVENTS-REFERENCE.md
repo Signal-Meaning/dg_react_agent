@@ -25,28 +25,27 @@ The component receives VAD events from two Deepgram WebSocket services:
 ### Transcription Service (wss://api.deepgram.com/v1/listen)
 
 #### SpeechStarted
-- **Event Type**: `SpeechStarted`
+- **Event Type**: `SpeechStarted` ✅ **REAL DEEPGRAM EVENT**
 - **Component Callback**: `onUserStartedSpeaking()` (same as agent)
 - **Data**: `{ channel: number[]; timestamp: number }`
 - **Purpose**: Real-time voice activity detection from transcription service
 - **When Triggered**: When `vad_events=true` is set in transcription options and speech begins
 - **Configuration**: Requires `vad_events: true` in `transcriptionOptions`
+- **Documentation**: [Deepgram Speech Started Documentation](https://developers.deepgram.com/docs/speech-started)
 
 #### SpeechStopped
-- **Event Type**: `SpeechStopped`
-- **Component Callback**: `onUserStoppedSpeaking(data)` (same as agent)
-- **Data**: `{ channel: number[]; timestamp: number }`
-- **Purpose**: Real-time voice activity detection from transcription service
-- **When Triggered**: When `vad_events=true` is set in transcription options and speech ends
-- **Configuration**: Requires `vad_events: true` in `transcriptionOptions`
+- **Event Type**: `SpeechStopped` ❌ **DOES NOT EXIST**
+- **Status**: **Fictional Event** - This event is not part of the Deepgram API
+- **Note**: Deepgram does not provide a "SpeechStopped" event. Use `UtteranceEnd` for speech end detection.
 
 #### UtteranceEnd
-- **Event Type**: `UtteranceEnd`
+- **Event Type**: `UtteranceEnd` ✅ **REAL DEEPGRAM EVENT**
 - **Component Callback**: `onUtteranceEnd(data)`
 - **Data**: `{ channel: number[]; lastWordEnd: number }`
 - **Purpose**: End-of-speech detection based on word timing analysis
 - **When Triggered**: When `utterance_end_ms` parameter is set and sufficient gap between words is detected
-- **Configuration**: Requires `utterance_end_ms: number` in `transcriptionOptions`
+- **Configuration**: Requires `utterance_end_ms: number` and `interim_results: true` in `transcriptionOptions`
+- **Documentation**: [Deepgram Utterance End Documentation](https://developers.deepgram.com/docs/understanding-end-of-speech-detection#using-utteranceend)
 
 ## Component Configuration
 
