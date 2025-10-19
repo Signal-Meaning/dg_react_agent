@@ -53,7 +53,7 @@ test.describe('Transcription Configuration Test', () => {
     console.log('📊 Has transcription variables:', hasTranscriptionVars);
     console.log('📊 isTranscriptionConfigured:', config?.isTranscriptionConfigured);
     
-    // Verify transcription service is now configured
+    // Verify transcription service is properly configured
     expect(hasTranscriptionVars).toBe(true);
     expect(config.isTranscriptionConfigured).toBe(true);
     expect(config.transcriptionManagerExists).toBe(true);
