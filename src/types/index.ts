@@ -209,6 +209,16 @@ export interface DeepgramVoiceInteractionProps {
   onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
   
   /**
+   * Called when SpeechStarted is detected from Deepgram Transcription API
+   */
+  onSpeechStarted?: (data: { channel: number[]; timestamp: number }) => void;
+  
+  /**
+   * Called when SpeechStopped is detected from Deepgram Transcription API
+   */
+  onSpeechStopped?: (data: { channel: number[]; timestamp: number }) => void;
+  
+  /**
    * Called when VAD events are received from transcription service
    */
   onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
@@ -308,6 +318,21 @@ export interface DeepgramVoiceInteractionHandle {
    * Manually trigger connection timeout for testing lazy reconnection
    */
   triggerTimeoutForTesting: () => void;
+  
+  /**
+   * Get connection states for debugging (testing only)
+   */
+  getConnectionStates: () => {
+    transcription: string;
+    agent: string;
+    transcriptionConnected: boolean;
+    agentConnected: boolean;
+  };
+  
+  /**
+   * Get current component state for debugging (testing only)
+   */
+  getState: () => any;
 }
 
 // REMOVE the duplicate AgentState definition at the end of this file

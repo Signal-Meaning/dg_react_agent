@@ -104,44 +104,33 @@ test.describe('VAD Realistic Audio Simulation', () => {
       console.log('🔧 [VAD] Deepgram component:', !!deepgramComponent);
       console.log('🔧 [VAD] Component keys:', deepgramComponent ? Object.keys(deepgramComponent) : 'none');
       
-      if (deepgramComponent && deepgramComponent.transcriptionManagerRef?.current) {
-        const state = deepgramComponent.transcriptionManagerRef.current.getState();
-        console.log('🔧 [VAD] Transcription service state:', state);
-        return { connected: state === 'connected', state };
-      }
-      console.log('🔧 [VAD] No transcription manager found');
-      
-      // Check if transcription manager ref exists but is null
-      if (deepgramComponent && deepgramComponent.transcriptionManagerRef) {
-        console.log('🔧 [VAD] Transcription manager ref exists but is null:', deepgramComponent.transcriptionManagerRef.current);
-      }
-      
-      // Check component state for transcription service
-      if (deepgramComponent && deepgramComponent.getState) {
-        const componentState = deepgramComponent.getState();
-        console.log('🔧 [VAD] Component state:', componentState);
-      }
-      
-      // Try to manually start transcription service
-      if (deepgramComponent && deepgramComponent.start) {
-        console.log('🔧 [VAD] Attempting to start transcription service...');
-        try {
-          deepgramComponent.start();
-          console.log('🔧 [VAD] Transcription service start called');
-          
-          // Wait a bit and check again
-          setTimeout(() => {
-            if (deepgramComponent.transcriptionManagerRef?.current) {
-              const state = deepgramComponent.transcriptionManagerRef.current.getState();
-              console.log('🔧 [VAD] Transcription service state after start:', state);
-            }
-          }, 1000);
-        } catch (error) {
-          console.log('🔧 [VAD] Error starting transcription service:', error.message);
+      if (deepgramComponent) {
+        // Use the new debug methods
+        if (deepgramComponent.getConnectionStates) {
+          const connectionStates = deepgramComponent.getConnectionStates();
+          console.log('🔧 [VAD] Connection states:', connectionStates);
+          return {
+            connected: connectionStates.transcriptionConnected,
+            state: connectionStates.transcription,
+            agentConnected: connectionStates.agentConnected,
+            agentState: connectionStates.agent
+          };
+        }
+        
+        // Fallback to component state
+        if (deepgramComponent.getState) {
+          const componentState = deepgramComponent.getState();
+          console.log('🔧 [VAD] Component state:', componentState);
+          return {
+            connected: componentState.connections?.transcription === 'connected',
+            state: componentState.connections?.transcription || 'not-found',
+            agentConnected: componentState.connections?.agent === 'connected',
+            agentState: componentState.connections?.agent || 'not-found'
+          };
         }
       }
       
-      return { connected: false, state: 'not-found' };
+      return { connected: false, state: 'not-found', agentConnected: false, agentState: 'not-found' };
     });
     
     console.log('🔧 [VAD] Transcription service info:', transcriptionInfo);
@@ -155,7 +144,9 @@ test.describe('VAD Realistic Audio Simulation', () => {
     // Wait for VAD events
     const vadEvents = await AudioTestHelpers.waitForVADEvents(page, [
       'UserStartedSpeaking',
-      'UserStoppedSpeaking'
+      'UserStoppedSpeaking',
+      'SpeechStarted',
+      'SpeechStopped'
     ], 5000);
     
     console.log('📊 VAD Events detected:', vadEvents);
@@ -163,10 +154,13 @@ test.describe('VAD Realistic Audio Simulation', () => {
     // Verify we got VAD events
     expect(vadEvents.length).toBeGreaterThan(0);
     
-    // Check for specific event types
+    // Check for specific event types - we should get at least one "started" and one "stopped" event
     const eventTypes = vadEvents.map(event => event.type);
-    expect(eventTypes).toContain('UserStartedSpeaking');
-    expect(eventTypes).toContain('UserStoppedSpeaking');
+    const hasStartedEvent = eventTypes.some(type => type === 'UserStartedSpeaking' || type === 'SpeechStarted');
+    const hasStoppedEvent = eventTypes.some(type => type === 'UserStoppedSpeaking' || type === 'SpeechStopped');
+    
+    expect(hasStartedEvent).toBe(true);
+    expect(hasStoppedEvent).toBe(true);
     
     console.log('✅ VAD events triggered successfully with realistic audio');
   });

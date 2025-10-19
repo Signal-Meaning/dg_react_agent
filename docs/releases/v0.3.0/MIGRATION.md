@@ -112,7 +112,6 @@ interface DeepgramVoiceInteractionProps {
   // NEW: VAD event callbacks
   onUserStoppedSpeaking?: () => void;
   onUtteranceEnd?: (data: UtteranceEndData) => void;
-  onVADEvent?: (event: VADEvent) => void;
 }
 ```
 
@@ -134,7 +133,6 @@ interface DeepgramVoiceInteractionProps {
   onUserStartedSpeaking={() => console.log('User started speaking')}
   onUserStoppedSpeaking={() => console.log('User stopped speaking')}
   onUtteranceEnd={(data) => console.log('Utterance ended:', data)}
-  onVADEvent={(event) => console.log('VAD event:', event)}
   onAgentResponse={(response) => console.log('Agent response:', response)}
 />
 ```

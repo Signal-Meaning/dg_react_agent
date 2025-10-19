@@ -17,6 +17,7 @@
     "build": "rollup -c",
     "build:watch": "rollup -c -w",
     "dev": "rollup -c -w",
+    "generate-test-audio": "node scripts/generate-test-audio.js",
     "pretest": "npm run build",
     "test": "jest",
     "test:mock": "jest",

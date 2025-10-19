@@ -10,5 +10,7 @@ export default defineConfig({
     fs: {
       allow: ['..', '../..', '../../..']
     }
-  }
+  },
+  // Serve test fixtures
+  publicDir: '../tests/fixtures'
 })

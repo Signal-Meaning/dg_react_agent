@@ -250,17 +250,27 @@ class AudioTestHelpers {
   static async waitForVADEvents(page, expectedEvents = ['UserStartedSpeaking', 'UserStoppedSpeaking'], timeout = 5000) {
     const detectedEvents = [];
     
-    // Set up event listeners
-    await page.exposeFunction('onVADEventDetected', (eventType, data) => {
-      detectedEvents.push({ type: eventType, data, timestamp: Date.now() });
-      console.log(`🎯 [VAD] Event detected: ${eventType}`, data);
-    });
+    // Set up event listeners - check if function already exists
+    try {
+      await page.exposeFunction('onVADEventDetected', (eventType, data) => {
+        detectedEvents.push({ type: eventType, data, timestamp: Date.now() });
+        console.log(`🎯 [VAD] Event detected: ${eventType}`, data);
+      });
+    } catch (error) {
+      if (error.message.includes('has been already registered')) {
+        console.log('⚠️ [VAD] onVADEventDetected already registered, continuing...');
+      } else {
+        throw error;
+      }
+    }
 
     // Monitor VAD events
     await page.evaluate((expectedEvents) => {
       const vadElements = {
         'UserStartedSpeaking': '[data-testid="user-speaking"]',
         'UserStoppedSpeaking': '[data-testid="user-stopped-speaking"]',
+        'SpeechStarted': '[data-testid="speech-started"]',
+        'SpeechStopped': '[data-testid="speech-stopped"]',
         'UtteranceEnd': '[data-testid="utterance-end"]',
         'VADEvent': '[data-testid="vad-event"]'
       };

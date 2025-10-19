@@ -401,6 +401,15 @@ function DeepgramVoiceInteraction(
     const isTranscriptionConfigured = !!transcriptionOptions;
     const isAgentConfigured = !!agentOptions;
     
+    // Enhanced logging for debugging initialization issues
+    console.log('🔧 [INIT] Service configuration check:');
+    console.log('  - transcriptionOptions:', transcriptionOptions);
+    console.log('  - agentOptions:', agentOptions);
+    console.log('  - isTranscriptionConfigured:', isTranscriptionConfigured);
+    console.log('  - isAgentConfigured:', isAgentConfigured);
+    console.log('  - apiKey present:', !!apiKey);
+    console.log('  - apiKey length:', apiKey ? apiKey.length : 0);
+    
     if (!isTranscriptionConfigured && !isAgentConfigured) {
       // In CI or package import context, just log a warning instead of erroring
       if (isCIEnvironment || isPackageImport) {
@@ -437,9 +446,13 @@ function DeepgramVoiceInteraction(
 
     // --- TRANSCRIPTION SETUP (CONDITIONAL) ---
     if (isTranscriptionConfigured) {
+      console.log('🔧 [TRANSCRIPTION] Transcription service is configured, proceeding with setup');
+      console.log('🔧 [TRANSCRIPTION] transcriptionManagerRef.current:', transcriptionManagerRef.current);
+      
       if (!transcriptionManagerRef.current) {
         try {
           log('🔧 [TRANSCRIPTION] Starting transcription setup');
+          console.log('🔧 [TRANSCRIPTION] Creating new transcription manager...');
       let transcriptionUrl = endpoints.transcriptionUrl;
       let transcriptionQueryParams: Record<string, string | boolean | number> = {};
 
@@ -511,13 +524,28 @@ function DeepgramVoiceInteraction(
       
       // Log final transcription URL with VAD parameters
       console.log('Final transcription URL:', transcriptionUrl);
+      console.log('🔧 [VAD] VAD configuration check:');
+      console.log('  - vad_events in baseTranscriptionParams:', baseTranscriptionParams.vad_events);
+      console.log('  - vad_events in transcriptionOptions:', transcriptionOptions.vad_events);
+      console.log('  - utterance_end_ms in baseTranscriptionParams:', baseTranscriptionParams.utterance_end_ms);
+      console.log('  - utterance_end_ms in transcriptionOptions:', transcriptionOptions.utterance_end_ms);
+      
       if (useKeytermPrompting) {
         log('Using keyterm prompting - VAD params in URL');
+        console.log('🔧 [VAD] URL contains VAD params:', transcriptionUrl.includes('vad_events'));
       } else {
         log('Using queryParams - VAD params:', transcriptionQueryParams);
+        console.log('🔧 [VAD] queryParams contains vad_events:', 'vad_events' in transcriptionQueryParams);
       }
       
       // Create Transcription WebSocket manager
+      console.log('🔧 [TRANSCRIPTION] Creating WebSocketManager with config:');
+      console.log('  - url:', transcriptionUrl);
+      console.log('  - apiKey present:', !!apiKey);
+      console.log('  - service: transcription');
+      console.log('  - queryParams:', useKeytermPrompting ? 'undefined (using keyterm prompting)' : transcriptionQueryParams);
+      console.log('  - debug:', debug);
+      
     transcriptionManagerRef.current = new WebSocketManager({
         url: transcriptionUrl,
       apiKey,
@@ -526,6 +554,8 @@ function DeepgramVoiceInteraction(
       debug,
       keepaliveInterval: 0, // Disable keepalives for transcription service
     });
+    
+    console.log('🔧 [TRANSCRIPTION] WebSocketManager created successfully:', !!transcriptionManagerRef.current);
 
     // Set up event listeners for transcription WebSocket
       transcriptionUnsubscribe = transcriptionManagerRef.current.addEventListener((event: WebSocketEvent) => {
@@ -568,6 +598,7 @@ function DeepgramVoiceInteraction(
         log('Transcription manager already exists, skipping setup');
       }
     } else {
+      console.log('🔧 [TRANSCRIPTION] Transcription service NOT configured, skipping setup');
       log('Transcription service not configured, skipping setup');
     }
 
@@ -672,6 +703,7 @@ function DeepgramVoiceInteraction(
         }
         onKeepalive?.(event.data.service);
       } else if (event.type === 'message') {
+        console.log('🔍 [AGENT] Agent WebSocket received message:', event.data);
         handleAgentMessage(event.data);
       } else if (event.type === 'binary') {
         handleAgentAudio(event.data);
@@ -899,11 +931,25 @@ function DeepgramVoiceInteraction(
 
   // Type guard for transcription messages
   const isTranscriptionMessage = (data: unknown): data is { type: string; [key: string]: unknown } => {
-    return typeof data === 'object' && data !== null && 'type' in data;
+    const isObject = typeof data === 'object';
+    const isNotNull = data !== null;
+    const hasType = isObject && isNotNull && 'type' in data;
+    const result = isObject && isNotNull && hasType;
+    
+    console.log('🔍 [DEBUG] isTranscriptionMessage check:', {
+      data: data,
+      isObject,
+      isNotNull,
+      hasType,
+      result
+    });
+    return result;
   };
 
   // Handle transcription messages - only relevant if transcription is configured
   const handleTranscriptionMessage = (data: unknown) => {
+    console.log('🔍 [DEBUG] handleTranscriptionMessage called with:', data);
+    
     // Add simplified transcript log for better readability - always show with [TRANSCRIPT] prefix
     if (typeof data === 'object' && data !== null && 'alternatives' in data) {
       const transcriptData = data as { alternatives?: Array<{ transcript?: string }>; is_final?: boolean };
@@ -913,6 +959,14 @@ function DeepgramVoiceInteraction(
       }
     }
     
+    // Always log VAD events for debugging
+    if (typeof data === 'object' && data !== null && 'type' in data && (data as any).type === 'vad') {
+      console.log('🎯 [VAD] VADEvent received in handleTranscriptionMessage:', data);
+    }
+    
+    // Always log all transcription messages to debug VAD events
+    console.log('📝 [TRANSCRIPTION] Message received:', data);
+    
     // Debug: Log all transcription messages (only in debug mode)
     if (props.debug) {
       console.log('📝 [TRANSCRIPTION] Message received:', data);
@@ -920,15 +974,29 @@ function DeepgramVoiceInteraction(
     
     // Skip processing if transcription service isn't configured
     if (!transcriptionManagerRef.current) {
+      console.log('🔍 [DEBUG] Transcription service not configured, returning early');
       log('Received unexpected transcription message but service is not configured:', data);
       return;
     }
+    
+    console.log('🔍 [DEBUG] Transcription service is configured, continuing...');
+    
+    // Debug: Log message type for VAD debugging
+    if (typeof data === 'object' && data !== null && 'type' in data) {
+      console.log('🔍 [DEBUG] Processing message type:', (data as any).type);
+    }
 
     // Type guard check
-    if (!isTranscriptionMessage(data)) {
+    console.log('🔍 [DEBUG] Checking type guard for data:', data);
+    const typeGuardResult = isTranscriptionMessage(data);
+    console.log('🔍 [DEBUG] isTranscriptionMessage result:', typeGuardResult);
+    if (!typeGuardResult) {
+      console.log('🔍 [DEBUG] Type guard failed, returning early');
       log('Invalid transcription message format:', data);
       return;
     }
+    
+    console.log('🔍 [DEBUG] Message passed type guard, processing...');
     
     // Check if agent is in sleep mode
     const isSleepingOrEntering = 
@@ -998,6 +1066,61 @@ function DeepgramVoiceInteraction(
       const channel = Array.isArray(data.channel) ? data.channel : [0, 1];
       const lastWordEnd = typeof data.last_word_end === 'number' ? data.last_word_end : 0;
       onUtteranceEnd?.({ channel, lastWordEnd });
+      return;
+    }
+    
+    // Handle SpeechStarted event from transcription service
+    if (data.type === 'SpeechStarted') {
+      console.log('🎯 [VAD] SpeechStarted message received from transcription service:', data);
+      if (isSleepingOrEntering) {
+        sleepLog('Ignoring SpeechStarted event (state:', stateRef.current.agentState, ')');
+        return;
+      }
+      
+      // Call the specific SpeechStarted callback
+      if (props.onSpeechStarted) {
+        props.onSpeechStarted({ 
+          channel: data.channel as number[], 
+          timestamp: data.timestamp as number 
+        });
+      }
+      
+      // User started speaking
+      onUserStartedSpeaking?.();
+      dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: true });
+      updateKeepaliveState(true);
+      
+      if (stateRef.current.agentState === 'idle' || stateRef.current.agentState === 'sleeping') {
+        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'listening' });
+      }
+      return;
+    }
+    
+    // Handle SpeechStopped event from transcription service
+    if (data.type === 'SpeechStopped') {
+      console.log('🎯 [VAD] SpeechStopped message received from transcription service:', data);
+      if (isSleepingOrEntering) {
+        sleepLog('Ignoring SpeechStopped event (state:', stateRef.current.agentState, ')');
+        return;
+      }
+      
+      // Call the specific SpeechStopped callback
+      if (props.onSpeechStopped) {
+        props.onSpeechStopped({ 
+          channel: data.channel as number[], 
+          timestamp: data.timestamp as number 
+        });
+      }
+      
+      // User stopped speaking
+      const stopTimestamp = Date.now();
+      onUserStoppedSpeaking?.({ timestamp: stopTimestamp });
+      dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
+      updateKeepaliveState(false);
+      
+      if (stateRef.current.agentState === 'listening') {
+        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
+      }
       return;
     }
   };
@@ -1247,6 +1370,7 @@ function DeepgramVoiceInteraction(
   const handleAgentMessage = (data: unknown) => {
     // Debug: Log all agent messages with type
     const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as any).type : 'unknown';
+    console.log(`🔍 [AGENT] Received agent message (type: ${messageType}):`, data);
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
     
     // Don't re-enable idle timeout resets here
@@ -1514,8 +1638,11 @@ function DeepgramVoiceInteraction(
       return;
     }
 
-    // Handle VAD events from transcription service
-    if (data.type === 'VADEvent') {
+    // Handle VAD events from transcription service (vad type)
+    // NOTE: SpeechStarted/SpeechStopped are handled in handleTranscriptionMessage
+    console.log('🔍 [DEBUG] Checking for VAD event type:', data.type);
+    if (data.type === 'vad') {
+      console.log('🎯 [VAD] VADEvent message received:', data);
       log('VADEvent message received:', data);
       
       // Call the callback with VAD event data
@@ -2369,6 +2496,14 @@ function DeepgramVoiceInteraction(
         agentManagerRef.current.triggerTimeoutForTesting();
       }
     },
+    // Debug methods for testing
+    getConnectionStates: () => ({
+      transcription: transcriptionManagerRef.current?.getState() || 'not-found',
+      agent: agentManagerRef.current?.getState() || 'not-found',
+      transcriptionConnected: transcriptionManagerRef.current?.isConnected() || false,
+      agentConnected: agentManagerRef.current?.isConnected() || false,
+    }),
+    getState: () => state,
   }));
 
   // Render nothing (headless component)

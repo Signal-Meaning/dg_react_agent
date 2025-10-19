@@ -28,7 +28,6 @@ interface DeepgramVoiceInteractionProps {
   // NEW: VAD event callbacks
   onUserStoppedSpeaking?: () => void;
   onUtteranceEnd?: (data: UtteranceEndData) => void;
-  onVADEvent?: (event: VADEvent) => void;
   
   // NEW: State change callback
   onStateChange?: (state: VoiceInteractionState) => void;
@@ -76,32 +75,6 @@ onUtteranceEnd?: (data: UtteranceEndData) => void;
 />
 ```
 
-##### onVADEvent
-```typescript
-onVADEvent?: (event: VADEvent) => void;
-```
-**Purpose**: Called for all VAD events  
-**Parameters**: `VADEvent` object with event type and data  
-**Usage**: Centralized VAD event handling, custom voice processing
-
-**Example:**
-```typescript
-<DeepgramVoiceInteraction
-  onVADEvent={(event) => {
-    switch (event.type) {
-      case 'UserStartedSpeaking':
-        handleUserStartedSpeaking();
-        break;
-      case 'UserStoppedSpeaking':
-        handleUserStoppedSpeaking();
-        break;
-      case 'UtteranceEnd':
-        handleUtteranceEnd(event.data);
-        break;
-    }
-  }}
-/>
-```
 
 ##### onStateChange
 ```typescript

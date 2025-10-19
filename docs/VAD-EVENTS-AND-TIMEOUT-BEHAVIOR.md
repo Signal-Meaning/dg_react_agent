@@ -7,18 +7,27 @@ This document explains how the DeepgramVoiceInteraction component handles Voice 
 The component receives VAD signals from two different Deepgram services:
 
 ### 1. Agent Service (WebSocket)
+- **Message Type**: `UserStartedSpeaking`
+- **Callback**: `onUserStartedSpeaking`
+- **Data**: None
+- **Purpose**: Indicates user has started speaking from agent perspective
+
 - **Message Type**: `UserStoppedSpeaking`
 - **Callback**: `onUserStoppedSpeaking`
 - **Data**: `{ timestamp?: number }`
 - **Purpose**: Indicates user has stopped speaking from agent perspective
 
 ### 2. Transcription Service (WebSocket)  
-- **Message Type**: `VADEvent`
-- **Callback**: `onVADEvent`
-- **Data**: `{ speechDetected: boolean; confidence?: number; timestamp?: number }`
+- **Message Type**: `SpeechStarted`
+- **Callback**: `onUserStartedSpeaking` (same callback as agent)
+- **Data**: `{ channel: number[]; timestamp: number }`
 - **Purpose**: Real-time voice activity detection from transcription service
 
-### 3. Transcription Service (WebSocket)
+- **Message Type**: `SpeechStopped`
+- **Callback**: `onUserStoppedSpeaking` (same callback as agent)
+- **Data**: `{ channel: number[]; timestamp: number }`
+- **Purpose**: Real-time voice activity detection from transcription service
+
 - **Message Type**: `UtteranceEnd`
 - **Callback**: `onUtteranceEnd`
 - **Data**: `{ channel: number[]; lastWordEnd: number }`
@@ -29,7 +38,7 @@ The component receives VAD signals from two different Deepgram services:
 ### The Problem
 When a user stops speaking, **multiple VAD signals fire simultaneously**:
 1. `UserStoppedSpeaking` from agent service
-2. `VADEvent speechDetected: false` from transcription service
+2. `SpeechStopped` from transcription service
 3. `UtteranceEnd` from transcription service
 
 ### Current Behavior
@@ -46,7 +55,7 @@ When a user stops speaking, **multiple VAD signals fire simultaneously**:
 const primarySignal = 'UtteranceEnd'; // Most reliable
 
 // Use others for validation/warnings
-const validateWithVAD = true;
+const validateWithSpeechStopped = true;
 const validateWithAgent = true;
 
 // Handle conflicts
@@ -128,7 +137,7 @@ graph TD
 ```typescript
 // Recommended priority order:
 // 1. UtteranceEnd (most reliable)
-// 2. VADEvent speechDetected (real-time)
+// 2. SpeechStopped (real-time from transcription)
 // 3. UserStoppedSpeaking (agent perspective)
 ```
 
@@ -201,8 +210,8 @@ const handleAgentIdle = () => {
 // Choose primary signal, use others for validation
 <DeepgramVoiceInteraction
   onUtteranceEnd={handlePrimaryVAD}
-  onVADEvent={handleSecondaryVAD} // For validation only
-  onUserStoppedSpeaking={handleTertiaryVAD} // For validation only
+  onUserStoppedSpeaking={handleSecondaryVAD} // For validation only
+  // Note: SpeechStopped events use the same onUserStoppedSpeaking callback
 />
 ```
 
