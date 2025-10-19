@@ -12,10 +12,9 @@ The component receives VAD signals from two different Deepgram services:
 - **Data**: None
 - **Purpose**: Indicates user has started speaking from agent perspective
 
-- **Message Type**: `UserStoppedSpeaking`
-- **Callback**: `onUserStoppedSpeaking`
-- **Data**: `{ timestamp?: number }`
-- **Purpose**: Indicates user has stopped speaking from agent perspective
+- **Message Type**: `UserStoppedSpeaking` ❌ **DOES NOT EXIST**
+- **Status**: **Fictional Event** - This event is not part of the Deepgram API
+- **Note**: Use `UtteranceEnd` for speech end detection instead
 
 ### 2. Transcription Service (WebSocket)  
 - **Message Type**: `SpeechStarted`
@@ -23,10 +22,9 @@ The component receives VAD signals from two different Deepgram services:
 - **Data**: `{ channel: number[]; timestamp: number }`
 - **Purpose**: Real-time voice activity detection from transcription service
 
-- **Message Type**: `SpeechStopped`
-- **Callback**: `onUserStoppedSpeaking` (same callback as agent)
-- **Data**: `{ channel: number[]; timestamp: number }`
-- **Purpose**: Real-time voice activity detection from transcription service
+- **Message Type**: `SpeechStopped` ❌ **DOES NOT EXIST**
+- **Status**: **Fictional Event** - This event is not part of the Deepgram API
+- **Note**: Use `UtteranceEnd` for speech end detection instead
 
 - **Message Type**: `UtteranceEnd`
 - **Callback**: `onUtteranceEnd`
@@ -36,16 +34,15 @@ The component receives VAD signals from two different Deepgram services:
 ## Signal Redundancy
 
 ### The Problem
-When a user stops speaking, **multiple VAD signals fire simultaneously**:
-1. `UserStoppedSpeaking` from agent service
-2. `SpeechStopped` from transcription service
-3. `UtteranceEnd` from transcription service
+When a user stops speaking, **only one real VAD signal fires**:
+1. `UtteranceEnd` from transcription service ✅ **REAL EVENT**
+
+**Note**: `UserStoppedSpeaking` and `SpeechStopped` are fictional events that don't exist in the Deepgram API.
 
 ### Current Behavior
-- All three signals are processed independently
-- Each updates the same internal state (`isUserSpeaking: false`)
-- No conflict resolution or validation
-- Potential for timing inconsistencies
+- Only `UtteranceEnd` signal is processed (fictional events removed)
+- Updates internal state (`isUserSpeaking: false`)
+- Clean, single-source signal handling
 
 ### Recommended Handling Strategy
 
@@ -135,10 +132,8 @@ graph TD
 
 ### 1. VAD Signal Priority
 ```typescript
-// Recommended priority order:
-// 1. UtteranceEnd (most reliable)
-// 2. SpeechStopped (real-time from transcription)
-// 3. UserStoppedSpeaking (agent perspective)
+// Only real event available:
+// 1. UtteranceEnd (only real Deepgram event for speech end detection)
 ```
 
 ### 2. Conflict Detection
