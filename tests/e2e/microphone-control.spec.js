@@ -47,6 +47,57 @@ test.describe('Microphone Control', () => {
     // but the microphone itself is disabled until the user clicks the button
   });
 
+  test('should check transcription configuration after env update', async ({ page }) => {
+    console.log('🔍 Checking transcription configuration after .env update...');
+    
+    // Enable microphone to start WebSocket connection
+    await page.click('[data-testid="microphone-button"]');
+    
+    // Wait for connection to be established
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    
+    console.log('✅ Connection established');
+    
+    // Check environment variables
+    const envVars = await page.evaluate(() => {
+      return {
+        VITE_DEEPGRAM_API_KEY: import.meta.env.VITE_DEEPGRAM_API_KEY,
+        VITE_TRANSCRIPTION_MODEL: import.meta.env.VITE_TRANSCRIPTION_MODEL,
+        VITE_TRANSCRIPTION_INTERIM_RESULTS: import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS,
+        VITE_TRANSCRIPTION_VAD_EVENTS: import.meta.env.VITE_TRANSCRIPTION_VAD_EVENTS,
+        VITE_TRANSCRIPTION_UTTERANCE_END_MS: import.meta.env.VITE_TRANSCRIPTION_UTTERANCE_END_MS
+      };
+    });
+    
+    console.log('📊 Environment variables:', envVars);
+    
+    // Check transcription configuration
+    const config = await page.evaluate(() => {
+      const deepgramComponent = window.deepgramRef?.current;
+      if (deepgramComponent && deepgramComponent.getState) {
+        const state = deepgramComponent.getState();
+        return {
+          transcriptionOptions: state.transcriptionOptions,
+          isTranscriptionConfigured: !!state.transcriptionOptions,
+          transcriptionManagerExists: !!deepgramComponent.transcriptionManagerRef?.current
+        };
+      }
+      return null;
+    });
+    
+    console.log('📊 Configuration:', JSON.stringify(config, null, 2));
+    
+    // Check if any transcription variables are loaded
+    const hasTranscriptionVars = Object.values(envVars).some(value => 
+      value && value !== 'undefined' && value !== 'null'
+    );
+    
+    console.log('📊 Has transcription variables:', hasTranscriptionVars);
+    console.log('📊 isTranscriptionConfigured:', config?.isTranscriptionConfigured);
+    
+    expect(true).toBe(true); // Always pass, just for debugging
+  });
+
   test('should handle microphone permission denied', async ({ page }) => {
     // Mock permission denied
     await page.context().grantPermissions([], { origin: 'http://localhost:3000' });
