@@ -105,7 +105,11 @@ tests/
 │   ├── text-only-conversation.spec.js
 │   ├── barge-in-behavior.spec.js
 │   ├── api-integration.spec.js
-│   └── performance.spec.js
+│   ├── performance.spec.js
+│   ├── vad-realistic-audio.spec.js          # VAD realistic audio simulation ⚠️ CI SKIPPED
+│   ├── vad-advanced-simulation.spec.js      # Advanced VAD patterns ⚠️ CI SKIPPED
+│   ├── manual-vad-workflow.spec.js          # Manual VAD workflow ⚠️ CI SKIPPED
+│   └── vad-websocket-events.spec.js         # VAD WebSocket validation
 ├── fixtures/
 │   ├── test-audio/
 │   │   ├── greeting.wav
@@ -117,6 +121,7 @@ tests/
 │       └── agent-response.json
 └── utils/
     ├── audio-helpers.js
+    ├── vad-audio-simulator.js               # VAD audio simulation utilities
     ├── api-mocks.js
     └── test-helpers.js
 ```
@@ -399,6 +404,69 @@ test.describe('Performance', () => {
   });
 });
 ```
+
+### 7. VAD (Voice Activity Detection) Tests
+
+**File**: `tests/e2e/vad-realistic-audio.spec.js`
+
+⚠️ **CI SKIPPED** - These tests require real Deepgram API connections and are skipped in CI environments. See [Issue #99](https://github.com/Signal-Meaning/dg_react_agent/issues/99) for mock implementation.
+
+```javascript
+import { test, expect } from '@playwright/test';
+
+test.describe('VAD Realistic Audio Simulation', () => {
+  // Skip these tests in CI - they require real Deepgram API connections
+  // See issue #99 for mock implementation
+  test.beforeEach(async ({ page }) => {
+    if (process.env.CI) {
+      test.skip(true, 'VAD tests require real Deepgram API connections - skipped in CI. See issue #99 for mock implementation.');
+      return;
+    }
+    
+    await setupTestPage(page);
+  });
+
+  test('should trigger VAD events with realistic TTS audio', async ({ page }) => {
+    // Enable microphone
+    await page.click('[data-testid="microphone-button"]');
+    
+    // Wait for connection to be established first
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    
+    // Simulate realistic speech with silence padding
+    await AudioTestHelpers.simulateVADSpeech(page, 'Hello, how are you today?', {
+      silenceDuration: 1000,
+      onsetSilence: 300
+    });
+    
+    // Wait for VAD events
+    const vadEvents = await AudioTestHelpers.waitForVADEvents(page, [
+      'UserStartedSpeaking',
+      'UserStoppedSpeaking'
+    ], 5000);
+    
+    // Verify we got VAD events
+    expect(vadEvents.length).toBeGreaterThan(0);
+  });
+});
+```
+
+**Key Features:**
+- **Realistic Audio Simulation**: Uses TTS-generated audio instead of empty buffers
+- **Proper VAD Event Triggering**: Speech → silence patterns that trigger VAD events
+- **Multiple Audio Sources**: TTS generation, pre-recorded samples, and hybrid approaches
+- **CI Integration**: Properly skipped in CI environments with clear messaging
+
+**Status**: 
+- ✅ **Audio Simulation**: Working (121,600 bytes generated and transmitted)
+- ✅ **Agent Service**: Connected successfully
+- ✅ **Microphone**: Enabled properly
+- ❌ **Transcription Service**: Not connecting (required for VAD events)
+- ❌ **VAD Events**: Not triggered (depends on transcription service)
+
+**Related Issues:**
+- [Issue #95](https://github.com/Signal-Meaning/dg_react_agent/issues/95): VAD Events Not Triggered by Simulated Audio in Tests
+- [Issue #99](https://github.com/Signal-Meaning/dg_react_agent/issues/99): Add Mock Feature Extensions for CI Testing
 
 ## Test Utilities
 

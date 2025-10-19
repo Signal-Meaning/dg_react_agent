@@ -18,7 +18,14 @@ const AudioSimulator = require('../utils/audio-simulator');
 const AudioFileLoader = require('../utils/audio-file-loader');
 
 test.describe('Advanced VAD Audio Simulation', () => {
+  // Skip these tests in CI - they require real Deepgram API connections
+  // See issue #99 for mock implementation
   test.beforeEach(async ({ page }) => {
+    if (process.env.CI) {
+      test.skip(true, 'VAD tests require real Deepgram API connections - skipped in CI. See issue #99 for mock implementation.');
+      return;
+    }
+    
     await setupTestPage(page);
   });
 

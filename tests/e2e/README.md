@@ -78,8 +78,10 @@ npx playwright test --grep "Microphone"     # All microphone tests
 
 ### VAD (Voice Activity Detection) Tests
 - **`vad-websocket-events.spec.js`** - VAD event WebSocket validation
+- **`vad-realistic-audio.spec.js`** - Realistic TTS audio simulation for VAD testing ⚠️ **CI SKIPPED**
+- **`vad-advanced-simulation.spec.js`** - Advanced VAD audio simulation patterns ⚠️ **CI SKIPPED**
+- **`manual-vad-workflow.spec.js`** - Manual VAD workflow testing ⚠️ **CI SKIPPED**
 - **`diagnostic-vad.spec.js`** - VAD diagnostic tests
-- **`manual-vad-workflow.spec.js`** - Manual VAD workflow testing
 
 ### Configuration & Setup Tests
 - **`deepgram-instructions-file.spec.js`** - Custom instructions file loading
@@ -172,6 +174,36 @@ Validates that connection stays alive during active conversation with natural pa
 **Run:**
 ```bash
 npx playwright test tests/e2e/idle-timeout-behavior.spec.js
+```
+
+### VAD Test Status
+
+**File:** `vad-realistic-audio.spec.js`, `vad-advanced-simulation.spec.js`, `manual-vad-workflow.spec.js`
+
+**Purpose:** Test Voice Activity Detection (VAD) events with realistic audio simulation.
+
+**Current Status:**
+- ✅ **Audio Simulation**: Working (121,600 bytes generated and transmitted)
+- ✅ **Agent Service**: Connected successfully  
+- ✅ **Microphone**: Enabled properly
+- ❌ **Transcription Service**: Not connecting (required for VAD events)
+- ❌ **VAD Events**: Not triggered (depends on transcription service)
+
+**CI Behavior:**
+- **Local Development**: Tests run but fail due to transcription service issue
+- **CI Environment**: Tests are properly skipped with message: *"VAD tests require real Deepgram API connections - skipped in CI"*
+
+**Related Issues:**
+- [Issue #95](https://github.com/Signal-Meaning/dg_react_agent/issues/95): VAD Events Not Triggered by Simulated Audio in Tests
+- [Issue #99](https://github.com/Signal-Meaning/dg_react_agent/issues/99): Add Mock Feature Extensions for CI Testing
+
+**Run:**
+```bash
+# Run VAD tests locally (will fail due to transcription service issue)
+npx playwright test tests/e2e/vad-realistic-audio.spec.js
+
+# Verify CI skip behavior
+CI=true npx playwright test tests/e2e/vad-realistic-audio.spec.js
 ```
 
 ## Troubleshooting

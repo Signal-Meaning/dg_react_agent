@@ -14,6 +14,14 @@ const { setupTestPage, simulateUserGesture, simulateSpeech } = require('./helper
  */
 
 test.describe('Manual VAD Workflow Tests', () => {
+  // Skip these tests in CI - they require real Deepgram API connections
+  // See issue #99 for mock implementation
+  test.beforeEach(async ({ page }) => {
+    if (process.env.CI) {
+      test.skip(true, 'VAD tests require real Deepgram API connections - skipped in CI. See issue #99 for mock implementation.');
+      return;
+    }
+  });
 
   test('should handle complete manual workflow: speak → silence → timeout', async ({ page }) => {
     // Set up test page with audio mocks
