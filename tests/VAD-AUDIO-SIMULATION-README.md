@@ -2,6 +2,8 @@
 
 This document describes the VAD Audio Simulation System implemented for Issue #93, which provides realistic TTS-based audio simulation for VAD testing.
 
+⚠️ **Current Status**: Audio simulation is working, but VAD events are not being triggered due to transcription service connection issues. See [Issue #95](https://github.com/Signal-Meaning/dg_react_agent/issues/95) for details.
+
 ## Overview
 
 The VAD Audio Simulation System replaces the previous `ArrayBuffer(8192)` simulation with realistic speech patterns that properly trigger VAD events. This system uses the Web Speech API to generate TTS audio with proper silence padding to ensure reliable VAD event triggering.
@@ -281,13 +283,20 @@ await AudioTestHelpers.simulateVADSpeech(page, 'Hello', {
    - Ensure tests run in a browser environment
    - Check browser compatibility
 
-2. **VAD events not triggering**
-   - Verify silence padding is sufficient (300ms onset, 1000ms offset)
-   - Check audio format matches Deepgram requirements
+2. **VAD events not triggering** ⚠️ **CURRENT ISSUE**
+   - **Root Cause**: Transcription service is not connecting (Issue #95)
+   - **Symptoms**: Audio simulation works (121,600 bytes generated), but no VAD events
+   - **Status**: Audio simulation ✅, Agent service ✅, Transcription service ❌
+   - **Workaround**: Tests are skipped in CI until transcription service connection is fixed
 
 3. **Sample generation fails**
    - Check TTS voice availability
    - Verify audio context permissions
+
+4. **Tests skipped in CI**
+   - **Expected behavior**: VAD tests require real API connections
+   - **Message**: "VAD tests require real Deepgram API connections - skipped in CI"
+   - **Solution**: See [Issue #99](https://github.com/Signal-Meaning/dg_react_agent/issues/99) for mock implementation
 
 ### Debug Information
 

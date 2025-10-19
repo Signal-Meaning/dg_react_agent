@@ -8,6 +8,7 @@
  */
 
 const AudioSimulator = require('./audio-simulator');
+const VADAudioSimulator = require('./vad-audio-simulator');
 
 class AudioTestHelpers {
   /**
@@ -201,6 +202,19 @@ class AudioTestHelpers {
    */
   static async simulateSpeech(page, phrase, options = {}) {
     await AudioSimulator.simulateSpeech(page, phrase, options);
+  }
+
+  /**
+   * Simulate VAD speech with realistic audio
+   * @param {import('@playwright/test').Page} page - Playwright page object
+   * @param {string} phrase - Text to speak
+   * @param {Object} options - Speech options
+   * @param {number} options.silenceDuration - Silence after speech in ms
+   * @param {number} options.onsetSilence - Initial silence in ms
+   * @param {boolean} options.generateNew - Force new sample generation
+   */
+  static async simulateVADSpeech(page, phrase, options = {}) {
+    await VADAudioSimulator.simulateSpeechWithSilence(page, phrase, options);
   }
 
   /**

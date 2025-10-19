@@ -14,8 +14,35 @@ const AudioTestHelpers = require('../utils/audio-helpers');
 const AudioSimulator = require('../utils/audio-simulator');
 
 test.describe('VAD Realistic Audio Simulation', () => {
+  // Skip these tests in CI - they require real Deepgram API connections
+  // See issue #99 for mock implementation
   test.beforeEach(async ({ page }) => {
+    if (process.env.CI) {
+      test.skip(true, 'VAD tests require real Deepgram API connections - skipped in CI. See issue #99 for mock implementation.');
+      return;
+    }
+    
     await setupTestPage(page);
+    
+    // Enable test mode and set test API key
+    await page.evaluate(() => {
+      // Set test mode flag
+      window.testMode = true;
+      
+      // Set test API key in the global scope
+      window.testApiKey = 'test-key';
+      window.testProjectId = 'test-project';
+      
+      // Override the environment variables for testing
+      // Use a real API key format to pass validation (40-character hex string)
+      if (window.import && window.import.meta) {
+        window.import.meta.env = {
+          ...window.import.meta.env,
+          VITE_DEEPGRAM_API_KEY: 'a1b2c3d4e5f6789012345678901234567890abcd',
+          VITE_DEEPGRAM_PROJECT_ID: 'test-project'
+        };
+      }
+    });
   });
 
   test('should trigger VAD events with realistic TTS audio', async ({ page }) => {
@@ -33,12 +60,8 @@ test.describe('VAD Realistic Audio Simulation', () => {
     // Enable microphone
     await page.click('[data-testid="microphone-button"]');
     
-    // Wait for microphone to be enabled (same approach as working test)
-    await page.waitForTimeout(3000);
-    
-    // Check if microphone status changed
-    const micStatusAfterClick = await page.locator('[data-testid="mic-status"]').textContent();
-    console.log('Mic status after click:', micStatusAfterClick);
+    // Wait for connection to be established first (like working tests)
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
     
     // Display relevant console logs for debugging
     console.log('\n=== CONSOLE LOGS ===');
@@ -52,15 +75,79 @@ test.describe('VAD Realistic Audio Simulation', () => {
     relevantLogs.forEach(log => console.log(log));
     console.log('=== END CONSOLE LOGS ===\n');
     
-    // Verify microphone is enabled
-    expect(micStatusAfterClick).toBe('Enabled');
-    console.log('✅ Microphone enabled');
+    // Wait a bit for microphone toggle to complete
+    await page.waitForTimeout(2000);
     
-    // Wait for connection
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    // Now check microphone status
+    const micStatusAfterClick = await page.locator('[data-testid="mic-status"]').textContent();
+    console.log('Mic status after click:', micStatusAfterClick);
+    
+    // If still disabled, wait a bit more and check again
+    if (micStatusAfterClick === 'Disabled') {
+      console.log('Microphone still disabled, waiting longer...');
+      await page.waitForTimeout(3000);
+      const micStatusAfterWait = await page.locator('[data-testid="mic-status"]').textContent();
+      console.log('Mic status after additional wait:', micStatusAfterWait);
+      
+      // Verify microphone is enabled
+      expect(micStatusAfterWait).toBe('Enabled');
+      console.log('✅ Microphone enabled after additional wait');
+    } else {
+      // Verify microphone is enabled
+      expect(micStatusAfterClick).toBe('Enabled');
+      console.log('✅ Microphone enabled');
+    }
+    
+    // Check if transcription service is connected
+    const transcriptionInfo = await page.evaluate(() => {
+      const deepgramComponent = window.deepgramRef?.current;
+      console.log('🔧 [VAD] Deepgram component:', !!deepgramComponent);
+      console.log('🔧 [VAD] Component keys:', deepgramComponent ? Object.keys(deepgramComponent) : 'none');
+      
+      if (deepgramComponent && deepgramComponent.transcriptionManagerRef?.current) {
+        const state = deepgramComponent.transcriptionManagerRef.current.getState();
+        console.log('🔧 [VAD] Transcription service state:', state);
+        return { connected: state === 'connected', state };
+      }
+      console.log('🔧 [VAD] No transcription manager found');
+      
+      // Check if transcription manager ref exists but is null
+      if (deepgramComponent && deepgramComponent.transcriptionManagerRef) {
+        console.log('🔧 [VAD] Transcription manager ref exists but is null:', deepgramComponent.transcriptionManagerRef.current);
+      }
+      
+      // Check component state for transcription service
+      if (deepgramComponent && deepgramComponent.getState) {
+        const componentState = deepgramComponent.getState();
+        console.log('🔧 [VAD] Component state:', componentState);
+      }
+      
+      // Try to manually start transcription service
+      if (deepgramComponent && deepgramComponent.start) {
+        console.log('🔧 [VAD] Attempting to start transcription service...');
+        try {
+          deepgramComponent.start();
+          console.log('🔧 [VAD] Transcription service start called');
+          
+          // Wait a bit and check again
+          setTimeout(() => {
+            if (deepgramComponent.transcriptionManagerRef?.current) {
+              const state = deepgramComponent.transcriptionManagerRef.current.getState();
+              console.log('🔧 [VAD] Transcription service state after start:', state);
+            }
+          }, 1000);
+        } catch (error) {
+          console.log('🔧 [VAD] Error starting transcription service:', error.message);
+        }
+      }
+      
+      return { connected: false, state: 'not-found' };
+    });
+    
+    console.log('🔧 [VAD] Transcription service info:', transcriptionInfo);
     
     // Simulate realistic speech with silence padding
-    await AudioTestHelpers.simulateSpeech(page, 'Hello, how are you today?', {
+    await AudioTestHelpers.simulateVADSpeech(page, 'Hello, how are you today?', {
       silenceDuration: 1000,
       onsetSilence: 300
     });
@@ -195,7 +282,7 @@ test.describe('VAD Realistic Audio Simulation', () => {
     
     // Generate new sample
     const customPhrase = 'This is a custom test phrase for dynamic generation';
-    await AudioTestHelpers.simulateSpeech(page, customPhrase, {
+    await AudioTestHelpers.simulateVADSpeech(page, customPhrase, {
       generateNew: true,
       silenceDuration: 1500
     });

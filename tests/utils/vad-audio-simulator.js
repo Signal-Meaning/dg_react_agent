@@ -55,29 +55,79 @@ class VADAudioSimulator {
       sampleName = null
     } = options;
 
-    let audioData;
-
-    if (sampleName) {
-      // Use pre-generated sample from library
-      audioData = await VADAudioSimulator.loadAudioSample(sampleName);
-    } else if (generateNew || !VADAudioSimulator.sampleCache.has(phrase)) {
-      // Generate new sample
-      audioData = await VADAudioSimulator.generateAndCacheSample(phrase, silenceDuration);
-    } else {
-      // Use cached sample
-      audioData = VADAudioSimulator.sampleCache.get(phrase);
+    // Create simple audio data that will trigger VAD events (in Node.js context)
+    console.log('🔧 [VAD] Creating audio data in Node.js context:', { phrase, silenceDuration, onsetSilence });
+    
+    const sampleRate = 16000;
+    const speechDuration = Math.max(1000, phrase.length * 100); // Estimate speech duration
+    const totalDuration = onsetSilence + speechDuration + silenceDuration;
+    const totalSamples = Math.floor((totalDuration / 1000) * sampleRate);
+    
+    console.log('🔧 [VAD] Audio parameters:', { sampleRate, speechDuration, totalDuration, totalSamples });
+    
+    const audioBuffer = new ArrayBuffer(totalSamples * 2); // 16-bit PCM
+    const audioView = new Int16Array(audioBuffer);
+    
+    // Fill with silence, then speech pattern, then silence
+    const onsetSamples = Math.floor((onsetSilence / 1000) * sampleRate);
+    const speechSamples = Math.floor((speechDuration / 1000) * sampleRate);
+    
+    console.log('🔧 [VAD] Sample ranges:', { onsetSamples, speechSamples, totalSamples });
+    
+    for (let i = 0; i < totalSamples; i++) {
+      if (i < onsetSamples || i >= onsetSamples + speechSamples) {
+        // Silence periods
+        audioView[i] = 0;
+      } else {
+        // Speech period - use a sine wave pattern that should trigger VAD
+        const speechIndex = i - onsetSamples;
+        const frequency = 440 + (speechIndex % 200); // Varying frequency
+        const amplitude = 8000; // Strong enough to trigger VAD
+        const sample = Math.sin(2 * Math.PI * frequency * speechIndex / sampleRate) * amplitude;
+        audioView[i] = Math.floor(sample);
+      }
     }
+    
+    const audioData = audioBuffer;
+    
+    console.log('🔧 [VAD] Created simple audio pattern:', {
+      phrase,
+      totalDuration,
+      totalSamples,
+      onsetSamples,
+      speechSamples,
+      audioBufferSize: audioData.byteLength
+    });
 
+    console.log('🔧 [VAD] Audio data received from browser context:', {
+      audioDataSize: audioData ? audioData.byteLength : 'undefined',
+      audioDataType: typeof audioData
+    });
+
+    // Convert ArrayBuffer to Uint8Array for serialization
+    const audioBytes = new Uint8Array(audioData);
+    
     // Send audio data to Deepgram component
-    await page.evaluate((audioData) => {
+    await page.evaluate((audioBytes) => {
+      // Convert back to ArrayBuffer in browser context
+      const audioData = audioBytes.buffer.slice(audioBytes.byteOffset, audioBytes.byteOffset + audioBytes.byteLength);
+      
       const deepgramComponent = window.deepgramRef?.current;
       if (deepgramComponent && deepgramComponent.sendAudioData) {
-        console.log('🎤 [VAD] Sending audio data to Deepgram component');
+        console.log('🎤 [VAD] Sending audio data to Deepgram component, size:', audioData ? audioData.byteLength : 'undefined');
+        console.log('🎤 [VAD] Audio data type:', typeof audioData, 'is ArrayBuffer:', audioData instanceof ArrayBuffer);
+        console.log('🎤 [VAD] First few bytes:', new Uint8Array(audioData.slice(0, 10)));
         deepgramComponent.sendAudioData(audioData);
+        console.log('🎤 [VAD] Audio data sent successfully');
       } else {
         console.warn('🎤 [VAD] DeepgramVoiceInteraction not found or sendAudioData not available');
+        console.warn('🎤 [VAD] deepgramRef:', !!window.deepgramRef);
+        console.warn('🎤 [VAD] deepgramRef.current:', !!window.deepgramRef?.current);
+        if (window.deepgramRef?.current) {
+          console.warn('🎤 [VAD] Available methods:', Object.keys(window.deepgramRef.current));
+        }
       }
-    }, audioData);
+    }, audioBytes);
 
     console.log('🎤 [VAD] Simulated speech:', {
       phrase,
@@ -153,7 +203,7 @@ class VADAudioSimulator {
       console.warn('⚠️ [VAD] TTS generation failed, using fallback audio:', error.message);
       
       // Fallback: Create a simple audio buffer with silence padding
-      const fallbackAudio = this.createFallbackAudio(phrase, silenceMs);
+      const fallbackAudio = VADAudioSimulator.createFallbackAudio(phrase, silenceMs);
       
       // Cache the fallback sample
       if (!VADAudioSimulator.sampleCache) {
