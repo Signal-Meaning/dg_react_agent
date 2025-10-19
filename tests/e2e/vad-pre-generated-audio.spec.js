@@ -8,7 +8,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
-const { setupTestPage, simulateUserGesture } = require('./helpers/audio-mocks');
+const { setupTestPage } = require('./helpers/audio-mocks');
 
 test.describe('VAD Pre-Generated Audio Test', () => {
   test.beforeEach(async ({ page }) => {
