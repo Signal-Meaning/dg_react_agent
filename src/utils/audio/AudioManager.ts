@@ -335,7 +335,26 @@ export class AudioManager {
       
       // Resume the AudioContext if it's suspended
       if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
+        this.log('AudioContext suspended, resuming for microphone access...');
+        try {
+          await this.audioContext.resume();
+          this.log('AudioContext resumed successfully');
+        } catch (error) {
+          this.log('Failed to resume AudioContext:', error);
+          throw new Error('AudioContext could not be resumed - user gesture required');
+        }
+      }
+      
+      // Double-check that AudioContext is running
+      if (this.audioContext.state !== 'running') {
+        this.log(`AudioContext state is ${this.audioContext.state}, attempting to resume again...`);
+        try {
+          await this.audioContext.resume();
+          this.log('AudioContext resumed on second attempt');
+        } catch (error) {
+          this.log('Failed to resume AudioContext on second attempt:', error);
+          throw new Error(`AudioContext could not be resumed - current state: ${this.audioContext.state}`);
+        }
       }
       
       // Start recording

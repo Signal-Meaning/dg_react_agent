@@ -9,7 +9,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
-const { setupTestPage } = require('./helpers/audio-mocks');
+const { setupTestPage, simulateUserGesture } = require('./helpers/audio-mocks');
 const AudioTestHelpers = require('../utils/audio-helpers');
 const AudioSimulator = require('../utils/audio-simulator');
 
@@ -26,6 +26,9 @@ test.describe('VAD Realistic Audio Simulation', () => {
     page.on('console', msg => {
       consoleLogs.push(`[${msg.type()}] ${msg.text()}`);
     });
+    
+    // Simulate user gesture before microphone interaction
+    await simulateUserGesture(page);
     
     // Enable microphone
     await page.click('[data-testid="microphone-button"]');

@@ -173,6 +173,48 @@ async function setupTestPage(page) {
   
   // Wait for connection to be established
   await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
+  
+  // Simulate user gesture to enable AudioContext
+  await page.evaluate(() => {
+    // Create a temporary audio context to trigger user gesture requirement
+    const tempContext = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Resume the context to simulate user interaction
+    if (tempContext.state === 'suspended') {
+      return tempContext.resume().then(() => {
+        console.log('✅ AudioContext resumed for test setup');
+        tempContext.close();
+      });
+    } else {
+      console.log('✅ AudioContext already running');
+      tempContext.close();
+      return Promise.resolve();
+    }
+  });
+  
+  // Wait a bit for AudioContext to be ready
+  await page.waitForTimeout(500);
+}
+
+/**
+ * Simulates a user gesture to enable AudioContext
+ * @param {import('@playwright/test').Page} page - The Playwright page instance
+ */
+async function simulateUserGesture(page) {
+  await page.evaluate(() => {
+    // Trigger a user gesture by creating and interacting with an audio context
+    const context = new (window.AudioContext || window.webkitAudioContext)();
+    if (context.state === 'suspended') {
+      return context.resume().then(() => {
+        console.log('✅ User gesture simulated - AudioContext resumed');
+        context.close();
+      });
+    } else {
+      console.log('✅ User gesture simulated - AudioContext already running');
+      context.close();
+      return Promise.resolve();
+    }
+  });
 }
 
 /**
@@ -221,5 +263,6 @@ async function simulateSpeech(page, description = 'simulated speech', options = 
 module.exports = {
   setupAudioMocks,
   setupTestPage,
+  simulateUserGesture,
   simulateSpeech
 };
