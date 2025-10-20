@@ -5,9 +5,9 @@
  * to understand why VAD events are not being triggered.
  */
 
-const { test, expect } = require('@playwright/test');
-const { setupTestPage, simulateUserGesture } = require('./helpers/audio-mocks');
-const AudioTestHelpers = require('../utils/audio-helpers');
+import { test, expect } from '@playwright/test';
+import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
+import AudioTestHelpers from '../utils/audio-helpers';
 
 test.describe('VAD Debug Test', () => {
   test.beforeEach(async ({ page }) => {

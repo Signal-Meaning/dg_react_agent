@@ -227,8 +227,9 @@ export interface DeepgramVoiceInteractionProps {
   /**
    * Enable UtteranceEnd detection for more reliable end-of-speech detection
    * Reference: https://developers.deepgram.com/docs/understanding-end-of-speech-detection
+   * Note: Deepgram's minimum utterance_end_ms is 1000ms
    */
-  utteranceEndMs?: number; // Default: 1000ms (minimum recommended)
+  utteranceEndMs?: number; // Default: 1000ms (minimum required by Deepgram)
 
   /**
    * Enable interim results (required for UtteranceEnd)

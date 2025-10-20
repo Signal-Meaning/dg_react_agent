@@ -5,7 +5,7 @@
  * Specifically testing if this issue is autoConnect-specific.
  */
 
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test.describe('Greeting Audio Timing', () => {
   test.beforeEach(async ({ page }) => {

@@ -6,7 +6,7 @@
  * disableIdleTimeoutResets() calls.
  */
 
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test.describe('VAD Timeout Issue #71 - Real Component Analysis', () => {
   test.beforeEach(async ({ page }) => {
