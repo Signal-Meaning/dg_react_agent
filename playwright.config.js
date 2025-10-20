@@ -33,6 +33,9 @@ module.exports = defineConfig({
     
     /* Take screenshot on failure */
     screenshot: 'only-on-failure',
+    
+    /* Grant microphone permissions automatically for VAD tests */
+    permissions: ['microphone'],
   },
 
   /* Configure projects for major browsers */
