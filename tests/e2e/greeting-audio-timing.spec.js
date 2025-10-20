@@ -1,8 +1,9 @@
 /**
  * Greeting Audio Timing E2E Tests
  * 
- * These tests verify that greeting audio plays without microphone activation.
- * Issue #90: AudioContext exposure timing - RESOLVED ✅
+ * These tests verify that greeting audio plays correctly based on user interactions.
+ * Architecture: Agent service includes TTS channel, auto-connects and buffers greeting,
+ * then plays when user interacts (text input focus or mic button press).
  */
 
 import { test, expect } from '@playwright/test';
@@ -25,100 +26,131 @@ test.describe('Greeting Audio Timing', () => {
     return await page.locator('[data-testid="mic-status"]').textContent();
   };
 
+  // Helper function to check audio playback status
+  const getAudioPlayingStatus = async (page) => {
+    return await page.locator('[data-testid="audio-playing-status"]').textContent();
+  };
+
+  // Helper function to wait for audio playback to start
+  const waitForAudioPlaybackStart = async (page, timeout = 5000) => {
+    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('true', { timeout });
+  };
+
+  // Helper function to verify initial state (DRY)
+  const verifyInitialState = async (page) => {
+    const micStatus = await getMicStatus(page);
+    const audioPlayingStatus = await getAudioPlayingStatus(page);
+    const audioContextState = await getAudioContextState(page);
+    
+    console.log(`🎤 Microphone status: ${micStatus}`);
+    console.log(`🔊 Audio playing status: ${audioPlayingStatus}`);
+    console.log(`🔊 AudioContext state: ${audioContextState}`);
+
+    expect(micStatus).toContain('Disabled');
+    expect(audioPlayingStatus).toBe('false');
+    expect(audioContextState).toBe('running');
+  };
+
+
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:5173');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
   });
 
-  test('should play greeting audio without microphone activation in autoConnect mode', async ({ page }) => {
-    console.log('🎵 Testing greeting audio timing in autoConnect mode...');
+  test('should play greeting audio when user clicks into text input field', async ({ page }) => {
+    console.log('🎵 Testing greeting playback on text input focus...');
     
+    // Wait for app ready and agent connection established
     await waitForAppReady(page);
-    console.log('✅ App ready, connection established, greeting appeared');
+    console.log('✅ App ready, agent connection established, greeting buffered');
 
-    // Verify microphone is disabled but AudioContext is running
-    const micStatus = await getMicStatus(page);
-    const audioContextState = await getAudioContextState(page);
-    
-    console.log(`🎤 Microphone status: ${micStatus}`);
-    console.log(`🔊 AudioContext state: ${audioContextState}`);
+    // Verify initial state - microphone disabled, audio not playing
+    await verifyInitialState(page);
 
-    expect(micStatus).toContain('Disabled');
-    expect(audioContextState).toBe('running');
-    console.log('✅ SUCCESS: AudioContext running - greeting audio playing without microphone activation');
+    // Click into text input field to trigger greeting playback
+    await page.click('input[type="text"]');
+    console.log('✅ Text input field clicked - should trigger greeting playback');
+
+    // Wait for audio playback to start
+    await waitForAudioPlaybackStart(page);
+    console.log('✅ Greeting audio playback started');
+
+    // Verify audio is playing
+    const playingStatus = await getAudioPlayingStatus(page);
+    expect(playingStatus).toBe('true');
+    console.log('✅ SUCCESS: Greeting audio is playing after text input focus');
   });
 
-  test('should play greeting audio without microphone activation in non-autoConnect mode', async ({ page }) => {
-    console.log('🎵 Testing greeting audio timing in non-autoConnect mode...');
+  test('should play greeting audio when user presses microphone button', async ({ page }) => {
+    console.log('🎵 Testing greeting playback on microphone activation...');
     
-    // Manual connection
-    await page.click('[data-testid="start-button"]');
-    console.log('✅ Manual connection initiated');
-    
+    // Wait for app ready and agent connection established
     await waitForAppReady(page);
-    console.log('✅ App ready, connection established, greeting appeared');
+    console.log('✅ App ready, agent connection established, greeting buffered');
 
-    // Verify microphone is disabled but AudioContext is running
-    const micStatus = await getMicStatus(page);
-    const audioContextState = await getAudioContextState(page);
-    
-    console.log(`🎤 Microphone status: ${micStatus}`);
-    console.log(`🔊 Non-autoConnect AudioContext state: ${audioContextState}`);
+    // Verify initial state - microphone disabled, audio not playing
+    await verifyInitialState(page);
 
-    expect(micStatus).toContain('Disabled');
-    expect(audioContextState).toBe('running');
-    console.log('✅ SUCCESS: AudioContext running in non-autoConnect mode');
-  });
-
-  test('should initialize AudioContext when microphone is activated', async ({ page }) => {
-    console.log('🎵 Testing AudioContext initialization with microphone activation...');
-    
-    await waitForAppReady(page);
-
-    // Check AudioContext before and after microphone activation
-    const audioContextBefore = await getAudioContextState(page);
-    console.log(`🔊 AudioContext before mic activation: ${audioContextBefore}`);
-
+    // Click microphone button to connect to both services and trigger greeting
     await page.click('[data-testid="microphone-button"]');
+    console.log('✅ Microphone button clicked - should connect to both services and trigger greeting');
+
+    // Wait for microphone to be enabled
     await page.waitForSelector('[data-testid="mic-status"]:has-text("Enabled")', { timeout: 5000 });
-    console.log('✅ Microphone activated and enabled');
+    console.log('✅ Microphone enabled - both agent and transcription services connected');
 
-    const audioContextAfter = await getAudioContextState(page);
-    console.log(`🔊 AudioContext after mic activation: ${audioContextAfter}`);
+    // Wait for audio playback to start
+    await waitForAudioPlaybackStart(page);
+    console.log('✅ Greeting audio playback started');
 
-    expect(audioContextAfter).toBe('running');
-    console.log('✅ AudioContext is running after microphone activation');
+    // Verify audio is playing
+    const playingStatus = await getAudioPlayingStatus(page);
+    expect(playingStatus).toBe('true');
+
+    // Verify microphone is enabled
+    const enabledMicStatus = await getMicStatus(page);
+    expect(enabledMicStatus).toContain('Enabled');
+    console.log('✅ SUCCESS: Greeting audio is playing after microphone activation');
   });
 
-  // SKIPPED: This test looks for AudioManager logs in DOM, but they're only available when debug=true
-  // The functionality is working correctly (AudioContext state proves this)
-  // See issue #114 for proper test improvement
-  test.skip('should verify greeting audio playback timing', async ({ page }) => {
-    console.log('🎵 Testing detailed greeting audio playback timing...');
+  test('should replay greeting audio immediately on reconnection', async ({ page }) => {
+    console.log('🎵 Testing greeting replay on reconnection...');
     
+    // Wait for app ready and agent connection established
     await waitForAppReady(page);
+    console.log('✅ App ready, agent connection established, greeting buffered');
 
-    // Check for audio-related logs that indicate playback
-    const audioPlaybackLogs = await page.evaluate(() => {
-      const logs = Array.from(document.querySelectorAll('[data-testid="event-log"] li'));
-      return logs.map(log => log.textContent).filter(text => 
-        text.includes('queueAudio') || 
-        text.includes('AudioBuffer') ||
-        text.includes('playback') ||
-        text.includes('audio data')
-      );
-    });
+    // Verify initial state
+    const audioPlayingStatus = await getAudioPlayingStatus(page);
+    expect(audioPlayingStatus).toBe('false');
 
-    console.log('🔊 Audio playback logs:', audioPlaybackLogs);
-    console.log(`🔊 Has audio processing logs: ${audioPlaybackLogs.length > 0}`);
+    // Trigger initial greeting playback via text input
+    await page.click('input[type="text"]');
+    await waitForAudioPlaybackStart(page);
+    console.log('✅ Initial greeting played successfully');
 
-    // This test helps us understand if greeting audio is actually being processed
-    // The key evidence is AudioContext state, not necessarily logs
-    if (audioPlaybackLogs.length > 0) {
-      console.log('✅ SUCCESS: Audio processing logs found - greeting audio is being handled');
-    } else {
-      console.log('ℹ️ No audio processing logs found - this is expected when debug=false');
-      console.log('✅ The key evidence is AudioContext state, which we check above');
-    }
+    // Disconnect by triggering timeout
+    await page.click('[data-testid="trigger-timeout-button"]');
+    console.log('✅ Connection timeout triggered');
+
+    // Wait for connection status to change to 'closed' (exact value, not text parsing)
+    await page.waitForFunction(() => {
+      const statusElement = document.querySelector('[data-testid="connection-status"]');
+      return statusElement && statusElement.textContent === 'closed';
+    }, { timeout: 10000 });
+    console.log('✅ Connection status changed to closed');
+
+    // Reconnect by clicking into text input field (triggers agent connection)
+    await page.click('input[type="text"]');
+    console.log('✅ Text input clicked - should trigger reconnection and greeting replay');
+
+    // Wait for audio playback to start (should happen immediately on reconnection)
+    await waitForAudioPlaybackStart(page);
+    console.log('✅ Greeting audio replayed successfully');
+
+    // Verify audio is playing
+    const playingStatus = await getAudioPlayingStatus(page);
+    expect(playingStatus).toBe('true');
+    console.log('✅ SUCCESS: Greeting audio replayed after reconnection');
   });
 });

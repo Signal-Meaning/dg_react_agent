@@ -591,7 +591,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         // onSpeechStopped removed - not a real Deepgram event
         onUtteranceEnd={handleUtteranceEnd}
         onVADEvent={handleVADEvent}
-        debug={import.meta.env.VITE_DEBUG === 'true' || false} // Enable debug via environment variable for testing
+        debug={import.meta.env.VITE_DEBUG === 'true' || new URLSearchParams(window.location.search).get('debug') === 'true' || false} // Enable debug via environment variable or URL parameter for testing
       />
       
       <div style={{ border: '1px solid blue', padding: '10px', margin: '15px 0' }}>
@@ -632,7 +632,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           );
         })()}
         <p>Audio Recording: <strong>{isRecording.toString()}</strong></p>
-        <p>Audio Playing: <strong>{isPlaying.toString()}</strong></p>
+        <p>Audio Playing: <strong data-testid="audio-playing-status">{isPlaying.toString()}</strong></p>
         <h4>Auto-Connect Dual Mode States:</h4>
         <div data-testid="auto-connect-states">
           <p>Microphone Enabled: <strong data-testid="mic-status">{micEnabled ? 'Enabled' : 'Disabled'}</strong></p>
@@ -732,7 +732,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <button 
           onClick={() => {
             // Access the internal agent manager for testing
-            const componentRef = deepgramRef.current as any;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const componentRef = deepgramRef.current as DeepgramVoiceInteractionHandle & { agentManagerRef?: { current?: any } };
             const agentManager = componentRef?.agentManagerRef?.current;
             if (agentManager) {
               triggerTimeoutForTesting(agentManager);
@@ -752,6 +753,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             pointerEvents: 'auto'
           }}
           title="Manually trigger connection timeout for testing lazy reconnection"
+          data-testid="trigger-timeout-button"
         >
           🧪 Trigger Timeout
         </button>
