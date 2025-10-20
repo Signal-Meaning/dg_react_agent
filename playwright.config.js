@@ -33,6 +33,22 @@ module.exports = defineConfig({
     
     /* Take screenshot on failure */
     screenshot: 'only-on-failure',
+    
+    /* Grant microphone permissions automatically for VAD tests */
+    permissions: ['microphone'],
+    
+    /* Mute microphone for automated tests to prevent ambient noise interference */
+    launchOptions: {
+      args: [
+        '--use-fake-ui-for-media-stream',
+        '--use-fake-device-for-media-stream',
+        '--disable-audio-output',
+        '--mute-audio'
+      ]
+    },
+    
+    /* Provide fake media streams for consistent testing */
+    // Note: We'll handle fake media streams in individual tests as needed
   },
 
   /* Configure projects for major browsers */

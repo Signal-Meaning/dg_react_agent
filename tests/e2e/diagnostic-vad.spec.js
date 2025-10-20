@@ -5,8 +5,8 @@
  * microphone behavior in manual testing.
  */
 
-const { test, expect } = require('@playwright/test');
-const { setupTestPage, simulateSpeech } = require('./helpers/audio-mocks');
+import { test, expect } from '@playwright/test';
+import { setupTestPage, simulateSpeech } from './helpers/audio-mocks';
 
 test.describe('Diagnostic VAD Tests', () => {
   

@@ -5,8 +5,8 @@
  * if the VAD configuration is properly set up.
  */
 
-const { test, expect } = require('@playwright/test');
-const { setupTestPage, simulateUserGesture } = require('./helpers/audio-mocks');
+import { test, expect } from '@playwright/test';
+import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
 
 test.describe('VAD Fresh Initialization Test', () => {
   test.beforeEach(async ({ page }) => {

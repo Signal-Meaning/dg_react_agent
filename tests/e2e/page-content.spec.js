@@ -4,7 +4,7 @@
  * This test just checks what's actually on the page
  */
 
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test.describe('Page Content Tests', () => {
   

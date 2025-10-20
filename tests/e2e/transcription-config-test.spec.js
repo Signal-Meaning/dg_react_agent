@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test.describe('Transcription Configuration Test', () => {
   test('should verify transcription service is properly configured', async ({ page }) => {
