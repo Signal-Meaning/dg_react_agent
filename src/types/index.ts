@@ -313,11 +313,6 @@ export interface DeepgramVoiceInteractionHandle {
   connectWithContext: (sessionId: string, history: ConversationMessage[], options: AgentOptions) => Promise<void>;
   
   /**
-   * Manually trigger connection timeout for testing lazy reconnection
-   */
-  triggerTimeoutForTesting: () => void;
-  
-  /**
    * Get connection states for debugging (testing only)
    */
   getConnectionStates: () => {
