@@ -8,6 +8,9 @@
 // Re-export test helpers for external use
 export * from './test-utils/test-helpers';
 
+// Re-export timeout testing utilities
+export * from './test-utils/timeout-testing';
+
 // Additional test utilities can be added here
 export const TEST_CONSTANTS = {
   DEFAULT_TIMEOUT: 5000,
