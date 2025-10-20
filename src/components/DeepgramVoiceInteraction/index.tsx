@@ -142,7 +142,7 @@ function DeepgramVoiceInteraction(
     onAgentUtterance,
     onUserMessage,
     onUserStartedSpeaking,
-    // onUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
+    onUserStoppedSpeaking,
     onUtteranceEnd,
     onVADEvent,
     onKeepalive,
@@ -174,6 +174,9 @@ function DeepgramVoiceInteraction(
   const transcriptionManagerRef = useRef<WebSocketManager | null>(null);
   const agentManagerRef = useRef<WebSocketManager | null>(null);
   const audioManagerRef = useRef<AudioManager | null>(null);
+  
+  // Tracking user speaking state
+  const userSpeakingRef = useRef(false);
   
   // Track if auto-connect has been attempted to prevent multiple attempts
   const autoConnectAttemptedRef = useRef(false);
@@ -1044,6 +1047,12 @@ function DeepgramVoiceInteraction(
       const channel = Array.isArray(data.channel) ? data.channel : [0, 1];
       const lastWordEnd = typeof data.last_word_end === 'number' ? data.last_word_end : 0;
       onUtteranceEnd?.({ channel, lastWordEnd });
+      
+      // User stopped speaking
+      if (userSpeakingRef.current) {
+        userSpeakingRef.current = false;
+        onUserStoppedSpeaking?.();
+      }
       return;
     }
     
@@ -1064,7 +1073,10 @@ function DeepgramVoiceInteraction(
       }
       
       // User started speaking
-      onUserStartedSpeaking?.();
+      if (!userSpeakingRef.current) {
+        userSpeakingRef.current = true;
+        onUserStartedSpeaking?.();
+      }
       dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: true });
       updateKeepaliveState(true);
       
