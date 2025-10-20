@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import DeepgramVoiceInteraction from '../../src/components/DeepgramVoiceInteraction';
+import { triggerTimeoutForTesting } from '../../src/test-utils';
 import { 
   DeepgramVoiceInteractionHandle,
   TranscriptResponse,
@@ -730,8 +731,15 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         </button>
         <button 
           onClick={() => {
-            deepgramRef.current?.triggerTimeoutForTesting();
-            addLog('🧪 [TEST] Manually triggered connection timeout');
+            // Access the internal agent manager for testing
+            const componentRef = deepgramRef.current as any;
+            const agentManager = componentRef?.agentManagerRef?.current;
+            if (agentManager) {
+              triggerTimeoutForTesting(agentManager);
+              addLog('🧪 [TEST] Manually triggered connection timeout');
+            } else {
+              addLog('❌ [TEST] Agent manager not available for timeout testing');
+            }
           }}
           disabled={!isReady}
           style={{ 
