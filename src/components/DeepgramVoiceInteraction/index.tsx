@@ -1125,11 +1125,9 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    // Mark as sent immediately to prevent duplicate calls (both locally and globally)
-    hasSentSettingsRef.current = true;
-    (window as any).globalSettingsSent = true;
+    // Record when settings were sent (but don't mark as applied until SettingsApplied is received)
     settingsSentTimeRef.current = Date.now();
-    console.log('🔧 [sendAgentSettings] hasSentSettingsRef and globalSettingsSent set to true');
+    console.log('🔧 [sendAgentSettings] Settings message sent, waiting for SettingsApplied confirmation');
     
     // Build the Settings message based on agentOptions
     const settingsMessage = {
@@ -1204,22 +1202,28 @@ function DeepgramVoiceInteraction(
         return;
       }
       
-      // Use ref to avoid stale closure issues, but also check state
+      // Check if settings have been applied (not just sent)
       if (!hasSentSettingsRef.current && !(window as any).globalSettingsSent && !state.hasSentSettings) {
-        console.log('❌ Cannot enable microphone before settings are sent');
-        console.log('❌ hasSentSettingsRef is false - attempting to send settings now');
+        console.log('❌ Cannot enable microphone before settings are applied');
+        console.log('❌ Settings must be sent and SettingsApplied received before microphone can be enabled');
         
         // Try to send settings if they haven't been sent yet
         if (agentManagerRef.current && agentOptions) {
           console.log('🔧 Attempting to send settings from toggleMic');
           sendAgentSettings();
           
-          // Wait a bit for settings to be processed
-          await new Promise(resolve => setTimeout(resolve, 100));
+          // Wait for SettingsApplied message (up to 5 seconds)
+          console.log('⏳ Waiting for SettingsApplied confirmation...');
+          let attempts = 0;
+          const maxAttempts = 50; // 5 seconds with 100ms intervals
           
-          // Check if settings were sent successfully
+          while (attempts < maxAttempts && !hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+          }
+          
           if (!hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
-            console.log('❌ Settings still not sent after attempt');
+            console.log('❌ SettingsApplied not received within timeout');
             return;
           }
         } else {
@@ -1227,10 +1231,22 @@ function DeepgramVoiceInteraction(
           return;
         }
       } else if (hasSentSettingsRef.current || (window as any).globalSettingsSent || state.hasSentSettings) {
-        console.log('✅ Settings already sent, proceeding with microphone enable');
+        console.log('✅ Settings already applied, proceeding with microphone enable');
       } else {
-        console.log('❌ Cannot enable microphone: settings not sent and cannot be sent');
+        console.log('❌ Cannot enable microphone: settings not applied');
         return;
+      }
+      
+      // Ensure component is started (creates audio manager)
+      if (!audioManagerRef.current) {
+        console.log('🔧 Audio manager not created, starting component...');
+        try {
+          await start();
+          console.log('✅ Component started, audio manager created');
+        } catch (error) {
+          console.log('❌ Failed to start component:', error);
+          return;
+        }
       }
       
       if (audioManagerRef.current) {
@@ -1401,6 +1417,18 @@ function DeepgramVoiceInteraction(
           log('Reconnection detected - skipping greeting');
         }
       }
+      return;
+    }
+    
+    // Handle SettingsApplied message - settings are now active
+    if (data.type === 'SettingsApplied') {
+      console.info('✅ [Protocol] SettingsApplied received - settings are now active');
+      log('SettingsApplied received - settings are now active');
+      // Only mark as sent when we get confirmation from Deepgram
+      hasSentSettingsRef.current = true;
+      (window as any).globalSettingsSent = true;
+      dispatch({ type: 'SETTINGS_SENT', sent: true });
+      console.log('🎯 [SettingsApplied] Settings confirmed by Deepgram, audio data can now be processed');
       return;
     }
     
@@ -1646,6 +1674,13 @@ function DeepgramVoiceInteraction(
 
   // Send audio data to WebSockets - conditionally route based on configuration
   const sendAudioData = (data: ArrayBuffer) => {
+    // Always log this critical method call
+    console.log('🎵 [sendAudioData] CALLED with data size:', data.byteLength);
+    console.log('🎵 [sendAudioData] hasSentSettingsRef.current:', hasSentSettingsRef.current);
+    console.log('🎵 [sendAudioData] state.hasSentSettings:', state.hasSentSettings);
+    console.log('🎵 [sendAudioData] agentManagerRef.current?.getState():', agentManagerRef.current?.getState());
+    console.log('🎵 [sendAudioData] transcriptionManagerRef.current?.getState():', transcriptionManagerRef.current?.getState());
+    
     // Debug logging only (reduce console spam)
     if (debug) {
       console.log('🎵 [sendAudioData] Called with data size:', data.byteLength);
