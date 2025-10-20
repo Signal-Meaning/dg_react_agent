@@ -1,5 +1,5 @@
-const { test, expect } = require('@playwright/test');
-const SimpleVADHelpers = require('../utils/simple-vad-helpers');
+import { test, expect } from '@playwright/test';
+import SimpleVADHelpers from '../utils/simple-vad-helpers';
 
 test.describe('VAD Events Verification', () => {
   test('should verify VAD events work with transcription service configured', async ({ page }) => {

@@ -1,5 +1,5 @@
-const { test, expect } = require('@playwright/test');
-const { setupTestMode, expectMockMode, expectRealMode } = require('../utils/test-helpers');
+import { test, expect } from '@playwright/test';
+import { setupTestMode, expectMockMode, expectRealMode } from '../utils/test-helpers';
 
 /**
  * API Key Validation Tests

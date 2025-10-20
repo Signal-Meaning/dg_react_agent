@@ -27,12 +27,12 @@
  *    - Agent finishes + user not speaking → allow natural timeout
  */
 
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 const { 
   SELECTORS,
   waitForConnection 
 } = require('./helpers/test-helpers');
-const { setupTestPage } = require('./helpers/audio-mocks');
+import { setupTestPage } from './helpers/audio-mocks';
 
 test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
   

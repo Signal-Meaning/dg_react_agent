@@ -1,8 +1,8 @@
-const { test, expect } = require('@playwright/test');
-const path = require('path');
+import { test, expect } from '@playwright/test';
+import path from 'path';
 
 // Load environment variables from test-app/.env
-require('dotenv').config({ path: path.join(__dirname, '../../test-app/.env') });
+// dotenv config handled by Playwright config
 
 /**
  * Real User Workflow Tests
