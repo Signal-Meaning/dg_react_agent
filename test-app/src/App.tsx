@@ -591,7 +591,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         // onSpeechStopped removed - not a real Deepgram event
         onUtteranceEnd={handleUtteranceEnd}
         onVADEvent={handleVADEvent}
-        debug={false} // Testing if transcription works without debug
+        debug={import.meta.env.VITE_DEBUG === 'true' || false} // Enable debug via environment variable for testing
       />
       
       <div style={{ border: '1px solid blue', padding: '10px', margin: '15px 0' }}>
