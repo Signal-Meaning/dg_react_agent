@@ -281,9 +281,76 @@ test('should maintain correct component state', async ({ page }) => {
 4. **Verify State Changes**: Always verify component state changes after actions
 5. **Use Realistic Audio**: Pre-generated samples provide more realistic VAD testing than synthetic patterns
 6. **Document Test Patterns**: Follow established patterns for consistency across tests
+7. **Use Shared Utilities**: Always use `VADTestUtilities` class for VAD testing
+8. **Lift Constants**: Use `VAD_TEST_CONSTANTS` for timing and configuration values
+9. **DRY Principles**: Avoid code duplication by using shared validation functions
+10. **Return Results**: Validation functions should return results, not call `expect` directly
+
+## VAD Test Utilities (Issue #96 Resolution)
+
+### Overview
+The VAD test utilities provide a comprehensive, DRY implementation for testing Voice Activity Detection functionality. These utilities consolidate common patterns and eliminate code duplication across VAD tests.
+
+### VADTestUtilities Class
+Located in `tests/utils/vad-test-utilities.js`, this class provides:
+
+#### Core Methods
+- `loadAndSendAudioSample(sampleName)` - Load and send pre-recorded audio samples
+- `analyzeVADEvents()` - Analyze captured VAD events (SpeechStarted, UtteranceEnd, UserStoppedSpeaking)
+- `analyzeTiming()` - Analyze timing information from VAD events
+- `analyzeAgentStateChanges()` - Analyze agent state transitions and timeout behavior
+
+#### Validation Functions
+- `validateVADSignalRedundancy(vadAnalysis)` - Validate multiple VAD signals for same event
+- `validateAgentStateTimeoutBehavior(agentAnalysis)` - Validate agent state timeout behavior
+- `validateIdleTimeoutStateMachine(agentAnalysis)` - Validate idle timeout state machine consistency
+
+### Constants Configuration
+```javascript
+const VAD_TEST_CONSTANTS = {
+  DEFAULT_AUDIO_SAMPLE: 'hello__how_are_you_today_',
+  VAD_EVENT_WAIT_MS: 3000,
+  AGENT_PROCESSING_WAIT_MS: 2000,
+  NATURAL_TIMEOUT_WAIT_MS: 11000,
+  CONNECTION_TIMEOUT_MS: 10000,
+  SIGNAL_CONFLICT_THRESHOLD_MS: 1000,
+  TOTAL_SILENCE_DURATION_SECONDS: 2.0
+};
+```
+
+### Usage Example
+```javascript
+const { VADTestUtilities, VAD_TEST_CONSTANTS } = require('../utils/vad-test-utilities');
+
+test('VAD test example', async ({ page }) => {
+  const vadUtils = new VADTestUtilities(page);
+  
+  // Load and send audio sample
+  await vadUtils.loadAndSendAudioSample(VAD_TEST_CONSTANTS.DEFAULT_AUDIO_SAMPLE);
+  
+  // Wait for VAD events
+  await waitForVADEvents(page, VAD_TEST_CONSTANTS.VAD_EVENT_WAIT_MS);
+  
+  // Analyze events
+  const vadAnalysis = vadUtils.analyzeVADEvents();
+  vadUtils.analyzeTiming();
+  
+  // Validate results
+  const validationResults = validateVADSignalRedundancy(vadAnalysis);
+  expect(validationResults.hasMultipleSignals).toBe(true);
+});
+```
+
+### Key Benefits
+- **DRY Implementation**: No code duplication across VAD tests
+- **Consistent Patterns**: All VAD tests follow same approach
+- **Maintainable**: Easy to update constants and patterns in one place
+- **Real VAD Testing**: Uses actual Deepgram API integration with pre-recorded audio
+- **Comprehensive Coverage**: Tests VAD signal redundancy, agent state transitions, and timeout behavior
 
 ## Related Documentation
 
 - [VAD Events Reference](VAD-EVENTS-REFERENCE.md) - Complete reference for Deepgram VAD events
 - [VAD Events and Timeout Behavior](VAD-EVENTS-AND-TIMEOUT-BEHAVIOR.md) - VAD event handling patterns
 - [Playwright Testing Plan](PLAYWRIGHT_TESTING_PLAN.md) - Overall testing strategy
+- [VAD Test Status Report](VAD-TEST-STATUS-REPORT.md) - Current status of VAD testing implementation
