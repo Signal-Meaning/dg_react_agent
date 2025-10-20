@@ -2462,11 +2462,6 @@ function DeepgramVoiceInteraction(
     resumeWithAudio,
     connectWithContext,
     sendAudioData, // Expose sendAudioData for testing and external use
-    triggerTimeoutForTesting: () => {
-      if (agentManagerRef.current) {
-        agentManagerRef.current.triggerTimeoutForTesting();
-      }
-    },
     // Debug methods for testing
     getConnectionStates: () => ({
       transcription: transcriptionManagerRef.current?.getState() || 'not-found',
