@@ -6,7 +6,7 @@
  * 2. Microphone enabling reliability
  */
 
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test.describe('Simple Microphone State Tests', () => {
   

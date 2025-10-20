@@ -6,8 +6,8 @@
  * to trigger Deepgram's VAD detection algorithm.
  */
 
-const { test, expect } = require('@playwright/test');
-const { setupTestPage, simulateUserGesture } = require('./helpers/audio-mocks');
+import { test, expect } from '@playwright/test';
+import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
 
 test.describe('VAD Solution Test', () => {
   test.beforeEach(async ({ page }) => {

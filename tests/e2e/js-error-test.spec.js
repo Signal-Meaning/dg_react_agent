@@ -4,7 +4,7 @@
  * This test checks for JavaScript errors that might prevent the component from rendering
  */
 
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test.describe('JavaScript Error Tests', () => {
   

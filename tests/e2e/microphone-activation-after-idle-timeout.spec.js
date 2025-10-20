@@ -22,12 +22,12 @@
  * STATUS: This test will FAIL until the race condition is fixed.
  */
 
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 const { 
   SELECTORS,
   waitForConnection 
 } = require('./helpers/test-helpers');
-const { setupTestPage } = require('./helpers/audio-mocks');
+import { setupTestPage } from './helpers/audio-mocks';
 
 test.describe('Microphone Activation After Idle Timeout', () => {
   

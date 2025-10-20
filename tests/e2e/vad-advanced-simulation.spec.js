@@ -11,11 +11,11 @@
  * that would be found in production voice applications.
  */
 
-const { test, expect } = require('@playwright/test');
-const { setupTestPage, simulateUserGesture } = require('./helpers/audio-mocks');
-const AudioTestHelpers = require('../utils/audio-helpers');
-const AudioSimulator = require('../utils/audio-simulator');
-const AudioFileLoader = require('../utils/audio-file-loader');
+import { test, expect } from '@playwright/test';
+import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
+import AudioTestHelpers from '../utils/audio-helpers';
+import AudioSimulator from '../utils/audio-simulator';
+import AudioFileLoader from '../utils/audio-file-loader';
 
 test.describe('Advanced VAD Audio Simulation', () => {
   // Skip these tests in CI - they require real Deepgram API connections
@@ -176,7 +176,8 @@ test.describe('Advanced VAD Audio Simulation', () => {
     console.log('🧪 Testing audio file validation...');
     
     // Test audio file validation (this will test the validation logic even without actual files)
-    const samplesDir = require('path').join(__dirname, '../fixtures/audio-samples');
+    const path = await import('path');
+    const samplesDir = path.join(__dirname, '../fixtures/audio-samples');
     
     // Test with non-existent file
     try {

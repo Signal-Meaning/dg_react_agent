@@ -8,11 +8,11 @@
  * speech patterns that properly trigger VAD events.
  */
 
-const { test, expect } = require('@playwright/test');
-const { setupTestPage, simulateUserGesture } = require('./helpers/audio-mocks');
-const AudioTestHelpers = require('../utils/audio-helpers');
-const AudioSimulator = require('../utils/audio-simulator');
-const SimpleVADHelpers = require('../utils/simple-vad-helpers');
+import { test, expect } from '@playwright/test';
+import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
+import AudioTestHelpers from '../utils/audio-helpers';
+import AudioSimulator from '../utils/audio-simulator';
+import SimpleVADHelpers from '../utils/simple-vad-helpers';
 
 test.describe('VAD Realistic Audio Simulation', () => {
   // Skip these tests in CI - they require real Deepgram API connections

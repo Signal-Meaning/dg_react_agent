@@ -14,7 +14,7 @@
  * - Connection remains stable throughout
  */
 
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 const {
   SELECTORS,
   setupTestPage,
