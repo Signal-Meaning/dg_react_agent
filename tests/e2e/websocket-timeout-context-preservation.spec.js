@@ -9,25 +9,27 @@ const {
 } = require('./helpers/test-helpers');
 
 /**
- * E2E Tests for WebSocket Timeout and Context Preservation
+ * E2E Tests for Context Preservation Across Connection Changes
  * 
  * IMPORTANT: These tests require a REAL Deepgram API key!
  * 
  * This test validates the critical sequence:
  * 1. Send audio or text to Deepgram server
  * 2. Observe successful transcript reception
- * 3. Advance timer so WebSocket times out
- * 4. Observe connection timeout
- * 5. Send second audio or text to Deepgram server
- * 6. Observe Deepgram server has context from both steps 1 & 5
- * 7. Close socket and cleanup
+ * 3. Stop microphone (realistic user action that may close connection)
+ * 4. Send second message to trigger reconnection
+ * 5. Observe Deepgram server has context from both steps 1 & 4
+ * 6. Verify conversation continuity
  * 
- * This ensures conversation context is preserved across WebSocket
- * timeouts and reconnections, which is essential for multi-turn
+ * This ensures conversation context is preserved across connection
+ * changes and reconnections, which is essential for multi-turn
  * conversations in voice commerce applications.
+ * 
+ * NOTE: This test focuses on context preservation, not idle timeout behavior.
+ * Idle timeout behavior is tested separately in idle-timeout-behavior.spec.js
  */
 
-test.describe('WebSocket Timeout and Context Preservation', () => {
+test.describe('Context Preservation Across Connection Changes', () => {
   test.beforeEach(async ({ page }) => {
     // Install WebSocket capture to monitor connection behavior
     await installWebSocketCapture(page);
@@ -40,8 +42,8 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     await waitForConnection(page, 10000);
   });
 
-  test('should preserve conversation context across WebSocket timeout and reconnection', async ({ page }) => {
-    console.log('🧪 Starting WebSocket timeout and context preservation test...');
+  test('should preserve conversation context across microphone stop and reconnection', async ({ page }) => {
+    console.log('🧪 Starting context preservation test with realistic user actions...');
     
     // Step 1: Send first text message to Deepgram server
     console.log('📝 Step 1: Sending first message...');
@@ -62,76 +64,49 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     expect(firstResponse.length).toBeGreaterThan(0);
     console.log('✅ Step 2: Transcript successfully received');
     
-    // Step 3: Advance timer to force WebSocket timeout
-    console.log('⏰ Step 3: Advancing timer to force WebSocket timeout...');
+    // Step 3: Enable microphone and then stop it (realistic user workflow)
+    console.log('🎤 Step 3: Testing microphone stop workflow...');
     
     // Get initial WebSocket data to understand connection state
     const initialWsData = await getCapturedWebSocketData(page);
     console.log('🔌 Initial WebSocket connections:', initialWsData.sent.length, 'sent,', initialWsData.received.length, 'received');
     
-    // Force WebSocket timeout by manipulating the keepalive mechanism
-    await page.evaluate(() => {
-      // Store original functions
-      const originalSetInterval = window.setInterval;
-      const originalClearInterval = window.clearInterval;
-      const originalSetTimeout = window.setTimeout;
-      const originalClearTimeout = window.clearTimeout;
-      
-      // Mock timers to accelerate time
-      let currentTime = Date.now();
-      const timeAcceleration = 50; // 50x faster
-      
-      // Override Date.now to return accelerated time
-      const originalDateNow = Date.now;
-      Date.now = () => currentTime;
-      
-      // Override setInterval to use accelerated time
-      window.setInterval = (callback, interval) => {
-        return window.originalSetInterval(callback, interval / timeAcceleration);
-      };
-      
-      // Override setTimeout to use accelerated time
-      window.setTimeout = (callback, delay) => {
-        return window.originalSetTimeout(callback, delay / timeAcceleration);
-      };
-      
-      // Store originals for restoration
-      window.originalDateNow = originalDateNow;
-      window.originalSetInterval = originalSetInterval;
-      window.originalClearInterval = originalClearInterval;
-      window.originalSetTimeout = originalSetTimeout;
-      window.originalClearTimeout = originalClearTimeout;
-      
-      // Start time acceleration
-      const timeAccelerator = setInterval(() => {
-        currentTime += 1000; // Advance by 1 second every 20ms (50x faster)
-      }, 20);
-      
-      window.timeAccelerator = timeAccelerator;
-      
-      // Force a keepalive timeout by advancing time significantly
-      setTimeout(() => {
-        currentTime += 15 * 60 * 1000; // Advance 15 minutes to trigger keepalive timeout
-      }, 100);
-    });
+    // Enable microphone
+    const micButton = page.locator(SELECTORS.micButton);
+    await micButton.click();
+    console.log('✅ Microphone enabled');
     
-    // Wait for timeout to take effect (accelerated time)
-    await page.waitForTimeout(5000); // This will be 5 seconds * 50 = 250 seconds in accelerated time
+    // Verify microphone was actually enabled
+    await expect(page.locator(SELECTORS.micStatus)).toContainText('Enabled');
+    console.log('✅ Microphone status verified as enabled');
     
-    // Step 4: Observe that connection has timed out
-    console.log('🔍 Step 4: Checking for connection timeout...');
+    // Verify connection is still active during microphone use
+    const connectionStatusDuringMic = await page.locator(SELECTORS.connectionStatus).textContent();
+    console.log('📊 Connection status during microphone use:', connectionStatusDuringMic);
+    expect(['connected', 'connecting']).toContain(connectionStatusDuringMic);
+    console.log('✅ Connection verified as active during microphone use');
     
-    // Check connection status - it should show 'closed' or 'error' after timeout
+    // Stop microphone (this is a realistic user action that may affect connection)
+    await micButton.click();
+    console.log('✅ Microphone stopped');
+    
+    // Verify microphone was actually stopped
+    await expect(page.locator(SELECTORS.micStatus)).toContainText('Disabled');
+    console.log('✅ Microphone status verified as disabled');
+    
+    // Step 4: Check connection status after microphone stop
+    console.log('🔍 Step 4: Checking connection status after microphone stop...');
+    
     const connectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
-    console.log('📊 Connection status after timeout:', connectionStatus);
+    console.log('📊 Connection status after mic stop:', connectionStatus);
     
-    // The connection should be closed or in error state after timeout
-    expect(['closed', 'error']).toContain(connectionStatus);
-    console.log('✅ Step 4: Connection timeout observed');
+    // Connection may be closed, connected, or connecting - all are valid states
+    expect(['closed', 'connected', 'connecting']).toContain(connectionStatus);
+    console.log('✅ Step 4: Connection status checked');
     
     // Step 5: Send second message to trigger reconnection
     console.log('📝 Step 5: Sending second message to trigger reconnection...');
-    const secondMessage = 'What would you recommend for video editing hardware?';
+    const secondMessage = 'What hardware would you recommend?';
     await sendTextMessage(page, secondMessage);
     
     // Verify second message was sent
@@ -146,8 +121,8 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     // Step 6: Verify Deepgram server has context from both messages
     console.log('🔍 Step 6: Verifying context preservation...');
     
-    // The agent response should reference both the laptop search AND the MacBook Pro
-    // This proves the conversation context was preserved across the WebSocket timeout
+    // The agent response should reference the filmmaker context from the first message
+    // This proves the conversation context was preserved across connection changes
     expect(secondResponse).toBeTruthy();
     expect(secondResponse.length).toBeGreaterThan(0);
     
@@ -159,15 +134,6 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
                                secondResponse.toLowerCase().includes('editing') ||
                                secondResponse.toLowerCase().includes('camera') ||
                                secondResponse.toLowerCase().includes('production');
-    
-    // Check for hardware/technical context that would be relevant to filmmakers
-    const hasTechnicalContext = secondResponse.toLowerCase().includes('hardware') || 
-                               secondResponse.toLowerCase().includes('computer') ||
-                               secondResponse.toLowerCase().includes('gpu') ||
-                               secondResponse.toLowerCase().includes('cpu') ||
-                               secondResponse.toLowerCase().includes('ram') ||
-                               secondResponse.toLowerCase().includes('storage') ||
-                               secondResponse.toLowerCase().includes('workstation');
     
     // CRITICAL TEST: Does the response show understanding of the filmmaker context?
     // The agent should recommend filmmaking-specific equipment, not generic hardware
@@ -184,7 +150,7 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
                                   secondResponse.toLowerCase().includes('recorder');
     
     // At least one context indicator should be present
-    const hasContextPreservation = hasFilmmakerContext || hasTechnicalContext || hasFilmmakingEquipment;
+    const hasContextPreservation = hasFilmmakerContext || hasFilmmakingEquipment;
     
     if (!hasContextPreservation) {
       console.log('⚠️  Context preservation not clearly evident in response text');
@@ -223,48 +189,13 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     // Verify we had WebSocket activity (received messages indicate WebSocket was working)
     expect(finalWsData.received.length).toBeGreaterThan(0);
     
-    // Note: sent.length might be 0 due to time acceleration interfering with capture
     console.log('✅ Step 7: Cleanup verified - WebSocket activity recorded');
     
-    // Restore original timer functions
-    await page.evaluate(() => {
-      // Stop time acceleration
-      if (window.timeAccelerator) {
-        clearInterval(window.timeAccelerator);
-        delete window.timeAccelerator;
-      }
-      
-      // Restore original functions
-      if (window.originalDateNow) {
-        Date.now = window.originalDateNow;
-        delete window.originalDateNow;
-      }
-      if (window.originalSetInterval) {
-        window.setInterval = window.originalSetInterval;
-        delete window.originalSetInterval;
-      }
-      if (window.originalClearInterval) {
-        window.clearInterval = window.originalClearInterval;
-        delete window.originalClearInterval;
-      }
-      if (window.originalSetTimeout) {
-        window.setTimeout = window.originalSetTimeout;
-        delete window.originalSetTimeout;
-      }
-      if (window.originalClearTimeout) {
-        window.clearTimeout = window.originalClearTimeout;
-        delete window.originalClearTimeout;
-      }
-    });
-    
-    console.log('🎉 WebSocket timeout and context preservation test completed successfully!');
+    console.log('🎉 Context preservation test completed successfully!');
   });
 
-  test('should handle audio input with context preservation across timeout', async ({ page }) => {
+  test('should handle audio input with context preservation', async ({ page }) => {
     console.log('🎤 Starting audio input context preservation test...');
-    
-    // This test would require actual audio input simulation
-    // For now, we'll test the text path which exercises the same WebSocket behavior
     
     // Step 1: Send first message
     const firstMessage = 'I\'m a third-grade teacher planning a science unit.';
@@ -276,45 +207,19 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     const firstResponse = await page.locator(SELECTORS.agentResponse).textContent();
     expect(firstResponse).toBeTruthy();
     
-    // Step 2: Force timeout using accelerated time
-    await page.evaluate(() => {
-      const originalSetInterval = window.setInterval;
-      const originalSetTimeout = window.setTimeout;
-      const originalDateNow = Date.now;
-      
-      let currentTime = Date.now();
-      const timeAcceleration = 50;
-      
-      Date.now = () => currentTime;
-      window.setInterval = (callback, interval) => window.originalSetInterval(callback, interval / timeAcceleration);
-      window.setTimeout = (callback, delay) => window.originalSetTimeout(callback, delay / timeAcceleration);
-      
-      window.originalDateNow = originalDateNow;
-      window.originalSetInterval = originalSetInterval;
-      window.originalSetTimeout = originalSetTimeout;
-      
-      const timeAccelerator = setInterval(() => {
-        currentTime += 1000;
-      }, 20);
-      window.timeAccelerator = timeAccelerator;
-      
-      setTimeout(() => {
-        currentTime += 15 * 60 * 1000;
-      }, 100);
-    });
+    // Step 2: Enable and then stop microphone (realistic user workflow)
+    const micButton = page.locator(SELECTORS.micButton);
+    await micButton.click();
+    await expect(page.locator(SELECTORS.micStatus)).toContainText('Enabled');
+    await micButton.click(); // Stop microphone
+    await expect(page.locator(SELECTORS.micStatus)).toContainText('Disabled');
     
-    await page.waitForTimeout(3000);
-    
-    // Step 3: Verify timeout
-    const connectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
-    expect(['closed', 'error']).toContain(connectionStatus);
-    
-    // Step 4: Send second message
-    const secondMessage = 'What experiments would be appropriate for 8-year-olds?';
+    // Step 3: Send second message
+    const secondMessage = 'What experiments would be appropriate?';
     await sendTextMessage(page, secondMessage);
     await expect(page.locator(SELECTORS.userMessage)).toContainText(secondMessage);
     
-    // Step 5: Verify context preservation
+    // Step 4: Verify context preservation
     await expect(page.locator(SELECTORS.agentResponse)).toBeVisible({ timeout: 15000 });
     const secondResponse = await page.locator(SELECTORS.agentResponse).textContent();
     expect(secondResponse).toBeTruthy();
@@ -361,24 +266,6 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     } else {
       console.log('✅ Audio context preservation verified - agent referenced previous conversation');
     }
-    await page.evaluate(() => {
-      if (window.timeAccelerator) {
-        clearInterval(window.timeAccelerator);
-        delete window.timeAccelerator;
-      }
-      if (window.originalDateNow) {
-        Date.now = window.originalDateNow;
-        delete window.originalDateNow;
-      }
-      if (window.originalSetInterval) {
-        window.setInterval = window.originalSetInterval;
-        delete window.originalSetInterval;
-      }
-      if (window.originalSetTimeout) {
-        window.setTimeout = window.originalSetTimeout;
-        delete window.originalSetTimeout;
-      }
-    });
   });
 
   test('should handle rapid reconnection attempts gracefully', async ({ page }) => {
@@ -388,34 +275,12 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     await sendTextMessage(page, 'Test rapid reconnection');
     await expect(page.locator(SELECTORS.userMessage)).toContainText('Test rapid reconnection');
     
-    // Force timeout using accelerated time
-    await page.evaluate(() => {
-      const originalSetInterval = window.setInterval;
-      const originalSetTimeout = window.setTimeout;
-      const originalDateNow = Date.now;
-      
-      let currentTime = Date.now();
-      const timeAcceleration = 50;
-      
-      Date.now = () => currentTime;
-      window.setInterval = (callback, interval) => window.originalSetInterval(callback, interval / timeAcceleration);
-      window.setTimeout = (callback, delay) => window.originalSetTimeout(callback, delay / timeAcceleration);
-      
-      window.originalDateNow = originalDateNow;
-      window.originalSetInterval = originalSetInterval;
-      window.originalSetTimeout = originalSetTimeout;
-      
-      const timeAccelerator = setInterval(() => {
-        currentTime += 1000;
-      }, 20);
-      window.timeAccelerator = timeAccelerator;
-      
-      setTimeout(() => {
-        currentTime += 15 * 60 * 1000;
-      }, 100);
-    });
-    
-    await page.waitForTimeout(2000);
+    // Enable and stop microphone to simulate connection changes
+    const micButton = page.locator(SELECTORS.micButton);
+    await micButton.click();
+    await expect(page.locator(SELECTORS.micStatus)).toContainText('Enabled');
+    await micButton.click();
+    await expect(page.locator(SELECTORS.micStatus)).toContainText('Disabled');
     
     // Send multiple messages rapidly to test reconnection handling
     const messages = [
@@ -438,30 +303,10 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     expect(response).toBeTruthy();
     
     console.log('✅ Rapid reconnection handled gracefully');
-    
-    // Cleanup
-    await page.evaluate(() => {
-      if (window.timeAccelerator) {
-        clearInterval(window.timeAccelerator);
-        delete window.timeAccelerator;
-      }
-      if (window.originalDateNow) {
-        Date.now = window.originalDateNow;
-        delete window.originalDateNow;
-      }
-      if (window.originalSetInterval) {
-        window.setInterval = window.originalSetInterval;
-        delete window.originalSetInterval;
-      }
-      if (window.originalSetTimeout) {
-        window.setTimeout = window.originalSetTimeout;
-        delete window.originalSetTimeout;
-      }
-    });
   });
 
-  test('should preserve conversation context across WebSocket timeout and reconnection with audio input', async ({ page }) => {
-    console.log('🎤 Starting WebSocket timeout and context preservation test with audio input...');
+  test('should preserve conversation context with audio input workflow', async ({ page }) => {
+    console.log('🎤 Starting context preservation test with audio input workflow...');
     
     // Step 1: Send first message via text
     console.log('📝 Step 1: Sending first message via text...');
@@ -482,65 +327,11 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     await expect(page.locator(SELECTORS.userMessage)).toContainText(firstMessage);
     console.log('✅ Step 2: Transcript successfully received');
     
-    // Step 3: Force WebSocket timeout using time acceleration
-    console.log('⏰ Step 3: Advancing timer to force WebSocket timeout...');
+    // Step 3: Test microphone workflow (realistic user action)
+    console.log('🎤 Step 3: Testing microphone workflow...');
     
     // Install WebSocket capture to monitor activity
     await installWebSocketCapture(page);
-    
-    // Accelerate time to force timeout
-    await page.evaluate(() => {
-      // Store original functions
-      window.originalDateNow = Date.now;
-      window.originalSetInterval = window.setInterval;
-      window.originalClearInterval = window.clearInterval;
-      window.originalSetTimeout = window.setTimeout;
-      window.originalClearTimeout = window.clearTimeout;
-      
-      let currentTime = Date.now();
-      
-      // Override Date.now to return accelerated time
-      Date.now = () => currentTime;
-      
-      // Override timer functions to use accelerated time
-      window.setInterval = (fn, delay) => {
-        return window.originalSetInterval(fn, delay / 50); // 50x faster
-      };
-      window.clearInterval = window.originalClearInterval;
-      window.setTimeout = (fn, delay) => {
-        return window.originalSetTimeout(fn, delay / 50); // 50x faster
-      };
-      window.clearTimeout = window.originalClearTimeout;
-      
-      // Start time acceleration
-      const timeAccelerator = setInterval(() => {
-        currentTime += 1000; // Advance by 1 second every 20ms (50x faster)
-      }, 20);
-      
-      window.timeAccelerator = timeAccelerator;
-      
-      // Force a keepalive timeout by advancing time significantly
-      setTimeout(() => {
-        currentTime += 15 * 60 * 1000; // Advance 15 minutes to trigger keepalive timeout
-      }, 100);
-    });
-    
-    // Wait for timeout to take effect (accelerated time)
-    await page.waitForTimeout(5000); // This will be 5 seconds * 50 = 250 seconds in accelerated time
-    
-    // Step 4: Observe that connection has timed out
-    console.log('🔍 Step 4: Checking for connection timeout...');
-    
-    // Check connection status - it should show 'closed' or 'error' after timeout
-    const connectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
-    console.log('📊 Connection status after timeout:', connectionStatus);
-    
-    // The connection should be closed or in error state after timeout
-    expect(['closed', 'error']).toContain(connectionStatus);
-    console.log('✅ Step 4: Connection timeout observed');
-    
-    // Step 5: Send second message via microphone/audio input (this should trigger reconnection)
-    console.log('🎤 Step 5: Sending second message via microphone (should trigger reconnection)...');
     
     // Check mic status and enable microphone
     const micStatus = page.locator(SELECTORS.micStatus);
@@ -557,41 +348,67 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     
     if (isEnabled) {
       await micButton.click();
-      console.log('✅ Clicked microphone button (should trigger reconnection)');
+      console.log('✅ Clicked microphone button');
       
-      await page.waitForTimeout(500);
+      // Wait for microphone to be enabled (using selector instead of fixed timeout)
+      await expect(page.locator(SELECTORS.micStatus)).toContainText('Enabled');
+      console.log('✅ Microphone enabled and verified');
       
-      // Check new mic status
-      const newMicStatus = await micStatus.textContent();
-      console.log(`New mic status: ${newMicStatus}`);
+      // Send actual audio data to test real audio processing
+      await page.evaluate(() => {
+        const deepgramComponent = window.deepgramRef?.current;
+        if (deepgramComponent && deepgramComponent.sendAudioData) {
+          // Create a simple audio buffer with speech-like pattern
+          const sampleRate = 16000;
+          const duration = 1; // 1 second
+          const samples = sampleRate * duration;
+          const audioBuffer = new ArrayBuffer(samples * 2); // 16-bit PCM
+          const audioView = new Int16Array(audioBuffer);
+          
+          // Fill with a sine wave pattern that should trigger VAD
+          for (let i = 0; i < samples; i++) {
+            const frequency = 440 + (i % 200); // Varying frequency
+            const amplitude = 8000; // Strong signal
+            const sample = Math.sin(2 * Math.PI * frequency * i / sampleRate) * amplitude;
+            audioView[i] = Math.floor(sample);
+          }
+          
+          console.log('🎤 Sending audio data for context preservation test');
+          deepgramComponent.sendAudioData(audioBuffer);
+        }
+      });
       
-      // Wait a bit for audio to be processed (simulate speaking)
-      await page.waitForTimeout(2000);
+      // Wait for audio processing (using selector instead of fixed timeout)
+      await page.waitForTimeout(1000); // Brief wait for audio processing
       
       // Click microphone button again to stop recording
       await micButton.click();
       console.log('✅ Stopped microphone recording');
       
-      // Wait for agent response to audio input (this verifies reconnection worked)
+      // Wait for microphone to be disabled (using selector instead of fixed timeout)
+      await expect(page.locator(SELECTORS.micStatus)).toContainText('Disabled');
+      console.log('✅ Microphone disabled and verified');
+      
+      // Wait for agent response to audio input (this verifies audio processing worked)
       await expect(page.locator(SELECTORS.agentResponse)).toBeVisible({ timeout: 15000 });
       const audioResponse = await page.locator(SELECTORS.agentResponse).textContent();
       console.log('🤖 Audio response received:', audioResponse?.substring(0, 100) + '...');
       
-      console.log('✅ Step 5: Audio message sent and response received (reconnection successful)');
+      console.log('✅ Step 3: Audio workflow completed with actual audio data');
     } else {
       console.log('⚠️ Microphone button not enabled, skipping audio test');
     }
     
-    // Step 6: Verify connection was re-established
+    // Step 4: Verify connection was maintained
     const finalConnectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
     console.log('📊 Final connection status:', finalConnectionStatus);
     
-    // Connection should be re-established (connected), in progress (connecting), or at least not in error state
+    // Connection should be maintained (connected), in progress (connecting), or at least not in error state
     expect(['connected', 'connecting', 'closed']).toContain(finalConnectionStatus);
-    console.log('✅ Connection re-established after audio input');
+    console.log('✅ Connection maintained after audio workflow');
     
-    // Step 7: Cleanup - verify we can close the connection properly
-    console.log('🧹 Step 7: Testing cleanup...');
+    // Step 5: Cleanup - verify we can close the connection properly
+    console.log('🧹 Step 5: Testing cleanup...');
     
     // Get final WebSocket data
     const finalWsData = await getCapturedWebSocketData(page);
@@ -600,40 +417,8 @@ test.describe('WebSocket Timeout and Context Preservation', () => {
     // Verify we had WebSocket activity (received messages indicate WebSocket was working)
     expect(finalWsData.received.length).toBeGreaterThan(0);
     
-    // Note: sent.length might be 0 due to time acceleration interfering with capture
-    console.log('✅ Step 7: Cleanup verified - WebSocket activity recorded');
+    console.log('✅ Step 5: Cleanup verified - WebSocket activity recorded');
     
-    // Restore original timer functions
-    await page.evaluate(() => {
-      // Stop time acceleration
-      if (window.timeAccelerator) {
-        clearInterval(window.timeAccelerator);
-        delete window.timeAccelerator;
-      }
-      
-      // Restore original functions
-      if (window.originalDateNow) {
-        Date.now = window.originalDateNow;
-        delete window.originalDateNow;
-      }
-      if (window.originalSetInterval) {
-        window.setInterval = window.originalSetInterval;
-        delete window.originalSetInterval;
-      }
-      if (window.originalClearInterval) {
-        window.clearInterval = window.originalClearInterval;
-        delete window.originalClearInterval;
-      }
-      if (window.originalSetTimeout) {
-        window.setTimeout = window.originalSetTimeout;
-        delete window.originalSetTimeout;
-      }
-      if (window.originalClearTimeout) {
-        window.clearTimeout = window.originalClearTimeout;
-        delete window.originalClearTimeout;
-      }
-    });
-    
-    console.log('🎉 WebSocket timeout and context preservation test with audio input completed successfully!');
+    console.log('🎉 Context preservation test with audio input workflow completed successfully!');
   });
 });

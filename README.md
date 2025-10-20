@@ -176,6 +176,8 @@ For a complete list of available environment variables, see [test-app/ENVIRONMEN
 
 For detailed information about testing utilities and audio sample generation, see [docs/TEST-UTILITIES.md](docs/TEST-UTILITIES.md).
 
+For current VAD testing status and DRY refactoring implementation, see [docs/VAD-TEST-STATUS-REPORT.md](docs/VAD-TEST-STATUS-REPORT.md).
+
 ### Example Configuration
 
 Create a `.env` file in your project root:
