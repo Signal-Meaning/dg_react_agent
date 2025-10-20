@@ -25,7 +25,7 @@ const DEEPGRAM_CONFIG = {
   apiKey: process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY,
   baseUrl: 'https://api.deepgram.com/v1/speak',
   voice: 'aura-2-apollo-en', // Default voice for testing
-  model: 'aura-2',
+  model: 'aura-2-apollo-en',
   encoding: 'linear16',
   sampleRate: 16000,
   channels: 1
@@ -50,20 +50,23 @@ async function generateTTSAudio(text, options = {}) {
   }
 
   const requestBody = {
-    text,
-    model,
-    voice,
-    encoding,
-    sample_rate: sampleRate
+    text
   };
 
   return new Promise((resolve, reject) => {
     const postData = JSON.stringify(requestBody);
     
+    // Build query parameters
+    const queryParams = new URLSearchParams({
+      voice,
+      encoding,
+      sample_rate: sampleRate.toString()
+    });
+    
     const options = {
       hostname: 'api.deepgram.com',
       port: 443,
-      path: '/v1/speak',
+      path: `/v1/speak?${queryParams}`,
       method: 'POST',
       headers: {
         'Authorization': `Token ${DEEPGRAM_CONFIG.apiKey}`,
@@ -74,7 +77,13 @@ async function generateTTSAudio(text, options = {}) {
 
     const req = https.request(options, (res) => {
       if (res.statusCode !== 200) {
-        reject(new Error(`Deepgram TTS API error: ${res.statusCode} ${res.statusMessage}`));
+        let errorBody = '';
+        res.on('data', (chunk) => {
+          errorBody += chunk;
+        });
+        res.on('end', () => {
+          reject(new Error(`Deepgram TTS API error: ${res.statusCode} ${res.statusMessage}\nResponse: ${errorBody}`));
+        });
         return;
       }
 
@@ -148,8 +157,8 @@ async function generateAllSamples() {
         model: DEEPGRAM_CONFIG.model
       });
       
-      // Add silence padding for VAD testing
-      const paddedAudio = addSilencePadding(ttsAudio, 300, 1000, DEEPGRAM_CONFIG.sampleRate);
+      // Add silence padding for VAD testing (2000ms to exceed utterance_end_ms threshold)
+      const paddedAudio = addSilencePadding(ttsAudio, 300, 2000, DEEPGRAM_CONFIG.sampleRate);
       
       const filename = `sample_${phrase.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}.json`;
       const filepath = path.join(outputDir, filename);
@@ -169,11 +178,11 @@ async function generateAllSamples() {
           model: DEEPGRAM_CONFIG.model,
           totalDuration: paddedAudio.length / (DEEPGRAM_CONFIG.sampleRate * 2), // 16-bit = 2 bytes per sample
           onsetSilence: 300,
-          offsetSilence: 1000,
+          offsetSilence: 2000,
           totalSamples: paddedAudio.length / 2, // 16-bit = 2 bytes per sample
           onsetSamples: Math.floor((300 / 1000) * DEEPGRAM_CONFIG.sampleRate),
           speechSamples: ttsAudio.length / 2,
-          offsetSamples: Math.floor((1000 / 1000) * DEEPGRAM_CONFIG.sampleRate)
+          offsetSamples: Math.floor((2000 / 1000) * DEEPGRAM_CONFIG.sampleRate)
         }
       };
       
@@ -202,7 +211,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  generateSimpleAudioPattern,
   generateAllSamples,
   TEST_PHRASES
 };

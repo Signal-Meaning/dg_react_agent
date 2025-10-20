@@ -182,7 +182,7 @@ export interface DeepgramVoiceInteractionProps {
 #### UtteranceEnd Parameter Integration
 Based on [Deepgram's documentation](https://developers.deepgram.com/docs/understanding-end-of-speech-detection), the `UtteranceEnd` feature requires:
 
-1. **Query Parameter**: `utterance_end_ms=1234` (minimum 1000ms recommended)
+1. **Query Parameter**: `utterance_end_ms=1234` (minimum 1000ms required by Deepgram)
 2. **Required Setting**: `interim_results=true` must be enabled
 3. **WebSocket Message**: Receives `{"type":"UtteranceEnd", "channel": [0,2], "last_word_end": 3.1}`
 
@@ -195,7 +195,7 @@ export interface TranscriptionOptions {
    * Enable UtteranceEnd detection for more reliable end-of-speech detection
    * Reference: https://developers.deepgram.com/docs/understanding-end-of-speech-detection
    */
-  utteranceEndMs?: number; // Default: 1000ms (minimum recommended)
+  utteranceEndMs?: number; // Default: 1000ms (minimum required by Deepgram)
   
   /**
    * Enable interim results (required for UtteranceEnd)
