@@ -196,8 +196,10 @@ export interface DeepgramVoiceInteractionProps {
    * VAD (Voice Activity Detection) Event Callbacks
    */
   
-  // onUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
-  // Use onUtteranceEnd for speech end detection instead
+  /**
+   * Called when the user stops speaking (based on VAD/endpointing)
+   */
+  onUserStoppedSpeaking?: () => void;
   
   /**
    * Called when UtteranceEnd is detected from Deepgram's end-of-speech detection
