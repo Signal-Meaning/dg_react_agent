@@ -568,18 +568,6 @@ export class WebSocketManager {
   }
 
   /**
-   * Manually trigger connection timeout for testing lazy reconnection
-   * This is for testing purposes only
-   */
-  public triggerTimeoutForTesting(): void {
-    this.log('🧪 [TEST] Manually triggering connection timeout for lazy reconnection testing');
-    this.stopKeepalive();
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.close(1000, 'Manual timeout for testing');
-    }
-  }
-
-  /**
    * Check if the WebSocket connection is open
    */
   public isConnected(): boolean {
