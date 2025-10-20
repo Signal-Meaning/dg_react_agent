@@ -94,15 +94,21 @@ test.describe('VAD Pre-Generated Audio Test', () => {
     
     // Convert base64 audio data to ArrayBuffer
     const audioBuffer = await page.evaluate((base64Data) => {
-      const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+      try {
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
+      } catch (error) {
+        console.error('Error converting base64 to ArrayBuffer:', error);
+        return null;
       }
-      return bytes.buffer;
     }, audioData.audioData);
     
-    console.log('🎵 Converted audio data to ArrayBuffer:', audioBuffer.byteLength, 'bytes');
+    expect(audioBuffer).toBeTruthy();
+    console.log('🎵 Converted audio data to ArrayBuffer:', audioBuffer?.byteLength || 'null', 'bytes');
     
     // Send audio data to Deepgram
     await page.evaluate((buffer) => {
