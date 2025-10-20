@@ -19,7 +19,7 @@ describe('Deepgram Configuration Tests', () => {
     it('should configure utteranceEndMs parameter for UtteranceEnd detection', () => {
       const props: DeepgramVoiceInteractionProps = {
         apiKey: 'test-key',
-        utteranceEndMs: 1000
+        utteranceEndMs: 1000 // Minimum required by Deepgram
       };
 
       const buildAgentConfig = (props: DeepgramVoiceInteractionProps) => {
