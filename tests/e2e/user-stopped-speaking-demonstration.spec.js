@@ -1,4 +1,9 @@
 const { test, expect } = require('@playwright/test');
+const path = require('path');
+const { setupVADTestingEnvironment } = require('../utils/audio-stream-mocks');
+
+// Load environment variables from test-app/.env
+require('dotenv').config({ path: path.join(__dirname, '../../test-app/.env') });
 
 /**
  * Test to demonstrate onUserStoppedSpeaking callback working with fake audio
@@ -9,11 +14,16 @@ const { test, expect } = require('@playwright/test');
  */
 
 test.describe('onUserStoppedSpeaking Demonstration', () => {
-  test('should demonstrate onUserStoppedSpeaking with pre-recorded audio and natural VAD', async ({ page }) => {
+  test('should demonstrate onUserStoppedSpeaking with real microphone and pre-recorded audio', async ({ page, context }) => {
+    // Grant microphone permissions and setup VAD testing environment
+    await context.grantPermissions(['microphone']);
+    await setupVADTestingEnvironment(page);
+    
     console.log('🧪 Demonstrating onUserStoppedSpeaking with fake audio...');
     
-    // Capture console logs for VAD events
+    // Capture console logs for VAD events and timing information
     const consoleLogs = [];
+    const vadEvents = [];
     page.on('console', msg => {
       const text = msg.text();
       consoleLogs.push(text);
@@ -23,6 +33,32 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
           text.includes('SpeechStarted') ||
           text.includes('[VAD]')) {
         console.log(`[BROWSER] ${text}`);
+        
+        // Extract timing information from UtteranceEnd events
+        if (text.includes('UtteranceEnd message received')) {
+          try {
+            // Extract the actual channel values from the log message
+            // Look for the actual channel array values in the console output
+            const channelMatch = text.match(/channel: \[(\d+), (\d+)\]/);
+            const lastWordEndMatch = text.match(/last_word_end: ([\d.]+)/);
+            
+            if (lastWordEndMatch) {
+              const lastWordEnd = parseFloat(lastWordEndMatch[1]);
+              const channel = channelMatch ? 
+                [parseInt(channelMatch[1]), parseInt(channelMatch[2])] : 
+                [0, 1]; // Fallback for single channel audio
+              
+              vadEvents.push({
+                type: 'UtteranceEnd',
+                timestamp: Date.now(),
+                lastWordEnd: lastWordEnd,
+                channel: channel
+              });
+            }
+          } catch (e) {
+            // Ignore parsing errors
+          }
+        }
       }
     });
     
@@ -123,6 +159,30 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
       console.log('  - UtteranceEnd events:', utteranceEndEvents.length);
       console.log('  - User stopped speaking events:', userStoppedSpeakingEvents.length);
       
+      // Analyze timing information
+      if (vadEvents.length > 0) {
+        console.log('\n⏱️ Timing Analysis:');
+        vadEvents.forEach((event, index) => {
+          console.log(`  - UtteranceEnd ${index + 1}:`);
+          console.log(`    - Last word ended at: ${event.lastWordEnd}s`);
+          console.log(`    - Channel: [${event.channel.join(', ')}]`);
+          console.log(`    - Event timestamp: ${new Date(event.timestamp).toISOString()}`);
+        });
+        
+        // Calculate remaining silence
+        const lastUtteranceEnd = vadEvents[vadEvents.length - 1];
+        if (lastUtteranceEnd) {
+          // Audio sample has 2000ms (2s) total silence
+          const totalSilenceDuration = 2.0; // seconds
+          const remainingSilence = totalSilenceDuration - lastUtteranceEnd.lastWordEnd;
+          console.log(`\n🔍 Silence Analysis:`);
+          console.log(`  - Total silence in audio sample: ${totalSilenceDuration}s`);
+          console.log(`  - Last word ended at: ${lastUtteranceEnd.lastWordEnd}s`);
+          console.log(`  - Remaining silence when UtteranceEnd triggered: ${remainingSilence.toFixed(3)}s`);
+          console.log(`  - Remaining silence as percentage: ${((remainingSilence / totalSilenceDuration) * 100).toFixed(1)}%`);
+        }
+      }
+      
       // Verify that we got the expected events
       expect(consoleLogs.some(log => log.includes('SpeechStarted'))).toBe(true);
       
@@ -160,18 +220,50 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
     }
   });
   
-  test('should demonstrate onUserStoppedSpeaking with multiple audio samples', async ({ page }) => {
+  test('should demonstrate onUserStoppedSpeaking with multiple audio samples', async ({ page, context }) => {
+    // Grant microphone permissions and setup VAD testing environment
+    await context.grantPermissions(['microphone']);
+    await setupVADTestingEnvironment(page);
+    
     console.log('🧪 Demonstrating onUserStoppedSpeaking with multiple audio samples...');
     
-    // Capture console logs
+    // Capture console logs and timing information
     const consoleLogs = [];
+    const vadEvents = [];
     page.on('console', msg => {
       const text = msg.text();
+      consoleLogs.push(text);
+      
       if (text.includes('🎤 [AGENT] User stopped speaking') || 
           text.includes('UtteranceEnd') || 
           text.includes('SpeechStarted')) {
-        consoleLogs.push(text);
         console.log(`[BROWSER] ${text}`);
+        
+        // Extract timing information from UtteranceEnd events
+        if (text.includes('UtteranceEnd message received')) {
+          try {
+            // Extract the actual channel values from the log message
+            // Look for the actual channel array values in the console output
+            const channelMatch = text.match(/channel: \[(\d+), (\d+)\]/);
+            const lastWordEndMatch = text.match(/last_word_end: ([\d.]+)/);
+            
+            if (lastWordEndMatch) {
+              const lastWordEnd = parseFloat(lastWordEndMatch[1]);
+              const channel = channelMatch ? 
+                [parseInt(channelMatch[1]), parseInt(channelMatch[2])] : 
+                [0, 1]; // Fallback for single channel audio
+              
+              vadEvents.push({
+                type: 'UtteranceEnd',
+                timestamp: Date.now(),
+                lastWordEnd: lastWordEnd,
+                channel: channel
+              });
+            }
+          } catch (e) {
+            // Ignore parsing errors
+          }
+        }
       }
     });
     
@@ -267,6 +359,29 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
     console.log('\n📊 Final Results:');
     console.log(`  - Total UtteranceEnd events: ${totalUtteranceEndEvents}`);
     console.log(`  - Total User stopped speaking events: ${totalUserStoppedSpeakingEvents}`);
+    
+    // Analyze timing information for all samples
+    if (vadEvents.length > 0) {
+      console.log('\n⏱️ Overall Timing Analysis:');
+      vadEvents.forEach((event, index) => {
+        console.log(`  - UtteranceEnd ${index + 1}:`);
+        console.log(`    - Last word ended at: ${event.lastWordEnd}s`);
+        console.log(`    - Channel: [${event.channel.join(', ')}]`);
+        console.log(`    - Event timestamp: ${new Date(event.timestamp).toISOString()}`);
+      });
+      
+      // Calculate average remaining silence
+      const totalSilenceDuration = 2.0; // seconds
+      const remainingSilences = vadEvents.map(event => totalSilenceDuration - event.lastWordEnd);
+      const avgRemainingSilence = remainingSilences.reduce((sum, silence) => sum + silence, 0) / remainingSilences.length;
+      
+      console.log(`\n🔍 Overall Silence Analysis:`);
+      console.log(`  - Total silence in audio samples: ${totalSilenceDuration}s`);
+      console.log(`  - Average remaining silence: ${avgRemainingSilence.toFixed(3)}s`);
+      console.log(`  - Average remaining silence as percentage: ${((avgRemainingSilence / totalSilenceDuration) * 100).toFixed(1)}%`);
+      console.log(`  - Min remaining silence: ${Math.min(...remainingSilences).toFixed(3)}s`);
+      console.log(`  - Max remaining silence: ${Math.max(...remainingSilences).toFixed(3)}s`);
+    }
     
     // Verify that we got at least some UtteranceEnd events
     if (totalUtteranceEndEvents > 0) {
