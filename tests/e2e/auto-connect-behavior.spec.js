@@ -5,7 +5,7 @@
  * in a real browser environment.
  */
 
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test.describe('Auto-Connect Behavior E2E Tests', () => {
   test.beforeEach(async ({ page }) => {

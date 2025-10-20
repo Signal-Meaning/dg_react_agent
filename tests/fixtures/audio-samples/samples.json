@@ -3,70 +3,70 @@
     "text": "Hello",
     "speechDuration": 1000,
     "onsetSilenceDuration": 300,
-    "offsetSilenceDuration": 1000,
+    "offsetSilenceDuration": 2000,
     "description": "Simple greeting"
   },
   "wait-one-moment": {
     "text": "Wait one moment",
     "speechDuration": 2000,
     "onsetSilenceDuration": 300,
-    "offsetSilenceDuration": 1000,
+    "offsetSilenceDuration": 2000,
     "description": "Pause request"
   },
   "thank-you": {
     "text": "Thank you",
     "speechDuration": 1000,
     "onsetSilenceDuration": 300,
-    "offsetSilenceDuration": 1000,
+    "offsetSilenceDuration": 2000,
     "description": "Polite acknowledgment"
   },
   "what-can-you-do": {
     "text": "What can you do?",
     "speechDuration": 2000,
     "onsetSilenceDuration": 300,
-    "offsetSilenceDuration": 1000,
+    "offsetSilenceDuration": 2000,
     "description": "Capability inquiry"
   },
   "greeting": {
     "text": "Good morning, how can I help you today?",
     "speechDuration": 3000,
     "onsetSilenceDuration": 300,
-    "offsetSilenceDuration": 1000,
+    "offsetSilenceDuration": 2000,
     "description": "Agent greeting message"
   },
   "user-response": {
     "text": "I need help with something",
     "speechDuration": 2500,
     "onsetSilenceDuration": 300,
-    "offsetSilenceDuration": 1000,
+    "offsetSilenceDuration": 2000,
     "description": "Typical user response"
   },
   "barge-in": {
     "text": "Stop, I want to ask something else",
     "speechDuration": 2000,
     "onsetSilenceDuration": 300,
-    "offsetSilenceDuration": 1000,
+    "offsetSilenceDuration": 2000,
     "description": "User interrupting agent speech"
   },
   "short-response": {
     "text": "Yes",
     "speechDuration": 500,
     "onsetSilenceDuration": 300,
-    "offsetSilenceDuration": 1000,
+    "offsetSilenceDuration": 2000,
     "description": "Short affirmative response"
   },
   "long-response": {
     "text": "I would like to know more about this topic",
     "speechDuration": 4000,
     "onsetSilenceDuration": 300,
-    "offsetSilenceDuration": 1000,
+    "offsetSilenceDuration": 2000,
     "description": "Longer user inquiry"
   },
   "confirmation": {
     "text": "That sounds good to me",
     "speechDuration": 2000,
     "onsetSilenceDuration": 300,
-    "offsetSilenceDuration": 1000,
+    "offsetSilenceDuration": 2000,
     "description": "User confirmation"
   }
 }

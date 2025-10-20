@@ -7,9 +7,9 @@
  * Priority 1, Option C: Investigate VAD configuration parameters
  */
 
-const { test, expect } = require('@playwright/test');
-const { setupTestPage, simulateUserGesture } = require('./helpers/audio-mocks');
-const SimpleVADHelpers = require('../utils/simple-vad-helpers');
+import { test, expect } from '@playwright/test';
+import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
+import SimpleVADHelpers from '../utils/simple-vad-helpers';
 
 test.describe('VAD Configuration Optimization', () => {
   test.beforeEach(async ({ page }) => {

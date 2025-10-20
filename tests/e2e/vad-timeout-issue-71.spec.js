@@ -8,7 +8,7 @@
  * because the VAD events don't tell the WebSocketManager to stop resetting idle timeouts.
  */
 
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test.describe('VAD Timeout Issue #71 - Missing disableIdleTimeoutResets() calls', () => {
   test.beforeEach(async ({ page }) => {

@@ -1,5 +1,6 @@
-const { test, expect } = require('@playwright/test');
-const { setupTestPage, simulateUserGesture, simulateSpeech } = require('./helpers/audio-mocks');
+import { test, expect } from '@playwright/test';
+import { setupTestPage, simulateUserGesture, simulateSpeech } from './helpers/audio-mocks';
+import AudioTestHelpers from '../utils/audio-helpers';
 
 /**
  * Manual VAD Workflow Test
@@ -135,7 +136,6 @@ test.describe('Manual VAD Workflow Tests', () => {
     });
     
     // Simulate speech with realistic audio
-    const AudioTestHelpers = require('../utils/audio-helpers');
     await AudioTestHelpers.simulateVADSpeech(page, 'Manual VAD workflow test', {
       silenceDuration: 1000,
       onsetSilence: 300

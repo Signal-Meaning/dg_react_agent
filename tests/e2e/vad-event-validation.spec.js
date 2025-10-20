@@ -1,6 +1,6 @@
-const { test, expect } = require('@playwright/test');
-const { setupTestPage, simulateUserGesture } = require('./helpers/audio-mocks');
-const AudioTestHelpers = require('../utils/audio-helpers');
+import { test, expect } from '@playwright/test';
+import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks.js';
+import AudioTestHelpers from '../utils/audio-helpers.js';
 
 test.describe('VAD Event Validation with Real APIs', () => {
   // Skip these tests in CI - they require real Deepgram API connections

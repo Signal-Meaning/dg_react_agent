@@ -99,14 +99,12 @@ function App() {
     channels: parseInt(import.meta.env.VITE_TRANSCRIPTION_CHANNELS || '1', 10),
     // VAD configuration for Voice Activity Detection events
     vad_events: import.meta.env.VITE_TRANSCRIPTION_VAD_EVENTS === 'true' || true, // Enable VAD events from transcription service
-    utterance_end_ms: parseInt(import.meta.env.VITE_TRANSCRIPTION_UTTERANCE_END_MS || '1000', 10), // Enable UtteranceEnd detection
+    utterance_end_ms: parseInt(import.meta.env.VITE_TRANSCRIPTION_UTTERANCE_END_MS || '1000', 10), // Enable UtteranceEnd detection (minimum 1000ms)
     // Add keyterms that might be tricky for standard models
-    keyterm: [
-      "Casella", // Proper noun
-      "Symbiosis", // Less common word
-      "Kerfuffle", // Unusual word
-      "Supercalifragilisticexpialidocious" // Very long/unusual
-    ]
+    // keyterm: [
+    //   "Hello", // Test phrase from audio sample
+    //   "World" // Common test word
+    // ]
   }), []); // Empty dependency array means this object is created only once
 
   // Monitor deepgramRef changes - only log once when it becomes available
