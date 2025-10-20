@@ -292,7 +292,11 @@ function App() {
     addLog(`🎤 [AGENT] User started speaking at ${timestamp}`);
   }, [addLog]);
 
-  // handleUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
+  const handleUserStoppedSpeaking = useCallback(() => {
+    const timestamp = new Date().toISOString().substring(11, 19);
+    setIsUserSpeaking(false);
+    addLog(`🎤 [AGENT] User stopped speaking at ${timestamp}`);
+  }, [addLog]);
 
   const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
     // Debug log removed - this was appearing when debug mode was off
@@ -581,7 +585,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onAgentSilent={handleAgentSilent}
         // VAD event props - clearly marked by source
         onUserStartedSpeaking={handleUserStartedSpeaking}
-        // onUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
+        onUserStoppedSpeaking={handleUserStoppedSpeaking}
         onSpeechStarted={handleSpeechStarted}
         // onSpeechStopped removed - not a real Deepgram event
         onUtteranceEnd={handleUtteranceEnd}
@@ -642,7 +646,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           
           <h5>From Agent WebSocket:</h5>
           <p>User Started Speaking: <strong data-testid="user-started-speaking">{userStartedSpeaking || 'Not detected'}</strong></p>
-          <p>User Stopped Speaking: <strong data-testid="user-stopped-speaking">Not a real Deepgram event</strong></p>
+          <p>User Stopped Speaking: <strong data-testid="user-stopped-speaking">Detected via UtteranceEnd</strong></p>
           
           <h5>From Transcription WebSocket:</h5>
           <p>Speech Started: <strong data-testid="speech-started">{speechStarted || 'Not detected'}</strong></p>
