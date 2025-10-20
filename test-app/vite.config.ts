@@ -15,6 +15,6 @@ export default defineConfig({
   publicDir: '../tests/fixtures',
   // Additional configuration for serving audio samples
   define: {
-    __AUDIO_SAMPLES_PATH__: JSON.stringify('/audio-samples/')
+    __AUDIO_SAMPLES_PATH__: JSON.stringify('/tests/fixtures/audio-samples/')
   }
 })
