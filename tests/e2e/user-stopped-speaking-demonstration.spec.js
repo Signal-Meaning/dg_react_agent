@@ -165,7 +165,7 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
         vadEvents.forEach((event, index) => {
           console.log(`  - UtteranceEnd ${index + 1}:`);
           console.log(`    - Last word ended at: ${event.lastWordEnd}s`);
-          console.log(`    - Channel: [${event.channel.join(', ')}]`);
+          console.log(`    - Channel: [${event.channel ? event.channel.join(', ') : 'N/A'}]`);
           console.log(`    - Event timestamp: ${new Date(event.timestamp).toISOString()}`);
         });
         
