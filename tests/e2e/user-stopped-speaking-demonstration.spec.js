@@ -1,9 +1,9 @@
-const { test, expect } = require('@playwright/test');
-const path = require('path');
-const { setupVADTestingEnvironment } = require('../utils/audio-stream-mocks');
+import { test, expect } from '@playwright/test';
+import path from 'path';
+import { setupVADTestingEnvironment } from '../utils/audio-stream-mocks';
 
 // Load environment variables from test-app/.env
-require('dotenv').config({ path: path.join(__dirname, '../../test-app/.env') });
+// dotenv config handled by Playwright config
 
 /**
  * Test to demonstrate onUserStoppedSpeaking callback working with fake audio

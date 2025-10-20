@@ -7,7 +7,7 @@
  * - When autoConnect is false, it should NOT auto-connect
  */
 
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test.describe('Auto-Connect Prop Behavior E2E Tests', () => {
   test.beforeEach(async ({ page }) => {

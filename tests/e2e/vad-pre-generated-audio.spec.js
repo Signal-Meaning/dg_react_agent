@@ -7,8 +7,8 @@
  * Priority 2: Fix pre-generated audio sample loading
  */
 
-const { test, expect } = require('@playwright/test');
-const { setupTestPage } = require('./helpers/audio-mocks');
+import { test, expect } from '@playwright/test';
+import { setupTestPage } from './helpers/audio-mocks';
 
 test.describe('VAD Pre-Generated Audio Test', () => {
   test.beforeEach(async ({ page }) => {

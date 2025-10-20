@@ -1,5 +1,5 @@
-const { test, expect } = require('@playwright/test');
-const { setupTestPage, waitForConnection } = require('./helpers/test-helpers');
+import { test, expect } from '@playwright/test';
+import { setupTestPage, waitForConnection } from './helpers/test-helpers';
 
 test.describe('Logging Behavior Tests', () => {
   

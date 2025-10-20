@@ -5,8 +5,8 @@
  * to understand why audio isn't getting server responses.
  */
 
-const { test, expect } = require('@playwright/test');
-const { setupTestPage } = require('./helpers/audio-mocks');
+import { test, expect } from '@playwright/test';
+import { setupTestPage } from './helpers/audio-mocks';
 
 test.describe('Manual Testing Diagnostics', () => {
   

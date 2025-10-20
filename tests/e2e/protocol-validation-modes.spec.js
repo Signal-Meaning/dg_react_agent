@@ -6,7 +6,7 @@
  * 2. Mock Mode: With mocked WebSocket (for testing without API key)
  */
 
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 const {
   installMockWebSocket,
 } = require('./helpers/test-helpers');
