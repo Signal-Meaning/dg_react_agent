@@ -32,6 +32,7 @@ build/
 # Test results
 test-results/
 playwright-report/
+coverage/
 
 guidance/
 test-results/.last-run.json
