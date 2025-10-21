@@ -470,6 +470,10 @@ export class AudioManager {
         silentGain.gain.value = 0; // Silent
         source.connect(silentGain);
         // Don't connect to destination - audio goes nowhere
+        
+        // Don't add to active sources or set playing state when muted
+        this.log('🔇 TTS muted - not tracking audio as playing');
+        return; // Exit early - don't set isPlaying or emit events
       } else {
         // Normal playback - connect to speakers
         source.connect(this.audioContext.destination);
