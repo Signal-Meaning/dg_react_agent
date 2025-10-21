@@ -524,6 +524,8 @@ function App() {
     addLog('🔇 TTS mute button clicked');
     
     if (deepgramRef.current) {
+      console.log('🔇 [APP] deepgramRef.current is available, calling toggleTtsMute()');
+      console.log('🔇 [APP] deepgramRef.current methods:', Object.keys(deepgramRef.current));
       deepgramRef.current.toggleTtsMute();
       console.log('✅ toggleTtsMute() method called');
     } else {
