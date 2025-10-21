@@ -26,7 +26,7 @@ jobs:
           node-version: '20'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@signal-meaning'
-          token: ${{ secrets.NPM_PACKAGES_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Debug Environment
         run: |
@@ -48,10 +48,13 @@ jobs:
           npm view @signal-meaning/deepgram-voice-interaction-react --registry https://npm.pkg.github.com || echo "Package view failed"
           echo ""
           echo "=== Manual .npmrc Test ==="
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" > ~/.npmrc
           echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "Manual .npmrc content:"
           cat ~/.npmrc
           echo ""
           echo "Testing with manual .npmrc:"
           npm whoami --registry https://npm.pkg.github.com || echo "Manual whoami failed"
+          echo ""
+          echo "=== Testing actual publish (dry run) ==="
+          npm publish --dry-run || echo "Dry run publish failed"
