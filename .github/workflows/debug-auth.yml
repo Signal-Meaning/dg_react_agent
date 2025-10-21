@@ -1,0 +1,57 @@
+name: Debug Authentication
+
+on:
+  workflow_dispatch:
+    inputs:
+      debug_token:
+        description: 'Debug token (optional)'
+        required: false
+        type: string
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@signal-meaning'
+          token: ${{ secrets.NPM_PACKAGES_TOKEN }}
+          
+      - name: Debug Environment
+        run: |
+          echo "=== Environment Debug ==="
+          echo "NODE_AUTH_TOKEN length: ${#NODE_AUTH_TOKEN}"
+          echo "NODE_AUTH_TOKEN starts with: ${NODE_AUTH_TOKEN:0:10}..."
+          echo "NODE_AUTH_TOKEN ends with: ...${NODE_AUTH_TOKEN: -10}"
+          echo ""
+          echo "=== NPM Configuration ==="
+          npm config list
+          echo ""
+          echo "=== Registry Ping Test ==="
+          npm ping --registry https://npm.pkg.github.com || echo "Ping failed"
+          echo ""
+          echo "=== Authentication Test ==="
+          npm whoami --registry https://npm.pkg.github.com || echo "Whoami failed"
+          echo ""
+          echo "=== Package Access Test ==="
+          npm view @signal-meaning/deepgram-voice-interaction-react --registry https://npm.pkg.github.com || echo "Package view failed"
+          echo ""
+          echo "=== Manual .npmrc Test ==="
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
+          echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "Manual .npmrc content:"
+          cat ~/.npmrc
+          echo ""
+          echo "Testing with manual .npmrc:"
+          npm whoami --registry https://npm.pkg.github.com || echo "Manual whoami failed"
