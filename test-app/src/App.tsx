@@ -384,10 +384,12 @@ function App() {
 
   const handleAgentSpeaking = useCallback(() => {
     setAgentSpeaking(true);
+    setAgentSilent(false); // Reset silent state when agent starts speaking
     addLog('Agent started speaking');
   }, [addLog]);
 
   const handleAgentSilent = useCallback(() => {
+    setAgentSpeaking(false); // Reset speaking state when agent finishes
     setAgentSilent(true);
     addLog('Agent finished speaking');
   }, [addLog]);

@@ -346,6 +346,16 @@ export interface DeepgramVoiceInteractionHandle {
    * Set TTS mute state
    */
   setTtsMuted: (muted: boolean) => void;
+
+  /**
+   * Get current TTS mute state
+   */
+  isTtsMuted: boolean;
+
+  /**
+   * Check if audio is currently playing
+   */
+  isPlaybackActive: () => boolean;
 }
 
 // REMOVE the duplicate AgentState definition at the end of this file

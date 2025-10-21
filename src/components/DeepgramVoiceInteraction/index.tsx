@@ -2559,6 +2559,8 @@ function DeepgramVoiceInteraction(
     getState: () => state,
     toggleTtsMute,
     setTtsMuted,
+    isTtsMuted: audioManagerRef.current?.isTtsMuted || false,
+    isPlaybackActive: () => audioManagerRef.current?.isPlaybackActive() || false,
   }));
 
   // Render nothing (headless component)
