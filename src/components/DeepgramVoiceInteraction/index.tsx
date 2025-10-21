@@ -1360,6 +1360,7 @@ function DeepgramVoiceInteraction(
   const handleAgentMessage = (data: unknown) => {
     // Debug: Log all agent messages with type
     const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as any).type : 'unknown';
+    console.log(`🎯 [AGENT] Received message: ${messageType}`);
     console.log(`🔍 [AGENT] Received agent message (type: ${messageType}):`, data);
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
     
@@ -1493,14 +1494,9 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'GREETING_STARTED', started: false });
       }
       
-      // Re-enable idle timeout resets when agent finishes (if user is not speaking)
-      console.log('🎯 [AGENT] AgentAudioDone - checking if should re-enable idle timeout resets');
-      if (!state.isUserSpeaking) {
-        console.log('🎯 [AGENT] User not speaking - re-enabling idle timeout resets for natural timeout');
-        manageIdleTimeoutResets('enable', 'AgentAudioDone - user not speaking');
-      } else {
-        console.log('🎯 [AGENT] User is speaking - keeping idle timeout resets disabled');
-      }
+      // DON'T re-enable idle timeout resets on AgentAudioDone
+      // The agent might still be sending ConversationText messages or playing audio
+      console.log('🎯 [AGENT] AgentAudioDone - keeping idle timeout resets disabled (agent may still be responding)');
       
       // Always call onAgentSilent when agent finishes speaking
       onAgentSilent?.();
@@ -1510,6 +1506,13 @@ function DeepgramVoiceInteraction(
     // Handle conversation text
     if (data.type === 'ConversationText') {
       const content = typeof data.content === 'string' ? data.content : '';
+      
+      // If we receive ConversationText after AgentAudioDone, keep idle timeout resets disabled
+      // This means the agent is still actively responding
+      if (stateRef.current.agentState === 'idle') {
+        console.log('🎯 [AGENT] ConversationText received after AgentAudioDone - agent still responding, keeping idle timeout resets disabled');
+        // Keep idle timeout resets disabled while agent is still sending content
+      }
       
       // Track conversation messages for lazy reconnection
       const conversationMessage: ConversationMessage = {
