@@ -82,15 +82,20 @@ function App() {
     // Don't clear keepalive - let it persist in the log history
   }, []); // No dependencies, created once
   
+  // Get debug state from URL or environment
+  const isDebugMode = import.meta.env.VITE_DEBUG === 'true' || new URLSearchParams(window.location.search).get('debug') === 'true' || false;
+  
   // Helper to update keepalive - memoized
   const updateKeepalive = useCallback((message: string) => {
     const timestampedMessage = `${new Date().toISOString().substring(11, 19)} - ${message}`;
     setCurrentKeepalive(timestampedMessage);
     // Add to logs so it persists (this replaces the current keepalive in the display)
     setLogs(prev => [...prev, timestampedMessage]);
-    // Also log to console for debugging
-    console.log(timestampedMessage);
-  }, []); // No dependencies, created once
+    // Only log to console when debug mode is enabled
+    if (isDebugMode) {
+      console.log(timestampedMessage);
+    }
+  }, [isDebugMode]); // Include isDebugMode in dependencies
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
   const memoizedTranscriptionOptions = useMemo(() => ({
@@ -623,7 +628,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         // onSpeechStopped removed - not a real Deepgram event
         onUtteranceEnd={handleUtteranceEnd}
         onVADEvent={handleVADEvent}
-        debug={import.meta.env.VITE_DEBUG === 'true' || new URLSearchParams(window.location.search).get('debug') === 'true' || false} // Enable debug via environment variable or URL parameter for testing
+        debug={isDebugMode} // Enable debug via environment variable or URL parameter for testing
       />
       
       <div style={{ border: '1px solid blue', padding: '10px', margin: '15px 0' }}>
