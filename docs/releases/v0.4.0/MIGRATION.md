@@ -124,6 +124,23 @@ npm test
 
 ## What's New
 
+### TTS Mute Functionality
+- **New Methods**: `toggleTtsMute()` and `setTtsMuted()`
+- **New Props**: `ttsMuted` and `onTtsMuteToggle`
+- **New State**: `ttsMuted` property in component state
+- **Complete Audio Control**: Mute/unmute TTS audio with immediate effect
+
+### VoiceAgent Event Hooks
+- **Agent Events**: `onAgentSpeaking()` and `onAgentSilent()`
+- **User Events**: `onUserStoppedSpeaking()`
+- **VAD Events**: `onUtteranceEnd()`, `onSpeechStarted()`, `onVADEvent()`
+- **Real-time Data**: Access to Deepgram's voice activity detection data
+
+### Enhanced Idle Timeout Management
+- **Smart Timeouts**: Prevents timeouts during agent speech
+- **Connection Stability**: Maintains stable connections during voice interactions
+- **Intelligent Timing**: Only times out during actual idle periods
+
 ### Enhanced Release Process
 - Comprehensive release checklist
 - GitHub issue template for releases
