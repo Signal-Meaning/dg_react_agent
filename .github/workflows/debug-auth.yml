@@ -39,13 +39,25 @@ jobs:
           npm config list
           echo ""
           echo "=== Registry Ping Test ==="
-          npm ping --registry https://npm.pkg.github.com || echo "Ping failed"
+          if ! npm ping --registry https://npm.pkg.github.com; then
+            echo "❌ Registry ping failed"
+            exit 1
+          fi
+          echo "✅ Registry ping successful"
           echo ""
           echo "=== Authentication Test ==="
-          npm whoami --registry https://npm.pkg.github.com || echo "Whoami failed"
+          if ! npm whoami --registry https://npm.pkg.github.com; then
+            echo "❌ Authentication failed"
+            exit 1
+          fi
+          echo "✅ Authentication successful"
           echo ""
           echo "=== Package Access Test ==="
-          npm view @signal-meaning/deepgram-voice-interaction-react --registry https://npm.pkg.github.com || echo "Package view failed"
+          if ! npm view @signal-meaning/deepgram-voice-interaction-react --registry https://npm.pkg.github.com; then
+            echo "❌ Package view failed"
+            exit 1
+          fi
+          echo "✅ Package view successful"
           echo ""
           echo "=== Manual .npmrc Test ==="
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
@@ -54,7 +66,15 @@ jobs:
           cat ~/.npmrc
           echo ""
           echo "Testing with manual .npmrc:"
-          npm whoami --registry https://npm.pkg.github.com || echo "Manual whoami failed"
+          if ! npm whoami --registry https://npm.pkg.github.com; then
+            echo "❌ Manual authentication failed"
+            exit 1
+          fi
+          echo "✅ Manual authentication successful"
           echo ""
           echo "=== Testing actual publish (dry run) ==="
-          npm publish --dry-run || echo "Dry run publish failed"
+          if ! npm publish --dry-run; then
+            echo "❌ Dry run publish failed"
+            exit 1
+          fi
+          echo "✅ Dry run publish successful"
