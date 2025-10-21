@@ -708,7 +708,6 @@ function DeepgramVoiceInteraction(
         }
         onKeepalive?.(event.data.service);
       } else if (event.type === 'message') {
-        console.log('🔍 [AGENT] Agent WebSocket received message:', event.data);
         handleAgentMessage(event.data);
       } else if (event.type === 'binary') {
         handleAgentAudio(event.data);
@@ -920,6 +919,16 @@ function DeepgramVoiceInteraction(
       prevIsReadyRef.current = state.isReady;
     }
   }, [state.isReady, onReady]);
+
+  // Handle idle timeout resets when audio finishes playing
+  useEffect(() => {
+    // When audio finishes playing (isPlaying becomes false), re-enable idle timeout resets
+    // This allows the connection to timeout naturally after the agent is truly done
+    if (!state.isPlaying && stateRef.current.agentState === 'idle') {
+      console.log('🎵 [AUDIO] Audio finished playing - re-enabling idle timeout resets');
+      manageIdleTimeoutResets('enable', 'AudioFinished');
+    }
+  }, [state.isPlaying, manageIdleTimeoutResets]);
 
   // Notify agent state changes ONLY when the value actually changes
   useEffect(() => {
@@ -1360,7 +1369,6 @@ function DeepgramVoiceInteraction(
   const handleAgentMessage = (data: unknown) => {
     // Debug: Log all agent messages with type
     const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as any).type : 'unknown';
-    console.log(`🔍 [AGENT] Received agent message (type: ${messageType}):`, data);
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
     
     // Don't re-enable idle timeout resets here
@@ -1466,9 +1474,10 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    if (data.type === 'AgentStartedSpeaking') {
-      sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
-      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
+        if (data.type === 'AgentStartedSpeaking') {
+          console.log('🎯 [AGENT] AgentStartedSpeaking received - disabling idle timeout resets');
+          sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
+          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
 
       // Track agent speaking
       if (state.greetingInProgress && !state.greetingStarted) {
@@ -1493,14 +1502,8 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'GREETING_STARTED', started: false });
       }
       
-      // Re-enable idle timeout resets when agent finishes (if user is not speaking)
-      console.log('🎯 [AGENT] AgentAudioDone - checking if should re-enable idle timeout resets');
-      if (!state.isUserSpeaking) {
-        console.log('🎯 [AGENT] User not speaking - re-enabling idle timeout resets for natural timeout');
-        manageIdleTimeoutResets('enable', 'AgentAudioDone - user not speaking');
-      } else {
-        console.log('🎯 [AGENT] User is speaking - keeping idle timeout resets disabled');
-      }
+          // DON'T re-enable idle timeout resets on AgentAudioDone
+          // The agent might still be sending ConversationText messages or playing audio
       
       // Always call onAgentSilent when agent finishes speaking
       onAgentSilent?.();
@@ -1510,6 +1513,13 @@ function DeepgramVoiceInteraction(
     // Handle conversation text
     if (data.type === 'ConversationText') {
       const content = typeof data.content === 'string' ? data.content : '';
+      
+      // If we receive ConversationText, this means the agent is actively responding
+      // Disable idle timeout resets to prevent connection drops during agent response
+      if (stateRef.current.agentState === 'idle') {
+        console.log('🎯 [AGENT] ConversationText received - disabling idle timeout resets (agent responding)');
+        manageIdleTimeoutResets('disable', 'ConversationText');
+      }
       
       // Track conversation messages for lazy reconnection
       const conversationMessage: ConversationMessage = {
