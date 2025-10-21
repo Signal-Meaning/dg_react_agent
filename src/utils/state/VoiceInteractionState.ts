@@ -106,6 +106,11 @@ export interface VoiceInteractionState {
    * TTS mute state
    */
   ttsMuted: boolean;
+  
+  /**
+   * Flag to track if agent is waiting for completion after AgentAudioDone
+   */
+  agentWaitingForCompletion: boolean;
 }
 
 /**
@@ -167,6 +172,9 @@ export const initialState: VoiceInteractionState = {
   
   // TTS state
   ttsMuted: false,
+  
+  // Agent completion tracking
+  agentWaitingForCompletion: false,
 };
 
 /**
