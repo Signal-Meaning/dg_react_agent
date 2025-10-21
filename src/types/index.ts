@@ -339,13 +339,32 @@ export interface DeepgramVoiceInteractionHandle {
 
   /**
    * Toggle TTS mute state
+   * 
+   * Switches between muted and unmuted states for TTS audio playback.
+   * When muted, the agent will not produce any audio output.
    */
   toggleTtsMute: () => void;
 
   /**
-   * Set TTS mute state
+   * Set TTS mute state explicitly
+   * 
+   * @param muted - Whether TTS should be muted (true) or unmuted (false)
    */
   setTtsMuted: (muted: boolean) => void;
+
+  /**
+   * Get current TTS mute state
+   * 
+   * @returns true if TTS is currently muted, false otherwise
+   */
+  isTtsMuted: boolean;
+
+  /**
+   * Check if audio is currently playing
+   * 
+   * @returns true if audio is currently playing, false otherwise
+   */
+  isPlaybackActive: () => boolean;
 }
 
 // REMOVE the duplicate AgentState definition at the end of this file
