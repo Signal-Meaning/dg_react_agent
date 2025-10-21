@@ -2,42 +2,105 @@
 
 ## Overview
 
-This release contains **no breaking changes** to the public API. All existing APIs remain unchanged and backward compatible.
+This release adds **new features** while maintaining **full backward compatibility**. All existing APIs remain unchanged and functional.
 
 ## Component Props
 
-### No Changes
-- All existing component props remain unchanged
-- No new props added
-- No props removed or deprecated
+### New Props Added
+```typescript
+interface DeepgramVoiceInteractionProps {
+  // ... existing props remain unchanged
+  
+  // NEW: TTS Mute functionality
+  ttsMuted?: boolean;                    // TTS mute state
+  onTtsMuteToggle?: (isMuted: boolean) => void;  // Mute state change callback
+  
+  // NEW: VoiceAgent event hooks
+  onAgentSpeaking?: () => void;          // Agent starts speaking
+  onAgentSilent?: () => void;            // Agent finishes speaking
+  onUserStoppedSpeaking?: () => void;    // User stops speaking
+  onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
+  onSpeechStarted?: (data: { channel: number[]; timestamp: number }) => void;
+  onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
+}
+```
 
 ## Callback Functions
 
-### No Changes
-- All existing callback functions remain unchanged
-- No new callbacks added
-- No callbacks removed or deprecated
+### New Callbacks Added
+- **`onTtsMuteToggle`**: Called when TTS mute state changes
+- **`onAgentSpeaking`**: Called when agent starts speaking (TTS begins)
+- **`onAgentSilent`**: Called when agent finishes speaking (AgentAudioDone)
+- **`onUserStoppedSpeaking`**: Called when user stops speaking (VAD/endpointing)
+- **`onUtteranceEnd`**: Called when UtteranceEnd is detected from Deepgram's end-of-speech detection
+- **`onSpeechStarted`**: Called when SpeechStarted is detected from Deepgram Transcription API
+- **`onVADEvent`**: Called when VAD events are received from transcription service
+
+### Existing Callbacks
+- ✅ All existing callbacks remain unchanged
+- ✅ No existing callbacks removed or deprecated
 
 ## State Interface
 
-### No Changes
-- All existing state properties remain unchanged
-- No new state properties added
-- No state properties removed or deprecated
+### New State Properties
+```typescript
+interface VoiceInteractionState {
+  // ... existing state properties remain unchanged
+  
+  // NEW: TTS mute state
+  ttsMuted: boolean;  // Current TTS mute state
+}
+```
+
+### Existing State Properties
+- ✅ All existing state properties remain unchanged
+- ✅ No existing state properties removed or deprecated
 
 ## Methods
 
-### No Changes
-- All existing methods remain unchanged
-- No new methods added
-- No methods removed or deprecated
+### New Methods Added
+```typescript
+interface DeepgramVoiceInteractionHandle {
+  // ... existing methods remain unchanged
+  
+  // NEW: TTS mute control methods
+  toggleTtsMute(): void;                    // Toggle TTS mute state
+  setTtsMuted(muted: boolean): void;        // Set TTS mute state explicitly
+}
+```
+
+### Existing Methods
+- ✅ All existing methods remain unchanged
+- ✅ No existing methods removed or deprecated
 
 ## Types
 
-### No Changes
-- All existing TypeScript types remain unchanged
-- No new types added
-- No types removed or deprecated
+### New Types Added
+```typescript
+// TTS mute callback type
+type TtsMuteToggleCallback = (isMuted: boolean) => void;
+
+// VAD event data types
+interface UtteranceEndData {
+  channel: number[];
+  lastWordEnd: number;
+}
+
+interface SpeechStartedData {
+  channel: number[];
+  timestamp: number;
+}
+
+interface VADEventData {
+  speechDetected: boolean;
+  confidence?: number;
+  timestamp?: number;
+}
+```
+
+### Existing Types
+- ✅ All existing TypeScript types remain unchanged
+- ✅ No existing types removed or deprecated
 
 ## Internal Changes
 
