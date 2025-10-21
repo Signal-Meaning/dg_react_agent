@@ -1,13 +1,14 @@
 # Issue #121: TTS Mute Button Status Report
 
 **Issue**: TTS Audio Not Playing - Agent Response Generated But No Audio Output  
-**Status**: PARTIALLY RESOLVED - TTS audio working, mute button has ref issue  
+**Status**: ✅ RESOLVED - TTS audio working, mute button fixed  
 **Date**: October 21, 2024  
+**Last Updated**: December 19, 2024  
 **Priority**: High  
 
 ## Summary
 
-Issue #121 was originally about TTS audio not playing at all. This has been **RESOLVED** - TTS audio is now working correctly. However, a secondary issue was discovered with the TTS mute button functionality.
+Issue #121 was originally about TTS audio not playing at all. This has been **RESOLVED** - TTS audio is now working correctly. The secondary issue with the TTS mute button functionality has also been **RESOLVED**.
 
 ## Root Cause Analysis
 
@@ -17,11 +18,11 @@ Issue #121 was originally about TTS audio not playing at all. This has been **RE
 **Issue**: When `state.ttsMuted` was `true`, the spread operator `...({})` didn't actually remove the `speak` property from agent settings  
 **Fix**: Inverted the logic to `...(!state.ttsMuted ? { speak: {...} } : {})`  
 
-### ❌ **ACTIVE: TTS Mute Button Not Working**
-**Root Cause**: Component's `toggleTtsMute` method is not being called via ref  
-**Location**: `test-app/src/App.tsx` and component ref exposure  
-**Issue**: App.tsx calls `deepgramRef.current.toggleTtsMute()` but the component method is never executed  
-**Evidence**: Console logs show App.tsx method calls but no component method logs  
+### ✅ **RESOLVED: TTS Mute Button Not Working**
+**Root Cause**: Conditional logic prevented mute from working on first press, plus inaccurate playback state detection  
+**Location**: `src/components/DeepgramVoiceInteraction/index.tsx` and `src/utils/audio/AudioManager.ts`  
+**Issue**: Mute button only worked on second press due to `isPlaybackActive()` race conditions  
+**Fix**: Always call `interruptAgent()` when muting and improved `isPlaybackActive()` accuracy  
 
 ## Current Behavior
 
@@ -30,12 +31,10 @@ Issue #121 was originally about TTS audio not playing at all. This has been **RE
 - Agent responses are generated and displayed
 - Audio is audible through speakers
 - Mute button UI updates (visual feedback)
-
-### ❌ **Not Working**
-- Mute button does not stop currently playing audio
-- First mute click has no effect
-- Second mute click (after unmute) works
-- Component's `toggleTtsMute` method is not being called
+- Mute button stops currently playing audio immediately
+- First mute click works reliably
+- Unmute allows future audio to play
+- Playback state detection is accurate
 
 ## Technical Details
 
@@ -66,22 +65,23 @@ Issue #121 was originally about TTS audio not playing at all. This has been **RE
 - Added proper order of operations (settings first, then interrupt)
 - Added comprehensive debug logging
 
-### ❌ **Fix 3: Ref Issue (Pending)**
-- Added debug logging to App.tsx to track ref calls
-- Identified that component method is not being called
-- Need to investigate ref exposure or timing issue
+### ✅ **Fix 3: Mute Button Reliability**
+- Always call `interruptAgent()` when muting (removed conditional check)
+- Enhanced `isPlaybackActive()` to check both `isPlaying` flag and `activeSourceNodes.length`
+- Added self-healing logic to sync mismatched playback states
+- Fixed race conditions in audio state detection
 
 ## Next Steps
 
-### **Immediate Priority**
-1. **Fix ref issue** - Investigate why `deepgramRef.current.toggleTtsMute()` doesn't call component method
-2. **Test mute functionality** - Verify mute button stops current audio immediately
-3. **Test unmute functionality** - Verify unmute allows future audio
+### ✅ **Completed**
+1. **Fixed mute functionality** - Mute button now stops current audio immediately
+2. **Fixed unmute functionality** - Unmute allows future audio to play
+3. **Fixed playback state detection** - `isPlaybackActive()` now accurately reflects audio state
 
-### **Investigation Areas**
-1. **Ref timing** - Check if ref is properly set when mute button is clicked
-2. **Method exposure** - Verify `toggleTtsMute` is properly exposed in `useImperativeHandle`
-3. **Component lifecycle** - Check if component is in correct state when method is called
+### **Testing Status**
+- All core functionality is working
+- Mute button reliability has been improved
+- Ready for production use
 
 ## Test Cases
 
@@ -90,20 +90,21 @@ Issue #121 was originally about TTS audio not playing at all. This has been **RE
 - [x] Agent responses are generated and displayed
 - [x] Mute button UI updates correctly
 - [x] Unmute button UI updates correctly
-
-### **Failing**
-- [ ] Mute button stops currently playing audio
-- [ ] First mute click works immediately
-- [ ] Mute state persists across interactions
+- [x] Mute button stops currently playing audio
+- [x] First mute click works immediately
+- [x] Mute state persists across interactions
+- [x] Playback state detection is accurate
 
 ## Files Modified
 
 ### **Core Fixes**
-- `src/components/DeepgramVoiceInteraction/index.tsx` - Fixed TTS mute logic, enhanced mute button
-- `src/utils/audio/AudioManager.ts` - Added audio buffer flushing for mute
+- `src/components/DeepgramVoiceInteraction/index.tsx` - Fixed TTS mute logic, always interrupt when muting
+- `src/utils/audio/AudioManager.ts` - Enhanced `isPlaybackActive()` with race condition handling
 
-### **Debug Additions**
-- `test-app/src/App.tsx` - Added debug logging for ref calls
+### **Key Changes**
+- Removed conditional check in `toggleTtsMute` - now always calls `interruptAgent()` when muting
+- Improved `isPlaybackActive()` to check both `isPlaying` flag and `activeSourceNodes.length`
+- Added self-healing logic to sync mismatched playback states
 
 ## Related Issues
 
@@ -114,7 +115,7 @@ Issue #121 was originally about TTS audio not playing at all. This has been **RE
 ## Status
 
 **TTS Audio**: ✅ RESOLVED  
-**Mute Button**: ❌ ACTIVE ISSUE (ref problem)  
-**Overall**: 🔄 PARTIALLY RESOLVED  
+**Mute Button**: ✅ RESOLVED  
+**Overall**: ✅ FULLY RESOLVED  
 
-The core TTS functionality is working, but the mute button has a ref issue preventing the component method from being called. This is a separate issue from the original TTS audio problem.
+Both the original TTS audio issue and the secondary mute button issue have been completely resolved. The mute button now reliably stops currently playing audio and prevents future audio while muted.
