@@ -39,11 +39,12 @@ jobs:
       - name: Run tests
         run: npm test
         
-      - name: Configure npm authentication
+      - name: Verify npm authentication
         run: |
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
-          echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          cat ~/.npmrc
+          echo "=== Verifying npm authentication ==="
+          npm whoami --registry https://npm.pkg.github.com
+          echo "=== NPM Configuration ==="
+          npm config list
         
       - name: Publish to GitHub Package Registry
         run: npm publish
@@ -57,9 +58,8 @@ jobs:
           # Create a test package.json
           echo '{"name": "test-install", "version": "1.0.0", "dependencies": {}}' > package.json
           
-          # Configure npm for GitHub Package Registry
+          # Configure npm for GitHub Package Registry (using setup-node auth)
           echo "@signal-meaning:registry=https://npm.pkg.github.com" > .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" >> .npmrc
           
           # Install the package
           npm install @signal-meaning/deepgram-voice-interaction-react
