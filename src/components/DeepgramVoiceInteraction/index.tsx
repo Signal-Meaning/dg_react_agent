@@ -1182,14 +1182,14 @@ function DeepgramVoiceInteraction(
           } : {})
         },
         // Only include speak provider if TTS is not muted
-        ...(state.ttsMuted ? {} : {
+        ...(!state.ttsMuted ? {
           speak: {
             provider: {
               type: 'deepgram',
               model: agentOptions.voice || 'aura-asteria-en'
             }
           }
-        }),
+        } : {}),
         greeting: agentOptions.greeting,
         context: transformConversationHistory(state.conversationHistory) // Include conversation context in correct Deepgram API format
       }
@@ -1197,7 +1197,9 @@ function DeepgramVoiceInteraction(
     
     console.log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
       conversationHistoryLength: state.conversationHistory.length,
-      contextMessages: transformConversationHistory(state.conversationHistory).messages
+      contextMessages: transformConversationHistory(state.conversationHistory).messages,
+      ttsMuted: state.ttsMuted,
+      hasSpeakProvider: 'speak' in settingsMessage.agent
     });
     agentManagerRef.current.sendJSON(settingsMessage);
     console.log('📤 [Protocol] Settings message sent successfully');
@@ -2469,18 +2471,32 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    const newMutedState = !audioManagerRef.current.isTtsMuted;
+    const currentMutedState = audioManagerRef.current.isTtsMuted;
+    const newMutedState = !currentMutedState;
+    const isCurrentlyPlaying = audioManagerRef.current.isPlaybackActive();
+    
+    log(`🔇 TTS mute toggle: ${currentMutedState} → ${newMutedState}, currently playing: ${isCurrentlyPlaying}`);
+    
+    // Update mute state first (this will stop current audio if muting)
     audioManagerRef.current.setTtsMuted(newMutedState);
     
-    // Update component state
+    // Update component state immediately for UI feedback
     dispatch({ type: 'TTS_MUTE_CHANGE', muted: newMutedState });
     
     log(`🔇 TTS mute state changed to: ${newMutedState}`);
     
-    // Re-send agent settings with updated TTS mute state
+    // Re-send agent settings with updated TTS mute state to prevent future audio
     if (agentManagerRef.current && agentManagerRef.current.isConnected()) {
       log('🔇 Re-sending agent settings with updated TTS mute state');
       sendAgentSettings();
+    } else {
+      log('🔇 Cannot re-send agent settings: agent not connected');
+    }
+    
+    // If muting, always interrupt to ensure audio stops immediately
+    if (newMutedState) {
+      log('🔇 Muting - interrupting current audio');
+      interruptAgent();
     }
     
     // Notify parent component of state change

@@ -416,6 +416,8 @@ export class AudioManager {
    * @param data ArrayBuffer containing audio data (Linear16 PCM expected)
    */
   public async queueAudio(data: ArrayBuffer): Promise<void> {
+    this.log(`🎵 [queueAudio] Received audio data: ${data.byteLength} bytes, TTS muted: ${this.isTtsMuted}`);
+    
     if (!this.isInitialized) {
       this.log('AudioManager not initialized, initializing now...');
       await this.initialize();
@@ -682,7 +684,18 @@ export class AudioManager {
    * Gets whether playback is active
    */
   public isPlaybackActive(): boolean {
-    return this.isPlaying;
+    // Check both the playing flag and active sources
+    // This handles race conditions where isPlaying might be stale
+    const hasActiveSources = this.activeSourceNodes.length > 0;
+    const result = this.isPlaying || hasActiveSources;
+    
+    // Sync the flag if we detect a mismatch
+    if (this.isPlaying !== hasActiveSources) {
+      this.log(`⚠️ isPlaying mismatch detected: isPlaying=${this.isPlaying}, activeSourceNodes=${this.activeSourceNodes.length}, syncing to ${result}`);
+      this.isPlaying = result;
+    }
+    
+    return result;
   }
   
   /**
@@ -699,6 +712,40 @@ export class AudioManager {
   public setTtsMuted(muted: boolean): void {
     this.log(`Setting TTS muted to: ${muted}`);
     this.isTtsMuted = muted;
+    
+    // If muting and audio is currently playing, stop it immediately and flush buffer
+    if (muted && this.isPlaying) {
+      this.log('🔇 TTS muted while audio is playing - stopping current audio immediately and flushing buffer');
+      this.clearAudioQueue();
+      this.flushAudioBuffer();
+    }
+  }
+
+  /**
+   * Flushes the audio buffer to ensure no pending audio plays
+   */
+  private flushAudioBuffer(): void {
+    this.log('🧹 Flushing audio buffer to prevent any pending audio playback');
+    
+    if (!this.audioContext) {
+      this.log('No audio context available for flushing');
+      return;
+    }
+    
+    try {
+      // Create a very short silent buffer and play it to flush any pending audio
+      const silentBuffer = this.audioContext.createBuffer(1, 1, this.audioContext.sampleRate);
+      const silentSource = this.audioContext.createBufferSource();
+      silentSource.buffer = silentBuffer;
+      silentSource.connect(this.audioContext.destination);
+      silentSource.start();
+      
+      // Immediately stop it
+      silentSource.stop();
+      this.log('✅ Audio buffer flushed successfully');
+    } catch (error) {
+      this.log('⚠️ Error flushing audio buffer:', error);
+    }
   }
 
 
