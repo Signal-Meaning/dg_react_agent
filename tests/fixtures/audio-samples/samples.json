@@ -68,5 +68,12 @@
     "onsetSilenceDuration": 300,
     "offsetSilenceDuration": 2000,
     "description": "User confirmation"
+  },
+  "cat-activity-question": {
+    "text": "Can you make me a list of ways to keep my cats busy?",
+    "speechDuration": 4000,
+    "onsetSilenceDuration": 300,
+    "offsetSilenceDuration": 2000,
+    "description": "Complex question requiring agent thinking and detailed response"
   }
 }
