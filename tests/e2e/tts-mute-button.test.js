@@ -11,20 +11,25 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('TTS Mute Button Functionality', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, context }) => {
+    // Grant audio permissions for the test
+    await context.grantPermissions(['microphone', 'camera']);
+    
     // Navigate to test app
     await page.goto('http://localhost:5173');
     
     // Wait for component to be ready
-    await page.waitForSelector('[data-testid="deepgram-voice-interaction"]', { timeout: 10000 });
+    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
-    // Wait for auto-connect to complete
-    await page.waitForFunction(() => {
-      return window.deepgramRef?.current?.isConnected?.() === true;
-    }, { timeout: 15000 });
+    // Wait for component to be ready (connection starts as closed)
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('closed', { timeout: 10000 });
   });
 
   test('should stop currently playing audio when mute button is clicked', async ({ page }) => {
+    // Start the connection first
+    await page.click('[data-testid="start-button"]');
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
+    
     // Send a text message to trigger agent response
     await page.fill('[data-testid="text-input"]', 'Tell me a short story');
     await page.click('[data-testid="send-button"]');
@@ -32,7 +37,7 @@ test.describe('TTS Mute Button Functionality', () => {
     // Wait for agent to start speaking
     await page.waitForFunction(() => {
       return window.deepgramRef?.current?.isPlaybackActive?.() === true;
-    }, { timeout: 10000 });
+    }, { timeout: 5000 });
     
     // Verify audio is playing
     const isPlayingBefore = await page.evaluate(() => {
@@ -41,7 +46,7 @@ test.describe('TTS Mute Button Functionality', () => {
     expect(isPlayingBefore).toBe(true);
     
     // Click mute button
-    await page.click('[data-testid="mute-button"]');
+    await page.click('[data-testid="tts-mute-button"]');
     
     // Wait for audio to stop
     await page.waitForFunction(() => {
@@ -62,6 +67,10 @@ test.describe('TTS Mute Button Functionality', () => {
   });
 
   test('should work on first click (no second click required)', async ({ page }) => {
+    // Start the connection first
+    await page.click('[data-testid="start-button"]');
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
+    
     // Send a text message to trigger agent response
     await page.fill('[data-testid="text-input"]', 'Count from 1 to 10');
     await page.click('[data-testid="send-button"]');
@@ -69,10 +78,10 @@ test.describe('TTS Mute Button Functionality', () => {
     // Wait for agent to start speaking
     await page.waitForFunction(() => {
       return window.deepgramRef?.current?.isPlaybackActive?.() === true;
-    }, { timeout: 10000 });
+    }, { timeout: 5000 });
     
     // Click mute button immediately (first click)
-    await page.click('[data-testid="mute-button"]');
+    await page.click('[data-testid="tts-mute-button"]');
     
     // Verify audio stopped immediately
     await page.waitForFunction(() => {
@@ -87,8 +96,12 @@ test.describe('TTS Mute Button Functionality', () => {
   });
 
   test('should allow audio to play after unmuting', async ({ page }) => {
+    // Start the connection first
+    await page.click('[data-testid="start-button"]');
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
+    
     // First mute the TTS
-    await page.click('[data-testid="mute-button"]');
+    await page.click('[data-testid="tts-mute-button"]');
     
     // Verify muted state
     let isMuted = await page.evaluate(() => {
@@ -110,7 +123,7 @@ test.describe('TTS Mute Button Functionality', () => {
     expect(isPlayingWhileMuted).toBe(false);
     
     // Unmute
-    await page.click('[data-testid="mute-button"]');
+    await page.click('[data-testid="tts-mute-button"]');
     
     // Verify unmuted state
     isMuted = await page.evaluate(() => {
@@ -125,7 +138,7 @@ test.describe('TTS Mute Button Functionality', () => {
     // Wait for audio to start
     await page.waitForFunction(() => {
       return window.deepgramRef?.current?.isPlaybackActive?.() === true;
-    }, { timeout: 10000 });
+    }, { timeout: 5000 });
     
     // Verify audio is playing
     const isPlayingAfterUnmute = await page.evaluate(() => {
@@ -135,8 +148,12 @@ test.describe('TTS Mute Button Functionality', () => {
   });
 
   test('should maintain mute state across multiple interactions', async ({ page }) => {
+    // Start the connection first
+    await page.click('[data-testid="start-button"]');
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
+    
     // Mute the TTS
-    await page.click('[data-testid="mute-button"]');
+    await page.click('[data-testid="tts-mute-button"]');
     
     // Send multiple messages
     for (let i = 0; i < 3; i++) {
@@ -161,6 +178,10 @@ test.describe('TTS Mute Button Functionality', () => {
   });
 
   test('should accurately detect playback state during race conditions', async ({ page }) => {
+    // Start the connection first
+    await page.click('[data-testid="start-button"]');
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
+    
     // Send a message to trigger audio
     await page.fill('[data-testid="text-input"]', 'Tell me a long story');
     await page.click('[data-testid="send-button"]');
@@ -168,7 +189,7 @@ test.describe('TTS Mute Button Functionality', () => {
     // Wait for audio to start
     await page.waitForFunction(() => {
       return window.deepgramRef?.current?.isPlaybackActive?.() === true;
-    }, { timeout: 10000 });
+    }, { timeout: 5000 });
     
     // Rapidly check playback state multiple times
     const playbackStates = [];
@@ -184,7 +205,7 @@ test.describe('TTS Mute Button Functionality', () => {
     expect(playbackStates.every(state => state === true)).toBe(true);
     
     // Now mute and check again
-    await page.click('[data-testid="mute-button"]');
+    await page.click('[data-testid="tts-mute-button"]');
     
     // Wait for audio to stop
     await page.waitForFunction(() => {
