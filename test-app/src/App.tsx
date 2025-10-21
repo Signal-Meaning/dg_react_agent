@@ -70,6 +70,9 @@ function App() {
   // Text input state
   const [textInput, setTextInput] = useState('');
   
+  // TTS mute state
+  const [isTtsMuted, setIsTtsMuted] = useState(false);
+  
   // Helper to add logs - memoized
   const addLog = useCallback((message: string) => {
     const timestampedMessage = `${new Date().toISOString().substring(11, 19)} - ${message}`;
@@ -388,6 +391,11 @@ function App() {
     setAgentSilent(true);
     addLog('Agent finished speaking');
   }, [addLog]);
+
+  const handleTtsMuteToggle = useCallback((muted: boolean) => {
+    setIsTtsMuted(muted);
+    addLog(`TTS mute state changed to: ${muted ? 'MUTED' : 'UNMUTED'}`);
+  }, [addLog]);
   
   // Control functions
   const startInteraction = async () => {
@@ -510,6 +518,19 @@ function App() {
       setMicLoading(false);
     }
   };
+
+  const toggleTtsMute = () => {
+    console.log('🔇 [APP] toggleTtsMute called');
+    addLog('🔇 TTS mute button clicked');
+    
+    if (deepgramRef.current) {
+      deepgramRef.current.toggleTtsMute();
+      console.log('✅ toggleTtsMute() method called');
+    } else {
+      console.error('❌ deepgramRef.current is null!');
+      addLog('❌ Cannot toggle TTS mute: deepgramRef is null');
+    }
+  };
   
   // Show error if API key or project ID is missing
   if (shouldShowError) {
@@ -584,6 +605,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onConnectionReady={handleConnectionReady}
         onAgentSpeaking={handleAgentSpeaking}
         onAgentSilent={handleAgentSilent}
+        // TTS mute props
+        ttsMuted={isTtsMuted}
+        onTtsMuteToggle={handleTtsMuteToggle}
         // VAD event props - clearly marked by source
         onUserStartedSpeaking={handleUserStartedSpeaking}
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
@@ -633,6 +657,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         })()}
         <p>Audio Recording: <strong>{isRecording.toString()}</strong></p>
         <p>Audio Playing: <strong data-testid="audio-playing-status">{isPlaying.toString()}</strong></p>
+        <p>TTS Muted: <strong data-testid="tts-muted-status">{isTtsMuted.toString()}</strong></p>
         <h4>Auto-Connect Dual Mode States:</h4>
         <div data-testid="auto-connect-states">
           <p>Microphone Enabled: <strong data-testid="mic-status">{micEnabled ? 'Enabled' : 'Disabled'}</strong></p>
@@ -756,6 +781,27 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           data-testid="trigger-timeout-button"
         >
           🧪 Trigger Timeout
+        </button>
+        <button 
+          onClick={toggleTtsMute}
+          data-testid="tts-mute-button"
+          style={{
+            padding: '12px 20px',
+            borderRadius: '8px',
+            border: '3px solid',
+            borderColor: isTtsMuted ? '#dc3545' : '#28a745',
+            backgroundColor: isTtsMuted ? '#f8d7da' : '#d4edda',
+            color: isTtsMuted ? '#721c24' : '#155724',
+            fontWeight: 'bold',
+            fontSize: '16px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: isTtsMuted ? 'inset 0 2px 4px rgba(0,0,0,0.2)' : '0 2px 4px rgba(0,0,0,0.1)',
+            transform: isTtsMuted ? 'translateY(1px)' : 'translateY(0)',
+            pointerEvents: 'auto'
+          }}
+        >
+          {isTtsMuted ? '🔇 TTS MUTED' : '🔊 TTS ENABLED'}
         </button>
       </div>
       

@@ -101,6 +101,11 @@ export interface VoiceInteractionState {
     channel: number[];
     lastWordEnd: number;
   };
+
+  /**
+   * TTS mute state
+   */
+  ttsMuted: boolean;
 }
 
 /**
@@ -128,7 +133,8 @@ export type StateEvent =
   | { type: 'USER_SPEAKING_STATE_CHANGE'; isSpeaking: boolean }
   | { type: 'UTTERANCE_END'; data: { channel: number[]; lastWordEnd: number } }
   | { type: 'UPDATE_SPEECH_DURATION'; duration: number }
-  | { type: 'RESET_SPEECH_TIMER' };
+  | { type: 'RESET_SPEECH_TIMER' }
+  | { type: 'TTS_MUTE_CHANGE'; muted: boolean };
 
 /**
  * Initial state
@@ -158,6 +164,9 @@ export const initialState: VoiceInteractionState = {
   isUserSpeaking: false,
   lastUserSpeechTime: null,
   currentSpeechDuration: null,
+  
+  // TTS state
+  ttsMuted: false,
 };
 
 /**
@@ -314,6 +323,12 @@ export function stateReducer(state: VoiceInteractionState, event: StateEvent): V
         lastUserSpeechTime: null,
         currentSpeechDuration: null,
         utteranceEndData: undefined,
+      };
+      
+    case 'TTS_MUTE_CHANGE':
+      return {
+        ...state,
+        ttsMuted: event.muted,
       };
       
     default:
