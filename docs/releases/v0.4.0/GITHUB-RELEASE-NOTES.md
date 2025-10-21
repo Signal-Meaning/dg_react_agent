@@ -1,9 +1,8 @@
-## 🚀 Release v0.4.0: Manual Publishing Workaround Complete
+## 🚀 Release v0.4.0: TTS Mute Controls and Voice Interaction Enhancements
 
 ### ✅ Package Successfully Published
 - v0.4.0 published to GitHub Package Registry
 - Voice-commerce team can now access the package
-- Manual publishing workaround implemented
 
 ### 🎯 Key Features
 - **TTS Mute Functionality**: Complete mute/unmute capability
@@ -30,6 +29,8 @@ npm install @signal-meaning/deepgram-voice-interaction-react@0.4.0 --registry ht
 - [Migration Guide](docs/releases/v0.4.0/MIGRATION.md)
 
 ### 🔗 Related Issues
-- Closes #137: Manual Release Publishing Workaround
+- Closes #127: TTS mute state not respected during ongoing agent responses
+- Closes #124: Prevent idle timeout during agent speech
+- Closes #95: onUserStoppedSpeaking callback functionality
+- Closes #90: AudioContext exposure timing issues
 - Completes #129: v0.4.0 Release Process
-- References #132: GitHub Package Registry Authentication (workaround implemented)
