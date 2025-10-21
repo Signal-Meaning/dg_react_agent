@@ -5,7 +5,8 @@ module.exports = {
   testMatch: [
     '<rootDir>/tests/**/*.test.js',
     '<rootDir>/tests/**/*.test.ts',
-    '<rootDir>/tests/**/*.test.tsx'
+    '<rootDir>/tests/**/*.test.tsx',
+    '!<rootDir>/tests/e2e/**/*' // Exclude E2E tests
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
