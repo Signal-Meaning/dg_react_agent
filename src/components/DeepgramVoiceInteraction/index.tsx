@@ -2463,6 +2463,22 @@ function DeepgramVoiceInteraction(
   };
 
   // TTS mute control methods
+  /**
+   * Toggle the TTS mute state
+   * 
+   * This method toggles between muted and unmuted states for TTS audio playback.
+   * When muted, the agent will not produce any audio output, but will continue
+   * to process and respond to user input silently.
+   * 
+   * @example
+   * ```tsx
+   * const ref = useRef<DeepgramVoiceInteractionHandle>(null);
+   * 
+   * const handleMuteToggle = () => {
+   *   ref.current?.toggleTtsMute();
+   * };
+   * ```
+   */
   const toggleTtsMute = (): void => {
     log('🔇 toggleTtsMute method called');
     
@@ -2505,6 +2521,24 @@ function DeepgramVoiceInteraction(
     }
   };
 
+  /**
+   * Set the TTS mute state explicitly
+   * 
+   * This method allows you to explicitly set the TTS mute state to a specific value.
+   * Useful when you need to programmatically control the mute state based on
+   * external conditions or user preferences.
+   * 
+   * @param muted - Whether TTS should be muted (true) or unmuted (false)
+   * 
+   * @example
+   * ```tsx
+   * const ref = useRef<DeepgramVoiceInteractionHandle>(null);
+   * 
+   * const handleMuteChange = (shouldMute: boolean) => {
+   *   ref.current?.setTtsMuted(shouldMute);
+   * };
+   * ```
+   */
   const setTtsMuted = (muted: boolean): void => {
     log(`🔇 setTtsMuted method called with: ${muted}`);
     
@@ -2534,9 +2568,12 @@ function DeepgramVoiceInteraction(
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
+    // Core connection methods
     start,
     connectTextOnly,
     stop,
+    
+    // Agent interaction methods
     updateAgentInstructions,
     interruptAgent,
     sleep,
@@ -2544,11 +2581,24 @@ function DeepgramVoiceInteraction(
     toggleSleep,
     injectAgentMessage,
     injectUserMessage,
+    
+    // Microphone control
     toggleMicrophone: toggleMic,
+    
+    // Reconnection methods
     resumeWithText,
     resumeWithAudio,
     connectWithContext,
+    
+    // Audio data handling
     sendAudioData, // Expose sendAudioData for testing and external use
+    
+    // TTS mute functionality
+    toggleTtsMute,
+    setTtsMuted,
+    isTtsMuted: audioManagerRef.current?.isTtsMuted || false,
+    isPlaybackActive: () => state.isPlaying,
+    
     // Debug methods for testing
     getConnectionStates: () => ({
       transcription: transcriptionManagerRef.current?.getState() || 'not-found',
@@ -2557,10 +2607,6 @@ function DeepgramVoiceInteraction(
       agentConnected: agentManagerRef.current?.isConnected() || false,
     }),
     getState: () => state,
-    toggleTtsMute,
-    setTtsMuted,
-    isTtsMuted: audioManagerRef.current?.isTtsMuted || false,
-    isPlaybackActive: () => audioManagerRef.current?.isPlaybackActive() || false,
   }));
 
   // Render nothing (headless component)
