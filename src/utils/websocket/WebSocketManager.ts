@@ -231,16 +231,12 @@ export class WebSocketManager {
               // Only reset idle timeout on meaningful messages
               const shouldResetTimeout = this.shouldResetIdleTimeout(data);
               if (shouldResetTimeout) {
-                // If there's meaningful content, re-enable idle timeout resets
-                // This allows continued conversation after UtteranceEnd
+                // If there's meaningful content, reset the idle timeout
+                // But DON'T automatically re-enable idle timeout resets if they're disabled
+                // This prevents the idle timeout from firing during agent responses
                 if (this.idleTimeoutDisabled) {
-                  this.log(`Re-enabling idle timeout resets due to meaningful activity: ${data.type}`);
-                  this.enableIdleTimeoutResets();
-                  
-                  // Also notify the component to re-enable the other service
-                  // This ensures both agent and transcription services stay in sync
-                  console.log(`🔄 [WebSocketManager] Emitting re_enable_idle_timeout event for ${this.options.service}`);
-                  this.emit({ type: 're_enable_idle_timeout', service: this.options.service });
+                  this.log(`NOT re-enabling idle timeout resets due to meaningful activity: ${data.type} (resets are disabled)`);
+                  // Don't re-enable idle timeout resets - let the component manage this
                 } else {
                   this.resetIdleTimeout();
                 }
@@ -420,11 +416,16 @@ export class WebSocketManager {
     }
     
     if (this.options.idleTimeout && this.options.idleTimeout > 0) {
-      this.idleTimeoutId = window.setTimeout(() => {
-        this.log(`Idle timeout reached (${this.options.idleTimeout}ms) - closing connection`);
-        console.log(`🔧 [WebSocketManager] Idle timeout reached (${this.options.idleTimeout}ms) - closing ${this.options.service} connection`);
-        this.close();
-      }, this.options.idleTimeout);
+            this.idleTimeoutId = window.setTimeout(() => {
+              // Check if idle timeout resets are disabled before firing
+              if (this.idleTimeoutDisabled) {
+                this.log(`Idle timeout reached but resets are disabled - not closing connection for ${this.options.service}`);
+                return;
+              }
+
+              this.log(`Idle timeout reached (${this.options.idleTimeout}ms) - closing connection`);
+              this.close();
+            }, this.options.idleTimeout);
 
       this.log(`Started idle timeout (${this.options.idleTimeout}ms) for ${this.options.service}`);
     }
@@ -492,9 +493,9 @@ export class WebSocketManager {
    */
   public disableIdleTimeoutResets(): void {
     this.idleTimeoutDisabled = true;
-    console.log(`🔧 [WebSocketManager] Disabled idle timeout resets for ${this.options.service} - connection will timeout naturally`);
-    // Start the idle timeout immediately since resets are disabled
-    this.startIdleTimeout();
+    this.log(`Disabled idle timeout resets for ${this.options.service} - connection will timeout naturally`);
+    // Don't start idle timeout immediately - let it timeout naturally when resets are disabled
+    // The timeout will fire but won't close the connection due to the check in startIdleTimeout()
   }
 
   /**
@@ -502,9 +503,9 @@ export class WebSocketManager {
    */
   public enableIdleTimeoutResets(): void {
     this.idleTimeoutDisabled = false;
-    console.log(`🔧 [WebSocketManager] Re-enabled idle timeout resets for ${this.options.service}`);
-    // Also reset the idle timeout to give a fresh start
-    this.resetIdleTimeout();
+    this.log(`Re-enabled idle timeout resets for ${this.options.service}`);
+    // Don't reset the idle timeout immediately - let it timeout naturally based on last activity
+    // This prevents immediate timeout if the agent finished responding a while ago
   }
 
   /**
