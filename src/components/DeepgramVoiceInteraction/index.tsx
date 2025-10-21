@@ -1697,6 +1697,12 @@ function DeepgramVoiceInteraction(
       return;
     }
     
+    // Check TTS mute state before processing audio
+    if (audioManagerRef.current?.isTtsMuted) {
+      log('🔇 TTS is muted - discarding audio buffer to prevent playback');
+      return;
+    }
+    
     if (audioManagerRef.current) {
       log('Passing buffer to AudioManager.queueAudio()');
       audioManagerRef.current.queueAudio(data)
