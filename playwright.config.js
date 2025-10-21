@@ -1,6 +1,9 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 /**
  * @see https://playwright.dev/docs/test-configuration
  */

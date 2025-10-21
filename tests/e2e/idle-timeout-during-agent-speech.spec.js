@@ -1,5 +1,5 @@
 /**
- * Issue #124: Idle Timeout Firing During Agent Speech
+ * Idle Timeout Firing During Agent Speech
  * 
  * PROBLEM: The idle timeout mechanism incorrectly fires while the agent is actively speaking,
  * causing the WebSocket connection to be severed mid-sentence. This results in incomplete
@@ -17,6 +17,10 @@
  * CURRENT BUG: Idle timeout fires at 10 seconds regardless of agent speaking state
  * 
  * TESTING APPROACH: Monitor UI behavior instead of console logs for reliable testing
+ * 
+ * IMPORTANT: This test requires real Deepgram APIs to work properly.
+ * The idle timeout fix only triggers with real agent messages, not mock responses.
+ * See issue #99 for details on mock vs real API testing limitations.
  */
 
 import { test, expect } from '@playwright/test';
@@ -27,10 +31,24 @@ const {
 } = require('./helpers/test-helpers');
 import { setupTestPage } from './helpers/audio-mocks';
 
-test.describe('Issue #124: Idle Timeout During Agent Speech', () => {
+test.describe('Idle Timeout During Agent Speech', () => {
   
   test('should NOT timeout while agent is actively speaking (UI behavior test)', async ({ page }) => {
-    console.log('🧪 Testing Issue #124: Idle timeout during agent speech using UI behavior...');
+    // Skip test if real APIs are not available
+    // This test requires real Deepgram APIs because the idle timeout fix
+    // only triggers with real agent messages, not mock responses
+    const hasRealAPI = process.env.VITE_DEEPGRAM_API_KEY && 
+                      process.env.VITE_DEEPGRAM_API_KEY !== 'your-deepgram-api-key-here' &&
+                      process.env.VITE_DEEPGRAM_API_KEY !== 'your_actual_deepgram_api_key_here' &&
+                      !process.env.VITE_DEEPGRAM_API_KEY.startsWith('test-') &&
+                      process.env.VITE_DEEPGRAM_API_KEY.length >= 20;
+    
+    if (!hasRealAPI) {
+      test.skip('Skipping test - requires real Deepgram API key. See issue #99 for details.');
+      return;
+    }
+    
+    console.log('🧪 Testing idle timeout during agent speech using UI behavior...');
     
     // Step 1: Setup and establish connection
     console.log('Step 1: Setting up test page and establishing connection...');
@@ -154,7 +172,28 @@ test.describe('Issue #124: Idle Timeout During Agent Speech', () => {
   });
   
   test('should demonstrate connection stability during long agent response', async ({ page }) => {
+    // Skip test if real APIs are not available
+    const hasRealAPI = process.env.VITE_DEEPGRAM_API_KEY && 
+                      process.env.VITE_DEEPGRAM_API_KEY !== 'your-deepgram-api-key-here' &&
+                      process.env.VITE_DEEPGRAM_API_KEY !== 'your_actual_deepgram_api_key_here' &&
+                      !process.env.VITE_DEEPGRAM_API_KEY.startsWith('test-') &&
+                      process.env.VITE_DEEPGRAM_API_KEY.length >= 20;
+    
+    if (!hasRealAPI) {
+      test.skip('Skipping test - requires real Deepgram API key. See issue #99 for details.');
+      return;
+    }
+    
     console.log('🧪 Testing connection stability during long agent response...');
+    
+    // Capture console logs to see which service is timing out
+    const consoleLogs = [];
+    page.on('console', msg => {
+      const text = msg.text();
+      if (text.includes('Idle timeout') || text.includes('closing') || text.includes('connection')) {
+        consoleLogs.push({ timestamp: Date.now(), text });
+      }
+    });
     
     await setupTestPage(page);
     await waitForConnection(page, 10000);
@@ -194,6 +233,13 @@ test.describe('Issue #124: Idle Timeout During Agent Speech', () => {
     const finalStatus = await page.locator(SELECTORS.connectionStatus).textContent();
     console.log(`Final connection status: ${finalStatus}`);
     
+    // Log all console messages related to timeouts
+    console.log('\n📊 TIMEOUT-RELATED CONSOLE LOGS:');
+    consoleLogs.forEach((log, i) => {
+      const timeSinceStart = log.timestamp - startTime;
+      console.log(`  ${i + 1}. +${timeSinceStart}ms: ${log.text}`);
+    });
+    
     // Check if connection dropped during the monitoring period
     const connectionDropped = connectionChecks.some(check => check.status === 'closed');
     
@@ -209,6 +255,18 @@ test.describe('Issue #124: Idle Timeout During Agent Speech', () => {
   });
   
   test('should handle multiple rapid messages without timeout', async ({ page }) => {
+    // Skip test if real APIs are not available
+    const hasRealAPI = process.env.VITE_DEEPGRAM_API_KEY && 
+                      process.env.VITE_DEEPGRAM_API_KEY !== 'your-deepgram-api-key-here' &&
+                      process.env.VITE_DEEPGRAM_API_KEY !== 'your_actual_deepgram_api_key_here' &&
+                      !process.env.VITE_DEEPGRAM_API_KEY.startsWith('test-') &&
+                      process.env.VITE_DEEPGRAM_API_KEY.length >= 20;
+    
+    if (!hasRealAPI) {
+      test.skip('Skipping test - requires real Deepgram API key. See issue #99 for details.');
+      return;
+    }
+    
     console.log('🧪 Testing multiple rapid messages without timeout...');
     
     await setupTestPage(page);
