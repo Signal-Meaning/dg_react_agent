@@ -156,6 +156,8 @@ function DeepgramVoiceInteraction(
     onConnectionReady,
     onAgentSpeaking,
     onAgentSilent,
+    ttsMuted = false,
+    onTtsMuteToggle,
   } = props;
 
   // Internal state
@@ -737,6 +739,11 @@ function DeepgramVoiceInteraction(
         debug,
       });
 
+      // Set initial TTS mute state
+      audioManagerRef.current.setTtsMuted(ttsMuted);
+      dispatch({ type: 'TTS_MUTE_CHANGE', muted: ttsMuted });
+      log(`🔇 Initial TTS mute state set to: ${ttsMuted}`);
+
     // Set up event listeners for audio manager
       audioUnsubscribe = audioManagerRef.current.addEventListener((event: AudioEvent) => {
       if (event.type === 'ready') {
@@ -1174,12 +1181,15 @@ function DeepgramVoiceInteraction(
             }
           } : {})
         },
-        speak: {
-          provider: {
-            type: 'deepgram',
-            model: agentOptions.voice || 'aura-asteria-en'
+        // Only include speak provider if TTS is not muted
+        ...(state.ttsMuted ? {} : {
+          speak: {
+            provider: {
+              type: 'deepgram',
+              model: agentOptions.voice || 'aura-asteria-en'
+            }
           }
-        },
+        }),
         greeting: agentOptions.greeting,
         context: transformConversationHistory(state.conversationHistory) // Include conversation context in correct Deepgram API format
       }
@@ -2450,6 +2460,62 @@ function DeepgramVoiceInteraction(
     }
   };
 
+  // TTS mute control methods
+  const toggleTtsMute = (): void => {
+    log('🔇 toggleTtsMute method called');
+    
+    if (!audioManagerRef.current) {
+      log('Cannot toggle TTS mute: audio manager not initialized');
+      return;
+    }
+    
+    const newMutedState = !audioManagerRef.current.isTtsMuted;
+    audioManagerRef.current.setTtsMuted(newMutedState);
+    
+    // Update component state
+    dispatch({ type: 'TTS_MUTE_CHANGE', muted: newMutedState });
+    
+    log(`🔇 TTS mute state changed to: ${newMutedState}`);
+    
+    // Re-send agent settings with updated TTS mute state
+    if (agentManagerRef.current && agentManagerRef.current.isConnected()) {
+      log('🔇 Re-sending agent settings with updated TTS mute state');
+      sendAgentSettings();
+    }
+    
+    // Notify parent component of state change
+    if (onTtsMuteToggle) {
+      onTtsMuteToggle(newMutedState);
+    }
+  };
+
+  const setTtsMuted = (muted: boolean): void => {
+    log(`🔇 setTtsMuted method called with: ${muted}`);
+    
+    if (!audioManagerRef.current) {
+      log('Cannot set TTS mute: audio manager not initialized');
+      return;
+    }
+    
+    audioManagerRef.current.setTtsMuted(muted);
+    
+    // Update component state
+    dispatch({ type: 'TTS_MUTE_CHANGE', muted });
+    
+    log(`🔇 TTS mute state set to: ${muted}`);
+    
+    // Re-send agent settings with updated TTS mute state
+    if (agentManagerRef.current && agentManagerRef.current.isConnected()) {
+      log('🔇 Re-sending agent settings with updated TTS mute state');
+      sendAgentSettings();
+    }
+    
+    // Notify parent component of state change
+    if (onTtsMuteToggle) {
+      onTtsMuteToggle(muted);
+    }
+  };
+
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     start,
@@ -2475,6 +2541,8 @@ function DeepgramVoiceInteraction(
       agentConnected: agentManagerRef.current?.isConnected() || false,
     }),
     getState: () => state,
+    toggleTtsMute,
+    setTtsMuted,
   }));
 
   // Render nothing (headless component)
