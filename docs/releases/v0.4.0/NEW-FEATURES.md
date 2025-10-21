@@ -1,5 +1,94 @@
 # New Features - v0.4.0
 
+## 🎤 TTS Mute Functionality
+
+### Complete Audio Control
+- **Toggle Method**: `toggleTtsMute()` - Toggle TTS mute state on/off
+- **Set Method**: `setTtsMuted(muted: boolean)` - Explicitly set mute state
+- **State Property**: `ttsMuted` - Track current mute state
+- **Callback**: `onTtsMuteToggle(isMuted: boolean)` - React to mute state changes
+
+### Usage Examples
+```typescript
+// Basic usage
+const ref = useRef<DeepgramVoiceInteractionHandle>(null);
+
+const handleMuteToggle = () => {
+  ref.current?.toggleTtsMute();
+};
+
+// Explicit control
+const handleMuteChange = (shouldMute: boolean) => {
+  ref.current?.setTtsMuted(shouldMute);
+};
+
+// React to changes
+<DeepgramVoiceInteraction
+  onTtsMuteToggle={(isMuted) => {
+    console.log('TTS muted:', isMuted);
+    setMuteButtonText(isMuted ? '🔇 MUTED' : '🔊 ENABLED');
+  }}
+/>
+```
+
+## 🎯 VoiceAgent Event Hooks
+
+### Comprehensive Voice Interaction Events
+- **Agent Events**: `onAgentSpeaking()` / `onAgentSilent()` - Track when agent starts/stops speaking
+- **User Events**: `onUserStoppedSpeaking()` - Detect when user stops speaking
+- **VAD Events**: `onUtteranceEnd()`, `onSpeechStarted()`, `onVADEvent()` - Voice Activity Detection
+- **Real-time Data**: Access to Deepgram's voice activity detection data
+
+### Event Callback Examples
+```typescript
+<DeepgramVoiceInteraction
+  // Agent speaking events
+  onAgentSpeaking={() => {
+    console.log('Agent started speaking');
+    setAgentStatus('Speaking...');
+  }}
+  onAgentSilent={() => {
+    console.log('Agent finished speaking');
+    setAgentStatus('Listening...');
+  }}
+  
+  // User speech events
+  onUserStoppedSpeaking={() => {
+    console.log('User stopped speaking');
+    setUserStatus('Processing...');
+  }}
+  
+  // VAD events with data
+  onUtteranceEnd={(data) => {
+    console.log('Utterance ended:', data);
+    // data: { channel: number[]; lastWordEnd: number }
+  }}
+  onSpeechStarted={(data) => {
+    console.log('Speech started:', data);
+    // data: { channel: number[]; timestamp: number }
+  }}
+  onVADEvent={(data) => {
+    console.log('VAD event:', data);
+    // data: { speechDetected: boolean; confidence?: number; timestamp?: number }
+  }}
+/>
+```
+
+## ⏱️ Enhanced Idle Timeout Management
+
+### Smart Connection Management
+- **Agent Speech Protection**: Prevents timeouts during agent responses
+- **Intelligent Timing**: Only times out during actual idle periods
+- **Connection Stability**: Maintains stable connections during voice interactions
+
+### How It Works
+```typescript
+// Automatic timeout management
+// - Disables timeouts when agent starts speaking
+// - Re-enables timeouts when agent finishes
+// - Prevents mid-sentence disconnections
+```
+
 ## 🚀 Release Process Enhancement
 
 ### Comprehensive Release Checklist

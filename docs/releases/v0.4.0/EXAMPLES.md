@@ -271,12 +271,62 @@ const toggleMicrophone = () => {
 };
 ```
 
-### Toggle TTS Mute
+### TTS Mute Control
 ```typescript
+// Toggle TTS mute
 const toggleTtsMute = () => {
   if (voiceRef.current) {
     voiceRef.current.toggleTtsMute();
   }
+};
+
+// Set TTS mute state explicitly
+const setTtsMuted = (muted: boolean) => {
+  if (voiceRef.current) {
+    voiceRef.current.setTtsMuted(muted);
+  }
+};
+
+// React to mute state changes
+const handleTtsMuteToggle = (isMuted: boolean) => {
+  console.log('TTS muted:', isMuted);
+  setMuteButtonText(isMuted ? '🔇 MUTED' : '🔊 ENABLED');
+};
+```
+
+### VoiceAgent Event Hooks
+```typescript
+// Agent speaking events
+const handleAgentSpeaking = () => {
+  console.log('Agent started speaking');
+  setAgentStatus('Speaking...');
+};
+
+const handleAgentSilent = () => {
+  console.log('Agent finished speaking');
+  setAgentStatus('Listening...');
+};
+
+// User speech events
+const handleUserStoppedSpeaking = () => {
+  console.log('User stopped speaking');
+  setUserStatus('Processing...');
+};
+
+// VAD events with data
+const handleUtteranceEnd = (data) => {
+  console.log('Utterance ended:', data);
+  // data: { channel: number[]; lastWordEnd: number }
+};
+
+const handleSpeechStarted = (data) => {
+  console.log('Speech started:', data);
+  // data: { channel: number[]; timestamp: number }
+};
+
+const handleVADEvent = (data) => {
+  console.log('VAD event:', data);
+  // data: { speechDetected: boolean; confidence?: number; timestamp?: number }
 };
 ```
 
