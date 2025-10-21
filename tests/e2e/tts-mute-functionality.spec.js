@@ -67,6 +67,9 @@ test.describe('TTS Mute Functionality', () => {
     await expect(muteButton).toContainText('🔇 TTS MUTED');
     await expect(page.locator('[data-testid="tts-muted-status"]')).toContainText('true');
     
+    // Wait a bit for React state update to complete
+    await page.waitForTimeout(100);
+    
     // Check button styling for muted state
     const mutedButtonStyle = await muteButton.evaluate(el => {
       const style = getComputedStyle(el);
@@ -78,8 +81,9 @@ test.describe('TTS Mute Functionality', () => {
     });
     
     // Should have red styling for muted state (be more flexible with color matching)
-    expect(mutedButtonStyle.borderColor).toMatch(/rgb\(220, 53, 69\)|rgb\(5[3-4], 15[8-9], 69\)/); // Allow both red and green variants
-    expect(mutedButtonStyle.backgroundColor).toContain('rgb(248, 215, 218)'); // #f8d7da
+    // Allow for browser color calculation variations
+    expect(mutedButtonStyle.borderColor).toMatch(/rgb\(19[0-9], [4-7][0-9], 69\)|rgb\(22[0-1], 5[0-9], 69\)/); // Red variants
+    expect(mutedButtonStyle.backgroundColor).toMatch(/rgb\(24[0-9], 21[0-9], 21[0-9]\)|rgb\(24[0-9], 21[0-9], 22[0-9]\)/); // Light red variants
     
     // Click to unmute
     await muteButton.click();

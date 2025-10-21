@@ -666,6 +666,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <p>Audio Recording: <strong>{isRecording.toString()}</strong></p>
         <p>Audio Playing: <strong data-testid="audio-playing-status">{isPlaying.toString()}</strong></p>
         <p>TTS Muted: <strong data-testid="tts-muted-status">{isTtsMuted.toString()}</strong></p>
+        <p>Component Ready: <strong data-testid="component-ready-status">{isReady.toString()}</strong></p>
         <h4>Auto-Connect Dual Mode States:</h4>
         <div data-testid="auto-connect-states">
           <p>Microphone Enabled: <strong data-testid="mic-status">{micEnabled ? 'Enabled' : 'Disabled'}</strong></p>

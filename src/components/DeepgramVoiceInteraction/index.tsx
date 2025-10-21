@@ -1842,6 +1842,8 @@ function DeepgramVoiceInteraction(
         log('AudioManager not available for recording - this is expected for text-only agent interactions');
       }
       
+      // Set ready state to true after successful start
+      dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
       log('Start method completed successfully');
     } catch (error) {
       log('Error within start method:', error);
@@ -1881,6 +1883,9 @@ function DeepgramVoiceInteraction(
       
       // DO NOT start recording - this is text-only mode
       log('Text-only connection established (no audio recording)');
+      
+      // Set ready state to true after successful text-only connection
+      dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
     } catch (error) {
       log('Error within connectTextOnly method:', error);
       handleError({
@@ -1922,8 +1927,8 @@ function DeepgramVoiceInteraction(
         agentManagerRef.current.close();
       }
       
-      // Signal not ready after stopping
-      dispatch({ type: 'READY_STATE_CHANGE', isReady: false }); 
+      // Signal ready after stopping - component can accept new connections
+      dispatch({ type: 'READY_STATE_CHANGE', isReady: true }); 
       return Promise.resolve();
     } catch (error) {
       log('Error stopping:', error);
