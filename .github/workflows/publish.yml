@@ -16,6 +16,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
       
     steps:
       - name: Checkout code
@@ -27,7 +28,7 @@ jobs:
           node-version: '20'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@signal-meaning'
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.NPM_PACKAGES_TOKEN }}
           
       - name: Install dependencies
         run: npm ci
@@ -37,6 +38,12 @@ jobs:
         
       - name: Run tests
         run: npm test
+        
+      - name: Configure npm authentication
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
+          echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          cat ~/.npmrc
         
       - name: Publish to GitHub Package Registry
         run: npm publish
@@ -52,7 +59,7 @@ jobs:
           
           # Configure npm for GitHub Package Registry
           echo "@signal-meaning:registry=https://npm.pkg.github.com" > .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" >> .npmrc
           
           # Install the package
           npm install @signal-meaning/deepgram-voice-interaction-react
