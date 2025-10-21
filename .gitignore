@@ -22,6 +22,9 @@ build/
 .env.test.local
 .env.production.local
 
+# NPM configuration with tokens
+.npmrc
+
 # IDE files
 .vscode/
 .idea/
