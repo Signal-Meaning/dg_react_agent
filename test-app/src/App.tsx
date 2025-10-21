@@ -367,6 +367,10 @@ function App() {
         setTimeout(() => {
           setAgentResponse(`[MOCK] I received your message: "${textInput}". How can I help you with that?`);
           addLog('Mock agent responded to text message');
+          
+          // Note: Mock responses don't trigger the idle timeout fix
+          // The fix only works with real agent messages, not mock responses
+          // See issue #99 for details on mock vs real API testing limitations
         }, 1000);
       }
       
