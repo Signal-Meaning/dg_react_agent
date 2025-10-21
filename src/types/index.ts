@@ -193,6 +193,16 @@ export interface DeepgramVoiceInteractionProps {
   onAgentSilent?: () => void;
 
   /**
+   * TTS mute state - when true, TTS audio is muted
+   */
+  ttsMuted?: boolean;
+
+  /**
+   * Called when TTS mute state changes
+   */
+  onTtsMuteToggle?: (isMuted: boolean) => void;
+
+  /**
    * VAD (Voice Activity Detection) Event Callbacks
    */
   
@@ -326,6 +336,16 @@ export interface DeepgramVoiceInteractionHandle {
    * Get current component state for debugging (testing only)
    */
   getState: () => any;
+
+  /**
+   * Toggle TTS mute state
+   */
+  toggleTtsMute: () => void;
+
+  /**
+   * Set TTS mute state
+   */
+  setTtsMuted: (muted: boolean) => void;
 }
 
 // REMOVE the duplicate AgentState definition at the end of this file
