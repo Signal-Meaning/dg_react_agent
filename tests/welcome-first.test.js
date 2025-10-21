@@ -112,7 +112,8 @@ AudioManager.mockImplementation(() => ({
   startRecording: jest.fn().mockResolvedValue(),
   stopRecording: jest.fn(),
   addEventListener: jest.fn().mockReturnValue(mockUnsubscribe),
-  dispose: jest.fn()
+  dispose: jest.fn(),
+  setTtsMuted: jest.fn()
 }));
 
 // Mock console methods to reduce noise in tests

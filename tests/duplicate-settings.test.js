@@ -111,7 +111,8 @@ describe('Duplicate Settings Prevention', () => {
       startRecording: jest.fn().mockResolvedValue(),
       stopRecording: jest.fn(),
       addEventListener: jest.fn().mockReturnValue(jest.fn()),
-      dispose: jest.fn()
+      dispose: jest.fn(),
+      setTtsMuted: jest.fn()
     }));
 
     render(
@@ -176,7 +177,8 @@ describe('Duplicate Settings Prevention', () => {
       startRecording: jest.fn().mockResolvedValue(),
       stopRecording: jest.fn(),
       addEventListener: jest.fn().mockReturnValue(jest.fn()),
-      dispose: jest.fn()
+      dispose: jest.fn(),
+      setTtsMuted: jest.fn()
     }));
 
     const ref = React.createRef();
@@ -261,7 +263,8 @@ describe('Duplicate Settings Prevention', () => {
       startRecording: jest.fn().mockResolvedValue(),
       stopRecording: jest.fn(),
       addEventListener: jest.fn().mockReturnValue(jest.fn()),
-      dispose: jest.fn()
+      dispose: jest.fn(),
+      setTtsMuted: jest.fn()
     }));
 
     const ref = React.createRef();
@@ -336,7 +339,8 @@ describe('Duplicate Settings Prevention', () => {
       startRecording: jest.fn().mockResolvedValue(),
       stopRecording: jest.fn(),
       addEventListener: jest.fn().mockReturnValue(jest.fn()),
-      dispose: jest.fn()
+      dispose: jest.fn(),
+      setTtsMuted: jest.fn()
     }));
 
     render(
