@@ -1022,9 +1022,6 @@ function DeepgramVoiceInteraction(
       return;
     }
 
-    // Note: UserStoppedSpeaking is not a real Deepgram event - removed handler
-    // Use UtteranceEnd for speech end detection instead
-
     if (data.type === 'UtteranceEnd') {
       console.log('🎯 [VAD] UtteranceEnd message received from transcription service:', data);
       if (isSleepingOrEntering) {
@@ -1590,7 +1587,11 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
       dispatch({ type: 'UTTERANCE_END', data: { channel, lastWordEnd } });
       
-      // Note: onUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
+      // User stopped speaking
+      if (userSpeakingRef.current) {
+        userSpeakingRef.current = false;
+        onUserStoppedSpeaking?.();
+      }
       
       // Disable keepalives when utterance ends
       updateKeepaliveState(false);
@@ -1639,7 +1640,11 @@ function DeepgramVoiceInteraction(
         // User stopped speaking - keep idle timeout resets disabled to allow natural timeout
         console.log('🎯 [VAD] VADEvent speechDetected: false - keeping idle timeout resets disabled');
         
-        // onUserStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
+        // User stopped speaking
+        if (userSpeakingRef.current) {
+          userSpeakingRef.current = false;
+          onUserStoppedSpeaking?.();
+        }
         dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
         updateKeepaliveState(false);
         
