@@ -1,0 +1,47 @@
+name: Test Publish Authentication
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-publish-auth:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@signal-meaning'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Build package
+        run: npm run build
+        
+      - name: Test authentication (exact same as publish workflow)
+        run: |
+          echo "=== Testing exact same authentication as publish workflow ==="
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" > ~/.npmrc
+          echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "Manual .npmrc content:"
+          cat ~/.npmrc
+          echo ""
+          echo "Testing whoami:"
+          npm whoami --registry https://npm.pkg.github.com || echo "Whoami failed"
+          echo ""
+          echo "Testing package view:"
+          npm view @signal-meaning/deepgram-voice-interaction-react --registry https://npm.pkg.github.com || echo "Package view failed"
+          echo ""
+          echo "Testing dry run publish:"
+          npm publish --dry-run || echo "Dry run failed"
