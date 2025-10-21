@@ -421,6 +421,14 @@ export class WebSocketManager {
     
     if (this.options.idleTimeout && this.options.idleTimeout > 0) {
       this.idleTimeoutId = window.setTimeout(() => {
+        // Check if idle timeout resets are disabled before firing
+        console.log(`🔧 [WebSocketManager] DEBUG: Timeout fired for ${this.options.service}, idleTimeoutDisabled = ${this.idleTimeoutDisabled}`);
+        if (this.idleTimeoutDisabled) {
+          this.log(`Idle timeout reached but resets are disabled - not closing connection for ${this.options.service}`);
+          console.log(`🔧 [WebSocketManager] Idle timeout reached but resets are disabled - not closing ${this.options.service} connection`);
+          return;
+        }
+        
         this.log(`Idle timeout reached (${this.options.idleTimeout}ms) - closing connection`);
         console.log(`🔧 [WebSocketManager] Idle timeout reached (${this.options.idleTimeout}ms) - closing ${this.options.service} connection`);
         this.close();
@@ -493,8 +501,9 @@ export class WebSocketManager {
   public disableIdleTimeoutResets(): void {
     this.idleTimeoutDisabled = true;
     console.log(`🔧 [WebSocketManager] Disabled idle timeout resets for ${this.options.service} - connection will timeout naturally`);
-    // Start the idle timeout immediately since resets are disabled
-    this.startIdleTimeout();
+    console.log(`🔧 [WebSocketManager] DEBUG: idleTimeoutDisabled = ${this.idleTimeoutDisabled} for ${this.options.service}`);
+    // Don't start idle timeout immediately - let it timeout naturally when resets are disabled
+    // The timeout will fire but won't close the connection due to the check in startIdleTimeout()
   }
 
   /**
