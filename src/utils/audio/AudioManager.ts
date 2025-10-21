@@ -686,12 +686,12 @@ export class AudioManager {
   public isPlaybackActive(): boolean {
     // Check both the playing flag and active sources
     // This handles race conditions where isPlaying might be stale
-    const hasActiveSources = this.activeSourceNodes.length > 0;
+    const hasActiveSources = this.activeSourceNodes ? this.activeSourceNodes.length > 0 : false;
     const result = this.isPlaying || hasActiveSources;
     
     // Sync the flag if we detect a mismatch
     if (this.isPlaying !== hasActiveSources) {
-      this.log(`⚠️ isPlaying mismatch detected: isPlaying=${this.isPlaying}, activeSourceNodes=${this.activeSourceNodes.length}, syncing to ${result}`);
+      this.log(`⚠️ isPlaying mismatch detected: isPlaying=${this.isPlaying}, activeSourceNodes=${this.activeSourceNodes?.length || 0}, syncing to ${result}`);
       this.isPlaying = result;
     }
     
