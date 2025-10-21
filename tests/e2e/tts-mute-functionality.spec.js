@@ -408,4 +408,84 @@ test.describe('TTS Mute Functionality', () => {
     // Verify muted state is reflected in button text
     await expect(muteButton).toContainText('🔇 TTS MUTED');
   });
+
+  test('TTS mute state should be respected during ongoing agent responses (Issue #127)', async ({ page }) => {
+    // Skip test if real APIs are not available
+    // This test requires real Deepgram APIs because the TTS mute bug
+    // only manifests with real agent responses, not mock responses
+    const hasRealAPI = process.env.VITE_DEEPGRAM_API_KEY && 
+                      process.env.VITE_DEEPGRAM_API_KEY !== 'your-deepgram-api-key-here' &&
+                      process.env.VITE_DEEPGRAM_API_KEY !== 'your_actual_deepgram_api_key_here' &&
+                      !process.env.VITE_DEEPGRAM_API_KEY.startsWith('test-') &&
+                      process.env.VITE_DEEPGRAM_API_KEY.length >= 20;
+    
+    if (!hasRealAPI) {
+      test.skip('Skipping test - requires real Deepgram API key. See issue #99 for details.');
+      return;
+    }
+
+    const muteButton = page.locator('[data-testid="tts-mute-button"]');
+    
+    // Start interaction
+    await page.click('[data-testid="start-button"]');
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    
+    // Send a text message that should trigger a long TTS response
+    await page.fill('[data-testid="text-input"]', 'Tell me a story about a rabbit and a hamster');
+    await page.click('[data-testid="send-button"]');
+    
+    // Wait for agent to start responding
+    await page.waitForTimeout(2000);
+    
+    // Check if agent is speaking
+    const agentSpeaking = await page.locator('[data-testid="agent-speaking"]').textContent();
+    const audioPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
+    
+    console.log('Agent speaking status:', agentSpeaking);
+    console.log('Audio playing status:', audioPlaying);
+    
+    // Mute TTS while agent is responding
+    await muteButton.click();
+    await expect(page.locator('[data-testid="tts-muted-status"]')).toContainText('true');
+    console.log('TTS muted during agent response');
+    
+    // Wait for agent to continue responding (this is where the bug occurs)
+    // The agent should NOT resume audio playback while muted
+    await page.waitForTimeout(5000);
+    
+    // Check that mute state is still active
+    await expect(page.locator('[data-testid="tts-muted-status"]')).toContainText('true');
+    await expect(muteButton).toContainText('🔇 TTS MUTED');
+    
+    // Check if audio is still playing (it shouldn't be if mute is working correctly)
+    const audioPlayingAfterMute = await page.locator('[data-testid="audio-playing-status"]').textContent();
+    console.log('Audio playing after mute:', audioPlayingAfterMute);
+    
+    // This test should FAIL if audio is still playing while muted
+    // This indicates Issue #127 - TTS mute state not respected during agent responses
+    expect(audioPlayingAfterMute).toBe('false');
+    
+    if (audioPlayingAfterMute === 'true') {
+      console.log('❌ BUG DETECTED: Audio is still playing while TTS is muted!');
+      console.log('This confirms Issue #127 - TTS mute state not respected during agent responses');
+      throw new Error('TTS mute state not respected during agent responses - audio continues playing while muted');
+    } else {
+      console.log('✅ TTS mute is working correctly - no audio playing while muted');
+    }
+    
+    // Unmute TTS
+    await muteButton.click();
+    await expect(page.locator('[data-testid="tts-muted-status"]')).toContainText('false');
+    console.log('TTS unmuted');
+    
+    // Send another message to test that TTS works after unmuting
+    await page.fill('[data-testid="text-input"]', 'Say hello');
+    await page.click('[data-testid="send-button"]');
+    
+    // Wait to see if TTS resumes
+    await page.waitForTimeout(3000);
+    
+    // Verify button shows correct state
+    await expect(muteButton).toContainText('🔊 TTS ENABLED');
+  });
 });
