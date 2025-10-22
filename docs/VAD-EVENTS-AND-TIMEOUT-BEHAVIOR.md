@@ -31,6 +31,73 @@ The component receives VAD signals from two different Deepgram services:
 - **Data**: `{ channel: number[]; lastWordEnd: number }`
 - **Purpose**: End-of-speech detection based on Deepgram's utterance detection
 
+## End-of-Speech Detection
+
+The component follows Deepgram's recommended pattern for detecting when a user has finished speaking:
+
+### Speech Detection Signals
+
+1. **`speech_final=true`** in transcript results (from Endpointing feature)
+   - Callback: `onUserStoppedSpeaking`
+   - Triggers when Deepgram's VAD detects silence after speech
+   - **When this fires, subsequent UtteranceEnd messages are ignored**
+
+2. **`UtteranceEnd`** message (from UtteranceEnd feature)
+   - Callback: `onUtteranceEnd` and `onUserStoppedSpeaking`
+   - Triggers when word timing gap exceeds `utterance_end_ms` threshold
+   - **Only processed if NO `speech_final=true` was received**
+
+### Recommended Pattern (Per Deepgram Docs)
+
+According to [Deepgram's official documentation](https://developers.deepgram.com/docs/understanding-end-of-speech-detection#using-utteranceend):
+
+> When using both features in your app, you may want to trigger your "speaker has finished speaking" logic using the following rules:
+> 
+> - trigger when a transcript with `speech_final=true` is received (which may be followed by an `UtteranceEnd` message which can be ignored)
+> - trigger if you receive an `UtteranceEnd` message with no preceding `speech_final=true` message and send the last-received transcript for further processing
+
+### Implementation
+
+The component implements this by:
+1. Setting a flag when `speech_final=true` is received
+2. Checking this flag before processing `UtteranceEnd` messages
+3. Resetting the flag when new speech starts (`SpeechStarted`)
+
+This ensures `isUserSpeaking` becomes `false` when **EITHER**:
+- `speech_final=true` is received (ignore UtteranceEnd), OR
+- `UtteranceEnd` is received with NO preceding `speech_final=true`
+
+## Architecture: IdleTimeoutService
+
+The component uses a dedicated `IdleTimeoutService` for clean separation of concerns:
+
+### Event-Driven Design
+
+The service handles idle timeout through events rather than complex state watching:
+
+```typescript
+// Events that affect idle timeout behavior
+type IdleTimeoutEvent = 
+  | { type: 'USER_STARTED_SPEAKING' }
+  | { type: 'USER_STOPPED_SPEAKING' }
+  | { type: 'AGENT_STATE_CHANGED'; state: string }
+  | { type: 'PLAYBACK_STATE_CHANGED'; isPlaying: boolean }
+  | { type: 'MEANINGFUL_USER_ACTIVITY'; activity: string };
+```
+
+### Clean Separation
+
+- **Speech Detection**: Handled by the main component using reducer state
+- **Idle Timeout Management**: Handled by `IdleTimeoutService`
+- **WebSocket Activity**: Detected by `WebSocketManager` and reported via callbacks
+
+### Benefits
+
+1. **Single Responsibility**: Each service has one clear purpose
+2. **Testable**: Services can be tested independently
+3. **Maintainable**: Clear boundaries between concerns
+4. **Event-Driven**: Reactive architecture using events
+
 ## Signal Redundancy
 
 ### The Problem

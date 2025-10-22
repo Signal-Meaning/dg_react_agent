@@ -166,7 +166,7 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
           console.log(`  - UtteranceEnd ${index + 1}:`);
           console.log(`    - Last word ended at: ${event.lastWordEnd}s`);
           console.log(`    - Channel: [${event.channel ? event.channel.join(', ') : 'N/A'}]`);
-          console.log(`    - Event timestamp: ${new Date(event.timestamp).toISOString()}`);
+          console.log(`    - Event timestamp: ${event.timestamp ? new Date(event.timestamp).toISOString() : 'N/A'}`);
         });
         
         // Calculate remaining silence
@@ -183,35 +183,68 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
         }
       }
       
-      // Verify that we got the expected events
-      expect(consoleLogs.some(log => log.includes('SpeechStarted'))).toBe(true);
+      // Test the complete flow using data-testid elements
       
-      if (utteranceEndEvents.length > 0) {
-        console.log('🎉 SUCCESS: UtteranceEnd events detected by Deepgram VAD!');
-        expect(userStoppedSpeakingEvents.length).toBeGreaterThan(0);
-        console.log('🎉 SUCCESS: onUserStoppedSpeaking callback triggered naturally!');
+      // 1. Wait for speech detection
+      console.log('⏳ Waiting for speech detection...');
+      await page.waitForFunction(() => 
+        document.querySelector('[data-testid="speech-started"]')?.textContent !== 'Not detected'
+      , { timeout: 10000 });
+      
+      const speechStarted = await page.locator('[data-testid="speech-started"]').textContent();
+      expect(speechStarted).not.toBe('Not detected');
+      console.log('✅ Speech started detected:', speechStarted);
+      
+      // 2. Check user speaking state (may be true or false depending on timing)
+      const isUserSpeaking = await page.locator('[data-testid="user-speaking"]').textContent();
+      console.log('📊 User speaking state:', isUserSpeaking);
+      
+      // Note: The state may be false if UtteranceEnd events have already been processed
+      // This is expected behavior - the important part is that UtteranceEnd detection works
+      
+      // 3. Wait for UtteranceEnd detection
+      console.log('⏳ Waiting for UtteranceEnd detection...');
+      await page.waitForFunction(() => 
+        document.querySelector('[data-testid="utterance-end"]')?.textContent !== 'Not detected'
+      , { timeout: 10000 });
+      
+      const utteranceEnd = await page.locator('[data-testid="utterance-end"]').textContent();
+      expect(utteranceEnd).not.toBe('Not detected');
+      console.log('✅ UtteranceEnd detected:', utteranceEnd);
+      
+      // 4. Check user stopped speaking callback
+      const userStoppedSpeaking = await page.locator('[data-testid="user-stopped-speaking"]').textContent();
+      expect(userStoppedSpeaking).not.toBe('Not detected');
+      console.log('✅ User stopped speaking callback:', userStoppedSpeaking);
+      
+      // 5. Wait for all events to be processed before checking final state
+      console.log('⏳ Waiting for all events to be processed...');
+      await page.waitForTimeout(2000);
+      
+      // 6. Verify user speaking state is now false
+      const isUserSpeakingAfter = await page.locator('[data-testid="user-speaking"]').textContent();
+      console.log('🔍 DEBUG: User speaking state after UtteranceEnd:', isUserSpeakingAfter);
+      console.log('🔍 DEBUG: utteranceEndDetected flag:', await page.locator('p:has-text("Debug - utteranceEndDetected")').textContent());
+      
+      // Check if the state is actually false
+      if (isUserSpeakingAfter === 'false') {
+        console.log('✅ User speaking state is correctly false');
       } else {
-        console.log('⚠️ No UtteranceEnd events detected - audio sample may need more silence');
-        console.log('💡 This suggests the silence duration in the audio sample is insufficient');
-        console.log('💡 Current utterance_end_ms setting:', 1500, 'ms');
-        console.log('💡 Audio sample silence duration:', 2000, 'ms (should be sufficient)');
+        console.log('❌ User speaking state is still true, this indicates a bug in the state management');
+        // Let's see what other debugging info we can get
+        const vadStates = await page.locator('[data-testid="vad-states"]').textContent();
+        console.log('🔍 DEBUG: Full VAD states:', vadStates);
       }
       
-      // Check VAD event display elements
-      const vadElements = await page.evaluate(() => {
-        return {
-          userSpeaking: document.querySelector('[data-testid="user-speaking"]')?.textContent || 'Not found',
-          userStoppedSpeaking: document.querySelector('[data-testid="user-stopped-speaking"]')?.textContent || 'Not found',
-          utteranceEnd: document.querySelector('[data-testid="utterance-end"]')?.textContent || 'Not found',
-          speechStarted: document.querySelector('[data-testid="speech-started"]')?.textContent || 'Not found'
-        };
-      });
+      expect(isUserSpeakingAfter).toBe('false');
+      console.log('✅ User speaking state after UtteranceEnd:', isUserSpeakingAfter);
       
-      console.log('📊 VAD Elements Status:');
-      console.log('  - User Speaking:', vadElements.userSpeaking);
-      console.log('  - User Stopped Speaking:', vadElements.userStoppedSpeaking);
-      console.log('  - Utterance End:', vadElements.utteranceEnd);
-      console.log('  - Speech Started:', vadElements.speechStarted);
+      console.log('\n🎉 SUCCESS: onUserStoppedSpeaking demonstration completed');
+      console.log('💡 This demonstrates that:');
+      console.log('  1. Speech detection works via data-testid elements');
+      console.log('  2. UtteranceEnd detection works via data-testid elements');
+      console.log('  3. onUserStoppedSpeaking callback works via data-testid elements');
+      console.log('  4. User speaking state updates correctly');
       
       console.log('✅ onUserStoppedSpeaking demonstration completed');
       
@@ -283,7 +316,7 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
     }
     
     // Test with multiple audio samples
-    const sampleNames = ['hello', 'wait-one-moment', 'thank-you'];
+    const sampleNames = ['hello', 'hello_there', 'hello_extended'];
     let totalUtteranceEndEvents = 0;
     let totalUserStoppedSpeakingEvents = 0;
     
@@ -332,33 +365,32 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
       }, sampleName);
       
       // Wait for events to be processed
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(3000);
       
-      // Count events for this sample
-      const sampleUtteranceEndEvents = consoleLogs.filter(log => 
-        log.includes('UtteranceEnd')
-      ).length;
+      // Check events using data-testid elements (same method as final verification)
+      const utteranceEndDetected = await page.locator('[data-testid="utterance-end"]').textContent();
+      const userStoppedSpeakingDetected = await page.locator('[data-testid="user-stopped-speaking"]').textContent();
       
-      const sampleUserStoppedSpeakingEvents = consoleLogs.filter(log => 
-        log.includes('🎤 [AGENT] User stopped speaking')
-      ).length;
+      const hasUtteranceEnd = utteranceEndDetected !== 'Not detected';
+      const hasUserStoppedSpeaking = userStoppedSpeakingDetected !== 'Not detected';
       
       console.log(`📊 ${sampleName} results:`);
-      console.log(`  - UtteranceEnd events: ${sampleUtteranceEndEvents}`);
-      console.log(`  - User stopped speaking events: ${sampleUserStoppedSpeakingEvents}`);
+      console.log(`  - UtteranceEnd events: ${hasUtteranceEnd ? '1' : '0'}`);
+      console.log(`  - User stopped speaking events: ${hasUserStoppedSpeaking ? '1' : '0'}`);
       
-      totalUtteranceEndEvents = sampleUtteranceEndEvents;
-      totalUserStoppedSpeakingEvents = sampleUserStoppedSpeakingEvents;
+      if (hasUtteranceEnd) totalUtteranceEndEvents++;
+      if (hasUserStoppedSpeaking) totalUserStoppedSpeakingEvents++;
       
       // Wait between samples
       if (i < sampleNames.length - 1) {
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(2000);
       }
     }
     
     console.log('\n📊 Final Results:');
     console.log(`  - Total UtteranceEnd events: ${totalUtteranceEndEvents}`);
     console.log(`  - Total User stopped speaking events: ${totalUserStoppedSpeakingEvents}`);
+    console.log('💡 Note: Events are detected via data-testid elements, same method as final verification');
     
     // Analyze timing information for all samples
     if (vadEvents.length > 0) {
@@ -367,7 +399,7 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
         console.log(`  - UtteranceEnd ${index + 1}:`);
         console.log(`    - Last word ended at: ${event.lastWordEnd}s`);
         console.log(`    - Channel: [${event.channel.join(', ')}]`);
-        console.log(`    - Event timestamp: ${new Date(event.timestamp).toISOString()}`);
+        console.log(`    - Event timestamp: ${event.timestamp ? new Date(event.timestamp).toISOString() : 'N/A'}`);
       });
       
       // Calculate average remaining silence
@@ -383,16 +415,41 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
       console.log(`  - Max remaining silence: ${Math.max(...remainingSilences).toFixed(3)}s`);
     }
     
-    // Verify that we got at least some UtteranceEnd events
-    if (totalUtteranceEndEvents > 0) {
-      console.log('🎉 SUCCESS: UtteranceEnd events detected across multiple samples!');
-      expect(totalUserStoppedSpeakingEvents).toBeGreaterThan(0);
-      console.log('🎉 SUCCESS: onUserStoppedSpeaking callback working with multiple samples!');
-    } else {
-      console.log('⚠️ No UtteranceEnd events detected - audio samples may need more silence');
-      console.log('💡 This suggests the silence duration in audio samples is insufficient for VAD');
-      console.log('💡 Try increasing offsetSilenceDuration in samples.json or reducing utterance_end_ms');
-    }
+    // Test the final state using data-testid elements
+    console.log('⏳ Checking final state via data-testid elements...');
+    
+    // Wait for user speaking state to be updated to false
+    await page.waitForFunction(() => 
+      document.querySelector('[data-testid="user-speaking"]')?.textContent === 'false'
+    , { timeout: 10000 });
+    
+    // Wait for any final events to be processed
+    await page.waitForTimeout(2000);
+    
+    // Check final VAD state
+    const finalSpeechStarted = await page.locator('[data-testid="speech-started"]').textContent();
+    const finalUtteranceEnd = await page.locator('[data-testid="utterance-end"]').textContent();
+    const finalUserStoppedSpeaking = await page.locator('[data-testid="user-stopped-speaking"]').textContent();
+    const finalUserSpeaking = await page.locator('[data-testid="user-speaking"]').textContent();
+    
+    console.log('📊 Final VAD State:');
+    console.log('  - Speech Started:', finalSpeechStarted);
+    console.log('  - Utterance End:', finalUtteranceEnd);
+    console.log('  - User Stopped Speaking:', finalUserStoppedSpeaking);
+    console.log('  - User Speaking:', finalUserSpeaking);
+    
+    // Verify that we got the expected events via data-testid elements
+    expect(finalSpeechStarted).not.toBe('Not detected');
+    expect(finalUtteranceEnd).not.toBe('Not detected');
+    expect(finalUserStoppedSpeaking).not.toBe('Not detected');
+    expect(finalUserSpeaking).toBe('false');
+    
+    console.log('🎉 SUCCESS: Multiple samples demonstration completed via data-testid elements!');
+    console.log('💡 This demonstrates that:');
+    console.log('  1. Speech detection works across multiple audio samples');
+    console.log('  2. UtteranceEnd detection works across multiple audio samples');
+    console.log('  3. onUserStoppedSpeaking callback works across multiple audio samples');
+    console.log('  4. User speaking state updates correctly across multiple audio samples');
     
     console.log('✅ Multiple samples demonstration completed');
   });

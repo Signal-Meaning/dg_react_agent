@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { WebSocketManager } from '../utils/websocket/WebSocketManager';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { VoiceInteractionState } from '../utils/state/VoiceInteractionState';
+import { WebSocketManager } from '../utils/websocket/WebSocketManager';
+import { IdleTimeoutService, IdleTimeoutEvent } from '../utils/IdleTimeoutService';
 
 /**
- * Custom hook for managing idle timeout resets based on component state
+ * Custom hook for managing idle timeout using the IdleTimeoutService
  * 
- * This hook centralizes all idle timeout management logic and provides
- * a clean interface for the DeepgramVoiceInteraction component.
+ * This hook provides a clean interface between the component and the
+ * centralized idle timeout service.
  */
 export function useIdleTimeoutManager(
   state: VoiceInteractionState,
@@ -14,76 +15,80 @@ export function useIdleTimeoutManager(
   transcriptionManagerRef: React.RefObject<WebSocketManager | null>,
   debug: boolean = false
 ) {
-  // Track previous state to avoid unnecessary calls
-  const prevStateRef = useRef<{
-    isUserSpeaking: boolean;
-    agentState: string;
-    isPlaying: boolean;
-  }>({
-    isUserSpeaking: false,
-    agentState: 'idle',
-    isPlaying: false,
-  });
+  const serviceRef = useRef<IdleTimeoutService | null>(null);
+  const prevStateRef = useRef<VoiceInteractionState>(state);
 
-  // DRY helper for idle timeout management
-  const manageIdleTimeoutResets = useCallback((action: 'enable' | 'disable', context: string) => {
-    try {
-      const logPrefix = action === 'enable' ? '🎯 [IDLE_TIMEOUT] Re-enabling' : '🎯 [IDLE_TIMEOUT] Disabling';
-      if (debug) {
-        console.log(`${logPrefix} idle timeout resets for both services (${context})`);
-      }
-      
-      if (agentManagerRef.current) {
-        agentManagerRef.current[action === 'enable' ? 'enableIdleTimeoutResets' : 'disableIdleTimeoutResets']();
-      }
-      if (transcriptionManagerRef.current) {
-        transcriptionManagerRef.current[action === 'enable' ? 'enableIdleTimeoutResets' : 'disableIdleTimeoutResets']();
-      }
-    } catch (error) {
-      console.error(`Error managing idle timeout resets (${action}):`, error);
-    }
+  // Initialize the service
+  useEffect(() => {
+    serviceRef.current = new IdleTimeoutService({
+      timeoutMs: 10000, // 10 seconds
+      debug,
+    });
+
+    // Set up timeout callback
+    serviceRef.current.onTimeout(() => {
+      console.log('🎯 [IDLE_TIMEOUT] Idle timeout reached - closing connections');
+      agentManagerRef.current?.close();
+      transcriptionManagerRef.current?.close();
+    });
+
+    return () => {
+      serviceRef.current?.destroy();
+    };
   }, [agentManagerRef, transcriptionManagerRef, debug]);
 
-  // Centralized idle timeout management based on component state
+  // Handle state changes
   useEffect(() => {
+    if (!serviceRef.current) return;
+
     const currentState = {
       isUserSpeaking: state.isUserSpeaking,
       agentState: state.agentState,
       isPlaying: state.isPlaying,
     };
 
-    const prevState = prevStateRef.current;
+    const prevState = {
+      isUserSpeaking: prevStateRef.current.isUserSpeaking,
+      agentState: prevStateRef.current.agentState,
+      isPlaying: prevStateRef.current.isPlaying,
+    };
 
-    // Only update if state actually changed
-    const stateChanged = 
-      currentState.isUserSpeaking !== prevState.isUserSpeaking ||
-      currentState.agentState !== prevState.agentState ||
-      currentState.isPlaying !== prevState.isPlaying;
-
-    if (!stateChanged) {
-      return;
+    // Emit events for state changes
+    if (currentState.isUserSpeaking !== prevState.isUserSpeaking) {
+      const event: IdleTimeoutEvent = currentState.isUserSpeaking 
+        ? { type: 'USER_STARTED_SPEAKING' }
+        : { type: 'USER_STOPPED_SPEAKING' };
+      serviceRef.current.handleEvent(event);
     }
 
-    // Determine if we should disable idle timeout resets
-    const shouldDisableResets = 
-      currentState.isUserSpeaking || 
-      currentState.agentState === 'listening' || 
-      currentState.agentState === 'thinking' || 
-      currentState.agentState === 'speaking' || 
-      currentState.isPlaying;
-
-    // Update idle timeout resets based on current state
-    if (shouldDisableResets) {
-      manageIdleTimeoutResets('disable', 'ActivityDetected');
-    } else {
-      manageIdleTimeoutResets('enable', 'AllIdle');
+    if (currentState.agentState !== prevState.agentState) {
+      serviceRef.current.handleEvent({ 
+        type: 'AGENT_STATE_CHANGED', 
+        state: currentState.agentState 
+      });
     }
 
-    // Update previous state
-    prevStateRef.current = currentState;
-  }, [state.isUserSpeaking, state.agentState, state.isPlaying, manageIdleTimeoutResets]);
+    if (currentState.isPlaying !== prevState.isPlaying) {
+      serviceRef.current.handleEvent({ 
+        type: 'PLAYBACK_STATE_CHANGED', 
+        isPlaying: currentState.isPlaying 
+      });
+    }
+
+    prevStateRef.current = state;
+  }, [state.isUserSpeaking, state.agentState, state.isPlaying]);
+
+  // Handle meaningful user activity from WebSocket managers
+  const handleMeaningfulActivity = useCallback((activity: string) => {
+    if (serviceRef.current) {
+      serviceRef.current.handleEvent({ 
+        type: 'MEANINGFUL_USER_ACTIVITY', 
+        activity 
+      });
+    }
+  }, []);
 
   return {
-    manageIdleTimeoutResets,
+    handleMeaningfulActivity,
   };
 }
