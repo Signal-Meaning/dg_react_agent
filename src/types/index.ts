@@ -365,6 +365,13 @@ export interface DeepgramVoiceInteractionHandle {
    * @returns true if audio is currently playing, false otherwise
    */
   isPlaybackActive: () => boolean;
+
+  /**
+   * Get the AudioContext for debugging and testing
+   * 
+   * @returns the AudioContext instance or undefined if not available
+   */
+  getAudioContext: () => AudioContext | undefined;
 }
 
 // REMOVE the duplicate AgentState definition at the end of this file

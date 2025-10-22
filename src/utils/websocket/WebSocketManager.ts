@@ -416,16 +416,13 @@ export class WebSocketManager {
     }
     
     if (this.options.idleTimeout && this.options.idleTimeout > 0) {
-            this.idleTimeoutId = window.setTimeout(() => {
-              // Check if idle timeout resets are disabled before firing
-              if (this.idleTimeoutDisabled) {
-                this.log(`Idle timeout reached but resets are disabled - not closing connection for ${this.options.service}`);
-                return;
-              }
-
-              this.log(`Idle timeout reached (${this.options.idleTimeout}ms) - closing connection`);
-              this.close();
-            }, this.options.idleTimeout);
+      this.log(`Starting idle timeout for ${this.options.service} with ${this.options.idleTimeout}ms delay`);
+      this.idleTimeoutId = window.setTimeout(() => {
+        // Always close the connection when idle timeout expires
+        // The idleTimeoutDisabled flag only controls whether resets are allowed, not whether the timeout fires
+        this.log(`Idle timeout reached (${this.options.idleTimeout}ms) - closing connection for ${this.options.service}`);
+        this.close();
+      }, this.options.idleTimeout);
 
       this.log(`Started idle timeout (${this.options.idleTimeout}ms) for ${this.options.service}`);
     }
@@ -494,8 +491,9 @@ export class WebSocketManager {
   public disableIdleTimeoutResets(): void {
     this.idleTimeoutDisabled = true;
     this.log(`Disabled idle timeout resets for ${this.options.service} - connection will timeout naturally`);
-    // Don't start idle timeout immediately - let it timeout naturally when resets are disabled
-    // The timeout will fire but won't close the connection due to the check in startIdleTimeout()
+    // Stop the current timeout when disabling resets to prevent premature closure during activity
+    this.stopIdleTimeout();
+    this.log(`Stopped current idle timeout for ${this.options.service} - will restart when resets are re-enabled`);
   }
 
   /**
@@ -504,8 +502,13 @@ export class WebSocketManager {
   public enableIdleTimeoutResets(): void {
     this.idleTimeoutDisabled = false;
     this.log(`Re-enabled idle timeout resets for ${this.options.service}`);
-    // Don't reset the idle timeout immediately - let it timeout naturally based on last activity
-    // This prevents immediate timeout if the agent finished responding a while ago
+    // Only start the idle timeout if it's not already running
+    if (this.idleTimeoutId === null) {
+      this.startIdleTimeout();
+      this.log(`Idle timeout started with ${this.options.idleTimeout}ms delay for ${this.options.service}`);
+    } else {
+      this.log(`Idle timeout already running, not restarting for ${this.options.service}`);
+    }
   }
 
   /**
