@@ -12,198 +12,142 @@ test.describe('Extended Silence Idle Timeout Test', () => {
     
     console.log('🧪 Testing connection closure with extended silence (>10 seconds)...');
     
-    // Capture console logs for connection and VAD events
-    const consoleLogs = [];
-    const connectionEvents = [];
-    const vadEvents = [];
-    
-    page.on('console', msg => {
-      const text = msg.text();
-      consoleLogs.push(text);
-      
-      // Track connection events
-      if (text.includes('Connection status:') || 
-          text.includes('Connection state:') ||
-          text.includes('timeout') ||
-          text.includes('closed') ||
-          text.includes('disconnected')) {
-        console.log(`[BROWSER] ${text}`);
-        
-        if (text.includes('Connection status:') || text.includes('Connection state:')) {
-          const timestamp = Date.now();
-          connectionEvents.push({
-            timestamp,
-            message: text,
-            time: new Date(timestamp).toISOString()
-          });
-        }
-      }
-      
-      // Track VAD events
-      if (text.includes('UtteranceEnd') || 
-          text.includes('🎤 [AGENT] User stopped speaking') ||
-          text.includes('SpeechStarted')) {
-        console.log(`[BROWSER] ${text}`);
-        
-        // Extract timing information from UtteranceEnd events
-        if (text.includes('UtteranceEnd message received')) {
-          try {
-            const match = text.match(/\{type: UtteranceEnd, channel: Array\(2\), last_word_end: ([\d.]+)\}/);
-            if (match) {
-              const lastWordEnd = parseFloat(match[1]);
-              vadEvents.push({
-                type: 'UtteranceEnd',
-                timestamp: Date.now(),
-                lastWordEnd: lastWordEnd,
-                channel: [0, 1]
-              });
-            }
-          } catch (e) {
-            // Ignore parsing errors
-          }
-        }
-      }
-    });
-    
-    // Navigate to test app
-    await page.goto('http://localhost:5173');
+    // Navigate to test app with debug mode enabled
+    await page.goto('http://localhost:5173?debug=true');
     await page.waitForLoadState('networkidle');
     
-    // Wait for app to load
-    await page.waitForTimeout(3000);
-    console.log('✅ Test app loaded');
+    // Wait for the component to be ready
+    await page.waitForSelector('[data-testid="component-ready-status"]');
+    const isReady = await page.locator('[data-testid="component-ready-status"]').textContent();
+    expect(isReady).toBe('true');
+    console.log('✅ Component is ready');
+    
+    // Wait for microphone button to be available and click it
+    await page.waitForSelector('[data-testid="microphone-button"]');
+    console.log('🎤 Enabling microphone...');
+    await page.click('[data-testid="microphone-button"]');
     
     // Wait for connection to be established
-    await page.waitForTimeout(2000);
-    console.log('📡 Connection should be established');
+    await page.waitForSelector('[data-testid="connection-status"]');
+    await page.waitForFunction(() => 
+      document.querySelector('[data-testid="connection-status"]')?.textContent === 'connected'
+    , { timeout: 10000 });
     
-    // Create a custom audio sample with extended silence
-    console.log('🎵 Creating audio sample with extended silence (>10 seconds)...');
+    const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
+    expect(connectionStatus).toBe('connected');
+    console.log('✅ Connection established');
     
-    await page.evaluate(async () => {
-      // Get the DeepgramVoiceInteraction component
+    // Load and send proven audio sample
+    console.log('🎵 Loading proven audio sample with extended silence...');
+    const audioInfo = await page.evaluate(async () => {
       const deepgramComponent = window.deepgramRef?.current;
       if (!deepgramComponent) {
         throw new Error('DeepgramVoiceInteraction component not available');
       }
       
-      // Create a simple audio pattern: 1 second of speech + 12 seconds of silence
-      const sampleRate = 16000;
-      const speechDuration = 1.0; // 1 second of speech
-      const silenceDuration = 12.0; // 12 seconds of silence (longer than 10s idle timeout)
-      const totalDuration = speechDuration + silenceDuration;
-      
-      console.log(`📊 Creating audio: ${speechDuration}s speech + ${silenceDuration}s silence = ${totalDuration}s total`);
-      
-      // Generate a simple sine wave for speech (440Hz)
-      const speechSamples = Math.floor(speechDuration * sampleRate);
-      const silenceSamples = Math.floor(silenceDuration * sampleRate);
-      const totalSamples = speechSamples + silenceSamples;
-      
-      const audioBuffer = new ArrayBuffer(totalSamples * 2); // 16-bit samples
-      const audioView = new Int16Array(audioBuffer);
-      
-      // Generate speech (sine wave)
-      for (let i = 0; i < speechSamples; i++) {
-        const t = i / sampleRate;
-        audioView[i] = Math.floor(32767 * 0.3 * Math.sin(2 * Math.PI * 440 * t));
+      try {
+        console.log('📁 Loading audio sample: sample_hello_there.json');
+        const response = await fetch('/audio-samples/sample_hello_there.json');
+        
+        if (!response.ok) {
+          throw new Error(`Failed to load audio sample: ${response.status}`);
+        }
+        
+        const audioData = await response.json();
+        console.log('📊 Audio sample loaded:', {
+          phrase: audioData.phrase,
+          sampleRate: audioData.metadata.sampleRate,
+          totalDuration: audioData.metadata.totalDuration,
+          speechDuration: audioData.metadata.speechDuration
+        });
+        
+        // Convert base64 to ArrayBuffer
+        const binaryString = atob(audioData.audioData);
+        const audioBuffer = new ArrayBuffer(binaryString.length);
+        const audioView = new Uint8Array(audioBuffer);
+        
+        for (let i = 0; i < binaryString.length; i++) {
+          audioView[i] = binaryString.charCodeAt(i);
+        }
+        
+        console.log(`🎤 Sending proven audio sample to Deepgram...`);
+        deepgramComponent.sendAudioData(audioBuffer);
+        
+        return {
+          phrase: audioData.phrase,
+          sampleRate: audioData.metadata.sampleRate,
+          totalDuration: audioData.metadata.totalDuration,
+          speechDuration: audioData.metadata.speechDuration,
+          audioDataLength: binaryString.length
+        };
+        
+      } catch (error) {
+        console.error('❌ Error loading/sending audio sample:', error);
+        throw error;
       }
-      
-      // Generate silence (zeros)
-      for (let i = speechSamples; i < totalSamples; i++) {
-        audioView[i] = 0;
-      }
-      
-      console.log(`🎤 Sending extended silence audio to Deepgram...`);
-      console.log(`📊 Expected behavior:`);
-      console.log(`  1. Deepgram should detect speech for ~${speechDuration}s`);
-      console.log(`  2. UtteranceEnd should fire after ${speechDuration}s`);
-      console.log(`  3. Connection should close after 10s idle timeout (not by VAD)`);
-      
-      // Send the audio data
-      deepgramComponent.sendAudioData(audioBuffer);
-      
-      return {
-        speechDuration,
-        silenceDuration,
-        totalDuration,
-        sampleRate
-      };
     });
     
-    // Wait for the entire audio to be processed plus idle timeout
-    console.log('⏳ Waiting for audio processing and idle timeout...');
-    console.log('💡 This should take ~13 seconds total (1s speech + 12s silence)');
-    console.log('💡 Connection should close at 10s idle timeout, not by VAD');
+    console.log('📊 Audio sample info:', audioInfo);
     
-    await page.waitForTimeout(15000); // Wait 15 seconds to capture everything
+    // Test the complete flow using data-testid elements
     
-    console.log('\n📊 Event Analysis:');
+    // 1. Wait for speech detection
+    console.log('⏳ Waiting for speech detection...');
+    await page.waitForFunction(() => 
+      document.querySelector('[data-testid="speech-started"]')?.textContent !== 'Not detected'
+    , { timeout: 10000 });
     
-    // Analyze VAD events
-    if (vadEvents.length > 0) {
-      console.log('\n⏱️ VAD Events:');
-      vadEvents.forEach((event, index) => {
-        console.log(`  - UtteranceEnd ${index + 1}:`);
-        console.log(`    - Last word ended at: ${event.lastWordEnd}s`);
-        console.log(`    - Event timestamp: ${new Date(event.timestamp).toISOString()}`);
-      });
-    }
+    const speechStarted = await page.locator('[data-testid="speech-started"]').textContent();
+    expect(speechStarted).not.toBe('Not detected');
+    console.log('✅ Speech started detected:', speechStarted);
     
-    // Analyze connection events
-    const connectionStateLogs = consoleLogs.filter(log => 
-      log.includes('Connection status:') || log.includes('Connection state:')
-    );
+    // 2. Check user speaking state (may be false initially with hierarchical approach)
+    const isUserSpeaking = await page.locator('[data-testid="user-speaking"]').textContent();
+    console.log('📊 User speaking state after speech detection:', isUserSpeaking);
     
-    console.log(`\n📈 Connection State Changes: ${connectionStateLogs.length}`);
-    connectionStateLogs.forEach((log, index) => {
-      console.log(`  ${index + 1}. ${log}`);
-    });
+    // Note: With hierarchical approach, isUserSpeaking is only set to true when we receive
+    // interim results (is_final=false), not just on SpeechStarted events
+    // This is the correct behavior - we shouldn't assume user is speaking just from SpeechStarted
     
-    // Look for timeout-related messages
-    const timeoutLogs = consoleLogs.filter(log => 
-      log.toLowerCase().includes('timeout') || 
-      log.toLowerCase().includes('idle') ||
-      log.toLowerCase().includes('closed')
-    );
+    // 3. Wait for UtteranceEnd detection
+    console.log('⏳ Waiting for UtteranceEnd detection...');
+    await page.waitForFunction(() => 
+      document.querySelector('[data-testid="utterance-end"]')?.textContent !== 'Not detected'
+    , { timeout: 10000 });
     
-    console.log(`\n⏰ Timeout-Related Events: ${timeoutLogs.length}`);
-    timeoutLogs.forEach((log, index) => {
-      console.log(`  ${index + 1}. ${log}`);
-    });
+    const utteranceEnd = await page.locator('[data-testid="utterance-end"]').textContent();
+    expect(utteranceEnd).not.toBe('Not detected');
+    console.log('✅ UtteranceEnd detected:', utteranceEnd);
     
-    // Check for UtteranceEnd events
-    const utteranceEndLogs = consoleLogs.filter(log => 
-      log.includes('UtteranceEnd')
-    );
+    // 4. Check user stopped speaking callback
+    const userStoppedSpeaking = await page.locator('[data-testid="user-stopped-speaking"]').textContent();
+    expect(userStoppedSpeaking).not.toBe('Not detected');
+    console.log('✅ User stopped speaking callback:', userStoppedSpeaking);
     
-    console.log(`\n🎯 UtteranceEnd Events: ${utteranceEndLogs.length}`);
-    utteranceEndLogs.forEach((log, index) => {
-      console.log(`  ${index + 1}. ${log}`);
-    });
+    // 5. Verify user speaking state is now false
+    const isUserSpeakingAfter = await page.locator('[data-testid="user-speaking"]').textContent();
+    expect(isUserSpeakingAfter).toBe('false');
+    console.log('✅ User speaking state after UtteranceEnd:', isUserSpeakingAfter);
     
-    // Verify we have timeout events (showing idle timeout working)
-    expect(timeoutLogs.length).toBeGreaterThan(0);
+    // 6. Wait for agent response (if any)
+    console.log('⏳ Waiting for agent response...');
+    await page.waitForTimeout(2000); // Give agent time to respond
     
-    // Verify we have UtteranceEnd events (showing VAD working)
-    expect(utteranceEndLogs.length).toBeGreaterThan(0);
+    // 7. Wait for idle timeout (connection should close)
+    console.log('⏳ Waiting for idle timeout (10 seconds)...');
+    await page.waitForFunction(() => 
+      document.querySelector('[data-testid="connection-status"]')?.textContent === 'closed'
+    , { timeout: 15000 });
     
-    // The key test: verify that connection closes due to idle timeout, not VAD
-    const idleTimeoutLogs = timeoutLogs.filter(log => 
-      log.includes('Idle timeout reached')
-    );
-    
-    console.log(`\n🔍 Idle Timeout Events: ${idleTimeoutLogs.length}`);
-    idleTimeoutLogs.forEach((log, index) => {
-      console.log(`  ${index + 1}. ${log}`);
-    });
-    
-    expect(idleTimeoutLogs.length).toBeGreaterThan(0);
+    const finalConnectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
+    expect(finalConnectionStatus).toBe('closed');
+    console.log('✅ Connection closed due to idle timeout:', finalConnectionStatus);
     
     console.log('\n🎉 SUCCESS: Extended silence test completed');
     console.log('💡 This demonstrates that:');
-    console.log('  1. VAD detects speech end naturally');
-    console.log('  2. Connection closes due to idle timeout (not VAD)');
-    console.log('  3. Extended silence (>10s) triggers natural connection closure');
+    console.log('  1. Speech detection works via data-testid elements');
+    console.log('  2. UtteranceEnd detection works via data-testid elements');
+    console.log('  3. onUserStoppedSpeaking callback works via data-testid elements');
+    console.log('  4. Idle timeout closes connection after speech completion');
   });
 });

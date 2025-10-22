@@ -26,18 +26,29 @@ export function useIdleTimeoutManager(
   });
 
   // DRY helper for idle timeout management
-  const manageIdleTimeoutResets = useCallback((action: 'enable' | 'disable', context: string) => {
+  const manageIdleTimeoutResets = useCallback((action: 'enable' | 'disable' | 'start', context: string) => {
     try {
-      const logPrefix = action === 'enable' ? '🎯 [IDLE_TIMEOUT] Re-enabling' : '🎯 [IDLE_TIMEOUT] Disabling';
-      if (debug) {
-        console.log(`${logPrefix} idle timeout resets for both services (${context})`);
-      }
+      const logPrefix = action === 'enable' ? '🎯 [IDLE_TIMEOUT] Re-enabling' : 
+                       action === 'disable' ? '🎯 [IDLE_TIMEOUT] Disabling' : 
+                       '🎯 [IDLE_TIMEOUT] Starting';
+      // Always log idle timeout activity - this is critical for debugging
+      console.log(`${logPrefix} idle timeout resets for both services (${context})`);
       
       if (agentManagerRef.current) {
-        agentManagerRef.current[action === 'enable' ? 'enableIdleTimeoutResets' : 'disableIdleTimeoutResets']();
+        if (action === 'start') {
+          agentManagerRef.current.enableIdleTimeoutResets();
+          agentManagerRef.current.startIdleTimeout?.();
+        } else {
+          agentManagerRef.current[action === 'enable' ? 'enableIdleTimeoutResets' : 'disableIdleTimeoutResets']();
+        }
       }
       if (transcriptionManagerRef.current) {
-        transcriptionManagerRef.current[action === 'enable' ? 'enableIdleTimeoutResets' : 'disableIdleTimeoutResets']();
+        if (action === 'start') {
+          transcriptionManagerRef.current.enableIdleTimeoutResets();
+          transcriptionManagerRef.current.startIdleTimeout?.();
+        } else {
+          transcriptionManagerRef.current[action === 'enable' ? 'enableIdleTimeoutResets' : 'disableIdleTimeoutResets']();
+        }
       }
     } catch (error) {
       console.error(`Error managing idle timeout resets (${action}):`, error);
@@ -67,7 +78,6 @@ export function useIdleTimeoutManager(
     // Determine if we should disable idle timeout resets
     const shouldDisableResets = 
       currentState.isUserSpeaking || 
-      currentState.agentState === 'listening' || 
       currentState.agentState === 'thinking' || 
       currentState.agentState === 'speaking' || 
       currentState.isPlaying;
@@ -77,6 +87,10 @@ export function useIdleTimeoutManager(
       manageIdleTimeoutResets('disable', 'ActivityDetected');
     } else {
       manageIdleTimeoutResets('enable', 'AllIdle');
+      // Start the idle timeout when all conditions are idle or when agent is listening
+      if ((currentState.agentState === 'idle' || currentState.agentState === 'listening') && !currentState.isUserSpeaking) {
+        manageIdleTimeoutResets('start', 'AllIdle');
+      }
     }
 
     // Update previous state
