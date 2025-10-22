@@ -909,7 +909,19 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             data-testid="text-input"
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
-            onKeyPress={(e) => {
+            onFocus={async () => {
+              // Resume AudioContext on user interaction
+              const audioContext = deepgramRef.current?.getAudioContext?.();
+              if (audioContext?.state === 'suspended') {
+                try {
+                  await audioContext.resume();
+                  addLog('✅ AudioContext resumed on text input focus');
+                } catch (error) {
+                  addLog(`⚠️ Failed to resume AudioContext on focus: ${error}`);
+                }
+              }
+            }}
+            onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 handleTextSubmit();
               }
