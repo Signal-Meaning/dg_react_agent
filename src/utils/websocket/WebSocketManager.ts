@@ -54,6 +54,11 @@ export interface WebSocketManagerOptions {
    * Enable verbose logging
    */
   debug?: boolean;
+  
+  /**
+   * Callback for meaningful user activity (for idle timeout management)
+   */
+  onMeaningfulActivity?: (activity: string) => void;
 }
 
 /**
@@ -485,7 +490,11 @@ export class WebSocketManager {
     if (this.options.service === 'agent') {
       // Only reset on actual user messages
       const userActivityMessages = ['ConversationText']; // User sending text
-      return userActivityMessages.includes(data.type);
+      const isMeaningful = userActivityMessages.includes(data.type);
+      if (isMeaningful) {
+        this.options.onMeaningfulActivity?.(data.type);
+      }
+      return isMeaningful;
     }
     
     // For transcription service, only reset on actual speech activity
@@ -494,6 +503,9 @@ export class WebSocketManager {
       if (data.type === 'Results') {
         const hasAlternatives = data.alternatives && data.alternatives.length > 0;
         const hasTranscript = hasAlternatives && data.alternatives[0].transcript && data.alternatives[0].transcript.trim().length > 0;
+        if (hasTranscript) {
+          this.options.onMeaningfulActivity?.(`Results with transcript: "${data.alternatives[0].transcript}"`);
+        }
         return hasTranscript; // Only reset if there's actual transcript content
       }
       
