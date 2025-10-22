@@ -106,8 +106,24 @@ Audio Finished → Enable idle timeout resets → Allow natural timeout
 - Add metrics for idle timeout events
 - Consider adding idle timeout state callbacks
 
+## Refactoring Improvements
+
+After the initial fix, the code was refactored to address anti-patterns and improve maintainability:
+
+### **Code Quality Improvements**
+- **Consolidated useEffect hooks**: Reduced from 6+ scattered effects to single centralized state-based effect
+- **Extracted custom hook**: Created `useIdleTimeoutManager` for reusable idle timeout logic
+- **Removed duplicate calls**: Eliminated scattered `manageIdleTimeoutResets()` calls from message handlers
+- **Improved architecture**: Better separation of concerns and cleaner state management
+
+### **Testing Validation**
+- **Unit tests**: All 30 test suites passing (309 tests passed, 11 skipped)
+- **E2E tests**: Core functionality verified - idle timeout works correctly
+- **No regressions**: All functionality preserved with improved code quality
+- **Performance**: Reduced complexity and better maintainability
+
 ## Conclusion
 
-Issue #139 has been successfully resolved through the implementation of a comprehensive callback-based idle timeout management system. The solution provides reliable, maintainable, and well-tested idle timeout behavior across all interaction types.
+Issue #139 has been successfully resolved through the implementation of a comprehensive callback-based idle timeout management system, followed by significant code quality improvements through refactoring. The solution provides reliable, maintainable, and well-tested idle timeout behavior across all interaction types.
 
 **Status**: ✅ **RESOLVED** - Ready for production deployment.
