@@ -1751,6 +1751,19 @@ function DeepgramVoiceInteraction(
       return;
     }
     
+    // ISSUE #142: Skip greeting if AudioContext is suspended to prevent idle timeout bug
+    if (state.greetingInProgress && audioManagerRef.current) {
+      const audioContext = audioManagerRef.current.getAudioContext();
+      if (audioContext && audioContext.state === 'suspended') {
+        log('🚫 AudioContext is suspended - skipping greeting to prevent idle timeout bug');
+        log('This prevents the connection from staying open for 60 seconds after page refresh');
+        // Mark greeting as complete to allow idle timeout to work properly
+        dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
+        dispatch({ type: 'GREETING_STARTED', started: false });
+        return;
+      }
+    }
+    
     if (audioManagerRef.current) {
       log('Passing buffer to AudioManager.queueAudio()');
       audioManagerRef.current.queueAudio(data)
