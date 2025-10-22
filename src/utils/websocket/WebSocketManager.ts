@@ -491,8 +491,9 @@ export class WebSocketManager {
   public disableIdleTimeoutResets(): void {
     this.idleTimeoutDisabled = true;
     this.log(`Disabled idle timeout resets for ${this.options.service} - connection will timeout naturally`);
-    // Don't start idle timeout immediately - let it timeout naturally when resets are disabled
-    // The timeout will fire and close the connection when it expires
+    // Stop the current timeout when disabling resets to prevent premature closure during activity
+    this.stopIdleTimeout();
+    this.log(`Stopped current idle timeout for ${this.options.service} - will restart when resets are re-enabled`);
   }
 
   /**
