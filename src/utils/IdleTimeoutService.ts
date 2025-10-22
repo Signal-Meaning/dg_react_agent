@@ -108,7 +108,8 @@ export class IdleTimeoutService {
       this.enableResets();
       // Start timeout when all conditions are idle
       if ((this.currentState.agentState === 'idle' || this.currentState.agentState === 'listening') && 
-          !this.currentState.isUserSpeaking) {
+          !this.currentState.isUserSpeaking && 
+          !this.currentState.isPlaying) {
         this.startTimeout();
       }
     }
