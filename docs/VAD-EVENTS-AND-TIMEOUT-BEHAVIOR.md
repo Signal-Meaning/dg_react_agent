@@ -67,6 +67,37 @@ This ensures `isUserSpeaking` becomes `false` when **EITHER**:
 - `speech_final=true` is received (ignore UtteranceEnd), OR
 - `UtteranceEnd` is received with NO preceding `speech_final=true`
 
+## Architecture: IdleTimeoutService
+
+The component uses a dedicated `IdleTimeoutService` for clean separation of concerns:
+
+### Event-Driven Design
+
+The service handles idle timeout through events rather than complex state watching:
+
+```typescript
+// Events that affect idle timeout behavior
+type IdleTimeoutEvent = 
+  | { type: 'USER_STARTED_SPEAKING' }
+  | { type: 'USER_STOPPED_SPEAKING' }
+  | { type: 'AGENT_STATE_CHANGED'; state: string }
+  | { type: 'PLAYBACK_STATE_CHANGED'; isPlaying: boolean }
+  | { type: 'MEANINGFUL_USER_ACTIVITY'; activity: string };
+```
+
+### Clean Separation
+
+- **Speech Detection**: Handled by the main component using reducer state
+- **Idle Timeout Management**: Handled by `IdleTimeoutService`
+- **WebSocket Activity**: Detected by `WebSocketManager` and reported via callbacks
+
+### Benefits
+
+1. **Single Responsibility**: Each service has one clear purpose
+2. **Testable**: Services can be tested independently
+3. **Maintainable**: Clear boundaries between concerns
+4. **Event-Driven**: Reactive architecture using events
+
 ## Signal Redundancy
 
 ### The Problem

@@ -64,7 +64,7 @@ function App() {
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   
   // Flag to prevent state override after UtteranceEnd
-  // const utteranceEndDetected = useRef(false); // Removed - main component now handles speech_final correctly
+  const utteranceEndDetected = useRef(false);
   // Track the last speech session to detect new sessions
   // const lastSpeechSessionRef = useRef<string | null>(null);
   
@@ -309,15 +309,12 @@ function App() {
     console.error('Deepgram error:', error);
   }, [addLog]); // Depends on addLog
 
-  const handleUserSpeakingStateChange = useCallback((isSpeaking: boolean) => {
-    setIsUserSpeaking(isSpeaking);
-    console.log('🔄 [TEST-APP] User speaking state changed to:', isSpeaking);
-  }, []);
-
   // VAD event handlers - clearly marked by source
   const handleUserStartedSpeaking = useCallback(() => {
     const timestamp = new Date().toISOString().substring(11, 19);
     setUserStartedSpeaking(timestamp);
+    utteranceEndDetected.current = false; // Reset flag for new speech session
+    setIsUserSpeaking(true); // Update local state based on callback
     
     // Only log user speaking events in debug mode to reduce console spam
     if (isDebugMode) {
@@ -328,6 +325,7 @@ function App() {
   const handleUserStoppedSpeaking = useCallback(() => {
     const timestamp = new Date().toISOString().substring(11, 19);
     setUserStoppedSpeaking(timestamp);
+    setIsUserSpeaking(false); // Update local state based on callback
     
     // Only log user stopped speaking events in debug mode to reduce console spam
     if (isDebugMode) {
@@ -338,6 +336,8 @@ function App() {
   const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
     const channelStr = data.channel.join(',');
     setUtteranceEnd(`Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
+    utteranceEndDetected.current = true; // Set flag to prevent SpeechStarted from overriding
+    setIsUserSpeaking(false); // Update local state based on callback
     
     // Only log UtteranceEnd events in debug mode to reduce console spam
     if (isDebugMode) {
@@ -359,6 +359,11 @@ function App() {
   const handleSpeechStarted = useCallback((event: { channel: number[]; timestamp: number }) => {
     const timestamp = new Date().toISOString().substring(11, 19);
     setSpeechStarted(`Transcription: ${timestamp}`);
+    
+    // Only set isUserSpeaking to true if UtteranceEnd hasn't been detected
+    if (!utteranceEndDetected.current) {
+      setIsUserSpeaking(true); // Update local state based on callback
+    }
     
     // Only log SpeechStarted events in debug mode to reduce console spam
     if (isDebugMode) {
@@ -671,7 +676,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         // onSpeechStopped removed - not a real Deepgram event
         onUtteranceEnd={handleUtteranceEnd}
         onVADEvent={handleVADEvent}
-        onUserSpeakingStateChange={handleUserSpeakingStateChange}
         debug={isDebugMode} // Enable debug via environment variable or URL parameter for testing
       />
       
