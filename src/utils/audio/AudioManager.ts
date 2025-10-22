@@ -479,30 +479,30 @@ export class AudioManager {
       this.activeSourceNodes.push(source);
       this.log(`[queueAudio] Added source. activeSourceNodes.length = ${this.activeSourceNodes.length}`);
       
-      // Set up ended handler to remove from active sources when done
-      const originalOnEnded = source.onended;
-      source.onended = (event) => {
-        // Remove from active sources first to ensure cleanup even if there's an error
-        const index = this.activeSourceNodes.indexOf(source);
-        if (index !== -1) {
-          this.activeSourceNodes.splice(index, 1);
-          this.log(`[onended] Source removed. activeSourceNodes.length = ${this.activeSourceNodes.length}`);
-        } else {
-          this.log(`[onended] Source not found in activeSourceNodes (unusual)`);
-        }
-        
-        // Call original handler if there was one
-        try {
-          if (originalOnEnded) {
-            originalOnEnded.call(source, event);
-          }
-        } catch (err) {
-          this.log('Error in original onended handler:', err);
-        }
-      };
-      
       // Set current source (for backwards compatibility)
       this.currentSource = source;
+      
+      // Add fallback timeout for suspended AudioContext
+      // If the AudioContext is suspended, the audio won't play and onended won't fire
+      if (this.audioContext.state === 'suspended') {
+        this.log(`⚠️ AudioContext is suspended - adding fallback timeout for ${buffer.duration}s`);
+        setTimeout(() => {
+          this.log(`[fallback] Audio should have finished playing (duration: ${buffer.duration}s)`);
+          // Manually trigger the onended logic
+          const index = this.activeSourceNodes.indexOf(source);
+          if (index !== -1) {
+            this.activeSourceNodes.splice(index, 1);
+            this.log(`[fallback] Source removed. activeSourceNodes.length = ${this.activeSourceNodes.length}`);
+            
+            // Only emit playing=false if this was the last scheduled chunk
+            if (this.activeSourceNodes.length === 0) {
+              this.log('[fallback] No more active sources, setting playing state to false');
+              this.isPlaying = false;
+              this.emit({ type: 'playing', isPlaying: false });
+            }
+          }
+        }, buffer.duration * 1000 + 100); // Add 100ms buffer
+      }
       
       // Set playing state
       const wasPlaying = this.isPlaying;
@@ -513,15 +513,34 @@ export class AudioManager {
         this.emit({ type: 'playing', isPlaying: true });
       }
       
-      // Set up ended handler for the last chunk
-      this.currentSource.onended = () => {
-        this.log('[currentSource.onended] Current audio source playback ended');
+      // Set up ended handler that handles both cleanup and playing state
+      const originalOnEnded = source.onended;
+      source.onended = (event) => {
+        this.log('[onended] Audio source playback ended');
+        
+        // Remove from active sources first to ensure cleanup even if there's an error
+        const index = this.activeSourceNodes.indexOf(source);
+        if (index !== -1) {
+          this.activeSourceNodes.splice(index, 1);
+          this.log(`[onended] Source removed. activeSourceNodes.length = ${this.activeSourceNodes.length}`);
+        } else {
+          this.log(`[onended] Source not found in activeSourceNodes (unusual)`);
+        }
         
         // Only emit playing=false if this was the last scheduled chunk
         if (this.activeSourceNodes.length === 0) {
-          this.log('[currentSource.onended] No more active sources, setting playing state to false');
+          this.log('[onended] No more active sources, setting playing state to false');
           this.isPlaying = false;
           this.emit({ type: 'playing', isPlaying: false });
+        }
+        
+        // Call original handler if there was one
+        try {
+          if (originalOnEnded) {
+            originalOnEnded.call(source, event);
+          }
+        } catch (err) {
+          this.log('Error in original onended handler:', err);
         }
       };
       
