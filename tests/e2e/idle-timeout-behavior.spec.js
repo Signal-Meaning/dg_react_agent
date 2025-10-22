@@ -68,8 +68,17 @@ test.describe('Idle Timeout Behavior', () => {
     console.log(`Initial connection status: ${initialStatus}`);
     expect(initialStatus).toBe('connected');
     
-    // Step 2: Wait for idle timeout (10+ seconds of inactivity)
-    console.log('Step 2: Waiting for idle timeout (12 seconds)...');
+    // Step 2: Send a brief message to get agent response, then wait for idle timeout
+    console.log('Step 2: Sending brief message to trigger agent response...');
+    await page.fill(SELECTORS.textInput, 'one moment');
+    await page.press(SELECTORS.textInput, 'Enter');
+    
+    // Wait for agent to respond and finish
+    console.log('Waiting for agent to respond and finish...');
+    await page.waitForTimeout(3000); // Give agent time to respond
+    
+    // Now wait for idle timeout (10+ seconds of inactivity after agent finishes)
+    console.log('Step 3: Waiting for idle timeout after agent response (12 seconds)...');
     await page.waitForTimeout(12000);
     
     const statusAfterTimeout = await page.locator(SELECTORS.connectionStatus).textContent();
@@ -77,8 +86,8 @@ test.describe('Idle Timeout Behavior', () => {
     // Connection should be closed after idle timeout
     expect(statusAfterTimeout).toBe('closed');
     
-    // Step 3: Attempt to activate microphone
-    console.log('Step 3: Attempting to activate microphone...');
+    // Step 4: Attempt to activate microphone
+    console.log('Step 4: Attempting to activate microphone...');
     const micButton = page.locator(SELECTORS.micButton);
     const micStatusBefore = await page.locator(SELECTORS.micStatus).textContent();
     console.log(`Mic status before click: ${micStatusBefore}`);
@@ -87,10 +96,10 @@ test.describe('Idle Timeout Behavior', () => {
     console.log('✅ Clicked microphone button');
     
     // Step 4: Wait for reconnection attempt and microphone activation
-    console.log('Step 4: Waiting for reconnection and mic activation (up to 5 seconds)...');
+    console.log('Step 5: Waiting for reconnection and mic activation (up to 5 seconds)...');
     await page.waitForTimeout(5000);
     
-    // Step 5: Check final state
+    // Step 6: Check final state
     const finalMicStatus = await page.locator(SELECTORS.micStatus).textContent();
     const finalConnectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
     
