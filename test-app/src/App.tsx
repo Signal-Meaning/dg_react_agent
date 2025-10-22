@@ -58,10 +58,26 @@ function App() {
   
   // VAD state
   const [userStartedSpeaking, setUserStartedSpeaking] = useState<string | null>(null);
-  // userStoppedSpeaking removed - UserStoppedSpeaking is not a real Deepgram event
+  const [userStoppedSpeaking, setUserStoppedSpeaking] = useState<string | null>(null);
   const [utteranceEnd, setUtteranceEnd] = useState<string | null>(null);
   const [vadEvent, setVadEvent] = useState<string | null>(null);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  
+  // Flag to prevent state override after UtteranceEnd
+  const utteranceEndDetected = useRef(false);
+  // Track the last speech session to detect new sessions
+  // const lastSpeechSessionRef = useRef<string | null>(null);
+  
+  // Debug: Monitor isUserSpeaking state changes
+  useEffect(() => {
+    console.log('🔄 [TEST-APP] isUserSpeaking state changed to:', isUserSpeaking);
+  }, [isUserSpeaking]);
+  
+  // Reset the utteranceEndDetected flag when component mounts
+  // useEffect(() => {
+  //   utteranceEndDetected.current = false;
+  //   console.log('🔄 [TEST-APP] Component mounted - reset utteranceEndDetected flag');
+  // }, []);
   
   // VAD state from transcription service (SpeechStarted/UtteranceEnd)
   const [speechStarted, setSpeechStarted] = useState<string | null>(null);
@@ -297,37 +313,63 @@ function App() {
   const handleUserStartedSpeaking = useCallback(() => {
     const timestamp = new Date().toISOString().substring(11, 19);
     setUserStartedSpeaking(timestamp);
-    setIsUserSpeaking(true);
-    addLog(`🎤 [AGENT] User started speaking at ${timestamp}`);
-  }, [addLog]);
+    utteranceEndDetected.current = false; // Reset flag for new speech session
+    setIsUserSpeaking(true); // Update local state based on callback
+    
+    // Only log user speaking events in debug mode to reduce console spam
+    if (isDebugMode) {
+      addLog(`🎤 [AGENT] User started speaking at ${timestamp}`);
+    }
+  }, [addLog, isDebugMode]);
 
   const handleUserStoppedSpeaking = useCallback(() => {
     const timestamp = new Date().toISOString().substring(11, 19);
-    setIsUserSpeaking(false);
-    addLog(`🎤 [AGENT] User stopped speaking at ${timestamp}`);
-  }, [addLog]);
+    setUserStoppedSpeaking(timestamp);
+    setIsUserSpeaking(false); // Update local state based on callback
+    
+    // Only log user stopped speaking events in debug mode to reduce console spam
+    if (isDebugMode) {
+      addLog(`🎤 [AGENT] User stopped speaking at ${timestamp}`);
+    }
+  }, [addLog, isDebugMode]);
 
   const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
-    // Debug log removed - this was appearing when debug mode was off
     const channelStr = data.channel.join(',');
     setUtteranceEnd(`Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
-    setIsUserSpeaking(false);
-    addLog(`🔚 [TRANSCRIPTION] UtteranceEnd detected`);
-  }, [addLog]);
+    utteranceEndDetected.current = true; // Set flag to prevent SpeechStarted from overriding
+    setIsUserSpeaking(false); // Update local state based on callback
+    
+    // Only log UtteranceEnd events in debug mode to reduce console spam
+    if (isDebugMode) {
+      addLog(`🔚 [TRANSCRIPTION] UtteranceEnd detected`);
+    }
+  }, [addLog, isDebugMode]);
 
   const handleVADEvent = useCallback((data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => {
     const timestamp = data.timestamp ? new Date(data.timestamp).toISOString().substring(11, 19) : 'unknown';
     const confidence = data.confidence ? ` (${(data.confidence * 100).toFixed(1)}%)` : '';
     setVadEvent(`${data.speechDetected ? 'Speech detected' : 'No speech'} at ${timestamp}${confidence}`);
-    setIsUserSpeaking(data.speechDetected);
-    addLog(`🎯 [TRANSCRIPTION] VAD Event: ${data.speechDetected ? 'Speech detected' : 'No speech'} at ${timestamp}${confidence}`);
-  }, [addLog]);
+    
+    // Only log VAD events in debug mode to reduce console spam
+    if (isDebugMode) {
+      addLog(`🎯 [TRANSCRIPTION] VAD Event: ${data.speechDetected ? 'Speech detected' : 'No speech'} at ${timestamp}${confidence}`);
+    }
+  }, [addLog, isDebugMode]);
 
   const handleSpeechStarted = useCallback((event: { channel: number[]; timestamp: number }) => {
     const timestamp = new Date().toISOString().substring(11, 19);
     setSpeechStarted(`Transcription: ${timestamp}`);
-    addLog(`🎤 [TRANSCRIPTION] Speech Started: ${JSON.stringify(event)}`);
-  }, [addLog]);
+    
+    // Only set isUserSpeaking to true if UtteranceEnd hasn't been detected
+    if (!utteranceEndDetected.current) {
+      setIsUserSpeaking(true); // Update local state based on callback
+    }
+    
+    // Only log SpeechStarted events in debug mode to reduce console spam
+    if (isDebugMode) {
+      addLog(`🎤 [TRANSCRIPTION] Speech Started: ${JSON.stringify(event)}`);
+    }
+  }, [addLog, isDebugMode]);
 
   // handleSpeechStopped removed - SpeechStopped is not a real Deepgram event
 
@@ -337,6 +379,12 @@ function App() {
     console.log('🎤 [APP] Current micEnabled state:', micEnabled);
     setMicEnabled(enabled);
     console.log('🎤 [APP] setMicEnabled called with:', enabled);
+    
+    // Reset the utteranceEndDetected flag when microphone is toggled
+    // This allows new speech sessions to work properly
+    // utteranceEndDetected.current = false; // Removed - main component handles this
+    console.log('🔄 [TEST-APP] handleMicToggle - microphone toggled');
+    
     addLog(`Microphone ${enabled ? 'enabled' : 'disabled'}`);
   }, [addLog, micEnabled]);
 
@@ -683,10 +731,11 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <h4>VAD (Voice Activity Detection) States:</h4>
         <div data-testid="vad-states">
           <p>User Speaking: <strong data-testid="user-speaking">{isUserSpeaking.toString()}</strong></p>
+          <p>Debug - utteranceEndDetected: <strong>Removed - main component handles this</strong></p>
           
           <h5>From Agent WebSocket:</h5>
           <p>User Started Speaking: <strong data-testid="user-started-speaking">{userStartedSpeaking || 'Not detected'}</strong></p>
-          <p>User Stopped Speaking: <strong data-testid="user-stopped-speaking">Detected via UtteranceEnd</strong></p>
+          <p>User Stopped Speaking: <strong data-testid="user-stopped-speaking">{userStoppedSpeaking || 'Not detected'}</strong></p>
           
           <h5>From Transcription WebSocket:</h5>
           <p>Speech Started: <strong data-testid="speech-started">{speechStarted || 'Not detected'}</strong></p>
