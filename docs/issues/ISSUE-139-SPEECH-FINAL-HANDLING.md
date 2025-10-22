@@ -280,6 +280,49 @@ All E2E tests are now passing:
 
 The implementation follows Deepgram's official guidelines and provides a robust foundation for end-of-speech detection in voice applications.
 
+## Refactoring Summary: Phases 1-3 Complete
+
+### ✅ **Phase 1: Consolidated State Management**
+- **Removed `userSpeakingRef`** - Eliminated duplicate state management, now uses only reducer state
+- **Removed `onUserSpeakingStateChange` callback** - Restored headless design principles
+- **Centralized speech detection** - All logic now uses reducer state consistently
+
+### ✅ **Phase 2: Extracted IdleTimeoutService**
+- **Created dedicated `IdleTimeoutService` class** - Clean separation of concerns
+- **Implemented event-driven architecture** - Uses events instead of complex state watching
+- **Separated speech detection from idle timeout management** - Clear boundaries
+
+### ✅ **Phase 3: Restored Headless Design**
+- **Removed internal state exposure** - Component no longer exposes internal state
+- **Restored parent-driven state management** - Test app manages its own state via callbacks
+- **Implemented callback-only interface** - Component only provides callbacks, no state queries
+
+### **Key Architectural Improvements:**
+
+1. **Single Source of Truth**: Only reducer state manages `isUserSpeaking`
+2. **Clean Architecture**: `IdleTimeoutService` handles all timeout logic
+3. **Event-Driven**: Uses events instead of complex state watching
+4. **Headless Design**: Component doesn't expose internal state
+5. **DRY Principle**: Eliminated duplicate speech detection logic
+6. **Maintainable**: Clear separation of concerns
+
+### **Files Modified in Refactoring:**
+
+- `src/utils/IdleTimeoutService.ts` - **NEW**: Centralized idle timeout service
+- `src/hooks/useIdleTimeoutManager.ts` - **REFACTORED**: Now uses IdleTimeoutService
+- `src/components/DeepgramVoiceInteraction/index.tsx` - **REFACTORED**: Removed userSpeakingRef, uses reducer state
+- `src/types/index.ts` - **REFACTORED**: Removed onUserSpeakingStateChange callback
+- `src/utils/websocket/WebSocketManager.ts` - **ENHANCED**: Added meaningful activity callback
+- `test-app/src/App.tsx` - **REFACTORED**: Restored parent-driven state management
+
+### ✅ **Final Test Results**
+
+All E2E tests are now passing:
+- `user-stopped-speaking-demonstration.spec.js` ✅ (2/2 tests pass)
+- `extended-silence-idle-timeout.spec.js` ✅ (1/1 test passes)
+
+The refactored code is now much cleaner, more maintainable, and follows proper architectural patterns while maintaining all existing functionality.
+
 ## Final Fix: AudioData Idle Timeout Reset
 
 ### ⚠️ Issue Identified

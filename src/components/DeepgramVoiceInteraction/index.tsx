@@ -148,7 +148,6 @@ function DeepgramVoiceInteraction(
     onVADEvent,
     onKeepalive,
     onPlaybackStateChange,
-    onUserSpeakingStateChange,
     onError,
     // Auto-connect dual mode props
     autoConnect,
@@ -177,9 +176,6 @@ function DeepgramVoiceInteraction(
   const transcriptionManagerRef = useRef<WebSocketManager | null>(null);
   const agentManagerRef = useRef<WebSocketManager | null>(null);
   const audioManagerRef = useRef<AudioManager | null>(null);
-  
-  // Tracking user speaking state
-  const userSpeakingRef = useRef(false);
   
   // Track whether speech_final=true was received to implement Deepgram's recommended pattern:
   // "trigger when speech_final=true is received (ignore subsequent UtteranceEnd)"
@@ -307,7 +303,7 @@ function DeepgramVoiceInteraction(
   };
   
   // Initialize idle timeout manager
-  useIdleTimeoutManager(
+  const { handleMeaningfulActivity } = useIdleTimeoutManager(
     state,
     agentManagerRef,
     transcriptionManagerRef,
@@ -347,11 +343,6 @@ function DeepgramVoiceInteraction(
       return () => clearTimeout(timerId);
     }
   }, [state]);
-
-  // Call onUserSpeakingStateChange callback when isUserSpeaking state changes
-  useEffect(() => {
-    onUserSpeakingStateChange?.(state.isUserSpeaking);
-  }, [state.isUserSpeaking, onUserSpeakingStateChange]);
 
   // Handle errors
   const handleError = (error: DeepgramError) => {
@@ -566,6 +557,7 @@ function DeepgramVoiceInteraction(
         queryParams: useKeytermPrompting ? undefined : transcriptionQueryParams, 
       debug: props.debug,
       keepaliveInterval: 0, // Disable keepalives for transcription service
+      onMeaningfulActivity: handleMeaningfulActivity,
     });
     
     console.log('🔧 [TRANSCRIPTION] WebSocketManager created successfully:', !!transcriptionManagerRef.current);
@@ -623,6 +615,7 @@ function DeepgramVoiceInteraction(
         apiKey,
         service: 'agent',
         debug: props.debug,
+        onMeaningfulActivity: handleMeaningfulActivity,
       });
 
     // Set up event listeners for agent WebSocket
@@ -1001,9 +994,8 @@ function DeepgramVoiceInteraction(
           // Set flag to ignore subsequent UtteranceEnd (per Deepgram guidelines)
           speechFinalReceivedRef.current = true;
           
-          // User stopped speaking
-          if (userSpeakingRef.current) {
-            userSpeakingRef.current = false;
+          // User stopped speaking - call callback if user was speaking
+          if (stateRef.current.isUserSpeaking) {
             onUserStoppedSpeaking?.();
           }
           dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
@@ -1018,9 +1010,8 @@ function DeepgramVoiceInteraction(
             console.log('🎯 [SPEECH] Final transcript received - user finished speaking (fallback)');
           }
           
-          // User stopped speaking
-          if (userSpeakingRef.current) {
-            userSpeakingRef.current = false;
+          // User stopped speaking - call callback if user was speaking
+          if (stateRef.current.isUserSpeaking) {
             onUserStoppedSpeaking?.();
           }
           dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
@@ -1160,10 +1151,7 @@ function DeepgramVoiceInteraction(
       onUtteranceEnd?.({ channel, lastWordEnd });
       
       // User stopped speaking - UtteranceEnd indicates speech has ended
-      // Call the callback regardless of current userSpeakingRef state
-      if (userSpeakingRef.current) {
-        userSpeakingRef.current = false;
-      }
+      // Always call the callback when UtteranceEnd is received
       onUserStoppedSpeaking?.();
       
       // Update state to trigger idle timeout re-enabling
@@ -1194,7 +1182,7 @@ function DeepgramVoiceInteraction(
       
       // User started speaking - only set if we have actual speech evidence
       // SpeechStarted alone is not sufficient - we need interim results or other evidence
-      if (!userSpeakingRef.current) {
+      if (!stateRef.current.isUserSpeaking) {
         // Don't set userSpeaking to true just on SpeechStarted
         // Wait for actual speech evidence (interim results, etc.)
         if (props.debug) {
@@ -1534,7 +1522,7 @@ function DeepgramVoiceInteraction(
       
       // Update VAD state - only if we don't already have speech evidence
       // Agent service UserStartedSpeaking might be less reliable than interim results
-      if (!userSpeakingRef.current) {
+      if (!stateRef.current.isUserSpeaking) {
         dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: true });
         if (props.debug) {
           console.log('🎯 [AGENT] UserStartedSpeaking from agent service - setting isUserSpeaking=true');
@@ -1630,8 +1618,7 @@ function DeepgramVoiceInteraction(
       // Reset user speaking state when agent finishes speaking
       // This is important for text-based interactions where no UtteranceEnd is received
       dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
-      if (userSpeakingRef.current) {
-        userSpeakingRef.current = false;
+      if (stateRef.current.isUserSpeaking) {
         onUserStoppedSpeaking?.();
       }
       
@@ -1746,9 +1733,8 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
       dispatch({ type: 'UTTERANCE_END', data: { channel, lastWordEnd } });
       
-      // User stopped speaking
-      if (userSpeakingRef.current) {
-        userSpeakingRef.current = false;
+      // User stopped speaking - call callback if user was speaking
+      if (stateRef.current.isUserSpeaking) {
         onUserStoppedSpeaking?.();
       }
       
