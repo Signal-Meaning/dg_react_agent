@@ -7,9 +7,8 @@ import { setupVADTestingEnvironment } from '../utils/audio-stream-mocks';
 
 test.describe('Extended Silence Idle Timeout Test', () => {
   test('should demonstrate connection closure with >10 seconds of silence', async ({ page, context }) => {
-    // Grant microphone permissions and setup VAD testing environment
+    // Grant microphone permissions
     await context.grantPermissions(['microphone']);
-    await setupVADTestingEnvironment(page);
     
     console.log('🧪 Testing connection closure with extended silence (>10 seconds)...');
     
