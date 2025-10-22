@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useReducer, useRef } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useReducer, useRef } from 'react';
 import {
   AgentState,
   DeepgramError,
@@ -149,7 +149,6 @@ function DeepgramVoiceInteraction(
     onKeepalive,
     onPlaybackStateChange,
     onError,
-    debug: debugProp = false,
     // Auto-connect dual mode props
     autoConnect,
     microphoneEnabled,
@@ -178,8 +177,10 @@ function DeepgramVoiceInteraction(
   const agentManagerRef = useRef<WebSocketManager | null>(null);
   const audioManagerRef = useRef<AudioManager | null>(null);
   
-  // Tracking user speaking state
-  const userSpeakingRef = useRef(false);
+  // Track whether speech_final=true was received to implement Deepgram's recommended pattern:
+  // "trigger when speech_final=true is received (ignore subsequent UtteranceEnd)"
+  // Reference: https://developers.deepgram.com/docs/understanding-end-of-speech-detection#using-utteranceend
+  const speechFinalReceivedRef = useRef(false);
   
   // Track if auto-connect has been attempted to prevent multiple attempts
   const autoConnectAttemptedRef = useRef(false);
@@ -302,7 +303,7 @@ function DeepgramVoiceInteraction(
   };
   
   // Initialize idle timeout manager
-  const { manageIdleTimeoutResets } = useIdleTimeoutManager(
+  const { handleMeaningfulActivity } = useIdleTimeoutManager(
     state,
     agentManagerRef,
     transcriptionManagerRef,
@@ -556,6 +557,7 @@ function DeepgramVoiceInteraction(
         queryParams: useKeytermPrompting ? undefined : transcriptionQueryParams, 
       debug: props.debug,
       keepaliveInterval: 0, // Disable keepalives for transcription service
+      onMeaningfulActivity: handleMeaningfulActivity,
     });
     
     console.log('🔧 [TRANSCRIPTION] WebSocketManager created successfully:', !!transcriptionManagerRef.current);
@@ -613,6 +615,7 @@ function DeepgramVoiceInteraction(
         apiKey,
         service: 'agent',
         debug: props.debug,
+        onMeaningfulActivity: handleMeaningfulActivity,
       });
 
     // Set up event listeners for agent WebSocket
@@ -751,6 +754,13 @@ function DeepgramVoiceInteraction(
       } else if (event.type === 'playing') {
         log('Playing state:', event.isPlaying);
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: event.isPlaying });
+        
+        // Transition agent to idle when audio playback stops
+        // This ensures the agent state reflects actual audio playback completion
+        if (!event.isPlaying && stateRef.current.agentState === 'speaking') {
+          sleepLog('Audio playback finished - transitioning agent to idle');
+          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+        }
       } else if (event.type === 'error') {
         handleError(event.error);
       } else if (event.type === 'data') {
@@ -944,7 +954,7 @@ function DeepgramVoiceInteraction(
     const result = isObject && isNotNull && hasType;
     
     if (props.debug) {
-      console.log('🔍 [DEBUG] isTranscriptionMessage check:', {
+      lazyLog('🔍 [DEBUG] isTranscriptionMessage check:', {
         data: data,
         isObject,
         isNotNull,
@@ -958,7 +968,7 @@ function DeepgramVoiceInteraction(
   // Handle transcription messages - only relevant if transcription is configured
   const handleTranscriptionMessage = (data: unknown) => {
     if (props.debug) {
-      console.log('🔍 [DEBUG] handleTranscriptionMessage called with:', data);
+      lazyLog('🔍 [DEBUG] handleTranscriptionMessage called with:', data);
     }
     
     // Add simplified transcript log for better readability - always show with [TRANSCRIPT] prefix
@@ -970,7 +980,9 @@ function DeepgramVoiceInteraction(
       };
       const transcript = transcriptData.alternatives?.[0]?.transcript;
       if (transcript && transcript.trim()) {
-        console.log(`[TRANSCRIPT] "${transcript}" ${transcriptData.is_final ? '(final)' : '(interim)'}${transcriptData.speech_final ? ' [SPEECH_FINAL]' : ''}`);
+        if (props.debug) {
+          lazyLog(`[TRANSCRIPT] "${transcript}" ${transcriptData.is_final ? '(final)' : '(interim)'}${transcriptData.speech_final ? ' [SPEECH_FINAL]' : ''}`);
+        }
         
         // CRITICAL FIX: Use Deepgram's recommended end-of-speech signals
         if (transcriptData.speech_final === true) {
@@ -979,9 +991,11 @@ function DeepgramVoiceInteraction(
             console.log('🎯 [SPEECH] speech_final=true received - user finished speaking (endpointing)');
           }
           
-          // User stopped speaking
-          if (userSpeakingRef.current) {
-            userSpeakingRef.current = false;
+          // Set flag to ignore subsequent UtteranceEnd (per Deepgram guidelines)
+          speechFinalReceivedRef.current = true;
+          
+          // User stopped speaking - call callback if user was speaking
+          if (stateRef.current.isUserSpeaking) {
             onUserStoppedSpeaking?.();
           }
           dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
@@ -996,9 +1010,8 @@ function DeepgramVoiceInteraction(
             console.log('🎯 [SPEECH] Final transcript received - user finished speaking (fallback)');
           }
           
-          // User stopped speaking
-          if (userSpeakingRef.current) {
-            userSpeakingRef.current = false;
+          // User stopped speaking - call callback if user was speaking
+          if (stateRef.current.isUserSpeaking) {
             onUserStoppedSpeaking?.();
           }
           dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
@@ -1027,56 +1040,61 @@ function DeepgramVoiceInteraction(
     // Always log VAD events for debugging
     if (typeof data === 'object' && data !== null && 'type' in data && (data as any).type === 'vad') {
       if (props.debug) {
-        console.log('🎯 [VAD] VADEvent received in handleTranscriptionMessage:', data);
+        lazyLog('🎯 [VAD] VADEvent received in handleTranscriptionMessage:', data);
       }
     }
     
-    // Always log all transcription messages to debug VAD events
-    console.log('📝 [TRANSCRIPTION] Message received:', data);
-    
-    // Debug: Log all transcription messages (only in debug mode)
+    // Debug: Log transcription messages (only in debug mode and filter out empty results)
     if (props.debug) {
-      console.log('📝 [TRANSCRIPTION] Message received:', data);
+      // Only log if there's meaningful content or it's a VAD event
+      const hasContent = typeof data === 'object' && data !== null && (
+        ('alternatives' in data && (data as any).alternatives?.length > 0) ||
+        ('type' in data && ['SpeechStarted', 'UtteranceEnd', 'vad'].includes((data as any).type))
+      );
+      
+      if (hasContent) {
+        lazyLog('📝 [TRANSCRIPTION] Message received:', data);
+      }
     }
     
     // Skip processing if transcription service isn't configured
     if (!transcriptionManagerRef.current) {
       if (props.debug) {
-        console.log('🔍 [DEBUG] Transcription service not configured, returning early');
+        lazyLog('🔍 [DEBUG] Transcription service not configured, returning early');
       }
       log('Received unexpected transcription message but service is not configured:', data);
       return;
     }
     
     if (props.debug) {
-      console.log('🔍 [DEBUG] Transcription service is configured, continuing...');
+      lazyLog('🔍 [DEBUG] Transcription service is configured, continuing...');
     }
     
     // Debug: Log message type for VAD debugging
     if (typeof data === 'object' && data !== null && 'type' in data) {
       if (props.debug) {
-        console.log('🔍 [DEBUG] Processing message type:', (data as any).type);
+        lazyLog('🔍 [DEBUG] Processing message type:', (data as any).type);
       }
     }
 
     // Type guard check
     if (props.debug) {
-      console.log('🔍 [DEBUG] Checking type guard for data:', data);
+      lazyLog('🔍 [DEBUG] Checking type guard for data:', data);
     }
     const typeGuardResult = isTranscriptionMessage(data);
     if (props.debug) {
-      console.log('🔍 [DEBUG] isTranscriptionMessage result:', typeGuardResult);
+      lazyLog('🔍 [DEBUG] isTranscriptionMessage result:', typeGuardResult);
     }
     if (!typeGuardResult) {
       if (props.debug) {
-        console.log('🔍 [DEBUG] Type guard failed, returning early');
+        lazyLog('🔍 [DEBUG] Type guard failed, returning early');
       }
       log('Invalid transcription message format:', data);
       return;
     }
     
     if (props.debug) {
-      console.log('🔍 [DEBUG] Message passed type guard, processing...');
+      lazyLog('🔍 [DEBUG] Message passed type guard, processing...');
     }
     
     // Check if agent is in sleep mode
@@ -1102,8 +1120,21 @@ function DeepgramVoiceInteraction(
 
     if (data.type === 'UtteranceEnd') {
       if (props.debug) {
-        console.log('🎯 [SPEECH] UtteranceEnd message received - user finished speaking (word timing)');
+        console.log('🎯 [SPEECH] UtteranceEnd message received - checking if should process');
       }
+      
+      // Check if speech_final was already received (per Deepgram guidelines)
+      if (speechFinalReceivedRef.current) {
+        if (props.debug) {
+          console.log('🎯 [SPEECH] UtteranceEnd ignored - speech_final=true already received');
+        }
+        return; // Ignore UtteranceEnd after speech_final
+      }
+      
+      if (props.debug) {
+        console.log('🎯 [SPEECH] UtteranceEnd processing - no speech_final received, user finished speaking (word timing)');
+      }
+      
       if (isSleepingOrEntering) {
         sleepLog('Ignoring UtteranceEnd event (state:', stateRef.current.agentState, ')');
         return;
@@ -1119,11 +1150,12 @@ function DeepgramVoiceInteraction(
       const lastWordEnd = typeof data.last_word_end === 'number' ? data.last_word_end : 0;
       onUtteranceEnd?.({ channel, lastWordEnd });
       
-      // User stopped speaking
-      if (userSpeakingRef.current) {
-        userSpeakingRef.current = false;
-        onUserStoppedSpeaking?.();
-      }
+      // User stopped speaking - UtteranceEnd indicates speech has ended
+      // Always call the callback when UtteranceEnd is received
+      onUserStoppedSpeaking?.();
+      
+      // Update state to trigger idle timeout re-enabling
+      dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
       return;
     }
     
@@ -1137,6 +1169,9 @@ function DeepgramVoiceInteraction(
         return;
       }
       
+      // Reset speech_final flag for new speech session
+      speechFinalReceivedRef.current = false;
+      
       // Call the specific SpeechStarted callback
       if (props.onSpeechStarted) {
         props.onSpeechStarted({ 
@@ -1145,13 +1180,18 @@ function DeepgramVoiceInteraction(
         });
       }
       
-      // User started speaking
-      if (!userSpeakingRef.current) {
-        userSpeakingRef.current = true;
-        onUserStartedSpeaking?.();
+      // User started speaking - only set if we have actual speech evidence
+      // SpeechStarted alone is not sufficient - we need interim results or other evidence
+      if (!stateRef.current.isUserSpeaking) {
+        // Don't set userSpeaking to true just on SpeechStarted
+        // Wait for actual speech evidence (interim results, etc.)
+        if (props.debug) {
+          console.log('🎯 [SPEECH] SpeechStarted received - waiting for speech evidence before setting userSpeaking=true');
+        }
       }
-      dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: true });
-      updateKeepaliveState(true);
+      
+      // Reset speech_final flag for new speech session
+      speechFinalReceivedRef.current = false;
       
       if (stateRef.current.agentState === 'idle' || stateRef.current.agentState === 'sleeping') {
         dispatch({ type: 'AGENT_STATE_CHANGE', state: 'listening' });
@@ -1480,8 +1520,18 @@ function DeepgramVoiceInteraction(
       clearAudio();
       onUserStartedSpeaking?.();
       
-      // Update VAD state
-      dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: true });
+      // Update VAD state - only if we don't already have speech evidence
+      // Agent service UserStartedSpeaking might be less reliable than interim results
+      if (!stateRef.current.isUserSpeaking) {
+        dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: true });
+        if (props.debug) {
+          console.log('🎯 [AGENT] UserStartedSpeaking from agent service - setting isUserSpeaking=true');
+        }
+      } else {
+        if (props.debug) {
+          console.log('🎯 [AGENT] UserStartedSpeaking from agent service - already have speech evidence, skipping');
+        }
+      }
       
       // Re-enable keepalives when user starts speaking
       updateKeepaliveState(true);
@@ -1553,9 +1603,12 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentAudioDone') {
-      sleepLog('Dispatching AGENT_STATE_CHANGE to idle (from AgentAudioDone)');
-      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
-
+      sleepLog('AgentAudioDone received - audio generation complete, but playback may continue');
+      
+      // DON'T transition to idle yet - the agent is still speaking (audio is playing)
+      // The actual transition to idle will happen when audio playback finishes
+      // This prevents the agent from appearing idle while audio is still playing
+      
       // Track agent silent
       if (state.greetingInProgress) {
         dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
@@ -1565,8 +1618,7 @@ function DeepgramVoiceInteraction(
       // Reset user speaking state when agent finishes speaking
       // This is important for text-based interactions where no UtteranceEnd is received
       dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
-      if (userSpeakingRef.current) {
-        userSpeakingRef.current = false;
+      if (stateRef.current.isUserSpeaking) {
         onUserStoppedSpeaking?.();
       }
       
@@ -1681,9 +1733,8 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
       dispatch({ type: 'UTTERANCE_END', data: { channel, lastWordEnd } });
       
-      // User stopped speaking
-      if (userSpeakingRef.current) {
-        userSpeakingRef.current = false;
+      // User stopped speaking - call callback if user was speaking
+      if (stateRef.current.isUserSpeaking) {
         onUserStoppedSpeaking?.();
       }
       
@@ -1701,11 +1752,11 @@ function DeepgramVoiceInteraction(
     // Handle VAD events from transcription service (vad type)
     // NOTE: SpeechStarted is handled in handleTranscriptionMessage (SpeechStopped is not a real Deepgram event)
     if (props.debug) {
-      console.log('🔍 [DEBUG] Checking for VAD event type:', data.type);
+      lazyLog('🔍 [DEBUG] Checking for VAD event type:', data.type);
     }
     if (data.type === 'vad') {
       if (props.debug) {
-        console.log('🎯 [VAD] VADEvent message received:', data);
+        lazyLog('🎯 [VAD] VADEvent message received:', data);
       }
       log('VADEvent message received:', data);
       
@@ -1758,7 +1809,7 @@ function DeepgramVoiceInteraction(
     
     if (audioManagerRef.current) {
       log('Passing buffer to AudioManager.queueAudio()');
-      console.log('🎵 [AUDIO] Audio context state:', audioManagerRef.current.getAudioContext?.()?.state);
+      if (props.debug) lazyLog('🎵 [AUDIO] Audio context state:', audioManagerRef.current.getAudioContext?.()?.state);
       audioManagerRef.current.queueAudio(data)
         .then(() => {
           log('Successfully queued audio buffer for playback');
@@ -1773,19 +1824,13 @@ function DeepgramVoiceInteraction(
 
   // Send audio data to WebSockets - conditionally route based on configuration
   const sendAudioData = (data: ArrayBuffer) => {
-    // Always log this critical method call
-    console.log('🎵 [sendAudioData] CALLED with data size:', data.byteLength);
-    console.log('🎵 [sendAudioData] hasSentSettingsRef.current:', hasSentSettingsRef.current);
-    console.log('🎵 [sendAudioData] state.hasSentSettings:', state.hasSentSettings);
-    console.log('🎵 [sendAudioData] agentManagerRef.current?.getState():', agentManagerRef.current?.getState());
-    console.log('🎵 [sendAudioData] transcriptionManagerRef.current?.getState():', transcriptionManagerRef.current?.getState());
-    
     // Debug logging only (reduce console spam)
     if (props.debug) {
-      console.log('🎵 [sendAudioData] Called with data size:', data.byteLength);
-      console.log('🎵 [sendAudioData] hasSentSettingsRef.current:', hasSentSettingsRef.current);
-      console.log('🎵 [sendAudioData] state.hasSentSettings:', state.hasSentSettings);
-      console.log('🎵 [sendAudioData] agentManagerRef.current?.getState():', agentManagerRef.current?.getState());
+      lazyLog('🎵 [sendAudioData] Called with data size:', data.byteLength);
+      lazyLog('🎵 [sendAudioData] hasSentSettingsRef.current:', hasSentSettingsRef.current);
+      lazyLog('🎵 [sendAudioData] state.hasSentSettings:', state.hasSentSettings);
+      lazyLog('🎵 [sendAudioData] agentManagerRef.current?.getState():', agentManagerRef.current?.getState());
+      lazyLog('🎵 [sendAudioData] transcriptionManagerRef.current?.getState():', transcriptionManagerRef.current?.getState());
     }
     
     // Send to transcription service if configured and connected
@@ -1815,31 +1860,31 @@ function DeepgramVoiceInteraction(
         // Check if settings have been sent and enough time has passed
         if (!hasSentSettingsRef.current) {
           if (props.debug) {
-            console.log('🎵 [sendAudioData] ❌ CRITICAL: Cannot send audio data before settings are sent!');
-            console.log('🎵 [sendAudioData] ❌ hasSentSettingsRef.current:', hasSentSettingsRef.current);
-            console.log('🎵 [sendAudioData] ❌ state.hasSentSettings:', state.hasSentSettings);
+            lazyLog('🎵 [sendAudioData] ❌ CRITICAL: Cannot send audio data before settings are sent!');
+            lazyLog('🎵 [sendAudioData] ❌ hasSentSettingsRef.current:', hasSentSettingsRef.current);
+            lazyLog('🎵 [sendAudioData] ❌ state.hasSentSettings:', state.hasSentSettings);
           }
           return; // Don't send audio data
         }
         
         // Wait for settings to be processed by Deepgram (minimum 500ms)
         if (settingsSentTimeRef.current && Date.now() - settingsSentTimeRef.current < 500) {
-          if (props.debug) console.log('🎵 [sendAudioData] ⏳ Waiting for settings to be processed by Deepgram...');
+          if (props.debug) lazyLog('🎵 [sendAudioData] ⏳ Waiting for settings to be processed by Deepgram...');
           return; // Don't send audio data yet
         }
         
-        if (props.debug) console.log('🎵 [sendAudioData] ✅ Settings confirmed, sending to agent service');
+        if (props.debug) lazyLog('🎵 [sendAudioData] ✅ Settings confirmed, sending to agent service');
         agentManagerRef.current.sendBinary(data);
         
         // Log successful audio transmission (debug level)
         lazyLog('🎵 [AUDIO] Audio data sent to Deepgram agent service');
       } else if (isSleepingOrEntering) {
         if (props.debug) {
-          console.log('🎵 [sendAudioData] Skipping agent service - sleeping state:', stateRef.current.agentState);
+          lazyLog('🎵 [sendAudioData] Skipping agent service - sleeping state:', stateRef.current.agentState);
           sleepLog('Skipping sendAudioData to agent (state:', stateRef.current.agentState, ')');
         }
       } else {
-        if (props.debug) console.log('🎵 [sendAudioData] Skipping agent service - not connected:', connectionState);
+        if (props.debug) lazyLog('🎵 [sendAudioData] Skipping agent service - not connected:', connectionState);
       }
     }
   };

@@ -54,6 +54,11 @@ export interface WebSocketManagerOptions {
    * Enable verbose logging
    */
   debug?: boolean;
+  
+  /**
+   * Callback for meaningful user activity (for idle timeout management)
+   */
+  onMeaningfulActivity?: (activity: string) => void;
 }
 
 /**
@@ -228,17 +233,20 @@ export class WebSocketManager {
               const data = JSON.parse(event.data);
               this.log('Parsed message into JSON:', data);
               
-              // Only reset idle timeout on meaningful messages
+              // Only reset idle timeout on meaningful user activity (not every protocol message)
               const shouldResetTimeout = this.shouldResetIdleTimeout(data);
               if (shouldResetTimeout) {
                 // If there's meaningful content, reset the idle timeout
                 // But DON'T automatically re-enable idle timeout resets if they're disabled
                 // This prevents the idle timeout from firing during agent responses
                 if (this.idleTimeoutDisabled) {
-                  this.log(`NOT re-enabling idle timeout resets due to meaningful activity: ${data.type} (resets are disabled)`);
+                  console.log(`🎯 [IDLE_TIMEOUT] NOT re-enabling idle timeout resets due to meaningful activity: ${data.type} (resets are disabled)`);
                   // Don't re-enable idle timeout resets - let the component manage this
                 } else {
-                  this.resetIdleTimeout();
+                  // Only reset on truly meaningful user activity, not on every protocol message
+                  if (this.isMeaningfulUserActivity(data)) {
+                    this.resetIdleTimeout(data);
+                  }
                 }
               }
               
@@ -410,7 +418,7 @@ export class WebSocketManager {
   /**
    * Starts the idle timeout
    */
-  private startIdleTimeout(): void {
+  public startIdleTimeout(): void {
     if (this.idleTimeoutId !== null) {
       this.stopIdleTimeout();
     }
@@ -420,11 +428,11 @@ export class WebSocketManager {
       this.idleTimeoutId = window.setTimeout(() => {
         // Always close the connection when idle timeout expires
         // The idleTimeoutDisabled flag only controls whether resets are allowed, not whether the timeout fires
-        this.log(`Idle timeout reached (${this.options.idleTimeout}ms) - closing connection for ${this.options.service}`);
+        console.log(`🎯 [IDLE_TIMEOUT] Idle timeout reached (${this.options.idleTimeout}ms) - closing connection for ${this.options.service}`);
         this.close();
       }, this.options.idleTimeout);
 
-      this.log(`Started idle timeout (${this.options.idleTimeout}ms) for ${this.options.service}`);
+      console.log(`🎯 [IDLE_TIMEOUT] Started idle timeout (${this.options.idleTimeout}ms) for ${this.options.service}`);
     }
   }
 
@@ -435,7 +443,7 @@ export class WebSocketManager {
     if (this.idleTimeoutId !== null) {
       window.clearTimeout(this.idleTimeoutId);
       this.idleTimeoutId = null;
-      this.log('Stopped idle timeout');
+      console.log(`🎯 [IDLE_TIMEOUT] Stopped idle timeout for ${this.options.service}`);
     }
   }
 
@@ -473,15 +481,54 @@ export class WebSocketManager {
   }
 
   /**
+   * Determines if a message represents meaningful user activity (not just protocol messages)
+   */
+  private isMeaningfulUserActivity(data: any): boolean {
+    // Only reset idle timeout on ACTUAL user activity, not on every message
+    
+    // For agent service, only reset on user messages, not agent responses or protocol messages
+    if (this.options.service === 'agent') {
+      // Only reset on actual user messages
+      const userActivityMessages = ['ConversationText']; // User sending text
+      const isMeaningful = userActivityMessages.includes(data.type);
+      if (isMeaningful) {
+        this.options.onMeaningfulActivity?.(data.type);
+      }
+      return isMeaningful;
+    }
+    
+    // For transcription service, only reset on actual speech activity
+    if (this.options.service === 'transcription') {
+      // Only reset on actual speech content, not empty results or protocol messages
+      if (data.type === 'Results') {
+        const hasAlternatives = data.alternatives && data.alternatives.length > 0;
+        const hasTranscript = hasAlternatives && data.alternatives[0].transcript && data.alternatives[0].transcript.trim().length > 0;
+        if (hasTranscript) {
+          this.options.onMeaningfulActivity?.(`Results with transcript: "${data.alternatives[0].transcript}"`);
+        }
+        return hasTranscript; // Only reset if there's actual transcript content
+      }
+      
+      // Don't reset on other transcription messages (SpeechStarted, UtteranceEnd, etc.)
+      // These are protocol messages, not user activity
+      return false;
+    }
+    
+    return false; // Default to not reset for unknown services
+  }
+
+  /**
    * Resets the idle timeout (call when activity occurs)
    */
-  public resetIdleTimeout(): void {
+  public resetIdleTimeout(triggerMessage?: any): void {
     if (this.options.idleTimeout && this.options.idleTimeout > 0 && !this.idleTimeoutDisabled) {
-      this.log(`Resetting idle timeout for ${this.options.service}`);
+      const triggerInfo = triggerMessage ? ` (triggered by: ${triggerMessage.type || 'unknown'})` : '';
+      console.log(`🎯 [IDLE_TIMEOUT] Resetting idle timeout for ${this.options.service}${triggerInfo}`);
       this.stopIdleTimeout();
       this.startIdleTimeout();
     } else if (this.idleTimeoutDisabled) {
-      this.log(`NOT resetting idle timeout for ${this.options.service} - disabled after UtteranceEnd`);
+      const triggerInfo = triggerMessage ? ` (triggered by: ${triggerMessage.type || 'unknown'})` : '';
+      console.log(`🎯 [IDLE_TIMEOUT] NOT resetting idle timeout for ${this.options.service} - disabled after UtteranceEnd${triggerInfo}`);
     }
   }
 
@@ -490,10 +537,10 @@ export class WebSocketManager {
    */
   public disableIdleTimeoutResets(): void {
     this.idleTimeoutDisabled = true;
-    this.log(`Disabled idle timeout resets for ${this.options.service} - connection will timeout naturally`);
+    console.log(`🎯 [IDLE_TIMEOUT] Disabled idle timeout resets for ${this.options.service} - connection will timeout naturally`);
     // Stop the current timeout when disabling resets to prevent premature closure during activity
     this.stopIdleTimeout();
-    this.log(`Stopped current idle timeout for ${this.options.service} - will restart when resets are re-enabled`);
+    console.log(`🎯 [IDLE_TIMEOUT] Stopped current idle timeout for ${this.options.service} - will restart when resets are re-enabled`);
   }
 
   /**
@@ -501,14 +548,10 @@ export class WebSocketManager {
    */
   public enableIdleTimeoutResets(): void {
     this.idleTimeoutDisabled = false;
-    this.log(`Re-enabled idle timeout resets for ${this.options.service}`);
-    // Only start the idle timeout if it's not already running
-    if (this.idleTimeoutId === null) {
-      this.startIdleTimeout();
-      this.log(`Idle timeout started with ${this.options.idleTimeout}ms delay for ${this.options.service}`);
-    } else {
-      this.log(`Idle timeout already running, not restarting for ${this.options.service}`);
-    }
+    console.log(`🎯 [IDLE_TIMEOUT] Re-enabled idle timeout resets for ${this.options.service}`);
+    // Don't automatically start the idle timeout - let the component decide when to start it
+    // The idle timeout should only start when there's actual silence (no user speaking, no agent activity)
+    console.log(`🎯 [IDLE_TIMEOUT] Idle timeout resets enabled for ${this.options.service} - timeout will start on next activity`);
   }
 
   /**
@@ -534,8 +577,10 @@ export class WebSocketManager {
     try {
       this.log('Sending JSON:', data);
       this.ws.send(JSON.stringify(data));
-      // Reset idle timeout when sending messages (correct behavior)
-      this.resetIdleTimeout();
+      // Only reset idle timeout when sending meaningful user messages, not protocol messages
+      if (this.isMeaningfulUserActivity(data)) {
+        this.resetIdleTimeout(data);
+      }
       return true;
     } catch (error) {
       this.log('Error sending JSON:', error);
@@ -555,8 +600,9 @@ export class WebSocketManager {
     try {
       this.log(`Sending binary data: ${data instanceof ArrayBuffer ? data.byteLength : data.size} bytes`);
       this.ws.send(data);
-      // Reset idle timeout when sending messages (correct behavior)
-      this.resetIdleTimeout();
+      // Audio data being sent is just a technical signal - not user activity
+      // Don't reset idle timeout based on audio data transmission
+      // Idle timeout should be based on actual speech detection, not mic being open
       return true;
     } catch (error) {
       this.log('Error sending binary data:', error);
