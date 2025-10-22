@@ -231,6 +231,12 @@ export interface DeepgramVoiceInteractionProps {
   onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
 
   /**
+   * Called when the user speaking state changes (true/false)
+   * This provides the component's internal isUserSpeaking state to the parent
+   */
+  onUserSpeakingStateChange?: (isSpeaking: boolean) => void;
+
+  /**
    * VAD Configuration Options
    */
   
