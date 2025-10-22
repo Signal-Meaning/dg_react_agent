@@ -416,16 +416,17 @@ export class WebSocketManager {
     }
     
     if (this.options.idleTimeout && this.options.idleTimeout > 0) {
-            this.idleTimeoutId = window.setTimeout(() => {
-              // Check if idle timeout resets are disabled before firing
-              if (this.idleTimeoutDisabled) {
-                this.log(`Idle timeout reached but resets are disabled - not closing connection for ${this.options.service}`);
-                return;
-              }
+      this.log(`Starting idle timeout for ${this.options.service} with ${this.options.idleTimeout}ms delay`);
+      this.idleTimeoutId = window.setTimeout(() => {
+        // Check if idle timeout resets are disabled before firing
+        if (this.idleTimeoutDisabled) {
+          this.log(`Idle timeout reached but resets are disabled - not closing connection for ${this.options.service}`);
+          return;
+        }
 
-              this.log(`Idle timeout reached (${this.options.idleTimeout}ms) - closing connection`);
-              this.close();
-            }, this.options.idleTimeout);
+        this.log(`Idle timeout reached (${this.options.idleTimeout}ms) - closing connection`);
+        this.close();
+      }, this.options.idleTimeout);
 
       this.log(`Started idle timeout (${this.options.idleTimeout}ms) for ${this.options.service}`);
     }
@@ -504,8 +505,13 @@ export class WebSocketManager {
   public enableIdleTimeoutResets(): void {
     this.idleTimeoutDisabled = false;
     this.log(`Re-enabled idle timeout resets for ${this.options.service}`);
-    // Don't reset the idle timeout immediately - let it timeout naturally based on last activity
-    // This prevents immediate timeout if the agent finished responding a while ago
+    // Only start the idle timeout if it's not already running
+    if (this.idleTimeoutId === null) {
+      this.startIdleTimeout();
+      this.log(`Idle timeout started with ${this.options.idleTimeout}ms delay for ${this.options.service}`);
+    } else {
+      this.log(`Idle timeout already running, not restarting for ${this.options.service}`);
+    }
   }
 
   /**

@@ -44,12 +44,18 @@ test.describe('Idle Timeout Behavior', () => {
   test('should handle microphone activation after idle timeout', async ({ page }) => {
     console.log('🧪 Testing microphone activation after idle timeout...');
     
-    // Track errors
+    // Track errors and debug logs
     const errors = [];
+    const debugLogs = [];
     page.on('console', msg => {
       const text = msg.text();
       if (msg.type() === 'error' || text.includes('ERROR') || text.includes('🚨')) {
         errors.push(text);
+      }
+      // Capture our debug logs
+      if (text.includes('🎵 [AUDIO]') || text.includes('🎯 [IDLE_TIMEOUT]')) {
+        debugLogs.push(text);
+        console.log('DEBUG:', text);
       }
     });
     
@@ -92,11 +98,19 @@ test.describe('Idle Timeout Behavior', () => {
     console.log(`  Microphone: ${finalMicStatus}`);
     console.log(`  Connection: ${finalConnectionStatus}`);
     console.log(`  Errors captured: ${errors.length}`);
+    console.log(`  Debug logs captured: ${debugLogs.length}`);
     
     if (errors.length > 0) {
       console.log('\n🚨 ERRORS:');
       errors.forEach((err, i) => {
         console.log(`  ${i + 1}. ${err.substring(0, 200)}`);
+      });
+    }
+    
+    if (debugLogs.length > 0) {
+      console.log('\n🔍 DEBUG LOGS:');
+      debugLogs.forEach((log, i) => {
+        console.log(`  ${i + 1}. ${log}`);
       });
     }
     
