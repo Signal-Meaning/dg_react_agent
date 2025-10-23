@@ -8,7 +8,6 @@ export type WebSocketEvent =
   | { type: 'message'; data: any }
   | { type: 'binary'; data: ArrayBuffer }
   | { type: 'keepalive'; data: { type: string; timestamp: number; service: ServiceType } }
-  | { type: 're_enable_idle_timeout'; service: ServiceType }
   | { type: 'error'; error: DeepgramError };
 
 /**
