@@ -22,11 +22,12 @@ The `dg_react_agent` library has separate idle timeout mechanisms for transcript
 
 ### Current Architecture Issues
 
-#### Dual Timeout System
-- **Agent WebSocket**: Independent idle timeout (typically 10s)
-- **Transcription WebSocket**: Independent idle timeout (typically 10s)
-- **No Coordination**: Services can timeout at different times
-- **Race Conditions**: One service can timeout while the other remains active
+#### Triple Timeout System (The Real Problem!)
+- **Agent WebSocket**: Independent idle timeout (10s) in WebSocketManager
+- **Transcription WebSocket**: Independent idle timeout (10s) in WebSocketManager  
+- **IdleTimeoutService**: Centralized timeout manager (10s) - THE RIGHT APPROACH
+- **Manual Coordination**: Complex event passing between services via `re_enable_idle_timeout`
+- **Race Conditions**: WebSocket timeouts conflict with centralized service
 
 #### Specific Problems
 1. **UtteranceEnd** → Both services disabled ✅
@@ -74,22 +75,20 @@ Both transcription and agent services should:
 
 ## Proposed Solution
 
-The library should implement a **unified idle timeout management system** where:
+**KEY INSIGHT**: The `IdleTimeoutService` already exists and is the right approach! The problem is that `WebSocketManager` classes still have their own independent timeouts that conflict with it.
 
-### 1. Shared Timeout Configuration
-Both services use the same timeout value and configuration
+### The Fix: Remove WebSocket-Level Timeouts
 
-### 2. Coordinated Activity
-Activity on either service resets the timeout for both services
+1. **Keep IdleTimeoutService** - It's already centralized and working correctly
+2. **Remove WebSocket timeouts** - Disable individual `idleTimeout` in WebSocketManager
+3. **Simplify coordination** - Let IdleTimeoutService handle everything centrally
+4. **Remove manual events** - No more `re_enable_idle_timeout` event passing needed
 
-### 3. Unified Closure
-Both services close together when the unified timeout expires
-
-### 4. Agent Speaking Protection
-The timeout is disabled when the agent is speaking (as it currently does for agent service)
-
-### 5. Single Source of Truth
-One timeout manager controls both services instead of separate managers
+### Benefits of This Approach:
+- **Simpler**: Remove complex cross-service coordination
+- **More reliable**: Single source of truth for timeouts
+- **Already implemented**: IdleTimeoutService is working correctly
+- **Less code**: Remove redundant timeout logic from WebSocketManager
 
 ## Technical Implementation Plan
 
