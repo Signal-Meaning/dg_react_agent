@@ -61,6 +61,67 @@ releases/
 5. **Release**: Publish release with documentation
 6. **Announcement**: Announce release with migration guidance
 
+## Creating Release Issues
+
+### Automated Release Issue Creation
+
+The project includes an automated script to create release issues and set up the proper working environment:
+
+```bash
+# Create a patch release issue and branch
+npm run release:issue 0.4.2 patch
+
+# Create a minor release issue and branch
+npm run release:issue 0.5.0 minor
+
+# Create a major release issue and branch
+npm run release:issue 1.0.0 major
+```
+
+### What the Script Does
+
+1. **Validates Environment**: Checks that the working directory is clean (no uncommitted changes)
+2. **Switches to Main**: Switches to the main branch and pulls latest changes
+3. **Creates GitHub Issue**: Creates a GitHub issue using the appropriate template:
+   - **Patch releases**: Uses `quick-release.md` template (streamlined checklist)
+   - **Minor/Major releases**: Uses `release-checklist.md` template (comprehensive checklist)
+4. **Creates Working Branch**: Creates a new branch named `issueNNN` (where NNN is the issue number)
+5. **Switches to New Branch**: Leaves you on the new release branch ready to start work
+
+### Release Issue Templates
+
+#### Quick Release Template (Patch)
+- Streamlined checklist for bug fixes and minor improvements
+- Essential testing and validation steps
+- Simplified documentation requirements (CHANGELOG only)
+- Quick release process
+
+#### Release Checklist Template (Minor/Major)
+- Complete pre-release preparation
+- Version management and dependency updates
+- Build and package validation
+- Comprehensive documentation requirements
+- Git operations and tagging
+- Package publishing to GitHub Registry
+- GitHub release creation
+
+### Prerequisites
+
+- Working directory must be clean (no uncommitted changes)
+- GitHub CLI (`gh`) must be installed and authenticated
+- Must have push access to the repository
+
+### Manual Release Issue Creation
+
+If you prefer to create release issues manually:
+
+1. **Go to GitHub Issues**: Navigate to the repository's Issues page
+2. **Click "New Issue"**: Click the "New Issue" button
+3. **Select Template**: Choose either "Release Checklist" or "Quick Release" template
+4. **Fill in Details**: Replace `vX.X.X` with the actual version number
+5. **Create Issue**: Click "Submit new issue"
+6. **Create Branch**: Manually create a branch named `issueNNN` based on main
+
 ## Release Checklist
 
 Each release includes a comprehensive checklist to ensure all steps are completed correctly. The checklist covers both technical release tasks and documentation requirements.
