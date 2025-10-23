@@ -30,6 +30,8 @@ This comprehensive integration guide provides everything you need to successfull
 npm install @signal-meaning/deepgram-voice-interaction-react
 ```
 
+> **Note**: For technical setup requirements (webpack configuration, React externalization, etc.), see [TECHNICAL-SETUP.md](./TECHNICAL-SETUP.md)
+
 ### Basic Integration
 
 ```tsx
