@@ -64,6 +64,9 @@ npm install ../dg_react_agent/deepgram-voice-interaction-react-0.1.1.tgz
 - `npm run workflow` - Interactive development workflow script
 - `npm run status` - Show project status and information
 
+### **Release Management**
+- `npm run release:issue` - Create release issue and working branch
+
 ## **Development Workflow**
 
 ### **1. Making Changes**
@@ -302,6 +305,33 @@ chore: maintenance tasks
 
 ## **Release Process**
 
+### **Creating Release Issues**
+
+The project includes an automated script to streamline the release process:
+
+```bash
+# Create a patch release issue and working branch
+npm run release:issue 0.4.2 patch
+
+# Create a minor release issue and working branch  
+npm run release:issue 0.5.0 minor
+
+# Create a major release issue and working branch
+npm run release:issue 1.0.0 major
+```
+
+**What this does:**
+1. **Validates Environment**: Ensures working directory is clean
+2. **Switches to Main**: Updates main branch with latest changes
+3. **Creates GitHub Issue**: Uses appropriate template (quick-release for patches, full checklist for minor/major)
+4. **Creates Working Branch**: Creates `issueNNN` branch based on main
+5. **Switches to New Branch**: Leaves you ready to start release work
+
+### **Release Issue Templates**
+
+- **Quick Release** (Patch): Streamlined checklist for bug fixes
+- **Release Checklist** (Minor/Major): Comprehensive checklist with full documentation requirements
+
 ### **Pre-release Checklist**
 - [ ] All tests passing
 - [ ] Documentation updated
@@ -310,11 +340,13 @@ chore: maintenance tasks
 - [ ] Build successful: `npm run build`
 
 ### **Release Steps**
-1. **Update version**: `npm version patch|minor|major`
-2. **Build package**: `npm run build`
-3. **Run tests**: `npm test && npm run test:e2e`
-4. **Publish**: `npm publish`
-5. **Create release**: GitHub release with changelog
+1. **Create Release Issue**: Use `npm run release:issue` or create manually
+2. **Follow Checklist**: Work through the issue checklist systematically
+3. **Update version**: `npm version patch|minor|major`
+4. **Build package**: `npm run build`
+5. **Run tests**: `npm test && npm run test:e2e`
+6. **Publish**: `npm publish`
+7. **Create release**: GitHub release with changelog
 
 ## **Troubleshooting**
 

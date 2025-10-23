@@ -852,6 +852,48 @@ A: Transcription mode only converts speech to text. Agent mode provides AI conve
 ### Q: How do I interrupt the agent while it's speaking?
 A: Use the `interruptAgent()` method or start speaking (if microphone is enabled) to interrupt.
 
+## Development
+
+### Quick Start
+
+```bash
+# Install dependencies
+npm install
+
+# Run tests
+npm test
+
+# Build the package
+npm run build
+
+# Create local package for testing
+npm run package:local
+```
+
+### Release Management
+
+The project includes automated tools for creating release issues and managing the release process:
+
+```bash
+# Create a patch release issue and working branch
+npm run release:issue 0.4.2 patch
+
+# Create a minor release issue and working branch  
+npm run release:issue 0.5.0 minor
+
+# Create a major release issue and working branch
+npm run release:issue 1.0.0 major
+```
+
+This script will:
+1. Validate that your working directory is clean
+2. Switch to the main branch and pull latest changes
+3. Create a GitHub issue with the appropriate release checklist
+4. Create a new working branch named `issueNNN` (where NNN is the issue number)
+5. Switch you to that branch ready to start release work
+
+For detailed development information, see [DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
 ## License
 
 MIT 
