@@ -581,12 +581,6 @@ function DeepgramVoiceInteraction(
         }
       } else if (event.type === 'message') {
         handleTranscriptionMessage(event.data);
-      } else if (event.type === 're_enable_idle_timeout') {
-        // Re-enable idle timeout resets for the other service when one detects meaningful activity
-        console.log('🔄 [IDLE_TIMEOUT] Re-enabling idle timeout resets for agent service due to transcription activity');
-        if (agentManagerRef.current) {
-          agentManagerRef.current.enableIdleTimeoutResets();
-        }
       } else if (event.type === 'error') {
         handleError(event.error);
       }
@@ -703,21 +697,12 @@ function DeepgramVoiceInteraction(
           log('Connection established but auto-connect will handle settings sending, skipping');
         }
       } else if (event.type === 'keepalive') {
-        // Handle keepalive messages for logging
-        if (props.debug) {
-          console.log('🔧 [DEBUG] Agent keepalive event received:', event.data.service);
-        }
+        // Keepalive events are no longer logged to reduce noise
         onKeepalive?.(event.data.service);
       } else if (event.type === 'message') {
         handleAgentMessage(event.data);
       } else if (event.type === 'binary') {
         handleAgentAudio(event.data);
-      } else if (event.type === 're_enable_idle_timeout') {
-        // Re-enable idle timeout resets for the other service when one detects meaningful activity
-        console.log('🔄 [IDLE_TIMEOUT] Re-enabling idle timeout resets for transcription service due to agent activity');
-        if (transcriptionManagerRef.current) {
-          transcriptionManagerRef.current.enableIdleTimeoutResets();
-        }
       } else if (event.type === 'error') {
         handleError(event.error);
       }
@@ -1422,10 +1407,8 @@ function DeepgramVoiceInteraction(
           console.log('🎤 [toggleMic] Calling onMicToggle with true');
           onMicToggle?.(true);
           log('✅ Microphone enabled');
-          // Reset idle timeout when microphone is enabled (user activity)
-          if (agentManagerRef.current) {
-            agentManagerRef.current.resetIdleTimeout();
-          }
+          // ISSUE #149 FIX: IdleTimeoutService handles timeout resets centrally
+          // No need to manually reset individual WebSocket timeouts
         } catch (error) {
           console.log('❌ startRecording failed:', error);
           (window as any).audioCaptureInProgress = false;
@@ -1451,10 +1434,8 @@ function DeepgramVoiceInteraction(
         // Reset global flag
         (window as any).audioCaptureInProgress = false;
         
-        // Reset idle timeout when microphone is disabled (user activity)
-        if (agentManagerRef.current) {
-          agentManagerRef.current.resetIdleTimeout();
-        }
+        // ISSUE #149 FIX: IdleTimeoutService handles timeout resets centrally
+        // No need to manually reset individual WebSocket timeouts
       }
     }
   };
