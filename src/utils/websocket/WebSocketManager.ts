@@ -8,7 +8,6 @@ export type WebSocketEvent =
   | { type: 'message'; data: any }
   | { type: 'binary'; data: ArrayBuffer }
   | { type: 'keepalive'; data: { type: string; timestamp: number; service: ServiceType } }
-  | { type: 're_enable_idle_timeout'; service: ServiceType }
   | { type: 'error'; error: DeepgramError };
 
 /**
@@ -397,7 +396,7 @@ export class WebSocketManager {
    */
   private sendKeepalive(): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      // Emit keepalive event for test-app logging
+      // Emit keepalive event for test-app logging (but don't log to console)
       this.emit({ 
         type: 'keepalive', 
         data: { 
@@ -417,23 +416,14 @@ export class WebSocketManager {
 
   /**
    * Starts the idle timeout
+   * 
+   * ISSUE #149 FIX: Individual WebSocket timeouts are disabled in favor of
+   * the centralized IdleTimeoutService to prevent conflicts and ensure
+   * coordinated timeout behavior across all services.
    */
   public startIdleTimeout(): void {
-    if (this.idleTimeoutId !== null) {
-      this.stopIdleTimeout();
-    }
-    
-    if (this.options.idleTimeout && this.options.idleTimeout > 0) {
-      this.log(`Starting idle timeout for ${this.options.service} with ${this.options.idleTimeout}ms delay`);
-      this.idleTimeoutId = window.setTimeout(() => {
-        // Always close the connection when idle timeout expires
-        // The idleTimeoutDisabled flag only controls whether resets are allowed, not whether the timeout fires
-        console.log(`🎯 [IDLE_TIMEOUT] Idle timeout reached (${this.options.idleTimeout}ms) - closing connection for ${this.options.service}`);
-        this.close();
-      }, this.options.idleTimeout);
-
-      console.log(`🎯 [IDLE_TIMEOUT] Started idle timeout (${this.options.idleTimeout}ms) for ${this.options.service}`);
-    }
+    this.log(`🎯 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for ${this.options.service}`);
+    // Individual WebSocket timeouts are disabled - IdleTimeoutService handles all timeout logic
   }
 
   /**
@@ -519,51 +509,41 @@ export class WebSocketManager {
 
   /**
    * Resets the idle timeout (call when activity occurs)
+   * 
+   * ISSUE #149 FIX: Individual WebSocket timeout resets are disabled in favor of
+   * the centralized IdleTimeoutService to prevent conflicts and ensure
+   * coordinated timeout behavior across all services.
    */
   public resetIdleTimeout(triggerMessage?: any): void {
-    if (this.options.idleTimeout && this.options.idleTimeout > 0 && !this.idleTimeoutDisabled) {
-      const triggerInfo = triggerMessage ? ` (triggered by: ${triggerMessage.type || 'unknown'})` : '';
-      console.log(`🎯 [IDLE_TIMEOUT] Resetting idle timeout for ${this.options.service}${triggerInfo}`);
-      this.stopIdleTimeout();
-      this.startIdleTimeout();
-    } else if (this.idleTimeoutDisabled) {
-      const triggerInfo = triggerMessage ? ` (triggered by: ${triggerMessage.type || 'unknown'})` : '';
-      console.log(`🎯 [IDLE_TIMEOUT] NOT resetting idle timeout for ${this.options.service} - disabled after UtteranceEnd${triggerInfo}`);
-    }
+    const triggerInfo = triggerMessage ? ` (triggered by: ${triggerMessage.type || 'unknown'})` : '';
+    this.log(`🎯 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for ${this.options.service}${triggerInfo}`);
+    // Individual WebSocket timeout resets are disabled - IdleTimeoutService handles all timeout logic
   }
 
   /**
    * Disables idle timeout resets (for UtteranceEnd scenarios)
+   * 
+   * ISSUE #149 FIX: Individual WebSocket timeout management is disabled in favor of
+   * the centralized IdleTimeoutService to prevent conflicts and ensure
+   * coordinated timeout behavior across all services.
    */
   public disableIdleTimeoutResets(): void {
-    this.idleTimeoutDisabled = true;
-    console.log(`🎯 [IDLE_TIMEOUT] Disabled idle timeout resets for ${this.options.service} - connection will timeout naturally`);
-    // Stop the current timeout when disabling resets to prevent premature closure during activity
-    this.stopIdleTimeout();
-    console.log(`🎯 [IDLE_TIMEOUT] Stopped current idle timeout for ${this.options.service} - will restart when resets are re-enabled`);
+    this.log(`🎯 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for ${this.options.service}`);
+    // Individual WebSocket timeout management is disabled - IdleTimeoutService handles all timeout logic
   }
 
   /**
    * Re-enables idle timeout resets (for reconnection scenarios)
+   * 
+   * ISSUE #149 FIX: Individual WebSocket timeout management is disabled in favor of
+   * the centralized IdleTimeoutService to prevent conflicts and ensure
+   * coordinated timeout behavior across all services.
    */
   public enableIdleTimeoutResets(): void {
-    this.idleTimeoutDisabled = false;
-    console.log(`🎯 [IDLE_TIMEOUT] Re-enabled idle timeout resets for ${this.options.service}`);
-    // Don't automatically start the idle timeout - let the component decide when to start it
-    // The idle timeout should only start when there's actual silence (no user speaking, no agent activity)
-    console.log(`🎯 [IDLE_TIMEOUT] Idle timeout resets enabled for ${this.options.service} - timeout will start on next activity`);
+    this.log(`🎯 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for ${this.options.service}`);
+    // Individual WebSocket timeout management is disabled - IdleTimeoutService handles all timeout logic
   }
 
-  /**
-   * Resets the idle timeout only on user activity (not agent responses)
-   * This prevents timeouts during natural conversation flow
-   */
-  // private resetIdleTimeoutOnUserActivity(): void { // Unused for now
-  //   if (this.options.idleTimeout && this.options.idleTimeout > 0) {
-  //     this.stopIdleTimeout();
-  //     this.startIdleTimeout();
-  //   }
-  // }
 
   /**
    * Sends a JSON message over the WebSocket

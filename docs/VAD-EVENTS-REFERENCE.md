@@ -47,6 +47,47 @@ The component receives VAD events from two Deepgram WebSocket services:
 - **Configuration**: Requires `utterance_end_ms: number` and `interim_results: true` in `transcriptionOptions`
 - **Documentation**: [Deepgram Utterance End Documentation](https://developers.deepgram.com/docs/understanding-end-of-speech-detection#using-utteranceend)
 
+## Testing VAD Events
+
+### Recommended Testing Approach
+
+**Always test with real audio samples first** to ensure VAD events are properly triggered:
+
+```javascript
+// ✅ CORRECT: Use real audio samples
+const { VADTestUtilities } = require('../utils/vad-test-utilities');
+const vadUtils = new VADTestUtilities(page);
+
+// Load and send real audio sample
+await vadUtils.loadAndSendAudioSample('hello');
+
+// Wait for real VAD events from Deepgram
+const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
+  'SpeechStarted',    // Real Deepgram event
+  'UtteranceEnd'      // Real Deepgram event
+], 5000);
+```
+
+### Why Real Audio Testing?
+
+- **Synthetic audio often fails**: `AudioSimulator.simulateSpeech()` may not trigger VAD events
+- **Real timing matters**: Pre-generated samples have proper silence padding (300ms + 2000ms)
+- **Integration validation**: Tests the complete flow from audio → VAD → timeout management
+- **Prevents false positives**: Synthetic tests might pass while real usage fails
+
+### Available Audio Samples
+
+Use these pre-generated samples for testing:
+
+- `hello` - Short phrase (~2.6s total)
+- `hello__how_are_you_today_` - Longer phrase (~3.8s total)
+- `hello_there` - Medium phrase (~2.9s total)
+
+Each sample includes:
+- 300ms onset silence
+- Actual speech content
+- 2000ms offset silence
+
 ## Component Configuration
 
 ### Enabling VAD Events
