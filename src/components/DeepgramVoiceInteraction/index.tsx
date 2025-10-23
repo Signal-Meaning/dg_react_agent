@@ -700,10 +700,7 @@ function DeepgramVoiceInteraction(
           log('Connection established but auto-connect will handle settings sending, skipping');
         }
       } else if (event.type === 'keepalive') {
-        // Handle keepalive messages for logging
-        if (props.debug) {
-          console.log('🔧 [DEBUG] Agent keepalive event received:', event.data.service);
-        }
+        // Keepalive events are no longer logged to reduce noise
         onKeepalive?.(event.data.service);
       } else if (event.type === 'message') {
         handleAgentMessage(event.data);

@@ -397,7 +397,7 @@ export class WebSocketManager {
    */
   private sendKeepalive(): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      // Emit keepalive event for test-app logging
+      // Emit keepalive event for test-app logging (but don't log to console)
       this.emit({ 
         type: 'keepalive', 
         data: { 
