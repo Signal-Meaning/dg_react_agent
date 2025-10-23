@@ -418,17 +418,13 @@ export class WebSocketManager {
   /**
    * Starts the idle timeout
    * 
-   * ISSUE #149 FIX: Disable individual WebSocket timeouts to prevent conflicts
-   * with the centralized IdleTimeoutService. Let the IdleTimeoutService handle
-   * all timeout logic centrally.
+   * ISSUE #149 FIX: Individual WebSocket timeouts are disabled in favor of
+   * the centralized IdleTimeoutService to prevent conflicts and ensure
+   * coordinated timeout behavior across all services.
    */
   public startIdleTimeout(): void {
-    // DISABLED: Individual WebSocket timeouts conflict with IdleTimeoutService
-    // The IdleTimeoutService should handle all timeout logic centrally
-    this.log(`🎯 [IDLE_TIMEOUT] Individual WebSocket timeout disabled for ${this.options.service} - using centralized IdleTimeoutService`);
-    
-    // Keep the method for backward compatibility but don't start individual timeouts
-    // The IdleTimeoutService will handle closing connections when needed
+    this.log(`🎯 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for ${this.options.service}`);
+    // Individual WebSocket timeouts are disabled - IdleTimeoutService handles all timeout logic
   }
 
   /**
@@ -515,62 +511,40 @@ export class WebSocketManager {
   /**
    * Resets the idle timeout (call when activity occurs)
    * 
-   * ISSUE #149 FIX: Disable individual WebSocket timeout resets to prevent conflicts
-   * with the centralized IdleTimeoutService. Let the IdleTimeoutService handle
-   * all timeout logic centrally.
+   * ISSUE #149 FIX: Individual WebSocket timeout resets are disabled in favor of
+   * the centralized IdleTimeoutService to prevent conflicts and ensure
+   * coordinated timeout behavior across all services.
    */
   public resetIdleTimeout(triggerMessage?: any): void {
-    // DISABLED: Individual WebSocket timeout resets conflict with IdleTimeoutService
-    // The IdleTimeoutService should handle all timeout logic centrally
     const triggerInfo = triggerMessage ? ` (triggered by: ${triggerMessage.type || 'unknown'})` : '';
-    this.log(`🎯 [IDLE_TIMEOUT] Individual WebSocket timeout reset disabled for ${this.options.service} - using centralized IdleTimeoutService${triggerInfo}`);
-    
-    // Keep the method for backward compatibility but don't reset individual timeouts
-    // The IdleTimeoutService will handle timeout resets when needed
+    this.log(`🎯 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for ${this.options.service}${triggerInfo}`);
+    // Individual WebSocket timeout resets are disabled - IdleTimeoutService handles all timeout logic
   }
 
   /**
    * Disables idle timeout resets (for UtteranceEnd scenarios)
    * 
-   * ISSUE #149 FIX: Disable individual WebSocket timeout management to prevent conflicts
-   * with the centralized IdleTimeoutService. Let the IdleTimeoutService handle
-   * all timeout logic centrally.
+   * ISSUE #149 FIX: Individual WebSocket timeout management is disabled in favor of
+   * the centralized IdleTimeoutService to prevent conflicts and ensure
+   * coordinated timeout behavior across all services.
    */
   public disableIdleTimeoutResets(): void {
-    // DISABLED: Individual WebSocket timeout management conflicts with IdleTimeoutService
-    // The IdleTimeoutService should handle all timeout logic centrally
-    this.log(`🎯 [IDLE_TIMEOUT] Individual WebSocket timeout management disabled for ${this.options.service} - using centralized IdleTimeoutService`);
-    
-    // Keep the method for backward compatibility but don't manage individual timeouts
-    // The IdleTimeoutService will handle timeout management when needed
+    this.log(`🎯 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for ${this.options.service}`);
+    // Individual WebSocket timeout management is disabled - IdleTimeoutService handles all timeout logic
   }
 
   /**
    * Re-enables idle timeout resets (for reconnection scenarios)
    * 
-   * ISSUE #149 FIX: Disable individual WebSocket timeout management to prevent conflicts
-   * with the centralized IdleTimeoutService. Let the IdleTimeoutService handle
-   * all timeout logic centrally.
+   * ISSUE #149 FIX: Individual WebSocket timeout management is disabled in favor of
+   * the centralized IdleTimeoutService to prevent conflicts and ensure
+   * coordinated timeout behavior across all services.
    */
   public enableIdleTimeoutResets(): void {
-    // DISABLED: Individual WebSocket timeout management conflicts with IdleTimeoutService
-    // The IdleTimeoutService should handle all timeout logic centrally
-    this.log(`🎯 [IDLE_TIMEOUT] Individual WebSocket timeout management disabled for ${this.options.service} - using centralized IdleTimeoutService`);
-    
-    // Keep the method for backward compatibility but don't manage individual timeouts
-    // The IdleTimeoutService will handle timeout management when needed
+    this.log(`🎯 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for ${this.options.service}`);
+    // Individual WebSocket timeout management is disabled - IdleTimeoutService handles all timeout logic
   }
 
-  /**
-   * Resets the idle timeout only on user activity (not agent responses)
-   * This prevents timeouts during natural conversation flow
-   */
-  // private resetIdleTimeoutOnUserActivity(): void { // Unused for now
-  //   if (this.options.idleTimeout && this.options.idleTimeout > 0) {
-  //     this.stopIdleTimeout();
-  //     this.startIdleTimeout();
-  //   }
-  // }
 
   /**
    * Sends a JSON message over the WebSocket
