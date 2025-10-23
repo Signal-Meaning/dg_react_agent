@@ -36,6 +36,7 @@
     "workflow": "./scripts/dev-workflow.sh",
     "clean": "rm -rf dist/ && rm -f *.tgz",
     "status": "./scripts/dev-workflow.sh status",
+    "release:issue": "./scripts/create-release-issue.sh",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
