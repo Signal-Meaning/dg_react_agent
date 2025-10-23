@@ -181,6 +181,7 @@ If you encounter issues:
 3. Verify React version compatibility
 4. Check browser console for specific error messages
 5. See [INTEGRATION-GUIDE.md](./INTEGRATION-GUIDE.md) for usage patterns and examples
+6. See [API-REFERENCE.md](./API-REFERENCE.md) for complete component API documentation
 
 ## Changelog
 

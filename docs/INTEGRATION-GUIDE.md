@@ -468,14 +468,14 @@ function TextAndVoiceApp() {
 }
 ```
 
-### 4. Voice Commerce Pattern
+### 4. Dynamic Context Switching Pattern
 
-**Use Case**: E-commerce applications with voice shopping capabilities.
+**Use Case**: Applications that need to change agent behavior based on user context or page state.
 
 ```tsx
-function VoiceCommerceApp() {
+function DynamicContextApp() {
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
-  const [currentContext, setCurrentContext] = useState('browsing');
+  const [currentMode, setCurrentMode] = useState('general');
 
   const agentOptions = useMemo(() => ({
     language: 'en',
@@ -483,35 +483,32 @@ function VoiceCommerceApp() {
     thinkProviderType: 'open_ai',
     thinkModel: 'gpt-4o-mini',
     voice: 'aura-asteria-en',
-    instructions: `You are a helpful e-commerce voice assistant. Help customers:
-    - Find products by category, brand, or description
-    - Check product availability and pricing
-    - Process orders and answer shipping questions
-    - Handle returns and exchanges
-    - Provide product recommendations
-    Be friendly, helpful, and concise.`,
-    greeting: 'Welcome to our store! How can I help you find what you\'re looking for?'
+    instructions: 'You are a helpful assistant.',
+    greeting: 'Hello! How can I help you today?'
   }), []);
 
-  const switchToOrderMode = useCallback(() => {
-    setCurrentContext('order');
-    voiceRef.current?.updateAgentInstructions({
-      instructions: `Help the customer with their order. They can check status, modify items, or get shipping updates.`
-    });
-  }, []);
+  const switchToMode = useCallback((mode: string) => {
+    const instructions = {
+      general: 'You are a helpful assistant.',
+      customer_service: 'You are a customer service representative. Help with returns, exchanges, and general questions.',
+      technical: 'You are a technical support specialist. Help with technical issues and troubleshooting.',
+      sales: 'You are a sales assistant. Help customers find products and make purchases.'
+    };
 
-  const switchToCustomerService = useCallback(() => {
-    setCurrentContext('support');
     voiceRef.current?.updateAgentInstructions({
-      instructions: `You are a customer service representative. Help with returns, exchanges, refunds, and general questions.`
+      instructions: instructions[mode] || instructions.general
     });
+    
+    setCurrentMode(mode);
   }, []);
 
   return (
     <div>
-      <div className="context-controls">
-        <button onClick={switchToOrderMode}>Order Help</button>
-        <button onClick={switchToCustomerService}>Customer Service</button>
+      <div className="mode-controls">
+        <button onClick={() => switchToMode('general')}>General</button>
+        <button onClick={() => switchToMode('customer_service')}>Customer Service</button>
+        <button onClick={() => switchToMode('technical')}>Technical</button>
+        <button onClick={() => switchToMode('sales')}>Sales</button>
       </div>
       
       <DeepgramVoiceInteraction
@@ -520,7 +517,6 @@ function VoiceCommerceApp() {
         agentOptions={agentOptions}
         autoConnect={true}
         onAgentUtterance={(utterance) => {
-          // Handle agent responses for commerce flow
           console.log('Agent response:', utterance.text);
         }}
       />
@@ -597,8 +593,7 @@ The component implements complex idle timeout logic:
 <DeepgramVoiceInteraction
   sleepOptions={{
     autoSleep: true,
-    timeout: 30, // 30 seconds
-    wakeWords: ['hey assistant', 'wake up']
+    timeout: 30 // 30 seconds
   }}
   onAgentStateChange={(state) => {
     if (state === 'sleeping') {
@@ -610,17 +605,36 @@ The component implements complex idle timeout logic:
 
 ### 5. Lazy Reconnection
 
-The component supports lazy reconnection for better user experience:
+The component supports lazy reconnection for better user experience. This allows the component to maintain conversation context across reconnections and provides seamless resumption of conversations.
+
+**How it works:**
+- The component automatically generates a session ID for tracking conversations
+- Conversation history is maintained in component state
+- When reconnecting, the full conversation context is preserved
+- The agent can continue from where the conversation left off
 
 ```tsx
-// Resume with text input
+// Resume with text input (maintains conversation context)
 await voiceRef.current?.resumeWithText('Hello, I need help');
 
-// Resume with audio input
+// Resume with audio input (maintains conversation context)  
 await voiceRef.current?.resumeWithAudio();
 
-// Connect with conversation context
+// Connect with specific conversation context
+// sessionId: string - unique identifier for the conversation
+// history: ConversationMessage[] - array of previous messages
+// options: AgentOptions - agent configuration
 await voiceRef.current?.connectWithContext(sessionId, history, options);
+```
+
+**Session Management:**
+```tsx
+// The component automatically manages session IDs
+// You can access the current session ID from component state
+const currentSessionId = voiceRef.current?.getState()?.sessionId;
+
+// Conversation history is automatically maintained
+const conversationHistory = voiceRef.current?.getState()?.conversationHistory;
 ```
 
 ---
@@ -1048,97 +1062,14 @@ useEffect(() => {
 
 ---
 
-## 🎯 Voice Commerce Specific Patterns
+## 📚 Related Documentation
 
-### 1. Product Search Integration
-
-```tsx
-function ProductSearchApp() {
-  const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
-  const [searchResults, setSearchResults] = useState([]);
-
-  const handleTranscript = useCallback((transcript: TranscriptResponse) => {
-    const text = transcript.channel.alternatives[0].transcript;
-    
-    // Trigger product search based on transcript
-    if (text.includes('search for') || text.includes('find')) {
-      performProductSearch(text);
-    }
-  }, []);
-
-  const performProductSearch = useCallback(async (query: string) => {
-    // Extract search terms
-    const searchTerms = query.replace(/search for|find/gi, '').trim();
-    
-    // Call your product search API
-    const results = await searchProducts(searchTerms);
-    setSearchResults(results);
-    
-    // Update agent with search results
-    voiceRef.current?.updateAgentInstructions({
-      instructions: `Help the customer with these search results: ${JSON.stringify(results)}`
-    });
-  }, []);
-
-  return (
-    <div>
-      <div className="search-results">
-        {searchResults.map(product => (
-          <div key={product.id}>{product.name}</div>
-        ))}
-      </div>
-      
-      <DeepgramVoiceInteraction
-        ref={voiceRef}
-        apiKey={apiKey}
-        transcriptionOptions={transcriptionOptions}
-        agentOptions={agentOptions}
-        onTranscriptUpdate={handleTranscript}
-      />
-    </div>
-  );
-}
-```
-
-### 2. Order Management Integration
-
-```tsx
-function OrderManagementApp() {
-  const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
-  const [currentOrder, setCurrentOrder] = useState(null);
-
-  const switchToOrderMode = useCallback((orderId: string) => {
-    // Load order details
-    const order = loadOrder(orderId);
-    setCurrentOrder(order);
-    
-    // Update agent with order context
-    voiceRef.current?.updateAgentInstructions({
-      instructions: `Help the customer with their order #${orderId}. Order details: ${JSON.stringify(order)}`
-    });
-  }, []);
-
-  const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
-    // Process agent responses for order management
-    if (utterance.text.includes('add to cart')) {
-      // Extract product and add to cart
-    } else if (utterance.text.includes('checkout')) {
-      // Proceed to checkout
-    }
-  }, []);
-
-  return (
-    <div>
-      <DeepgramVoiceInteraction
-        ref={voiceRef}
-        apiKey={apiKey}
-        agentOptions={agentOptions}
-        onAgentUtterance={handleAgentUtterance}
-      />
-    </div>
-  );
-}
-```
+- **[API Reference](./API-REFERENCE.md)** - Complete component API documentation
+- **[Technical Setup](./TECHNICAL-SETUP.md)** - Build configuration and technical requirements  
+- **[Development Guide](./DEVELOPMENT.md)** - Development workflow and testing
+- **[Test App](../test-app/)** - Working examples and test scenarios
+- **[VAD Events Reference](./VAD-EVENTS-REFERENCE.md)** - Voice Activity Detection events
+- **[Test Utilities](./TEST-UTILITIES.md)** - Testing helpers and utilities
 
 ---
 
