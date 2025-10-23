@@ -2,9 +2,14 @@
 name: Release Checklist
 about: Complete release process checklist for new versions
 title: 'Release vX.X.X: Complete Release Process and Documentation'
-labels: ['release', 'documentation']
+labels: ['release', 'documentation', 'priority:high']
 assignees: ''
 ---
+
+<!-- 
+CLI Usage:
+gh issue create --template release-checklist.md --title "Release vX.X.X: Complete Release Process and Documentation" --label "release,documentation,priority:high" --body "Replace vX.X.X with actual version number"
+-->
 
 ## 🚀 Release vX.X.X - Complete Release Process
 
