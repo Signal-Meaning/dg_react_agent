@@ -2,7 +2,9 @@
 
 **Component**: `DeepgramVoiceInteraction`  
 **Package**: `@signal-meaning/deepgram-voice-interaction-react`  
-**Version**: 0.4.0+
+**Version**: 0.5.0+
+
+> **Simplified API Design**: Redundant APIs have been removed to reduce confusion and complexity.
 
 ## 📋 Table of Contents
 
@@ -36,31 +38,33 @@ interface DeepgramVoiceInteractionProps {
   onAgentStateChange?: (state: AgentState) => void;
   onAgentUtterance?: (utterance: LLMResponse) => void;
   onUserMessage?: (message: UserMessageResponse) => void;
+  onAgentAudioStateChange?: (isPlaying: boolean) => void;
+  
+  // Deprecated - use onAgentAudioStateChange instead
+  /** @deprecated Use onAgentAudioStateChange instead */
   onPlaybackStateChange?: (isPlaying: boolean) => void;
+  
+  // Voice Activity Detection
   onUserStartedSpeaking?: () => void;
   onUserStoppedSpeaking?: () => void;
+  onAgentStartedSpeaking?: () => void;
+  onAgentStoppedSpeaking?: () => void;
   onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
-  onSpeechStarted?: (data: { channel: number[]; timestamp: number }) => void;
-  onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
-  onKeepalive?: (service: ServiceType) => void;
-  onError?: (error: DeepgramError) => void;
   
-  // Auto-Connect Configuration
-  autoConnect?: boolean;
-  microphoneEnabled?: boolean;
-  onMicToggle?: (enabled: boolean) => void;
-  onConnectionReady?: () => void;
+  // Deprecated - use onAgentStartedSpeaking/onAgentStoppedSpeaking instead
+  /** @deprecated Use onAgentStartedSpeaking instead */
   onAgentSpeaking?: () => void;
+  /** @deprecated Use onAgentStoppedSpeaking instead */
   onAgentSilent?: () => void;
   
-  // TTS Configuration
-  ttsMuted?: boolean;
-  onTtsMuteToggle?: (isMuted: boolean) => void;
+  // Error Handling
+  onError?: (error: DeepgramError) => void;
   
   // Sleep Configuration
   sleepOptions?: {
     autoSleep?: boolean;
     timeout?: number;
+    wakeWords?: string[];
   };
   
   // Debug
@@ -84,21 +88,37 @@ interface DeepgramVoiceInteractionProps {
 
 ### Event Callbacks
 
+#### Connection Events
 | Prop | Type | Description |
 |------|------|-------------|
 | `onReady` | `(isReady: boolean) => void` | Called when component is ready |
 | `onConnectionStateChange` | `(service: ServiceType, state: ConnectionState) => void` | Called when connection state changes |
+
+#### Transcription Events
+| Prop | Type | Description |
+|------|------|-------------|
 | `onTranscriptUpdate` | `(transcriptData: TranscriptResponse) => void` | Called when transcript is received |
+
+#### Agent Events
+| Prop | Type | Description |
+|------|------|-------------|
 | `onAgentStateChange` | `(state: AgentState) => void` | Called when agent state changes |
 | `onAgentUtterance` | `(utterance: LLMResponse) => void` | Called when agent produces text |
 | `onUserMessage` | `(message: UserMessageResponse) => void` | Called when user message is received |
-| `onPlaybackStateChange` | `(isPlaying: boolean) => void` | Called when audio playback state changes |
+| `onAgentAudioStateChange` | `(isPlaying: boolean) => void` | Called when agent TTS audio state changes |
+
+#### Voice Activity Detection Events
+| Prop | Type | Description |
+|------|------|-------------|
 | `onUserStartedSpeaking` | `() => void` | Called when user starts speaking |
-| `onUserStoppedSpeaking` | `() => void` | Called when user stops speaking |
-| `onUtteranceEnd` | `(data: { channel: number[]; lastWordEnd: number }) => void` | Called when utterance ends |
-| `onSpeechStarted` | `(data: { channel: number[]; timestamp: number }) => void` | Called when speech starts |
-| `onVADEvent` | `(data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void` | Called on VAD events |
-| `onKeepalive` | `(service: ServiceType) => void` | Called when keepalive is sent |
+| `onUserStoppedSpeaking` | `() => void` | Called when user stops speaking (triggered by endpointing) |
+| `onAgentStartedSpeaking` | `() => void` | Called when agent starts speaking (simplifies `onAgentStateChange` + `onAgentAudioStateChange`) |
+| `onAgentStoppedSpeaking` | `() => void` | Called when agent stops speaking (simplifies `onAgentStateChange` + `onAgentAudioStateChange`) |
+| `onUtteranceEnd` | `(data: { channel: number[]; lastWordEnd: number }) => void` | Called when utterance ends (word-timing based) |
+
+#### Error Handling
+| Prop | Type | Description |
+|------|------|-------------|
 | `onError` | `(error: DeepgramError) => void` | Called when error occurs |
 
 ---
@@ -121,51 +141,115 @@ voiceRef.current?.stop();
 
 | Method | Parameters | Return | Description |
 |--------|------------|--------|-------------|
-| `start` | None | `Promise<void>` | Start voice interaction |
-| `stop` | None | `Promise<void>` | Stop voice interaction |
+| `start` | None | `Promise<void>` | Start all configured services (transcription + agent) |
+| `stop` | None | `Promise<void>` | Stop all services and connections |
+
+### Agent Control Methods
+
+| Method | Parameters | Return | Description |
+|--------|------------|--------|-------------|
 | `interruptAgent` | None | `void` | Interrupt agent while speaking |
 | `sleep` | None | `void` | Put agent to sleep |
 | `wake` | None | `void` | Wake agent from sleep |
 | `toggleSleep` | None | `void` | Toggle between sleep and wake |
-
-### Agent Control
-
-| Method | Parameters | Return | Description |
-|--------|------------|--------|-------------|
 | `updateAgentInstructions` | `UpdateInstructionsPayload` | `void` | Update agent instructions |
 | `injectAgentMessage` | `message: string` | `void` | Inject message to agent |
 | `injectUserMessage` | `message: string` | `void` | Inject user message to agent |
 
-### Microphone Control
+---
 
-| Method | Parameters | Return | Description |
-|--------|------------|--------|-------------|
-| `toggleMicrophone` | `enabled: boolean` | `Promise<void>` | Toggle microphone on/off |
+## Deprecated APIs
 
-### Reconnection Methods
+The following APIs are deprecated and will be removed in a future version. Please update your code to use the recommended alternatives:
 
-| Method | Parameters | Return | Description |
-|--------|------------|--------|-------------|
-| `resumeWithText` | `text: string` | `Promise<void>` | Resume with text input |
-| `resumeWithAudio` | None | `Promise<void>` | Resume with audio input |
-| `connectWithContext` | `sessionId: string, history: ConversationMessage[], options: AgentOptions` | `Promise<void>` | Connect with conversation context |
-| `connectTextOnly` | None | `Promise<void>` | Connect for text-only mode |
+### Deprecated Props
 
-### TTS Control
+| Deprecated Prop | Recommended Alternative | Migration |
+|----------------|------------------------|-----------|
+| `onPlaybackStateChange` | `onAgentAudioStateChange` | Rename the prop and update any references |
+| `onAgentSpeaking` | `onAgentStartedSpeaking` | Rename the prop and update any references |
+| `onAgentSilent` | `onAgentStoppedSpeaking` | Rename the prop and update any references |
 
-| Method | Parameters | Return | Description |
-|--------|------------|--------|-------------|
-| `toggleTtsMute` | None | `void` | Toggle TTS mute state |
-| `setTtsMuted` | `muted: boolean` | `void` | Set TTS mute state |
+**Migration Examples:**
+```tsx
+// Before (deprecated)
+<DeepgramVoiceInteraction
+  onPlaybackStateChange={(isPlaying) => console.log('Playing:', isPlaying)}
+  onAgentSpeaking={() => console.log('Agent speaking')}
+  onAgentSilent={() => console.log('Agent silent')}
+/>
 
-### Debug Methods
+// After (recommended)
+<DeepgramVoiceInteraction
+  onAgentAudioStateChange={(isPlaying) => console.log('Agent TTS playing:', isPlaying)}
+  onAgentStartedSpeaking={() => console.log('Agent started speaking')}
+  onAgentStoppedSpeaking={() => console.log('Agent stopped speaking')}
+/>
+```
 
-| Method | Parameters | Return | Description |
-|--------|------------|--------|-------------|
-| `getConnectionStates` | None | `{ transcription: string; agent: string; transcriptionConnected: boolean; agentConnected: boolean }` | Get connection states |
-| `getState` | None | `any` | Get current component state |
+**Why the changes?**
+- `onPlaybackStateChange` → `onAgentAudioStateChange`: More specific naming (component only plays agent TTS audio)
+- `onAgentSpeaking` → `onAgentStartedSpeaking`: Consistent with `onUserStartedSpeaking` pattern
+- `onAgentSilent` → `onAgentStoppedSpeaking`: Consistent with `onUserStoppedSpeaking` pattern
+- Better developer experience with more descriptive and consistent naming
 
 ---
+
+## TypeScript Integration
+
+### Importing Types
+
+The component exports all necessary TypeScript types for full type safety:
+
+```tsx
+import { 
+  DeepgramVoiceInteraction,
+  DeepgramVoiceInteractionProps,
+  DeepgramVoiceInteractionHandle,
+  AgentOptions,
+  TranscriptionOptions,
+  AgentState,
+  ConnectionState,
+  ServiceType,
+  TranscriptResponse,
+  LLMResponse,
+  UserMessageResponse,
+  DeepgramError,
+  UpdateInstructionsPayload,
+  ConversationMessage
+} from '@signal-meaning/deepgram-voice-interaction-react';
+```
+
+### Type Usage Examples
+
+```tsx
+// Component ref with proper typing
+const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
+
+// Props with type safety
+const agentOptions: AgentOptions = {
+  language: 'en',
+  listenModel: 'nova-3',
+  thinkProviderType: 'open_ai',
+  thinkModel: 'gpt-4o-mini',
+  voice: 'aura-asteria-en',
+  instructions: 'You are a helpful assistant.'
+};
+
+// Event handlers with proper types
+const handleAgentStateChange = (state: AgentState) => {
+  console.log('Agent state:', state);
+};
+
+const handleTranscriptUpdate = (transcript: TranscriptResponse) => {
+  const text = transcript.channel.alternatives[0].transcript;
+  console.log('Transcript:', text);
+};
+
+const handleError = (error: DeepgramError) => {
+  console.error('Error:', error.message);
+};
+```
 
 ## Type Definitions
 
@@ -310,11 +394,11 @@ onAgentUtterance={(utterance: LLMResponse) => {
 }}
 
 // Agent speaking events
-onAgentSpeaking={() => {
+onAgentStartedSpeaking={() => {
   console.log('Agent started speaking');
 }}
 
-onAgentSilent={() => {
+onAgentStoppedSpeaking={() => {
   console.log('Agent finished speaking');
 }}
 ```
@@ -322,14 +406,9 @@ onAgentSilent={() => {
 ### Audio Events
 
 ```tsx
-// Playback state
-onPlaybackStateChange={(isPlaying: boolean) => {
-  console.log('Audio playing:', isPlaying);
-}}
-
-// TTS mute state
-onTtsMuteToggle={(isMuted: boolean) => {
-  console.log('TTS muted:', isMuted);
+// Agent TTS audio state
+onAgentAudioStateChange={(isPlaying: boolean) => {
+  console.log('Agent TTS playing:', isPlaying);
 }}
 ```
 
@@ -373,13 +452,7 @@ interface VoiceInteractionState {
 
 ### State Access
 
-```tsx
-// Get current state
-const currentState = voiceRef.current?.getState();
-
-// Get connection states
-const connectionStates = voiceRef.current?.getConnectionStates();
-```
+The component manages internal state that you can monitor through callbacks. For debugging, use the `debug={true}` prop to enable detailed logging.
 
 ---
 
@@ -445,22 +518,56 @@ const agentOptions = useMemo(() => ({
 />
 ```
 
-### Auto-Connect Mode
+### Audio Control via interruptAgent
+
+The component provides `interruptAgent()` to stop agent TTS audio. Audio control should be handled by the parent application:
 
 ```tsx
-<DeepgramVoiceInteraction
-  apiKey={apiKey}
-  agentOptions={agentOptions}
-  autoConnect={true}
-  microphoneEnabled={false}
-  onConnectionReady={() => console.log('Ready for interaction')}
-  onMicToggle={(enabled) => setMicEnabled(enabled)}
-/>
+function AudioControlApp() {
+  const [isAgentMuted, setIsAgentMuted] = useState(false);
+  const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
+
+  const toggleAgentMute = useCallback(() => {
+    if (isAgentMuted) {
+      // "Unmute" - restart the agent
+      voiceRef.current?.start();
+      setIsAgentMuted(false);
+    } else {
+      // "Mute" - interrupt the agent to stop TTS audio
+      voiceRef.current?.interruptAgent();
+      setIsAgentMuted(true);
+    }
+  }, [isAgentMuted]);
+
+  return (
+    <div>
+      <button onClick={toggleAgentMute}>
+        {isAgentMuted ? 'Unmute Agent' : 'Mute Agent'}
+      </button>
+      
+      <DeepgramVoiceInteraction
+        ref={voiceRef}
+        apiKey={apiKey}
+        agentOptions={agentOptions}
+      />
+    </div>
+  );
+}
 ```
 
-### Manual Control
+**Why this approach is better:**
+- **`interruptAgent()`** already stops agent TTS audio and clears the audio queue
+- **No need for mute state management** in the component
+- **Parent controls when agent speaks** through `start()`/`interruptAgent()`
+- **Simpler API** - no additional props or methods needed
+
+### Basic Control
+
+The component requires explicit control. You must call `start()` to begin voice interaction:
 
 ```tsx
+const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
+
 const startInteraction = async () => {
   await voiceRef.current?.start();
 };
@@ -472,6 +579,21 @@ const stopInteraction = async () => {
 const interruptAgent = () => {
   voiceRef.current?.interruptAgent();
 };
+
+return (
+  <div>
+    <button onClick={startInteraction}>Start Voice Interaction</button>
+    <button onClick={stopInteraction}>Stop Voice Interaction</button>
+    <button onClick={interruptAgent}>Interrupt Agent</button>
+    
+    <DeepgramVoiceInteraction
+      ref={voiceRef}
+      apiKey={apiKey}
+      agentOptions={agentOptions}
+      onReady={() => console.log('Ready')}
+    />
+  </div>
+);
 ```
 
 ---
@@ -485,6 +607,6 @@ const interruptAgent = () => {
 
 ---
 
-**Last Updated**: December 2024  
-**Component Version**: 0.4.0+  
+**Last Updated**: January 2025  
+**Component Version**: 0.5.0+  
 **React Version**: 16.8.0+

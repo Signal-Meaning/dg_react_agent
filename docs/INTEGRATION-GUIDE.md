@@ -212,11 +212,11 @@ function VoiceApp() {
     }
   }, []);
 
-  const handleAgentSpeaking = useCallback(() => {
+  const handleAgentStartedSpeaking = useCallback(() => {
     setIsSpeaking(true);
   }, []);
 
-  const handleAgentSilent = useCallback(() => {
+  const handleAgentStoppedSpeaking = useCallback(() => {
     setIsSpeaking(false);
   }, []);
 
@@ -226,8 +226,8 @@ function VoiceApp() {
       onReady={handleReady}
       onAgentStateChange={handleAgentStateChange}
       onConnectionStateChange={handleConnectionStateChange}
-      onAgentSpeaking={handleAgentSpeaking}
-      onAgentSilent={handleAgentSilent}
+      onAgentStartedSpeaking={handleAgentStartedSpeaking}
+      onAgentStoppedSpeaking={handleAgentStoppedSpeaking}
     />
   );
 }
@@ -360,27 +360,27 @@ function AutoConnectApp() {
         microphoneEnabled={micEnabled}
         onConnectionReady={handleConnectionReady}
         onMicToggle={handleMicToggle}
-        onAgentSpeaking={() => console.log('Agent speaking')}
-        onAgentSilent={() => console.log('Agent finished')}
+        onAgentStartedSpeaking={() => console.log('Agent speaking')}
+        onAgentStoppedSpeaking={() => console.log('Agent finished')}
       />
     </div>
   );
 }
 ```
 
-### 2. Manual Control Pattern
+### 2. Basic Control Pattern
 
 **Use Case**: Applications that need full control over when voice interaction starts/stops.
 
 ```tsx
-function ManualControlApp() {
+function BasicControlApp() {
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
-  const [isRecording, setIsRecording] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
 
   const startInteraction = useCallback(async () => {
     try {
       await voiceRef.current?.start();
-      setIsRecording(true);
+      setIsConnected(true);
     } catch (error) {
       console.error('Failed to start:', error);
     }
@@ -389,7 +389,7 @@ function ManualControlApp() {
   const stopInteraction = useCallback(async () => {
     try {
       await voiceRef.current?.stop();
-      setIsRecording(false);
+      setIsConnected(false);
     } catch (error) {
       console.error('Failed to stop:', error);
     }
@@ -401,13 +401,13 @@ function ManualControlApp() {
 
   return (
     <div>
-      <button onClick={startInteraction} disabled={isRecording}>
+      <button onClick={startInteraction} disabled={isConnected}>
         Start Voice Interaction
       </button>
-      <button onClick={stopInteraction} disabled={!isRecording}>
+      <button onClick={stopInteraction} disabled={!isConnected}>
         Stop Voice Interaction
       </button>
-      <button onClick={interruptAgent} disabled={!isRecording}>
+      <button onClick={interruptAgent} disabled={!isConnected}>
         Interrupt Agent
       </button>
       
@@ -430,18 +430,29 @@ function ManualControlApp() {
 function TextAndVoiceApp() {
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
   const [textInput, setTextInput] = useState('');
+  const [isConnected, setIsConnected] = useState(false);
 
   const handleTextSubmit = useCallback(async () => {
     if (!textInput.trim()) return;
     
     try {
-      // Use lazy reconnect for text input
-      await voiceRef.current?.resumeWithText(textInput);
+      // Inject text message to agent
+      voiceRef.current?.injectUserMessage(textInput);
       setTextInput('');
     } catch (error) {
       console.error('Failed to send text:', error);
     }
   }, [textInput]);
+
+  const toggleConnection = useCallback(async () => {
+    if (isConnected) {
+      await voiceRef.current?.stop();
+      setIsConnected(false);
+    } else {
+      await voiceRef.current?.start();
+      setIsConnected(true);
+    }
+  }, [isConnected]);
 
   return (
     <div>
@@ -456,12 +467,15 @@ function TextAndVoiceApp() {
         <button onClick={handleTextSubmit}>Send</button>
       </div>
       
+      <button onClick={toggleConnection}>
+        {isConnected ? 'Disconnect' : 'Connect'}
+      </button>
+      
       <DeepgramVoiceInteraction
         ref={voiceRef}
         apiKey={apiKey}
         agentOptions={agentOptions}
-        autoConnect={true}
-        microphoneEnabled={false} // Start with mic disabled
+        onReady={() => console.log('Ready')}
       />
     </div>
   );
@@ -570,11 +584,11 @@ The greeting plays automatically when the agent connection is ready:
     greeting: 'Welcome! I\'m ready to help you.',
     // ... other options
   }}
-  onAgentSpeaking={() => {
+  onAgentStartedSpeaking={() => {
     // Called when greeting starts playing
     console.log('Greeting started');
   }}
-  onAgentSilent={() => {
+  onAgentStoppedSpeaking={() => {
     // Called when greeting finishes
     console.log('Ready for user input');
   }}
@@ -603,38 +617,43 @@ The component implements complex idle timeout logic:
 />
 ```
 
-### 5. Lazy Reconnection
+### 5. Context Switching and Reconnection
 
-The component supports lazy reconnection for better user experience. This allows the component to maintain conversation context across reconnections and provides seamless resumption of conversations.
+The component handles context switching and reconnection through simple start/stop patterns. Session management is handled internally for seamless user experience.
 
 **How it works:**
-- The component automatically generates a session ID for tracking conversations
-- Conversation history is maintained in component state
-- When reconnecting, the full conversation context is preserved
-- The agent can continue from where the conversation left off
+- The component automatically manages session IDs and conversation history internally
+- Context changes are handled by updating props and calling `start()`
+- The component preserves conversation context across reconnections
+- No need to manually manage sessions or conversation history
 
 ```tsx
-// Resume with text input (maintains conversation context)
-await voiceRef.current?.resumeWithText('Hello, I need help');
+// Change context by updating props and restarting
+const switchToCustomerService = useCallback(() => {
+  setAgentOptions({
+    ...agentOptions,
+    instructions: 'You are a customer service representative...'
+  });
+  // Component will use new instructions on next start()
+}, [agentOptions]);
 
-// Resume with audio input (maintains conversation context)  
-await voiceRef.current?.resumeWithAudio();
+// Simple reconnection pattern
+const reconnect = useCallback(async () => {
+  await voiceRef.current?.stop();
+  await voiceRef.current?.start();
+}, []);
 
-// Connect with specific conversation context
-// sessionId: string - unique identifier for the conversation
-// history: ConversationMessage[] - array of previous messages
-// options: AgentOptions - agent configuration
-await voiceRef.current?.connectWithContext(sessionId, history, options);
+// Text input during conversation
+const sendTextMessage = useCallback((text: string) => {
+  voiceRef.current?.injectUserMessage(text);
+}, []);
 ```
 
-**Session Management:**
+**Simplified Session Management:**
 ```tsx
-// The component automatically manages session IDs
-// You can access the current session ID from component state
-const currentSessionId = voiceRef.current?.getState()?.sessionId;
-
-// Conversation history is automatically maintained
-const conversationHistory = voiceRef.current?.getState()?.conversationHistory;
+// Session management is handled internally
+// No need to access session IDs or conversation history
+// Component automatically maintains context across reconnections
 ```
 
 ---
@@ -744,46 +763,120 @@ function NetworkResilientApp() {
 
 ---
 
+## ⚠️ API Changes and Deprecations
+
+### Deprecated APIs
+
+The following APIs are deprecated and will be removed in a future version:
+
+- `onPlaybackStateChange` → Use `onAgentAudioStateChange` instead
+- `onAgentSpeaking` → Use `onAgentStartedSpeaking` instead  
+- `onAgentSilent` → Use `onAgentStoppedSpeaking` instead
+
+**Migration:**
+```tsx
+// Before (deprecated)
+<DeepgramVoiceInteraction
+  onPlaybackStateChange={(isPlaying) => console.log('Playing:', isPlaying)}
+  onAgentSpeaking={() => console.log('Agent speaking')}
+  onAgentSilent={() => console.log('Agent silent')}
+/>
+
+// After (recommended)
+<DeepgramVoiceInteraction
+  onAgentAudioStateChange={(isPlaying) => console.log('Agent TTS playing:', isPlaying)}
+  onAgentStartedSpeaking={() => console.log('Agent started speaking')}
+  onAgentStoppedSpeaking={() => console.log('Agent stopped speaking')}
+/>
+```
+
+---
+
+## 🔧 Simplified API Approach
+
+The component follows a **simplified API design** that reduces complexity and confusion:
+
+### **Core Methods: `start()` and `stop()`**
+
+The component provides only **two primary methods** for connection control:
+
+- **`start()`** - Connects to all configured services (transcription + agent)
+- **`stop()`** - Disconnects from all services
+
+This approach eliminates the need for complex reconnection methods and session management APIs.
+
+### **Mode-Based Configuration**
+
+The component automatically determines which services to use based on props:
+
+- **Dual Mode**: Both `transcriptionOptions` and `agentOptions` provided
+- **Transcription-Only**: Only `transcriptionOptions` provided  
+- **Agent-Only**: Only `agentOptions` provided
+
+### **Internal Session Management**
+
+Session IDs and conversation history are managed internally:
+- No need to manually track sessions
+- Context is preserved across reconnections
+- Developers focus on business logic, not session management
+
+### **Removed Redundant APIs**
+
+The following APIs have been removed to reduce confusion:
+- ❌ `resumeWithText()` / `resumeWithAudio()` - Use `start()`/`stop()` instead
+- ❌ `connectWithContext()` - Update props and call `start()`
+- ❌ `connectTextOnly()` - Use agent-only mode
+- ❌ `toggleMicrophone()` - Use `start()`/`stop()` for connection control
+- ❌ `onMicToggle` - Not needed with simplified approach
+- ❌ `onVADEvent` - Use `onUtteranceEnd` for better accuracy
+- ❌ `onKeepalive` - Internal logging only, no developer value
+
+---
+
 ## 🎯 Advanced Features
 
-### 1. TTS Mute Control
+### 1. Agent Audio Control
 
 ```tsx
-function TTSControlApp() {
-  const [isTtsMuted, setIsTtsMuted] = useState(false);
+function AgentAudioControlApp() {
+  const [isAgentMuted, setIsAgentMuted] = useState(false);
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
 
-  const toggleTtsMute = useCallback(() => {
-    voiceRef.current?.toggleTtsMute();
+  const muteAgent = useCallback(() => {
+    voiceRef.current?.agentMute();
   }, []);
 
-  const handleTtsMuteToggle = useCallback((muted: boolean) => {
-    setIsTtsMuted(muted);
-    console.log(`TTS ${muted ? 'muted' : 'unmuted'}`);
+  const unmuteAgent = useCallback(() => {
+    voiceRef.current?.agentUnmute();
+  }, []);
+
+  const handleAgentMuteChange = useCallback((muted: boolean) => {
+    setIsAgentMuted(muted);
+    console.log(`Agent audio ${muted ? 'muted' : 'unmuted'}`);
   }, []);
 
   return (
     <div>
       <button 
-        onClick={toggleTtsMute}
-        className={isTtsMuted ? 'muted' : 'unmuted'}
+        onClick={isAgentMuted ? unmuteAgent : muteAgent}
+        className={isAgentMuted ? 'muted' : 'unmuted'}
       >
-        {isTtsMuted ? '🔇 TTS MUTED' : '🔊 TTS ENABLED'}
+        {isAgentMuted ? '🔇 AGENT MUTED' : '🔊 AGENT ENABLED'}
       </button>
       
       <DeepgramVoiceInteraction
         ref={voiceRef}
         apiKey={apiKey}
         agentOptions={agentOptions}
-        ttsMuted={isTtsMuted}
-        onTtsMuteToggle={handleTtsMuteToggle}
+        agentMuted={isAgentMuted}
+        onAgentMuteChange={handleAgentMuteChange}
       />
     </div>
   );
 }
 ```
 
-### 2. VAD (Voice Activity Detection) Events
+### 2. Voice Activity Detection Events
 
 ```tsx
 function VADEventApp() {
@@ -801,14 +894,10 @@ function VADEventApp() {
     setVadEvents(prev => [...prev, `Utterance ended: ${data.lastWordEnd}s`]);
   }, []);
 
-  const handleVADEvent = useCallback((data: { speechDetected: boolean; confidence?: number }) => {
-    setVadEvents(prev => [...prev, `VAD: ${data.speechDetected ? 'Speech detected' : 'No speech'}`]);
-  }, []);
-
   return (
     <div>
       <div className="vad-events">
-        <h3>VAD Events:</h3>
+        <h3>Voice Activity Events:</h3>
         {vadEvents.map((event, index) => (
           <div key={index}>{event}</div>
         ))}
@@ -824,7 +913,6 @@ function VADEventApp() {
         onUserStartedSpeaking={handleUserStartedSpeaking}
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
         onUtteranceEnd={handleUtteranceEnd}
-        onVADEvent={handleVADEvent}
       />
     </div>
   );
