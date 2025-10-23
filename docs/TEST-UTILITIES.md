@@ -6,6 +6,86 @@ This document describes the test utilities and infrastructure used for testing t
 
 The test suite uses a combination of Playwright for end-to-end testing and custom utilities for audio simulation, VAD event detection, and component state verification.
 
+## Testing Strategy: Real First, Then Mock
+
+### Recommended Testing Approach
+
+**For new developers working on voice interaction features, follow this testing hierarchy:**
+
+1. **Start with Real Audio + Real Deepgram Services** (Recommended)
+   - Use pre-generated audio samples with `VADTestUtilities.loadAndSendAudioSample()`
+   - Test against actual Deepgram transcription and agent services
+   - Wait for real VAD events (`SpeechStarted`, `UtteranceEnd`) from Deepgram
+   - This validates the complete integration and catches real-world issues
+
+2. **Add Mock Tests for Edge Cases** (Secondary)
+   - Use `AudioSimulator.simulateSpeech()` for synthetic audio
+   - Mock Deepgram responses for specific error scenarios
+   - Test timeout behavior and error handling
+   - This provides faster feedback for development iterations
+
+### Why Real Audio First?
+
+- **Catches Integration Issues**: Real audio triggers actual VAD events that synthetic audio might miss
+- **Validates Timing**: Pre-generated samples have proper silence padding (300ms onset + 2000ms offset)
+- **Tests Complete Flow**: From audio input → VAD detection → timeout management → UI updates
+- **Prevents False Positives**: Synthetic tests might pass while real usage fails
+
+### Example: Testing Idle Timeout with Real Audio
+
+Here's how to properly test idle timeout behavior using real audio samples:
+
+```javascript
+test('should not timeout during active conversation', async ({ page }) => {
+  // Import the correct utilities
+  const { VADTestUtilities } = require('../utils/vad-test-utilities');
+  const SimpleVADHelpers = require('../utils/simple-vad-helpers');
+  
+  // Initialize VAD test utilities
+  const vadUtils = new VADTestUtilities(page);
+  
+  // Set up the test page and enable microphone
+  await setupTestPage(page);
+  await page.click('[data-testid="microphone-button"]');
+  
+  // Simulate conversation using real audio samples
+  const conversationSamples = [
+    { sample: 'hello', delay: 0 },
+    { sample: 'hello__how_are_you_today_', delay: 1000 }, // 1s pause
+    { sample: 'hello', delay: 1000 }, // 1s pause
+  ];
+  
+  for (const { sample, delay } of conversationSamples) {
+    if (delay > 0) {
+      await page.waitForTimeout(delay);
+    }
+    
+    // Use real audio samples (300ms onset + speech + 2000ms offset silence)
+    await vadUtils.loadAndSendAudioSample(sample);
+    
+    // Wait for real VAD events from Deepgram
+    const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
+      'SpeechStarted',    // From transcription service
+      'UtteranceEnd'      // From transcription service  
+    ], 5000); // Account for 2s offset silence
+    
+    expect(vadEvents.length).toBeGreaterThan(0);
+  }
+  
+  // Verify connection stayed alive
+  const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
+  expect(connectionStatus).toBe('connected');
+});
+```
+
+### Key Points for Real Audio Testing:
+
+1. **Use VADTestUtilities**: `loadAndSendAudioSample()` loads pre-generated samples
+2. **Wait for Real VAD Events**: Don't rely on synthetic events
+3. **Account for Timing**: Samples have 2s offset silence, use appropriate timeouts
+4. **Test Complete Flow**: From audio → VAD → timeout management → UI state
+5. **Use Existing Samples**: `hello`, `hello__how_are_you_today_`, etc.
+
 ## Audio Testing Infrastructure
 
 ### Pre-Generated Audio Samples

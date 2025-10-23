@@ -186,7 +186,11 @@ test.describe('Idle Timeout Behavior', () => {
   });
 
   test('should not timeout during active conversation after UtteranceEnd', async ({ page }) => {
-    console.log('🧪 Testing idle timeout behavior during active conversation...');
+    console.log('🧪 Testing idle timeout behavior during active conversation with REAL AUDIO...');
+    
+    // Import audio simulation utilities
+    const { VADTestUtilities } = require('../utils/vad-test-utilities');
+    const SimpleVADHelpers = require('../utils/simple-vad-helpers');
     
     // Track connection close events
     const connectionCloses = [];
@@ -210,49 +214,46 @@ test.describe('Idle Timeout Behavior', () => {
     console.log(`Microphone status: ${micStatus}`);
     expect(micStatus).toBe('Enabled');
     
-    // Simulate user speaking by sending audio data multiple times over 15+ seconds
-    // This simulates: user speaks → pause (UtteranceEnd) → continues speaking
-    console.log('Step 2: Simulating ongoing conversation with pauses...');
+    // Simulate REAL conversation using existing audio samples with proper timing
+    // These samples have: 300ms onset silence + speech + 2000ms offset silence
+    console.log('Step 2: Simulating ongoing conversation with REAL AUDIO SAMPLES...');
+    
+    // Initialize VAD test utilities
+    const vadUtils = new VADTestUtilities(page);
     
     const startTime = Date.now();
-    const conversationDuration = 15000; // 15 seconds of conversation
-    const speakingIntervals = [
-      { start: 0, duration: 3000, label: 'First utterance' },
-      { start: 4000, duration: 3000, label: 'Second utterance (after brief pause)' },
-      { start: 8000, duration: 3000, label: 'Third utterance (continuing)' },
-      { start: 12000, duration: 3000, label: 'Fourth utterance (still going)' }
+    const conversationSamples = [
+      { sample: 'hello', delay: 0 },
+      { sample: 'hello__how_are_you_today_', delay: 1000 }, // 1s pause between samples
+      { sample: 'hello', delay: 1000 }, // 1s pause between samples
+      { sample: 'hello__how_are_you_today_', delay: 1000 }, // 1s pause between samples
+      { sample: 'hello', delay: 1000 } // 1s pause between samples
     ];
     
-    for (const interval of speakingIntervals) {
-      // Wait until it's time for this speaking interval
-      const elapsed = Date.now() - startTime;
-      const waitTime = interval.start - elapsed;
-      if (waitTime > 0) {
-        console.log(`Waiting ${waitTime}ms before ${interval.label}...`);
-        await page.waitForTimeout(waitTime);
+    for (const { sample, delay } of conversationSamples) {
+      // Wait for the specified delay (simulating natural conversation pauses)
+      if (delay > 0) {
+        console.log(`Waiting ${delay}ms before next phrase...`);
+        await page.waitForTimeout(delay);
       }
       
-      console.log(`Speaking: ${interval.label}`);
+      console.log(`Speaking: "${sample}"`);
       
-      // Simulate audio data being sent during this interval
-      await page.evaluate((duration) => {
-        const deepgramComponent = window.deepgramRef?.current;
-        if (deepgramComponent && deepgramComponent.sendAudioData) {
-          // Send audio chunks to simulate speaking
-          const chunkInterval = setInterval(() => {
-            const audioData = new ArrayBuffer(8192);
-            deepgramComponent.sendAudioData(audioData);
-          }, 100);
-          
-          // Stop sending after duration
-          setTimeout(() => clearInterval(chunkInterval), duration);
-        }
-      }, interval.duration);
+      // Use VADTestUtilities to load and send pre-recorded audio samples
+      // These samples have proper timing: 300ms onset silence + speech + 2000ms offset silence
+      await vadUtils.loadAndSendAudioSample(sample);
       
-      await page.waitForTimeout(interval.duration);
+      // Wait for VAD events to be processed (this is what keeps the connection alive)
+      console.log('⏳ Waiting for VAD events...');
+      const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
+        'SpeechStarted',    // From transcription service
+        'UtteranceEnd'      // From transcription service  
+      ], 5000); // Longer timeout to account for 2s offset silence
+      
+      console.log(`✅ VAD events detected: ${vadEvents.length}`);
     }
     
-    console.log('Step 3: Checking connection stayed alive during conversation...');
+    console.log('Step 3: Checking connection stayed alive during REAL conversation...');
     
     // Check connection status
     const connectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
@@ -264,19 +265,131 @@ test.describe('Idle Timeout Behavior', () => {
       console.log(`  ${i + 1}. ${event.text}`);
     });
     
-    // Assert: Connection should still be alive after 15 seconds of active conversation
-    // The bug would cause it to timeout after UtteranceEnd despite ongoing conversation
+    // Assert: Connection should still be alive after real conversation
+    // The IdleTimeoutService should detect VAD events and keep connection alive
     expect(connectionStatus).toBe('connected');
-    console.log('✅ Connection stayed alive during active conversation with pauses');
+    console.log('✅ Connection stayed alive during REAL conversation with VAD events');
     
     // No premature idle timeouts should have occurred during active conversation
     const prematureTimeouts = connectionCloses.filter(e => 
       e.text.includes('Idle timeout reached') && 
-      (e.timestamp - startTime) < conversationDuration
+      (e.timestamp - startTime) < 20000 // 20 seconds total conversation time
     );
     
     expect(prematureTimeouts.length).toBe(0);
-    console.log('✅ No premature idle timeouts during active conversation');
+    console.log('✅ No premature idle timeouts during REAL conversation');
+  });
+
+  test('should handle conversation with realistic timing and padding', async ({ page }) => {
+    console.log('🧪 Testing idle timeout with realistic conversation timing (2.3s padding)...');
+    
+    // Import audio simulation utilities
+    const { VADTestUtilities } = require('../utils/vad-test-utilities');
+    const SimpleVADHelpers = require('../utils/simple-vad-helpers');
+    
+    // Track connection close events
+    const connectionCloses = [];
+    page.on('console', msg => {
+      const text = msg.text();
+      if (text.includes('Idle timeout reached') || text.includes('Connection close')) {
+        connectionCloses.push({ timestamp: Date.now(), text });
+      }
+    });
+    
+    await setupTestPage(page);
+    await waitForConnection(page, 10000);
+    
+    // Enable microphone
+    console.log('Step 1: Enabling microphone...');
+    const micButton = page.locator(SELECTORS.micButton);
+    await micButton.click();
+    await page.waitForTimeout(1000);
+    
+    const micStatus = await page.locator(SELECTORS.micStatus).textContent();
+    console.log(`Microphone status: ${micStatus}`);
+    expect(micStatus).toBe('Enabled');
+    
+    // Simulate a realistic conversation using existing audio samples
+    // These samples have: 300ms onset silence + speech + 2000ms offset silence
+    console.log('Step 2: Simulating realistic conversation with proper timing...');
+    
+    // Initialize VAD test utilities
+    const vadUtils = new VADTestUtilities(page);
+    
+    const startTime = Date.now();
+    const conversationFlow = [
+      { 
+        sample: 'hello', 
+        delay: 0,
+        expectedDuration: 2638 // ~2.64s total (300ms + speech + 2000ms)
+      },
+      { 
+        sample: 'hello__how_are_you_today_', 
+        delay: 1000, // 1s pause between samples
+        expectedDuration: 3810 // ~3.81s total (300ms + speech + 2000ms)
+      },
+      { 
+        sample: 'hello', 
+        delay: 1000, // 1s pause between samples
+        expectedDuration: 2638 // ~2.64s total (300ms + speech + 2000ms)
+      },
+      { 
+        sample: 'hello__how_are_you_today_', 
+        delay: 1000, // 1s pause between samples
+        expectedDuration: 3810 // ~3.81s total (300ms + speech + 2000ms)
+      }
+    ];
+    
+    for (const { sample, delay, expectedDuration } of conversationFlow) {
+      // Wait for the specified delay (realistic conversation timing)
+      if (delay > 0) {
+        console.log(`Waiting ${delay}ms before next phrase (realistic conversation pause)...`);
+        await page.waitForTimeout(delay);
+      }
+      
+      console.log(`Speaking: "${sample}" (expected duration: ${expectedDuration}ms)`);
+      
+      // Use VADTestUtilities to load and send pre-recorded audio samples
+      await vadUtils.loadAndSendAudioSample(sample);
+      
+      // Wait for VAD events to be processed
+      console.log('⏳ Waiting for VAD events...');
+      const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
+        'SpeechStarted',    // From transcription service
+        'UtteranceEnd'      // From transcription service  
+      ], 6000); // Longer timeout to account for 2s offset silence
+      
+      console.log(`✅ VAD events detected: ${vadEvents.length}`);
+      
+      // Verify we got the expected VAD events
+      expect(vadEvents.length).toBeGreaterThan(0);
+    }
+    
+    console.log('Step 3: Verifying connection stayed alive during realistic conversation...');
+    
+    // Check connection status
+    const connectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
+    console.log(`Final connection status: ${connectionStatus}`);
+    
+    // Log any connection closes that occurred
+    console.log(`\nConnection close events: ${connectionCloses.length}`);
+    connectionCloses.forEach((event, i) => {
+      console.log(`  ${i + 1}. ${event.text}`);
+    });
+    
+    // Assert: Connection should still be alive after realistic conversation
+    // The IdleTimeoutService should detect VAD events and keep connection alive
+    expect(connectionStatus).toBe('connected');
+    console.log('✅ Connection stayed alive during realistic conversation with proper timing');
+    
+    // No premature idle timeouts should have occurred during active conversation
+    const prematureTimeouts = connectionCloses.filter(e => 
+      e.text.includes('Idle timeout reached') && 
+      (e.timestamp - startTime) < 25000 // 25 seconds total conversation time
+    );
+    
+    expect(prematureTimeouts.length).toBe(0);
+    console.log('✅ No premature idle timeouts during realistic conversation with 2.3s padding');
   });
 
   test('should handle idle timeout correctly - connection closes after 10 seconds of inactivity', async ({ page }) => {
