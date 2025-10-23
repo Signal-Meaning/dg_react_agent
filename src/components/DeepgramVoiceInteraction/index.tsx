@@ -581,9 +581,6 @@ function DeepgramVoiceInteraction(
         }
       } else if (event.type === 'message') {
         handleTranscriptionMessage(event.data);
-      } else if (event.type === 're_enable_idle_timeout') {
-        // ISSUE #149 FIX: Cross-service timeout coordination is now handled by IdleTimeoutService
-        console.log('🔄 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for timeout coordination');
       } else if (event.type === 'error') {
         handleError(event.error);
       }
@@ -706,9 +703,6 @@ function DeepgramVoiceInteraction(
         handleAgentMessage(event.data);
       } else if (event.type === 'binary') {
         handleAgentAudio(event.data);
-      } else if (event.type === 're_enable_idle_timeout') {
-        // ISSUE #149 FIX: Cross-service timeout coordination is now handled by IdleTimeoutService
-        console.log('🔄 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for timeout coordination');
       } else if (event.type === 'error') {
         handleError(event.error);
       }
