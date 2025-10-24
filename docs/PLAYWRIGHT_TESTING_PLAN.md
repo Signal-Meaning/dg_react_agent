@@ -61,7 +61,7 @@ module.exports = {
     timeout: 5000,
   },
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
     video: 'retain-on-failure',
   },
@@ -89,7 +89,7 @@ module.exports = {
   ],
   webServer: {
     command: 'npm run dev',
-    port: 3000,
+    port: 5173,
     reuseExistingServer: !process.env.CI,
   },
 };
@@ -207,7 +207,9 @@ test.describe('Microphone Control', () => {
 
   test('should handle microphone permission denied', async ({ page }) => {
     // Mock permission denied
-    await page.context().grantPermissions([], { origin: 'http://localhost:3000' });
+    const currentUrl = page.url();
+    const origin = new URL(currentUrl).origin;
+    await page.context().grantPermissions([], { origin });
     
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -505,9 +507,11 @@ class AudioTestHelpers {
   }
 
   static async mockAudioPermissions(page, granted = true) {
+    const currentUrl = page.url();
+    const origin = new URL(currentUrl).origin;
     await page.context().grantPermissions(
       granted ? ['microphone'] : [],
-      { origin: 'http://localhost:3000' }
+      { origin }
     );
   }
 }
@@ -580,7 +584,7 @@ module.exports = APITestMocks;
 ```bash
 # .env.test
 DEEPGRAM_API_KEY=test-api-key
-TEST_BASE_URL=http://localhost:3000
+TEST_BASE_URL=http://localhost:5173
 TEST_TIMEOUT=30000
 TEST_VIDEO_RECORDING=true
 TEST_TRACE_RECORDING=true
