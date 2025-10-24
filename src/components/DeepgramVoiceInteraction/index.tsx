@@ -139,8 +139,6 @@ function DeepgramVoiceInteraction(
     onUtteranceEnd,
     onPlaybackStateChange,
     onError,
-    // Auto-connect dual mode props
-    autoConnect,
     onConnectionReady,
     onAgentSpeaking,
     onAgentSilent,
@@ -170,35 +168,16 @@ function DeepgramVoiceInteraction(
   // Reference: https://developers.deepgram.com/docs/understanding-end-of-speech-detection#using-utteranceend
   const speechFinalReceivedRef = useRef(false);
   
-  // Track if auto-connect has been attempted to prevent multiple attempts
-  const autoConnectAttemptedRef = useRef(false);
   const hasSentSettingsRef = useRef(false);
   
   // Track when settings were sent to add proper delay
   const settingsSentTimeRef = useRef<number | null>(null);
   
-  // Global flag to prevent settings from being sent multiple times across component instances
-  if (!(window as any).globalSettingsSent) {
-    (window as any).globalSettingsSent = false;
-  }
+  // Promise-based locking for AudioManager creation to prevent race conditions
+  const audioManagerCreationPromiseRef = useRef<Promise<void> | null>(null);
   
-  // Global flag to prevent multiple auto-connect attempts across component re-initializations
-  if (!(window as any).globalAutoConnectAttempted) {
-    (window as any).globalAutoConnectAttempted = false;
-  }
-  
-  // Global flag to prevent multiple component initializations during HMR
-  if (!(window as any).componentInitializationCount) {
-    (window as any).componentInitializationCount = 0;
-  }
-  (window as any).componentInitializationCount++;
-  
-  // Remove HMR prevention logic - it's causing React hook errors
-  
-  // Global flag to track if audio is currently being captured
-  if (!(window as any).audioCaptureInProgress) {
-    (window as any).audioCaptureInProgress = false;
-  }
+  // Component-level state management
+  // No global state needed - each component instance manages its own state
   
   // Debug: Log component initialization (but limit frequency to avoid spam)
   // Moved inside useEffect to only log when component actually initializes, not on every render
@@ -640,10 +619,9 @@ function DeepgramVoiceInteraction(
           
           dispatch({ type: 'SETTINGS_SENT', sent: false });
           hasSentSettingsRef.current = false; // Reset ref when connection closes
-          (window as any).globalSettingsSent = false; // Reset global flag when connection closes
           settingsSentTimeRef.current = null; // Reset settings time
           if (props.debug) {
-            console.log('🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
+            console.log('🔧 [Connection] hasSentSettingsRef reset to false due to connection close');
           }
           log('Reset hasSentSettings flag due to connection close');
           
@@ -669,18 +647,14 @@ function DeepgramVoiceInteraction(
           }
         }
         
-        // Send settings message when connection is established (unless we're lazy reconnecting)
-        // Only send settings if they haven't been sent AND we're not in auto-connect mode
-        // (auto-connect will handle settings sending via its own timeout)
-        if (event.state === 'connected' && !isLazyReconnectingRef.current && !hasSentSettingsRef.current && !(window as any).globalSettingsSent && !autoConnect) {
+        // Send settings message when connection is established
+        if (event.state === 'connected' && !isLazyReconnectingRef.current && !hasSentSettingsRef.current) {
           log('Connection established, sending settings via connection state handler');
           sendAgentSettings();
         } else if (event.state === 'connected' && isLazyReconnectingRef.current) {
           log('Skipping automatic settings send - lazy reconnection in progress');
         } else if (event.state === 'connected' && state.hasSentSettings) {
           log('Connection established but settings already sent, skipping');
-        } else if (event.state === 'connected' && autoConnect) {
-          log('Connection established but auto-connect will handle settings sending, skipping');
         }
       } else if (event.type === 'message') {
         handleAgentMessage(event.data);
@@ -713,78 +687,8 @@ function DeepgramVoiceInteraction(
     // The component can accept text interactions and manual connections without audio
     dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
 
-    // Auto-connect dual mode logic
-    console.log('Auto-connect check:', { autoConnect, isAgentConfigured, isTranscriptionConfigured, agentManagerRef: !!agentManagerRef.current, transcriptionManagerRef: !!transcriptionManagerRef.current });
-    if (autoConnect === true && isAgentConfigured && !autoConnectAttemptedRef.current && !(window as any).globalAutoConnectAttempted) {
-      // Validate API key before attempting connection
-      const isValidApiKey = apiKey && 
-        apiKey !== 'your-deepgram-api-key-here' && 
-        apiKey !== 'your_actual_deepgram_api_key_here' &&
-        !apiKey.startsWith('test-') && 
-        apiKey.length >= 20;
-      
-      if (!isValidApiKey) {
-        log('⚠️ Auto-connect skipped: Invalid or missing API key');
-        log(`API key status: ${apiKey ? `"${apiKey.substring(0, 10)}..."` : 'undefined'}`);
-        dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
-        return;
-      }
-      
-      log('Auto-connect dual mode enabled, establishing connection');
-      
-      // For auto-connect dual mode, set ready immediately since the user can interact via text
-      // even if audio is not available
-      dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
-      
-      // Auto-connect to both services in dual mode
-      setTimeout(async () => {
-        // Check again inside setTimeout to prevent multiple executions
-        if (autoConnectAttemptedRef.current) {
-          console.log('Auto-connect already attempted, skipping');
-          return;
-        }
-        autoConnectAttemptedRef.current = true; // Mark as attempted
-        
-        console.log('Auto-connect timeout executing, agentManagerRef.current:', !!agentManagerRef.current, 'transcriptionManagerRef.current:', !!transcriptionManagerRef.current);
-        
-        try {
-          // Connect transcription service if configured
-          if (transcriptionManagerRef.current) {
-            console.log('Auto-connect: Connecting transcription service...');
-            await transcriptionManagerRef.current.connect();
-            console.log('Auto-connect: Transcription service connected');
-          }
-          
-          // Connect agent service if configured
-          if (agentManagerRef.current) {
-            console.log('Auto-connect: Connecting agent service...');
-            await agentManagerRef.current.connect();
-            console.log('Auto-connect: Agent service connected');
-            
-            // Wait for connection to be fully established (simplified)
-            await new Promise(resolve => setTimeout(resolve, 200)); // Simple wait
-            
-            // Send settings immediately after connection to enable greeting
-            if (agentManagerRef.current.getState() === 'connected') {
-              log('Auto-connect: Connection established, sending settings for greeting');
-              // Only send settings if they haven't been sent yet
-              if (!hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
-                sendAgentSettings();
-              } else {
-                log('Auto-connect: Settings already sent, skipping');
-              }
-            } else {
-              log('Auto-connect: Connection not fully established after waiting');
-            }
-          }
-        } catch (error) {
-          log('Auto-connect failed:', error);
-        }
-      }, 100); // Small delay to ensure audio manager is ready
-    } else {
-      log('Auto-connect disabled or agent not configured', { autoConnect, isAgentConfigured });
-      // Component is already ready from the AudioManager initialization above
-    }
+    // Component is ready - no auto-connect needed
+    log('Component initialized and ready');
 
     // Clean up
     return () => {
@@ -817,7 +721,7 @@ function DeepgramVoiceInteraction(
       dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: false });
       dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
     };
-  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, props.debug, autoConnect]); 
+  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, props.debug]); 
 
   // Notify ready state changes ONLY when the value actually changes
   useEffect(() => {
@@ -1118,11 +1022,9 @@ function DeepgramVoiceInteraction(
     }
     
     // Check if settings have already been sent (welcome-first behavior)
-    // Use both ref and global flag to avoid stale closure issues and cross-component duplicates
-    if (hasSentSettingsRef.current || (window as any).globalSettingsSent) {
-      console.log('🔧 [sendAgentSettings] Settings already sent (via ref or global), skipping');
+    if (hasSentSettingsRef.current) {
+      console.log('🔧 [sendAgentSettings] Settings already sent, skipping');
       console.log('🔧 [sendAgentSettings] hasSentSettingsRef.current:', hasSentSettingsRef.current);
-      console.log('🔧 [sendAgentSettings] globalSettingsSent:', (window as any).globalSettingsSent);
       return;
     }
     
@@ -1297,7 +1199,6 @@ function DeepgramVoiceInteraction(
       log('SettingsApplied received - settings are now active');
       // Only mark as sent when we get confirmation from Deepgram
       hasSentSettingsRef.current = true;
-      (window as any).globalSettingsSent = true;
       dispatch({ type: 'SETTINGS_SENT', sent: true });
       console.log('🎯 [SettingsApplied] Settings confirmed by Deepgram, audio data can now be processed');
       return;
@@ -1403,7 +1304,6 @@ function DeepgramVoiceInteraction(
         log('⚠️ [Agent] Settings already applied - this is normal during reconnection:', errorMessage);
         // Mark settings as sent to prevent further attempts
         hasSentSettingsRef.current = true;
-        (window as any).globalSettingsSent = true;
         dispatch({ type: 'SETTINGS_SENT', sent: true });
         return;
       }
@@ -1541,7 +1441,14 @@ function DeepgramVoiceInteraction(
     
     log('Passing buffer to AudioManager.queueAudio()');
     if (props.debug) log('🎵 [AUDIO] Audio context state:', audioManagerRef.current?.getAudioContext?.()?.state);
-    audioManagerRef.current!.queueAudio(data)
+    
+    // Double-check that AudioManager exists after lazy creation
+    if (!audioManagerRef.current) {
+      log('AudioManager not available after creation attempt');
+      return;
+    }
+    
+    audioManagerRef.current.queueAudio(data)
       .then(() => {
         log('Successfully queued audio buffer for playback');
       })
@@ -1625,12 +1532,7 @@ function DeepgramVoiceInteraction(
       // Validate configuration - at least one service must be configured
       if (!agentOptions && !transcriptionOptions) {
         const error = new Error('DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()');
-        handleError({
-          service: 'agent',
-          code: 'configuration_error',
-          message: error.message,
-          details: { agentOptions, transcriptionOptions }
-        });
+        // This is a validation error, not a service error - just throw it
         throw error;
       }
       
@@ -1689,6 +1591,14 @@ function DeepgramVoiceInteraction(
       log('Start method completed successfully');
     } catch (error) {
       log('Error within start method:', error);
+      
+      // Check if this is a validation error - let it pass through without handleError
+      if (error instanceof Error && error.message.includes('At least one of agentOptions or transcriptionOptions must be provided')) {
+        dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
+        throw error; // Re-throw validation errors directly
+      }
+      
+      // Handle other errors as service errors
       handleError({
         service: 'transcription',
         code: 'start_error',
@@ -1998,48 +1908,64 @@ function DeepgramVoiceInteraction(
     }
   };
 
-  // Helper function to create and initialize AudioManager
+  // Helper function to create and initialize AudioManager with promise-based locking
   const createAudioManager = async (): Promise<void> => {
+    // If AudioManager already exists, return immediately
     if (audioManagerRef.current) {
-      return; // Already exists
+      return;
     }
 
-    log('Creating AudioManager');
-    audioManagerRef.current = new AudioManager({
-      debug: props.debug,
-    });
+    // If creation is already in progress, wait for it to complete
+    if (audioManagerCreationPromiseRef.current) {
+      return audioManagerCreationPromiseRef.current;
+    }
 
-    // Set initial TTS mute state
-    audioManagerRef.current.setTtsMuted(ttsMuted);
-    dispatch({ type: 'TTS_MUTE_CHANGE', muted: ttsMuted });
-    log(`🔇 Initial TTS mute state set to: ${ttsMuted}`);
+    // Create the promise and store it to prevent concurrent creation
+    audioManagerCreationPromiseRef.current = (async () => {
+      try {
+        log('Creating AudioManager');
+        audioManagerRef.current = new AudioManager({
+          debug: props.debug,
+        });
 
-    // Set up event listeners for audio manager
-    audioManagerRef.current.addEventListener((event: AudioEvent) => {
-      if (event.type === 'ready') {
-        log('Audio manager ready');
-      } else if (event.type === 'recording') {
-        log('Recording state:', event.isRecording);
-        dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: event.isRecording });
-      } else if (event.type === 'playing') {
-        log('Playing state:', event.isPlaying);
-        dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: event.isPlaying });
-        
-        // Transition agent to idle when audio playback stops
-        if (!event.isPlaying && stateRef.current.agentState === 'speaking') {
-          sleepLog('Audio playback finished - transitioning agent to idle');
-          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
-        }
-      } else if (event.type === 'error') {
-        handleError(event.error);
-      } else if (event.type === 'data') {
-        sendAudioData(event.data);
+        // Set initial TTS mute state
+        audioManagerRef.current.setTtsMuted(ttsMuted);
+        dispatch({ type: 'TTS_MUTE_CHANGE', muted: ttsMuted });
+        log(`🔇 Initial TTS mute state set to: ${ttsMuted}`);
+
+        // Set up event listeners for audio manager
+        audioManagerRef.current.addEventListener((event: AudioEvent) => {
+          if (event.type === 'ready') {
+            log('Audio manager ready');
+          } else if (event.type === 'recording') {
+            log('Recording state:', event.isRecording);
+            dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: event.isRecording });
+          } else if (event.type === 'playing') {
+            log('Playing state:', event.isPlaying);
+            dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: event.isPlaying });
+            
+            // Transition agent to idle when audio playback stops
+            if (!event.isPlaying && stateRef.current.agentState === 'speaking') {
+              sleepLog('Audio playback finished - transitioning agent to idle');
+              dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+            }
+          } else if (event.type === 'error') {
+            handleError(event.error);
+          } else if (event.type === 'data') {
+            sendAudioData(event.data);
+          }
+        });
+
+        // Initialize AudioManager
+        await audioManagerRef.current.initialize();
+        log('AudioManager initialized');
+      } finally {
+        // Clear the promise reference when done (success or failure)
+        audioManagerCreationPromiseRef.current = null;
       }
-    });
+    })();
 
-    // Initialize AudioManager
-    await audioManagerRef.current.initialize();
-    log('AudioManager initialized');
+    return audioManagerCreationPromiseRef.current;
   };
 
   // Start audio capture with lazy initialization

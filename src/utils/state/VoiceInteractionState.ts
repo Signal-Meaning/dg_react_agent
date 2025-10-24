@@ -126,7 +126,6 @@ export type StateEvent =
   | { type: 'CONNECTION_TYPE_CHANGE'; isNew: boolean }
   | { type: 'SESSION_ESTABLISHED'; established: boolean }
   | { type: 'RESET_GREETING_STATE' }
-  | { type: 'CLEAR_CONVERSATION_HISTORY' }
   | { type: 'USER_SPEAKING_STATE_CHANGE'; isSpeaking: boolean }
   | { type: 'UTTERANCE_END'; data: { channel: number[]; lastWordEnd: number } }
   | { type: 'UPDATE_SPEECH_DURATION'; duration: number }
@@ -269,9 +268,6 @@ export function stateReducer(state: VoiceInteractionState, event: StateEvent): V
         greetingStarted: false,
       };
       
-    case 'CLEAR_CONVERSATION_HISTORY':
-      // No-op since we removed conversation history
-      return state;
       
     case 'USER_SPEAKING_STATE_CHANGE':
       // Handle malformed actions gracefully

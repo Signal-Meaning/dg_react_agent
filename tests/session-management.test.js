@@ -363,9 +363,8 @@ describe('Session Management Utilities', () => {
       // Create a recent session
       const recentSessionId = sessionManager.createSession('recent-session');
       
-      // Manually create an old session by directly modifying the Map
-      const oldSession = sessionManager.getAllSessions().get('old-session');
-      oldSession.lastActivity = Date.now() - (SESSION_CONFIG.MAX_SESSION_AGE + 10000);
+      // Use proper method to update session activity to make it old
+      sessionManager.updateSessionActivity('old-session', Date.now() - (SESSION_CONFIG.MAX_SESSION_AGE + 10000));
       
       // Run cleanup
       cleanupOldSessions(sessionManager);

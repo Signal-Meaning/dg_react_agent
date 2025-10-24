@@ -93,25 +93,15 @@ describe('Error Handling Tests', () => {
       expect(ref.current).toBeDefined();
     });
 
-    // Attempt to start without any configuration
+    // Attempt to start without any configuration - should throw directly
     await expect(async () => {
       await act(async () => {
         await ref.current.start();
       });
     }).rejects.toThrow('DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()');
 
-    // Verify error handler was called
-    expect(mockOnError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        service: 'agent',
-        code: 'configuration_error',
-        message: 'DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()',
-        details: expect.objectContaining({
-          agentOptions: undefined,
-          transcriptionOptions: undefined
-        })
-      })
-    );
+    // Verify error handler was NOT called (validation errors are thrown directly)
+    expect(mockOnError).not.toHaveBeenCalled();
   });
 
   test('should throw error when both options are null', async () => {
@@ -137,17 +127,8 @@ describe('Error Handling Tests', () => {
       });
     }).rejects.toThrow('DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()');
 
-    expect(mockOnError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        service: 'agent',
-        code: 'configuration_error',
-        message: 'DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()',
-        details: expect.objectContaining({
-          agentOptions: null,
-          transcriptionOptions: null
-        })
-      })
-    );
+    // Verify error handler was NOT called (validation errors are thrown directly)
+    expect(mockOnError).not.toHaveBeenCalled();
   });
 
   test('should throw error when both options are undefined', async () => {
@@ -345,25 +326,14 @@ describe('Error Handling Tests', () => {
       expect(ref.current).toBeDefined();
     });
 
-    try {
+    // Attempt to start with mixed null/undefined options - should throw directly
+    await expect(async () => {
       await act(async () => {
         await ref.current.start();
       });
-    } catch (error) {
-      // Expected to throw
-    }
+    }).rejects.toThrow('DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()');
 
-    // Verify error handler was called with detailed information
-    expect(mockOnError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        service: 'agent',
-        code: 'configuration_error',
-        message: 'DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()',
-        details: {
-          agentOptions: null,
-          transcriptionOptions: undefined
-        }
-      })
-    );
+    // Verify error handler was NOT called (validation errors are thrown directly)
+    expect(mockOnError).not.toHaveBeenCalled();
   });
 });
