@@ -158,10 +158,6 @@ export interface DeepgramVoiceInteractionProps {
     wakeWords?: string[];
   };
 
-  /**
-   * Auto-connect dual mode behavior options
-   */
-  autoConnect?: boolean;
 
 
   /**
