@@ -26,6 +26,7 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
 - [ ] **Linting Clean**: No linting errors
   - [ ] Run: `npm run lint`
 - [ ] **Documentation Updated**: All relevant documentation updated
+- [ ] **API Changes Documented**: Any API changes appear in API-REFERENCE.md evolution section
 - [ ] **Breaking Changes Documented**: Any breaking changes identified and documented
 
 #### Version Management
