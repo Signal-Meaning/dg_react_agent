@@ -1,4 +1,4 @@
-import { AgentState, ConnectionState, ServiceType, ConversationMessage } from '../../types';
+import { AgentState, ConnectionState, ServiceType } from '../../types';
 
 /**
  * State of the voice interaction component
@@ -69,12 +69,6 @@ export interface VoiceInteractionState {
    */
   isNewConnection: boolean;
   hasEstablishedSession: boolean;
-  
-  /**
-   * Conversation context for lazy reconnection
-   */
-  conversationHistory: ConversationMessage[];
-  sessionId: string | null;
 
   /**
    * VAD (Voice Activity Detection) state properties
@@ -132,8 +126,6 @@ export type StateEvent =
   | { type: 'CONNECTION_TYPE_CHANGE'; isNew: boolean }
   | { type: 'SESSION_ESTABLISHED'; established: boolean }
   | { type: 'RESET_GREETING_STATE' }
-  | { type: 'ADD_CONVERSATION_MESSAGE'; message: ConversationMessage }
-  | { type: 'SET_SESSION_ID'; sessionId: string }
   | { type: 'CLEAR_CONVERSATION_HISTORY' }
   | { type: 'USER_SPEAKING_STATE_CHANGE'; isSpeaking: boolean }
   | { type: 'UTTERANCE_END'; data: { channel: number[]; lastWordEnd: number } }
@@ -162,8 +154,6 @@ export const initialState: VoiceInteractionState = {
   greetingStarted: false,
   isNewConnection: true,
   hasEstablishedSession: false,
-  conversationHistory: [],
-  sessionId: null,
   
   // VAD state properties
   isUserSpeaking: false,
@@ -279,23 +269,9 @@ export function stateReducer(state: VoiceInteractionState, event: StateEvent): V
         greetingStarted: false,
       };
       
-    case 'ADD_CONVERSATION_MESSAGE':
-      return {
-        ...state,
-        conversationHistory: [...state.conversationHistory, event.message],
-      };
-      
-    case 'SET_SESSION_ID':
-      return {
-        ...state,
-        sessionId: event.sessionId,
-      };
-      
     case 'CLEAR_CONVERSATION_HISTORY':
-      return {
-        ...state,
-        conversationHistory: [],
-      };
+      // No-op since we removed conversation history
+      return state;
       
     case 'USER_SPEAKING_STATE_CHANGE':
       // Handle malformed actions gracefully
