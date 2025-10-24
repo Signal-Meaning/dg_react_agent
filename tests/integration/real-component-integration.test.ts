@@ -31,14 +31,14 @@ describe('Real Component Integration Tests', () => {
   // Mock functions for testing
   let mockOnUtteranceEnd: jest.Mock;
   let mockOnUserStoppedSpeaking: jest.Mock;
-  let mockOnVADEvent: jest.Mock;
+  let mockOnUserStartedSpeaking: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
     
     mockOnUtteranceEnd = jest.fn();
     mockOnUserStoppedSpeaking = jest.fn();
-    mockOnVADEvent = jest.fn();
+    mockOnUserStartedSpeaking = jest.fn();
   });
 
   describe('Mock-Based Tests (Always Run)', () => {
@@ -52,7 +52,7 @@ describe('Real Component Integration Tests', () => {
             apiKey: "test-key",
             onUtteranceEnd: mockOnUtteranceEnd,
             onUserStoppedSpeaking: mockOnUserStoppedSpeaking,
-            onVADEvent: mockOnVADEvent,
+            onUserStartedSpeaking: mockOnUserStartedSpeaking,
             utteranceEndMs: 1500,
             interimResults: true
           })
@@ -115,7 +115,7 @@ describe('Real Component Integration Tests', () => {
             apiKey: process.env.DEEPGRAM_API_KEY!,
             onUtteranceEnd: mockOnUtteranceEnd,
             onUserStoppedSpeaking: mockOnUserStoppedSpeaking,
-            onVADEvent: mockOnVADEvent,
+            onUserStartedSpeaking: mockOnUserStartedSpeaking,
             utteranceEndMs: 1000,
             interimResults: true,
             debug: true
@@ -211,15 +211,14 @@ describe('Real Component Integration Tests', () => {
         React.createElement(DeepgramVoiceInteraction, {
           ref: componentRef,
           apiKey: "test-key",
-          onVADEvent: mockOnVADEvent
         })
       );
 
       // Component should initialize without errors
       expect(componentRef.current).toBeDefined();
       
-      // Test that callback prop is properly set
-      expect(mockOnVADEvent).toBeDefined();
+      // VAD events are now processed internally only
+      // No public callback is exposed
     });
   });
 
