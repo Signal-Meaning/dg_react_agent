@@ -199,11 +199,9 @@ describe('Error Handling Tests', () => {
     });
 
     // Should not throw error
-    await expect(async () => {
-      await act(async () => {
-        await ref.current.start();
-      });
-    }).resolves.not.toThrow();
+    await act(async () => {
+      await ref.current.start();
+    });
 
     // Should not call error handler
     expect(mockOnError).not.toHaveBeenCalled();
@@ -232,11 +230,9 @@ describe('Error Handling Tests', () => {
     });
 
     // Should not throw error
-    await expect(async () => {
-      await act(async () => {
-        await ref.current.start();
-      });
-    }).resolves.not.toThrow();
+    await act(async () => {
+      await ref.current.start();
+    });
 
     // Should not call error handler
     expect(mockOnError).not.toHaveBeenCalled();
@@ -274,11 +270,9 @@ describe('Error Handling Tests', () => {
     });
 
     // Should not throw error
-    await expect(async () => {
-      await act(async () => {
-        await ref.current.start();
-      });
-    }).resolves.not.toThrow();
+    await act(async () => {
+      await ref.current.start();
+    });
 
     // Should not call error handler
     expect(mockOnError).not.toHaveBeenCalled();
@@ -302,11 +296,9 @@ describe('Error Handling Tests', () => {
     });
 
     // Should not throw error (empty objects are truthy)
-    await expect(async () => {
-      await act(async () => {
-        await ref.current.start();
-      });
-    }).resolves.not.toThrow();
+    await act(async () => {
+      await ref.current.start();
+    });
   });
 
   test('should handle falsy but not null/undefined configurations', async () => {

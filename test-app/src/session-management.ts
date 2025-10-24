@@ -253,11 +253,13 @@ export const cleanupOldSessions = (sessionManager: SessionManager): void => {
   const now = Date.now();
   const sessionsToDelete: string[] = [];
 
-  for (const [sessionId, session] of sessionManager.getAllSessions()) {
-    if (now - session.lastActivity > SESSION_CONFIG.MAX_SESSION_AGE) {
+  sessionManager.getAllSessions().forEach((session, sessionId) => {
+    const age = now - session.lastActivity;
+    
+    if (age > SESSION_CONFIG.MAX_SESSION_AGE) {
       sessionsToDelete.push(sessionId);
     }
-  }
+  });
 
   sessionsToDelete.forEach(sessionId => {
     sessionManager.deleteSession(sessionId);

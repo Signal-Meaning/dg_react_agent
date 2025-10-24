@@ -359,11 +359,13 @@ describe('Session Management Utilities', () => {
     test('should clean up old sessions', () => {
       // Create a session with old timestamp
       const oldSessionId = sessionManager.createSession('old-session');
-      const session = sessionManager.getAllSessions().get(oldSessionId);
-      session.lastActivity = Date.now() - (SESSION_CONFIG.MAX_SESSION_AGE + 1000);
       
       // Create a recent session
       const recentSessionId = sessionManager.createSession('recent-session');
+      
+      // Manually create an old session by directly modifying the Map
+      const oldSession = sessionManager.getAllSessions().get('old-session');
+      oldSession.lastActivity = Date.now() - (SESSION_CONFIG.MAX_SESSION_AGE + 10000);
       
       // Run cleanup
       cleanupOldSessions(sessionManager);
