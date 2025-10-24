@@ -30,11 +30,11 @@ The component currently implements:
 
 ## 📋 Proposed Changes
 
-### 1. Remove Redundant Files
+### 1. Move Session Management to Application Layer
 **File to Delete:**
-- `src/utils/conversation-context.ts` - Should never have been in component
+- `src/utils/conversation-context.ts` - Move session management utilities to test-app
 
-**Rationale:** Session management belongs in the application layer, not the component.
+**Rationale:** Session management belongs in the application layer, not the component. The test-app should handle conversation history and session IDs.
 
 ### 2. Remove Redundant Methods
 **Methods to Remove from `DeepgramVoiceInteractionHandle`:**
@@ -51,7 +51,7 @@ The component currently implements:
 - `sessionId: string | null`
 - All session-related state management logic
 
-**Rationale:** The component should not track conversation state - this is the application's responsibility.
+**Rationale:** The component should not track conversation state - this is the application's responsibility. The test-app will manage session state and provide context via `agentOptions` when needed.
 
 ### 4. Simplify to Core Methods
 **Keep Only Essential Methods:**
