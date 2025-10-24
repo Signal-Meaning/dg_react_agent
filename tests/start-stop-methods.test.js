@@ -206,7 +206,7 @@ afterAll(() => {
       // Verify start method exists
       expect(typeof ref.current.start).toBe('function');
       
-      // Call start method - should not throw
+      // Call start method - should succeed but do nothing (original behavior)
       await act(async () => {
         await expect(ref.current.start()).resolves.toBeUndefined();
       });
