@@ -82,7 +82,6 @@ describe('Module Export Validation', () => {
       const requiredMethods = [
         'start: () => Promise<void>',
         'stop: () => Promise<void>',
-        'connectTextOnly: () => Promise<void>',
         'injectUserMessage: (message: string) => void',
         'injectAgentMessage: (message: string) => void',
         'updateAgentInstructions: (payload: UpdateInstructionsPayload) => void',

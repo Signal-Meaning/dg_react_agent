@@ -77,7 +77,7 @@ describe('Error Handling Tests', () => {
     mockOnError = jest.fn();
   });
 
-  test('should throw error when no configuration provided', async () => {
+  test('should succeed but do nothing when no configuration provided', async () => {
     const ref = React.createRef();
 
     render(
@@ -93,18 +93,16 @@ describe('Error Handling Tests', () => {
       expect(ref.current).toBeDefined();
     });
 
-    // Attempt to start without any configuration - should throw directly
-    await expect(async () => {
-      await act(async () => {
-        await ref.current.start();
-      });
-    }).rejects.toThrow('DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()');
+    // Attempt to start without any configuration - should succeed but do nothing (original behavior)
+    await act(async () => {
+      await ref.current.start();
+    });
 
-    // Verify error handler was NOT called (validation errors are thrown directly)
+    // Verify error handler was NOT called (no error thrown)
     expect(mockOnError).not.toHaveBeenCalled();
   });
 
-  test('should throw error when both options are null', async () => {
+  test('should succeed but do nothing when both options are null', async () => {
     const ref = React.createRef();
 
     render(
@@ -121,17 +119,16 @@ describe('Error Handling Tests', () => {
       expect(ref.current).toBeDefined();
     });
 
-    await expect(async () => {
-      await act(async () => {
-        await ref.current.start();
-      });
-    }).rejects.toThrow('DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()');
+    // Should succeed but do nothing (original behavior)
+    await act(async () => {
+      await ref.current.start();
+    });
 
-    // Verify error handler was NOT called (validation errors are thrown directly)
+    // Verify error handler was NOT called (no error thrown)
     expect(mockOnError).not.toHaveBeenCalled();
   });
 
-  test('should throw error when both options are undefined', async () => {
+  test('should succeed but do nothing when both options are undefined', async () => {
     const ref = React.createRef();
 
     render(
@@ -148,11 +145,13 @@ describe('Error Handling Tests', () => {
       expect(ref.current).toBeDefined();
     });
 
-    await expect(async () => {
-      await act(async () => {
-        await ref.current.start();
-      });
-    }).rejects.toThrow('DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()');
+    // Should succeed but do nothing (original behavior)
+    await act(async () => {
+      await ref.current.start();
+    });
+
+    // Verify error handler was NOT called (no error thrown)
+    expect(mockOnError).not.toHaveBeenCalled();
   });
 
   test('should succeed when only agentOptions provided', async () => {
@@ -299,12 +298,10 @@ describe('Error Handling Tests', () => {
       expect(ref.current).toBeDefined();
     });
 
-    // Should throw error (falsy values)
-    await expect(async () => {
-      await act(async () => {
-        await ref.current.start();
-      });
-    }).rejects.toThrow('DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()');
+    // Should succeed but do nothing (original behavior with falsy values)
+    await act(async () => {
+      await ref.current.start();
+    });
   });
 
   test('should provide detailed error information', async () => {
@@ -326,14 +323,12 @@ describe('Error Handling Tests', () => {
       expect(ref.current).toBeDefined();
     });
 
-    // Attempt to start with mixed null/undefined options - should throw directly
-    await expect(async () => {
-      await act(async () => {
-        await ref.current.start();
-      });
-    }).rejects.toThrow('DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()');
+    // Attempt to start with mixed null/undefined options - should succeed but do nothing (original behavior)
+    await act(async () => {
+      await ref.current.start();
+    });
 
-    // Verify error handler was NOT called (validation errors are thrown directly)
+    // Verify error handler was NOT called (no error thrown)
     expect(mockOnError).not.toHaveBeenCalled();
   });
 });

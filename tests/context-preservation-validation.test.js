@@ -153,28 +153,32 @@ describe('Context Preservation Validation', () => {
     // SCENARIO: User is a third-grade teacher asking for classroom management tips
     // After disconnection, agent should remember the teaching context
     
-    // Build conversation history for teacher scenario
-    mockState.conversationHistory = [
-      {
-        role: 'user',
-        content: "I'm a third-grade teacher struggling with classroom management",
-        timestamp: Date.now() - 2000
-      },
-      {
-        role: 'assistant',
-        content: "Classroom management for third graders can be challenging! Let's focus on positive reinforcement and clear routines. What specific behaviors are you seeing?",
-        timestamp: Date.now() - 1000
-      },
-      {
-        role: 'user', 
-        content: "The kids won't stay in their seats during independent work time",
-        timestamp: Date.now() - 500
-      }
-    ];
+    // Build conversation history for teacher scenario using SessionManager
+    const sessionId = sessionManager.createSession('teacher-session');
+    
+    sessionManager.addMessage({
+      role: 'user',
+      content: "I'm a third-grade teacher struggling with classroom management",
+      timestamp: Date.now() - 2000
+    });
+    
+    sessionManager.addMessage({
+      role: 'assistant',
+      content: "Classroom management for third graders can be challenging! Let's focus on positive reinforcement and clear routines. What specific behaviors are you seeing?",
+      timestamp: Date.now() - 1000
+    });
+    
+    sessionManager.addMessage({
+      role: 'user', 
+      content: "The kids won't stay in their seats during independent work time",
+      timestamp: Date.now() - 500
+    });
 
+    // Get context from SessionManager
+    const context = sessionManager.getSessionContext(sessionId);
+    
     // Simulate disconnection
     mockAgentManager.isConnected.mockReturnValue(false);
-    mockState.hasSentSettings = false;
 
     // Track settings sent
     let settingsSent = null;
@@ -208,7 +212,7 @@ describe('Context Preservation Validation', () => {
           },
           // Don't include greeting for lazy reconnection - we're resuming a conversation, not starting new
           // greeting: options.greeting,
-          context: transformConversationHistory(history) // Correct Deepgram API format
+          context: transformConversationHistoryTest(history) // Correct Deepgram API format
         }
       };
       
@@ -224,7 +228,9 @@ describe('Context Preservation Validation', () => {
       instructions: 'You are a helpful voice assistant.',
     };
 
-    connectWithContext('test-session', mockState.conversationHistory, agentOptions);
+    // Use the context from SessionManager instead of mockState
+    const sessionHistory = sessionManager.getConversationHistory();
+    connectWithContext('test-session', sessionHistory, agentOptions);
 
     // Validate context preservation in correct Deepgram API format
     expect(settingsSent).not.toBeNull();
@@ -255,23 +261,23 @@ describe('Context Preservation Validation', () => {
     // This test demonstrates what happens WITHOUT context preservation
     // It should show that the agent loses all conversation memory
     
-    // Simulate conversation history exists
-    mockState.conversationHistory = [
-      {
-        role: 'user',
-        content: "I'm a scientist working on climate research",
-        timestamp: Date.now() - 1000
-      },
-      {
-        role: 'assistant',
-        content: "That's fascinating! Climate research is crucial. What specific area are you focusing on?",
-        timestamp: Date.now() - 500
-      }
-    ];
+    // Simulate conversation history exists using SessionManager
+    const sessionId = sessionManager.createSession('scientist-session');
+    
+    sessionManager.addMessage({
+      role: 'user',
+      content: "I'm a scientist working on climate research",
+      timestamp: Date.now() - 1000
+    });
+    
+    sessionManager.addMessage({
+      role: 'assistant',
+      content: "That's fascinating! Climate research is crucial. What specific area are you focusing on?",
+      timestamp: Date.now() - 500
+    });
 
     // Simulate disconnection
     mockAgentManager.isConnected.mockReturnValue(false);
-    mockState.hasSentSettings = false;
 
     // Track settings sent
     let settingsSent = null;
@@ -320,7 +326,9 @@ describe('Context Preservation Validation', () => {
       instructions: 'You are a helpful voice assistant.',
     };
 
-    connectWithContextWithoutContext('test-session', mockState.conversationHistory, agentOptions);
+    // Use empty history to simulate no context
+    const emptyHistory = [];
+    connectWithContextWithoutContext('test-session', emptyHistory, agentOptions);
 
     // BEFORE FIX: Context would be empty or missing
     // AFTER FIX: Context should contain scientist conversation
@@ -344,18 +352,19 @@ describe('Context Preservation Validation', () => {
   test('should demonstrate the fix working - Scientist Scenario', () => {
     // This test shows the FIXED behavior with context preservation
     
-    mockState.conversationHistory = [
-      {
-        role: 'user',
-        content: "I'm a scientist working on climate research",
-        timestamp: Date.now() - 1000
-      },
-      {
-        role: 'assistant',
-        content: "That's fascinating! Climate research is crucial. What specific area are you focusing on?",
-        timestamp: Date.now() - 500
-      }
-    ];
+    const sessionId = sessionManager.createSession('scientist-fixed-session');
+    
+    sessionManager.addMessage({
+      role: 'user',
+      content: "I'm a scientist working on climate research",
+      timestamp: Date.now() - 1000
+    });
+    
+    sessionManager.addMessage({
+      role: 'assistant',
+      content: "That's fascinating! Climate research is crucial. What specific area are you focusing on?",
+      timestamp: Date.now() - 500
+    });
 
     let settingsSent = null;
     mockAgentManager.sendJSON.mockImplementation((message) => {
@@ -403,7 +412,9 @@ describe('Context Preservation Validation', () => {
       instructions: 'You are a helpful voice assistant.',
     };
 
-    connectWithContextWithContext('test-session', mockState.conversationHistory, agentOptions);
+    // Use the context from SessionManager
+    const sessionHistory = sessionManager.getConversationHistory();
+    connectWithContextWithContext('test-session', sessionHistory, agentOptions);
 
     // Validate context is preserved
     expect(settingsSent).not.toBeNull();
