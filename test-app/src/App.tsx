@@ -38,8 +38,7 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSleeping, setIsSleeping] = useState(false);
-  const [connectionStates, setConnectionStates] = useState<Record<ServiceType, ConnectionState>>({
-    transcription: 'closed',
+  const [connectionStates, setConnectionStates] = useState<Partial<Record<ServiceType, ConnectionState>>>({
     agent: 'closed'
   });
   const [logs, setLogs] = useState<string[]>([]);
@@ -78,8 +77,6 @@ function App() {
   // }, []);
   
   // VAD state from transcription service (SpeechStarted/UtteranceEnd)
-  const [speechStarted, setSpeechStarted] = useState<string | null>(null);
-  // speechStopped removed - SpeechStopped is not a real Deepgram event
   
   // Text input state
   const [textInput, setTextInput] = useState('');
@@ -313,21 +310,6 @@ function App() {
     }
   }, [addLog, isDebugMode]);
 
-
-  const handleSpeechStarted = useCallback((event: { channel: number[]; timestamp: number }) => {
-    const timestamp = new Date().toISOString().substring(11, 19);
-    setSpeechStarted(`Transcription: ${timestamp}`);
-    
-    // Only set isUserSpeaking to true if UtteranceEnd hasn't been detected
-    if (!utteranceEndDetected.current) {
-      setIsUserSpeaking(true); // Update local state based on callback
-    }
-    
-    // Only log SpeechStarted events in debug mode to reduce console spam
-    if (isDebugMode) {
-      addLog(`🎤 [TRANSCRIPTION] Speech Started: ${JSON.stringify(event)}`);
-    }
-  }, [addLog, isDebugMode]);
 
   // handleSpeechStopped removed - SpeechStopped is not a real Deepgram event
 
@@ -628,7 +610,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         // VAD event props - clearly marked by source
         onUserStartedSpeaking={handleUserStartedSpeaking}
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
-        onSpeechStarted={handleSpeechStarted}
         // onSpeechStopped removed - not a real Deepgram event
         onUtteranceEnd={handleUtteranceEnd}
         debug={isDebugMode} // Enable debug via environment variable or URL parameter for testing
@@ -638,8 +619,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <h4>Component States:</h4>
         <p>App UI State (isSleeping): <strong>{(isSleeping || agentState === 'entering_sleep').toString()}</strong></p>
         <p>Core Component State (agentState via callback): <strong>{agentState}</strong></p>
-        <p>Transcription Connection: <strong data-testid="connection-status">{connectionStates.agent}</strong></p>
-        <p>Agent Connection: <strong>{connectionStates.agent}</strong></p>
+        <p>Agent Connection: <strong data-testid="connection-status">{connectionStates.agent}</strong></p>
         
         {/* API Mode Indicator */}
         {(() => {
@@ -691,10 +671,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <h5>From Agent WebSocket:</h5>
           <p>User Started Speaking: <strong data-testid="user-started-speaking">{userStartedSpeaking || 'Not detected'}</strong></p>
           <p>User Stopped Speaking: <strong data-testid="user-stopped-speaking">{userStoppedSpeaking || 'Not detected'}</strong></p>
-          
-          <h5>From Transcription WebSocket:</h5>
-          <p>Speech Started: <strong data-testid="speech-started">{speechStarted || 'Not detected'}</strong></p>
-          <p>Speech Stopped: <strong data-testid="speech-stopped">Not a real Deepgram event</strong></p>
           <p>Utterance End: <strong data-testid="utterance-end">{utteranceEnd || 'Not detected'}</strong></p>
         </div>
       </div>
