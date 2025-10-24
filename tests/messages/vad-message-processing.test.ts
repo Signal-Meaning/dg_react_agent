@@ -272,11 +272,8 @@ describe('VAD Message Processing', () => {
         type: 'USER_SPEAKING_STATE_CHANGE', 
         isSpeaking: true 
       });
-      expect(mockOnVADEvent).toHaveBeenCalledWith({
-        speechDetected: true,
-        confidence: 0.95,
-        timestamp: 1234567890
-      });
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
     });
 
     it('should handle VADEvent with speech not detected', () => {
@@ -307,11 +304,8 @@ describe('VAD Message Processing', () => {
         type: 'USER_SPEAKING_STATE_CHANGE', 
         isSpeaking: false 
       });
-      expect(mockOnVADEvent).toHaveBeenCalledWith({
-        speechDetected: false,
-        confidence: 0.1,
-        timestamp: undefined
-      });
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
     });
 
     it('should handle VADEvent without optional fields', () => {
@@ -341,11 +335,8 @@ describe('VAD Message Processing', () => {
         type: 'USER_SPEAKING_STATE_CHANGE', 
         isSpeaking: true 
       });
-      expect(mockOnVADEvent).toHaveBeenCalledWith({
-        speechDetected: true,
-        confidence: undefined,
-        timestamp: undefined
-      });
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
     });
   });
 
@@ -624,7 +615,8 @@ describe('VAD Message Processing', () => {
 
       expect(processingTime).toBeLessThan(10); // Should process 5 messages in <10ms
       expect(mockDispatch).toHaveBeenCalledTimes(5);
-      expect(mockOnVADEvent).toHaveBeenCalledTimes(5);
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
     });
 
     it('should handle mixed message types efficiently', () => {
@@ -684,7 +676,8 @@ describe('VAD Message Processing', () => {
       expect(mockDispatch).toHaveBeenCalledTimes(5);
       expect(mockOnUserStoppedSpeaking).toHaveBeenCalledTimes(2);
       expect(mockOnUtteranceEnd).toHaveBeenCalledTimes(1);
-      expect(mockOnVADEvent).toHaveBeenCalledTimes(2);
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
     });
   });
 
