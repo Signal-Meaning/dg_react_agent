@@ -1,43 +1,32 @@
 # Technical Setup Guide
 
+**Audience**: Frontend developers integrating the `@signal-meaning/deepgram-voice-interaction-react` component
+
 ## Overview
 
-This document covers the technical requirements and build configuration needed to integrate the `@signal-meaning/deepgram-voice-interaction-react` component. For usage patterns and examples, see [INTEGRATION-GUIDE.md](./INTEGRATION-GUIDE.md).
+This document covers the technical requirements and build configuration needed to integrate the `@signal-meaning/deepgram-voice-interaction-react` component into your React application.
 
-## Plugin Requirements
+> **For usage patterns and examples**: See [INTEGRATION-GUIDE.md](./releases/v0.5.0/INTEGRATION-GUIDE.md)  
+> **For complete API reference**: See [API-REFERENCE.md](./releases/v0.5.0/API-REFERENCE.md)
 
-### 1. React Externalization (CRITICAL)
-- ✅ React and React-DOM MUST be externalized (not bundled)
-- ✅ Plugin uses peer dependencies for React
-- ✅ Plugin does NOT include React in dependencies
-- ✅ Rollup config externalizes 'react' and 'react-dom'
+## Prerequisites
 
-### 2. Build Configuration
-- ✅ Provides both ESM and CJS builds
-- ✅ Proper external configuration in rollup
-- ✅ Validates before and after build
+- **React 16.8.0+** (hooks support required)
+- **Node.js 16+** (for build tools)
+- **Deepgram API Key** (get from [Deepgram Console](https://console.deepgram.com/))
 
-### 3. Package.json Requirements
-- ✅ Has peerDependencies for react and react-dom
-- ✅ Does NOT have react or react-dom in dependencies
-- ✅ Provides both main and module fields
+## Installation
 
-## Integration Validation
+### 1. Install the Package
 
-The plugin includes a built-in validator that ensures:
-- React is properly externalized
-- No React bundling in the plugin
-- Proper peer dependencies configuration
-- Compatible with single React instance
-
-## Developer Integration Guide
-
-### Step 1: Install the Package
 ```bash
 npm install @signal-meaning/deepgram-voice-interaction-react
 ```
 
-### Step 2: Ensure React Version Compatibility
+### 2. Verify React Version
+
+Ensure your project uses React 16.8.0 or higher:
+
 ```json
 {
   "dependencies": {
@@ -47,7 +36,12 @@ npm install @signal-meaning/deepgram-voice-interaction-react
 }
 ```
 
-### Step 3: Configure Webpack Aliases (CRITICAL)
+## Build Configuration
+
+### Webpack Configuration (CRITICAL)
+
+The component uses peer dependencies for React. You must configure webpack aliases to ensure a single React instance:
+
 ```javascript
 // webpack.config.js or craco.config.js
 module.exports = {
@@ -60,134 +54,379 @@ module.exports = {
 };
 ```
 
-### Step 4: Use the Component
-```tsx
-import React from 'react';
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+### Vite Configuration
 
+```javascript
+// vite.config.js
+export default {
+  resolve: {
+    alias: {
+      'react': 'react',
+      'react-dom': 'react-dom'
+    }
+  }
+};
+```
+
+### Create React App (CRA)
+
+If using Create React App, you'll need to eject or use CRACO:
+
+```bash
+npm install @craco/craco --save-dev
+```
+
+```javascript
+// craco.config.js
+module.exports = {
+  webpack: {
+    alias: {
+      'react': 'react',
+      'react-dom': 'react-dom'
+    }
+  }
+};
+```
+
+## Environment Variables
+
+### Required Environment Variables
+
+```bash
+# .env
+VITE_DEEPGRAM_API_KEY=your_deepgram_api_key_here
+VITE_DEEPGRAM_PROJECT_ID=your_project_id_here
+```
+
+### Optional Environment Variables
+
+```bash
+# .env
+VITE_TRANSCRIPTION_MODEL=nova-3
+VITE_AGENT_VOICE=aura-asteria-en
+VITE_AGENT_LANGUAGE=en
+```
+
+## Basic Integration
+
+### 1. Import the Component
+
+```tsx
+import React, { useRef } from 'react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+```
+
+### 2. Basic Usage
+
+```tsx
 function App() {
+  const voiceRef = useRef(null);
+
   return (
     <DeepgramVoiceInteraction
-      apiKey="your-api-key"
-      onTranscriptUpdate={(result) => console.log(result)}
-      onAgentUtterance={(utterance) => console.log(utterance)}
+      ref={voiceRef}
+      apiKey={process.env.VITE_DEEPGRAM_API_KEY}
+      onReady={() => console.log('Component ready')}
+      onError={(error) => console.error('Error:', error)}
     />
   );
 }
 ```
 
-> **Note**: For complete usage examples and patterns, see [INTEGRATION-GUIDE.md](./INTEGRATION-GUIDE.md)
+## Common Issues and Solutions
 
-## Error Prevention
+### 1. "Invalid hook call" Error
 
-### Common Issues and Solutions
+**Problem**: Multiple React instances in your application
 
-#### 1. "Invalid hook call" Error
-**Cause**: Multiple React instances
-**Solution**: Use webpack aliases to ensure single React instance
+**Solution**: 
+- Check webpack aliases are configured correctly
+- Ensure only one React version is installed: `npm ls react`
+- Restart your development server after configuration changes
 
-#### 2. "Cannot find module" Error
-**Cause**: Plugin not properly externalized
-**Solution**: Run `npm run validate` in the plugin directory
+### 2. "Cannot find module" Error
 
-#### 3. React Hooks Errors
-**Cause**: Plugin bundling React instead of externalizing
-**Solution**: Check rollup configuration and rebuild
+**Problem**: Package not properly installed or externalized
 
-## Validation Commands
+**Solution**:
+- Reinstall the package: `npm install @signal-meaning/deepgram-voice-interaction-react`
+- Clear node_modules and reinstall: `rm -rf node_modules && npm install`
 
-### Validate Plugin Before Integration
-```bash
-cd node_modules/deepgram-voice-interaction-react
-npm run validate
-```
+### 3. Audio Not Playing
 
-### Validate After Integration
-```bash
-# Check for React hooks errors in browser console
-# Monitor for "Invalid hook call" errors
-```
+**Problem**: Browser security policies blocking audio
 
-## Testing Integration
+**Solution**:
+- Ensure user interaction before starting audio
+- Check browser console for AudioContext suspension errors
+- See [AUDIO-BUFFER-MANAGEMENT.md](./releases/v0.5.0/AUDIO-BUFFER-MANAGEMENT.md) for detailed guidance
 
-### Unit Tests
+### 4. WebSocket Connection Issues
+
+**Problem**: Network or API key issues
+
+**Solution**:
+- Verify API key is correct and has proper permissions
+- Check network connectivity
+- Monitor browser console for connection errors
+
+## Development Tips
+
+### 1. Enable Debug Mode
+
 ```tsx
-import { render } from '@testing-library/react';
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
-
-test('should render without React hooks errors', () => {
-  render(<DeepgramVoiceInteraction apiKey="test" />);
-  // No "Invalid hook call" errors should occur
-});
+<DeepgramVoiceInteraction
+  debug={true} // Enables detailed logging
+  // ... other props
+/>
 ```
 
-### E2E Tests
-```javascript
-// playwright test
-test('should work without React hooks errors', async ({ page }) => {
-  await page.goto('/');
-  // Check for error messages in console
-  const errors = await page.evaluate(() => {
-    return window.console.errors.filter(e => 
-      e.includes('Invalid hook call') || 
-      e.includes('dispatcher.useMemo')
-    );
-  });
-  expect(errors).toHaveLength(0);
-});
+### 2. Monitor Console Logs
+
+Watch for these common issues:
+- "Invalid hook call" errors
+- AudioContext suspension warnings
+- WebSocket connection errors
+- API authentication errors
+
+### 3. Test in Different Browsers
+
+- **Chrome**: Full feature support
+- **Firefox**: Good support, may have audio timing differences
+- **Safari**: Requires user gesture for audio activation
+- **Edge**: Good support
+
+## Production Considerations
+
+These are **best practices for component integrators** to ensure reliable, performant voice interactions in production applications.
+
+### 1. Environment Variables
+
+Ensure production environment has:
+- Valid Deepgram API key
+- Proper CORS configuration
+- HTTPS for audio access
+
+### 2. Error Handling
+
+**Why**: Voice interactions can fail due to network issues, browser restrictions, or API errors. Proper error handling prevents application crashes and provides user feedback.
+
+Implement proper error boundaries:
+
+```tsx
+class VoiceErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Voice interaction error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div>
+          <h1>Voice interaction failed</h1>
+          <p>Please refresh the page or try again later.</p>
+          <button onClick={() => window.location.reload()}>
+            Refresh Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Usage
+<VoiceErrorBoundary>
+  <DeepgramVoiceInteraction {...props} />
+</VoiceErrorBoundary>
 ```
 
-## Troubleshooting
+### 3. Performance Optimization
 
-### 1. Package Validation Fails
-```bash
-# Check rollup configuration
-cat rollup.config.js | grep -A 5 "external"
+**Why**: Voice interactions involve real-time audio processing, WebSocket connections, and state management. Poor performance can cause audio glitches, connection timeouts, and poor user experience.
 
-# Verify peer dependencies
-cat package.json | grep -A 5 "peerDependencies"
+#### Critical Performance Requirements
 
-# Rebuild package
-npm run build
+**1. Memoize Component Options (CRITICAL)**
+```tsx
+// ❌ WRONG - Creates new objects on every render
+function App() {
+  return (
+    <DeepgramVoiceInteraction
+      agentOptions={{
+        language: 'en',
+        listenModel: 'nova-3',
+        thinkProviderType: 'open_ai',
+        thinkModel: 'gpt-4o-mini',
+        voice: 'aura-asteria-en',
+        instructions: 'You are a helpful assistant.'
+      }}
+      transcriptionOptions={{
+        model: 'nova-3',
+        language: 'en-US',
+        smart_format: true,
+        interim_results: true,
+        vad_events: true,
+        utterance_end_ms: 1000
+      }}
+    />
+  );
+}
+
+// ✅ CORRECT - Memoized options prevent re-initialization
+function App() {
+  const agentOptions = useMemo(() => ({
+    language: 'en',
+    listenModel: 'nova-3',
+    thinkProviderType: 'open_ai',
+    thinkModel: 'gpt-4o-mini',
+    voice: 'aura-asteria-en',
+    instructions: 'You are a helpful assistant.'
+  }), []); // Empty dependency array - options never change
+
+  const transcriptionOptions = useMemo(() => ({
+    model: 'nova-3',
+    language: 'en-US',
+    smart_format: true,
+    interim_results: true,
+    vad_events: true,
+    utterance_end_ms: 1000
+  }), []); // Empty dependency array - options never change
+
+  return (
+    <DeepgramVoiceInteraction
+      agentOptions={agentOptions}
+      transcriptionOptions={transcriptionOptions}
+    />
+  );
+}
 ```
 
-### 2. Integration Still Has Errors
-```bash
-# Check webpack aliases
-cat webpack.config.js | grep -A 5 "alias"
+**Why This Matters**: The component re-initializes WebSocket connections and audio contexts when options change. Unmemoized options cause constant re-initialization, leading to:
+- Connection instability
+- Audio glitches
+- Memory leaks
+- Poor user experience
 
-# Verify single React instance
-npm ls react
+**2. Implement Proper Cleanup**
+```tsx
+function VoiceApp() {
+  const voiceRef = useRef(null);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Component handles internal cleanup, but we can log it
+      console.log('Voice component unmounting');
+    };
+  }, []);
+
+  // Handle page visibility changes
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Pause voice interaction when page is hidden
+        voiceRef.current?.stop();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  return <DeepgramVoiceInteraction ref={voiceRef} {...props} />;
+}
 ```
 
-### 3. Runtime Errors
-- Check browser console for "Invalid hook call" errors
-- Monitor for React hooks errors during development
-- Verify webpack aliases are working
+**Why This Matters**: Proper cleanup prevents:
+- Memory leaks from audio buffers
+- Orphaned WebSocket connections
+- Background audio processing
+- Battery drain on mobile devices
 
-## Best Practices
+**3. Monitor Memory Usage**
+```tsx
+// Development-only memory monitoring
+useEffect(() => {
+  if (process.env.NODE_ENV === 'development') {
+    const interval = setInterval(() => {
+      if (performance.memory) {
+        const memory = {
+          used: Math.round(performance.memory.usedJSHeapSize / 1024 / 1024),
+          total: Math.round(performance.memory.totalJSHeapSize / 1024 / 1024)
+        };
+        
+        if (memory.used > 100) { // Alert if using more than 100MB
+          console.warn('High memory usage detected:', memory);
+        }
+      }
+    }, 10000); // Check every 10 seconds
 
-1. **Always validate the package** before integration
-2. **Use webpack aliases** to ensure single React instance
-3. **Monitor for React hooks errors** during development
-4. **Test integration** with both unit and E2E tests
-5. **Check browser console** for React hooks errors in production
+    return () => clearInterval(interval);
+  }
+}, []);
+```
+
+**Why This Matters**: Voice interactions can accumulate memory from:
+- Audio buffers
+- WebSocket message queues
+- Conversation history
+- Event listeners
+
+**4. Optimize Re-renders**
+```tsx
+// Memoize event handlers to prevent unnecessary re-renders
+const handleTranscriptUpdate = useCallback((transcript) => {
+  setTranscript(transcript);
+}, []);
+
+const handleAgentUtterance = useCallback((utterance) => {
+  setAgentResponse(utterance.text);
+}, []);
+
+const handleError = useCallback((error) => {
+  console.error('Voice error:', error);
+  setError(error.message);
+}, []);
+
+return (
+  <DeepgramVoiceInteraction
+    onTranscriptUpdate={handleTranscriptUpdate}
+    onAgentUtterance={handleAgentUtterance}
+    onError={handleError}
+    // ... other props
+  />
+);
+```
+
+**Why This Matters**: Unmemoized event handlers cause the component to re-render on every parent render, potentially causing:
+- Audio interruptions
+- Connection instability
+- Poor performance
 
 ## Support
 
 If you encounter issues:
-1. Run `npm run validate` in the package directory
-2. Check webpack aliases configuration
-3. Verify React version compatibility
-4. Check browser console for specific error messages
-5. See [INTEGRATION-GUIDE.md](./INTEGRATION-GUIDE.md) for usage patterns and examples
-6. See [API-REFERENCE.md](./API-REFERENCE.md) for complete component API documentation
 
-## Changelog
+1. **Check the console** for specific error messages
+2. **Verify your configuration** matches the examples above
+3. **Test with debug mode** enabled
+4. **See the integration guide** for usage patterns: [INTEGRATION-GUIDE.md](./releases/v0.5.0/INTEGRATION-GUIDE.md)
+5. **Check the API reference** for complete documentation: [API-REFERENCE.md](./releases/v0.5.0/API-REFERENCE.md)
 
-### v0.4.0+
-- Updated package name to @signal-meaning/deepgram-voice-interaction-react
-- Removed outdated HealthMonitor references
-- Focused on technical setup and build configuration
-- Added cross-references to comprehensive integration guide
+---
 
+**Last Updated**: October 2025  
+**Component Version**: 0.5.0+  
+**React Version**: 16.8.0+
