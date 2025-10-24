@@ -304,7 +304,6 @@ function DeepgramVoiceInteraction(
   const { handleMeaningfulActivity } = useIdleTimeoutManager(
     state,
     agentManagerRef,
-    transcriptionManagerRef,
     props.debug
   );
   

@@ -12,7 +12,6 @@ import { IdleTimeoutService, IdleTimeoutEvent } from '../utils/IdleTimeoutServic
 export function useIdleTimeoutManager(
   state: VoiceInteractionState,
   agentManagerRef: React.RefObject<WebSocketManager | null>,
-  transcriptionManagerRef: React.RefObject<WebSocketManager | null>,
   debug: boolean = false
 ) {
   const serviceRef = useRef<IdleTimeoutService | null>(null);
@@ -27,15 +26,14 @@ export function useIdleTimeoutManager(
 
     // Set up timeout callback
     serviceRef.current.onTimeout(() => {
-      console.log('🎯 [IDLE_TIMEOUT] Idle timeout reached - closing connections');
+      console.log('🎯 [IDLE_TIMEOUT] Idle timeout reached - closing agent connection');
       agentManagerRef.current?.close();
-      transcriptionManagerRef.current?.close();
     });
 
     return () => {
       serviceRef.current?.destroy();
     };
-  }, [agentManagerRef, transcriptionManagerRef, debug]);
+  }, [agentManagerRef, debug]);
 
   // Handle state changes
   useEffect(() => {
