@@ -145,7 +145,6 @@ function DeepgramVoiceInteraction(
     onUserStartedSpeaking,
     onUserStoppedSpeaking,
     onUtteranceEnd,
-    onKeepalive,
     onPlaybackStateChange,
     onError,
     // Auto-connect dual mode props
@@ -695,9 +694,6 @@ function DeepgramVoiceInteraction(
         } else if (event.state === 'connected' && autoConnect) {
           log('Connection established but auto-connect will handle settings sending, skipping');
         }
-      } else if (event.type === 'keepalive') {
-        // Keepalive events are no longer logged to reduce noise
-        onKeepalive?.(event.data.service);
       } else if (event.type === 'message') {
         handleAgentMessage(event.data);
       } else if (event.type === 'binary') {
