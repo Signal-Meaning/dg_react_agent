@@ -149,8 +149,6 @@ function DeepgramVoiceInteraction(
     onError,
     // Auto-connect dual mode props
     autoConnect,
-    microphoneEnabled,
-    onMicToggle,
     onConnectionReady,
     onAgentSpeaking,
     onAgentSilent,
@@ -667,7 +665,6 @@ function DeepgramVoiceInteraction(
               try {
                 await audioManagerRef.current?.stopRecording();
                 dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: false });
-                onMicToggle?.(false);
                 if (props.debug) {
                   console.log('🔧 [Connection] Microphone disabled due to connection close');
                 }
@@ -1229,149 +1226,6 @@ function DeepgramVoiceInteraction(
     console.log('📤 [Protocol] Settings sent state updated to true');
   };
 
-  // Microphone control function
-  const toggleMic = async (enable: boolean) => {
-    console.log('🎤 [toggleMic] called with:', enable);
-    console.log('🎤 [toggleMic] hasSentSettings:', state.hasSentSettings);
-    console.log('🎤 [toggleMic] hasSentSettingsRef:', hasSentSettingsRef.current);
-    console.log('🎤 [toggleMic] audioManagerRef.current:', !!audioManagerRef.current);
-    
-    if (enable) {
-      // Check if agent is connected first
-      if (!agentManagerRef.current || agentManagerRef.current.getState() !== 'connected') {
-        console.log('❌ Cannot enable microphone - agent not connected, state:', agentManagerRef.current?.getState());
-        return;
-      }
-      
-      // Check if settings have been applied (not just sent)
-      if (!hasSentSettingsRef.current && !(window as any).globalSettingsSent && !state.hasSentSettings) {
-        console.log('❌ Cannot enable microphone before settings are applied');
-        console.log('❌ Settings must be sent and SettingsApplied received before microphone can be enabled');
-        
-        // Try to send settings if they haven't been sent yet
-        if (agentManagerRef.current && agentOptions) {
-          console.log('🔧 Attempting to send settings from toggleMic');
-          sendAgentSettings();
-          
-          // Wait for SettingsApplied message (up to 5 seconds)
-          console.log('⏳ Waiting for SettingsApplied confirmation...');
-          let attempts = 0;
-          const maxAttempts = 50; // 5 seconds with 100ms intervals
-          
-          while (attempts < maxAttempts && !hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-          }
-          
-          if (!hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
-            console.log('❌ SettingsApplied not received within timeout');
-            return;
-          }
-        } else {
-          console.log('❌ Cannot send settings: agentManagerRef or agentOptions missing');
-          return;
-        }
-      } else if (hasSentSettingsRef.current || (window as any).globalSettingsSent || state.hasSentSettings) {
-        console.log('✅ Settings already applied, proceeding with microphone enable');
-      } else {
-        console.log('❌ Cannot enable microphone: settings not applied');
-        return;
-      }
-      
-      // Ensure component is started (creates audio manager)
-      if (!audioManagerRef.current) {
-        console.log('🔧 Audio manager not created, starting component...');
-        try {
-          await start();
-          console.log('✅ Component started, audio manager created');
-        } catch (error) {
-          console.log('❌ Failed to start component:', error);
-          return;
-        }
-      }
-      
-      if (audioManagerRef.current) {
-        console.log('✅ Enabling microphone...');
-        console.log('Calling startRecording on audioManagerRef.current');
-        
-        // Set global flag to prevent HMR disruption
-        (window as any).audioCaptureInProgress = true;
-        
-        try {
-          await audioManagerRef.current.startRecording();
-          console.log('✅ startRecording completed successfully');
-          
-          // Connect transcription service for VAD events when microphone starts
-          if (transcriptionManagerRef.current && transcriptionManagerRef.current.getState() !== 'connected') {
-            if (props.debug) {
-              console.log('🎤 [VAD] Connecting transcription service for VAD events');
-            }
-            try {
-              await transcriptionManagerRef.current.connect();
-              if (props.debug) {
-                console.log('🎤 [VAD] Transcription service connected for VAD events');
-              }
-            } catch (error) {
-              if (props.debug) {
-                console.log('🎤 [VAD] Failed to connect transcription service:', error);
-              }
-            }
-          }
-          
-          // Wait for settings to be processed by Deepgram before allowing audio data
-          if (settingsSentTimeRef.current) {
-            const timeSinceSettings = Date.now() - settingsSentTimeRef.current;
-            if (timeSinceSettings < 500) {
-              const waitTime = 500 - timeSinceSettings;
-              console.log(`⏳ Waiting ${waitTime}ms for settings to be processed by Deepgram...`);
-              await new Promise(resolve => setTimeout(resolve, waitTime));
-            }
-          }
-          
-          console.log('🎤 [toggleMic] Dispatching MIC_ENABLED_CHANGE with enabled: true');
-          dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: true });
-          console.log('🎤 [toggleMic] Calling onMicToggle with true');
-          onMicToggle?.(true);
-          log('✅ Microphone enabled');
-          // ISSUE #149 FIX: IdleTimeoutService handles timeout resets centrally
-          // No need to manually reset individual WebSocket timeouts
-        } catch (error) {
-          console.log('❌ startRecording failed:', error);
-          (window as any).audioCaptureInProgress = false;
-          throw error;
-        }
-      } else {
-        log('❌ Cannot enable microphone: audioManagerRef.current is null');
-      }
-    } else {
-      // Interrupt any ongoing TTS playback when stopping recording
-      if (agentManagerRef.current) {
-        log('Interrupting agent when stopping microphone');
-        interruptAgent();
-      }
-        
-      if (audioManagerRef.current) {
-        log('Disabling microphone...');
-        audioManagerRef.current.stopRecording();
-        dispatch({ type: 'MIC_ENABLED_CHANGE', enabled: false });
-        onMicToggle?.(false);
-        log('Microphone disabled');
-        
-        // Reset global flag
-        (window as any).audioCaptureInProgress = false;
-        
-        // ISSUE #149 FIX: IdleTimeoutService handles timeout resets centrally
-        // No need to manually reset individual WebSocket timeouts
-      }
-    }
-  };
-
-  // Handle microphoneEnabled prop changes
-  useEffect(() => {
-    if (microphoneEnabled !== undefined && microphoneEnabled !== state.micEnabledInternal) {
-      toggleMic(microphoneEnabled);
-    }
-  }, [microphoneEnabled]);
 
   // Type guard for agent messages
   const isAgentMessage = (data: unknown): data is { type: string; [key: string]: unknown } => {
@@ -2350,7 +2204,7 @@ function DeepgramVoiceInteraction(
         }
       }
       
-      await toggleMic(true);
+      await startAudioCapture();
       
       lazyLog('Successfully resumed conversation with audio');
     } catch (error) {
@@ -2696,8 +2550,7 @@ function DeepgramVoiceInteraction(
     injectAgentMessage,
     injectUserMessage,
     
-    // Microphone control
-    toggleMicrophone: toggleMic,
+    // Audio capture
     startAudioCapture,
     
     // Reconnection methods
