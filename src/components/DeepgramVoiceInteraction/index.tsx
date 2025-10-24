@@ -304,7 +304,6 @@ function DeepgramVoiceInteraction(
   const { handleMeaningfulActivity } = useIdleTimeoutManager(
     state,
     agentManagerRef,
-    transcriptionManagerRef,
     props.debug
   );
   
@@ -708,90 +707,22 @@ function DeepgramVoiceInteraction(
       log('Agent service not configured, skipping setup');
     }
 
-    // --- AUDIO SETUP (CONDITIONAL) ---
-    // We need audio for recording (transcription) or playback (agent)
-    // For AGENT-ONLY mode, we can skip AudioManager initialization if we only need text interactions
+    // --- AUDIO SETUP (LAZY INITIALIZATION) ---
+    // For Agent-Only mode, we use lazy audio initialization to prevent premature browser security prompts
+    // AudioManager will only be created when user explicitly requests microphone access
     const needsAudioManager = isTranscriptionConfigured || (isAgentConfigured && agentOptions?.voice);
     
     if (needsAudioManager) {
-      // Create audio manager
-      audioManagerRef.current = new AudioManager({
-        debug: props.debug,
-      });
-
-      // Set initial TTS mute state
-      audioManagerRef.current.setTtsMuted(ttsMuted);
-      dispatch({ type: 'TTS_MUTE_CHANGE', muted: ttsMuted });
-      log(`🔇 Initial TTS mute state set to: ${ttsMuted}`);
-
-    // Set up event listeners for audio manager
-      audioUnsubscribe = audioManagerRef.current.addEventListener((event: AudioEvent) => {
-      if (event.type === 'ready') {
-        log('Audio manager ready');
-      } else if (event.type === 'recording') {
-        log('Recording state:', event.isRecording);
-        dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: event.isRecording });
-      } else if (event.type === 'playing') {
-        log('Playing state:', event.isPlaying);
-        dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: event.isPlaying });
-        
-        // Transition agent to idle when audio playback stops
-        // This ensures the agent state reflects actual audio playback completion
-        if (!event.isPlaying && stateRef.current.agentState === 'speaking') {
-          sleepLog('Audio playback finished - transitioning agent to idle');
-          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
-        }
-      } else if (event.type === 'error') {
-        handleError(event.error);
-      } else if (event.type === 'data') {
-        sendAudioData(event.data);
-      }
-    });
-
+      // Don't create AudioManager during initialization - use lazy initialization
+      // AudioManager will be created when startAudioCapture() is called
+      log('Audio manager will be created lazily when audio access is requested');
+    } else {
+      log('AudioManager not needed for this configuration, skipping setup');
+    }
+    
     // Component is ready immediately when configured - AudioManager is not a prerequisite
     // The component can accept text interactions and manual connections without audio
     dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
-    
-    // Initialize AudioManager for playback readiness (Issue #43 fix)
-    // This ensures AudioContext is ready when greeting audio arrives
-    audioManagerRef.current.initialize()
-      .then(() => {
-        log('AudioManager initialized successfully for playback readiness');
-        
-        // CRITICAL FIX for Issue #43: Ensure AudioContext is ready for playback
-        // AudioContext may be suspended until user interaction, but we need it ready for greetings
-        if (audioManagerRef.current && audioManagerRef.current.getAudioContext) {
-          const audioContext = audioManagerRef.current.getAudioContext();
-          
-          // Expose AudioContext to window for testing (Issue #43 investigation)
-          if (typeof window !== 'undefined') {
-            (window as any).audioContext = audioContext;
-            log('AudioContext exposed to window for testing');
-          }
-          
-          if (audioContext && audioContext.state === 'suspended') {
-            log('AudioContext is suspended - attempting to resume for greeting playback');
-            audioContext.resume().then(() => {
-              log('AudioContext resumed successfully - ready for greeting audio playback');
-            }).catch((error: Error) => {
-              log('Failed to resume AudioContext:', error);
-              log('Note: AudioContext may require user interaction to resume');
-            });
-          } else {
-            log(`AudioContext is already ${audioContext?.state} - ready for greeting audio playback`);
-          }
-        }
-      })
-      .catch((error: Error) => {
-        log('AudioManager failed to initialize:', error);
-        // Don't change isReady here - component can still work without audio
-        // Audio features will be disabled, but text interactions still work
-      });
-    } else {
-      log('AudioManager not needed for this configuration, skipping setup');
-      // For text-only agent interactions, we can be ready immediately
-      dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
-    }
 
     // Auto-connect dual mode logic
     console.log('Auto-connect check:', { autoConnect, isAgentConfigured, isTranscriptionConfigured, agentManagerRef: !!agentManagerRef.current, transcriptionManagerRef: !!transcriptionManagerRef.current });
@@ -1755,7 +1686,7 @@ function DeepgramVoiceInteraction(
   };
 
   // Handle agent audio - only relevant if agent is configured
-  const handleAgentAudio = (data: ArrayBuffer) => {
+  const handleAgentAudio = async (data: ArrayBuffer) => {
     // Don't re-enable idle timeout resets here
     // After UtteranceEnd, only new connection should re-enable
     
@@ -1773,25 +1704,38 @@ function DeepgramVoiceInteraction(
       return;
     }
     
+    // Create AudioManager lazily if it doesn't exist (for TTS-only playback)
+    if (!audioManagerRef.current) {
+      log('Creating AudioManager lazily for TTS playback');
+      try {
+        await createAudioManager();
+        log('AudioManager initialized for TTS playback');
+      } catch (error) {
+        log('Failed to initialize AudioManager for TTS:', error);
+        handleError({
+          service: 'transcription',
+          code: 'audio_init_failed',
+          message: `Failed to initialize AudioManager for TTS: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+        return;
+      }
+    }
+    
     // Check TTS mute state before processing audio
     if (audioManagerRef.current?.isTtsMuted) {
       log('🔇 TTS is muted - discarding audio buffer to prevent playback');
       return;
     }
     
-    if (audioManagerRef.current) {
-      log('Passing buffer to AudioManager.queueAudio()');
-      if (props.debug) lazyLog('🎵 [AUDIO] Audio context state:', audioManagerRef.current.getAudioContext?.()?.state);
-      audioManagerRef.current.queueAudio(data)
-        .then(() => {
-          log('Successfully queued audio buffer for playback');
-        })
-        .catch((error: Error) => {
-          log('Error queueing audio:', error);
-        });
-    } else {
-      log('Cannot queue audio: audioManagerRef.current is null');
-    }
+    log('Passing buffer to AudioManager.queueAudio()');
+    if (props.debug) lazyLog('🎵 [AUDIO] Audio context state:', audioManagerRef.current?.getAudioContext?.()?.state);
+    audioManagerRef.current!.queueAudio(data)
+      .then(() => {
+        log('Successfully queued audio buffer for playback');
+      })
+      .catch((error: Error) => {
+        log('Error queueing audio:', error);
+      });
   };
 
   // Send audio data to WebSockets - conditionally route based on configuration
@@ -2669,6 +2613,73 @@ function DeepgramVoiceInteraction(
     }
   };
 
+  // Helper function to create and initialize AudioManager
+  const createAudioManager = async (): Promise<void> => {
+    if (audioManagerRef.current) {
+      return; // Already exists
+    }
+
+    log('Creating AudioManager');
+    audioManagerRef.current = new AudioManager({
+      debug: props.debug,
+    });
+
+    // Set initial TTS mute state
+    audioManagerRef.current.setTtsMuted(ttsMuted);
+    dispatch({ type: 'TTS_MUTE_CHANGE', muted: ttsMuted });
+    log(`🔇 Initial TTS mute state set to: ${ttsMuted}`);
+
+    // Set up event listeners for audio manager
+    audioManagerRef.current.addEventListener((event: AudioEvent) => {
+      if (event.type === 'ready') {
+        log('Audio manager ready');
+      } else if (event.type === 'recording') {
+        log('Recording state:', event.isRecording);
+        dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: event.isRecording });
+      } else if (event.type === 'playing') {
+        log('Playing state:', event.isPlaying);
+        dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: event.isPlaying });
+        
+        // Transition agent to idle when audio playback stops
+        if (!event.isPlaying && stateRef.current.agentState === 'speaking') {
+          sleepLog('Audio playback finished - transitioning agent to idle');
+          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+        }
+      } else if (event.type === 'error') {
+        handleError(event.error);
+      } else if (event.type === 'data') {
+        sendAudioData(event.data);
+      }
+    });
+
+    // Initialize AudioManager
+    await audioManagerRef.current.initialize();
+    log('AudioManager initialized');
+  };
+
+  // Start audio capture with lazy initialization
+  const startAudioCapture = async (): Promise<void> => {
+    try {
+      log('startAudioCapture called - initializing audio manager lazily');
+      
+      // Create AudioManager if it doesn't exist
+      await createAudioManager();
+
+      // Start recording
+      await audioManagerRef.current!.startRecording();
+      
+      log('Audio capture started successfully');
+    } catch (error) {
+      log('Failed to start audio capture:', error);
+      handleError({
+        service: 'transcription',
+        code: 'audio_capture_failed',
+        message: `Failed to start audio capture: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+      throw error;
+    }
+  };
+
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     // Core connection methods
@@ -2687,6 +2698,7 @@ function DeepgramVoiceInteraction(
     
     // Microphone control
     toggleMicrophone: toggleMic,
+    startAudioCapture,
     
     // Reconnection methods
     resumeWithText,
