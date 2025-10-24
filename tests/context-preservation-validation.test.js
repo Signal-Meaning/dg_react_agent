@@ -1,10 +1,19 @@
 /**
  * Test to validate conversation context preservation across WebSocket disconnections
- * This test should FAIL before the context fix and PASS after the fix is applied.
+ * 
+ * UPDATED: This test now validates that the test-app properly manages session context
+ * and passes it to the component via agentOptions when reconnecting.
+ * 
+ * Architecture:
+ * - Session management is handled by test-app (SessionManager)
+ * - Component receives context via agentOptions.context
+ * - Context is transformed to Deepgram API format
  */
 
-// Utility function for transforming conversation history
-const transformConversationHistory = (history) => {
+import { SessionManager, transformConversationHistory } from '../test-app/src/session-management';
+
+// Utility function for transforming conversation history (moved to test-app)
+const transformConversationHistoryTest = (history) => {
   return {
     messages: history.map(message => ({
       type: "History",
@@ -16,7 +25,7 @@ const transformConversationHistory = (history) => {
 
 describe('Context Preservation Validation', () => {
   let mockAgentManager;
-  let mockState;
+  let sessionManager;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -31,37 +40,32 @@ describe('Context Preservation Validation', () => {
       addEventListener: jest.fn().mockReturnValue(() => {}),
     };
 
-    // Mock state with conversation history
-    mockState = {
-      hasSentSettings: false,
-      conversationHistory: [],
-      sessionId: null,
-      isReady: true,
-      agentState: 'idle',
-    };
+    // Create fresh session manager for each test
+    sessionManager = new SessionManager();
   });
 
   test('should preserve context across disconnection - Filmmaker Scenario', () => {
     // SCENARIO: User is a filmmaker asking for camera recommendations
     // After disconnection, agent should remember the filmmaker context
     
-    // STEP 1: Build conversation history
-    mockState.conversationHistory = [
-      {
-        role: 'user',
-        content: "I'm a filmmaker looking for camera recommendations",
-        timestamp: Date.now() - 1000
-      },
-      {
-        role: 'assistant', 
-        content: "Great! As a filmmaker, you'll want to consider factors like sensor size, low-light performance, and video capabilities. What's your budget range?",
-        timestamp: Date.now() - 500
-      }
-    ];
+    // STEP 1: Create session and build conversation history using SessionManager
+    const sessionId = sessionManager.createSession('test-session');
+    
+    // Add conversation messages to session
+    sessionManager.addMessage({
+      role: 'user',
+      content: "I'm a filmmaker looking for camera recommendations",
+      timestamp: Date.now() - 1000
+    });
+    
+    sessionManager.addMessage({
+      role: 'assistant', 
+      content: "Great! As a filmmaker, you'll want to consider factors like sensor size, low-light performance, and video capabilities. What's your budget range?",
+      timestamp: Date.now() - 500
+    });
 
     // STEP 2: Simulate WebSocket disconnection
     mockAgentManager.isConnected.mockReturnValue(false);
-    mockState.hasSentSettings = false; // Reset after disconnection
 
     // STEP 3: Track what settings are sent during reconnection
     let settingsSent = null;
@@ -72,47 +76,47 @@ describe('Context Preservation Validation', () => {
       return true;
     });
 
-    // STEP 4: Simulate the connectWithContext method behavior with correct Deepgram API format
-
-    const connectWithContext = (sessionId, history, options) => {
-      const settingsMessage = {
-        type: 'Settings',
-        audio: {
-          input: { encoding: 'linear16', sample_rate: 16000 },
-          output: { encoding: 'linear16', sample_rate: 24000 }
-        },
-        agent: {
-          language: options.language || 'en',
-          listen: {
-            provider: { type: 'deepgram', model: 'nova-2' }
-          },
-          think: {
-            provider: { type: 'open_ai', model: 'gpt-4o-mini' },
-            prompt: options.instructions || 'You are a helpful voice assistant.'
-          },
-          speak: {
-            provider: { type: 'deepgram', model: 'aura-asteria-en' }
-          },
-          // Don't include greeting for lazy reconnection - we're resuming a conversation, not starting new
-          // greeting: options.greeting,
-          context: transformConversationHistory(history) // Correct Deepgram API format
-        }
+    // STEP 4: Simulate test-app providing context via agentOptions (new architecture)
+    const getAgentOptionsWithContext = () => {
+      const sessionContext = sessionManager.getSessionContext(sessionId);
+      return {
+        language: 'en',
+        listenModel: 'nova-2',
+        thinkProviderType: 'open_ai',
+        thinkModel: 'gpt-4o-mini',
+        voice: 'aura-asteria-en',
+        instructions: 'You are a helpful voice assistant.',
+        context: sessionContext?.context // Pass context from SessionManager
       };
-      
-      mockAgentManager.sendJSON(settingsMessage);
     };
 
-    // STEP 5: Trigger lazy reconnection with context
-    const agentOptions = {
-      language: 'en',
-      listenModel: 'nova-2',
-      thinkProviderType: 'open_ai',
-      thinkModel: 'gpt-4o-mini',
-      voice: 'aura-asteria-en',
-      instructions: 'You are a helpful voice assistant.',
+    // STEP 5: Simulate component receiving agentOptions with context
+    const agentOptions = getAgentOptionsWithContext();
+    
+    // Simulate component sending settings with context
+    const settingsMessage = {
+      type: 'Settings',
+      audio: {
+        input: { encoding: 'linear16', sample_rate: 16000 },
+        output: { encoding: 'linear16', sample_rate: 24000 }
+      },
+      agent: {
+        language: agentOptions.language,
+        listen: {
+          provider: { type: 'deepgram', model: agentOptions.listenModel }
+        },
+        think: {
+          provider: { type: agentOptions.thinkProviderType, model: agentOptions.thinkModel },
+          prompt: agentOptions.instructions
+        },
+        speak: {
+          provider: { type: 'deepgram', model: agentOptions.voice }
+        },
+        context: agentOptions.context // Context from SessionManager
+      }
     };
-
-    connectWithContext('test-session', mockState.conversationHistory, agentOptions);
+    
+    mockAgentManager.sendJSON(settingsMessage);
 
     // STEP 6: Validate that context was preserved in correct Deepgram API format
     expect(settingsSent).not.toBeNull();
