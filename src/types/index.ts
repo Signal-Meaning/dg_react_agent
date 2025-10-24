@@ -163,15 +163,6 @@ export interface DeepgramVoiceInteractionProps {
    */
   autoConnect?: boolean;
 
-  /**
-   * Whether microphone is enabled (controlled or initial state)
-   */
-  microphoneEnabled?: boolean;
-
-  /**
-   * Called when microphone is toggled on/off
-   */
-  onMicToggle?: (enabled: boolean) => void;
 
   /**
    * Called when dual mode connection is established and settings are sent
@@ -294,10 +285,6 @@ export interface DeepgramVoiceInteractionHandle {
    */
   injectUserMessage: (message: string) => void;
 
-  /**
-   * Toggle microphone on/off
-   */
-  toggleMicrophone: (enabled: boolean) => Promise<void>;
   
   /**
    * Start audio capture (lazy initialization)
