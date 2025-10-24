@@ -166,8 +166,8 @@ describe('VAD Event Handlers', () => {
     });
   });
 
-  describe('handleVADEvent', () => {
-    it('should call onVADEvent callback with speech detected', () => {
+  describe('handleVADEvent (Internal Processing)', () => {
+    it('should process VAD events internally without public callback', () => {
       const response: VADEventResponse = {
         type: AgentResponseType.VAD_EVENT,
         speech_detected: true,
@@ -176,20 +176,14 @@ describe('VAD Event Handlers', () => {
       };
 
       const handleVADEvent = (data: VADEventResponse) => {
-        mockOnVADEvent({
-          speechDetected: data.speech_detected,
-          confidence: data.confidence,
-          timestamp: data.timestamp
-        });
+        // VAD events are now processed internally only
+        // No public callback is exposed
       };
 
       handleVADEvent(response);
 
-      expect(mockOnVADEvent).toHaveBeenCalledWith({
-        speechDetected: true,
-        confidence: 0.95,
-        timestamp: 1234567890
-      });
+      // VAD events are processed internally, no public callback
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
     });
 
     it('should handle speech not detected', () => {
