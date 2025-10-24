@@ -34,14 +34,14 @@ describe('VAD Component Props', () => {
       expect(typeof props.onUtteranceEnd).toBe('function');
     });
 
-    it('should define onVADEvent prop', () => {
+    it('should define onUserStartedSpeaking prop', () => {
       const props: DeepgramVoiceInteractionProps = {
         apiKey: 'test-key',
-        onVADEvent: jest.fn()
+        onUserStartedSpeaking: jest.fn()
       };
 
-      expect(props.onVADEvent).toBeDefined();
-      expect(typeof props.onVADEvent).toBe('function');
+      expect(props.onUserStartedSpeaking).toBeDefined();
+      expect(typeof props.onUserStartedSpeaking).toBe('function');
     });
 
     it('should make VAD callback props optional', () => {
@@ -52,7 +52,7 @@ describe('VAD Component Props', () => {
 
       expect(props.onUserStoppedSpeaking).toBeUndefined();
       expect(props.onUtteranceEnd).toBeUndefined();
-      expect(props.onVADEvent).toBeUndefined();
+      expect(props.onUserStartedSpeaking).toBeUndefined();
     });
   });
 
@@ -174,78 +174,51 @@ describe('VAD Component Props', () => {
     });
   });
 
-  describe('onVADEvent Callback', () => {
-    it('should call onVADEvent with speech detected', () => {
+  describe('onUserStartedSpeaking Callback', () => {
+    it('should call onUserStartedSpeaking when user starts speaking', () => {
       const mockCallback = jest.fn();
       const props: DeepgramVoiceInteractionProps = {
         apiKey: 'test-key',
-        onVADEvent: mockCallback
+        onUserStartedSpeaking: mockCallback
+      };
+
+      props.onUserStartedSpeaking?.();
+
+      expect(mockCallback).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('onUserStoppedSpeaking Callback', () => {
+    it('should call onUserStoppedSpeaking when user stops speaking', () => {
+      const mockCallback = jest.fn();
+      const props: DeepgramVoiceInteractionProps = {
+        apiKey: 'test-key',
+        onUserStoppedSpeaking: mockCallback
+      };
+
+      props.onUserStoppedSpeaking?.();
+
+      expect(mockCallback).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('onUtteranceEnd Callback', () => {
+    it('should call onUtteranceEnd with utterance data', () => {
+      const mockCallback = jest.fn();
+      const props: DeepgramVoiceInteractionProps = {
+        apiKey: 'test-key',
+        onUtteranceEnd: mockCallback
       };
 
       const data = {
-        speechDetected: true,
-        confidence: 0.95,
-        timestamp: 1234567890
+        channel: [0],
+        lastWordEnd: 1.5
       };
 
-      props.onVADEvent?.(data);
+      props.onUtteranceEnd?.(data);
 
       expect(mockCallback).toHaveBeenCalledWith(data);
       expect(mockCallback).toHaveBeenCalledTimes(1);
-    });
-
-    it('should call onVADEvent with speech not detected', () => {
-      const mockCallback = jest.fn();
-      const props: DeepgramVoiceInteractionProps = {
-        apiKey: 'test-key',
-        onVADEvent: mockCallback
-      };
-
-      const data = {
-        speechDetected: false,
-        confidence: 0.1
-      };
-
-      props.onVADEvent?.(data);
-
-      expect(mockCallback).toHaveBeenCalledWith(data);
-    });
-
-    it('should handle VAD events without optional fields', () => {
-      const mockCallback = jest.fn();
-      const props: DeepgramVoiceInteractionProps = {
-        apiKey: 'test-key',
-        onVADEvent: mockCallback
-      };
-
-      const data = {
-        speechDetected: true
-      };
-
-      props.onVADEvent?.(data);
-
-      expect(mockCallback).toHaveBeenCalledWith(data);
-    });
-
-    it('should handle rapid VAD events', () => {
-      const mockCallback = jest.fn();
-      const props: DeepgramVoiceInteractionProps = {
-        apiKey: 'test-key',
-        onVADEvent: mockCallback
-      };
-
-      const data1 = { speechDetected: true, confidence: 0.9 };
-      const data2 = { speechDetected: false, confidence: 0.1 };
-      const data3 = { speechDetected: true, confidence: 0.8 };
-
-      props.onVADEvent?.(data1);
-      props.onVADEvent?.(data2);
-      props.onVADEvent?.(data3);
-
-      expect(mockCallback).toHaveBeenCalledTimes(3);
-      expect(mockCallback).toHaveBeenNthCalledWith(1, data1);
-      expect(mockCallback).toHaveBeenNthCalledWith(2, data2);
-      expect(mockCallback).toHaveBeenNthCalledWith(3, data3);
     });
   });
 
@@ -309,20 +282,20 @@ describe('VAD Component Props', () => {
     it('should support all VAD props together', () => {
       const mockOnUserStoppedSpeaking = jest.fn();
       const mockOnUtteranceEnd = jest.fn();
-      const mockOnVADEvent = jest.fn();
+      const mockOnUserStartedSpeaking = jest.fn();
 
       const props: DeepgramVoiceInteractionProps = {
         apiKey: 'test-key',
         onUserStoppedSpeaking: mockOnUserStoppedSpeaking,
         onUtteranceEnd: mockOnUtteranceEnd,
-        onVADEvent: mockOnVADEvent,
+        onUserStartedSpeaking: mockOnUserStartedSpeaking,
         utteranceEndMs: 1000,
         interimResults: true
       };
 
       expect(props.onUserStoppedSpeaking).toBe(mockOnUserStoppedSpeaking);
       expect(props.onUtteranceEnd).toBe(mockOnUtteranceEnd);
-      expect(props.onVADEvent).toBe(mockOnVADEvent);
+      expect(props.onUserStartedSpeaking).toBe(mockOnUserStartedSpeaking);
       expect(props.utteranceEndMs).toBe(1000);
       expect(props.interimResults).toBe(true);
     });
@@ -350,7 +323,7 @@ describe('VAD Component Props', () => {
         apiKey: 'test-key', // Required
         onUserStoppedSpeaking: jest.fn(), // Optional VAD callback
         utteranceEndMs: 1000, // Optional VAD config
-        // onUtteranceEnd and onVADEvent not provided (optional)
+        // onUtteranceEnd and onUserStartedSpeaking not provided (optional)
         // interimResults not provided (optional)
       };
 
@@ -358,7 +331,7 @@ describe('VAD Component Props', () => {
       expect(props.onUserStoppedSpeaking).toBeDefined();
       expect(props.utteranceEndMs).toBe(1000);
       expect(props.onUtteranceEnd).toBeUndefined();
-      expect(props.onVADEvent).toBeUndefined();
+      expect(props.onUserStartedSpeaking).toBeUndefined();
       expect(props.interimResults).toBeUndefined();
     });
   });
@@ -374,17 +347,15 @@ describe('VAD Component Props', () => {
           expect(Array.isArray(data.channel)).toBe(true);
           expect(typeof data.lastWordEnd).toBe('number');
         },
-        onVADEvent: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => {
-          expect(typeof data.speechDetected).toBe('boolean');
-          expect(typeof data.confidence === 'number' || data.confidence === undefined).toBe(true);
-          expect(typeof data.timestamp === 'number' || data.timestamp === undefined).toBe(true);
+        onUserStartedSpeaking: () => {
+          // Simple callback with no parameters
         }
       };
 
       // Test the callbacks with valid data
       props.onUserStoppedSpeaking?.({ timestamp: 1234567890 });
       props.onUtteranceEnd?.({ channel: [0, 1], lastWordEnd: 1.5 });
-      props.onVADEvent?.({ speechDetected: true, confidence: 0.9 });
+      props.onUserStartedSpeaking?.();
     });
 
     it('should enforce correct configuration prop types', () => {

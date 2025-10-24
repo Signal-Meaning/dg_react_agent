@@ -60,7 +60,6 @@ function App() {
   const [userStartedSpeaking, setUserStartedSpeaking] = useState<string | null>(null);
   const [userStoppedSpeaking, setUserStoppedSpeaking] = useState<string | null>(null);
   const [utteranceEnd, setUtteranceEnd] = useState<string | null>(null);
-  const [vadEvent, setVadEvent] = useState<string | null>(null);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   
   // Flag to prevent state override after UtteranceEnd
@@ -345,16 +344,6 @@ function App() {
     }
   }, [addLog, isDebugMode]);
 
-  const handleVADEvent = useCallback((data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => {
-    const timestamp = data.timestamp ? new Date(data.timestamp).toISOString().substring(11, 19) : 'unknown';
-    const confidence = data.confidence ? ` (${(data.confidence * 100).toFixed(1)}%)` : '';
-    setVadEvent(`${data.speechDetected ? 'Speech detected' : 'No speech'} at ${timestamp}${confidence}`);
-    
-    // Only log VAD events in debug mode to reduce console spam
-    if (isDebugMode) {
-      addLog(`🎯 [TRANSCRIPTION] VAD Event: ${data.speechDetected ? 'Speech detected' : 'No speech'} at ${timestamp}${confidence}`);
-    }
-  }, [addLog, isDebugMode]);
 
   const handleSpeechStarted = useCallback((event: { channel: number[]; timestamp: number }) => {
     const timestamp = new Date().toISOString().substring(11, 19);
@@ -675,7 +664,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onSpeechStarted={handleSpeechStarted}
         // onSpeechStopped removed - not a real Deepgram event
         onUtteranceEnd={handleUtteranceEnd}
-        onVADEvent={handleVADEvent}
         debug={isDebugMode} // Enable debug via environment variable or URL parameter for testing
       />
       
@@ -741,7 +729,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <p>Speech Started: <strong data-testid="speech-started">{speechStarted || 'Not detected'}</strong></p>
           <p>Speech Stopped: <strong data-testid="speech-stopped">Not a real Deepgram event</strong></p>
           <p>Utterance End: <strong data-testid="utterance-end">{utteranceEnd || 'Not detected'}</strong></p>
-          <p>VAD Event: <strong data-testid="vad-event">{vadEvent || 'Not detected'}</strong></p>
         </div>
       </div>
       
