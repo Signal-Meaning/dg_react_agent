@@ -11,7 +11,7 @@ The v0.5.0 release introduces significant API changes focused on **simplificatio
 ### Key Changes Summary
 
 - **Removed Auto-Connect**: No automatic connections on mount
-- **Explicit Control**: All services must be started manually via `start()` methods
+- **Explicit Control**: All services must be started via one of the `start()` methods
 - **Simplified Audio Control**: Unified `interruptAgent()` method replaces multiple audio controls
 - **Enhanced VAD Events**: More specific callbacks replace generic `onVADEvent`
 - **Session Management**: Optional session ID support for multi-session applications
@@ -22,7 +22,7 @@ The v0.5.0 release introduces significant API changes focused on **simplificatio
 
 ### 1. Control Pattern
 
-**Before (v0.4.x)**:
+**Before (v0.5.0)**:
 ```tsx
 <DeepgramVoiceInteraction
   autoConnect={true}
@@ -56,7 +56,7 @@ const startInteraction = async () => {
 
 **Settings are sent to the agent service immediately after connection** - this rule applies to all start methods (`start()`, `startTranscription()`, `startAgent()`). The new methods guarantee this behavior to avoid errors. If you forget to provide the appropriate options props, `start()` can result in errors.
 
-**Before (v0.4.x)**:
+**Before (v0.5.0)**:
 ```tsx
 // Auto-connect with immediate settings
 <DeepgramVoiceInteraction
@@ -85,7 +85,7 @@ const startAgent = async () => {
 
 ### 3. Audio Control Simplification
 
-**Before (v0.4.x)**:
+**Before (v0.5.0)**:
 ```tsx
 // Multiple audio control methods
 <DeepgramVoiceInteraction
@@ -117,39 +117,11 @@ const interruptAgent = () => {
 - **Buffer management**: Automatically clears Web Audio API buffers
 - **Simplified state**: Use `onAgentStartedSpeaking`/`onAgentStoppedSpeaking` for audio state
 
-### 4. Idle Timeout vs Sleep Behavior
-
-**Clarification**: Idle timeout and sleep are **related but distinct** features:
-
-- **Idle Timeout**: Automatically closes connections after inactivity (10 seconds default)
-- **Sleep**: Puts the agent into a sleep state where it ignores audio input
-- **autoSleep**: A configuration option that enables automatic sleep after idle timeout
-
-**Current Implementation**:
-- Idle timeout is handled by `IdleTimeoutService` (10-second default)
-- Sleep is controlled via `sleep()`, `wake()`, `toggleSleep()` methods
-- `autoSleep` option in `sleepOptions` enables automatic sleep after idle timeout
-
-**Migration**:
-```tsx
-// Before: Relied on automatic idle timeout behavior
-<DeepgramVoiceInteraction autoConnect={true} />
-
-// After: Explicit control with optional auto-sleep
-<DeepgramVoiceInteraction
-  sleepOptions={{
-    autoSleep: true,    // Enable auto-sleep after idle timeout
-    timeout: 30000,     // 30 seconds before auto-sleep
-    wakeWords: ['hey', 'wake up']
-  }}
-/>
-```
-
-### 5. Context Preservation
+### 4. Context Preservation
 
 **The component preserves conversation context across reconnections** - but only if session IDs are managed properly. Session IDs need to be an optional input for the start method calls.
 
-**Before (v0.4.x)**:
+**Before (v0.5.0)**:
 ```tsx
 // Context was managed automatically
 <DeepgramVoiceInteraction
@@ -178,7 +150,7 @@ const switchSession = async (newSessionId: string) => {
 };
 ```
 
-### 6. Simplified Session Management
+### 5. Simplified Session Management
 
 **Session ID Support**: Session IDs can be provided to start method calls for applications with multiple sessions that can be switched.
 
@@ -249,7 +221,7 @@ const switchToSession = async (newSessionId: string) => {
 
 ## 📝 Complete Migration Example
 
-### Before (v0.4.x)
+### Before (v0.5.0)
 ```tsx
 function VoiceApp() {
   const [isConnected, setIsConnected] = useState(false);
