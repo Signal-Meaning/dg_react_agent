@@ -145,7 +145,6 @@ function DeepgramVoiceInteraction(
     onUserStartedSpeaking,
     onUserStoppedSpeaking,
     onUtteranceEnd,
-    onVADEvent,
     onKeepalive,
     onPlaybackStateChange,
     onError,
@@ -1741,13 +1740,9 @@ function DeepgramVoiceInteraction(
       }
       log('VADEvent message received:', data);
       
-      // Call the callback with VAD event data
+      // Track VAD event for redundancy detection (internal use only)
       const speechDetected = typeof data.speech_detected === 'boolean' ? data.speech_detected : false;
-      const confidence = typeof data.confidence === 'number' ? data.confidence : undefined;
       const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
-      onVADEvent?.({ speechDetected, confidence, timestamp });
-      
-      // Track VAD event for redundancy detection
       const vadEvent = { type: 'VADEvent', speechDetected, timestamp, source: 'transcription' };
       trackVADEvent(vadEvent);
       

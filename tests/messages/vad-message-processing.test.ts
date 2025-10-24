@@ -252,7 +252,6 @@ describe('VAD Message Processing', () => {
       };
 
       const processTranscriptionMessage = (data: AgentIncomingMessage, callbacks: {
-        onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
         dispatch?: typeof mockDispatch;
       }) => {
         if (data.type === AgentResponseType.VAD_EVENT) {
@@ -261,16 +260,11 @@ describe('VAD Message Processing', () => {
             type: 'USER_SPEAKING_STATE_CHANGE', 
             isSpeaking: vadData.speech_detected 
           });
-          callbacks.onVADEvent?.({
-            speechDetected: vadData.speech_detected,
-            confidence: vadData.confidence,
-            timestamp: vadData.timestamp
-          });
+          // VAD events are now processed internally only
         }
       };
 
       processTranscriptionMessage(message, {
-        onVADEvent: mockOnVADEvent,
         dispatch: mockDispatch
       });
 
@@ -293,7 +287,6 @@ describe('VAD Message Processing', () => {
       };
 
       const processTranscriptionMessage = (data: AgentIncomingMessage, callbacks: {
-        onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
         dispatch?: typeof mockDispatch;
       }) => {
         if (data.type === AgentResponseType.VAD_EVENT) {
@@ -302,16 +295,11 @@ describe('VAD Message Processing', () => {
             type: 'USER_SPEAKING_STATE_CHANGE', 
             isSpeaking: vadData.speech_detected 
           });
-          callbacks.onVADEvent?.({
-            speechDetected: vadData.speech_detected,
-            confidence: vadData.confidence,
-            timestamp: vadData.timestamp
-          });
+          // VAD events are now processed internally only
         }
       };
 
       processTranscriptionMessage(message, {
-        onVADEvent: mockOnVADEvent,
         dispatch: mockDispatch
       });
 
@@ -333,7 +321,6 @@ describe('VAD Message Processing', () => {
       };
 
       const processTranscriptionMessage = (data: AgentIncomingMessage, callbacks: {
-        onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
         dispatch?: typeof mockDispatch;
       }) => {
         if (data.type === AgentResponseType.VAD_EVENT) {
@@ -342,16 +329,11 @@ describe('VAD Message Processing', () => {
             type: 'USER_SPEAKING_STATE_CHANGE', 
             isSpeaking: vadData.speech_detected 
           });
-          callbacks.onVADEvent?.({
-            speechDetected: vadData.speech_detected,
-            confidence: vadData.confidence,
-            timestamp: vadData.timestamp
-          });
+          // VAD events are now processed internally only
         }
       };
 
       processTranscriptionMessage(message, {
-        onVADEvent: mockOnVADEvent,
         dispatch: mockDispatch
       });
 
@@ -540,7 +522,6 @@ describe('VAD Message Processing', () => {
       } as any;
 
       const processTranscriptionMessage = (data: AgentIncomingMessage, callbacks: {
-        onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
         dispatch?: typeof mockDispatch;
       }) => {
         if (data.type === AgentResponseType.VAD_EVENT) {
@@ -550,18 +531,13 @@ describe('VAD Message Processing', () => {
               type: 'USER_SPEAKING_STATE_CHANGE', 
               isSpeaking: vadData.speech_detected 
             });
-            callbacks.onVADEvent?.({
-              speechDetected: vadData.speech_detected,
-              confidence: vadData.confidence,
-              timestamp: vadData.timestamp
-            });
+            // VAD events are now processed internally only
           }
         }
       };
 
       expect(() => {
         processTranscriptionMessage(malformedMessage, {
-          onVADEvent: mockOnVADEvent,
           dispatch: mockDispatch
         });
       }).not.toThrow();
@@ -579,7 +555,6 @@ describe('VAD Message Processing', () => {
       const processMessage = (data: AgentIncomingMessage, callbacks: {
         onUserStoppedSpeaking?: (data: { timestamp?: number }) => void;
         onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
-        onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
         dispatch?: typeof mockDispatch;
       }) => {
         // Only process known VAD message types
@@ -593,11 +568,7 @@ describe('VAD Message Processing', () => {
           });
         } else if (data.type === AgentResponseType.VAD_EVENT) {
           const vadData = data as VADEventResponse;
-          callbacks.onVADEvent?.({
-            speechDetected: vadData.speech_detected,
-            confidence: vadData.confidence,
-            timestamp: vadData.timestamp
-          });
+          // VAD events are now processed internally only
         }
         // Unknown message types are ignored
       };
@@ -606,7 +577,6 @@ describe('VAD Message Processing', () => {
         processMessage(unknownMessage, {
           onUserStoppedSpeaking: mockOnUserStoppedSpeaking,
           onUtteranceEnd: mockOnUtteranceEnd,
-          onVADEvent: mockOnVADEvent,
           dispatch: mockDispatch
         });
       }).not.toThrow();
@@ -629,7 +599,6 @@ describe('VAD Message Processing', () => {
       ];
 
       const processTranscriptionMessage = (data: AgentIncomingMessage, callbacks: {
-        onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
         dispatch?: typeof mockDispatch;
       }) => {
         if (data.type === AgentResponseType.VAD_EVENT) {
@@ -638,11 +607,7 @@ describe('VAD Message Processing', () => {
             type: 'USER_SPEAKING_STATE_CHANGE', 
             isSpeaking: vadData.speech_detected 
           });
-          callbacks.onVADEvent?.({
-            speechDetected: vadData.speech_detected,
-            confidence: vadData.confidence,
-            timestamp: vadData.timestamp
-          });
+          // VAD events are now processed internally only
         }
       };
 
@@ -650,7 +615,6 @@ describe('VAD Message Processing', () => {
 
       messages.forEach(message => {
         processTranscriptionMessage(message, {
-          onVADEvent: mockOnVADEvent,
           dispatch: mockDispatch
         });
       });
@@ -675,7 +639,6 @@ describe('VAD Message Processing', () => {
       const processMessage = (data: AgentIncomingMessage, callbacks: {
         onUserStoppedSpeaking?: (data: { timestamp?: number }) => void;
         onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
-        onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
         dispatch?: typeof mockDispatch;
       }) => {
         if (data.type === AgentResponseType.USER_STOPPED_SPEAKING) {
@@ -700,11 +663,7 @@ describe('VAD Message Processing', () => {
             type: 'USER_SPEAKING_STATE_CHANGE', 
             isSpeaking: vadData.speech_detected 
           });
-          callbacks.onVADEvent?.({
-            speechDetected: vadData.speech_detected,
-            confidence: vadData.confidence,
-            timestamp: vadData.timestamp
-          });
+          // VAD events are now processed internally only
         }
       };
 
@@ -714,7 +673,6 @@ describe('VAD Message Processing', () => {
         processMessage(message, {
           onUserStoppedSpeaking: mockOnUserStoppedSpeaking,
           onUtteranceEnd: mockOnUtteranceEnd,
-          onVADEvent: mockOnVADEvent,
           dispatch: mockDispatch
         });
       });

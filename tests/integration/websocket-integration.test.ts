@@ -187,7 +187,6 @@ describe('WebSocket Integration Tests', () => {
       };
 
       const handleTranscriptionMessage = (data: any, callbacks: {
-        onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
         dispatch?: typeof mockDispatch;
       }) => {
         if (data.type === AgentResponseType.VAD_EVENT) {
@@ -195,11 +194,7 @@ describe('WebSocket Integration Tests', () => {
             type: 'USER_SPEAKING_STATE_CHANGE', 
             isSpeaking: data.speech_detected 
           });
-          callbacks.onVADEvent?.({
-            speechDetected: data.speech_detected,
-            confidence: data.confidence,
-            timestamp: data.timestamp
-          });
+          // VAD events are now processed internally only
         }
       };
 
@@ -209,7 +204,6 @@ describe('WebSocket Integration Tests', () => {
 
       const parsedMessage = JSON.parse(messageEvent.data);
       handleTranscriptionMessage(parsedMessage, {
-        onVADEvent: mockOnVADEvent,
         dispatch: mockDispatch
       });
 
@@ -233,7 +227,6 @@ describe('WebSocket Integration Tests', () => {
       ];
 
       const handleTranscriptionMessage = (data: any, callbacks: {
-        onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
         dispatch?: typeof mockDispatch;
       }) => {
         if (data.type === AgentResponseType.VAD_EVENT) {
@@ -241,11 +234,7 @@ describe('WebSocket Integration Tests', () => {
             type: 'USER_SPEAKING_STATE_CHANGE', 
             isSpeaking: data.speech_detected 
           });
-          callbacks.onVADEvent?.({
-            speechDetected: data.speech_detected,
-            confidence: data.confidence,
-            timestamp: data.timestamp
-          });
+          // VAD events are now processed internally only
         }
       };
 
@@ -256,7 +245,6 @@ describe('WebSocket Integration Tests', () => {
         const parsedMessage = JSON.parse(messageEvent.data);
         
         handleTranscriptionMessage(parsedMessage, {
-          onVADEvent: mockOnVADEvent,
           dispatch: mockDispatch
         });
       });
@@ -434,7 +422,6 @@ describe('WebSocket Integration Tests', () => {
       const handleWebSocketMessage = (data: any, callbacks: {
         onUserStoppedSpeaking?: (data: { timestamp?: number }) => void;
         onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
-        onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
         dispatch?: typeof mockDispatch;
       }) => {
         if (data.type === AgentResponseType.USER_STOPPED_SPEAKING) {
@@ -457,11 +444,7 @@ describe('WebSocket Integration Tests', () => {
             type: 'USER_SPEAKING_STATE_CHANGE', 
             isSpeaking: data.speech_detected 
           });
-          callbacks.onVADEvent?.({
-            speechDetected: data.speech_detected,
-            confidence: data.confidence,
-            timestamp: data.timestamp
-          });
+          // VAD events are now processed internally only
         }
         // Unknown message types are ignored
       };
@@ -469,7 +452,6 @@ describe('WebSocket Integration Tests', () => {
       handleWebSocketMessage(unknownMessage, {
         onUserStoppedSpeaking: mockOnUserStoppedSpeaking,
         onUtteranceEnd: mockOnUtteranceEnd,
-        onVADEvent: mockOnVADEvent,
         dispatch: mockDispatch
       });
 
@@ -510,7 +492,6 @@ describe('WebSocket Integration Tests', () => {
       }));
 
       const handleTranscriptionMessage = (data: any, callbacks: {
-        onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
         dispatch?: typeof mockDispatch;
       }) => {
         if (data.type === AgentResponseType.VAD_EVENT) {
@@ -518,11 +499,7 @@ describe('WebSocket Integration Tests', () => {
             type: 'USER_SPEAKING_STATE_CHANGE', 
             isSpeaking: data.speech_detected 
           });
-          callbacks.onVADEvent?.({
-            speechDetected: data.speech_detected,
-            confidence: data.confidence,
-            timestamp: data.timestamp
-          });
+          // VAD events are now processed internally only
         }
       };
 
@@ -535,7 +512,6 @@ describe('WebSocket Integration Tests', () => {
         const parsedMessage = JSON.parse(messageEvent.data);
         
         handleTranscriptionMessage(parsedMessage, {
-          onVADEvent: mockOnVADEvent,
           dispatch: mockDispatch
         });
       });
@@ -560,7 +536,6 @@ describe('WebSocket Integration Tests', () => {
       const handleWebSocketMessage = (data: any, callbacks: {
         onUserStoppedSpeaking?: (data: { timestamp?: number }) => void;
         onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
-        onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
         dispatch?: typeof mockDispatch;
       }) => {
         if (data.type === AgentResponseType.USER_STOPPED_SPEAKING) {
@@ -583,11 +558,7 @@ describe('WebSocket Integration Tests', () => {
             type: 'USER_SPEAKING_STATE_CHANGE', 
             isSpeaking: data.speech_detected 
           });
-          callbacks.onVADEvent?.({
-            speechDetected: data.speech_detected,
-            confidence: data.confidence,
-            timestamp: data.timestamp
-          });
+          // VAD events are now processed internally only
         }
       };
 
@@ -602,7 +573,6 @@ describe('WebSocket Integration Tests', () => {
         handleWebSocketMessage(parsedMessage, {
           onUserStoppedSpeaking: mockOnUserStoppedSpeaking,
           onUtteranceEnd: mockOnUtteranceEnd,
-          onVADEvent: mockOnVADEvent,
           dispatch: mockDispatch
         });
       });

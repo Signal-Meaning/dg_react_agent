@@ -104,10 +104,15 @@ test.describe('Manual VAD Workflow Tests', () => {
     // Monitor VAD events
     const vadEvents = [];
     
-    // Listen for VAD event changes
-    await page.exposeFunction('onVADEvent', (eventType, status) => {
-      vadEvents.push({ type: eventType, status, timestamp: Date.now() });
-      console.log(`VAD Event: ${eventType} = ${status}`);
+    // Listen for VAD event changes using new callbacks
+    await page.exposeFunction('onUserStartedSpeaking', () => {
+      vadEvents.push({ type: 'userStartedSpeaking', status: true, timestamp: Date.now() });
+      console.log(`VAD Event: userStartedSpeaking = true`);
+    });
+    
+    await page.exposeFunction('onUserStoppedSpeaking', () => {
+      vadEvents.push({ type: 'userStoppedSpeaking', status: false, timestamp: Date.now() });
+      console.log(`VAD Event: userStoppedSpeaking = false`);
     });
     
     // Set up VAD event monitoring
@@ -126,7 +131,11 @@ test.describe('Manual VAD Workflow Tests', () => {
           const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
               if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                window.onVADEvent(eventType, element.textContent);
+                if (eventType === 'user-speaking' && element.textContent === 'true') {
+                  window.onUserStartedSpeaking();
+                } else if (eventType === 'user-speaking' && element.textContent === 'false') {
+                  window.onUserStoppedSpeaking();
+                }
               }
             });
           });
