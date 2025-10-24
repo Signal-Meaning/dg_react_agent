@@ -167,7 +167,7 @@ test.describe('VAD Timeout Issue #71 - Real Component Analysis', () => {
         {
           handler: 'VADEvent', 
           location: 'handleTranscriptionMessage function (if implemented)',
-          currentCode: 'Only calls onVADEvent callback',
+          currentCode: 'VAD events processed internally only',
           neededCode: 'Add disableIdleTimeoutResets() calls for both agent and transcription managers'
         },
         {

@@ -225,10 +225,6 @@ export interface DeepgramVoiceInteractionProps {
   // Note: onSpeechStopped removed - SpeechStopped is not a real Deepgram event
   // Use onUtteranceEnd for speech end detection instead
   
-  /**
-   * Called when VAD events are received from transcription service
-   */
-  onVADEvent?: (data: { speechDetected: boolean; confidence?: number; timestamp?: number }) => void;
 
   /**
    * VAD Configuration Options
