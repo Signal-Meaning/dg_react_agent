@@ -43,7 +43,6 @@ function App() {
     agent: 'closed'
   });
   const [logs, setLogs] = useState<string[]>([]);
-  const [currentKeepalive, setCurrentKeepalive] = useState<string | null>(null);
   const [micLoading, setMicLoading] = useState(false);
   
   // Instructions state
@@ -99,18 +98,6 @@ function App() {
   
   // Get debug state from URL or environment
   const isDebugMode = import.meta.env.VITE_DEBUG === 'true' || new URLSearchParams(window.location.search).get('debug') === 'true' || false;
-  
-  // Helper to update keepalive - memoized
-  const updateKeepalive = useCallback((message: string) => {
-    const timestampedMessage = `${new Date().toISOString().substring(11, 19)} - ${message}`;
-    setCurrentKeepalive(timestampedMessage);
-    // Add to logs so it persists (this replaces the current keepalive in the display)
-    setLogs(prev => [...prev, timestampedMessage]);
-    // Only log to console when debug mode is enabled
-    if (isDebugMode) {
-      console.log(timestampedMessage);
-    }
-  }, [isDebugMode]); // Include isDebugMode in dependencies
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
   const memoizedTranscriptionOptions = useMemo(() => ({
@@ -647,7 +634,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onConnectionStateChange={handleConnectionStateChange}
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
-        onKeepalive={(service) => updateKeepalive(`💓 [KEEPALIVE] ${service} keepalive sent`)}
         // Auto-connect dual mode props
         autoConnect={true}
         microphoneEnabled={micEnabled}
@@ -1003,9 +989,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
 
       <div data-testid="event-log" style={{ marginTop: '20px', border: '1px solid #4a5568', padding: '10px', pointerEvents: 'auto', backgroundColor: '#1a202c' }}>
         <h3 style={{ color: '#e2e8f0' }}>Event Log</h3>
-        <button onClick={() => { setLogs([]); setCurrentKeepalive(null); }} style={{ marginBottom: '10px', pointerEvents: 'auto', backgroundColor: '#4a5568', color: '#e2e8f0', border: '1px solid #2d3748', padding: '5px 10px', borderRadius: '4px' }}>Clear Logs</button>
+        <button onClick={() => { setLogs([]); }} style={{ marginBottom: '10px', pointerEvents: 'auto', backgroundColor: '#4a5568', color: '#e2e8f0', border: '1px solid #2d3748', padding: '5px 10px', borderRadius: '4px' }}>Clear Logs</button>
         <pre style={{ maxHeight: '300px', overflowY: 'scroll', background: '#2d3748', padding: '5px', color: '#e2e8f0', border: '1px solid #4a5568', borderRadius: '4px' }}>
-          {currentKeepalive ? [currentKeepalive, ...logs.slice().reverse()].join('\n') : logs.slice().reverse().join('\n')}
+          {logs.slice().reverse().join('\n')}
         </pre>
       </div>
     </div>
