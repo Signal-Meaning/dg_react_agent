@@ -2,7 +2,7 @@
 
 **Version**: 0.4.0+  
 **Target Audience**: Voice-commerce teams, frontend developers, integration teams  
-**Last Updated**: December 2024
+**Last Updated**: October 2025
 
 ## 🎯 Overview
 
@@ -182,8 +182,6 @@ interface VoiceInteractionState {
   isUserSpeaking: boolean;
   lastUserSpeechTime: number | null;
   
-  // TTS mute state
-  ttsMuted: boolean;
 }
 ```
 
@@ -763,35 +761,6 @@ function NetworkResilientApp() {
 
 ---
 
-## ⚠️ API Changes and Deprecations
-
-### Deprecated APIs
-
-The following APIs are deprecated and will be removed in a future version:
-
-- `onPlaybackStateChange` → Use `onAgentAudioStateChange` instead
-- `onAgentSpeaking` → Use `onAgentStartedSpeaking` instead  
-- `onAgentSilent` → Use `onAgentStoppedSpeaking` instead
-
-**Migration:**
-```tsx
-// Before (deprecated)
-<DeepgramVoiceInteraction
-  onPlaybackStateChange={(isPlaying) => console.log('Playing:', isPlaying)}
-  onAgentSpeaking={() => console.log('Agent speaking')}
-  onAgentSilent={() => console.log('Agent silent')}
-/>
-
-// After (recommended)
-<DeepgramVoiceInteraction
-  onAgentAudioStateChange={(isPlaying) => console.log('Agent TTS playing:', isPlaying)}
-  onAgentStartedSpeaking={() => console.log('Agent started speaking')}
-  onAgentStoppedSpeaking={() => console.log('Agent stopped speaking')}
-/>
-```
-
----
-
 ## 🔧 Simplified API Approach
 
 The component follows a **simplified API design** that reduces complexity and confusion:
@@ -830,46 +799,43 @@ The following APIs have been removed to reduce confusion:
 - ❌ `onMicToggle` - Not needed with simplified approach
 - ❌ `onVADEvent` - Use `onUtteranceEnd` for better accuracy
 - ❌ `onKeepalive` - Internal logging only, no developer value
+- ❌ `agentMute()` / `agentUnmute()` - Use `interruptAgent()` instead
+- ❌ `toggleTtsMute()` / `setTtsMuted()` - Use `interruptAgent()` instead
+- ❌ `agentMuted` prop - Not needed with simplified approach
+- ❌ `onAgentMuteChange` - Not needed with simplified approach
 
 ---
 
 ## 🎯 Advanced Features
 
+This section covers advanced integration patterns and features that provide fine-grained control over voice interactions. These features are essential for building production-ready voice applications with proper user experience and performance.
+
 ### 1. Agent Audio Control
+
+**Purpose**: Demonstrates how to provide users with immediate control over agent audio playback, essential for user experience and preventing audio-related issues.
+
+**Context**: Users need the ability to stop agent speech immediately, whether for interruption, error recovery, or user preference. The `interruptAgent()` method provides this control while properly managing audio buffers.
+
+**Use Cases**: User interruption, error recovery, audio buffer management, accessibility controls.
 
 ```tsx
 function AgentAudioControlApp() {
-  const [isAgentMuted, setIsAgentMuted] = useState(false);
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
 
-  const muteAgent = useCallback(() => {
-    voiceRef.current?.agentMute();
-  }, []);
-
-  const unmuteAgent = useCallback(() => {
-    voiceRef.current?.agentUnmute();
-  }, []);
-
-  const handleAgentMuteChange = useCallback((muted: boolean) => {
-    setIsAgentMuted(muted);
-    console.log(`Agent audio ${muted ? 'muted' : 'unmuted'}`);
+  const stopAgent = useCallback(() => {
+    voiceRef.current?.interruptAgent();
   }, []);
 
   return (
     <div>
-      <button 
-        onClick={isAgentMuted ? unmuteAgent : muteAgent}
-        className={isAgentMuted ? 'muted' : 'unmuted'}
-      >
-        {isAgentMuted ? '🔇 AGENT MUTED' : '🔊 AGENT ENABLED'}
+      <button onClick={stopAgent}>
+        Stop Agent
       </button>
       
       <DeepgramVoiceInteraction
         ref={voiceRef}
         apiKey={apiKey}
         agentOptions={agentOptions}
-        agentMuted={isAgentMuted}
-        onAgentMuteChange={handleAgentMuteChange}
       />
     </div>
   );
@@ -877,6 +843,12 @@ function AgentAudioControlApp() {
 ```
 
 ### 2. Voice Activity Detection Events
+
+**Purpose**: Shows how to implement real-time visual feedback and proper conversation flow control using voice activity detection events.
+
+**Context**: VAD events provide precise timing information about when users start and stop speaking, enabling applications to provide visual feedback, manage idle timeouts, and control conversation flow more accurately than microphone state alone.
+
+**Use Cases**: Visual feedback during speech, idle timeout management, conversation flow control, accessibility features.
 
 ```tsx
 function VADEventApp() {
@@ -920,6 +892,12 @@ function VADEventApp() {
 ```
 
 ### 3. Dynamic Instructions Update
+
+**Purpose**: Demonstrates how to update agent behavior in real-time without restarting the voice interaction, enabling dynamic conversation modes and context switching.
+
+**Context**: Many voice applications need to change agent behavior based on user context, conversation state, or application mode. The `updateAgentInstructions()` method allows this without disrupting ongoing voice interaction.
+
+**Use Cases**: Context switching, mode changes, personalized responses, conversation state management.
 
 ```tsx
 function DynamicInstructionsApp() {
@@ -987,26 +965,12 @@ module.exports = {
 
 #### 2. Infinite Re-initialization
 
-**Cause**: Non-memoized options props  
-**Solution**: Always use `useMemo` for options
+**Cause**: Non-memoized options props causing constant component re-initialization  
+**Solution**: Always use `useMemo` for options (see [Memoization Requirements](#1-memoization-requirements) below for detailed guidance)
 
-```tsx
-// ❌ WRONG - causes infinite re-initialization
-<DeepgramVoiceInteraction
-  agentOptions={{
-    language: 'en',
-    instructions: 'You are helpful'
-  }}
-/>
+**Why this happens**: React re-renders cause new object creation, triggering component re-initialization and WebSocket reconnections.
 
-// ✅ CORRECT - memoized options
-const agentOptions = useMemo(() => ({
-  language: 'en',
-  instructions: 'You are helpful'
-}), []);
-
-<DeepgramVoiceInteraction agentOptions={agentOptions} />
-```
+**Quick Fix**: Memoize options with `useMemo` and empty dependency arrays for static configurations.
 
 #### 3. Microphone Permission Denied
 
@@ -1177,6 +1141,6 @@ useEffect(() => {
 
 ---
 
-**Last Updated**: December 2024  
+**Last Updated**: October 2025  
 **Component Version**: 0.4.0+  
 **React Version**: 16.8.0+
