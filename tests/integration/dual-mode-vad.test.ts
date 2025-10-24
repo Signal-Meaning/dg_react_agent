@@ -73,11 +73,8 @@ describe('Dual-Mode VAD Tests', () => {
       });
 
       expect(mockDispatch).toHaveBeenCalledTimes(2);
-      expect(mockOnVADEvent).toHaveBeenCalledWith({
-        speechDetected: false,
-        confidence: 0.1,
-        timestamp: undefined
-      });
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
       expect(mockOnUserStoppedSpeaking).toHaveBeenCalledWith({ timestamp: 1234567890 });
     });
 
@@ -129,11 +126,8 @@ describe('Dual-Mode VAD Tests', () => {
       });
 
       expect(mockDispatch).toHaveBeenCalledTimes(2);
-      expect(mockOnVADEvent).toHaveBeenCalledWith({
-        speechDetected: true,
-        confidence: 0.9,
-        timestamp: undefined
-      });
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
       expect(mockOnUtteranceEnd).toHaveBeenCalledWith({
         channel: [0, 1],
         lastWordEnd: 2.5
@@ -162,10 +156,6 @@ describe('Dual-Mode VAD Tests', () => {
               isSpeaking: event.data.speech_detected 
             });
             // VAD events are now processed internally only
-              speechDetected: event.data.speech_detected,
-              confidence: event.data.confidence,
-              timestamp: event.data.timestamp
-            });
           } else if (event.service === 'agent' && event.data.type === AgentResponseType.USER_STOPPED_SPEAKING) {
             callbacks.dispatch?.({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
             callbacks.onUserStoppedSpeaking?.({ timestamp: event.data.timestamp });
@@ -192,7 +182,8 @@ describe('Dual-Mode VAD Tests', () => {
       });
 
       expect(mockDispatch).toHaveBeenCalledTimes(4);
-      expect(mockOnVADEvent).toHaveBeenCalledTimes(2);
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
       expect(mockOnUserStoppedSpeaking).toHaveBeenCalledTimes(1);
       expect(mockOnUtteranceEnd).toHaveBeenCalledTimes(1);
     });
@@ -217,10 +208,6 @@ describe('Dual-Mode VAD Tests', () => {
               isSpeaking: event.data.speech_detected 
             });
             // VAD events are now processed internally only
-              speechDetected: event.data.speech_detected,
-              confidence: event.data.confidence,
-              timestamp: event.data.timestamp
-            });
           } else if (event.service === 'agent' && event.data.type === AgentResponseType.USER_STOPPED_SPEAKING) {
             callbacks.dispatch?.({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
             callbacks.onUserStoppedSpeaking?.({ timestamp: event.data.timestamp });
@@ -247,7 +234,8 @@ describe('Dual-Mode VAD Tests', () => {
       });
 
       expect(mockDispatch).toHaveBeenCalledTimes(4);
-      expect(mockOnVADEvent).toHaveBeenCalledTimes(2);
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
       expect(mockOnUserStoppedSpeaking).toHaveBeenCalledTimes(1);
       expect(mockOnUtteranceEnd).toHaveBeenCalledTimes(1);
     });
@@ -270,10 +258,6 @@ describe('Dual-Mode VAD Tests', () => {
         events.forEach(event => {
           if (event.service === 'transcription' && event.data.type === AgentResponseType.VAD_EVENT) {
             // VAD events are now processed internally only
-              speechDetected: event.data.speech_detected,
-              confidence: event.data.confidence,
-              timestamp: event.data.timestamp
-            });
           } else if (event.service === 'agent' && event.data.type === AgentResponseType.USER_STOPPED_SPEAKING) {
             finalSpeakingState = false;
             callbacks.onUserStoppedSpeaking?.({ timestamp: event.data.timestamp });
@@ -293,11 +277,8 @@ describe('Dual-Mode VAD Tests', () => {
         type: 'USER_SPEAKING_STATE_CHANGE', 
         isSpeaking: false 
       });
-      expect(mockOnVADEvent).toHaveBeenCalledWith({
-        speechDetected: true,
-        confidence: 0.9,
-        timestamp: undefined
-      });
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
       expect(mockOnUserStoppedSpeaking).toHaveBeenCalledWith({ timestamp: 1000 });
     });
 
@@ -334,10 +315,6 @@ describe('Dual-Mode VAD Tests', () => {
               isSpeaking: event.data.speech_detected 
             });
             // VAD events are now processed internally only
-              speechDetected: event.data.speech_detected,
-              confidence: event.data.confidence,
-              timestamp: event.data.timestamp
-            });
           }
         });
       };
@@ -348,7 +325,8 @@ describe('Dual-Mode VAD Tests', () => {
       });
 
       expect(mockDispatch).toHaveBeenCalledTimes(2); // Only first VADEvent and UtteranceEnd
-      expect(mockOnVADEvent).toHaveBeenCalledTimes(1); // Only first VADEvent
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled(); // Only first VADEvent
       expect(mockOnUtteranceEnd).toHaveBeenCalledTimes(1);
     });
   });
@@ -375,10 +353,6 @@ describe('Dual-Mode VAD Tests', () => {
               isSpeaking: currentSpeakingState 
             });
             // VAD events are now processed internally only
-              speechDetected: event.data.speech_detected,
-              confidence: event.data.confidence,
-              timestamp: event.data.timestamp
-            });
           } else if (event.service === 'agent' && event.data.type === AgentResponseType.USER_STOPPED_SPEAKING) {
             currentSpeakingState = false;
             callbacks.dispatch?.({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: currentSpeakingState });
@@ -393,7 +367,8 @@ describe('Dual-Mode VAD Tests', () => {
       });
 
       expect(mockDispatch).toHaveBeenCalledTimes(3);
-      expect(mockOnVADEvent).toHaveBeenCalledTimes(2);
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
       expect(mockOnUserStoppedSpeaking).toHaveBeenCalledTimes(1);
     });
 
@@ -417,10 +392,6 @@ describe('Dual-Mode VAD Tests', () => {
               isSpeaking: event.data.speech_detected 
             });
             // VAD events are now processed internally only
-              speechDetected: event.data.speech_detected,
-              confidence: event.data.confidence,
-              timestamp: event.data.timestamp
-            });
           } else if (event.service === 'agent' && event.data.type === AgentResponseType.USER_STOPPED_SPEAKING) {
             callbacks.dispatch?.({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
             callbacks.onUserStoppedSpeaking?.({ timestamp: event.data.timestamp });
@@ -448,7 +419,8 @@ describe('Dual-Mode VAD Tests', () => {
       });
 
       expect(mockDispatch).toHaveBeenCalledTimes(3); // Only VAD events
-      expect(mockOnVADEvent).toHaveBeenCalledTimes(1);
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled();
       expect(mockOnUserStoppedSpeaking).toHaveBeenCalledTimes(1);
       expect(mockOnUtteranceEnd).toHaveBeenCalledTimes(1);
     });
@@ -498,10 +470,6 @@ describe('Dual-Mode VAD Tests', () => {
               isSpeaking: event.data.speech_detected 
             });
             // VAD events are now processed internally only
-              speechDetected: event.data.speech_detected,
-              confidence: event.data.confidence,
-              timestamp: event.data.timestamp
-            });
           } else if (event.service === 'agent' && event.data.type === AgentResponseType.USER_STOPPED_SPEAKING) {
             callbacks.dispatch?.({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
             callbacks.onUserStoppedSpeaking?.({ timestamp: event.data.timestamp });
@@ -534,7 +502,8 @@ describe('Dual-Mode VAD Tests', () => {
 
       expect(processingTime).toBeLessThan(100); // Should process 100 events in <100ms
       expect(mockDispatch).toHaveBeenCalledTimes(100);
-      expect(mockOnVADEvent).toHaveBeenCalledTimes(34); // ~1/3 of events
+      // VAD events are now processed internally only
+      expect(mockOnVADEvent).not.toHaveBeenCalled(); // ~1/3 of events
       expect(mockOnUserStoppedSpeaking).toHaveBeenCalledTimes(33); // ~1/3 of events
       expect(mockOnUtteranceEnd).toHaveBeenCalledTimes(33); // ~1/3 of events
     });

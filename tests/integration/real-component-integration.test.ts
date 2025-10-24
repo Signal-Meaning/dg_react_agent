@@ -217,8 +217,8 @@ describe('Real Component Integration Tests', () => {
       // Component should initialize without errors
       expect(componentRef.current).toBeDefined();
       
-      // Test that callback prop is properly set
-      expect(mockOnVADEvent).toBeDefined();
+      // VAD events are now processed internally only
+      // No public callback is exposed
     });
   });
 
