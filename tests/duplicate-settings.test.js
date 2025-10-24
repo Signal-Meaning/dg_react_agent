@@ -305,9 +305,9 @@ afterAll(() => {
     // Clear the mock to track new calls
     mockSendJSON.mockClear();
 
-    // Now call toggleMic - this should NOT send settings again
+    // Now call start() - this should NOT send settings again
     await act(async () => {
-      await ref.current.toggleMicrophone(true);
+      await ref.current.start();
     });
 
     // Simulate another connection state change - this should NOT send settings again
