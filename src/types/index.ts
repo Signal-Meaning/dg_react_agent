@@ -300,6 +300,15 @@ export interface DeepgramVoiceInteractionHandle {
   toggleMicrophone: (enabled: boolean) => Promise<void>;
   
   /**
+   * Start audio capture (lazy initialization)
+   * 
+   * This method triggers the browser's microphone permission prompt and initializes
+   * the AudioManager for voice interactions. Should only be called when user explicitly
+   * requests microphone access.
+   */
+  startAudioCapture: () => Promise<void>;
+  
+  /**
    * Resume conversation with text input (lazy reconnection)
    */
   resumeWithText: (text: string) => Promise<void>;

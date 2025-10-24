@@ -38,8 +38,7 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSleeping, setIsSleeping] = useState(false);
-  const [connectionStates, setConnectionStates] = useState<Record<ServiceType, ConnectionState>>({
-    transcription: 'closed',
+  const [connectionStates, setConnectionStates] = useState<Partial<Record<ServiceType, ConnectionState>>>({
     agent: 'closed'
   });
   const [logs, setLogs] = useState<string[]>([]);
@@ -78,8 +77,6 @@ function App() {
   // }, []);
   
   // VAD state from transcription service (SpeechStarted/UtteranceEnd)
-  const [speechStarted, setSpeechStarted] = useState<string | null>(null);
-  // speechStopped removed - SpeechStopped is not a real Deepgram event
   
   // Text input state
   const [textInput, setTextInput] = useState('');
@@ -100,23 +97,6 @@ function App() {
   const isDebugMode = import.meta.env.VITE_DEBUG === 'true' || new URLSearchParams(window.location.search).get('debug') === 'true' || false;
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
-  const memoizedTranscriptionOptions = useMemo(() => ({
-    // Use environment variables with sensible defaults
-    model: import.meta.env.VITE_TRANSCRIPTION_MODEL || 'nova-3', 
-    language: import.meta.env.VITE_TRANSCRIPTION_LANGUAGE || 'en-US',
-    smart_format: import.meta.env.VITE_TRANSCRIPTION_SMART_FORMAT === 'true' || true,
-    interim_results: import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS === 'true' || true,
-    diarize: import.meta.env.VITE_TRANSCRIPTION_DIARIZE === 'true' || true, 
-    channels: parseInt(import.meta.env.VITE_TRANSCRIPTION_CHANNELS || '1', 10),
-    // VAD configuration for Voice Activity Detection events
-    vad_events: import.meta.env.VITE_TRANSCRIPTION_VAD_EVENTS === 'true' || true, // Enable VAD events from transcription service
-    utterance_end_ms: parseInt(import.meta.env.VITE_TRANSCRIPTION_UTTERANCE_END_MS || '1000', 10), // Enable UtteranceEnd detection (minimum 1000ms)
-    // Add keyterms that might be tricky for standard models
-    // keyterm: [
-    //   "Hello", // Test phrase from audio sample
-    //   "World" // Common test word
-    // ]
-  }), []); // Empty dependency array means this object is created only once
 
   // Monitor deepgramRef changes - only log once when it becomes available
   const hasLoggedRef = useRef(false);
@@ -196,7 +176,6 @@ function App() {
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
-    transcriptionUrl: import.meta.env.VITE_TRANSCRIPTION_URL || 'wss://api.deepgram.com/v1/listen',
     agentUrl: import.meta.env.VITE_AGENT_URL || 'wss://agent.deepgram.com/v1/agent/converse',
   }), []);
 
@@ -331,21 +310,6 @@ function App() {
     }
   }, [addLog, isDebugMode]);
 
-
-  const handleSpeechStarted = useCallback((event: { channel: number[]; timestamp: number }) => {
-    const timestamp = new Date().toISOString().substring(11, 19);
-    setSpeechStarted(`Transcription: ${timestamp}`);
-    
-    // Only set isUserSpeaking to true if UtteranceEnd hasn't been detected
-    if (!utteranceEndDetected.current) {
-      setIsUserSpeaking(true); // Update local state based on callback
-    }
-    
-    // Only log SpeechStarted events in debug mode to reduce console spam
-    if (isDebugMode) {
-      addLog(`🎤 [TRANSCRIPTION] Speech Started: ${JSON.stringify(event)}`);
-    }
-  }, [addLog, isDebugMode]);
 
   // handleSpeechStopped removed - SpeechStopped is not a real Deepgram event
 
@@ -517,27 +481,27 @@ function App() {
       console.log('🎤 [APP] deepgramRef.current:', !!deepgramRef.current);
       
       if (!micEnabled) {
-        // Enable microphone with lazy reconnect
+        // Enable microphone with lazy audio initialization
         setMicLoading(true);
-        addLog('Resuming conversation with audio');
-        console.log('🎤 [APP] About to call resumeWithAudio()');
+        addLog('Starting audio capture (lazy initialization)');
+        console.log('🎤 [APP] About to call startAudioCapture()');
         
         if (deepgramRef.current) {
-          console.log('🎤 [APP] deepgramRef.current exists, calling resumeWithAudio()');
+          console.log('🎤 [APP] deepgramRef.current exists, calling startAudioCapture()');
           console.log('🎤 [APP] deepgramRef.current methods:', Object.keys(deepgramRef.current));
           
-          if (typeof deepgramRef.current.resumeWithAudio === 'function') {
-            console.log('🎤 [APP] resumeWithAudio method exists, calling it');
-            await deepgramRef.current.resumeWithAudio();
-            console.log('🎤 [APP] resumeWithAudio() completed successfully');
-            addLog('Audio conversation resumed');
+          if (typeof deepgramRef.current.startAudioCapture === 'function') {
+            console.log('🎤 [APP] startAudioCapture method exists, calling it');
+            await deepgramRef.current.startAudioCapture();
+            console.log('🎤 [APP] startAudioCapture() completed successfully');
+            addLog('Audio capture started successfully');
           } else {
-            console.log('🎤 [APP] resumeWithAudio method does not exist!');
-            addLog('❌ [APP] resumeWithAudio method not found on ref');
+            console.log('🎤 [APP] startAudioCapture method does not exist!');
+            addLog('❌ [APP] startAudioCapture method not found on ref');
           }
         } else {
           console.log('🎤 [APP] deepgramRef.current is null!');
-          addLog('❌ [APP] deepgramRef.current is null - cannot resume audio');
+          addLog('❌ [APP] deepgramRef.current is null - cannot start audio capture');
         }
         setMicLoading(false);
       } else {
@@ -623,7 +587,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       <DeepgramVoiceInteraction
         ref={deepgramRef}
         apiKey={import.meta.env.VITE_DEEPGRAM_API_KEY || ''}
-        transcriptionOptions={memoizedTranscriptionOptions}
         agentOptions={memoizedAgentOptions}
         endpointConfig={memoizedEndpointConfig}
         onReady={handleReady}
@@ -647,7 +610,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         // VAD event props - clearly marked by source
         onUserStartedSpeaking={handleUserStartedSpeaking}
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
-        onSpeechStarted={handleSpeechStarted}
         // onSpeechStopped removed - not a real Deepgram event
         onUtteranceEnd={handleUtteranceEnd}
         debug={isDebugMode} // Enable debug via environment variable or URL parameter for testing
@@ -657,8 +619,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <h4>Component States:</h4>
         <p>App UI State (isSleeping): <strong>{(isSleeping || agentState === 'entering_sleep').toString()}</strong></p>
         <p>Core Component State (agentState via callback): <strong>{agentState}</strong></p>
-        <p>Transcription Connection: <strong data-testid="connection-status">{connectionStates.agent}</strong></p>
-        <p>Agent Connection: <strong>{connectionStates.agent}</strong></p>
+        <p>Agent Connection: <strong data-testid="connection-status">{connectionStates.agent}</strong></p>
         
         {/* API Mode Indicator */}
         {(() => {
@@ -710,10 +671,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <h5>From Agent WebSocket:</h5>
           <p>User Started Speaking: <strong data-testid="user-started-speaking">{userStartedSpeaking || 'Not detected'}</strong></p>
           <p>User Stopped Speaking: <strong data-testid="user-stopped-speaking">{userStoppedSpeaking || 'Not detected'}</strong></p>
-          
-          <h5>From Transcription WebSocket:</h5>
-          <p>Speech Started: <strong data-testid="speech-started">{speechStarted || 'Not detected'}</strong></p>
-          <p>Speech Stopped: <strong data-testid="speech-stopped">Not a real Deepgram event</strong></p>
           <p>Utterance End: <strong data-testid="utterance-end">{utteranceEnd || 'Not detected'}</strong></p>
         </div>
       </div>
