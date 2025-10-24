@@ -396,15 +396,17 @@ export class WebSocketManager {
    */
   private sendKeepalive(): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      // Emit keepalive event for test-app logging (but don't log to console)
-      this.emit({ 
-        type: 'keepalive', 
-        data: { 
-          type: 'KeepAlive', 
-          timestamp: Date.now(),
-          service: this.options.service 
-        } 
-      });
+      // Only emit keepalive events in debug mode to reduce noise
+      if (this.options.debug) {
+        this.emit({ 
+          type: 'keepalive', 
+          data: { 
+            type: 'KeepAlive', 
+            timestamp: Date.now(),
+            service: this.options.service 
+          } 
+        });
+      }
       
       try {
         this.ws.send(JSON.stringify({ type: 'KeepAlive' }));
