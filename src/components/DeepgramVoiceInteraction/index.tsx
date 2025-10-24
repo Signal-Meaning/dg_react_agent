@@ -1529,11 +1529,10 @@ function DeepgramVoiceInteraction(
     try {
       log('Start method called');
       
-      // Validate configuration - at least one service must be configured
+      // Check if any services are configured - if not, just return (original behavior)
       if (!agentOptions && !transcriptionOptions) {
-        const error = new Error('DeepgramVoiceInteraction: At least one of agentOptions or transcriptionOptions must be provided to start()');
-        // This is a validation error, not a service error - just throw it
-        throw error;
+        log('No services configured - start() will do nothing');
+        return;
       }
       
       // Note: Session management and conversation context is handled by the application layer
