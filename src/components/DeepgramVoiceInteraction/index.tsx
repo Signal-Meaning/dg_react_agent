@@ -7,7 +7,6 @@ import {
   LLMResponse,
   TranscriptResponse,
   UpdateInstructionsPayload,
-  AgentOptions,
   ConnectionState
 } from '../../types';
 import { WebSocketManager, WebSocketEvent } from '../../utils/websocket/WebSocketManager';
