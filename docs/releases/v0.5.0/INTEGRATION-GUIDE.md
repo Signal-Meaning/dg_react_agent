@@ -2,7 +2,7 @@
 
 **Version**: 0.4.0+  
 **Target Audience**: Voice-commerce teams, frontend developers, integration teams  
-**Last Updated**: December 2024
+**Last Updated**: October 2025
 
 ## 🎯 Overview
 
@@ -29,6 +29,8 @@ This comprehensive integration guide provides everything you need to successfull
 ```bash
 npm install @signal-meaning/deepgram-voice-interaction-react
 ```
+
+> **Note**: For technical setup requirements (webpack configuration, React externalization, etc.), see [TECHNICAL-SETUP.md](./TECHNICAL-SETUP.md)
 
 ### Basic Integration
 
@@ -180,8 +182,6 @@ interface VoiceInteractionState {
   isUserSpeaking: boolean;
   lastUserSpeechTime: number | null;
   
-  // TTS mute state
-  ttsMuted: boolean;
 }
 ```
 
@@ -210,11 +210,11 @@ function VoiceApp() {
     }
   }, []);
 
-  const handleAgentSpeaking = useCallback(() => {
+  const handleAgentStartedSpeaking = useCallback(() => {
     setIsSpeaking(true);
   }, []);
 
-  const handleAgentSilent = useCallback(() => {
+  const handleAgentStoppedSpeaking = useCallback(() => {
     setIsSpeaking(false);
   }, []);
 
@@ -224,8 +224,8 @@ function VoiceApp() {
       onReady={handleReady}
       onAgentStateChange={handleAgentStateChange}
       onConnectionStateChange={handleConnectionStateChange}
-      onAgentSpeaking={handleAgentSpeaking}
-      onAgentSilent={handleAgentSilent}
+      onAgentStartedSpeaking={handleAgentStartedSpeaking}
+      onAgentStoppedSpeaking={handleAgentStoppedSpeaking}
     />
   );
 }
@@ -358,27 +358,27 @@ function AutoConnectApp() {
         microphoneEnabled={micEnabled}
         onConnectionReady={handleConnectionReady}
         onMicToggle={handleMicToggle}
-        onAgentSpeaking={() => console.log('Agent speaking')}
-        onAgentSilent={() => console.log('Agent finished')}
+        onAgentStartedSpeaking={() => console.log('Agent speaking')}
+        onAgentStoppedSpeaking={() => console.log('Agent finished')}
       />
     </div>
   );
 }
 ```
 
-### 2. Manual Control Pattern
+### 2. Basic Control Pattern
 
 **Use Case**: Applications that need full control over when voice interaction starts/stops.
 
 ```tsx
-function ManualControlApp() {
+function BasicControlApp() {
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
-  const [isRecording, setIsRecording] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
 
   const startInteraction = useCallback(async () => {
     try {
       await voiceRef.current?.start();
-      setIsRecording(true);
+      setIsConnected(true);
     } catch (error) {
       console.error('Failed to start:', error);
     }
@@ -387,7 +387,7 @@ function ManualControlApp() {
   const stopInteraction = useCallback(async () => {
     try {
       await voiceRef.current?.stop();
-      setIsRecording(false);
+      setIsConnected(false);
     } catch (error) {
       console.error('Failed to stop:', error);
     }
@@ -399,13 +399,13 @@ function ManualControlApp() {
 
   return (
     <div>
-      <button onClick={startInteraction} disabled={isRecording}>
+      <button onClick={startInteraction} disabled={isConnected}>
         Start Voice Interaction
       </button>
-      <button onClick={stopInteraction} disabled={!isRecording}>
+      <button onClick={stopInteraction} disabled={!isConnected}>
         Stop Voice Interaction
       </button>
-      <button onClick={interruptAgent} disabled={!isRecording}>
+      <button onClick={interruptAgent} disabled={!isConnected}>
         Interrupt Agent
       </button>
       
@@ -428,18 +428,29 @@ function ManualControlApp() {
 function TextAndVoiceApp() {
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
   const [textInput, setTextInput] = useState('');
+  const [isConnected, setIsConnected] = useState(false);
 
   const handleTextSubmit = useCallback(async () => {
     if (!textInput.trim()) return;
     
     try {
-      // Use lazy reconnect for text input
-      await voiceRef.current?.resumeWithText(textInput);
+      // Inject text message to agent
+      voiceRef.current?.injectUserMessage(textInput);
       setTextInput('');
     } catch (error) {
       console.error('Failed to send text:', error);
     }
   }, [textInput]);
+
+  const toggleConnection = useCallback(async () => {
+    if (isConnected) {
+      await voiceRef.current?.stop();
+      setIsConnected(false);
+    } else {
+      await voiceRef.current?.start();
+      setIsConnected(true);
+    }
+  }, [isConnected]);
 
   return (
     <div>
@@ -454,26 +465,29 @@ function TextAndVoiceApp() {
         <button onClick={handleTextSubmit}>Send</button>
       </div>
       
+      <button onClick={toggleConnection}>
+        {isConnected ? 'Disconnect' : 'Connect'}
+      </button>
+      
       <DeepgramVoiceInteraction
         ref={voiceRef}
         apiKey={apiKey}
         agentOptions={agentOptions}
-        autoConnect={true}
-        microphoneEnabled={false} // Start with mic disabled
+        onReady={() => console.log('Ready')}
       />
     </div>
   );
 }
 ```
 
-### 4. Voice Commerce Pattern
+### 4. Dynamic Context Switching Pattern
 
-**Use Case**: E-commerce applications with voice shopping capabilities.
+**Use Case**: Applications that need to change agent behavior based on user context or page state.
 
 ```tsx
-function VoiceCommerceApp() {
+function DynamicContextApp() {
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
-  const [currentContext, setCurrentContext] = useState('browsing');
+  const [currentMode, setCurrentMode] = useState('general');
 
   const agentOptions = useMemo(() => ({
     language: 'en',
@@ -481,35 +495,32 @@ function VoiceCommerceApp() {
     thinkProviderType: 'open_ai',
     thinkModel: 'gpt-4o-mini',
     voice: 'aura-asteria-en',
-    instructions: `You are a helpful e-commerce voice assistant. Help customers:
-    - Find products by category, brand, or description
-    - Check product availability and pricing
-    - Process orders and answer shipping questions
-    - Handle returns and exchanges
-    - Provide product recommendations
-    Be friendly, helpful, and concise.`,
-    greeting: 'Welcome to our store! How can I help you find what you\'re looking for?'
+    instructions: 'You are a helpful assistant.',
+    greeting: 'Hello! How can I help you today?'
   }), []);
 
-  const switchToOrderMode = useCallback(() => {
-    setCurrentContext('order');
-    voiceRef.current?.updateAgentInstructions({
-      instructions: `Help the customer with their order. They can check status, modify items, or get shipping updates.`
-    });
-  }, []);
+  const switchToMode = useCallback((mode: string) => {
+    const instructions = {
+      general: 'You are a helpful assistant.',
+      customer_service: 'You are a customer service representative. Help with returns, exchanges, and general questions.',
+      technical: 'You are a technical support specialist. Help with technical issues and troubleshooting.',
+      sales: 'You are a sales assistant. Help customers find products and make purchases.'
+    };
 
-  const switchToCustomerService = useCallback(() => {
-    setCurrentContext('support');
     voiceRef.current?.updateAgentInstructions({
-      instructions: `You are a customer service representative. Help with returns, exchanges, refunds, and general questions.`
+      instructions: instructions[mode] || instructions.general
     });
+    
+    setCurrentMode(mode);
   }, []);
 
   return (
     <div>
-      <div className="context-controls">
-        <button onClick={switchToOrderMode}>Order Help</button>
-        <button onClick={switchToCustomerService}>Customer Service</button>
+      <div className="mode-controls">
+        <button onClick={() => switchToMode('general')}>General</button>
+        <button onClick={() => switchToMode('customer_service')}>Customer Service</button>
+        <button onClick={() => switchToMode('technical')}>Technical</button>
+        <button onClick={() => switchToMode('sales')}>Sales</button>
       </div>
       
       <DeepgramVoiceInteraction
@@ -518,7 +529,6 @@ function VoiceCommerceApp() {
         agentOptions={agentOptions}
         autoConnect={true}
         onAgentUtterance={(utterance) => {
-          // Handle agent responses for commerce flow
           console.log('Agent response:', utterance.text);
         }}
       />
@@ -572,11 +582,11 @@ The greeting plays automatically when the agent connection is ready:
     greeting: 'Welcome! I\'m ready to help you.',
     // ... other options
   }}
-  onAgentSpeaking={() => {
+  onAgentStartedSpeaking={() => {
     // Called when greeting starts playing
     console.log('Greeting started');
   }}
-  onAgentSilent={() => {
+  onAgentStoppedSpeaking={() => {
     // Called when greeting finishes
     console.log('Ready for user input');
   }}
@@ -595,8 +605,7 @@ The component implements complex idle timeout logic:
 <DeepgramVoiceInteraction
   sleepOptions={{
     autoSleep: true,
-    timeout: 30, // 30 seconds
-    wakeWords: ['hey assistant', 'wake up']
+    timeout: 30 // 30 seconds
   }}
   onAgentStateChange={(state) => {
     if (state === 'sleeping') {
@@ -606,19 +615,43 @@ The component implements complex idle timeout logic:
 />
 ```
 
-### 5. Lazy Reconnection
+### 5. Context Switching and Reconnection
 
-The component supports lazy reconnection for better user experience:
+The component handles context switching and reconnection through simple start/stop patterns. Session management is handled internally for seamless user experience.
+
+**How it works:**
+- The component automatically manages session IDs and conversation history internally
+- Context changes are handled by updating props and calling `start()`
+- The component preserves conversation context across reconnections
+- No need to manually manage sessions or conversation history
 
 ```tsx
-// Resume with text input
-await voiceRef.current?.resumeWithText('Hello, I need help');
+// Change context by updating props and restarting
+const switchToCustomerService = useCallback(() => {
+  setAgentOptions({
+    ...agentOptions,
+    instructions: 'You are a customer service representative...'
+  });
+  // Component will use new instructions on next start()
+}, [agentOptions]);
 
-// Resume with audio input
-await voiceRef.current?.resumeWithAudio();
+// Simple reconnection pattern
+const reconnect = useCallback(async () => {
+  await voiceRef.current?.stop();
+  await voiceRef.current?.start();
+}, []);
 
-// Connect with conversation context
-await voiceRef.current?.connectWithContext(sessionId, history, options);
+// Text input during conversation
+const sendTextMessage = useCallback((text: string) => {
+  voiceRef.current?.injectUserMessage(text);
+}, []);
+```
+
+**Simplified Session Management:**
+```tsx
+// Session management is handled internally
+// No need to access session IDs or conversation history
+// Component automatically maintains context across reconnections
 ```
 
 ---
@@ -728,46 +761,94 @@ function NetworkResilientApp() {
 
 ---
 
+## 🔧 Simplified API Approach
+
+The component follows a **simplified API design** that reduces complexity and confusion:
+
+### **Core Methods: `start()` and `stop()`**
+
+The component provides only **two primary methods** for connection control:
+
+- **`start()`** - Connects to all configured services (transcription + agent)
+- **`stop()`** - Disconnects from all services
+
+This approach eliminates the need for complex reconnection methods and session management APIs.
+
+### **Mode-Based Configuration**
+
+The component automatically determines which services to use based on props:
+
+- **Dual Mode**: Both `transcriptionOptions` and `agentOptions` provided
+- **Transcription-Only**: Only `transcriptionOptions` provided  
+- **Agent-Only**: Only `agentOptions` provided
+
+### **Internal Session Management**
+
+Session IDs and conversation history are managed internally:
+- No need to manually track sessions
+- Context is preserved across reconnections
+- Developers focus on business logic, not session management
+
+### **Removed Redundant APIs**
+
+The following APIs have been removed to reduce confusion:
+- ❌ `resumeWithText()` / `resumeWithAudio()` - Use `start()`/`stop()` instead
+- ❌ `connectWithContext()` - Update props and call `start()`
+- ❌ `connectTextOnly()` - Use agent-only mode
+- ❌ `toggleMicrophone()` - Use `start()`/`stop()` for connection control
+- ❌ `onMicToggle` - Not needed with simplified approach
+- ❌ `onVADEvent` - Use `onUtteranceEnd` for better accuracy
+- ❌ `onKeepalive` - Internal logging only, no developer value
+- ❌ `agentMute()` / `agentUnmute()` - Use `interruptAgent()` instead
+- ❌ `toggleTtsMute()` / `setTtsMuted()` - Use `interruptAgent()` instead
+- ❌ `agentMuted` prop - Not needed with simplified approach
+- ❌ `onAgentMuteChange` - Not needed with simplified approach
+
+---
+
 ## 🎯 Advanced Features
 
-### 1. TTS Mute Control
+This section covers advanced integration patterns and features that provide fine-grained control over voice interactions. These features are essential for building production-ready voice applications with proper user experience and performance.
+
+### 1. Agent Audio Control
+
+**Purpose**: Demonstrates how to provide users with immediate control over agent audio playback, essential for user experience and preventing audio-related issues.
+
+**Context**: Users need the ability to stop agent speech immediately, whether for interruption, error recovery, or user preference. The `interruptAgent()` method provides this control while properly managing audio buffers.
+
+**Use Cases**: User interruption, error recovery, audio buffer management, accessibility controls.
 
 ```tsx
-function TTSControlApp() {
-  const [isTtsMuted, setIsTtsMuted] = useState(false);
+function AgentAudioControlApp() {
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
 
-  const toggleTtsMute = useCallback(() => {
-    voiceRef.current?.toggleTtsMute();
-  }, []);
-
-  const handleTtsMuteToggle = useCallback((muted: boolean) => {
-    setIsTtsMuted(muted);
-    console.log(`TTS ${muted ? 'muted' : 'unmuted'}`);
+  const stopAgent = useCallback(() => {
+    voiceRef.current?.interruptAgent();
   }, []);
 
   return (
     <div>
-      <button 
-        onClick={toggleTtsMute}
-        className={isTtsMuted ? 'muted' : 'unmuted'}
-      >
-        {isTtsMuted ? '🔇 TTS MUTED' : '🔊 TTS ENABLED'}
+      <button onClick={stopAgent}>
+        Stop Agent
       </button>
       
       <DeepgramVoiceInteraction
         ref={voiceRef}
         apiKey={apiKey}
         agentOptions={agentOptions}
-        ttsMuted={isTtsMuted}
-        onTtsMuteToggle={handleTtsMuteToggle}
       />
     </div>
   );
 }
 ```
 
-### 2. VAD (Voice Activity Detection) Events
+### 2. Voice Activity Detection Events
+
+**Purpose**: Shows how to implement real-time visual feedback and proper conversation flow control using voice activity detection events.
+
+**Context**: VAD events provide precise timing information about when users start and stop speaking, enabling applications to provide visual feedback, manage idle timeouts, and control conversation flow more accurately than microphone state alone.
+
+**Use Cases**: Visual feedback during speech, idle timeout management, conversation flow control, accessibility features.
 
 ```tsx
 function VADEventApp() {
@@ -785,14 +866,10 @@ function VADEventApp() {
     setVadEvents(prev => [...prev, `Utterance ended: ${data.lastWordEnd}s`]);
   }, []);
 
-  const handleVADEvent = useCallback((data: { speechDetected: boolean; confidence?: number }) => {
-    setVadEvents(prev => [...prev, `VAD: ${data.speechDetected ? 'Speech detected' : 'No speech'}`]);
-  }, []);
-
   return (
     <div>
       <div className="vad-events">
-        <h3>VAD Events:</h3>
+        <h3>Voice Activity Events:</h3>
         {vadEvents.map((event, index) => (
           <div key={index}>{event}</div>
         ))}
@@ -808,7 +885,6 @@ function VADEventApp() {
         onUserStartedSpeaking={handleUserStartedSpeaking}
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
         onUtteranceEnd={handleUtteranceEnd}
-        onVADEvent={handleVADEvent}
       />
     </div>
   );
@@ -816,6 +892,12 @@ function VADEventApp() {
 ```
 
 ### 3. Dynamic Instructions Update
+
+**Purpose**: Demonstrates how to update agent behavior in real-time without restarting the voice interaction, enabling dynamic conversation modes and context switching.
+
+**Context**: Many voice applications need to change agent behavior based on user context, conversation state, or application mode. The `updateAgentInstructions()` method allows this without disrupting ongoing voice interaction.
+
+**Use Cases**: Context switching, mode changes, personalized responses, conversation state management.
 
 ```tsx
 function DynamicInstructionsApp() {
@@ -883,26 +965,12 @@ module.exports = {
 
 #### 2. Infinite Re-initialization
 
-**Cause**: Non-memoized options props  
-**Solution**: Always use `useMemo` for options
+**Cause**: Non-memoized options props causing constant component re-initialization  
+**Solution**: Always use `useMemo` for options (see [Memoization Requirements](#1-memoization-requirements) below for detailed guidance)
 
-```tsx
-// ❌ WRONG - causes infinite re-initialization
-<DeepgramVoiceInteraction
-  agentOptions={{
-    language: 'en',
-    instructions: 'You are helpful'
-  }}
-/>
+**Why this happens**: React re-renders cause new object creation, triggering component re-initialization and WebSocket reconnections.
 
-// ✅ CORRECT - memoized options
-const agentOptions = useMemo(() => ({
-  language: 'en',
-  instructions: 'You are helpful'
-}), []);
-
-<DeepgramVoiceInteraction agentOptions={agentOptions} />
-```
+**Quick Fix**: Memoize options with `useMemo` and empty dependency arrays for static configurations.
 
 #### 3. Microphone Permission Denied
 
@@ -1046,97 +1114,14 @@ useEffect(() => {
 
 ---
 
-## 🎯 Voice Commerce Specific Patterns
+## 📚 Related Documentation
 
-### 1. Product Search Integration
-
-```tsx
-function ProductSearchApp() {
-  const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
-  const [searchResults, setSearchResults] = useState([]);
-
-  const handleTranscript = useCallback((transcript: TranscriptResponse) => {
-    const text = transcript.channel.alternatives[0].transcript;
-    
-    // Trigger product search based on transcript
-    if (text.includes('search for') || text.includes('find')) {
-      performProductSearch(text);
-    }
-  }, []);
-
-  const performProductSearch = useCallback(async (query: string) => {
-    // Extract search terms
-    const searchTerms = query.replace(/search for|find/gi, '').trim();
-    
-    // Call your product search API
-    const results = await searchProducts(searchTerms);
-    setSearchResults(results);
-    
-    // Update agent with search results
-    voiceRef.current?.updateAgentInstructions({
-      instructions: `Help the customer with these search results: ${JSON.stringify(results)}`
-    });
-  }, []);
-
-  return (
-    <div>
-      <div className="search-results">
-        {searchResults.map(product => (
-          <div key={product.id}>{product.name}</div>
-        ))}
-      </div>
-      
-      <DeepgramVoiceInteraction
-        ref={voiceRef}
-        apiKey={apiKey}
-        transcriptionOptions={transcriptionOptions}
-        agentOptions={agentOptions}
-        onTranscriptUpdate={handleTranscript}
-      />
-    </div>
-  );
-}
-```
-
-### 2. Order Management Integration
-
-```tsx
-function OrderManagementApp() {
-  const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
-  const [currentOrder, setCurrentOrder] = useState(null);
-
-  const switchToOrderMode = useCallback((orderId: string) => {
-    // Load order details
-    const order = loadOrder(orderId);
-    setCurrentOrder(order);
-    
-    // Update agent with order context
-    voiceRef.current?.updateAgentInstructions({
-      instructions: `Help the customer with their order #${orderId}. Order details: ${JSON.stringify(order)}`
-    });
-  }, []);
-
-  const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
-    // Process agent responses for order management
-    if (utterance.text.includes('add to cart')) {
-      // Extract product and add to cart
-    } else if (utterance.text.includes('checkout')) {
-      // Proceed to checkout
-    }
-  }, []);
-
-  return (
-    <div>
-      <DeepgramVoiceInteraction
-        ref={voiceRef}
-        apiKey={apiKey}
-        agentOptions={agentOptions}
-        onAgentUtterance={handleAgentUtterance}
-      />
-    </div>
-  );
-}
-```
+- **[API Reference](./API-REFERENCE.md)** - Complete component API documentation
+- **[Technical Setup](./TECHNICAL-SETUP.md)** - Build configuration and technical requirements  
+- **[Development Guide](./DEVELOPMENT.md)** - Development workflow and testing
+- **[Test App](../test-app/)** - Working examples and test scenarios
+- **[VAD Events Reference](./VAD-EVENTS-REFERENCE.md)** - Voice Activity Detection events
+- **[Test Utilities](./TEST-UTILITIES.md)** - Testing helpers and utilities
 
 ---
 
@@ -1156,6 +1141,6 @@ function OrderManagementApp() {
 
 ---
 
-**Last Updated**: December 2024  
+**Last Updated**: October 2025  
 **Component Version**: 0.4.0+  
 **React Version**: 16.8.0+
