@@ -9,7 +9,6 @@ module.exports = {
     '<rootDir>/test-app/tests/**/*.test.js',
     '<rootDir>/test-app/tests/**/*.test.ts',
     '<rootDir>/test-app/tests/**/*.test.tsx',
-    '!<rootDir>/tests/e2e/**/*', // Exclude E2E tests
     '!<rootDir>/test-app/tests/e2e/**/*' // Exclude test-app E2E tests
   ],
   moduleNameMapper: {
@@ -27,5 +26,16 @@ module.exports = {
     '!src/test-app/**/*'
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html']
+  coverageReporters: ['text', 'lcov', 'html'],
+  // Handle test-app ES modules by transforming them
+  transformIgnorePatterns: [
+    'node_modules/(?!(test-app)/)'
+  ],
+  // Use CommonJS for all tests to avoid ES module conflicts
+  extensionsToTreatAsEsm: [],
+  globals: {
+    'ts-jest': {
+      useESM: false
+    }
+  }
 };

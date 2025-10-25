@@ -31,12 +31,12 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { 
+const { 
   SELECTORS,
   waitForConnection 
-} from './helpers/test-helpers.js';
-import { setupTestPage } from './helpers/audio-mocks.js';
-import {
+} = require('./helpers/test-helpers');
+import { setupTestPage } from './helpers/audio-mocks';
+const {
   VADTestUtilities,
   setupVADTestEnvironment,
   waitForVADEvents,
@@ -44,7 +44,7 @@ import {
   validateAgentStateTimeoutBehavior,
   validateIdleTimeoutStateMachine,
   VAD_TEST_CONSTANTS
-} from '../utils/vad-test-utilities.js';
+} = require('../utils/vad-test-utilities');
 
 test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
   let vadUtils;

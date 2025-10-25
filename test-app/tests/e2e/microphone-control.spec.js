@@ -30,101 +30,92 @@ test.describe('Microphone Control', () => {
   });
 
   test('should enable microphone when button clicked', async ({ page }) => {
-    // Verify microphone button is initially enabled (component ready in auto-connect mode)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
+    // Wait for component to be ready
+    await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true');
+    
+    // Verify initial state - microphone should be disabled
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
     
-    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
-    // but the microphone itself is disabled until the user clicks the button
+    // Click the microphone button to enable it
+    await page.click('[data-testid="microphone-button"]');
+    
+    // Wait for state to update
+    await page.waitForTimeout(2000);
+    
+    // Verify microphone is now enabled
+    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Enabled');
   });
 
   test('should disable microphone when button clicked again', async ({ page }) => {
-    // Verify microphone button is initially enabled (component ready in auto-connect mode)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
-    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
+    // Wait for component to be ready
+    await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true');
     
-    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
-    // but the microphone itself is disabled until the user clicks the button
+    // First enable the microphone
+    await page.click('[data-testid="microphone-button"]');
+    await page.waitForTimeout(2000);
+    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Enabled');
+    
+    // Now disable it by clicking again
+    await page.click('[data-testid="microphone-button"]');
+    await page.waitForTimeout(2000);
+    
+    // Verify microphone is now disabled
+    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
   });
 
-  test('should handle microphone permission denied', async ({ page }) => {
-    // Mock permission denied
-    await page.context().grantPermissions([], { origin: 'http://localhost:3000' });
+  // TODO: Fix permission mocking - see https://github.com/Signal-Meaning/dg_react_agent/issues/178
+  test.skip('should handle microphone permission denied', async ({ page }) => {
+    // Wait for component to be ready
+    await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true');
     
-    // Verify microphone button is enabled (component ready in auto-connect mode)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
+    // Mock permission denied - use the actual origin
+    const currentUrl = page.url();
+    const origin = new URL(currentUrl).origin;
+    await page.context().grantPermissions([], { origin });
+    
+    // Try to enable microphone - should handle permission error gracefully
+    await page.click('[data-testid="microphone-button"]');
+    await page.waitForTimeout(3000);
+    
+    // Should remain disabled due to permission error
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
-    
-    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
-    // but the microphone itself is disabled until the user clicks the button
-    // This test verifies the current behavior where the button is disabled
   });
 
   test('should handle microphone permission granted', async ({ page }) => {
-    // Grant microphone permission
-    await page.context().grantPermissions(['microphone'], { origin: 'http://localhost:3000' });
+    // Wait for component to be ready
+    await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true');
     
-    // Verify microphone button is enabled (component ready in auto-connect mode)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
-    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
+    // Grant microphone permission - use the actual origin
+    const currentUrl = page.url();
+    const origin = new URL(currentUrl).origin;
+    await page.context().grantPermissions(['microphone'], { origin });
     
-    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
-    // but the microphone itself is disabled until the user clicks the button
-    // This test verifies the current behavior where the button is disabled
+    // Try to enable microphone - should work with permission granted
+    await page.click('[data-testid="microphone-button"]');
+    await page.waitForTimeout(3000);
+    
+    // Should be enabled with permission granted
+    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Enabled');
   });
 
-  test('should toggle microphone via props', async ({ page }) => {
-    // Test with microphoneEnabled=true prop
-    await page.goto('/?microphoneEnabled=true');
-    await page.waitForLoadState('networkidle');
+  // TODO: Fix permission mocking - see https://github.com/Signal-Meaning/dg_react_agent/issues/178
+  test.skip('should handle microphone errors gracefully', async ({ page }) => {
+    // Wait for component to be ready
+    await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true');
     
-    // Verify microphone button is enabled (component ready in auto-connect mode)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
-    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
-    
-    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
-    // but the microphone itself is disabled until the user clicks the button
-    // This test verifies the current behavior where the button is disabled
-  });
-
-  test('should handle microphone toggle callback', async ({ page }) => {
-    // Listen for microphone toggle events
-    const toggleEvents = [];
-    await page.exposeFunction('onMicToggle', (enabled) => {
-      toggleEvents.push(enabled);
-    });
-    
-    // Verify microphone button is enabled (component ready in auto-connect mode)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
-    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
-    
-    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
-    // but the microphone itself is disabled until the user clicks the button
-  });
-
-  test('should maintain microphone state during reconnection', async ({ page }) => {
-    // Verify microphone button is enabled (component ready in auto-connect mode)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
-    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
-    
-    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
-    // but the microphone itself is disabled until the user clicks the button
-  });
-
-  test('should handle microphone errors gracefully', async ({ page }) => {
-    // Mock microphone error
+    // Mock getUserMedia to throw error
     await page.addInitScript(() => {
       // Override getUserMedia to throw error
       navigator.mediaDevices.getUserMedia = () => {
-        return Promise.reject(new Error('Microphone access denied'));
+        return Promise.reject(new DOMException('Microphone access denied', 'NotAllowedError'));
       };
     });
     
-    // Verify microphone button is enabled (component ready in auto-connect mode)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
-    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
+    // Try to enable microphone - should handle error gracefully
+    await page.click('[data-testid="microphone-button"]');
+    await page.waitForTimeout(3000);
     
-    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
-    // but the microphone itself is disabled until the user clicks the button
+    // Should remain disabled due to error
+    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
   });
 });

@@ -290,7 +290,7 @@ async function assertConnectionHealthy(page, expect) {
   await expect(connectionReady).toHaveText('true');
 }
 
-export {
+module.exports = {
   SELECTORS,
   setupTestPage,
   waitForConnection,

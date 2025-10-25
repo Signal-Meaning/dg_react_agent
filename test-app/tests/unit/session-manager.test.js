@@ -10,14 +10,14 @@
  * that handle conversation context in the application layer.
  */
 
-import { 
+const { 
   SessionManager, 
   generateSessionId, 
   transformConversationHistory,
   cleanupOldSessions,
   setupSessionCleanup,
   SESSION_CONFIG
-} from '../../src/session-management';
+} = require('../../src/session-management');
 
 describe('SessionManager Unit Tests', () => {
   let sessionManager;

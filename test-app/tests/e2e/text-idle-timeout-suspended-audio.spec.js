@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import { setupTestPage } from './helpers/audio-mocks.js';
+const { test, expect } = require('@playwright/test');
+const { setupTestPage } = require('./helpers/audio-mocks');
 
 test.describe('Text Input Idle Timeout with Suspended AudioContext', () => {
   test('should timeout after text interaction even with suspended AudioContext', async ({ page }) => {

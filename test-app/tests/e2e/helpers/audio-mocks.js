@@ -260,7 +260,7 @@ async function simulateSpeech(page, description = 'simulated speech', options = 
   }
 }
 
-export {
+module.exports = {
   setupAudioMocks,
   setupTestPage,
   simulateUserGesture,

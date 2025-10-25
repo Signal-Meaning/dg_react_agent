@@ -25,12 +25,12 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { 
+const { 
   SELECTORS,
   waitForConnection,
   sendTextMessage
-} from './helpers/test-helpers.js';
-import { setupTestPage } from './helpers/audio-mocks.js';
+} = require('./helpers/test-helpers');
+import { setupTestPage } from './helpers/audio-mocks';
 
 test.describe('Greeting Idle Timeout', () => {
   
