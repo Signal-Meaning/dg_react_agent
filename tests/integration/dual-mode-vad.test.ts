@@ -16,7 +16,7 @@ import {
   UserStoppedSpeakingResponse,
   UtteranceEndResponse,
   VADEventResponse
-} from 'deepgram-voice-interaction-react';
+} from '../../dist/types/agent';
 
 describe('Dual-Mode VAD Tests', () => {
   // Mock functions for testing

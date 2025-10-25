@@ -7,7 +7,7 @@
  * - Accurate playback state detection
  */
 
-import { AudioManager } from 'deepgram-voice-interaction-react';
+import { AudioManager } from '../../dist/utils/audio/AudioManager';
 
 // Mock AudioContext and related Web Audio API
 const mockAudioContext = {

@@ -15,7 +15,7 @@ import {
   UserStoppedSpeakingResponse,
   UtteranceEndResponse,
   VADEventResponse
-} from 'deepgram-voice-interaction-react';
+} from '../../dist/types/agent';
 
 describe('WebSocket Integration Tests', () => {
   // Mock WebSocket and event handlers
