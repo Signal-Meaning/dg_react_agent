@@ -123,3 +123,4 @@ Multiple E2E tests are failing due to audio context initialization and microphon
 - The test failures are consistent and reproducible
 - The issues appear to be related to component state management rather than test configuration
 - Priority should be given to AudioContext and microphone state issues as they affect core functionality
+
