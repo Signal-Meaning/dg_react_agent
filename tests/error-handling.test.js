@@ -57,7 +57,6 @@ describe('Error Handling Tests', () => {
       isRecording: jest.fn().mockReturnValue(false),
       isPlaybackActive: jest.fn().mockReturnValue(false),
       isTtsMuted: false,
-      setTtsMuted: jest.fn(),
       getAudioContext: jest.fn().mockReturnValue({
         state: 'running',
         resume: jest.fn().mockResolvedValue()

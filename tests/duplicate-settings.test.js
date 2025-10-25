@@ -115,7 +115,6 @@ afterAll(() => {
       stopRecording: jest.fn(),
       addEventListener: jest.fn().mockReturnValue(jest.fn()),
       dispose: jest.fn(),
-      setTtsMuted: jest.fn()
     }));
 
     render(
@@ -181,7 +180,6 @@ afterAll(() => {
       stopRecording: jest.fn(),
       addEventListener: jest.fn().mockReturnValue(jest.fn()),
       dispose: jest.fn(),
-      setTtsMuted: jest.fn()
     }));
 
     const ref = React.createRef();
@@ -267,7 +265,6 @@ afterAll(() => {
       stopRecording: jest.fn(),
       addEventListener: jest.fn().mockReturnValue(jest.fn()),
       dispose: jest.fn(),
-      setTtsMuted: jest.fn()
     }));
 
     const ref = React.createRef();
@@ -343,7 +340,6 @@ afterAll(() => {
       stopRecording: jest.fn(),
       addEventListener: jest.fn().mockReturnValue(jest.fn()),
       dispose: jest.fn(),
-      setTtsMuted: jest.fn()
     }));
 
     render(

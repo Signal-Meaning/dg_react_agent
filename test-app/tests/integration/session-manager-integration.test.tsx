@@ -4,24 +4,25 @@
  */
 
 /**
- * Session Management Integration Tests
+ * SessionManager Integration Tests
  * 
  * These tests validate the integration between the test-app's SessionManager
- * and the DeepgramVoiceInteraction component.
+ * and the DeepgramVoiceInteraction component. This tests how SessionManager
+ * is used in a real application context with the voice interaction component.
  */
 
 import React, { useRef, useState, useCallback } from 'react';
 import { render, waitFor, act, fireEvent } from '@testing-library/react';
-import { DeepgramVoiceInteraction } from '../../src';
-import { SessionManager } from '../../test-app/src/session-management';
-import type { DeepgramVoiceInteractionHandle, AgentOptions } from '../../src/types';
+import { DeepgramVoiceInteraction } from '../../../src';
+import { SessionManager } from '../../src/session-management';
+import type { DeepgramVoiceInteractionHandle, AgentOptions } from '../../../src/types';
 
 // Mock the WebSocketManager and AudioManager
-jest.mock('../../src/utils/websocket/WebSocketManager');
-jest.mock('../../src/utils/audio/AudioManager');
+jest.mock('../../../src/utils/websocket/WebSocketManager');
+jest.mock('../../../src/utils/audio/AudioManager');
 
-const { WebSocketManager } = require('../../src/utils/websocket/WebSocketManager');
-const { AudioManager } = require('../../src/utils/audio/AudioManager');
+const { WebSocketManager } = require('../../../src/utils/websocket/WebSocketManager');
+const { AudioManager } = require('../../../src/utils/audio/AudioManager');
 
 // Test component that simulates test-app behavior
 const TestAppWithSessionManagement = () => {
@@ -192,7 +193,7 @@ const TestAppWithSessionManagement = () => {
   );
 };
 
-describe('Session Management Integration Tests', () => {
+describe('SessionManager Integration Tests', () => {
   let mockAgentManager;
   let mockAudioManager;
 
@@ -221,8 +222,6 @@ describe('Session Management Integration Tests', () => {
       stopRecording: jest.fn().mockResolvedValue(),
       isRecording: jest.fn().mockReturnValue(false),
       isPlaybackActive: jest.fn().mockReturnValue(false),
-      isTtsMuted: false,
-      setTtsMuted: jest.fn(),
       getAudioContext: jest.fn().mockReturnValue({
         state: 'running',
         resume: jest.fn().mockResolvedValue()

@@ -106,8 +106,6 @@ afterAll(() => {
       stopRecording: jest.fn(),
       isRecording: jest.fn().mockReturnValue(false),
       isTtsMuted: false,
-      toggleTtsMute: jest.fn(),
-      setTtsMuted: jest.fn(),
       getAudioContext: jest.fn(),
       addEventListener: jest.fn().mockReturnValue(jest.fn()), // Return unsubscribe function
       removeEventListener: jest.fn(),

@@ -4,7 +4,7 @@
  */
 
 /**
- * Session Management Utilities Tests
+ * SessionManager Unit Tests
  * 
  * These tests validate the SessionManager class and related utilities
  * that handle conversation context in the application layer.
@@ -17,9 +17,9 @@ import {
   cleanupOldSessions,
   setupSessionCleanup,
   SESSION_CONFIG
-} from '../test-app/src/session-management';
+} from '../../src/session-management';
 
-describe('Session Management Utilities', () => {
+describe('SessionManager Unit Tests', () => {
   let sessionManager;
 
   beforeEach(() => {

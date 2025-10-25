@@ -6,7 +6,11 @@ module.exports = {
     '<rootDir>/tests/**/*.test.js',
     '<rootDir>/tests/**/*.test.ts',
     '<rootDir>/tests/**/*.test.tsx',
-    '!<rootDir>/tests/e2e/**/*' // Exclude E2E tests
+    '<rootDir>/test-app/tests/**/*.test.js',
+    '<rootDir>/test-app/tests/**/*.test.ts',
+    '<rootDir>/test-app/tests/**/*.test.tsx',
+    '!<rootDir>/tests/e2e/**/*', // Exclude E2E tests
+    '!<rootDir>/test-app/tests/e2e/**/*' // Exclude test-app E2E tests
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'

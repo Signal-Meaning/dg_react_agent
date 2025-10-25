@@ -189,16 +189,6 @@ export interface DeepgramVoiceInteractionProps {
   onAgentSilent?: () => void;
 
   /**
-   * TTS mute state - when true, TTS audio is muted
-   */
-  ttsMuted?: boolean;
-
-  /**
-   * Called when TTS mute state changes
-   */
-  onTtsMuteToggle?: (isMuted: boolean) => void;
-
-  /**
    * VAD (Voice Activity Detection) Event Callbacks
    */
   
@@ -317,28 +307,6 @@ export interface DeepgramVoiceInteractionHandle {
    * Get current component state for debugging (testing only)
    */
   getState: () => any;
-
-  /**
-   * Toggle TTS mute state
-   * 
-   * Switches between muted and unmuted states for TTS audio playback.
-   * When muted, the agent will not produce any audio output.
-   */
-  toggleTtsMute: () => void;
-
-  /**
-   * Set TTS mute state explicitly
-   * 
-   * @param muted - Whether TTS should be muted (true) or unmuted (false)
-   */
-  setTtsMuted: (muted: boolean) => void;
-
-  /**
-   * Get current TTS mute state
-   * 
-   * @returns true if TTS is currently muted, false otherwise
-   */
-  isTtsMuted: boolean;
 
   /**
    * Check if audio is currently playing

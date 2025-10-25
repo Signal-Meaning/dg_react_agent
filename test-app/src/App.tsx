@@ -197,7 +197,7 @@ function App() {
     context: conversationHistory.length > 0 ? {
       messages: conversationHistory.map(message => ({
         type: "History",
-        role: message.role === 'assistant' ? 'assistant' : 'user',
+        role: message.role === 'assistant' ? 'assistant' as const : 'user' as const,
         content: message.content
       }))
     } : undefined
@@ -386,8 +386,8 @@ function App() {
         setUserMessage(textInput);
         
         if (deepgramRef.current) {
-          // Use lazy reconnect method instead of direct injection
-          await deepgramRef.current.resumeWithText(textInput);
+          // Use injectUserMessage method instead of resumeWithText
+          deepgramRef.current.injectUserMessage(textInput);
           addLog('Text message sent');
         } else {
           addLog('Error: DeepgramVoiceInteraction ref not available');
@@ -432,11 +432,6 @@ function App() {
     addLog('Agent finished speaking');
   }, [addLog]);
 
-  const handleTtsMuteToggle = useCallback((muted: boolean) => {
-    setIsTtsMuted(muted);
-    addLog(`TTS mute state changed to: ${muted ? 'MUTED' : 'UNMUTED'}`);
-  }, [addLog]);
-  
   // Control functions
   const startInteraction = async () => {
     try {
@@ -548,7 +543,7 @@ function App() {
       } else {
         // Disable microphone
         console.log('🎤 [APP] Disabling microphone');
-        await deepgramRef.current?.toggleMicrophone(false);
+        // Note: Microphone control is handled by the component's internal state
         addLog('Microphone disabled');
       }
     } catch (error) {
@@ -559,18 +554,38 @@ function App() {
     }
   };
 
-  const toggleTtsMute = () => {
-    console.log('🔇 [APP] toggleTtsMute called');
+  /**
+   * Comprehensive muting callback that handles all audio management
+   * This demonstrates proper parent-controlled muting pattern:
+   * 1. Parent manages mute state locally
+   * 2. Parent calls interruptAgent() to stop audio immediately
+   * 3. Parent handles any additional audio channel management if needed
+   */
+  const handleMuteToggle = () => {
+    console.log('🔇 [APP] Mute toggle called');
     addLog('🔇 TTS mute button clicked');
     
-    if (deepgramRef.current) {
-      console.log('🔇 [APP] deepgramRef.current is available, calling toggleTtsMute()');
-      console.log('🔇 [APP] deepgramRef.current methods:', Object.keys(deepgramRef.current));
-      deepgramRef.current.toggleTtsMute();
-      console.log('✅ toggleTtsMute() method called');
-    } else {
+    if (!deepgramRef.current) {
       console.error('❌ deepgramRef.current is null!');
       addLog('❌ Cannot toggle TTS mute: deepgramRef is null');
+      return;
+    }
+    
+    const newMutedState = !isTtsMuted;
+    console.log(`🔇 [APP] Changing mute state: ${isTtsMuted} → ${newMutedState}`);
+    
+    // Update local mute state (parent responsibility)
+    setIsTtsMuted(newMutedState);
+    
+    if (newMutedState) {
+      // Muting: Call interruptAgent() to stop audio immediately
+      console.log('🔇 [APP] Muting - calling interruptAgent() to stop audio');
+      deepgramRef.current.interruptAgent();
+      addLog('🔇 Audio interrupted via interruptAgent()');
+    } else {
+      // Unmuting: Audio will resume naturally when agent speaks
+      console.log('🔇 [APP] Unmuting - audio will resume on next agent response');
+      addLog('🔇 Audio unmuted - will resume on next agent response');
     }
   };
   
@@ -650,9 +665,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onConnectionReady={handleConnectionReady}
         onAgentSpeaking={handleAgentSpeaking}
         onAgentSilent={handleAgentSilent}
-        // TTS mute props
-        ttsMuted={isTtsMuted}
-        onTtsMuteToggle={handleTtsMuteToggle}
         debug={true} // Enable debug for VAD testing
       />
       
@@ -817,7 +829,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           🧪 Trigger Timeout
         </button>
         <button 
-          onClick={toggleTtsMute}
+          onClick={handleMuteToggle}
           data-testid="tts-mute-button"
           style={{
             padding: '12px 20px',
