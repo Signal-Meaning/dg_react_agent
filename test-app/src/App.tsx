@@ -48,6 +48,13 @@ function App() {
   const [loadedInstructions, setLoadedInstructions] = useState<string>('');
   const [instructionsLoading, setInstructionsLoading] = useState(true);
   
+  // Conversation history for context management
+  const [conversationHistory, setConversationHistory] = useState<Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: number;
+  }>>([]);
+  
   // Auto-connect dual mode state
   const [micEnabled, setMicEnabled] = useState(false);
   const [connectionReady, setConnectionReady] = useState(false);
@@ -157,6 +164,20 @@ function App() {
     loadInstructions();
   }, [addLog]); // Include addLog in dependencies
 
+  const memoizedTranscriptionOptions = useMemo(() => ({
+    // Use environment variables with sensible defaults
+    model: import.meta.env.VITE_TRANSCRIPTION_MODEL || 'nova-3',
+    language: import.meta.env.VITE_TRANSCRIPTION_LANGUAGE || 'en-US',
+    smart_format: import.meta.env.VITE_TRANSCRIPTION_SMART_FORMAT !== 'false',
+    interim_results: import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS !== 'false',
+    diarize: import.meta.env.VITE_TRANSCRIPTION_DIARIZE !== 'false',
+    channels: parseInt(import.meta.env.VITE_TRANSCRIPTION_CHANNELS || '1'),
+    vad_events: true, // Enable VAD events
+    utterance_end_ms: parseInt(import.meta.env.VITE_TRANSCRIPTION_UTTERANCE_END_MS || '1000'),
+    sample_rate: 16000,
+    encoding: 'linear16'
+  }), []);
+
   const memoizedAgentOptions = useMemo(() => ({
     // Use environment variables with sensible defaults
     language: import.meta.env.VITE_AGENT_LANGUAGE || 'en',
@@ -172,7 +193,15 @@ function App() {
     voice: import.meta.env.VITE_AGENT_VOICE || 'aura-2-apollo-en',
     instructions: loadedInstructions || 'You are a helpful voice assistant. Keep your responses concise and informative.',
     greeting: import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?',
-  }), [loadedInstructions]); // Include loadedInstructions dependency
+    // Pass conversation history as context in Deepgram API format
+    context: conversationHistory.length > 0 ? {
+      messages: conversationHistory.map(message => ({
+        type: "History",
+        role: message.role === 'assistant' ? 'assistant' : 'user',
+        content: message.content
+      }))
+    } : undefined
+  }), [loadedInstructions, conversationHistory]); // Include conversationHistory dependency
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
@@ -231,11 +260,23 @@ function App() {
   const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
     setAgentResponse(utterance.text);
     addLog(`Agent said: ${utterance.text}`);
+    // Track agent messages in conversation history
+    setConversationHistory(prev => [...prev, {
+      role: 'assistant',
+      content: utterance.text,
+      timestamp: Date.now()
+    }]);
   }, [addLog]); // Depends on addLog
   
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
     setUserMessage(message.text);
     addLog(`User message from server: ${message.text}`);
+    // Track user messages in conversation history
+    setConversationHistory(prev => [...prev, {
+      role: 'user',
+      content: message.text,
+      timestamp: Date.now()
+    }]);
   }, [addLog]);
   
   const handleAgentStateChange = useCallback((state: AgentState) => {
@@ -314,6 +355,19 @@ function App() {
   // handleSpeechStopped removed - SpeechStopped is not a real Deepgram event
 
   // Auto-connect dual mode event handlers
+  const handleMicToggle = useCallback((enabled: boolean) => {
+    console.log('🎤 [APP] handleMicToggle called with enabled:', enabled);
+    console.log('🎤 [APP] Current micEnabled state:', micEnabled);
+    setMicEnabled(enabled);
+    console.log('🎤 [APP] setMicEnabled called with:', enabled);
+    
+    // Reset the utteranceEndDetected flag when microphone is toggled
+    // This allows new speech sessions to work properly
+    // utteranceEndDetected.current = false; // Removed - main component handles this
+    console.log('🔄 [TEST-APP] handleMicToggle - microphone toggled');
+    
+    addLog(`Microphone ${enabled ? 'enabled' : 'disabled'}`);
+  }, [addLog, micEnabled]);
 
   const handleTextSubmit = useCallback(async () => {
     if (!textInput.trim()) return;
@@ -479,16 +533,9 @@ function App() {
           
           if (typeof deepgramRef.current.startAudioCapture === 'function') {
             console.log('🎤 [APP] startAudioCapture method exists, calling it');
-            try {
-              await deepgramRef.current.startAudioCapture();
-              console.log('🎤 [APP] startAudioCapture() completed successfully');
-              addLog('Audio capture started successfully');
-              setMicEnabled(true); // Only set to true if operation succeeds
-            } catch (error) {
-              console.log('🎤 [APP] startAudioCapture() failed:', error);
-              addLog(`❌ Audio capture failed: ${error.message}`);
-              // Don't set micEnabled to true if there was an error
-            }
+            await deepgramRef.current.startAudioCapture();
+            console.log('🎤 [APP] startAudioCapture() completed successfully');
+            addLog('Audio capture started successfully');
           } else {
             console.log('🎤 [APP] startAudioCapture method does not exist!');
             addLog('❌ [APP] startAudioCapture method not found on ref');
@@ -499,11 +546,10 @@ function App() {
         }
         setMicLoading(false);
       } else {
-        // Stop all connections (simpler approach)
-        console.log('🎤 [APP] Stopping all connections');
-        await deepgramRef.current?.stop();
-        addLog('All connections stopped');
-        setMicEnabled(false); // Update state to reflect microphone is disabled
+        // Disable microphone
+        console.log('🎤 [APP] Disabling microphone');
+        await deepgramRef.current?.toggleMicrophone(false);
+        addLog('Microphone disabled');
       }
     } catch (error) {
       console.log('🎤 [APP] Error in toggleMicrophone:', error);
@@ -582,6 +628,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       <DeepgramVoiceInteraction
         ref={deepgramRef}
         apiKey={import.meta.env.VITE_DEEPGRAM_API_KEY || ''}
+        transcriptionOptions={memoizedTranscriptionOptions}
         agentOptions={memoizedAgentOptions}
         endpointConfig={memoizedEndpointConfig}
         onReady={handleReady}
@@ -592,20 +639,21 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onConnectionStateChange={handleConnectionStateChange}
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
+        // VAD event handlers
+        onUserStartedSpeaking={handleUserStartedSpeaking}
+        onUserStoppedSpeaking={handleUserStoppedSpeaking}
+        onUtteranceEnd={handleUtteranceEnd}
         // Auto-connect dual mode props
         autoConnect={true}
+        microphoneEnabled={micEnabled}
+        onMicToggle={handleMicToggle}
         onConnectionReady={handleConnectionReady}
         onAgentSpeaking={handleAgentSpeaking}
         onAgentSilent={handleAgentSilent}
         // TTS mute props
         ttsMuted={isTtsMuted}
         onTtsMuteToggle={handleTtsMuteToggle}
-        // VAD event props - clearly marked by source
-        onUserStartedSpeaking={handleUserStartedSpeaking}
-        onUserStoppedSpeaking={handleUserStoppedSpeaking}
-        // onSpeechStopped removed - not a real Deepgram event
-        onUtteranceEnd={handleUtteranceEnd}
-        debug={isDebugMode} // Enable debug via environment variable or URL parameter for testing
+        debug={true} // Enable debug for VAD testing
       />
       
       <div style={{ border: '1px solid blue', padding: '10px', margin: '15px 0' }}>

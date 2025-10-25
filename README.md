@@ -564,6 +564,7 @@ export default CombinedInteraction;
 | `agentOptions`          | `AgentOptions`                                           | *        | Options for the agent service. See `AgentOptions` type & [Deepgram Agent Docs][agent-docs]. **Omit completely** (not just `{}`) when not using agent. |
 | `endpointConfig`        | `EndpointConfig` (`{ transcriptionUrl?, agentUrl? }`)    | No       | Override default Deepgram WebSocket URLs.                                                                 |
 | `autoConnect`           | `boolean`                                                | No       | Whether to automatically connect when ready. Default: `undefined` (no auto-connect).                     |
+| `microphoneEnabled`     | `boolean`                                                | No       | Whether microphone is enabled. Default: `false`.                                                          |
 | `sleepOptions`          | `SleepOptions`                                           | No       | Configuration for agent sleep behavior.                                                                   |
 | `onReady`               | `(isReady: boolean) => void`                             | No       | Called when the component is initialized and ready to start.                                              |
 | `onConnectionStateChange`| `(service: ServiceType, state: ConnectionState) => void` | No       | Called when WebSocket connection state changes for 'transcription' or 'agent'.                            |
@@ -574,6 +575,7 @@ export default CombinedInteraction;
 | `onUserStartedSpeaking` | `() => void`                                             | No       | Called when user speech starts (VAD).                                                                     |
 | `onUserStoppedSpeaking` | `() => void`                                             | No       | Called when user speech stops (VAD).                                                                      |
 | `onPlaybackStateChange` | `(isPlaying: boolean) => void`                           | No       | Called when agent audio playback starts or stops.                                                         |
+| `onMicToggle`           | `(enabled: boolean) => void`                             | No       | Called when microphone state changes.                                                                     |
 | `onConnectionReady`     | `() => void`                                             | No       | Called when dual mode connection is established.                                                          |
 | `onAgentSpeaking`       | `() => void`                                             | No       | Called when agent starts speaking.                                                                        |
 | `onAgentSilent`         | `() => void`                                             | No       | Called when agent finishes speaking.                                                                      |
@@ -769,6 +771,8 @@ return (
   <DeepgramVoiceInteraction
     apiKey={apiKey}
     autoConnect={true}
+    microphoneEnabled={micEnabled}
+    onMicToggle={setMicEnabled}
     agentOptions={agentOptions}
     onAgentUtterance={(utterance) => setResponse(utterance.text)}
   />

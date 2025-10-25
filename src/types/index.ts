@@ -8,7 +8,7 @@
 import type { ConnectionState, ServiceType, EndpointConfig, DeepgramError } from './connection';
 import type { TranscriptionOptions, TranscriptResponse } from './transcription';
 // Import AgentState specifically because DeepgramVoiceInteractionProps uses it directly
-import type { AgentState, AgentOptions, UpdateInstructionsPayload } from './agent';
+import type { AgentState, AgentOptions, UpdateInstructionsPayload, ConversationMessage } from './agent';
 
 // Re-export all types from specific files
 export * from './agent';
@@ -158,7 +158,20 @@ export interface DeepgramVoiceInteractionProps {
     wakeWords?: string[];
   };
 
+  /**
+   * Auto-connect dual mode behavior options
+   */
+  autoConnect?: boolean;
 
+  /**
+   * Whether microphone is enabled (controlled or initial state)
+   */
+  microphoneEnabled?: boolean;
+
+  /**
+   * Called when microphone is toggled on/off
+   */
+  onMicToggle?: (enabled: boolean) => void;
 
   /**
    * Called when dual mode connection is established and settings are sent
@@ -272,9 +285,23 @@ export interface DeepgramVoiceInteractionHandle {
   injectAgentMessage: (message: string) => void;
   
   /**
+   * Connect for text-only interactions (no microphone)
+   */
+  connectTextOnly: () => Promise<void>;
+  
+  /**
    * Inject a user message to the agent
    */
   injectUserMessage: (message: string) => void;
+
+  /**
+   * Start audio capture (lazy initialization)
+   * 
+   * This method triggers the browser's microphone permission prompt and initializes
+   * the AudioManager for voice interactions. Should only be called when user explicitly
+   * requests microphone access.
+   */
+  startAudioCapture: () => Promise<void>;
   
   /**
    * Get connection states for debugging (testing only)

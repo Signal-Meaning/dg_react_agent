@@ -5,7 +5,7 @@
  * without trying to mock the entire WebSocket connection flow.
  */
 
-const { WebSocketManager } = require('../dist');
+const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
 
 describe('WebSocket Error Handling - Simple Unit Tests', () => {
   let webSocketManager;

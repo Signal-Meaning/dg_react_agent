@@ -47,7 +47,7 @@ const shouldSkipInCI = process.env.CI && !process.env.RUN_REAL_API_TESTS;
 
 import React from 'react';
 import { render, waitFor, act } from '@testing-library/react';
-import { DeepgramVoiceInteraction } from '../src';
+import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
 // Mock the WebSocketManager and AudioManager
 jest.mock('../src/utils/websocket/WebSocketManager');
@@ -305,9 +305,9 @@ afterAll(() => {
     // Clear the mock to track new calls
     mockSendJSON.mockClear();
 
-    // Now call start() - this should NOT send settings again
+    // Now call toggleMic - this should NOT send settings again
     await act(async () => {
-      await ref.current.start();
+      await ref.current.toggleMicrophone(true);
     });
 
     // Simulate another connection state change - this should NOT send settings again

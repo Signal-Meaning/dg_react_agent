@@ -5,10 +5,6 @@
  * agent events including welcome messages, settings applied, and conversation flow.
  */
 
-const React = require('react');
-const { render, act } = require('@testing-library/react');
-const { DeepgramVoiceInteraction } = require('../dist');
-
 describe('Event Handling Unit Tests', () => {
   let mockOnReady;
   let mockOnAgentStateChange;

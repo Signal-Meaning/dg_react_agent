@@ -1,4 +1,4 @@
-import { AgentState, ConnectionState, ServiceType } from '../../types';
+import { AgentState, ConnectionState, ServiceType, ConversationMessage } from '../../types';
 
 /**
  * State of the voice interaction component
@@ -69,6 +69,7 @@ export interface VoiceInteractionState {
    */
   isNewConnection: boolean;
   hasEstablishedSession: boolean;
+  
 
   /**
    * VAD (Voice Activity Detection) state properties
