@@ -20,12 +20,13 @@
 
 import React from 'react';
 import { render, act } from '@testing-library/react';
-import { DeepgramVoiceInteraction } from '../../src';
-import { DeepgramVoiceInteractionHandle } from '../../src/types';
+import { DeepgramVoiceInteraction } from 'deepgram-voice-interaction-react';
+import { DeepgramVoiceInteractionHandle } from 'deepgram-voice-interaction-react';
 
-// Simple API key detection
+// Simple API key detection - only run real API tests in local development
 const isRealAPITesting = !!process.env.DEEPGRAM_API_KEY && 
-                        process.env.DEEPGRAM_API_KEY !== 'mock';
+                        process.env.DEEPGRAM_API_KEY !== 'mock' &&
+                        process.env.CI !== 'true';
 
 describe('Real Component Integration Tests', () => {
   // Mock functions for testing
@@ -47,15 +48,15 @@ describe('Real Component Integration Tests', () => {
       
       expect(() => {
         render(
-          React.createElement(DeepgramVoiceInteraction, {
-            ref: componentRef,
-            apiKey: "test-key",
-            onUtteranceEnd: mockOnUtteranceEnd,
-            onUserStoppedSpeaking: mockOnUserStoppedSpeaking,
-            onUserStartedSpeaking: mockOnUserStartedSpeaking,
-            utteranceEndMs: 1500,
-            interimResults: true
-          })
+          <DeepgramVoiceInteraction
+            ref={componentRef}
+            apiKey="test-key"
+            onUtteranceEnd={mockOnUtteranceEnd}
+            onUserStoppedSpeaking={mockOnUserStoppedSpeaking}
+            onUserStartedSpeaking={mockOnUserStartedSpeaking}
+            utteranceEndMs={1500}
+            interimResults={true}
+          />
         );
       }).not.toThrow();
     });
@@ -64,12 +65,12 @@ describe('Real Component Integration Tests', () => {
       const componentRef = React.createRef<DeepgramVoiceInteractionHandle>();
       
       render(
-        React.createElement(DeepgramVoiceInteraction, {
-          ref: componentRef,
-          apiKey: "test-key",
-          onUtteranceEnd: mockOnUtteranceEnd,
-          utteranceEndMs: 1000
-        })
+        <DeepgramVoiceInteraction
+          ref={componentRef}
+          apiKey="test-key"
+          onUtteranceEnd={mockOnUtteranceEnd}
+          utteranceEndMs={1000}
+        />
       );
 
       // Component should initialize without errors
@@ -83,13 +84,22 @@ describe('Real Component Integration Tests', () => {
         const componentRef = React.createRef<DeepgramVoiceInteractionHandle>();
         
         render(
-          React.createElement(DeepgramVoiceInteraction, {
-            ref: componentRef,
-            apiKey: process.env.DEEPGRAM_API_KEY!,
-            utteranceEndMs: 1500,
-            interimResults: true,
-            debug: true
-          })
+          <DeepgramVoiceInteraction
+            ref={componentRef}
+            apiKey={process.env.DEEPGRAM_API_KEY!}
+            agentOptions={{
+              language: 'en',
+              listenModel: 'nova-2',
+              thinkProviderType: 'open_ai',
+              thinkModel: 'gpt-4o-mini',
+              voice: 'aura-asteria-en',
+              instructions: 'You are a helpful assistant.',
+              greeting: 'Hello! How can I help you today?'
+            }}
+            utteranceEndMs={1500}
+            interimResults={true}
+            debug={true}
+          />
         );
 
         // Start the component
@@ -110,16 +120,25 @@ describe('Real Component Integration Tests', () => {
         const componentRef = React.createRef<DeepgramVoiceInteractionHandle>();
         
         render(
-          React.createElement(DeepgramVoiceInteraction, {
-            ref: componentRef,
-            apiKey: process.env.DEEPGRAM_API_KEY!,
-            onUtteranceEnd: mockOnUtteranceEnd,
-            onUserStoppedSpeaking: mockOnUserStoppedSpeaking,
-            onUserStartedSpeaking: mockOnUserStartedSpeaking,
-            utteranceEndMs: 1000,
-            interimResults: true,
-            debug: true
-          })
+          <DeepgramVoiceInteraction
+            ref={componentRef}
+            apiKey={process.env.DEEPGRAM_API_KEY!}
+            agentOptions={{
+              language: 'en',
+              listenModel: 'nova-2',
+              thinkProviderType: 'open_ai',
+              thinkModel: 'gpt-4o-mini',
+              voice: 'aura-asteria-en',
+              instructions: 'You are a helpful assistant.',
+              greeting: 'Hello! How can I help you today?'
+            }}
+            onUtteranceEnd={mockOnUtteranceEnd}
+            onUserStoppedSpeaking={mockOnUserStoppedSpeaking}
+            onUserStartedSpeaking={mockOnUserStartedSpeaking}
+            utteranceEndMs={1000}
+            interimResults={true}
+            debug={true}
+          />
         );
 
         // Start the component
@@ -149,14 +168,23 @@ describe('Real Component Integration Tests', () => {
         const componentRef = React.createRef<DeepgramVoiceInteractionHandle>();
         
         render(
-          React.createElement(DeepgramVoiceInteraction, {
-            ref: componentRef,
-            apiKey: process.env.DEEPGRAM_API_KEY!,
-            onUtteranceEnd: mockOnUtteranceEnd,
-            utteranceEndMs: 1000,
-            interimResults: true,
-            debug: true
-          })
+          <DeepgramVoiceInteraction
+            ref={componentRef}
+            apiKey={process.env.DEEPGRAM_API_KEY!}
+            agentOptions={{
+              language: 'en',
+              listenModel: 'nova-2',
+              thinkProviderType: 'open_ai',
+              thinkModel: 'gpt-4o-mini',
+              voice: 'aura-asteria-en',
+              instructions: 'You are a helpful assistant.',
+              greeting: 'Hello! How can I help you today?'
+            }}
+            onUtteranceEnd={mockOnUtteranceEnd}
+            utteranceEndMs={1000}
+            interimResults={true}
+            debug={true}
+          />
         );
 
         // Start the component
@@ -194,10 +222,10 @@ describe('Real Component Integration Tests', () => {
       const componentRef = React.createRef<DeepgramVoiceInteractionHandle>();
       
       render(
-        React.createElement(DeepgramVoiceInteraction, {
-          ref: componentRef,
-          apiKey: "test-key"
-        })
+        <DeepgramVoiceInteraction
+          ref={componentRef}
+          apiKey="test-key"
+        />
       );
 
       // Component should initialize without errors
@@ -208,10 +236,11 @@ describe('Real Component Integration Tests', () => {
       const componentRef = React.createRef<DeepgramVoiceInteractionHandle>();
       
       render(
-        React.createElement(DeepgramVoiceInteraction, {
-          ref: componentRef,
-          apiKey: "test-key",
-        })
+        <DeepgramVoiceInteraction
+          ref={componentRef}
+          apiKey="test-key"
+          onUserStartedSpeaking={mockOnUserStartedSpeaking}
+        />
       );
 
       // Component should initialize without errors
@@ -227,12 +256,12 @@ describe('Real Component Integration Tests', () => {
       const componentRef = React.createRef<DeepgramVoiceInteractionHandle>();
       
       render(
-        React.createElement(DeepgramVoiceInteraction, {
-          ref: componentRef,
-          apiKey: "test-key",
-          utteranceEndMs: 2000,
-          interimResults: true
-        })
+        <DeepgramVoiceInteraction
+          ref={componentRef}
+          apiKey="test-key"
+          utteranceEndMs={2000}
+          interimResults={true}
+        />
       );
 
       // Component should initialize without errors
@@ -243,11 +272,11 @@ describe('Real Component Integration Tests', () => {
       const componentRef = React.createRef<DeepgramVoiceInteractionHandle>();
       
       render(
-        React.createElement(DeepgramVoiceInteraction, {
-          ref: componentRef,
-          apiKey: "test-key",
-          interimResults: true
-        })
+        <DeepgramVoiceInteraction
+          ref={componentRef}
+          apiKey="test-key"
+          interimResults={true}
+        />
       );
 
       // Component should initialize without errors

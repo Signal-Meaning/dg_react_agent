@@ -6,7 +6,7 @@
  * they timeout together when truly idle.
  */
 
-const { IdleTimeoutService } = require('../../src/utils/IdleTimeoutService');
+const { IdleTimeoutService } = require('deepgram-voice-interaction-react');
 
 describe('Unified Timeout Coordination Integration', () => {
   let idleTimeoutService;

@@ -19,7 +19,7 @@ const {
   setupConsoleWarningSpy,
   TEST_DESCRIPTIONS,
   TEST_ASSERTIONS 
-} = require('./utils/auto-connect-test-utils');
+} = require('../test-app/tests/utils/auto-connect-test-utils');
 
 // Force mock mode in CI environment
 if (process.env.CI === 'true') {

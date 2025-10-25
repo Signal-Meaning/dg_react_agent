@@ -11,7 +11,6 @@
     "DEVELOPMENT.md",
     "docs/",
     "scripts/",
-    "tests/",
     "test-app/"
   ],
   "scripts": {
