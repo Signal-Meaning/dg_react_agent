@@ -7,9 +7,7 @@ import {
   LLMResponse,
   TranscriptResponse,
   UpdateInstructionsPayload,
-  ConversationMessage,
-  ConversationRole,
-  AgentOptions,
+
   ConnectionState
 } from '../../types';
 import { WebSocketManager, WebSocketEvent } from '../../utils/websocket/WebSocketManager';
@@ -20,9 +18,7 @@ import {
   stateReducer,
 } from '../../utils/state/VoiceInteractionState';
 import { 
-  transformConversationHistory, 
-  generateSessionId, 
-  LAZY_RECONNECT_CONFIG 
+  transformConversationHistory
 } from '../../utils/conversation-context';
 import { useIdleTimeoutManager } from '../../hooks/useIdleTimeoutManager';
 
@@ -1117,27 +1113,11 @@ function DeepgramVoiceInteraction(
   // Lazy reconnection logging helper
   const lazyLog = (...args: unknown[]) => {
     if (props.debug) {
-      console.log(LAZY_RECONNECT_CONFIG.LOG_PREFIX, ...args);
+      console.log('🔄 [LAZY_RECONNECT]', ...args);
     }
   };
 
-  // Check if WebSocket connection needs reconnection
-  const needsReconnection = (): boolean => {
-    try {
-      console.log(`🔍 [needsReconnection] About to call isConnected()`);
-      const isWebSocketOpen = agentManagerRef.current?.isConnected() || false;
-      console.log(`🔍 [needsReconnection] isConnected() returned: ${isWebSocketOpen}`);
-      
-      // Only reconnect if WebSocket is actually closed or manager doesn't exist
-      const needsReconnect = !agentManagerRef.current || !isWebSocketOpen;
-      console.log(`🔍 [needsReconnection] agentManagerRef.current: ${!!agentManagerRef.current}, isConnected: ${isWebSocketOpen}, hasSentSettings: ${state.hasSentSettings}, needsReconnect: ${needsReconnect}`);
-      return needsReconnect;
-    } catch (error) {
-      console.log(`🔍 [needsReconnection] Error calling isConnected():`, error);
-      // If there's an error, assume we need to reconnect
-      return true;
-    }
-  };
+
 
   // Send agent settings after connection is established - only if agent is configured
   const sendAgentSettings = () => {
@@ -1211,13 +1191,13 @@ function DeepgramVoiceInteraction(
           }
         } : {}),
         greeting: agentOptions.greeting,
-        context: transformConversationHistory(state.conversationHistory) // Include conversation context in correct Deepgram API format
+        context: agentOptions.context // Context is already in Deepgram API format
       }
     };
     
     console.log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
-      conversationHistoryLength: state.conversationHistory.length,
-      contextMessages: transformConversationHistory(state.conversationHistory).messages,
+      conversationHistoryLength: agentOptions.context?.messages?.length || 0,
+      contextMessages: agentOptions.context?.messages || [],
       ttsMuted: state.ttsMuted,
       hasSpeakProvider: 'speak' in settingsMessage.agent
     });
@@ -1550,14 +1530,6 @@ function DeepgramVoiceInteraction(
       }
       
       // If we receive ConversationText, this means the agent is actively responding
-      // Track conversation messages for lazy reconnection
-      const conversationMessage: ConversationMessage = {
-        role: data.role as ConversationRole,
-        content: content,
-        timestamp: Date.now()
-      };
-      dispatch({ type: 'ADD_CONVERSATION_MESSAGE', message: conversationMessage });
-      lazyLog(`Tracked conversation message: ${data.role} - "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`);
       
       if (data.role === 'assistant') {
         const response: LLMResponse = {
@@ -2104,411 +2076,6 @@ function DeepgramVoiceInteraction(
     });
   };
 
-  // Resume conversation with text input (lazy reconnection)
-  const resumeWithText = async (text: string): Promise<void> => {
-    lazyLog('Resuming conversation with text:', text);
-    lazyLog(`Current conversation history length: ${state.conversationHistory.length}`);
-    lazyLog(`Current session ID: ${state.sessionId || 'None'}`);
-    
-    // Set lazy reconnection flag
-    isLazyReconnectingRef.current = true;
-    
-    // Mark this as a reconnection immediately (synchronous)
-    isNewConnectionRef.current = false;
-    dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
-    
-    // CRITICAL: Resume AudioContext before sending text
-    const audioContext = audioManagerRef.current?.getAudioContext();
-    if (audioContext?.state === 'suspended') {
-      try {
-        await audioContext.resume();
-        lazyLog('✅ AudioContext resumed for text interaction');
-      } catch (error) {
-        lazyLog('⚠️ Failed to resume AudioContext:', error);
-      }
-    }
-    
-    try {
-      // Generate session ID if not exists
-      const sessionId = state.sessionId || generateSessionId();
-      lazyLog(`Using session ID: ${sessionId}`);
-      
-      // Add user message to conversation history
-      const userMessage: ConversationMessage = {
-        role: 'user',
-        content: text,
-        timestamp: Date.now()
-      };
-      
-      dispatch({ type: 'ADD_CONVERSATION_MESSAGE', message: userMessage });
-      dispatch({ type: 'SET_SESSION_ID', sessionId });
-      lazyLog(`Added user message to history: "${text}"`);
-      
-      // Check if we need to reconnect or just send the message
-      const shouldReconnect = needsReconnection();
-      lazyLog(`Connection check: needsReconnection=${shouldReconnect}`);
-      
-      if (shouldReconnect) {
-        // Connect with context
-        lazyLog(`Connecting with context (${state.conversationHistory.length + 1} messages)`);
-        await connectWithContext(sessionId, [...state.conversationHistory, userMessage], agentOptions!);
-      } else {
-        lazyLog(`Connection already established, skipping settings`);
-      }
-      
-      // Send the text message with configured delay
-      if (agentManagerRef.current) {
-        lazyLog(`Sending InjectUserMessage: "${text}"`);
-        setTimeout(() => {
-          if (agentManagerRef.current) {
-            agentManagerRef.current.sendJSON({
-              type: 'InjectUserMessage',
-              content: text
-            });
-            lazyLog(`InjectUserMessage sent after delay: "${text}"`);
-          }
-        }, LAZY_RECONNECT_CONFIG.MESSAGE_SEND_DELAY);
-      }
-      
-      lazyLog('Successfully resumed conversation with text');
-    } catch (error) {
-      lazyLog('Error resuming conversation with text:', error);
-      handleError({
-        service: 'agent',
-        code: 'resume_text_error',
-        message: 'Failed to resume conversation with text',
-        details: error,
-      });
-      throw error;
-    } finally {
-      // Clear lazy reconnection flag
-      isLazyReconnectingRef.current = false;
-    }
-  };
-
-  // Resume conversation with audio input (lazy reconnection)
-  const resumeWithAudio = async (): Promise<void> => {
-    console.log('🔍 [resumeWithAudio] Function called - starting execution');
-    lazyLog('🔍 [resumeWithAudio] Function called - starting execution');
-    lazyLog('Resuming conversation with audio');
-    lazyLog(`Current conversation history length: ${state.conversationHistory.length}`);
-    lazyLog(`Current session ID: ${state.sessionId || 'None'}`);
-    lazyLog(`Agent manager state: ${agentManagerRef.current?.getState() || 'null'}`);
-    
-    // Set lazy reconnection flag
-    isLazyReconnectingRef.current = true;
-    
-    // Mark this as a reconnection immediately (synchronous)
-    isNewConnectionRef.current = false;
-    dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
-    
-    try {
-      // Generate session ID if not exists
-      const sessionId = state.sessionId || generateSessionId();
-      lazyLog(`Using session ID: ${sessionId}`);
-      
-      dispatch({ type: 'SET_SESSION_ID', sessionId });
-      
-      // Check if we need to reconnect
-      lazyLog(`🔍 [resumeWithAudio] About to call needsReconnection()`);
-      const shouldReconnect = needsReconnection();
-      console.log(`🔍 [resumeWithAudio] needsReconnection() returned: ${shouldReconnect}`);
-      console.log(`🔍 [resumeWithAudio] About to check if shouldReconnect is true`);
-      lazyLog(`Audio connection check: needsReconnection=${shouldReconnect}`);
-      
-      if (shouldReconnect) {
-        console.log(`🔍 [resumeWithAudio] shouldReconnect is true, entering reconnection logic`);
-        // Wait for auto-connect to complete if it's in progress
-        console.log(`🔍 [resumeWithAudio] Checking if auto-connect is in progress...`);
-        let autoConnectWaitAttempts = 0;
-        const maxAutoConnectWait = 5; // 0.5 seconds max wait (reduced from 2 seconds)
-        
-        while (agentManagerRef.current?.getState() !== 'connected' && autoConnectWaitAttempts < maxAutoConnectWait) {
-          console.log(`🔍 [resumeWithAudio] Waiting for auto-connect to complete... attempt ${autoConnectWaitAttempts + 1}/${maxAutoConnectWait}`);
-          await new Promise(resolve => setTimeout(resolve, 100));
-          autoConnectWaitAttempts++;
-        }
-        
-        if (agentManagerRef.current?.getState() === 'connected') {
-          console.log(`🔍 [resumeWithAudio] Auto-connect completed, skipping manual connection`);
-        } else {
-          // Connect with context if auto-connect didn't complete
-          console.log(`🔍 [resumeWithAudio] Auto-connect didn't complete, connecting with context (${state.conversationHistory.length} messages)`);
-          await connectWithContext(sessionId, state.conversationHistory, agentOptions!);
-        }
-      } else {
-        lazyLog(`Connection already established, skipping settings`);
-      }
-      
-      // Wait for connection and Welcome message
-      console.log(`🔍 [resumeWithAudio] Waiting for connection and Welcome message`);
-      
-      let readyAttempts = 0;
-      const maxReadyAttempts = 50; // 5 seconds max wait
-      let welcomeReady = false;
-      
-      while (!welcomeReady && readyAttempts < maxReadyAttempts) {
-        const currentState = agentManagerRef.current?.getState();
-        const welcomeReceived = state.welcomeReceived;
-        
-        console.log(`🔍 [resumeWithAudio] Checking connection readiness... attempt ${readyAttempts + 1}/${maxReadyAttempts}`);
-        console.log(`  - Connection state: ${currentState}`);
-        console.log(`  - Welcome received: ${welcomeReceived}`);
-        
-        // Connection must be established and Welcome received
-        if (currentState === 'connected' && welcomeReceived) {
-          console.log('🔍 [resumeWithAudio] ✅ Connection ready, Welcome received');
-          welcomeReady = true;
-        } else {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          readyAttempts++;
-        }
-      }
-      
-      if (!welcomeReady) {
-        console.log('🔍 [resumeWithAudio] ❌ Connection/Welcome not ready');
-        throw new Error('Connection failed: timeout waiting for Welcome message');
-      }
-      
-      // Now send settings (during lazy reconnection, automatic settings send is skipped)
-      console.log('🔍 [resumeWithAudio] Sending settings for lazy reconnection');
-      if (!hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
-        sendAgentSettings();
-        // Wait for settings to be processed
-        await new Promise(resolve => setTimeout(resolve, 200));
-      } else {
-        console.log('🔍 [resumeWithAudio] Settings already sent');
-      }
-      
-      // Wait a bit more to ensure connection is stable after settings
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Final check before enabling microphone - add connection stability check
-      console.log('🔍 [resumeWithAudio] ✅ All checks passed, enabling microphone');
-      
-      if (!agentManagerRef.current || agentManagerRef.current.getState() !== 'connected') {
-        console.log('🔍 [resumeWithAudio] ❌ Cannot enable microphone: agent not connected, state:', agentManagerRef.current?.getState());
-        throw new Error(`Agent not connected (state: ${agentManagerRef.current?.getState()})`);
-      }
-      
-      // Additional connection stability check - wait for connection to remain stable
-      console.log('🔍 [resumeWithAudio] Performing connection stability check...');
-      let stabilityCheckAttempts = 0;
-      const maxStabilityChecks = 10; // 1 second max wait
-      let connectionStable = false;
-      
-      while (stabilityCheckAttempts < maxStabilityChecks && !connectionStable) {
-        const currentState = agentManagerRef.current?.getState();
-        console.log(`🔍 [resumeWithAudio] Stability check ${stabilityCheckAttempts + 1}/${maxStabilityChecks}: state=${currentState}`);
-        
-        if (currentState === 'connected') {
-          // Wait a bit more to ensure connection stays stable
-          await new Promise(resolve => setTimeout(resolve, 100));
-          const stateAfterWait = agentManagerRef.current?.getState();
-          console.log(`🔍 [resumeWithAudio] State after stability wait: ${stateAfterWait}`);
-          
-          if (stateAfterWait === 'connected') {
-            connectionStable = true;
-            console.log('🔍 [resumeWithAudio] ✅ Connection is stable, proceeding with microphone enable');
-          } else {
-            console.log('🔍 [resumeWithAudio] ❌ Connection became unstable, retrying...');
-            stabilityCheckAttempts++;
-          }
-        } else {
-          console.log('🔍 [resumeWithAudio] ❌ Connection not stable, retrying...');
-          stabilityCheckAttempts++;
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-      
-      if (!connectionStable) {
-        console.log('🔍 [resumeWithAudio] ❌ Connection failed stability check after maximum attempts');
-        
-        // Try one more reconnection attempt if stability check fails
-        console.log('🔍 [resumeWithAudio] Attempting one more reconnection...');
-        try {
-          if (agentManagerRef.current) {
-            await agentManagerRef.current.connect();
-            console.log('🔍 [resumeWithAudio] Reconnection attempt completed');
-            
-            // Wait a bit for the connection to stabilize
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Check if the reconnection was successful
-            const finalState = agentManagerRef.current.getState();
-            if (finalState !== 'connected') {
-              throw new Error('Connection failed stability check - connection closed immediately after establishment');
-            }
-            
-            console.log('🔍 [resumeWithAudio] ✅ Reconnection successful, proceeding with microphone enable');
-          } else {
-            throw new Error('Connection failed stability check - connection closed immediately after establishment');
-          }
-        } catch (reconnectError) {
-          console.log('🔍 [resumeWithAudio] ❌ Reconnection attempt failed:', reconnectError);
-          throw new Error('Connection failed stability check - connection closed immediately after establishment');
-        }
-      }
-      
-      await toggleMic(true);
-      
-      lazyLog('Successfully resumed conversation with audio');
-    } catch (error) {
-      lazyLog('❌ [resumeWithAudio] Error resuming conversation with audio:', error);
-      lazyLog('❌ [resumeWithAudio] Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : 'No stack trace',
-        name: error instanceof Error ? error.name : 'Unknown error type'
-      });
-      
-      // Provide more specific error messages based on the error type
-      let errorMessage = 'Failed to resume conversation with audio';
-      if (error instanceof Error) {
-        if (error.message.includes('Connection failed stability check')) {
-          errorMessage = 'Connection closed immediately after establishment. Please try again.';
-        } else if (error.message.includes('Agent not connected')) {
-          errorMessage = 'Agent connection lost. Please check your connection and try again.';
-        } else if (error.message.includes('resume_audio_error')) {
-          errorMessage = 'Microphone activation failed. Please try again.';
-        }
-      }
-      
-      handleError({
-        service: 'agent',
-        code: 'resume_audio_error',
-        message: errorMessage,
-        details: error,
-      });
-      throw error;
-    } finally {
-      // Clear lazy reconnection flag
-      isLazyReconnectingRef.current = false;
-    }
-  };
-
-  // Connect with conversation context (for lazy reconnection)
-  const connectWithContext = async (sessionId: string, history: ConversationMessage[], options: AgentOptions): Promise<void> => {
-    lazyLog('Connecting with conversation context:', { sessionId, historyLength: history.length });
-    lazyLog(`Agent options: ${JSON.stringify(options, null, 2)}`);
-    
-    try {
-      // Connect agent WebSocket if not already connected
-      const currentState = agentManagerRef.current?.getState();
-      lazyLog(`🔍 [connectWithContext] Current agent state: ${currentState}`);
-      lazyLog(`🔍 [connectWithContext] About to check if connection is needed`);
-      
-      if (agentManagerRef.current && currentState !== 'connected') {
-        lazyLog(`🔍 [connectWithContext] Entering connection logic for state: ${currentState}`);
-        // Check if we're already connecting (to avoid conflicts with auto-connect)
-        if (currentState === 'connecting') {
-          lazyLog(`🔍 [connectWithContext] Agent WebSocket is already connecting, waiting for connection...`);
-          
-          // Wait for connection to complete
-          let waitAttempts = 0;
-          const maxWaitAttempts = 50; // 5 seconds max wait
-          while (agentManagerRef.current.getState() !== 'connected' && waitAttempts < maxWaitAttempts) {
-            lazyLog(`🔍 [connectWithContext] Waiting for connection... attempt ${waitAttempts + 1}/${maxWaitAttempts}`);
-            await new Promise(resolve => setTimeout(resolve, 100));
-            waitAttempts++;
-          }
-          
-          const finalState = agentManagerRef.current.getState();
-          lazyLog(`🔍 [connectWithContext] Final agent state after waiting: ${finalState}`);
-          
-          if (finalState === 'connected') {
-            lazyLog(`🔍 [connectWithContext] Agent WebSocket connected successfully via waiting`);
-          } else {
-            lazyLog(`🔍 [connectWithContext] Agent WebSocket failed to connect after waiting, attempting manual connection`);
-            await agentManagerRef.current.connect();
-            lazyLog(`🔍 [connectWithContext] Agent WebSocket connect() completed`);
-          }
-        } else {
-          lazyLog(`🔍 [connectWithContext] Agent WebSocket not connected (${currentState}), connecting...`);
-          await agentManagerRef.current.connect();
-          lazyLog(`🔍 [connectWithContext] Agent WebSocket connect() completed`);
-        }
-        
-        // Check state after connection
-        const newState = agentManagerRef.current.getState();
-        lazyLog(`🔍 [connectWithContext] Agent state after connect(): ${newState}`);
-        lazyLog('Agent WebSocket connected with context');
-      } else {
-        lazyLog(`🔍 [connectWithContext] Agent WebSocket already connected (${currentState})`);
-      }
-      
-      // Send settings with conversation context for lazy reconnection
-      // Always send settings during lazy reconnection to ensure proper context
-      if (agentManagerRef.current) {
-        const settingsMessage = {
-          type: 'Settings',
-          audio: {
-            input: {
-              encoding: 'linear16',
-              sample_rate: 16000
-            },
-            output: {
-              encoding: 'linear16',
-              sample_rate: 24000
-            }
-          },
-          agent: {
-            language: options.language || 'en',
-            listen: {
-              provider: {
-                type: 'deepgram',
-                model: options.listenModel || 'nova-2'
-              }
-            },
-            think: {
-              provider: {
-                type: options.thinkProviderType || 'open_ai',
-                model: options.thinkModel || 'gpt-4o-mini'
-              },
-              prompt: options.instructions || 'You are a helpful voice assistant.',
-              ...(options.thinkEndpointUrl && options.thinkApiKey ? {
-                endpoint: {
-                  url: options.thinkEndpointUrl,
-                  headers: {
-                    authorization: `bearer ${options.thinkApiKey}`,
-                  },
-                }
-              } : {})
-            },
-            speak: {
-              provider: {
-                type: 'deepgram',
-                model: options.voice || 'aura-asteria-en'
-              }
-            },
-            // Don't include greeting for lazy reconnection - we're resuming a conversation, not starting new
-            // greeting: options.greeting,
-            context: transformConversationHistory(history) // Include conversation context in correct Deepgram API format
-          }
-        };
-        
-        lazyLog(`Sending settings with context (correct Deepgram API format):`, settingsMessage);
-        agentManagerRef.current.sendJSON(settingsMessage);
-        
-        // Mark settings as sent (both state and refs for consistency)
-        dispatch({ type: 'SETTINGS_SENT', sent: true });
-        hasSentSettingsRef.current = true;
-        (window as any).globalSettingsSent = true;
-        settingsSentTimeRef.current = Date.now();
-        lazyLog('Settings sent with conversation context (correct Deepgram API format)');
-      }
-      
-      lazyLog('Successfully connected with conversation context');
-    } catch (error) {
-      lazyLog('❌ [connectWithContext] Error connecting with context:', error);
-      lazyLog('❌ [connectWithContext] Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : 'No stack trace',
-        name: error instanceof Error ? error.name : 'Unknown error type'
-      });
-      throw error;
-    }
-  };
-
   // TTS mute control methods
   /**
    * Toggle the TTS mute state
@@ -2697,13 +2264,7 @@ function DeepgramVoiceInteraction(
     injectUserMessage,
     
     // Microphone control
-    toggleMicrophone: toggleMic,
     startAudioCapture,
-    
-    // Reconnection methods
-    resumeWithText,
-    resumeWithAudio,
-    connectWithContext,
     
     // Audio data handling
     sendAudioData, // Expose sendAudioData for testing and external use

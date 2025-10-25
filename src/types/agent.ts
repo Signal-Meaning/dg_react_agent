@@ -388,6 +388,16 @@ export interface AgentOptions {
   
   // Function definitions for agent
   functions?: AgentFunction[];
+  
+  // Conversation context for session continuity
+  // Format: { messages: Array<{ type: "History", role: "user" | "assistant", content: string }> }
+  context?: {
+    messages: Array<{
+      type: string;
+      role: ConversationRole;
+      content: string;
+    }>;
+  };
 }
 
 /**

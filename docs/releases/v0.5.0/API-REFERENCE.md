@@ -8,7 +8,7 @@
 
 This document serves **two audiences**:
 
-1. **Voice-commerce developers** integrating with v0.5.0 release
+1. **Beta developers** integrating with v0.5.0 release
 2. **Deepgram corporate team** for upstream package proposal
 
 ## 🎯 API Design Summary
@@ -35,7 +35,7 @@ The `DeepgramVoiceInteraction` component provides a **headless, imperative API**
 ### **Key Features**
 - **Voice Activity Detection** - Precise start/stop detection with word-level timing
 - **Audio Buffer Management** - Proper cleanup and memory management for TTS audio
-- **Context Preservation** - Maintain conversation history across reconnections
+- **Context Injection** - Provide conversation context via `injectMessage()` method
 - **TypeScript Support** - Full type safety with comprehensive type definitions
 - **React Integration** - Optimized for React with proper memoization patterns
 
@@ -435,9 +435,6 @@ interface VoiceInteractionState {
   lastUserSpeechTime: number | null;
   
   
-  // Conversation context
-  conversationHistory: ConversationMessage[];
-  sessionId: string | null;
 }
 ```
 
@@ -886,6 +883,81 @@ voiceRef.current?.injectMessage('agent', "Hello"); // Unified text input
 
 ---
 
+## Session Management
+
+### Application-Layer Session Management
+
+The component does **not** manage conversation history or session state internally. This is an application-layer concern that should be handled by your application code.
+
+### Recommended Pattern
+
+Manage conversation history in your application state and pass it through `agentOptions.context`:
+
+```tsx
+function VoiceApp() {
+  const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
+  const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
+
+  // Track agent messages
+  const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
+    setConversationHistory(prev => [...prev, {
+      role: 'assistant',
+      content: utterance.text,
+      timestamp: Date.now()
+    }]);
+  }, []);
+
+  // Track user messages
+  const handleUserMessage = useCallback((message: UserMessageResponse) => {
+    setConversationHistory(prev => [...prev, {
+      role: 'user',
+      content: message.text,
+      timestamp: Date.now()
+    }]);
+  }, []);
+
+  // Create agentOptions with context
+  const agentOptions = useMemo(() => ({
+    language: 'en',
+    listenModel: 'nova-3',
+    thinkProviderType: 'open_ai',
+    thinkModel: 'gpt-4o-mini',
+    voice: 'aura-asteria-en',
+    instructions: 'You are a helpful voice assistant.',
+    greeting: 'Hello! How can I assist you today?',
+    // Pass conversation history as context in Deepgram API format
+    context: conversationHistory.length > 0 ? {
+      messages: conversationHistory.map(message => ({
+        type: "History",
+        role: message.role === 'assistant' ? 'assistant' : 'user',
+        content: message.content
+      }))
+    } : undefined
+  }), [conversationHistory]);
+
+  return (
+    <DeepgramVoiceInteraction
+      ref={voiceRef}
+      apiKey={apiKey}
+      agentOptions={agentOptions}
+      onAgentUtterance={handleAgentUtterance}
+      onUserMessage={handleUserMessage}
+    />
+  );
+}
+```
+
+### Why This Approach?
+
+- **Single WebSocket = Single Session**: Each WebSocket connection is a complete session
+- **No Server-Side Persistence**: Deepgram servers don't maintain session state
+- **Client-Provided Context**: All conversation context must be provided by the client
+- **Single `start()` Method**: One WebSocket and single `start()` is sufficient for both voice and text interactions
+
+**For detailed session management patterns and examples, see [test-app documentation](../test-app/docs/SESSION-MANAGEMENT.md).**
+
+---
+
 ## Related Documentation
 
 - **[Integration Guide](./INTEGRATION-GUIDE.md)** - Complete integration patterns and examples
@@ -893,6 +965,9 @@ voiceRef.current?.injectMessage('agent', "Hello"); // Unified text input
 - **[Technical Setup](./TECHNICAL-SETUP.md)** - Build configuration and technical requirements
 - **[Development Guide](./DEVELOPMENT.md)** - Development workflow and testing
 - **[Test App](../test-app/)** - Working examples and test scenarios
+  - **[Session Management Guide](../test-app/docs/SESSION-MANAGEMENT.md)** - Detailed session management patterns
+  - **[Context Handling Guide](../test-app/docs/CONTEXT-HANDLING.md)** - Conversation context management
+  - **[Integration Examples](../test-app/docs/INTEGRATION-EXAMPLES.md)** - Real-world integration patterns
 
 ---
 

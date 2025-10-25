@@ -48,6 +48,13 @@ function App() {
   const [loadedInstructions, setLoadedInstructions] = useState<string>('');
   const [instructionsLoading, setInstructionsLoading] = useState(true);
   
+  // Conversation history for context management
+  const [conversationHistory, setConversationHistory] = useState<Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: number;
+  }>>([]);
+  
   // Auto-connect dual mode state
   const [micEnabled, setMicEnabled] = useState(false);
   const [connectionReady, setConnectionReady] = useState(false);
@@ -172,7 +179,15 @@ function App() {
     voice: import.meta.env.VITE_AGENT_VOICE || 'aura-2-apollo-en',
     instructions: loadedInstructions || 'You are a helpful voice assistant. Keep your responses concise and informative.',
     greeting: import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?',
-  }), [loadedInstructions]); // Include loadedInstructions dependency
+    // Pass conversation history as context in Deepgram API format
+    context: conversationHistory.length > 0 ? {
+      messages: conversationHistory.map(message => ({
+        type: "History",
+        role: message.role === 'assistant' ? 'assistant' : 'user',
+        content: message.content
+      }))
+    } : undefined
+  }), [loadedInstructions, conversationHistory]); // Include conversationHistory dependency
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
@@ -231,11 +246,23 @@ function App() {
   const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
     setAgentResponse(utterance.text);
     addLog(`Agent said: ${utterance.text}`);
+    // Track agent messages in conversation history
+    setConversationHistory(prev => [...prev, {
+      role: 'assistant',
+      content: utterance.text,
+      timestamp: Date.now()
+    }]);
   }, [addLog]); // Depends on addLog
   
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
     setUserMessage(message.text);
     addLog(`User message from server: ${message.text}`);
+    // Track user messages in conversation history
+    setConversationHistory(prev => [...prev, {
+      role: 'user',
+      content: message.text,
+      timestamp: Date.now()
+    }]);
   }, [addLog]);
   
   const handleAgentStateChange = useCallback((state: AgentState) => {

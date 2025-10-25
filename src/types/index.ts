@@ -295,11 +295,6 @@ export interface DeepgramVoiceInteractionHandle {
   injectUserMessage: (message: string) => void;
 
   /**
-   * Toggle microphone on/off
-   */
-  toggleMicrophone: (enabled: boolean) => Promise<void>;
-  
-  /**
    * Start audio capture (lazy initialization)
    * 
    * This method triggers the browser's microphone permission prompt and initializes
@@ -307,21 +302,6 @@ export interface DeepgramVoiceInteractionHandle {
    * requests microphone access.
    */
   startAudioCapture: () => Promise<void>;
-  
-  /**
-   * Resume conversation with text input (lazy reconnection)
-   */
-  resumeWithText: (text: string) => Promise<void>;
-  
-  /**
-   * Resume conversation with audio input (lazy reconnection)
-   */
-  resumeWithAudio: () => Promise<void>;
-  
-  /**
-   * Connect with conversation context (for lazy reconnection)
-   */
-  connectWithContext: (sessionId: string, history: ConversationMessage[], options: AgentOptions) => Promise<void>;
   
   /**
    * Get connection states for debugging (testing only)
