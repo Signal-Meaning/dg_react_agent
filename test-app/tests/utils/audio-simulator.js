@@ -12,10 +12,10 @@
  * - Error handling without fallback audio
  */
 
-const TTSGenerator = require('./tts-generator');
-const AudioFileLoader = require('./audio-file-loader');
-const fs = require('fs');
-const path = require('path');
+import TTSGenerator from './tts-generator.js';
+import AudioFileLoader from './audio-file-loader.js';
+import fs from 'fs';
+import path from 'path';
 
 class AudioSimulator {
   static sampleCache = new Map();
@@ -347,4 +347,4 @@ class AudioSimulator {
   }
 }
 
-module.exports = AudioSimulator;
+export default AudioSimulator;

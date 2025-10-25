@@ -15,7 +15,7 @@ import {
   UserStoppedSpeakingResponse,
   UtteranceEndResponse,
   VADEventResponse
-} from '../../dist/types/agent';
+} from '../../src/types/agent';
 
 describe('WebSocket Integration Tests', () => {
   // Mock WebSocket and event handlers

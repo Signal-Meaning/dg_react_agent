@@ -89,7 +89,7 @@ const TEST_ASSERTIONS = {
   }
 };
 
-module.exports = {
+export {
   createMockProps,
   createNonMemoizedOptions,
   setupConsoleWarningSpy,

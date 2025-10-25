@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
-const { 
+import { 
   setupTestPage, 
   waitForConnection, 
   sendTextMessage, 
   installWebSocketCapture, 
   getCapturedWebSocketData,
   SELECTORS 
-} = require('./helpers/test-helpers');
+} from './helpers/test-helpers.js';
 
 /**
  * E2E Tests for Context Preservation Across Connection Changes

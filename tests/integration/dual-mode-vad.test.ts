@@ -16,7 +16,7 @@ import {
   UserStoppedSpeakingResponse,
   UtteranceEndResponse,
   VADEventResponse
-} from '../../dist/types/agent';
+} from '../../src/types/agent';
 
 describe('Dual-Mode VAD Tests', () => {
   // Mock functions for testing

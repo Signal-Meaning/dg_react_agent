@@ -7,8 +7,8 @@
  * Enhanced with VAD Audio Simulation System for realistic testing.
  */
 
-const AudioSimulator = require('./audio-simulator');
-const VADAudioSimulator = require('./vad-audio-simulator');
+import AudioSimulator from './audio-simulator.js';
+import VADAudioSimulator from './vad-audio-simulator.js';
 
 class AudioTestHelpers {
   /**
@@ -331,5 +331,5 @@ class AudioTestHelpers {
   }
 }
 
-module.exports = AudioTestHelpers;
+export default AudioTestHelpers;
 

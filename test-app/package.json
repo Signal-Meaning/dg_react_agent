@@ -2,12 +2,13 @@
   "name": "test-app",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:e2e": "playwright test tests/e2e/",
+    "test:e2e": "playwright test --config=tests/playwright.config.mjs",
     "test:e2e:ui": "playwright test tests/e2e/ --ui",
     "test:e2e:debug": "playwright test tests/e2e/ --debug",
     "test:e2e:headed": "playwright test tests/e2e/ --headed",
@@ -15,9 +16,10 @@
     "test:dev": "vite & playwright test tests/e2e/ --headed"
   },
   "dependencies": {
+    "deepgram-voice-interaction-react": "file:../",
+    "dotenv": "^17.2.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "deepgram-voice-interaction-react": "file:../"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",

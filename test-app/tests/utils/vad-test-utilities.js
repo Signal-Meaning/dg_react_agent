@@ -246,7 +246,7 @@ async function setupVADTestEnvironment(page, context) {
   await context.grantPermissions(['microphone']);
   
   // Setup VAD testing environment (working pattern)
-  const { setupVADTestingEnvironment } = require('../utils/audio-stream-mocks');
+  const { setupVADTestingEnvironment } = await import('../utils/audio-stream-mocks.js');
   await setupVADTestingEnvironment(page);
   
   console.log('✅ VAD test environment setup complete');
@@ -399,7 +399,7 @@ function validateIdleTimeoutStateMachine(agentAnalysis) {
   return results;
 }
 
-module.exports = {
+export {
   VADTestUtilities,
   setupVADTestEnvironment,
   waitForVADEvents,

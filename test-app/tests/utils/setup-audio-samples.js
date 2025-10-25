@@ -13,9 +13,9 @@
  *   node tests/utils/setup-audio-samples.js --list
  */
 
-const AudioSimulator = require('./audio-simulator');
-const fs = require('fs');
-const path = require('path');
+const AudioSimulator = import from './audio-simulator');
+import fs from 'fs';
+import path from 'path';
 
 async function setupAudioSamples() {
   console.log('🎤 Setting up VAD Audio Sample Library...\n');
@@ -101,7 +101,7 @@ function listAudioSamples() {
 async function validateAudioSamples() {
   console.log('🔍 Validating audio samples...\n');
   
-  const AudioFileLoader = require('./audio-file-loader');
+  const AudioFileLoader = import from './audio-file-loader');
   const samplesDir = path.join(__dirname, '../fixtures/audio-samples');
   
   if (!fs.existsSync(samplesDir)) {
@@ -175,7 +175,7 @@ function showHelp() {
   console.log('  --help       Show this help message');
   console.log('  (no args)    Set up the audio sample library\n');
   console.log('Examples:');
-  console.log('  node tests/utils/setup-audio-samples.js');
+  console.log('  node tests/utils/setup-audio-samples.js';
   console.log('  node tests/utils/setup-audio-samples.js --clean');
   console.log('  node tests/utils/setup-audio-samples.js --list');
   console.log('  node tests/utils/setup-audio-samples.js --validate');
@@ -209,7 +209,7 @@ if (require.main === module) {
   });
 }
 
-module.exports = {
+export {
   setupAudioSamples,
   cleanAudioSamples,
   listAudioSamples

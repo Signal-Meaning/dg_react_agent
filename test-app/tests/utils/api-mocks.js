@@ -312,5 +312,5 @@ class APITestMocks {
   }
 }
 
-module.exports = APITestMocks;
+export default APITestMocks;
 

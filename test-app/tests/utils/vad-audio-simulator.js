@@ -11,10 +11,10 @@
  * - Integration with existing test infrastructure
  */
 
-const TTSGenerator = require('./tts-generator');
-const AudioFileLoader = require('./audio-file-loader');
-const fs = require('fs');
-const path = require('path');
+import TTSGenerator from './tts-generator.js';
+import AudioFileLoader from './audio-file-loader.js';
+import fs from 'fs';
+import path from 'path';
 
 class VADAudioSimulator {
   constructor() {
@@ -541,4 +541,4 @@ class VADAudioSimulator {
 // Initialize static cache
 VADAudioSimulator.sampleCache = new Map();
 
-module.exports = VADAudioSimulator;
+export default VADAudioSimulator;

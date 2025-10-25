@@ -7,7 +7,7 @@
  * - Accurate playback state detection
  */
 
-import { AudioManager } from '../../dist/utils/audio/AudioManager';
+import { AudioManager } from '../../src/utils/audio/AudioManager';
 
 // Mock AudioContext and related Web Audio API
 const mockAudioContext = {

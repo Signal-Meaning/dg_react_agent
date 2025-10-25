@@ -20,8 +20,8 @@
 
 import React from 'react';
 import { render, act } from '@testing-library/react';
-import { DeepgramVoiceInteraction } from '../../dist';
-import { DeepgramVoiceInteractionHandle } from '../../dist/types';
+import DeepgramVoiceInteraction from '../../src/components/DeepgramVoiceInteraction';
+import { DeepgramVoiceInteractionHandle } from '../../src/types';
 
 // Simple API key detection - only run real API tests in local development
 const isRealAPITesting = !!process.env.DEEPGRAM_API_KEY && 

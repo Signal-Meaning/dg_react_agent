@@ -11,8 +11,8 @@
  * - Integration with VAD Audio Simulator
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 class AudioFileLoader {
   /**
@@ -248,4 +248,4 @@ class AudioFileLoader {
   }
 }
 
-module.exports = AudioFileLoader;
+export default AudioFileLoader;

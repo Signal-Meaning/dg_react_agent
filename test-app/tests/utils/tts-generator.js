@@ -371,4 +371,4 @@ class TTSGenerator {
   }
 }
 
-module.exports = TTSGenerator;
+export default TTSGenerator;

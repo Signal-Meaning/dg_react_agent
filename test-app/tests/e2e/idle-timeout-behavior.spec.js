@@ -33,11 +33,11 @@
  */
 
 import { test, expect } from '@playwright/test';
-const { 
+import { 
   SELECTORS,
   waitForConnection 
-} = require('./helpers/test-helpers');
-import { setupTestPage } from './helpers/audio-mocks';
+} from './helpers/test-helpers.js';
+import { setupTestPage } from './helpers/audio-mocks.js';
 
 test.describe('Idle Timeout Behavior', () => {
   
@@ -189,8 +189,8 @@ test.describe('Idle Timeout Behavior', () => {
     console.log('🧪 Testing idle timeout behavior during active conversation with REAL AUDIO...');
     
     // Import audio simulation utilities
-    const { VADTestUtilities } = require('../utils/vad-test-utilities');
-    const SimpleVADHelpers = require('../utils/simple-vad-helpers');
+    const { VADTestUtilities } = await import('../utils/vad-test-utilities.js');
+    const SimpleVADHelpers = await import('../utils/simple-vad-helpers.js');
     
     // Track connection close events
     const connectionCloses = [];
@@ -284,8 +284,8 @@ test.describe('Idle Timeout Behavior', () => {
     console.log('🧪 Testing idle timeout with realistic conversation timing (2.3s padding)...');
     
     // Import audio simulation utilities
-    const { VADTestUtilities } = require('../utils/vad-test-utilities');
-    const SimpleVADHelpers = require('../utils/simple-vad-helpers');
+    const { VADTestUtilities } = await import('../utils/vad-test-utilities.js');
+    const SimpleVADHelpers = await import('../utils/simple-vad-helpers.js');
     
     // Track connection close events
     const connectionCloses = [];

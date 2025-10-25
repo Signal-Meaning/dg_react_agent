@@ -47,7 +47,7 @@ const shouldSkipInCI = process.env.CI && !process.env.RUN_REAL_API_TESTS;
 
 import React from 'react';
 import { render, waitFor, act } from '@testing-library/react';
-import { DeepgramVoiceInteraction } from '../src';
+import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
 // Mock the WebSocketManager and AudioManager
 jest.mock('../src/utils/websocket/WebSocketManager');

@@ -164,6 +164,20 @@ function App() {
     loadInstructions();
   }, [addLog]); // Include addLog in dependencies
 
+  const memoizedTranscriptionOptions = useMemo(() => ({
+    // Use environment variables with sensible defaults
+    model: import.meta.env.VITE_TRANSCRIPTION_MODEL || 'nova-3',
+    language: import.meta.env.VITE_TRANSCRIPTION_LANGUAGE || 'en-US',
+    smart_format: import.meta.env.VITE_TRANSCRIPTION_SMART_FORMAT !== 'false',
+    interim_results: import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS !== 'false',
+    diarize: import.meta.env.VITE_TRANSCRIPTION_DIARIZE !== 'false',
+    channels: parseInt(import.meta.env.VITE_TRANSCRIPTION_CHANNELS || '1'),
+    vad_events: true, // Enable VAD events
+    utterance_end_ms: parseInt(import.meta.env.VITE_TRANSCRIPTION_UTTERANCE_END_MS || '1000'),
+    sample_rate: 16000,
+    encoding: 'linear16'
+  }), []);
+
   const memoizedAgentOptions = useMemo(() => ({
     // Use environment variables with sensible defaults
     language: import.meta.env.VITE_AGENT_LANGUAGE || 'en',
@@ -614,6 +628,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       <DeepgramVoiceInteraction
         ref={deepgramRef}
         apiKey={import.meta.env.VITE_DEEPGRAM_API_KEY || ''}
+        transcriptionOptions={memoizedTranscriptionOptions}
         agentOptions={memoizedAgentOptions}
         endpointConfig={memoizedEndpointConfig}
         onReady={handleReady}
@@ -624,6 +639,10 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onConnectionStateChange={handleConnectionStateChange}
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
+        // VAD event handlers
+        onUserStartedSpeaking={handleUserStartedSpeaking}
+        onUserStoppedSpeaking={handleUserStoppedSpeaking}
+        onUtteranceEnd={handleUtteranceEnd}
         // Auto-connect dual mode props
         autoConnect={true}
         microphoneEnabled={micEnabled}
@@ -634,12 +653,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         // TTS mute props
         ttsMuted={isTtsMuted}
         onTtsMuteToggle={handleTtsMuteToggle}
-        // VAD event props - clearly marked by source
-        onUserStartedSpeaking={handleUserStartedSpeaking}
-        onUserStoppedSpeaking={handleUserStoppedSpeaking}
-        // onSpeechStopped removed - not a real Deepgram event
-        onUtteranceEnd={handleUtteranceEnd}
-        debug={isDebugMode} // Enable debug via environment variable or URL parameter for testing
+        debug={true} // Enable debug for VAD testing
       />
       
       <div style={{ border: '1px solid blue', padding: '10px', margin: '15px 0' }}>

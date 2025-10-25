@@ -113,7 +113,7 @@ async function sendTextMessage(page, message) {
  * @param {import('@playwright/test').Page} page - Playwright page object
  */
 async function expectMockMode(page) {
-  const { expect } = require('@playwright/test');
+  const { expect } = await import('@playwright/test');
   await expect(page.locator('h2')).toContainText(EXPECTATIONS.apiKeyStatus);
   await expect(page.locator('h4')).toContainText(EXPECTATIONS.mockMode);
 }
@@ -123,7 +123,7 @@ async function expectMockMode(page) {
  * @param {import('@playwright/test').Page} page - Playwright page object
  */
 async function expectRealMode(page) {
-  const { expect } = require('@playwright/test');
+  const { expect } = await import('@playwright/test');
   await expect(page.locator(SELECTORS.voiceAgent)).toBeVisible();
   // Should not show error banner - check if error banner exists first
   const errorBanner = page.locator('h2').filter({ hasText: EXPECTATIONS.apiKeyStatus });
@@ -132,7 +132,7 @@ async function expectRealMode(page) {
   }
 }
 
-module.exports = {
+export {
   setupTestMode,
   SELECTORS,
   TIMEOUTS,

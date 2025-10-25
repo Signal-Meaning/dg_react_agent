@@ -7,9 +7,9 @@
  */
 
 import { test, expect } from '@playwright/test';
-const {
+import {
   installMockWebSocket,
-} = require('./helpers/test-helpers');
+} from './helpers/test-helpers.js';
 
 // Configure to run only in chromium for focused testing
 test.use({ browserName: 'chromium' });

@@ -263,4 +263,4 @@ class SimpleVADHelpers {
   }
 }
 
-module.exports = SimpleVADHelpers;
+export default SimpleVADHelpers;

@@ -268,7 +268,7 @@ async function setupPermissionDeniedEnvironment(page) {
   });
 }
 
-module.exports = {
+export {
   AUDIO_STREAM_TYPES,
   setupSilentAudioStream,
   setupMockMediaStream,
