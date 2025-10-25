@@ -7,7 +7,7 @@ This guide provides real-world integration examples showing how to properly use 
 ### Simple Voice App
 
 ```tsx
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
 
 function SimpleVoiceApp() {
@@ -43,7 +43,7 @@ function SimpleVoiceApp() {
   };
 
   const handleAgentUtterance = (utterance: LLMResponse) => {
-    setMessages(prev => [...prev, { role: 'agent', content: utterance.text }]);
+    setMessages(prev => [...prev, { role: 'assistant', content: utterance.text }]);
   };
 
   const handleUserMessage = (message: UserMessageResponse) => {
@@ -142,12 +142,12 @@ function MultiSessionVoiceApp() {
     const session = sessions.get(sessionId);
     if (session?.conversationHistory) {
       session.conversationHistory.forEach(message => {
-        voiceRef.current?.injectMessage(message.role as 'agent' | 'user', message.content);
+        voiceRef.current?.injectMessage(message.role as 'assistant' | 'user', message.content);
       });
     }
   }, [isConnected, sessions]);
 
-  const addMessage = useCallback((role: 'agent' | 'user', content: string) => {
+  const addMessage = useCallback((role: 'assistant' | 'user', content: string) => {
     if (!currentSessionId) return;
     
     const message = {
@@ -167,7 +167,7 @@ function MultiSessionVoiceApp() {
   }, [currentSessionId]);
 
   const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
-    addMessage('agent', utterance.text);
+    addMessage('assistant', utterance.text);
   }, [addMessage]);
 
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
@@ -296,7 +296,7 @@ function ContextAwareVoiceApp() {
   }, []);
 
   // Add message to history
-  const addMessage = useCallback((role: 'agent' | 'user', content: string) => {
+  const addMessage = useCallback((role: 'assistant' | 'user', content: string) => {
     const message = {
       role,
       content,
@@ -354,7 +354,7 @@ function ContextAwareVoiceApp() {
     
     voiceRef.current?.updateAgentInstructions({
       instructions,
-      context
+      context: JSON.stringify(context)
     });
   }, [isConnected, generateInstructions, userProfile, conversationHistory]);
 
@@ -364,7 +364,7 @@ function ContextAwareVoiceApp() {
   }, [updateAgentContext]);
 
   const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
-    addMessage('agent', utterance.text);
+    addMessage('assistant', utterance.text);
   }, [addMessage]);
 
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
@@ -523,7 +523,7 @@ class EnterpriseSessionManager {
     return this.sessions.get(sessionId);
   }
 
-  addMessage(sessionId: string, role: 'agent' | 'user', content: string) {
+  addMessage(sessionId: string, role: 'assistant' | 'user', content: string) {
     const session = this.sessions.get(sessionId);
     if (!session) return;
     
@@ -594,12 +594,12 @@ function EnterpriseVoiceApp() {
     const session = sessionManager.getSession(sessionId);
     if (session?.conversationHistory) {
       session.conversationHistory.forEach(message => {
-        voiceRef.current?.injectMessage(message.role as 'agent' | 'user', message.content);
+        voiceRef.current?.injectMessage(message.role as 'assistant' | 'user', message.content);
       });
     }
   }, [isConnected, sessionManager]);
 
-  const addMessage = useCallback((role: 'agent' | 'user', content: string) => {
+  const addMessage = useCallback((role: 'assistant' | 'user', content: string) => {
     if (!currentSessionId) return;
     
     sessionManager.addMessage(currentSessionId, role, content);
@@ -607,7 +607,7 @@ function EnterpriseVoiceApp() {
   }, [currentSessionId, sessionManager]);
 
   const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
-    addMessage('agent', utterance.text);
+    addMessage('assistant', utterance.text);
   }, [addMessage]);
 
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
@@ -757,7 +757,7 @@ function TestableVoiceApp() {
     return sessionId;
   }, []);
 
-  const addMessage = useCallback((role: 'agent' | 'user', content: string) => {
+  const addMessage = useCallback((role: 'assistant' | 'user', content: string) => {
     if (!currentSessionId) return;
     
     const message = {
@@ -771,14 +771,14 @@ function TestableVoiceApp() {
         ? { 
             ...session, 
             conversationHistory: [...session.conversationHistory, message],
-            actualResponses: role === 'agent' ? [...session.actualResponses, content] : session.actualResponses
+            actualResponses: role === 'assistant' ? [...session.actualResponses, content] : session.actualResponses
           }
         : session
     ));
   }, [currentSessionId]);
 
   const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
-    addMessage('agent', utterance.text);
+    addMessage('assistant', utterance.text);
   }, [addMessage]);
 
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
