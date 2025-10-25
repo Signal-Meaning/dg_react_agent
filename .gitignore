@@ -40,3 +40,7 @@ coverage/
 
 guidance/
 test-results/.last-run.json
+test-app/test-results/
+
+test-app/.env*
+test-app/playwright-report/
