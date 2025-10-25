@@ -11,7 +11,8 @@
     "DEVELOPMENT.md",
     "docs/",
     "scripts/",
-    "tests/"
+    "tests/",
+    "test-app/"
   ],
   "scripts": {
     "build": "rollup -c",
