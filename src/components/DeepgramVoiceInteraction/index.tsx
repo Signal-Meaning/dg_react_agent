@@ -1474,10 +1474,10 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-        if (data.type === 'AgentStartedSpeaking') {
-          console.log('🎯 [AGENT] AgentStartedSpeaking received - disabling idle timeout resets');
-          sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
-          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
+    if (data.type === 'AgentStartedSpeaking') {
+      console.log('🎯 [AGENT] AgentStartedSpeaking received - disabling idle timeout resets');
+      sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
+      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
 
       // Track agent speaking
       if (state.greetingInProgress && !state.greetingStarted) {
@@ -1486,6 +1486,16 @@ function DeepgramVoiceInteraction(
       
       // Always call onAgentSpeaking when agent starts speaking
       onAgentSpeaking?.();
+      return;
+    }
+    
+    if (data.type === 'AgentStoppedSpeaking') {
+      console.log('🎯 [AGENT] AgentStoppedSpeaking received - transitioning to idle');
+      sleepLog('Dispatching AGENT_STATE_CHANGE to idle');
+      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+      
+      // Always call onAgentSilent when agent stops speaking
+      onAgentSilent?.();
       return;
     }
     
