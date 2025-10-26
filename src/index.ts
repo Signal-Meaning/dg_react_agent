@@ -11,6 +11,9 @@ export { default as DeepgramVoiceInteraction } from './components/DeepgramVoiceI
 export { WebSocketManager } from './utils/websocket/WebSocketManager';
 export { AudioManager } from './utils/audio/AudioManager';
 
+// Export services
+export { AgentStateService } from './services/AgentStateService';
+
 // Export test utilities
 export * from './test-utils';
 

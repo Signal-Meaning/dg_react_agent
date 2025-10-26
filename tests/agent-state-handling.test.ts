@@ -14,6 +14,7 @@ import React from 'react';
 import { renderHook, act } from '@testing-library/react';
 import { useIdleTimeoutManager } from '../src/hooks/useIdleTimeoutManager';
 import { IdleTimeoutService } from '../src/utils/IdleTimeoutService';
+import { AgentStateService } from '../src/services/AgentStateService';
 
 // Mock the WebSocket manager
 const mockWebSocketManager = {
@@ -274,6 +275,243 @@ describe('Agent State Message Handling', () => {
       
       const idleState = idleTimeoutService.getState();
       expect(idleState.agentState).toBe('idle');
+    });
+  });
+});
+
+describe('AgentStateService', () => {
+  let agentStateService: AgentStateService;
+  let mockCallbacks: {
+    onAgentSpeaking: jest.Mock;
+    onAgentSilent: jest.Mock;
+    onStateChange: jest.Mock;
+  };
+
+  beforeEach(() => {
+    mockCallbacks = {
+      onAgentSpeaking: jest.fn(),
+      onAgentSilent: jest.fn(),
+      onStateChange: jest.fn(),
+    };
+    
+    agentStateService = new AgentStateService(true);
+    agentStateService.setCallbacks(mockCallbacks);
+  });
+
+  afterEach(() => {
+    agentStateService.reset();
+    jest.clearAllMocks();
+  });
+
+  describe('AgentThinking message handling', () => {
+    it('should transition to thinking state', () => {
+      agentStateService.handleAgentThinking();
+      
+      expect(agentStateService.getCurrentState()).toBe('thinking');
+      expect(mockCallbacks.onStateChange).toHaveBeenCalledWith('thinking');
+    });
+
+    it('should log state transition', () => {
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      agentStateService.handleAgentThinking();
+      
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('State transition: idle → thinking')
+      );
+      
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('AgentStartedSpeaking message handling', () => {
+    it('should transition to speaking state and call onAgentSpeaking', () => {
+      agentStateService.handleAgentStartedSpeaking(false, false);
+      
+      expect(agentStateService.getCurrentState()).toBe('speaking');
+      expect(mockCallbacks.onAgentSpeaking).toHaveBeenCalled();
+      expect(mockCallbacks.onStateChange).toHaveBeenCalledWith('speaking');
+    });
+
+    it('should handle greeting state correctly', () => {
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      agentStateService.handleAgentStartedSpeaking(true, false);
+      
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Greeting started - agent began speaking')
+      );
+      
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('AgentStoppedSpeaking message handling', () => {
+    it('should transition to idle state and call onAgentSilent', () => {
+      // First set to speaking state
+      agentStateService.handleAgentStartedSpeaking(false, false);
+      jest.clearAllMocks();
+      
+      agentStateService.handleAgentStoppedSpeaking();
+      
+      expect(agentStateService.getCurrentState()).toBe('idle');
+      expect(mockCallbacks.onAgentSilent).toHaveBeenCalled();
+      expect(mockCallbacks.onStateChange).toHaveBeenCalledWith('idle');
+    });
+  });
+
+  describe('User speaking state handling', () => {
+    it('should transition from idle to listening when user starts speaking', () => {
+      agentStateService.handleUserStartedSpeaking();
+      
+      expect(agentStateService.getCurrentState()).toBe('listening');
+      expect(mockCallbacks.onStateChange).toHaveBeenCalledWith('listening');
+    });
+
+    it('should transition from listening to thinking when user stops speaking', () => {
+      agentStateService.handleUserStartedSpeaking();
+      jest.clearAllMocks();
+      
+      agentStateService.handleUserStoppedSpeaking();
+      
+      expect(agentStateService.getCurrentState()).toBe('thinking');
+      expect(mockCallbacks.onStateChange).toHaveBeenCalledWith('thinking');
+    });
+  });
+
+  describe('Audio playback state handling', () => {
+    it('should transition from speaking to idle when audio playback stops', () => {
+      agentStateService.handleAgentStartedSpeaking(false, false);
+      jest.clearAllMocks();
+      
+      agentStateService.handleAudioPlaybackChange(false);
+      
+      expect(agentStateService.getCurrentState()).toBe('idle');
+      expect(mockCallbacks.onStateChange).toHaveBeenCalledWith('idle');
+    });
+
+    it('should not transition when audio playback stops but not speaking', () => {
+      agentStateService.handleAudioPlaybackChange(false);
+      
+      expect(agentStateService.getCurrentState()).toBe('idle');
+      expect(mockCallbacks.onStateChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Sleep state handling', () => {
+    it('should transition to sleeping state', () => {
+      agentStateService.handleSleepStateChange(true);
+      
+      expect(agentStateService.getCurrentState()).toBe('sleeping');
+      expect(mockCallbacks.onStateChange).toHaveBeenCalledWith('sleeping');
+    });
+
+    it('should transition from sleeping to listening when woken', () => {
+      agentStateService.handleSleepStateChange(true);
+      jest.clearAllMocks();
+      
+      agentStateService.handleSleepStateChange(false);
+      
+      expect(agentStateService.getCurrentState()).toBe('listening');
+      expect(mockCallbacks.onStateChange).toHaveBeenCalledWith('listening');
+    });
+  });
+
+  describe('State validation', () => {
+    it('should prevent invalid state transitions', () => {
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      // Try to transition from sleeping to speaking (invalid - should go through listening first)
+      agentStateService.handleSleepStateChange(true);
+      jest.clearAllMocks();
+      
+      // This should cause an invalid transition warning
+      agentStateService.handleAgentStartedSpeaking(false, false);
+      
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid state transition')
+      );
+      
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('State history', () => {
+    it('should track state transitions', () => {
+      agentStateService.handleUserStartedSpeaking();
+      agentStateService.handleUserStoppedSpeaking();
+      agentStateService.handleAgentStartedSpeaking(false, false);
+      
+      const history = agentStateService.getStateHistory();
+      expect(history).toHaveLength(3);
+      expect(history[0].from).toBe('idle');
+      expect(history[0].to).toBe('listening');
+      expect(history[1].from).toBe('listening');
+      expect(history[1].to).toBe('thinking');
+      expect(history[2].from).toBe('thinking');
+      expect(history[2].to).toBe('speaking');
+    });
+
+    it('should provide recent transitions', () => {
+      agentStateService.handleUserStartedSpeaking();
+      agentStateService.handleUserStoppedSpeaking();
+      agentStateService.handleAgentThinking();
+      agentStateService.handleAgentStartedSpeaking(false, false);
+      
+      const recent = agentStateService.getRecentTransitions(2);
+      expect(recent).toHaveLength(2);
+      expect(recent[0].to).toBe('thinking');
+      expect(recent[1].to).toBe('speaking');
+    });
+  });
+
+  describe('State queries', () => {
+    it('should correctly identify active state', () => {
+      expect(agentStateService.isActive()).toBe(false); // idle
+      
+      agentStateService.handleUserStartedSpeaking();
+      expect(agentStateService.isActive()).toBe(true); // listening
+      
+      agentStateService.handleUserStoppedSpeaking();
+      expect(agentStateService.isActive()).toBe(true); // thinking
+      
+      agentStateService.handleAgentStartedSpeaking(false, false);
+      expect(agentStateService.isActive()).toBe(true); // speaking
+      
+      agentStateService.handleAgentStoppedSpeaking();
+      expect(agentStateService.isActive()).toBe(false); // idle
+    });
+
+    it('should correctly identify responding state', () => {
+      expect(agentStateService.isResponding()).toBe(false);
+      
+      agentStateService.handleAgentThinking();
+      expect(agentStateService.isResponding()).toBe(true); // thinking
+      
+      agentStateService.handleAgentStartedSpeaking(false, false);
+      expect(agentStateService.isResponding()).toBe(true); // speaking
+    });
+
+    it('should correctly identify listening state', () => {
+      expect(agentStateService.isListening()).toBe(false);
+      
+      agentStateService.handleUserStartedSpeaking();
+      expect(agentStateService.isListening()).toBe(true);
+    });
+  });
+
+  describe('Service reset', () => {
+    it('should reset to initial state', () => {
+      agentStateService.handleUserStartedSpeaking();
+      agentStateService.handleUserStoppedSpeaking();
+      
+      expect(agentStateService.getCurrentState()).toBe('thinking');
+      expect(agentStateService.getStateHistory()).toHaveLength(2);
+      
+      agentStateService.reset();
+      
+      expect(agentStateService.getCurrentState()).toBe('idle');
+      expect(agentStateService.getStateHistory()).toHaveLength(0);
     });
   });
 });

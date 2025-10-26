@@ -17,10 +17,12 @@ import {
   initialState,
   stateReducer,
 } from '../../utils/state/VoiceInteractionState';
-import { 
-  transformConversationHistory
-} from '../../utils/conversation-context';
+// Note: transformConversationHistory is imported but not currently used
+// import { 
+//   transformConversationHistory
+// } from '../../utils/conversation-context';
 import { useIdleTimeoutManager } from '../../hooks/useIdleTimeoutManager';
+import { AgentStateService } from '../../services/AgentStateService';
 
 // Default endpoints
 const DEFAULT_ENDPOINTS = {
@@ -302,6 +304,19 @@ function DeepgramVoiceInteraction(
     agentManagerRef,
     props.debug
   );
+
+  // Initialize agent state service
+  const agentStateServiceRef = useRef<AgentStateService | null>(null);
+  if (!agentStateServiceRef.current) {
+    agentStateServiceRef.current = new AgentStateService(props.debug);
+    agentStateServiceRef.current.setCallbacks({
+      onAgentSpeaking,
+      onAgentSilent,
+      onStateChange: (newState) => {
+        dispatch({ type: 'AGENT_STATE_CHANGE', state: newState });
+      }
+    });
+  }
   
   // Debug logging
   const log = (...args: unknown[]) => {
@@ -814,6 +829,12 @@ function DeepgramVoiceInteraction(
       if (audioManagerRef.current) {
         audioManagerRef.current.dispose();
       audioManagerRef.current = null;
+      }
+      
+      // Cleanup agent state service
+      if (agentStateServiceRef.current) {
+        agentStateServiceRef.current.reset();
+        agentStateServiceRef.current = null;
       }
       
       // Ensure state is reset on unmount
@@ -1428,8 +1449,8 @@ function DeepgramVoiceInteraction(
         isWaitingForUserVoiceAfterSleep.current = false;
       }
       
-      sleepLog('Dispatching AGENT_STATE_CHANGE to listening (from UserStartedSpeaking)');
-      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'listening' });
+      // Use agent state service for state transition
+      agentStateServiceRef.current?.handleUserStartedSpeaking();
       return;
     }
 
@@ -1465,8 +1486,7 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentThinking') {
-      sleepLog('Dispatching AGENT_STATE_CHANGE to thinking');
-      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
+      agentStateServiceRef.current?.handleAgentThinking();
       
       // Disable keepalives when agent starts thinking (user stopped speaking)
       updateKeepaliveState(false);
@@ -1475,38 +1495,28 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentStartedSpeaking') {
-      console.log('🎯 [AGENT] AgentStartedSpeaking received - disabling idle timeout resets');
-      sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
-      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
-
-      // Track agent speaking
+      agentStateServiceRef.current?.handleAgentStartedSpeaking(
+        state.greetingInProgress, 
+        state.greetingStarted
+      );
+      
+      // Track agent speaking for greeting state
       if (state.greetingInProgress && !state.greetingStarted) {
         dispatch({ type: 'GREETING_STARTED', started: true });
       }
       
-      // Always call onAgentSpeaking when agent starts speaking
-      onAgentSpeaking?.();
       return;
     }
     
     if (data.type === 'AgentStoppedSpeaking') {
-      console.log('🎯 [AGENT] AgentStoppedSpeaking received - transitioning to idle');
-      sleepLog('Dispatching AGENT_STATE_CHANGE to idle');
-      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
-      
-      // Always call onAgentSilent when agent stops speaking
-      onAgentSilent?.();
+      agentStateServiceRef.current?.handleAgentStoppedSpeaking();
       return;
     }
     
     if (data.type === 'AgentAudioDone') {
-      sleepLog('AgentAudioDone received - audio generation complete, but playback may continue');
+      agentStateServiceRef.current?.handleAgentAudioDone(state.greetingInProgress);
       
-      // DON'T transition to idle yet - the agent is still speaking (audio is playing)
-      // The actual transition to idle will happen when audio playback finishes
-      // This prevents the agent from appearing idle while audio is still playing
-      
-      // Track agent silent
+      // Track agent silent for greeting state
       if (state.greetingInProgress) {
         dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
         dispatch({ type: 'GREETING_STARTED', started: false });
@@ -1630,11 +1640,8 @@ function DeepgramVoiceInteraction(
       // Disable keepalives when utterance ends
       updateKeepaliveState(false);
       
-      // Transition to thinking state if currently listening
-      if (stateRef.current.agentState === 'listening') {
-        sleepLog('Dispatching AGENT_STATE_CHANGE to thinking (from UtteranceEnd)');
-        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
-      }
+      // Use agent state service for state transition
+      agentStateServiceRef.current?.handleUserStoppedSpeaking();
       return;
     }
 
@@ -2016,7 +2023,9 @@ function DeepgramVoiceInteraction(
     sleepLog('sleep() method called - initiating transition');
     isWaitingForUserVoiceAfterSleep.current = true;
     clearAudio();
-    sleepLog('Dispatching AGENT_STATE_CHANGE to entering_sleep (from sleep())');
+    
+    // Use agent state service for sleep transition
+    agentStateServiceRef.current?.handleSleepStateChange(true);
     dispatch({ type: 'AGENT_STATE_CHANGE', state: 'entering_sleep' });
   };
   
@@ -2034,8 +2043,9 @@ function DeepgramVoiceInteraction(
     
     sleepLog('wake() method called from sleeping state');
     isWaitingForUserVoiceAfterSleep.current = false;
-    sleepLog('Dispatching AGENT_STATE_CHANGE to listening (from wake())');
-    dispatch({ type: 'AGENT_STATE_CHANGE', state: 'listening' });
+    
+    // Use agent state service for wake transition
+    agentStateServiceRef.current?.handleSleepStateChange(false);
   };
   
   // Toggle between sleep and wake states - only if agent is configured
@@ -2217,11 +2227,8 @@ function DeepgramVoiceInteraction(
         log('Playing state:', event.isPlaying);
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: event.isPlaying });
         
-        // Transition agent to idle when audio playback stops
-        if (!event.isPlaying && stateRef.current.agentState === 'speaking') {
-          sleepLog('Audio playback finished - transitioning agent to idle');
-          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
-        }
+        // Use agent state service for audio playback state changes
+        agentStateServiceRef.current?.handleAudioPlaybackChange(event.isPlaying);
       } else if (event.type === 'error') {
         handleError(event.error);
       } else if (event.type === 'data') {
