@@ -190,7 +190,7 @@ test.describe('Idle Timeout Behavior', () => {
     
     // Import audio simulation utilities
     const { VADTestUtilities } = await import('../utils/vad-test-utilities.js');
-    const SimpleVADHelpers = await import('../utils/simple-vad-helpers.js');
+    const { default: SimpleVADHelpers } = await import('../utils/simple-vad-helpers.js');
     
     // Track connection close events
     const connectionCloses = [];
@@ -285,7 +285,7 @@ test.describe('Idle Timeout Behavior', () => {
     
     // Import audio simulation utilities
     const { VADTestUtilities } = await import('../utils/vad-test-utilities.js');
-    const SimpleVADHelpers = await import('../utils/simple-vad-helpers.js');
+    const { default: SimpleVADHelpers } = await import('../utils/simple-vad-helpers.js');
     
     // Track connection close events
     const connectionCloses = [];

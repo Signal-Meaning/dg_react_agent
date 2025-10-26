@@ -55,27 +55,37 @@ test.describe('Simple Microphone State Tests', () => {
     console.log('🎉 Agent service handles both transcription and agent functionality!');
   });
 
-  test('should test timeout button functionality', async ({ page }) => {
-    console.log('⏰ Testing timeout button functionality...');
+  test('should test sleep/wake functionality', async ({ page }) => {
+    console.log('😴 Testing sleep/wake functionality...');
     
     // Use the microphone helper to ensure proper setup first
     const result = await MicrophoneHelpers.waitForMicrophoneReady(page);
     expect(result.success).toBe(true);
     
-    // Find timeout button
-    const timeoutButton = page.locator('button:has-text("Trigger Timeout")');
-    await expect(timeoutButton).toBeVisible({ timeout: 10000 });
+    // Start recording first (required for sleep button to be enabled)
+    const startButton = page.locator('button:has-text("Start")');
+    await expect(startButton).toBeVisible({ timeout: 10000 });
+    await startButton.click();
+    await page.waitForTimeout(1000);
     
-    // Click timeout button
-    await timeoutButton.click();
+    // Find sleep/wake button (should now be enabled)
+    const sleepButton = page.locator('button:has-text("Put to Sleep")');
+    await expect(sleepButton).toBeVisible({ timeout: 10000 });
+    await expect(sleepButton).toBeEnabled();
+    
+    // Click sleep button
+    await sleepButton.click();
     await page.waitForTimeout(2000);
     
-    // Check connection status after timeout
-    const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    console.log('Connection status after timeout:', connectionStatus);
+    // Check if button text changed to "Wake Up"
+    const wakeButton = page.locator('button:has-text("Wake Up")');
+    await expect(wakeButton).toBeVisible({ timeout: 5000 });
     
-    // Test passes if timeout button is clickable
-    expect(timeoutButton).toBeVisible();
-    console.log('✅ Timeout button functionality verified!');
+    // Click wake button
+    await wakeButton.click();
+    await page.waitForTimeout(1000);
+    
+    // Test passes if sleep/wake functionality works
+    console.log('✅ Sleep/wake functionality test completed');
   });
 });

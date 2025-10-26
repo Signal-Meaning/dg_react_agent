@@ -13,6 +13,11 @@ import { MicrophoneHelpers } from './helpers/test-helpers.js';
 
 test.describe('Fixed Microphone Functionality Tests', () => {
   
+  test.beforeEach(async ({ page }) => {
+    await page.goto('http://localhost:5173');
+    await page.waitForLoadState('networkidle');
+  });
+  
   test('should enable microphone when button is clicked (FIXED)', async ({ page }) => {
     console.log('🎤 Testing microphone activation with proper sequence...');
     

@@ -272,15 +272,9 @@ export async function verifyMicrophonePrerequisites(page) {
     console.log(`🎤 [MICROPHONE_VERIFY] Agent connected: ${results.agentConnected}`);
 
     // Check if settings are applied (greeting completed) - make this optional
-    try {
-      const greetingStatus = await page.locator(SELECTORS.greetingSent).textContent();
-      results.settingsApplied = greetingStatus.includes('ready for interaction') || 
-                               greetingStatus.includes('Agent finished speaking');
-      console.log(`🎤 [MICROPHONE_VERIFY] Settings applied: ${results.settingsApplied}`);
-    } catch (error) {
-      console.log('🎤 [MICROPHONE_VERIFY] ⚠️ Greeting status not available, proceeding anyway');
-      results.settingsApplied = true; // Don't fail if greeting status is not available
-    }
+    // Note: greeting-sent element doesn't exist in current test app
+    console.log('🎤 [MICROPHONE_VERIFY] ⚠️ Greeting status not available, proceeding anyway');
+    results.settingsApplied = true; // Don't fail if greeting status is not available
 
     // Check microphone button state
     const micButton = page.locator(SELECTORS.micButton);
