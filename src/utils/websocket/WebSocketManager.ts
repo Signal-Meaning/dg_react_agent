@@ -489,9 +489,9 @@ export class WebSocketManager {
       return isMeaningful;
     }
     
-    // For transcription service, reset on actual speech activity AND VAD events
+    // For transcription service, only reset on actual speech activity
     if (this.options.service === 'transcription') {
-      // Reset on actual speech content
+      // Only reset on actual speech content, not empty results or protocol messages
       if (data.type === 'Results') {
         const hasAlternatives = data.alternatives && data.alternatives.length > 0;
         const hasTranscript = hasAlternatives && data.alternatives[0].transcript && data.alternatives[0].transcript.trim().length > 0;
@@ -501,14 +501,9 @@ export class WebSocketManager {
         return hasTranscript; // Only reset if there's actual transcript content
       }
       
-      // Reset on VAD events that indicate ongoing user activity
-      const vadEvents = ['SpeechStarted'];
-      if (vadEvents.includes(data.type)) {
-        this.options.onMeaningfulActivity?.(`VAD event: ${data.type}`);
-        return true;
-      }
-      
-      return false; // Don't reset on other transcription messages
+      // Don't reset on other transcription messages (UtteranceEnd, etc.)
+      // These are protocol messages, not user activity
+      return false;
     }
     
     return false; // Default to not reset for unknown services

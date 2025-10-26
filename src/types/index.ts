@@ -184,10 +184,9 @@ export interface DeepgramVoiceInteractionProps {
    */
   onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
   
-  /**
-   * Called when SpeechStarted is detected from Deepgram Transcription API
-   */
-  onSpeechStarted?: (data: { channel: number[]; timestamp: number }) => void;
+  // Note: onSpeechStarted removed - SpeechStarted was from old Transcription API
+  // Voice Agent API uses UserStartedSpeaking instead
+  // Use onUserStartedSpeaking for speech start detection
   
   // Note: onSpeechStopped removed - SpeechStopped is not a real Deepgram event
   // Use onUtteranceEnd for speech end detection instead

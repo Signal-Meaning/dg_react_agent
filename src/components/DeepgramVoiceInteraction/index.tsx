@@ -884,7 +884,7 @@ function DeepgramVoiceInteraction(
       // Only log if there's meaningful content or it's a VAD event
       const hasContent = typeof data === 'object' && data !== null && (
         ('alternatives' in data && (data as any).alternatives?.length > 0) ||
-        ('type' in data && ['SpeechStarted', 'UtteranceEnd', 'vad'].includes((data as any).type))
+        ('type' in data && ['UtteranceEnd', 'vad'].includes((data as any).type))
       );
       
       if (hasContent) {
@@ -997,45 +997,9 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    // Handle SpeechStarted event from transcription service
-    if (data.type === 'SpeechStarted') {
-      if (props.debug) {
-        console.log('🎯 [VAD] SpeechStarted message received from transcription service:', data);
-      }
-      if (isSleepingOrEntering) {
-        sleepLog('Ignoring SpeechStarted event (state:', stateRef.current.agentState, ')');
-        return;
-      }
-      
-      // Reset speech_final flag for new speech session
-      speechFinalReceivedRef.current = false;
-      
-      // Call the specific SpeechStarted callback
-      if (props.onSpeechStarted) {
-        props.onSpeechStarted({ 
-          channel: data.channel as number[], 
-          timestamp: data.timestamp as number 
-        });
-      }
-      
-      // User started speaking - only set if we have actual speech evidence
-      // SpeechStarted alone is not sufficient - we need interim results or other evidence
-      if (!stateRef.current.isUserSpeaking) {
-        // Don't set userSpeaking to true just on SpeechStarted
-        // Wait for actual speech evidence (interim results, etc.)
-        if (props.debug) {
-          console.log('🎯 [SPEECH] SpeechStarted received - waiting for speech evidence before setting userSpeaking=true');
-        }
-      }
-      
-      // Reset speech_final flag for new speech session
-      speechFinalReceivedRef.current = false;
-      
-      if (stateRef.current.agentState === 'idle' || stateRef.current.agentState === 'sleeping') {
-        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'listening' });
-      }
-      return;
-    }
+    // Note: SpeechStarted removed - was from old Transcription API
+    // Voice Agent API uses UserStartedSpeaking instead
+    // Use onUserStartedSpeaking for speech start detection
     
     // Note: SpeechStopped is not a real Deepgram event - removed handler
     // Use UtteranceEnd for speech end detection instead
@@ -1414,8 +1378,8 @@ function DeepgramVoiceInteraction(
       return;
     }
 
-    // Handle VAD events from transcription service (vad type)
-    // NOTE: SpeechStarted is handled in handleTranscriptionMessage (SpeechStopped is not a real Deepgram event)
+    // Handle VAD events from agent service (vad type)
+    // NOTE: SpeechStarted removed - was from old Transcription API, Voice Agent API uses UserStartedSpeaking
     if (props.debug) {
       lazyLog('🔍 [DEBUG] Checking for VAD event type:', data.type);
     }
