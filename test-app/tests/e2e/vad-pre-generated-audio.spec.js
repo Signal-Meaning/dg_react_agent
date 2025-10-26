@@ -133,7 +133,7 @@ test.describe('VAD Pre-Generated Audio Test', () => {
           const vadElements = {
             'UserStartedSpeaking': '[data-testid="user-started-speaking"]',
             // 'UserStoppedSpeaking': '[data-testid="user-stopped-speaking"]', // Not a real Deepgram event
-            'SpeechStarted': '[data-testid="speech-started"]',
+            'UserStartedSpeaking': '[data-testid="speech-started"]',
             // 'SpeechStopped': '[data-testid="speech-stopped"]', // Not a real Deepgram event
             'UtteranceEnd': '[data-testid="utterance-end"]',
             'VADEvent': '[data-testid="vad-event"]'
@@ -166,14 +166,14 @@ test.describe('VAD Pre-Generated Audio Test', () => {
     // Analyze results
     const eventTypes = vadEvents.map(event => event.type);
     const hasOnsetEvents = eventTypes.some(type => 
-      type === 'UserStartedSpeaking' || type === 'SpeechStarted'
+      type === 'UserStartedSpeaking' || type === 'UserStartedSpeaking'
     );
     const hasOffsetEvents = eventTypes.some(type => 
       type === 'UtteranceEnd'
     );
     
     console.log(`\n📈 VAD Event Analysis:`);
-    console.log(`Onset events: ${hasOnsetEvents ? '✅' : '❌'} (${eventTypes.filter(t => t === 'UserStartedSpeaking' || t === 'SpeechStarted').length})`);
+    console.log(`Onset events: ${hasOnsetEvents ? '✅' : '❌'} (${eventTypes.filter(t => t === 'UserStartedSpeaking' || t === 'UserStartedSpeaking').length})`);
     console.log(`Offset events: ${hasOffsetEvents ? '✅' : '❌'} (${eventTypes.filter(t => t === 'UtteranceEnd').length})`);
     console.log(`Total events: ${vadEvents.length}`);
     
@@ -246,7 +246,7 @@ test.describe('VAD Pre-Generated Audio Test', () => {
               const vadElements = {
                 'UserStartedSpeaking': '[data-testid="user-started-speaking"]',
                 // 'UserStoppedSpeaking': '[data-testid="user-stopped-speaking"]', // Not a real Deepgram event
-                'SpeechStarted': '[data-testid="speech-started"]',
+                'UserStartedSpeaking': '[data-testid="speech-started"]',
                 // 'SpeechStopped': '[data-testid="speech-stopped"]', // Not a real Deepgram event
                 'UtteranceEnd': '[data-testid="utterance-end"]'
               };
@@ -278,7 +278,7 @@ test.describe('VAD Pre-Generated Audio Test', () => {
       
       const eventTypes = vadEvents.map(event => event.type);
       const hasOnsetEvents = eventTypes.some(type => 
-        type === 'UserStartedSpeaking' || type === 'SpeechStarted'
+        type === 'UserStartedSpeaking' || type === 'UserStartedSpeaking'
       );
       const hasOffsetEvents = eventTypes.some(type => 
         type === 'UtteranceEnd'

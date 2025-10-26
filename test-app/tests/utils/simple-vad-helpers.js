@@ -190,7 +190,7 @@ class SimpleVADHelpers {
     await page.evaluate((expectedEvents) => {
       const vadElements = {
         'UserStartedSpeaking': '[data-testid="user-started-speaking"]',
-        'SpeechStarted': '[data-testid="speech-started"]',
+        'UserStartedSpeaking': '[data-testid="speech-started"]',
         'UtteranceEnd': '[data-testid="utterance-end"]',
         'VADEvent': '[data-testid="vad-event"]'
         // Note: UserStoppedSpeaking and SpeechStopped are not real Deepgram events

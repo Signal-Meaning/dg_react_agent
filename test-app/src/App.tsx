@@ -74,7 +74,7 @@ function App() {
   //   console.log('🔄 [TEST-APP] Component mounted - reset utteranceEndDetected flag');
   // }, []);
   
-  // VAD state from transcription service (SpeechStarted/UtteranceEnd)
+  // VAD state from Voice Agent API (UtteranceEnd)
   
   // Text input state
   const [textInput, setTextInput] = useState('');
@@ -337,7 +337,7 @@ function App() {
   const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
     const channelStr = data.channel.join(',');
     setUtteranceEnd(`Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
-    utteranceEndDetected.current = true; // Set flag to prevent SpeechStarted from overriding
+    utteranceEndDetected.current = true;
     
     // Only log UtteranceEnd events in debug mode to reduce console spam
     if (isDebugMode) {

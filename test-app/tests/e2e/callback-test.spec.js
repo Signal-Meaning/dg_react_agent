@@ -89,15 +89,15 @@ test.describe('Callback Test Suite', () => {
     
     // Wait for VAD events to be detected using the proper utility
     const detectedVADEvents = await SimpleVADHelpers.waitForVADEvents(page, [
-      'SpeechStarted',    // From transcription service
+      'UserStartedSpeaking',    // From transcription service
       'UtteranceEnd'      // From transcription service
     ], 10000);
     
-    // Check if SpeechStarted was detected
-    const hasSpeechStarted = detectedVADEvents.some(event => event.type === 'SpeechStarted');
-    expect(hasSpeechStarted).toBe(true);
+    // Check if UserStartedSpeaking was detected
+    const hasUserStartedSpeaking = detectedVADEvents.some(event => event.type === 'UserStartedSpeaking');
+    expect(hasUserStartedSpeaking).toBe(true);
     
-    console.log('✅ onUserStartedSpeaking callback working - SpeechStarted detected:', hasSpeechStarted);
+    console.log('✅ onUserStartedSpeaking callback working - UserStartedSpeaking detected:', hasUserStartedSpeaking);
     console.log('📊 Detected VAD events:', detectedVADEvents.map(e => e.type));
   });
 
@@ -118,7 +118,7 @@ test.describe('Callback Test Suite', () => {
     
     // Wait for VAD events to be detected using the proper utility
     const detectedVADEvents = await SimpleVADHelpers.waitForVADEvents(page, [
-      'SpeechStarted',    // From transcription service
+      'UserStartedSpeaking',    // From transcription service
       'UtteranceEnd'      // From transcription service
     ], 15000);
     

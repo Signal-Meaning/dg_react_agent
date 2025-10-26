@@ -106,8 +106,8 @@ test.describe('Extended Silence Idle Timeout Test', () => {
     console.log('📊 User speaking state after speech detection:', isUserSpeaking);
     
     // Note: With hierarchical approach, isUserSpeaking is only set to true when we receive
-    // interim results (is_final=false), not just on SpeechStarted events
-    // This is the correct behavior - we shouldn't assume user is speaking just from SpeechStarted
+    // interim results (is_final=false), not just on UserStartedSpeaking events
+    // This is the correct behavior - we shouldn't assume user is speaking just from UserStartedSpeaking
     
     // 3. Wait for UtteranceEnd detection
     console.log('⏳ Waiting for UtteranceEnd detection...');
