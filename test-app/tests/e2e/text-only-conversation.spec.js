@@ -21,7 +21,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Text-Only Conversation', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('http://localhost:5173');
     await page.waitForLoadState('networkidle');
     
     // Note: Component connects with valid API key from test-app/.env

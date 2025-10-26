@@ -23,10 +23,9 @@
  */
 
 import { test, expect } from '@playwright/test';
-const { 
-  SELECTORS,
-  waitForConnection 
-} = require('./helpers/test-helpers');
+import {
+  SELECTORS, waitForConnection
+} from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks';
 
 test.describe('Microphone Activation After Idle Timeout', () => {

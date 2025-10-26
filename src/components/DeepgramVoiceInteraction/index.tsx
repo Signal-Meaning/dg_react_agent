@@ -1517,13 +1517,6 @@ function DeepgramVoiceInteraction(
     if (data.type === 'ConversationText') {
       const content = typeof data.content === 'string' ? data.content : '';
       
-      // CRITICAL FIX: Skip processing if AudioContext is suspended (prevents idle timeout bug)
-      const audioContext = audioManagerRef.current?.getAudioContext();
-      if (audioContext?.state === 'suspended') {
-        log('⚠️ Skipping ConversationText processing - AudioContext is suspended, waiting for user interaction');
-        return;
-      }
-      
       // If we receive ConversationText, this means the agent is actively responding
       
       if (data.role === 'assistant') {

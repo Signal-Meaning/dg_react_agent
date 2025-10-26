@@ -15,14 +15,14 @@
  */
 
 import { test, expect } from '@playwright/test';
-const {
+import {
   SELECTORS,
   setupTestPage,
   waitForConnection,
   waitForAgentGreeting,
   sendTextMessage,
   assertConnectionHealthy,
-} = require('./helpers/test-helpers');
+} from './helpers/test-helpers.js';
 
 // Run only in chromium for focused testing
 test.use({ browserName: 'chromium' });

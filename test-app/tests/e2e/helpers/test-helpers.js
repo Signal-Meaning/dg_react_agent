@@ -30,7 +30,7 @@ const SELECTORS = {
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
 async function setupTestPage(page, timeout = 10000) {
-  await page.goto('/');
+  await page.goto('http://localhost:5173');
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
 }
 
@@ -290,7 +290,7 @@ async function assertConnectionHealthy(page, expect) {
   await expect(connectionReady).toHaveText('true');
 }
 
-module.exports = {
+export {
   SELECTORS,
   setupTestPage,
   waitForConnection,

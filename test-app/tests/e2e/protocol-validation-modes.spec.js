@@ -7,9 +7,9 @@
  */
 
 import { test, expect } from '@playwright/test';
-const {
+import {
   installMockWebSocket,
-} = require('./helpers/test-helpers');
+} from './helpers/test-helpers.js';
 
 // Configure to run only in chromium for focused testing
 test.use({ browserName: 'chromium' });
@@ -22,7 +22,7 @@ test.describe('Protocol Validation - Mock API Mode', () => {
     });
     
     // Navigate to test mode
-    await page.goto('/?test-mode=true');
+    await page.goto('http://localhost:5173/?test-mode=true');
     await page.waitForLoadState('networkidle');
     
     // Install mock WebSocket to prevent real API calls
@@ -58,7 +58,7 @@ test.describe('Protocol Validation - Mock Mode', () => {
     });
     
     // Navigate to test mode
-    await page.goto('/?test-mode=true');
+    await page.goto('http://localhost:5173/?test-mode=true');
     await page.waitForLoadState('networkidle');
     
     // Install mock WebSocket

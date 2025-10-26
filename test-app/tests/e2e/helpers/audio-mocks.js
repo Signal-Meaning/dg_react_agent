@@ -165,7 +165,7 @@ async function setupTestPage(page) {
   await setupAudioMocks(page);
   
   // Navigate to test app with debug mode enabled
-  await page.goto('/?debug=true');
+  await page.goto('http://localhost:5173/?debug=true');
   await page.waitForLoadState('networkidle');
   
   // Wait for component to initialize
@@ -260,7 +260,7 @@ async function simulateSpeech(page, description = 'simulated speech', options = 
   }
 }
 
-module.exports = {
+export {
   setupAudioMocks,
   setupTestPage,
   simulateUserGesture,
