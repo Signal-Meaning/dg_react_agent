@@ -2,6 +2,15 @@
 
 This guide explains how to develop, test, and package the `dg_react_agent` library.
 
+## **Fork Information**
+
+**Important:** This component was forked from the original Deepgram repository at commit `7191eb4a062f35344896e873f02eba69c9c46a2d` (pre-fork). All development after that point is considered post-fork.
+
+- **Pre-fork (7191eb4a062f35344896e873f02eba69c9c46a2d):** Original Deepgram component with basic microphone functionality via `startAudioCapture()` method
+- **Post-fork:** All enhancements, bug fixes, and new features added by Signal Meaning
+
+The original component provided basic microphone functionality via `startAudioCapture()` method, which is preserved in this fork. Additional microphone control features like `toggleMic()` and `microphoneEnabled` prop were added post-fork and may be causing connection issues in E2E tests.
+
 ## **Quick Start**
 
 ```bash

@@ -65,32 +65,41 @@ Multiple E2E tests are failing due to audio context initialization and microphon
 - VAD callbacks are not properly integrated with component state
 - This affects transcription and user interaction tests
 
-## 🛠️ Proposed Solutions
+## 🛠️ Solutions Implemented
 
-### **1. Fix AudioContext Initialization**
+### **1. Microphone Test Sequence Fix** ✅ **SOLVED**
+- **Root Cause**: Tests were not following proper sequence for microphone activation
+- **Solution**: Created `MicrophoneHelpers` utility with proper sequence:
+  1. Wait for agent connection establishment
+  2. Wait for agent greeting completion (settings applied)
+  3. Enable microphone and wait for confirmation
+- **Files Created**: 
+  - `test-app/tests/e2e/helpers/microphone-helpers.js`
+  - `test-app/tests/e2e/microphone-functionality-fixed.spec.js`
+  - `test-app/tests/e2e/MICROPHONE_MIGRATION_GUIDE.md`
+
+### **2. AudioContext Initialization** 🔄 **IN PROGRESS**
 - Ensure AudioContext is properly initialized before audio tests
 - Add proper error handling for audio context creation
 - Implement retry logic for audio context initialization
 
-### **2. Fix Microphone State Management**
-- Ensure microphone state is properly toggled during tests
-- Add proper state synchronization between component and test expectations
-- Implement proper microphone permission handling
-
-### **3. Fix WebSocket Connection State**
+### **3. WebSocket Connection State** 🔄 **IN PROGRESS**
 - Ensure WebSocket connections are properly established before tests
 - Add proper connection state management
 - Implement proper reconnection logic
 
-### **4. Fix Callback Integration**
+### **4. Callback Integration** 🔄 **IN PROGRESS**
 - Ensure VAD callbacks are properly integrated with component state
 - Add proper callback state management
 - Implement proper error handling for callbacks
 
 ## 📋 Implementation Tasks
 
+- [x] ✅ **COMPLETED**: Create MicrophoneHelpers utility for proper test sequence
+- [x] ✅ **COMPLETED**: Fix microphone state management with proper sequence
+- [x] ✅ **COMPLETED**: Add retry logic for flaky microphone tests
+- [x] ✅ **COMPLETED**: Create migration guide for existing tests
 - [ ] Fix AudioContext initialization in test setup
-- [ ] Fix microphone state management in component
 - [ ] Fix WebSocket connection state management
 - [ ] Fix VAD callback integration
 - [ ] Add proper error handling for audio operations

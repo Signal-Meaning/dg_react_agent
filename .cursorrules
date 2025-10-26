@@ -1,0 +1,44 @@
+# Cursor Rules for dg_react_agent
+
+## Fork Information
+
+**Critical Context:** This component was forked from the original Deepgram repository at commit `7191eb4a062f35344896e873f02eba69c9c46a2d` (pre-fork). All development after that point is considered post-fork.
+
+### Pre-fork (7191eb4a062f35344896e873f02eba69c9c46a2d)
+- Original Deepgram component with basic microphone functionality via `startAudioCapture()` method
+- Core WebSocket management and audio handling
+- Basic transcription and agent interaction capabilities
+
+### Post-fork
+- All enhancements, bug fixes, and new features added by Signal Meaning
+- Additional microphone control features like `toggleMic()` and `microphoneEnabled` prop
+- Agent state management improvements
+- Enhanced testing infrastructure
+
+## Development Guidelines
+
+### Microphone Functionality
+- **Preserve:** `startAudioCapture()` method (was present pre-fork)
+- **Be cautious with:** `toggleMic()` and `microphoneEnabled` prop (added post-fork, may cause connection issues)
+- **Test app expects:** `startAudioCapture()` method to be available via ref
+
+### Component Architecture
+- The component should be headless (no UI elements)
+- Microphone control should primarily be handled by the test app, not the component
+- The component should focus on WebSocket management and audio processing
+
+### Testing
+- E2E tests are failing due to microphone activation sequence issues
+- Use `MicrophoneHelpers` utility for consistent microphone testing
+- Focus on fixing the 40 failing microphone tests
+
+## Current Issues
+- 94 E2E tests failing, with 40+ microphone-related failures
+- Connection closing after microphone button click
+- Microphone not enabling properly in test environment
+
+## Code Style
+- Use TypeScript for type safety
+- Follow React best practices
+- Maintain backward compatibility with pre-fork functionality
+- Document any breaking changes clearly

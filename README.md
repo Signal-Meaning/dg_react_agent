@@ -2,6 +2,8 @@
 
 A headless React component designed to drastically simplify the integration of Deepgram's real-time transcription and voice agent capabilities into web applications. It handles the low-level complexities of WebSocket connections, browser microphone access, and agent audio playback, allowing you to focus on building your application's UI and logic.
 
+**Development Note:** This component was forked from the original Deepgram repository at commit `7191eb4a062f35344896e873f02eba69c9c46a2d` (pre-fork). All development after that point is considered post-fork. The original component provided basic microphone functionality via `startAudioCapture()` method, which is preserved in this fork.
+
 [![npm version](https://img.shields.io/npm/v/@signal-meaning/deepgram-voice-interaction-react?registry_uri=https://npm.pkg.github.com)](https://npm.pkg.github.com/@signal-meaning/deepgram-voice-interaction-react)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
