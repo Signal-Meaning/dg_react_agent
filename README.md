@@ -7,6 +7,22 @@ A headless React component designed to drastically simplify the integration of D
 [![npm version](https://img.shields.io/npm/v/@signal-meaning/deepgram-voice-interaction-react?registry_uri=https://npm.pkg.github.com)](https://npm.pkg.github.com/@signal-meaning/deepgram-voice-interaction-react)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+## Project Objectives
+
+**Fork Purpose:** This fork of `dg_react_agent` adds `test-app` as a demonstration of a React web testable frontend to the dg_react_agent React component.
+
+**API Compatibility Requirement:** The component MUST maintain API compatibility with the Deepgram Voice Agent API:
+- Voice Agent API v1: https://developers.deepgram.com/docs/voice-agent
+- Migration Guide: https://developers.deepgram.com/docs/voice-agent-v1-migration
+
+Any improvements must be justified and maintain compatibility with the Voice Agent API.
+
+**Test App Goals:** The test-app and its related tests are intended to:
+- Recommend certain integration patterns and avoid others
+- Act as a starting point for React developers
+- Demonstrate proper usage of the headless dg_react_agent component
+- MUST maintain API compatibility with the headless dg_react_agent component
+
 ## Features
 
 -   **Real-time Transcription:** Streams microphone audio to Deepgram's Speech-to-Text API and provides live results.

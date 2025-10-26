@@ -1,44 +1,43 @@
 # Cursor Rules for dg_react_agent
 
-## Fork Information
+## Project Objectives
 
-**Critical Context:** This component was forked from the original Deepgram repository at commit `7191eb4a062f35344896e873f02eba69c9c46a2d` (pre-fork). All development after that point is considered post-fork.
+**Fork Purpose:** This fork of `dg_react_agent` adds `test-app` as a demonstration of a React web testable frontend to the dg_react_agent React component.
 
-### Pre-fork (7191eb4a062f35344896e873f02eba69c9c46a2d)
-- Original Deepgram component with basic microphone functionality via `startAudioCapture()` method
-- Core WebSocket management and audio handling
-- Basic transcription and agent interaction capabilities
+**API Compatibility Requirement:** The component MUST maintain API compatibility with the Deepgram Voice Agent API:
+- Voice Agent API v1: https://developers.deepgram.com/docs/voice-agent
+- Migration Guide: https://developers.deepgram.com/docs/voice-agent-v1-migration
 
-### Post-fork
-- All enhancements, bug fixes, and new features added by Signal Meaning
-- Additional microphone control features like `toggleMic()` and `microphoneEnabled` prop
-- Agent state management improvements
-- Enhanced testing infrastructure
+Any improvements must be justified and maintain compatibility with the Voice Agent API.
+
+**Test App Goals:** The test-app and its related tests are intended to:
+- Recommend certain integration patterns and avoid others
+- Act as a starting point for React developers
+- Demonstrate proper usage of the headless dg_react_agent component
+- MUST maintain API compatibility with the headless dg_react_agent component
 
 ## Development Guidelines
 
-### Microphone Functionality
+### Fork Point
+- Pre-fork: commit `7191eb4a062f35344896e873f02eba69c9c46a2d`
+- Post-fork: all development after that point
+
+### Voice Agent API Only
+- The component uses ONLY the Deepgram Voice Agent API
+- No Transcription API features should be used
+- All `SpeechStarted` references in documentation/types should be removed or marked as deprecated
+
+## Microphone Functionality
 - **Preserve:** `startAudioCapture()` method (was present pre-fork)
 - **Be cautious with:** `toggleMic()` and `microphoneEnabled` prop (added post-fork, may cause connection issues)
 - **Test app expects:** `startAudioCapture()` method to be available via ref
 
-### Component Architecture
+## Component Architecture
 - The component should be headless (no UI elements)
 - Microphone control should primarily be handled by the test app, not the component
 - The component should focus on WebSocket management and audio processing
 
-### Testing
+## Testing
 - E2E tests are failing due to microphone activation sequence issues
 - Use `MicrophoneHelpers` utility for consistent microphone testing
 - Focus on fixing the 40 failing microphone tests
-
-## Current Issues
-- 94 E2E tests failing, with 40+ microphone-related failures
-- Connection closing after microphone button click
-- Microphone not enabling properly in test environment
-
-## Code Style
-- Use TypeScript for type safety
-- Follow React best practices
-- Maintain backward compatibility with pre-fork functionality
-- Document any breaking changes clearly
