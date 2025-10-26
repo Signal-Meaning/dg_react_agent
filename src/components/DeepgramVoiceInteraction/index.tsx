@@ -287,7 +287,7 @@ function DeepgramVoiceInteraction(
   };
   
   // Initialize idle timeout manager
-  const { handleMeaningfulActivity } = useIdleTimeoutManager(
+  const { handleMeaningfulActivity, handleUtteranceEnd } = useIdleTimeoutManager(
     state,
     agentManagerRef,
     props.debug
@@ -989,8 +989,11 @@ function DeepgramVoiceInteraction(
       // Always call the callback when UtteranceEnd is received
       onUserStoppedSpeaking?.();
       
-      // Update state to trigger idle timeout re-enabling
-      dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
+      // Don't update isUserSpeaking state here - let UtteranceEnd handle idle timeout differently
+      // than USER_STOPPED_SPEAKING events
+      
+      // Notify idle timeout service about UtteranceEnd
+      handleUtteranceEnd();
       return;
     }
     
@@ -1145,6 +1148,8 @@ function DeepgramVoiceInteraction(
   const handleAgentMessage = (data: unknown) => {
     // Debug: Log all agent messages with type
     const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as any).type : 'unknown';
+    console.log('🎯 [DEBUG] handleAgentMessage called - VERSION 7.0 - HMR TEST');
+    console.error('🎯 [ERROR] handleAgentMessage called - VERSION 7.0 - ERROR TEST');
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
     
     // Don't re-enable idle timeout resets here
@@ -1403,6 +1408,9 @@ function DeepgramVoiceInteraction(
       
       // Use agent state service for state transition
       agentStateServiceRef.current?.handleUserStoppedSpeaking();
+      
+      // Notify idle timeout service about UtteranceEnd
+      handleUtteranceEnd();
       return;
     }
 
