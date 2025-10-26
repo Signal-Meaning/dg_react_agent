@@ -94,6 +94,8 @@ export class IdleTimeoutService {
         } catch (error) {
           console.log('🎯 [DEBUG] stopTimeout() threw error:', error);
         }
+        // Ensure no new timeouts can be started during ongoing conversation
+        this.isDisabled = true;
         this.log('UtteranceEnd received - keeping idle timeout disabled for ongoing conversation');
         break;
         

@@ -593,7 +593,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onUtteranceEnd={handleUtteranceEnd}
         onAgentSpeaking={handleAgentSpeaking}
         onAgentSilent={handleAgentSilent}
-        debug={false} // Enable debug for VAD testing
+        debug={true} // Enable debug for VAD testing
       />
       
       <div style={{ border: '1px solid blue', padding: '10px', margin: '15px 0' }}>
