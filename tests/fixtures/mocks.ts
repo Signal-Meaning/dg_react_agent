@@ -40,7 +40,7 @@ export const createMockAudioManager = () => ({
   clearAudioQueue: jest.fn(),
   dispose: jest.fn(),
   isRecordingActive: jest.fn().mockReturnValue(false),
-  isPlaybackActive: jest.fn().mockReturnValue(false),
+
   getAudioContext: jest.fn().mockReturnValue({
     state: 'running',
     suspend: jest.fn(),

@@ -1865,9 +1865,6 @@ function DeepgramVoiceInteraction(
     // Audio data handling
     sendAudioData, // Expose sendAudioData for testing and external use
     
-    // Audio playback state
-    isPlaybackActive: () => state.isPlaying,
-    
     // Audio context access
     getAudioContext: () => audioManagerRef.current?.getAudioContext() || undefined,
     

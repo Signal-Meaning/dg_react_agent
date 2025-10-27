@@ -50,17 +50,7 @@ export const APPROVED_COMPONENT_METHOD_ADDITIONS = {
     question: 'Can test-app get this info from existing callbacks (onAgentStateChange, etc.)?',
   },
   
-  // REDUNDANT - should be removed
-  'isPlaybackActive': {
-    addedIn: 'v0.5.0',
-    issue: 'ISSUE-XXX',
-    rationale: 'Audio playback state query.',
-    breaking: false,
-    redundant: true,
-    reason: 'Test-app uses onPlaybackStateChange callback (line 297). Method is redundant.',
-    replacement: 'Use onPlaybackStateChange callback',
-    shouldRemove: true,
-  },
+
 } as const;
 
 // Methods that must be removed
@@ -71,6 +61,13 @@ export const METHODS_TO_REMOVE = {
     removeImmediately: true,
     removed: true,
     removedIn: 'Issue #194',
+  },
+  'isPlaybackActive': {
+    reason: 'Redundant with onPlaybackStateChange callback',
+    replacement: 'Use onPlaybackStateChange callback',
+    removeImmediately: true,
+    removed: true,
+    removedIn: 'Issue #195',
   },
 } as const;
 

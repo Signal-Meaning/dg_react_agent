@@ -285,13 +285,6 @@ export interface DeepgramVoiceInteractionHandle {
   getState: () => VoiceInteractionState;
 
   /**
-   * Check if audio is currently playing
-   * 
-   * @returns true if audio is currently playing, false otherwise
-   */
-  isPlaybackActive: () => boolean;
-
-  /**
    * Get the AudioContext for debugging and testing
    * 
    * @returns the AudioContext instance or undefined if not available
