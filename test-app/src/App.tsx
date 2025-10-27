@@ -60,6 +60,9 @@ function App() {
   const [agentSpeaking, setAgentSpeaking] = useState(false);
   const [agentSilent, setAgentSilent] = useState(false);
   
+  // TTS mute state
+  const [ttsMuted, setTtsMuted] = useState(false);
+  
   // VAD state
   const [userStartedSpeaking, setUserStartedSpeaking] = useState<string | null>(null);
   const [userStoppedSpeaking, setUserStoppedSpeaking] = useState<string | null>(null);
@@ -425,6 +428,17 @@ function App() {
     }
   };
   
+  const toggleTtsMute = () => {
+    const newMutedState = !ttsMuted;
+    setTtsMuted(newMutedState);
+    addLog(newMutedState ? '🔇 TTS Muted' : '🔊 TTS Unmuted');
+    
+    if (newMutedState && deepgramRef.current) {
+      // When muting, interrupt any currently playing audio
+      deepgramRef.current.interruptAgent();
+    }
+  };
+  
   const updateContext = () => {
     // Define the possible instruction prompts
     const instructions = [
@@ -676,11 +690,16 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           </button>
         )}
         <button 
-          onClick={interruptAgent}
+          onClick={toggleTtsMute}
           disabled={!isRecording}
-          style={{ padding: '10px 20px', pointerEvents: 'auto' }}
+          style={{ 
+            padding: '10px 20px',
+            backgroundColor: ttsMuted ? '#feb2b2' : 'transparent',
+            pointerEvents: 'auto'
+          }}
+          data-testid="tts-mute-button"
         >
-          Interrupt Audio
+          {ttsMuted ? '🔇 TTS Muted' : '🔊 TTS Enabled'}
         </button>
         <button 
           onClick={updateContext}

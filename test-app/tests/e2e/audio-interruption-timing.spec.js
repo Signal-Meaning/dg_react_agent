@@ -50,9 +50,9 @@ test.describe('Audio Interruption Timing', () => {
     // Get timestamp when audio started
     const audioStartTime = Date.now();
     
-    // Click interrupt button
-    await page.click('button:has-text("Interrupt Audio")');
-    console.log('✅ Interrupt button clicked');
+    // Click interrupt button (TTS Mute button)
+    await page.click('[data-testid="tts-mute-button"]');
+    console.log('✅ Mute button clicked');
     
     // Wait for audio to stop (should happen within 50ms)
     const interruptTime = Date.now();
@@ -93,7 +93,7 @@ test.describe('Audio Interruption Timing', () => {
     
     // Wait for audio and interrupt
     await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('true', { timeout: 5000 });
-    await page.click('button:has-text("Interrupt Audio")');
+    await page.click('[data-testid="tts-mute-button"]');
     await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 50 });
     
     // Wait a bit to ensure no audio resumes
@@ -130,9 +130,9 @@ test.describe('Audio Interruption Timing', () => {
     // Wait for audio
     await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('true', { timeout: 5000 });
     
-    // Rapidly click interrupt multiple times
+    // Rapidly click interrupt multiple times (using the new mute button)
     for (let i = 0; i < 5; i++) {
-      await page.click('button:has-text("Interrupt Audio")');
+      await page.click('[data-testid="tts-mute-button"]');
       await page.waitForTimeout(10);
     }
     
@@ -140,5 +140,42 @@ test.describe('Audio Interruption Timing', () => {
     await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false');
     
     console.log('✅ Rapid interrupt clicks handled without errors');
+  });
+
+  test('should persist mute state and prevent future audio', async ({ page }) => {
+    console.log('🔊 Testing TTS mute state persistence...');
+    
+    // Start connection
+    await page.click('[data-testid="start-button"]');
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
+    console.log('✅ Connection established');
+    
+    // Mute TTS
+    await page.click('[data-testid="tts-mute-button"]');
+    const muteButton = page.locator('[data-testid="tts-mute-button"]');
+    await expect(muteButton).toContainText('Muted');
+    console.log('✅ TTS muted');
+    
+    // Send a message - should not play audio (or should be interrupted immediately)
+    await page.fill('[data-testid="text-input"]', 'Hello test message');
+    await page.click('[data-testid="send-button"]');
+    console.log('✅ Message sent');
+    
+    // Wait and verify audio either doesn't start or is stopped quickly
+    await page.waitForTimeout(2000);
+    const isPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
+    expect(isPlaying).toBe('false');
+    console.log('✅ Audio did not play (as expected when muted)');
+    
+    // Verify mute state persists
+    await expect(muteButton).toContainText('Muted');
+    console.log('✅ Mute state persisted');
+    
+    // Unmute
+    await page.click('[data-testid="tts-mute-button"]');
+    await expect(muteButton).toContainText('Enabled');
+    console.log('✅ TTS unmuted');
+    
+    console.log('✅ Mute state persisted and prevented audio');
   });
 });
