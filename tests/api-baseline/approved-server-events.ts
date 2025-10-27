@@ -34,12 +34,12 @@ export const APPROVED_SERVER_EVENT_ADDITIONS = {
   'FunctionCallResponse': {
     rationale: 'Client response to FunctionCallRequest. Part of function calling feature.',
     addedIn: 'pre-fork',
-    needsOfficialVerification: false, // This is client->server, not server->client
+    needsOfficialVerification: true, // This is client->server, not server->client
   },
   'Error': {
     rationale: 'Error handling. Standard WebSocket error messages. Not in asyncapi.yml events but exists as error handling.',
     addedIn: 'pre-fork',
-    needsOfficialVerification: false,
+    needsOfficialVerification: true,
   },
   'Warning': {
     rationale: 'Non-fatal issues reported by Deepgram. Part of Voice Agent v1 API.',
