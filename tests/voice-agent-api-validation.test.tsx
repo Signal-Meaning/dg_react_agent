@@ -195,16 +195,17 @@ describe('Voice Agent API - Event Validation', () => {
     
     WebSocketManager.mockImplementation(() => mockWebSocketManager);
     
-    // Setup AudioManager mock - matches src/utils/audio/AudioManager.ts public API
+    // Setup AudioManager mock - matches PRE-FORK public API only (commit 7191eb4)
+    // These are the trusted baseline methods that existed pre-fork
     AudioManager = require('../src/utils/audio/AudioManager').AudioManager;
     mockAudioManager = {
-      // Public methods from AudioManager
+      // Pre-fork public methods (trusted baseline)
+      addEventListener: jest.fn().mockReturnValue(jest.fn()),
       initialize: jest.fn().mockResolvedValue(undefined),
       startRecording: jest.fn().mockResolvedValue(undefined),
       stopRecording: jest.fn(),
       queueAudio: jest.fn().mockResolvedValue(undefined),
       clearAudioQueue: jest.fn(),
-      abortPlayback: jest.fn(),
       dispose: jest.fn(),
       isRecordingActive: jest.fn().mockReturnValue(false),
       isPlaybackActive: jest.fn().mockReturnValue(false),
@@ -213,12 +214,14 @@ describe('Voice Agent API - Event Validation', () => {
         suspend: jest.fn(),
         resume: jest.fn(),
       }),
-      setTtsMuted: jest.fn(),
-      toggleTtsMute: jest.fn(),
-      addEventListener: jest.fn().mockReturnValue(jest.fn()),
-      removeEventListener: jest.fn(),
-      // Public property
-      isTtsMuted: false,
+      // Note: abortPlayback may have been added post-fork, verify git history
+      abortPlayback: jest.fn(),
+      
+      // REMOVED: Post-fork additions that should not be in mock
+      // setTtsMuted: jest.fn(),      // Added post-fork, NOT in pre-fork
+      // toggleTtsMute: jest.fn(),    // Added post-fork, NOT in pre-fork
+      // removeEventListener: jest.fn(), // Not in pre-fork
+      // isTtsMuted: false,           // Public property added post-fork
     };
     
     AudioManager.mockImplementation(() => mockAudioManager);
