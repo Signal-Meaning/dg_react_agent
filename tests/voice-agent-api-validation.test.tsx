@@ -92,76 +92,60 @@ import React from 'react';
 import { render, waitFor, act } from '@testing-library/react';
 import { DeepgramVoiceInteraction } from '../src';
 import { AgentResponseType } from '../src/types/agent';
-import { OFFICIAL_DEEPGRAM_SERVER_EVENTS } from './api-baseline/official-deepgram-api';
-import { APPROVED_SERVER_EVENT_ADDITIONS } from './api-baseline/approved-server-events';
+import { isApprovedEvent, isOfficialEvent } from './fixtures/server-api-baseline';
+import { isApprovedMethod, isUnauthorizedMethod, isDeprecatedMethod } from './fixtures/component-api-baseline';
+import { createMockWebSocketManager, createMockAudioManager, createMockAgentOptions, MOCK_API_KEY } from './fixtures/mocks';
 
 // Mock the WebSocketManager and AudioManager
 jest.mock('../src/utils/websocket/WebSocketManager');
 jest.mock('../src/utils/audio/AudioManager');
 
-const mockApiKey = 'mock-deepgram-api-key-for-testing-only';
+// Using fixture instead
 
 describe('Step 1: Deepgram Server API Validation', () => {
   it('should handle all official Deepgram Voice Agent v1 events', () => {
     const ourEvents = Object.values(AgentResponseType);
     
-    // Check if we handle all official events
-    const missingEvents = OFFICIAL_DEEPGRAM_SERVER_EVENTS.filter(
+    // Get official events
+    const { OFFICIAL_DEEPGRAM_SERVER_EVENTS } = require('./api-baseline/official-deepgram-api');
+    
+    // Find missing official events
+    const missingOfficialEvents = OFFICIAL_DEEPGRAM_SERVER_EVENTS.filter(
       event => !ourEvents.includes(event as any)
     );
     
-    // Events we know about but haven't implemented yet
-    const knownMissingEvents = ['InjectionRefused'];
-    const trulyMissingEvents = missingEvents.filter(
-      e => !knownMissingEvents.includes(e)
-    );
+    // Known missing (tracked in issues)
+    const knownMissing = ['InjectionRefused'];
+    const trulyMissing = missingOfficialEvents.filter(e => !knownMissing.includes(e));
     
-    if (trulyMissingEvents.length > 0) {
+    if (trulyMissing.length > 0) {
       throw new Error(
-        `❌ MISSING DEEPGRAM SERVER API EVENTS:\n` +
-        `${trulyMissingEvents.join(', ')}\n\n` +
-        `These events are in official Deepgram Voice Agent v1 API but not handled by component.\n` +
+        `❌ MISSING OFFICIAL DEEPGRAM SERVER EVENTS:\n` +
+        `${trulyMissing.join(', ')}\n\n` +
+        `These events are in official Voice Agent v1 API but not handled by component.\n` +
         `Add handlers to src/types/agent.ts AgentResponseType enum.`
       );
     }
     
-    // Warn about known missing events
-    const missingKnown = missingEvents.filter(e => knownMissingEvents.includes(e));
+    // Warn about known missing
+    const missingKnown = missingOfficialEvents.filter(e => knownMissing.includes(e));
     if (missingKnown.length > 0) {
-      console.warn(
-        `⚠️ These official events are known but not yet implemented:\n` +
-        `${missingKnown.join(', ')}\n` +
-        `Create GitHub issues to track implementation.`
-      );
+      console.warn(`⚠️ Known missing events: ${missingKnown.join(', ')} (see issue #199)`);
     }
   });
 
-  it('should not handle non-existent Deepgram events without approval', () => {
+  it('should only handle approved server events', () => {
     const ourEvents = Object.values(AgentResponseType);
     
-    // Check if we're handling events that don't exist in official API
-    const extraEvents = ourEvents.filter(
-      event => !OFFICIAL_DEEPGRAM_SERVER_EVENTS.includes(event as any)
-    );
+    // Find unapproved events
+    const unapprovedEvents = ourEvents.filter(event => !isApprovedEvent(event as string));
     
-    // Filter out approved additions
-    const approvedExtraEvents = Object.keys(APPROVED_SERVER_EVENT_ADDITIONS);
-    
-    const unapprovedExtraEvents = extraEvents.filter(
-      e => !approvedExtraEvents.includes(e as string)
-    );
-    
-    if (unapprovedExtraEvents.length > 0) {
+    if (unapprovedEvents.length > 0) {
       throw new Error(
         `❌ UNAPPROVED SERVER API EVENTS:\n` +
-        `${unapprovedExtraEvents.join(', ')}\n\n` +
-        `These events are handled by component but not in:\n` +
-        `  1. Official Deepgram asyncapi.yml spec\n` +
-        `  2. Approved additions (tests/api-baseline/approved-server-events.ts)\n\n` +
-        `TO FIX:\n` +
-        `1. Verify event exists in Deepgram documentation\n` +
-        `2. If official, add to approved-server-events.ts with rationale\n` +
-        `3. If not official, remove from AgentResponseType enum`
+        `${unapprovedEvents.join(', ')}\n\n` +
+        `These events are NOT in the official Deepgram API spec and NOT in approved additions.\n` +
+        `See tests/api-baseline/approved-server-events.ts for documentation process.`
       );
     }
   });
@@ -176,54 +160,14 @@ describe('Voice Agent API - Event Validation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     
-    // Setup WebSocketManager mock
+    // Use stable fixtures
+    mockWebSocketManager = createMockWebSocketManager();
+    mockAudioManager = createMockAudioManager();
+    
     WebSocketManager = require('../src/utils/websocket/WebSocketManager').WebSocketManager;
-    mockWebSocketManager = {
-      connect: jest.fn().mockResolvedValue(undefined),
-      close: jest.fn(),
-      sendJSON: jest.fn(),
-      sendBinary: jest.fn(),
-      sendCloseStream: jest.fn(),
-      getState: jest.fn().mockReturnValue('connected'),
-      isConnected: jest.fn().mockReturnValue(true),
-      addEventListener: jest.fn().mockReturnValue(jest.fn()),
-      removeEventListener: jest.fn(),
-      destroy: jest.fn(),
-      startKeepalive: jest.fn(),
-      stopKeepalive: jest.fn(),
-    };
+    AudioManager = require('../src/utils/audio/AudioManager').AudioManager;
     
     WebSocketManager.mockImplementation(() => mockWebSocketManager);
-    
-    // Setup AudioManager mock - matches PRE-FORK public API only (commit 7191eb4)
-    // These are the trusted baseline methods that existed pre-fork
-    AudioManager = require('../src/utils/audio/AudioManager').AudioManager;
-    mockAudioManager = {
-      // Pre-fork public methods (trusted baseline)
-      addEventListener: jest.fn().mockReturnValue(jest.fn()),
-      initialize: jest.fn().mockResolvedValue(undefined),
-      startRecording: jest.fn().mockResolvedValue(undefined),
-      stopRecording: jest.fn(),
-      queueAudio: jest.fn().mockResolvedValue(undefined),
-      clearAudioQueue: jest.fn(),
-      dispose: jest.fn(),
-      isRecordingActive: jest.fn().mockReturnValue(false),
-      isPlaybackActive: jest.fn().mockReturnValue(false),
-      getAudioContext: jest.fn().mockReturnValue({
-        state: 'running',
-        suspend: jest.fn(),
-        resume: jest.fn(),
-      }),
-      // Note: abortPlayback may have been added post-fork, verify git history
-      abortPlayback: jest.fn(),
-      
-      // REMOVED: Post-fork additions that should not be in mock
-      // setTtsMuted: jest.fn(),      // Added post-fork, NOT in pre-fork
-      // toggleTtsMute: jest.fn(),    // Added post-fork, NOT in pre-fork
-      // removeEventListener: jest.fn(), // Not in pre-fork
-      // isTtsMuted: false,           // Public property added post-fork
-    };
-    
     AudioManager.mockImplementation(() => mockAudioManager);
   });
 
@@ -235,15 +179,8 @@ describe('Voice Agent API - Event Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           onReady={onReady}
           debug={true}
         />
@@ -288,15 +225,8 @@ describe('Voice Agent API - Event Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           onReady={onReady}
           debug={true}
         />
@@ -324,15 +254,8 @@ describe('Voice Agent API - Event Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           onUserStartedSpeaking={onUserStartedSpeaking}
           debug={true}
         />
@@ -360,15 +283,8 @@ describe('Voice Agent API - Event Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           onAgentStateChange={onAgentStateChange}
           debug={true}
         />
@@ -398,15 +314,8 @@ describe('Voice Agent API - Event Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           onAgentSpeaking={onAgentSpeaking}
           onAgentStateChange={onAgentStateChange}
           debug={true}
@@ -435,15 +344,8 @@ describe('Voice Agent API - Event Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           onAgentUtterance={onAgentUtterance}
           debug={true}
         />
@@ -472,15 +374,8 @@ describe('Voice Agent API - Event Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           onUserMessage={onUserMessage}
           debug={true}
         />
@@ -511,15 +406,8 @@ describe('Voice Agent API - Event Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           onAgentSilent={onAgentSilent}
           debug={true}
         />
@@ -547,15 +435,8 @@ describe('Voice Agent API - Event Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           onError={onError}
           debug={true}
         />
@@ -586,15 +467,8 @@ describe('Voice Agent API - Event Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           debug={true}
         />
       );
@@ -728,15 +602,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
         />
       );
 
@@ -757,15 +624,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
         />
       );
 
@@ -789,15 +649,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
         />
       );
 
@@ -820,15 +673,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
         />
       );
 
@@ -851,15 +697,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
         />
       );
 
@@ -880,15 +719,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
         />
       );
 
@@ -909,15 +741,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
         />
       );
 
@@ -940,15 +765,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
         />
       );
 
@@ -969,15 +787,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
         />
       );
 
@@ -1000,15 +811,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
         />
       );
 
@@ -1029,15 +833,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
         />
       );
 
@@ -1056,15 +853,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
         />
       );
 
@@ -1091,15 +881,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           debug={true}
         />
       );
@@ -1157,15 +940,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           debug={true}
         />
       );
@@ -1201,15 +977,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           onReady={onReady}
           debug={true}
         />
@@ -1234,15 +1003,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           debug={true}
         />
       );
@@ -1267,15 +1029,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           debug={true}
         />
       );
@@ -1300,15 +1055,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           debug={true}
         />
       );
@@ -1335,15 +1083,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           debug={true}
         />
       );
@@ -1413,15 +1154,8 @@ describe('Component API Surface Validation', () => {
       render(
         <DeepgramVoiceInteraction
           ref={ref}
-          apiKey={mockApiKey}
-          agentOptions={{
-            language: 'en',
-            listenModel: 'nova-2',
-            thinkProviderType: 'open_ai',
-            thinkModel: 'gpt-4o-mini',
-            voice: 'aura-asteria-en',
-            instructions: 'You are a helpful assistant.',
-          }}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
           debug={true}
         />
       );
