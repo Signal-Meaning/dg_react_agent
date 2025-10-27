@@ -93,6 +93,7 @@ import { render, waitFor, act } from '@testing-library/react';
 import { DeepgramVoiceInteraction } from '../src';
 import { AgentResponseType } from '../src/types/agent';
 import { OFFICIAL_DEEPGRAM_SERVER_EVENTS } from './api-baseline/official-deepgram-api';
+import { APPROVED_SERVER_EVENT_ADDITIONS } from './api-baseline/approved-server-events';
 
 // Mock the WebSocketManager and AudioManager
 jest.mock('../src/utils/websocket/WebSocketManager');
@@ -143,20 +144,25 @@ describe('Step 1: Deepgram Server API Validation', () => {
       event => !OFFICIAL_DEEPGRAM_SERVER_EVENTS.includes(event as any)
     );
     
-    // Filter out pre-fork events that may not be in official spec yet
-    const approvedExtraEvents = ['Warning']; // Known addition
+    // Filter out approved additions
+    const approvedExtraEvents = Object.keys(APPROVED_SERVER_EVENT_ADDITIONS);
     
     const unapprovedExtraEvents = extraEvents.filter(
       e => !approvedExtraEvents.includes(e as string)
     );
     
     if (unapprovedExtraEvents.length > 0) {
-      console.warn(
-        `⚠️ Component handles events not in official API:\n` +
-        `${unapprovedExtraEvents.join(', ')}\n` +
-        `These may be internal events or need to be documented as approved additions.`
+      throw new Error(
+        `❌ UNAPPROVED SERVER API EVENTS:\n` +
+        `${unapprovedExtraEvents.join(', ')}\n\n` +
+        `These events are handled by component but not in:\n` +
+        `  1. Official Deepgram asyncapi.yml spec\n` +
+        `  2. Approved additions (tests/api-baseline/approved-server-events.ts)\n\n` +
+        `TO FIX:\n` +
+        `1. Verify event exists in Deepgram documentation\n` +
+        `2. If official, add to approved-server-events.ts with rationale\n` +
+        `3. If not official, remove from AgentResponseType enum`
       );
-      // Don't fail - just warn for now
     }
   });
 });
