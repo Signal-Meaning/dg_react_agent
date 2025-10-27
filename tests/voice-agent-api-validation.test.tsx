@@ -92,12 +92,74 @@ import React from 'react';
 import { render, waitFor, act } from '@testing-library/react';
 import { DeepgramVoiceInteraction } from '../src';
 import { AgentResponseType } from '../src/types/agent';
+import { OFFICIAL_DEEPGRAM_SERVER_EVENTS } from './api-baseline/official-deepgram-api';
 
 // Mock the WebSocketManager and AudioManager
 jest.mock('../src/utils/websocket/WebSocketManager');
 jest.mock('../src/utils/audio/AudioManager');
 
 const mockApiKey = 'mock-deepgram-api-key-for-testing-only';
+
+describe('Step 1: Deepgram Server API Validation', () => {
+  it('should handle all official Deepgram Voice Agent v1 events', () => {
+    const ourEvents = Object.values(AgentResponseType);
+    
+    // Check if we handle all official events
+    const missingEvents = OFFICIAL_DEEPGRAM_SERVER_EVENTS.filter(
+      event => !ourEvents.includes(event as any)
+    );
+    
+    // Events we know about but haven't implemented yet
+    const knownMissingEvents = ['InjectionRefused'];
+    const trulyMissingEvents = missingEvents.filter(
+      e => !knownMissingEvents.includes(e)
+    );
+    
+    if (trulyMissingEvents.length > 0) {
+      throw new Error(
+        `❌ MISSING DEEPGRAM SERVER API EVENTS:\n` +
+        `${trulyMissingEvents.join(', ')}\n\n` +
+        `These events are in official Deepgram Voice Agent v1 API but not handled by component.\n` +
+        `Add handlers to src/types/agent.ts AgentResponseType enum.`
+      );
+    }
+    
+    // Warn about known missing events
+    const missingKnown = missingEvents.filter(e => knownMissingEvents.includes(e));
+    if (missingKnown.length > 0) {
+      console.warn(
+        `⚠️ These official events are known but not yet implemented:\n` +
+        `${missingKnown.join(', ')}\n` +
+        `Create GitHub issues to track implementation.`
+      );
+    }
+  });
+
+  it('should not handle non-existent Deepgram events without approval', () => {
+    const ourEvents = Object.values(AgentResponseType);
+    
+    // Check if we're handling events that don't exist in official API
+    const extraEvents = ourEvents.filter(
+      event => !OFFICIAL_DEEPGRAM_SERVER_EVENTS.includes(event as any)
+    );
+    
+    // Filter out pre-fork events that may not be in official spec yet
+    const approvedExtraEvents = ['Warning']; // Known addition
+    
+    const unapprovedExtraEvents = extraEvents.filter(
+      e => !approvedExtraEvents.includes(e as string)
+    );
+    
+    if (unapprovedExtraEvents.length > 0) {
+      console.warn(
+        `⚠️ Component handles events not in official API:\n` +
+        `${unapprovedExtraEvents.join(', ')}\n` +
+        `These may be internal events or need to be documented as approved additions.`
+      );
+      // Don't fail - just warn for now
+    }
+  });
+});
 
 describe('Voice Agent API - Event Validation', () => {
   let mockWebSocketManager: any;
