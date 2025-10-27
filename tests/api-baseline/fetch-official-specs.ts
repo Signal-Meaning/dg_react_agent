@@ -1,24 +1,28 @@
-#!/usr/bin/env ts-node
 /**
  * Fetches official Deepgram Voice Agent v1 API spec
  * Source: github.com/deepgram/deepgram-api-specs/asyncapi.yml
+ * 
+ * Run with: npx tsx tests/api-baseline/fetch-official-specs.ts
  */
 
 import https from 'https';
 import yaml from 'js-yaml';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const SPECS_URL = 'https://raw.githubusercontent.com/deepgram/deepgram-api-specs/main/asyncapi.yml';
 
-async function fetch(url: string): Promise<{ text: () => Promise<string> }> {
+async function fetch(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     https.get(url, (res) => {
       let data = '';
       res.on('data', (chunk) => data += chunk);
-      res.on('end', () => {
-        resolve({ text: () => Promise.resolve(data) });
-      });
+      res.on('end', () => resolve(data));
       res.on('error', reject);
     }).on('error', reject);
   });
@@ -27,8 +31,7 @@ async function fetch(url: string): Promise<{ text: () => Promise<string> }> {
 async function fetchOfficialSpec() {
   console.log('📥 Fetching official Deepgram Voice Agent API spec...');
   
-  const response = await fetch(SPECS_URL);
-  const asyncApiYaml = await response.text();
+  const asyncApiYaml = await fetch(SPECS_URL);
   const spec = yaml.load(asyncApiYaml) as any;
   
   // Extract Voice Agent server events (messages from server to client)
@@ -46,25 +49,48 @@ async function fetchOfficialSpec() {
 
 function extractServerEvents(spec: any): string[] {
   const events: string[] = [];
-  const channels = spec.channels || {};
+  const components = spec.components || {};
+  const messages = components.messages || {};
   
+  // Look for Agent-related server events (incoming from Deepgram)
+  for (const [messageName, messageDef] of Object.entries(messages)) {
+    const msg = messageDef as any;
+    
+    // Check if this is an Agent V1 message
+    if (messageName.startsWith('AgentV1') && messageName.includes('Event')) {
+      // Extract the message type constant
+      if (msg.payload?.properties?.type?.const) {
+        events.push(msg.payload.properties.type.const);
+      }
+    }
+  }
+  
+  // Also check channels for Agent-specific messages
+  const channels = spec.channels || {};
   for (const [channelPath, channel] of Object.entries(channels)) {
-    if (channelPath.includes('/agent') || channelPath.includes('converse')) {
-      // Extract server->client messages (subscribe)
-      const subscribe = (channel as any).subscribe;
-      if (subscribe?.message?.oneOf) {
-        for (const msg of subscribe.message.oneOf) {
-          if (msg.$ref) {
-            // Extract event name from reference
-            const eventName = msg.$ref.split('/').pop();
-            events.push(eventName);
+    if (channelPath.includes('AgentV1')) {
+      const channelData = channel as any;
+      if (channelData.messages) {
+        for (const [msgKey, msgRef] of Object.entries(channelData.messages)) {
+          if (typeof msgRef === 'object' && (msgRef as any).$ref) {
+            const msgName = (msgRef as any).$ref.split('/').pop();
+            if (msgName.includes('Event') && msgName.startsWith('AgentV1')) {
+              // Extract from message definition
+              const msgDef = messages[msgName];
+              if (msgDef && (msgDef as any).payload?.properties?.type?.const) {
+                const eventType = (msgDef as any).payload.properties.type.const;
+                if (!events.includes(eventType)) {
+                  events.push(eventType);
+                }
+              }
+            }
           }
         }
       }
     }
   }
   
-  return events;
+  return events.sort();
 }
 
 function generateBaselineFile(events: string[]) {
