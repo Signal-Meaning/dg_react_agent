@@ -69,6 +69,8 @@ export const METHODS_TO_REMOVE = {
     reason: 'Redundant with start() method',
     replacement: 'start()',
     removeImmediately: true,
+    removed: true,
+    removedIn: 'Issue #194',
   },
 } as const;
 
