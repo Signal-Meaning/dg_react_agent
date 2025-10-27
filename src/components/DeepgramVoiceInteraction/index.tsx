@@ -1888,7 +1888,6 @@ function DeepgramVoiceInteraction(
   useImperativeHandle(ref, () => ({
     // Core connection methods
     start,
-    connectTextOnly,
     stop,
     
     // Agent interaction methods

@@ -22,6 +22,8 @@
     "test": "jest",
     "test:mock": "jest",
     "test:real": "RUN_REAL_API_TESTS=true jest",
+    "api:fetch-spec": "ts-node tests/api-baseline/fetch-official-specs.ts",
+    "api:validate": "jest tests/voice-agent-api-validation.test.tsx",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",

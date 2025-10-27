@@ -27,6 +27,13 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 - No Transcription API features should be used
 - All `SpeechStarted` references in documentation/types should be removed or marked as deprecated
 
+## Voice Agent API v1 Endpoint
+- **CRITICAL**: Component uses Voice Agent v1 API endpoint
+- ✅ Correct endpoint: `wss://agent.deepgram.com/v1/agent/converse`
+- ❌ NOT: `wss://agent.deepgram.com/agent` (deprecated early access)
+- **Verification**: Check `src/types/connection.ts` line 27
+- **API Specs**: https://github.com/deepgram/deepgram-api-specs
+
 ## Microphone Functionality
 - **Preserve:** `startAudioCapture()` method (was present pre-fork)
 - **Be cautious with:** `toggleMic()` and `microphoneEnabled` prop (added post-fork, may cause connection issues)

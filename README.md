@@ -17,6 +17,11 @@ A headless React component designed to drastically simplify the integration of D
 
 Any improvements must be justified and maintain compatibility with the Voice Agent API.
 
+**API Validation**: This component validates against two APIs:
+- **Deepgram Voice Agent v1 Server API** (endpoint: `wss://agent.deepgram.com/v1/agent/converse`)
+- **Component Public API** (interface: `DeepgramVoiceInteractionHandle` tracked since commit 7191eb4)
+All API changes require approval and documentation. See [API Governance](docs/DEVELOPMENT.md#api-governance-process) for details.
+
 **Test App Goals:** The test-app and its related tests are intended to:
 - Recommend certain integration patterns and avoid others
 - Act as a starting point for React developers

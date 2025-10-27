@@ -254,11 +254,7 @@ export interface DeepgramVoiceInteractionHandle {
    */
   injectAgentMessage: (message: string) => void;
   
-  /**
-   * Connect for text-only interactions (no microphone)
-   */
-  connectTextOnly: () => Promise<void>;
-  
+
   /**
    * Inject a user message to the agent
    */
