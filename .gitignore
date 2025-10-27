@@ -37,6 +37,8 @@ build/
 test-results/
 playwright-report/
 coverage/
+test-results.json
+test-app/test-results.json
 
 guidance/
 test-results/.last-run.json

@@ -30,7 +30,7 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
       
       if (text.includes('🎤 [AGENT] User stopped speaking') || 
           text.includes('UtteranceEnd') || 
-          text.includes('SpeechStarted') ||
+          text.includes('UserStartedSpeaking') ||
           text.includes('[VAD]')) {
         console.log(`[BROWSER] ${text}`);
         
@@ -137,7 +137,7 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
       
       // Check for VAD events in console logs
       const vadEvents = consoleLogs.filter(log => 
-        log.includes('SpeechStarted') || 
+        log.includes('UserStartedSpeaking') || 
         log.includes('UtteranceEnd') ||
         log.includes('User stopped speaking')
       );
@@ -155,7 +155,7 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
       );
       
       console.log('📊 Event Analysis:');
-      console.log('  - SpeechStarted events:', consoleLogs.filter(log => log.includes('SpeechStarted')).length);
+      console.log('  - UserStartedSpeaking events:', consoleLogs.filter(log => log.includes('UserStartedSpeaking')).length);
       console.log('  - UtteranceEnd events:', utteranceEndEvents.length);
       console.log('  - User stopped speaking events:', userStoppedSpeakingEvents.length);
       
@@ -269,7 +269,7 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
       
       if (text.includes('🎤 [AGENT] User stopped speaking') || 
           text.includes('UtteranceEnd') || 
-          text.includes('SpeechStarted')) {
+          text.includes('UserStartedSpeaking')) {
         console.log(`[BROWSER] ${text}`);
         
         // Extract timing information from UtteranceEnd events
@@ -427,19 +427,19 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
     await page.waitForTimeout(2000);
     
     // Check final VAD state
-    const finalSpeechStarted = await page.locator('[data-testid="speech-started"]').textContent();
+    const finalUserStartedSpeaking = await page.locator('[data-testid="speech-started"]').textContent();
     const finalUtteranceEnd = await page.locator('[data-testid="utterance-end"]').textContent();
     const finalUserStoppedSpeaking = await page.locator('[data-testid="user-stopped-speaking"]').textContent();
     const finalUserSpeaking = await page.locator('[data-testid="user-speaking"]').textContent();
     
     console.log('📊 Final VAD State:');
-    console.log('  - Speech Started:', finalSpeechStarted);
+    console.log('  - Speech Started:', finalUserStartedSpeaking);
     console.log('  - Utterance End:', finalUtteranceEnd);
     console.log('  - User Stopped Speaking:', finalUserStoppedSpeaking);
     console.log('  - User Speaking:', finalUserSpeaking);
     
     // Verify that we got the expected events via data-testid elements
-    expect(finalSpeechStarted).not.toBe('Not detected');
+    expect(finalUserStartedSpeaking).not.toBe('Not detected');
     expect(finalUtteranceEnd).not.toBe('Not detected');
     expect(finalUserStoppedSpeaking).not.toBe('Not detected');
     expect(finalUserSpeaking).toBe('false');

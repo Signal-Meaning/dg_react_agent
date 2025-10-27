@@ -171,7 +171,7 @@ test.describe('VAD Events Verification', () => {
     // Wait for VAD events
     console.log('⏳ Waiting for VAD events...');
     const detectedVADEvents = await SimpleVADHelpers.waitForVADEvents(page, [
-      'SpeechStarted'
+      'UserStartedSpeaking'
     ], 15000);
     
     // Wait for any transcript processing
@@ -206,15 +206,15 @@ test.describe('VAD Events Verification', () => {
       console.log('📝 Sample transcript data:', transcriptData.slice(0, 3));
     }
     
-    // Verify we got at least SpeechStarted
-    const hasSpeechStarted = detectedVADEvents.some(event => event.type === 'SpeechStarted');
+    // Verify we got at least UserStartedSpeaking
+    const hasUserStartedSpeaking = detectedVADEvents.some(event => event.type === 'UserStartedSpeaking');
     const hasUtteranceEnd = detectedVADEvents.some(event => event.type === 'UtteranceEnd');
     const hasInterimTranscripts = interimTranscripts.length > 0;
     const hasFinalTranscripts = finalTranscripts.length > 0;
     
-    expect(hasSpeechStarted).toBe(true);
+    expect(hasUserStartedSpeaking).toBe(true);
     console.log('\n✅ === VERIFICATION RESULTS ===');
-    console.log('✅ SpeechStarted detected:', hasSpeechStarted);
+    console.log('✅ UserStartedSpeaking detected:', hasUserStartedSpeaking);
     console.log('✅ UtteranceEnd detected:', hasUtteranceEnd);
     console.log('✅ Interim transcripts received:', hasInterimTranscripts);
     console.log('✅ Final transcripts received:', hasFinalTranscripts);

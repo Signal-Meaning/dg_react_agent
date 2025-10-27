@@ -32,23 +32,32 @@ test.describe('Microphone Reliability Diagnostics', () => {
     
     console.log('🔍 Starting microphone reliability test...');
     
-    // Step 1: Initial microphone enable
+    // Step 1: Initial microphone enable and start recording
     console.log('Step 1: Enabling microphone...');
     await page.click('[data-testid="microphone-button"]');
     await page.waitForTimeout(2000);
+    
+    // Start recording (required for sleep button to be enabled)
+    await page.click('button:has-text("Start")');
+    await page.waitForTimeout(1000);
     
     const micStatus1 = await page.locator('[data-testid="mic-status"]').textContent();
     const connectionStatus1 = await page.locator('[data-testid="connection-status"]').textContent();
     console.log(`After first enable - Mic: ${micStatus1}, Connection: ${connectionStatus1}`);
     
-    // Step 2: Trigger timeout
-    console.log('Step 2: Triggering timeout...');
-    await page.click('button:has-text("Trigger Timeout")');
+    // Step 2: Put agent to sleep (simulates timeout behavior)
+    console.log('Step 2: Putting agent to sleep...');
+    await page.click('button:has-text("Put to Sleep")');
     await page.waitForTimeout(3000);
     
     const micStatus2 = await page.locator('[data-testid="mic-status"]').textContent();
     const connectionStatus2 = await page.locator('[data-testid="connection-status"]').textContent();
-    console.log(`After timeout - Mic: ${micStatus2}, Connection: ${connectionStatus2}`);
+    console.log(`After sleep - Mic: ${micStatus2}, Connection: ${connectionStatus2}`);
+    
+    // Step 2.5: Wake agent back up
+    console.log('Step 2.5: Waking agent up...');
+    await page.click('button:has-text("Wake Up")');
+    await page.waitForTimeout(1000);
     
     // Step 3: Disable microphone
     console.log('Step 3: Disabling microphone...');
@@ -167,21 +176,25 @@ test.describe('Microphone Reliability Diagnostics', () => {
     
     console.log('🔍 Testing connection state consistency...');
     
-    // Enable microphone
+    // Enable microphone and start recording
     await page.click('[data-testid="microphone-button"]');
     await page.waitForTimeout(2000);
+    
+    // Start recording (required for sleep button to be enabled)
+    await page.click('button:has-text("Start")');
+    await page.waitForTimeout(1000);
     
     // Check connection state
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
     console.log('Connection status:', connectionStatus);
     
-    // Trigger timeout
-    await page.click('button:has-text("Trigger Timeout")');
+    // Put agent to sleep (simulates timeout behavior)
+    await page.click('button:has-text("Put to Sleep")');
     await page.waitForTimeout(2000);
     
-    // Check connection state after timeout
+    // Check connection state after sleep
     const connectionStatusAfter = await page.locator('[data-testid="connection-status"]').textContent();
-    console.log('Connection status after timeout:', connectionStatusAfter);
+    console.log('Connection status after sleep:', connectionStatusAfter);
     
     console.log('\n📊 CONNECTION STATE CHANGES:');
     stateChanges.forEach(change => {

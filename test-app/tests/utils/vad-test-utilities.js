@@ -58,7 +58,7 @@ class VADTestUtilities {
       // Capture VAD-related events (same pattern as working tests)
       if (text.includes('🎤 [AGENT] User stopped speaking') || 
           text.includes('UtteranceEnd') || 
-          text.includes('SpeechStarted') ||
+          text.includes('UserStartedSpeaking') ||
           text.includes('[VAD]') ||
           text.includes('Agent state changed') ||
           text.includes('idle timeout resets')) {
@@ -149,12 +149,12 @@ class VADTestUtilities {
    * Extracted from working user-stopped-speaking-demonstration.spec.js
    */
   analyzeVADEvents() {
-    const speechStartedEvents = this.consoleLogs.filter(log => log.includes('SpeechStarted'));
+    const speechStartedEvents = this.consoleLogs.filter(log => log.includes('UserStartedSpeaking'));
     const utteranceEndEvents = this.consoleLogs.filter(log => log.includes('UtteranceEnd'));
     const userStoppedEvents = this.consoleLogs.filter(log => log.includes('🎤 [AGENT] User stopped speaking'));
     
     console.log('📊 VAD Event Analysis:');
-    console.log(`  - SpeechStarted events: ${speechStartedEvents.length}`);
+    console.log(`  - UserStartedSpeaking events: ${speechStartedEvents.length}`);
     console.log(`  - UtteranceEnd events: ${utteranceEndEvents.length}`);
     console.log(`  - User stopped speaking events: ${userStoppedEvents.length}`);
     

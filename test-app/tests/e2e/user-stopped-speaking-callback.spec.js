@@ -20,7 +20,7 @@ test.describe('onUserStoppedSpeaking Callback Verification', () => {
       
       if (text.includes('User stopped speaking') || 
           text.includes('UtteranceEnd') || 
-          text.includes('SpeechStarted') ||
+          text.includes('UserStartedSpeaking') ||
           text.includes('[VAD]')) {
         console.log(`[BROWSER] ${text}`);
       }

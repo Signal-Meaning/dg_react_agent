@@ -501,7 +501,7 @@ export class WebSocketManager {
         return hasTranscript; // Only reset if there's actual transcript content
       }
       
-      // Don't reset on other transcription messages (SpeechStarted, UtteranceEnd, etc.)
+      // Don't reset on other transcription messages (UtteranceEnd, etc.)
       // These are protocol messages, not user activity
       return false;
     }

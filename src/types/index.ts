@@ -7,8 +7,9 @@
 // import type { AgentOptions, AgentState, AgentFunction, AgentSettingsMessage, UpdateInstructionsPayload } from './agent'; // REMOVED - Handled by export *
 import type { ConnectionState, ServiceType, EndpointConfig, DeepgramError } from './connection';
 import type { TranscriptionOptions, TranscriptResponse } from './transcription';
+import type { VoiceInteractionState } from '../utils/state/VoiceInteractionState';
 // Import AgentState specifically because DeepgramVoiceInteractionProps uses it directly
-import type { AgentState, AgentOptions, UpdateInstructionsPayload, ConversationMessage } from './agent';
+import type { AgentState, AgentOptions, UpdateInstructionsPayload } from './agent';
 
 // Re-export all types from specific files
 export * from './agent';
@@ -159,26 +160,6 @@ export interface DeepgramVoiceInteractionProps {
   };
 
   /**
-   * Auto-connect dual mode behavior options
-   */
-  autoConnect?: boolean;
-
-  /**
-   * Whether microphone is enabled (controlled or initial state)
-   */
-  microphoneEnabled?: boolean;
-
-  /**
-   * Called when microphone is toggled on/off
-   */
-  onMicToggle?: (enabled: boolean) => void;
-
-  /**
-   * Called when dual mode connection is established and settings are sent
-   */
-  onConnectionReady?: () => void;
-
-  /**
    * Called when agent starts speaking (TTS begins)
    */
   onAgentSpeaking?: () => void;
@@ -187,16 +168,6 @@ export interface DeepgramVoiceInteractionProps {
    * Called when agent finishes speaking (AgentAudioDone)
    */
   onAgentSilent?: () => void;
-
-  /**
-   * TTS mute state - when true, TTS audio is muted
-   */
-  ttsMuted?: boolean;
-
-  /**
-   * Called when TTS mute state changes
-   */
-  onTtsMuteToggle?: (isMuted: boolean) => void;
 
   /**
    * VAD (Voice Activity Detection) Event Callbacks
@@ -213,10 +184,9 @@ export interface DeepgramVoiceInteractionProps {
    */
   onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
   
-  /**
-   * Called when SpeechStarted is detected from Deepgram Transcription API
-   */
-  onSpeechStarted?: (data: { channel: number[]; timestamp: number }) => void;
+  // Note: onSpeechStarted removed - SpeechStarted was from old Transcription API
+  // Voice Agent API uses UserStartedSpeaking instead
+  // Use onUserStartedSpeaking for speech start detection
   
   // Note: onSpeechStopped removed - SpeechStopped is not a real Deepgram event
   // Use onUtteranceEnd for speech end detection instead
@@ -284,11 +254,7 @@ export interface DeepgramVoiceInteractionHandle {
    */
   injectAgentMessage: (message: string) => void;
   
-  /**
-   * Connect for text-only interactions (no microphone)
-   */
-  connectTextOnly: () => Promise<void>;
-  
+
   /**
    * Inject a user message to the agent
    */
@@ -316,29 +282,7 @@ export interface DeepgramVoiceInteractionHandle {
   /**
    * Get current component state for debugging (testing only)
    */
-  getState: () => any;
-
-  /**
-   * Toggle TTS mute state
-   * 
-   * Switches between muted and unmuted states for TTS audio playback.
-   * When muted, the agent will not produce any audio output.
-   */
-  toggleTtsMute: () => void;
-
-  /**
-   * Set TTS mute state explicitly
-   * 
-   * @param muted - Whether TTS should be muted (true) or unmuted (false)
-   */
-  setTtsMuted: (muted: boolean) => void;
-
-  /**
-   * Get current TTS mute state
-   * 
-   * @returns true if TTS is currently muted, false otherwise
-   */
-  isTtsMuted: boolean;
+  getState: () => VoiceInteractionState;
 
   /**
    * Check if audio is currently playing

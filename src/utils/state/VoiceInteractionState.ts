@@ -1,4 +1,4 @@
-import { AgentState, ConnectionState, ServiceType, ConversationMessage } from '../../types';
+import { AgentState, ConnectionState, ServiceType } from '../../types';
 
 /**
  * State of the voice interaction component
@@ -38,11 +38,6 @@ export interface VoiceInteractionState {
    * Error state
    */
   error: string | null;
-  
-  /**
-   * Internal microphone enabled state
-   */
-  micEnabledInternal: boolean;
   
   /**
    * Whether settings have been sent to the agent
@@ -97,10 +92,6 @@ export interface VoiceInteractionState {
     lastWordEnd: number;
   };
 
-  /**
-   * TTS mute state
-   */
-  ttsMuted: boolean;
   
   /**
    * Flag to track if agent is waiting for completion after AgentAudioDone
@@ -119,7 +110,6 @@ export type StateEvent =
   | { type: 'PLAYBACK_STATE_CHANGE'; isPlaying: boolean }
   | { type: 'READY_STATE_CHANGE'; isReady: boolean }
   | { type: 'ERROR'; message: string | null }
-  | { type: 'MIC_ENABLED_CHANGE'; enabled: boolean }
   | { type: 'SETTINGS_SENT'; sent: boolean }
   | { type: 'WELCOME_RECEIVED'; received: boolean }
   | { type: 'GREETING_PROGRESS_CHANGE'; inProgress: boolean }
@@ -130,8 +120,7 @@ export type StateEvent =
   | { type: 'USER_SPEAKING_STATE_CHANGE'; isSpeaking: boolean }
   | { type: 'UTTERANCE_END'; data: { channel: number[]; lastWordEnd: number } }
   | { type: 'UPDATE_SPEECH_DURATION'; duration: number }
-  | { type: 'RESET_SPEECH_TIMER' }
-  | { type: 'TTS_MUTE_CHANGE'; muted: boolean };
+  | { type: 'RESET_SPEECH_TIMER' };
 
 /**
  * Initial state
@@ -147,7 +136,6 @@ export const initialState: VoiceInteractionState = {
   isPlaying: false,
   isReady: false,
   error: null,
-  micEnabledInternal: false,
   hasSentSettings: false,
   welcomeReceived: false,
   greetingInProgress: false,
@@ -161,7 +149,6 @@ export const initialState: VoiceInteractionState = {
   currentSpeechDuration: null,
   
   // TTS state
-  ttsMuted: false,
   
   // Agent completion tracking
   agentWaitingForCompletion: false,
@@ -217,12 +204,6 @@ export function stateReducer(state: VoiceInteractionState, event: StateEvent): V
       return {
         ...state,
         error: event.message,
-      };
-
-    case 'MIC_ENABLED_CHANGE':
-      return {
-        ...state,
-        micEnabledInternal: event.enabled,
       };
 
     case 'SETTINGS_SENT':
@@ -306,12 +287,7 @@ export function stateReducer(state: VoiceInteractionState, event: StateEvent): V
         utteranceEndData: undefined,
       };
       
-    case 'TTS_MUTE_CHANGE':
-      return {
-        ...state,
-        ttsMuted: event.muted,
-      };
-      
+
     default:
       return state;
   }

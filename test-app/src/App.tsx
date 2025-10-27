@@ -1,6 +1,5 @@
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import DeepgramVoiceInteraction from '../../src/components/DeepgramVoiceInteraction';
-import { triggerTimeoutForTesting } from '../../src/test-utils';
 import { 
   DeepgramVoiceInteractionHandle,
   TranscriptResponse,
@@ -9,7 +8,8 @@ import {
   AgentState,
   ConnectionState,
   ServiceType,
-  DeepgramError
+  DeepgramError,
+  ConversationRole
 } from '../../src/types';
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 
@@ -50,14 +50,13 @@ function App() {
   
   // Conversation history for context management
   const [conversationHistory, setConversationHistory] = useState<Array<{
-    role: 'user' | 'assistant';
+    role: ConversationRole;
     content: string;
     timestamp: number;
   }>>([]);
   
   // Auto-connect dual mode state
   const [micEnabled, setMicEnabled] = useState(false);
-  const [connectionReady, setConnectionReady] = useState(false);
   const [agentSpeaking, setAgentSpeaking] = useState(false);
   const [agentSilent, setAgentSilent] = useState(false);
   
@@ -65,17 +64,9 @@ function App() {
   const [userStartedSpeaking, setUserStartedSpeaking] = useState<string | null>(null);
   const [userStoppedSpeaking, setUserStoppedSpeaking] = useState<string | null>(null);
   const [utteranceEnd, setUtteranceEnd] = useState<string | null>(null);
-  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   
   // Flag to prevent state override after UtteranceEnd
   const utteranceEndDetected = useRef(false);
-  // Track the last speech session to detect new sessions
-  // const lastSpeechSessionRef = useRef<string | null>(null);
-  
-  // Debug: Monitor isUserSpeaking state changes
-  useEffect(() => {
-    console.log('🔄 [TEST-APP] isUserSpeaking state changed to:', isUserSpeaking);
-  }, [isUserSpeaking]);
   
   // Reset the utteranceEndDetected flag when component mounts
   // useEffect(() => {
@@ -83,13 +74,10 @@ function App() {
   //   console.log('🔄 [TEST-APP] Component mounted - reset utteranceEndDetected flag');
   // }, []);
   
-  // VAD state from transcription service (SpeechStarted/UtteranceEnd)
+  // VAD state from Voice Agent API (UtteranceEnd)
   
   // Text input state
   const [textInput, setTextInput] = useState('');
-  
-  // TTS mute state
-  const [isTtsMuted, setIsTtsMuted] = useState(false);
   
   // Helper to add logs - memoized
   const addLog = useCallback((message: string) => {
@@ -197,7 +185,7 @@ function App() {
     context: conversationHistory.length > 0 ? {
       messages: conversationHistory.map(message => ({
         type: "History",
-        role: message.role === 'assistant' ? 'assistant' : 'user',
+        role: message.role,
         content: message.content
       }))
     } : undefined
@@ -217,6 +205,15 @@ function App() {
   const handleReady = useCallback((ready: boolean) => {
     setIsReady(ready);
     addLog(`Component is ${ready ? 'ready' : 'not ready'}`);
+    
+    // Start connections when component is ready
+    if (ready && deepgramRef.current) {
+      console.log('🎤 [APP] Starting connections...');
+      deepgramRef.current.start().catch(error => {
+        console.error('🎤 [APP] Failed to start connections:', error);
+        addLog(`Failed to start connections: ${error.message}`);
+      });
+    }
   }, [addLog]); // Depends on addLog
   
   const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
@@ -320,7 +317,6 @@ function App() {
     const timestamp = new Date().toISOString().substring(11, 19);
     setUserStartedSpeaking(timestamp);
     utteranceEndDetected.current = false; // Reset flag for new speech session
-    setIsUserSpeaking(true); // Update local state based on callback
     
     // Only log user speaking events in debug mode to reduce console spam
     if (isDebugMode) {
@@ -331,7 +327,6 @@ function App() {
   const handleUserStoppedSpeaking = useCallback(() => {
     const timestamp = new Date().toISOString().substring(11, 19);
     setUserStoppedSpeaking(timestamp);
-    setIsUserSpeaking(false); // Update local state based on callback
     
     // Only log user stopped speaking events in debug mode to reduce console spam
     if (isDebugMode) {
@@ -342,8 +337,7 @@ function App() {
   const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
     const channelStr = data.channel.join(',');
     setUtteranceEnd(`Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
-    utteranceEndDetected.current = true; // Set flag to prevent SpeechStarted from overriding
-    setIsUserSpeaking(false); // Update local state based on callback
+    utteranceEndDetected.current = true;
     
     // Only log UtteranceEnd events in debug mode to reduce console spam
     if (isDebugMode) {
@@ -351,61 +345,28 @@ function App() {
     }
   }, [addLog, isDebugMode]);
 
-
-  // handleSpeechStopped removed - SpeechStopped is not a real Deepgram event
-
   // Auto-connect dual mode event handlers
-  const handleMicToggle = useCallback((enabled: boolean) => {
-    console.log('🎤 [APP] handleMicToggle called with enabled:', enabled);
-    console.log('🎤 [APP] Current micEnabled state:', micEnabled);
-    setMicEnabled(enabled);
-    console.log('🎤 [APP] setMicEnabled called with:', enabled);
-    
-    // Reset the utteranceEndDetected flag when microphone is toggled
-    // This allows new speech sessions to work properly
-    // utteranceEndDetected.current = false; // Removed - main component handles this
-    console.log('🔄 [TEST-APP] handleMicToggle - microphone toggled');
-    
-    addLog(`Microphone ${enabled ? 'enabled' : 'disabled'}`);
-  }, [addLog, micEnabled]);
 
   const handleTextSubmit = useCallback(async () => {
     if (!textInput.trim()) return;
     
     try {
       const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
-      const isRealApiKey = apiKey && 
-        apiKey !== 'your-deepgram-api-key-here' && 
-        apiKey !== 'your_actual_deepgram_api_key_here' &&
-        !apiKey.startsWith('test-') && 
-        apiKey.length >= 20; // Deepgram API keys are typically 20+ characters
       
-      if (isRealApiKey) {
-        // Real API key - use lazy reconnect with text
-        addLog(`Resuming conversation with text: ${textInput}`);
-        setUserMessage(textInput);
-        
-        if (deepgramRef.current) {
-          // Use lazy reconnect method instead of direct injection
-          await deepgramRef.current.resumeWithText(textInput);
-          addLog('Text message sent');
-        } else {
-          addLog('Error: DeepgramVoiceInteraction ref not available');
-        }
+      if (!apiKey || apiKey === 'your-deepgram-api-key-here' || apiKey === 'your_actual_deepgram_api_key_here') {
+        addLog('❌ Please set VITE_DEEPGRAM_API_KEY environment variable with a valid Deepgram API key');
+        return;
+      }
+      
+      // Send text message to real Deepgram agent
+      addLog(`Sending text message: ${textInput}`);
+      setUserMessage(textInput);
+      
+      if (deepgramRef.current) {
+        await deepgramRef.current.injectUserMessage(textInput);
+        addLog('Text message sent to Deepgram agent');
       } else {
-        // Mock API key - use simulated responses
-        addLog(`Sending text message to MOCK agent: ${textInput}`);
-        setUserMessage(textInput);
-        
-        // Simulate agent response for testing with mock API key
-        setTimeout(() => {
-          setAgentResponse(`[MOCK] I received your message: "${textInput}". How can I help you with that?`);
-          addLog('Mock agent responded to text message');
-          
-          // Note: Mock responses don't trigger the idle timeout fix
-          // The fix only works with real agent messages, not mock responses
-          // See issue #99 for details on mock vs real API testing limitations
-        }, 1000);
+        addLog('Error: DeepgramVoiceInteraction ref not available');
       }
       
       setTextInput('');
@@ -415,10 +376,6 @@ function App() {
     }
   }, [textInput, addLog]);
 
-  const handleConnectionReady = useCallback(() => {
-    setConnectionReady(true);
-    addLog('Dual mode connection established and settings sent');
-  }, [addLog]);
 
   const handleAgentSpeaking = useCallback(() => {
     setAgentSpeaking(true);
@@ -432,10 +389,6 @@ function App() {
     addLog('Agent finished speaking');
   }, [addLog]);
 
-  const handleTtsMuteToggle = useCallback((muted: boolean) => {
-    setIsTtsMuted(muted);
-    addLog(`TTS mute state changed to: ${muted ? 'MUTED' : 'UNMUTED'}`);
-  }, [addLog]);
   
   // Control functions
   const startInteraction = async () => {
@@ -531,11 +484,23 @@ function App() {
           console.log('🎤 [APP] deepgramRef.current exists, calling startAudioCapture()');
           console.log('🎤 [APP] deepgramRef.current methods:', Object.keys(deepgramRef.current));
           
+          // Check if connection is closed and needs to be re-established
+          const connectionStates = deepgramRef.current.getConnectionStates();
+          if (!connectionStates.agentConnected) {
+            console.log('🎤 [APP] Agent connection closed, re-establishing connection...');
+            addLog('Re-establishing agent connection...');
+            await deepgramRef.current.start();
+            console.log('🎤 [APP] Connection re-established');
+          }
+          
           if (typeof deepgramRef.current.startAudioCapture === 'function') {
             console.log('🎤 [APP] startAudioCapture method exists, calling it');
             await deepgramRef.current.startAudioCapture();
             console.log('🎤 [APP] startAudioCapture() completed successfully');
             addLog('Audio capture started successfully');
+            
+            // Update local state to reflect microphone is enabled
+            setMicEnabled(true);
           } else {
             console.log('🎤 [APP] startAudioCapture method does not exist!');
             addLog('❌ [APP] startAudioCapture method not found on ref');
@@ -548,7 +513,8 @@ function App() {
       } else {
         // Disable microphone
         console.log('🎤 [APP] Disabling microphone');
-        await deepgramRef.current?.toggleMicrophone(false);
+        await deepgramRef.current?.stop();
+        setMicEnabled(false);
         addLog('Microphone disabled');
       }
     } catch (error) {
@@ -556,21 +522,6 @@ function App() {
       addLog(`Error toggling microphone: ${(error as Error).message}`);
       console.error('Microphone toggle error:', error);
       setMicLoading(false);
-    }
-  };
-
-  const toggleTtsMute = () => {
-    console.log('🔇 [APP] toggleTtsMute called');
-    addLog('🔇 TTS mute button clicked');
-    
-    if (deepgramRef.current) {
-      console.log('🔇 [APP] deepgramRef.current is available, calling toggleTtsMute()');
-      console.log('🔇 [APP] deepgramRef.current methods:', Object.keys(deepgramRef.current));
-      deepgramRef.current.toggleTtsMute();
-      console.log('✅ toggleTtsMute() method called');
-    } else {
-      console.error('❌ deepgramRef.current is null!');
-      addLog('❌ Cannot toggle TTS mute: deepgramRef is null');
     }
   };
   
@@ -588,13 +539,10 @@ function App() {
         fontSize: '14px',
         lineHeight: '1.5'
       }}>
-        <h2 style={{ margin: '0 0 15px 0', color: '#fbb6ce', fontSize: '18px' }}>⚠️ Deepgram API Key Status</h2>
-        <p style={{ margin: '0 0 15px 0' }}><strong>This test app supports both REAL and MOCK modes:</strong></p>
-        <div style={{ margin: '15px 0', padding: '15px', backgroundColor: '#2d3748', borderRadius: '6px', border: '1px solid #4a5568' }}>
-          <h4 style={{ margin: '0 0 10px 0', color: '#fc8181', fontSize: '16px' }}>🔴 Current Mode: MOCK</h4>
-          <p style={{ margin: '0', color: '#a0aec0' }}>Text messages will show simulated responses with <code style={{ backgroundColor: '#4a5568', padding: '2px 4px', borderRadius: '3px', fontSize: '13px', color: '#e2e8f0' }}>[MOCK]</code> prefix.</p>
-        </div>
-        <p style={{ margin: '15px 0 10px 0' }}><strong>To enable REAL Deepgram integration:</strong></p>
+        <h2 style={{ margin: '0 0 15px 0', color: '#fbb6ce', fontSize: '18px' }}>⚠️ Deepgram API Key Required</h2>
+        <p style={{ margin: '0 0 15px 0' }}><strong>This test app requires a valid Deepgram API key to function:</strong></p>
+        
+        <p style={{ margin: '15px 0 10px 0' }}><strong>To enable Deepgram integration:</strong></p>
         <p style={{ margin: '0 0 10px 0' }}>Set the following in <code style={{ backgroundColor: '#4a5568', padding: '2px 4px', borderRadius: '3px', fontSize: '13px', color: '#e2e8f0' }}>test-app/.env</code>:</p>
         <pre style={{ 
           backgroundColor: '#2d3748', 
@@ -611,7 +559,7 @@ VITE_DEEPGRAM_API_KEY=your-real-deepgram-api-key
 VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         </pre>
         <p style={{ margin: '15px 0 10px 0' }}>Get a free API key at: <a href="https://deepgram.com" target="_blank" style={{ color: '#63b3ed', textDecoration: 'none' }}>https://deepgram.com</a></p>
-        <p style={{ margin: '0', fontStyle: 'italic', color: '#a0aec0' }}>With a real API key, text messages will be sent to the actual Deepgram agent service.</p>
+        <p style={{ margin: '0', fontStyle: 'italic', color: '#a0aec0' }}>Text messages will be sent to the Deepgram agent service when a valid API key is provided.</p>
       </div>
     );
   }
@@ -643,16 +591,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onUserStartedSpeaking={handleUserStartedSpeaking}
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
         onUtteranceEnd={handleUtteranceEnd}
-        // Auto-connect dual mode props
-        autoConnect={true}
-        microphoneEnabled={micEnabled}
-        onMicToggle={handleMicToggle}
-        onConnectionReady={handleConnectionReady}
         onAgentSpeaking={handleAgentSpeaking}
         onAgentSilent={handleAgentSilent}
-        // TTS mute props
-        ttsMuted={isTtsMuted}
-        onTtsMuteToggle={handleTtsMuteToggle}
         debug={true} // Enable debug for VAD testing
       />
       
@@ -662,10 +602,10 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <p>Core Component State (agentState via callback): <strong>{agentState}</strong></p>
         <p>Agent Connection: <strong data-testid="connection-status">{connectionStates.agent}</strong></p>
         
-        {/* API Mode Indicator */}
+        {/* API Key Status Indicator */}
         {(() => {
           const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
-          const isRealApiKey = apiKey && 
+          const isValidApiKey = apiKey && 
             apiKey !== 'your-deepgram-api-key-here' && 
             apiKey !== 'your_actual_deepgram_api_key_here' &&
             !apiKey.startsWith('test-') && 
@@ -675,18 +615,18 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             <div style={{ 
               margin: '10px 0', 
               padding: '8px', 
-              backgroundColor: isRealApiKey ? '#1a4d1a' : '#2d3748', 
-              border: `1px solid ${isRealApiKey ? '#48bb78' : '#4a5568'}`,
+              backgroundColor: isValidApiKey ? '#1a4d1a' : '#4a1a1a', 
+              border: `1px solid ${isValidApiKey ? '#48bb78' : '#e53e3e'}`,
               borderRadius: '4px',
-              color: isRealApiKey ? '#9ae6b4' : '#e2e8f0'
+              color: isValidApiKey ? '#9ae6b4' : '#feb2b2'
             }} data-testid="api-mode-indicator">
               <strong>
-                {isRealApiKey ? '🟢 REAL API Mode' : '🟡 MOCK API Mode'}
+                {isValidApiKey ? '🟢 Valid Deepgram API Key' : '🔴 Invalid/Missing API Key'}
               </strong>
-              <p style={{ margin: '5px 0 0 0', fontSize: '0.9em', color: isRealApiKey ? '#9ae6b4' : '#a0aec0' }}>
-                {isRealApiKey 
-                  ? 'Text messages sent to actual Deepgram agent service' 
-                  : 'Text messages show simulated responses with [MOCK] prefix'
+              <p style={{ margin: '5px 0 0 0', fontSize: '0.9em', color: isValidApiKey ? '#9ae6b4' : '#feb2b2' }}>
+                {isValidApiKey 
+                  ? 'Text messages will be sent to Deepgram agent service' 
+                  : 'Please set VITE_DEEPGRAM_API_KEY environment variable'
                 }
               </p>
             </div>
@@ -694,25 +634,24 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         })()}
         <p>Audio Recording: <strong>{isRecording.toString()}</strong></p>
         <p>Audio Playing: <strong data-testid="audio-playing-status">{isPlaying.toString()}</strong></p>
-        <p>TTS Muted: <strong data-testid="tts-muted-status">{isTtsMuted.toString()}</strong></p>
         <p>Component Ready: <strong data-testid="component-ready-status">{isReady.toString()}</strong></p>
         <h4>Auto-Connect Dual Mode States:</h4>
         <div data-testid="auto-connect-states">
           <p>Microphone Enabled: <strong data-testid="mic-status">{micEnabled ? 'Enabled' : 'Disabled'}</strong></p>
-          <p>Connection Ready: <strong data-testid="connection-ready">{connectionReady.toString()}</strong></p>
           <p>Agent Speaking: <strong data-testid="agent-speaking">{agentSpeaking.toString()}</strong></p>
           <p>Agent Silent: <strong data-testid="agent-silent">{agentSilent.toString()}</strong></p>
         </div>
         
         <h4>VAD (Voice Activity Detection) States:</h4>
         <div data-testid="vad-states">
-          <p>User Speaking: <strong data-testid="user-speaking">{isUserSpeaking.toString()}</strong></p>
           <p>Debug - utteranceEndDetected: <strong>Removed - main component handles this</strong></p>
           
           <h5>From Agent WebSocket:</h5>
           <p>User Started Speaking: <strong data-testid="user-started-speaking">{userStartedSpeaking || 'Not detected'}</strong></p>
           <p>User Stopped Speaking: <strong data-testid="user-stopped-speaking">{userStoppedSpeaking || 'Not detected'}</strong></p>
           <p>Utterance End: <strong data-testid="utterance-end">{utteranceEnd || 'Not detected'}</strong></p>
+          
+          <h5>From Agent Service:</h5>
         </div>
       </div>
       
@@ -788,90 +727,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             micEnabled ? 'Disable Mic' : 'Enable Mic'
           )}
         </button>
-        <button 
-          onClick={() => {
-            // Access the internal agent manager for testing
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const componentRef = deepgramRef.current as DeepgramVoiceInteractionHandle & { agentManagerRef?: { current?: any } };
-            const agentManager = componentRef?.agentManagerRef?.current;
-            if (agentManager) {
-              triggerTimeoutForTesting(agentManager);
-              addLog('🧪 [TEST] Manually triggered connection timeout');
-            } else {
-              addLog('❌ [TEST] Agent manager not available for timeout testing');
-            }
-          }}
-          disabled={!isReady}
-          style={{ 
-            padding: '10px 20px',
-            backgroundColor: '#ff6b6b',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            pointerEvents: 'auto'
-          }}
-          title="Manually trigger connection timeout for testing lazy reconnection"
-          data-testid="trigger-timeout-button"
-        >
-          🧪 Trigger Timeout
-        </button>
-        <button 
-          onClick={toggleTtsMute}
-          data-testid="tts-mute-button"
-          style={{
-            padding: '12px 20px',
-            borderRadius: '8px',
-            border: '3px solid',
-            borderColor: isTtsMuted ? '#dc3545' : '#28a745',
-            backgroundColor: isTtsMuted ? '#f8d7da' : '#d4edda',
-            color: isTtsMuted ? '#721c24' : '#155724',
-            fontWeight: 'bold',
-            fontSize: '16px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            boxShadow: isTtsMuted ? 'inset 0 2px 4px rgba(0,0,0,0.2)' : '0 2px 4px rgba(0,0,0,0.1)',
-            transform: isTtsMuted ? 'translateY(1px)' : 'translateY(0)',
-            pointerEvents: 'auto'
-          }}
-        >
-          {isTtsMuted ? '🔇 TTS MUTED' : '🔊 TTS ENABLED'}
-        </button>
       </div>
       
-      {/* Auto-connect dual mode status */}
-      {connectionReady && (
-        <div style={{
-          margin: '20px 0',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          padding: '10px',
-          border: '2px solid #48bb78',
-          borderRadius: '8px',
-          backgroundColor: '#1a4d1a',
-          color: '#9ae6b4'
-        }}>
-          <p style={{ 
-            margin: '0 0 10px 0', 
-            fontWeight: 'bold'
-          }} data-testid="greeting-sent">
-            {agentSpeaking ? '🎤 Agent is speaking' 
-              : agentSilent ? '✅ Agent finished speaking - ready for interaction' 
-              : '🔗 Dual mode connected - waiting for agent...'}
-          </p>
-          {!micEnabled && (
-            <p style={{ 
-              margin: '0', 
-              fontStyle: 'italic', 
-              color: '#a0aec0'
-            }}>
-              Microphone disabled - click "Enable Mic" to start speaking
-            </p>
-          )}
-        </div>
-      )}
-
       {isRecording && (
         <div style={{
           margin: '20px 0',

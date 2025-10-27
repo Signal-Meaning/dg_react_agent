@@ -83,13 +83,13 @@ test.describe('VAD Configuration Optimization', () => {
       // Wait for VAD events with longer timeout
       const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
         'UserStartedSpeaking',
-        'SpeechStarted',
+        'UserStartedSpeaking',
         'UtteranceEnd'
       ], 10000); // 10 second timeout
       
       const eventTypes = vadEvents.map(event => event.type);
       const hasOnsetEvents = eventTypes.some(type => 
-        type === 'UserStartedSpeaking' || type === 'SpeechStarted'
+        type === 'UserStartedSpeaking' || type === 'UserStartedSpeaking'
       );
       const hasOffsetEvents = eventTypes.some(type => 
         type === 'UtteranceEnd'
@@ -188,14 +188,14 @@ test.describe('VAD Configuration Optimization', () => {
       const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
         'UserStartedSpeaking',
         'UserStoppedSpeaking',
-        'SpeechStarted',
+        'UserStartedSpeaking',
         'SpeechStopped',
         'UtteranceEnd'
       ], 15000); // 15 second timeout for longer patterns
       
       const eventTypes = vadEvents.map(event => event.type);
       const hasOnsetEvents = eventTypes.some(type => 
-        type === 'UserStartedSpeaking' || type === 'SpeechStarted'
+        type === 'UserStartedSpeaking' || type === 'UserStartedSpeaking'
       );
       const hasOffsetEvents = eventTypes.some(type => 
         type === 'UtteranceEnd'
@@ -287,7 +287,7 @@ test.describe('VAD Configuration Optimization', () => {
     const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
       'UserStartedSpeaking',
       'UserStoppedSpeaking',
-      'SpeechStarted',
+      'UserStartedSpeaking',
       'SpeechStopped',
       'UtteranceEnd'
     ], 15000);
@@ -307,7 +307,7 @@ test.describe('VAD Configuration Optimization', () => {
     
     // Check for proper sequence (onset events before offset events)
     const onsetEvents = eventSequence.filter(type => 
-      type === 'UserStartedSpeaking' || type === 'SpeechStarted'
+      type === 'UserStartedSpeaking' || type === 'UserStartedSpeaking'
     );
     const offsetEvents = eventSequence.filter(type => 
       type === 'UtteranceEnd'

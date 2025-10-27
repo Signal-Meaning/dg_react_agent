@@ -151,7 +151,7 @@ test.describe('VAD Realistic Audio Simulation', () => {
     // Wait for VAD events
     const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
       'UserStartedSpeaking',
-      'SpeechStarted',
+      'UserStartedSpeaking',
       'UtteranceEnd'  // Only real Deepgram events
     ], 5000);
     
@@ -162,7 +162,7 @@ test.describe('VAD Realistic Audio Simulation', () => {
     
     // Check for specific event types - we should get at least one "started" and one "stopped" event
     const eventTypes = vadEvents.map(event => event.type);
-    const hasStartedEvent = eventTypes.some(type => type === 'UserStartedSpeaking' || type === 'SpeechStarted');
+    const hasStartedEvent = eventTypes.some(type => type === 'UserStartedSpeaking' || type === 'UserStartedSpeaking');
     const hasStoppedEvent = eventTypes.some(type => type === 'UtteranceEnd');
     
     expect(hasStartedEvent).toBe(true);

@@ -40,11 +40,12 @@ async function setupTestPage(page, timeout = 10000) {
  * @param {number} timeout - Timeout in ms (default: 5000)
  */
 async function waitForConnection(page, timeout = 5000) {
-  const connectionReady = page.locator(SELECTORS.connectionReady);
-  await connectionReady.waitFor({ state: 'visible', timeout });
+  // Wait for connection status to show "connected"
   await page.waitForFunction(
-    (selector) => document.querySelector(selector)?.textContent === 'true',
-    SELECTORS.connectionReady,
+    () => {
+      const connectionStatus = document.querySelector('[data-testid="connection-status"]');
+      return connectionStatus && connectionStatus.textContent === 'connected';
+    },
     { timeout }
   );
 }
@@ -290,6 +291,9 @@ async function assertConnectionHealthy(page, expect) {
   await expect(connectionReady).toHaveText('true');
 }
 
+// Import microphone helpers
+import MicrophoneHelpers from './microphone-helpers.js';
+
 export {
   SELECTORS,
   setupTestPage,
@@ -300,5 +304,7 @@ export {
   getCapturedWebSocketData,
   installMockWebSocket,
   assertConnectionHealthy,
+  // Export microphone helpers
+  MicrophoneHelpers
 };
 
