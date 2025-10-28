@@ -92,7 +92,15 @@ test.describe('Text Message WebSocket State', () => {
     if (responseState === 'idle' && initialAgentState === 'idle') {
       console.warn('⚠️ Agent state did not change - message may not have been received');
       console.log('Console logs:', consoleLogs);
+      
+      // FAIL THE TEST - Agent should have received and responded to the message
+      // This is the actual regression we're trying to catch
+      throw new Error(`REGRESSION: Agent state did not change from 'idle'. Expected 'thinking' or 'speaking' after receiving message. This indicates the message was not processed or agent never received it. Console logs: ${consoleLogs.join(', ')}`);
     }
+    
+    // Also verify agent state actually changed to something other than idle
+    expect(responseState).not.toBe('idle');
+    console.log('✅ Agent state changed successfully:', responseState);
   });
 
   test('should fail when WebSocket is closed before component ready', async ({ page }) => {
@@ -173,8 +181,8 @@ test.describe('Text Message WebSocket State', () => {
     await textInput.fill('Test message');
     await textInput.press('Enter');
     
-    // Wait for processing
-    await page.waitForTimeout(2000);
+    // Wait for processing - agent should respond
+    await page.waitForTimeout(5000);
     
     // Check for the regression
     if (connectionStateOnSend === 'closed') {
@@ -185,7 +193,15 @@ test.describe('Text Message WebSocket State', () => {
       throw new Error('REGRESSION: WebSocket closed error detected when sending text message');
     }
     
-    console.log('✅ No regression detected - WebSocket state is correct');
+    // Also verify agent received the message by checking state changes
+    const agentStateElement = page.locator('p').filter({ hasText: 'Core Component State' }).locator('strong');
+    const agentState = await agentStateElement.textContent();
+    
+    if (agentState === 'idle') {
+      throw new Error('REGRESSION: Agent state is still "idle" after sending message. This means the message was not received or processed. Expected "thinking" or "speaking".');
+    }
+    
+    console.log('✅ No regression detected - WebSocket state is correct and agent received message. Agent state:', agentState);
   });
 
   test('should verify connection remains stable during text message flow', async ({ page }) => {
