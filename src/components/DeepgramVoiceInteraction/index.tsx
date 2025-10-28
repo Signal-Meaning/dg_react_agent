@@ -2094,6 +2094,12 @@ function DeepgramVoiceInteraction(
           await agentManagerRef.current.connect();
           log('Agent WebSocket connected for text message');
           console.log('📝 [TEXT_MESSAGE] Connection established');
+          
+          // Wait a moment for connection to fully establish
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Send settings to initialize the agent
+          sendAgentSettings();
         }
       } else if (connectionState === 'connecting') {
         // Wait for connection to be established

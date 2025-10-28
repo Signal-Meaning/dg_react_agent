@@ -43,6 +43,17 @@ test.describe('Text Message WebSocket State', () => {
     const initialAgentState = await agentStateElement.textContent();
     console.log('📊 Initial agent state:', initialAgentState);
     
+    // Check console logs for WebSocket state and agent messages
+    const consoleLogs = [];
+    page.on('console', (msg) => {
+      const text = msg.text();
+      if (text.includes('TEXT_MESSAGE') || text.includes('WebSocket state') || text.includes('Connection state') 
+          || text.includes('AGENT') || text.includes('🎯') || text.includes('📨') || text.includes('WEBSOCKET')) {
+        consoleLogs.push(text);
+        console.log('📋 Console:', text);
+      }
+    });
+    
     // Type text in the input field
     const textInput = page.locator('input[type="text"]').first();
     await textInput.fill('Hello');
@@ -56,15 +67,6 @@ test.describe('Text Message WebSocket State', () => {
     
     // Wait for the message to be processed
     await page.waitForTimeout(1000);
-    
-    // Check console logs for WebSocket state
-    const consoleLogs = [];
-    page.on('console', (msg) => {
-      const text = msg.text();
-      if (text.includes('TEXT_MESSAGE') || text.includes('WebSocket state') || text.includes('Connection state')) {
-        consoleLogs.push(text);
-      }
-    });
     
     // Verify connection is still connected after message attempt
     await page.waitForTimeout(500);
