@@ -75,7 +75,7 @@
  *   - Agent Control: updateAgentInstructions, interruptAgent
  *   - Sleep/Wake: sleep, wake, toggleSleep
  *   - Message Injection: injectAgentMessage, injectUserMessage
- *   - Audio: startAudioCapture, isPlaybackActive, getAudioContext
+ *   - Audio: startAudioCapture, getAudioContext
  * 
  * EXCLUDED (Debug/Testing Methods):
  *   - getState (testing only)
@@ -578,7 +578,7 @@ describe('Component API Surface Validation', () => {
       abortPlayback: jest.fn(),
       dispose: jest.fn(),
       isRecordingActive: jest.fn().mockReturnValue(false),
-      isPlaybackActive: jest.fn().mockReturnValue(false),
+
       getAudioContext: jest.fn().mockReturnValue({
         state: 'running',
         suspend: jest.fn(),
@@ -825,26 +825,6 @@ describe('Component API Surface Validation', () => {
       await act(async () => {
         await expect(ref.current.startAudioCapture()).resolves.toBeUndefined();
       });
-    });
-
-    it('should expose isPlaybackActive() method', async () => {
-      const ref = React.createRef<any>();
-      
-      render(
-        <DeepgramVoiceInteraction
-          ref={ref}
-          apiKey={MOCK_API_KEY}
-          agentOptions={createMockAgentOptions()}
-        />
-      );
-
-      await waitFor(() => {
-        expect(ref.current).toBeTruthy();
-      });
-
-      expect(typeof ref.current.isPlaybackActive).toBe('function');
-      
-      expect(ref.current.isPlaybackActive()).toBe(false);
     });
 
     it('should expose getAudioContext() method', async () => {
@@ -1107,13 +1087,13 @@ describe('Component API Surface Validation', () => {
         'injectAgentMessage',
         'injectUserMessage',
         'startAudioCapture',
-        'isPlaybackActive',
+
         'getAudioContext',
       ];
 
       // Fail if any required method is missing
       requiredMethods.forEach(method => {
-        expect(typeof ref.current[method]).toBe('function', `Required method '${method}' is missing from API`);
+        expect(typeof ref.current[method]).toBe('function');
       });
     });
 

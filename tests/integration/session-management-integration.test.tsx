@@ -220,7 +220,7 @@ describe('Session Management Integration Tests', () => {
       startRecording: jest.fn().mockResolvedValue(),
       stopRecording: jest.fn().mockResolvedValue(),
       isRecording: jest.fn().mockReturnValue(false),
-      isPlaybackActive: jest.fn().mockReturnValue(false),
+
       isTtsMuted: false,
       setTtsMuted: jest.fn(),
       getAudioContext: jest.fn().mockReturnValue({

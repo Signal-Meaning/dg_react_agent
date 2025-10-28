@@ -67,7 +67,6 @@ export const OFFICIAL_VOICE_AGENT_API_METHODS = [
   'injectAgentMessage',
   'injectUserMessage',
   'startAudioCapture',
-  'isPlaybackActive',
   'getAudioContext',
 ] as const;
 

@@ -173,6 +173,11 @@ function DeepgramVoiceInteraction(
   // Track when settings were sent to add proper delay
   const settingsSentTimeRef = useRef<number | null>(null);
   
+  // Track whether agent audio is allowed
+  const ALLOW_AUDIO = true;
+  const BLOCK_AUDIO = false;
+  const allowAgentRef = useRef(ALLOW_AUDIO);
+  
   // Global flag to prevent settings from being sent multiple times across component instances
   if (!(window as any).globalSettingsSent) {
     (window as any).globalSettingsSent = false;
@@ -1443,9 +1448,9 @@ function DeepgramVoiceInteraction(
       }
     }
     
-    // Check TTS mute state before processing audio
-    if (audioManagerRef.current?.isTtsMuted) {
-      log('🔇 TTS is muted - discarding audio buffer to prevent playback');
+    // Check if agent audio is blocked
+    if (!allowAgentRef.current) {
+      log('🔇 Agent audio blocked - discarding audio buffer to prevent playback');
       return;
     }
     
@@ -1531,6 +1536,10 @@ function DeepgramVoiceInteraction(
   const start = async (): Promise<void> => {
     try {
       log('Start method called');
+      
+      // Reset audio blocking state on fresh connection
+      allowAgentRef.current = ALLOW_AUDIO;
+      log('🔄 Connection starting - resetting audio blocking state');
       
       // Initialize audio if available (should already be initialized from the main useEffect)
       if (audioManagerRef.current) {
@@ -1664,20 +1673,9 @@ function DeepgramVoiceInteraction(
       log('🔴 Calling audioManager.clearAudioQueue()');
       audioManagerRef.current.clearAudioQueue();
       
-      // Additional audio cleanup
-      if (audioManagerRef.current['audioContext']) {
-        log('🔄 Manipulating audio context time reference');
-        const ctx = audioManagerRef.current['audioContext'] as AudioContext;
-        try {
-          const silentBuffer = ctx.createBuffer(1, 1024, ctx.sampleRate);
-          const silentSource = ctx.createBufferSource();
-          silentSource.buffer = silentBuffer;
-          silentSource.connect(ctx.destination);
-          silentSource.start();
-        } catch (e) {
-          log('⚠️ Error creating silent buffer:', e);
-        }
-      }
+      // Flush any pending audio to ensure complete stop
+      log('🧹 Calling audioManager.flushAudioBuffer()');
+      audioManagerRef.current.flushAudioBuffer();
     } catch (err) {
       log('❌ Error in clearAudio:', err);
     }
@@ -1698,7 +1696,32 @@ function DeepgramVoiceInteraction(
     log('🔴 Setting agent state to idle');
     sleepLog('Dispatching AGENT_STATE_CHANGE to idle (from interruptAgent)');
     dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+    
+    // Block agent audio to prevent future audio from queuing
+    allowAgentRef.current = BLOCK_AUDIO;
+    log('🔇 Agent audio blocked - future audio will be discarded');
+    
     log('🔴 interruptAgent method completed');
+  };
+  
+  /**
+   * Allows agent audio to queue after being blocked by interruptAgent()
+   * 
+   * Sets the internal allowAgentRef flag to true, allowing audio buffers
+   * to pass through handleAgentAudio() and queue for playback.
+   * 
+   * This is the counterpart to interruptAgent() and is typically used
+   * in push-button mute scenarios where the user releases the mute button.
+   * 
+   * @remarks
+   * - Safe to call multiple times
+   * - No-op if already allowed
+   * - Does not resume paused audio, only allows future audio
+   */
+  const allowAgent = (): void => {
+    log('🔊 allowAgent method called');
+    allowAgentRef.current = ALLOW_AUDIO;
+    log('🔊 Agent audio allowed - audio will play normally');
   };
 
   // Put agent to sleep - only if agent is configured
@@ -1853,6 +1876,7 @@ function DeepgramVoiceInteraction(
     // Agent interaction methods
     updateAgentInstructions,
     interruptAgent,
+    allowAgent,
     sleep,
     wake,
     toggleSleep,
@@ -1864,9 +1888,6 @@ function DeepgramVoiceInteraction(
     
     // Audio data handling
     sendAudioData, // Expose sendAudioData for testing and external use
-    
-    // Audio playback state
-    isPlaybackActive: () => state.isPlaying,
     
     // Audio context access
     getAudioContext: () => audioManagerRef.current?.getAudioContext() || undefined,
