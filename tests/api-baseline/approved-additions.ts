@@ -30,6 +30,14 @@ export const APPROVED_COMPONENT_METHOD_ADDITIONS = {
     requiredBy: 'Browser autoplay policies',
     usage: 'test-app/src/App.tsx:791',
   },
+  'allowAgent': {
+    addedIn: 'v0.5.1',
+    issue: 'Issue #195',
+    rationale: 'Counterpart to interruptAgent() for push-button mute control. Allows audio after blocking to enable hold-to-mute interactions.',
+    breaking: false,
+    confirmed: true,
+    usage: 'test-app/src/App.tsx:handleMuteUp',
+  },
   
   // UNDER REVIEW - debate needed
   'getConnectionStates': {

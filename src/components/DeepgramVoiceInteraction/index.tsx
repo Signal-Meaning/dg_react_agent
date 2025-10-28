@@ -1535,6 +1535,10 @@ function DeepgramVoiceInteraction(
     try {
       log('Start method called');
       
+      // Reset audio blocking state on fresh connection
+      allowAgentRef.current = true;
+      log('🔄 Connection starting - resetting audio blocking state');
+      
       // Initialize audio if available (should already be initialized from the main useEffect)
       if (audioManagerRef.current) {
         try {
@@ -1698,6 +1702,20 @@ function DeepgramVoiceInteraction(
     log('🔴 interruptAgent method completed');
   };
   
+  /**
+   * Allows agent audio to queue after being blocked by interruptAgent()
+   * 
+   * Sets the internal allowAgentRef flag to true, allowing audio buffers
+   * to pass through handleAgentAudio() and queue for playback.
+   * 
+   * This is the counterpart to interruptAgent() and is typically used
+   * in push-button mute scenarios where the user releases the mute button.
+   * 
+   * @remarks
+   * - Safe to call multiple times
+   * - No-op if already allowed
+   * - Does not resume paused audio, only allows future audio
+   */
   const allowAgent = (): void => {
     log('🔊 allowAgent method called');
     allowAgentRef.current = true;
