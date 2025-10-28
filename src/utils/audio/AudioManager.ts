@@ -423,8 +423,14 @@ export class AudioManager {
       this.log('AudioManager initialized from queueAudio');
     }
     
+    // Check if audioContext is available AFTER initialization
+    if (!this.audioContext) {
+      this.log('ERROR: AudioContext is null after initialization! isInitialized:', this.isInitialized);
+      throw new Error('AudioContext not available for audio playback - initialization may have failed silently');
+    }
+    
     // Resume the AudioContext if it's suspended (required for playback)
-    if (this.audioContext && this.audioContext.state === 'suspended') {
+    if (this.audioContext.state === 'suspended') {
       this.log('AudioContext suspended, resuming for playback...');
       await this.audioContext.resume();
       this.log('AudioContext resumed successfully');
@@ -433,11 +439,7 @@ export class AudioManager {
     try {
       this.log(`Processing audio data (${data.byteLength} bytes)...`);
       this.log(`[queueAudio] Before: activeSourceNodes.length = ${this.activeSourceNodes.length}, startTimeRef.current = ${this.startTimeRef.current}`);
-      
-      // Check if audioContext is available
-      if (!this.audioContext) {
-        throw new Error('AudioContext not available for audio playback');
-      }
+      this.log(`[queueAudio] AudioContext state: ${this.audioContext.state}`);
       
       // Create an audio buffer from the raw data
       const buffer = createAudioBuffer(
