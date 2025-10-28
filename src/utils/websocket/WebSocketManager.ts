@@ -486,7 +486,7 @@ export class WebSocketManager {
     // For agent service, only reset on user messages, not agent responses or protocol messages
     if (this.options.service === 'agent') {
       // Only reset on actual user messages
-      const userActivityMessages = ['ConversationText']; // User sending text
+      const userActivityMessages = ['ConversationText', 'InjectUserMessage']; // User sending text
       const isMeaningful = userActivityMessages.includes(data.type);
       if (isMeaningful) {
         this.options.onMeaningfulActivity?.(data.type);
