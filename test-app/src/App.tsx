@@ -62,6 +62,7 @@ function App() {
   
   // TTS mute state
   const [ttsMuted, setTtsMuted] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
   
   // VAD state
   const [userStartedSpeaking, setUserStartedSpeaking] = useState<string | null>(null);
@@ -430,6 +431,7 @@ function App() {
   
   // Handle push button: down = block agent audio
   const handleMuteDown = () => {
+    setIsPressed(true);
     setTtsMuted(true);
     addLog('🔇 Agent audio blocked');
     if (deepgramRef.current) {
@@ -439,6 +441,7 @@ function App() {
   
   // Handle push button: up = allow agent audio
   const handleMuteUp = () => {
+    setIsPressed(false);
     setTtsMuted(false);
     addLog('🔊 Agent audio allowed');
     if (deepgramRef.current) {
@@ -703,7 +706,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           disabled={!isRecording}
           style={{ 
             padding: '10px 20px',
-            backgroundColor: ttsMuted ? '#feb2b2' : 'transparent',
+            backgroundColor: isPressed ? '#f56565' : (ttsMuted ? '#feb2b2' : 'transparent'),
+            transform: isPressed ? 'scale(0.95)' : 'scale(1)',
+            transition: 'all 0.1s ease',
             pointerEvents: 'auto'
           }}
           data-testid="tts-mute-button"

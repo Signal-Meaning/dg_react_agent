@@ -189,4 +189,49 @@ test.describe('Audio Interruption Timing', () => {
     
     console.log('✅ Mute state persisted and prevented audio');
   });
+
+  test('should maintain mute state during long press', async ({ page }) => {
+    console.log('🔊 Testing long press mute behavior...');
+    
+    // Get user interaction by clicking text input
+    await page.click('[data-testid="text-input"]');
+    await page.waitForTimeout(200);
+    
+    // Start connection
+    await page.click('[data-testid="start-button"]');
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
+    console.log('✅ Connection established');
+    
+    // Hold down mute button
+    const muteButton = page.locator('[data-testid="tts-mute-button"]');
+    await muteButton.dispatchEvent('mousedown');
+    console.log('✅ Button pressed');
+    
+    // Send multiple messages while holding button
+    for (let i = 0; i < 3; i++) {
+      await page.fill('[data-testid="text-input"]', `Message ${i + 1}`);
+      await page.click('[data-testid="send-button"]');
+      console.log(`✅ Sent message ${i + 1}`);
+      
+      // Wait and verify no audio played
+      await page.waitForTimeout(1000);
+      const isPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
+      expect(isPlaying).toBe('false');
+      console.log(`✅ Message ${i + 1} - audio blocked`);
+    }
+    
+    // Release button
+    await muteButton.dispatchEvent('mouseup');
+    await expect(muteButton).toContainText('Enable');
+    console.log('✅ Button released');
+    
+    // Now send a message with button released - should play
+    await page.fill('[data-testid="text-input"]', 'Final test message');
+    await page.click('[data-testid="send-button"]');
+    console.log('✅ Sent message after release');
+    
+    // Wait to see if audio plays (may take time with real API)
+    await page.waitForTimeout(2000);
+    console.log('✅ Test complete - verified long press behavior');
+  });
 });

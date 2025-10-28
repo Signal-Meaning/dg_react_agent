@@ -174,7 +174,9 @@ function DeepgramVoiceInteraction(
   const settingsSentTimeRef = useRef<number | null>(null);
   
   // Track whether agent audio is allowed
-  const allowAgentRef = useRef(true);
+  const ALLOW_AUDIO = true;
+  const BLOCK_AUDIO = false;
+  const allowAgentRef = useRef(ALLOW_AUDIO);
   
   // Global flag to prevent settings from being sent multiple times across component instances
   if (!(window as any).globalSettingsSent) {
@@ -1536,7 +1538,7 @@ function DeepgramVoiceInteraction(
       log('Start method called');
       
       // Reset audio blocking state on fresh connection
-      allowAgentRef.current = true;
+      allowAgentRef.current = ALLOW_AUDIO;
       log('🔄 Connection starting - resetting audio blocking state');
       
       // Initialize audio if available (should already be initialized from the main useEffect)
@@ -1696,7 +1698,7 @@ function DeepgramVoiceInteraction(
     dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
     
     // Block agent audio to prevent future audio from queuing
-    allowAgentRef.current = false;
+    allowAgentRef.current = BLOCK_AUDIO;
     log('🔇 Agent audio blocked - future audio will be discarded');
     
     log('🔴 interruptAgent method completed');
@@ -1718,7 +1720,7 @@ function DeepgramVoiceInteraction(
    */
   const allowAgent = (): void => {
     log('🔊 allowAgent method called');
-    allowAgentRef.current = true;
+    allowAgentRef.current = ALLOW_AUDIO;
     log('🔊 Agent audio allowed - audio will play normally');
   };
 
