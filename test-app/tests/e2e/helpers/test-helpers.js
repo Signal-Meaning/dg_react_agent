@@ -69,6 +69,41 @@ async function waitForAgentGreeting(page, timeout = 8000) {
 }
 
 /**
+ * Wait for greeting to complete if it plays, otherwise continue
+ * This is a safe helper that waits for greeting audio to play and finish
+ * @param {import('@playwright/test').Page} page
+ * @param {Object} options - Configuration options
+ * @param {number} options.checkTimeout - Timeout to detect if greeting starts (default: 3000)
+ * @param {number} options.playTimeout - Timeout to wait for greeting to finish (default: 8000)
+ * @returns {Promise<boolean>} - True if greeting played and finished, false if no greeting
+ */
+async function waitForGreetingIfPresent(page, options = {}) {
+  const { checkTimeout = 3000, playTimeout = 8000 } = options;
+  
+  try {
+    // Check if greeting audio starts playing
+    await page.waitForFunction(() => {
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+      return audioPlaying && audioPlaying.textContent === 'true';
+    }, { timeout: checkTimeout });
+    console.log('✅ Greeting audio started');
+    
+    // Wait for greeting to finish
+    await page.waitForFunction(() => {
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+      return audioPlaying && audioPlaying.textContent === 'false';
+    }, { timeout: playTimeout });
+    console.log('✅ Greeting finished');
+    
+    return true;
+  } catch (e) {
+    // No greeting played, that's ok for tests that don't expect greeting
+    console.log('ℹ️ No greeting played (this is normal for some tests)');
+    return false;
+  }
+}
+
+/**
  * Send a text message through the UI
  * @param {import('@playwright/test').Page} page
  * @param {string} message - The message to send
@@ -295,16 +330,16 @@ async function assertConnectionHealthy(page, expect) {
 import MicrophoneHelpers from './microphone-helpers.js';
 
 export {
-  SELECTORS,
-  setupTestPage,
-  waitForConnection,
-  waitForAgentGreeting,
-  sendTextMessage,
-  installWebSocketCapture,
-  getCapturedWebSocketData,
-  installMockWebSocket,
-  assertConnectionHealthy,
-  // Export microphone helpers
-  MicrophoneHelpers
+  SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
+  setupTestPage, // Navigate to test app and wait for page load with configurable timeout
+  waitForConnection, // Wait for agent connection to be established (waits for "connected" status)
+  waitForAgentGreeting, // Wait for agent to finish speaking its greeting message
+  waitForGreetingIfPresent, // Safely wait for greeting if it plays, otherwise continue (doesn't fail if no greeting)
+  sendTextMessage, // Send a text message through the UI and wait for input to clear
+  installWebSocketCapture, // Install WebSocket message capture in browser context for testing
+  getCapturedWebSocketData, // Retrieve captured WebSocket messages and their counts
+  installMockWebSocket, // Replace global WebSocket with mock implementation for testing
+  assertConnectionHealthy, // Assert that connection status and ready state are both healthy
+  MicrophoneHelpers // Microphone utility helpers for E2E tests (activate/deactivate mic)
 };
 

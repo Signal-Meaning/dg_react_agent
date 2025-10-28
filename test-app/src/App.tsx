@@ -547,41 +547,6 @@ function App() {
       setMicLoading(false);
     }
   };
-
-  /**
-   * Comprehensive muting callback that handles all audio management
-   * This demonstrates proper parent-controlled muting pattern:
-   * 1. Parent manages mute state locally
-   * 2. Parent calls interruptAgent() to stop audio immediately
-   * 3. Parent handles any additional audio channel management if needed
-   */
-  const handleMuteToggle = () => {
-    console.log('🔇 [APP] Mute toggle called');
-    addLog('🔇 TTS mute button clicked');
-    
-    if (!deepgramRef.current) {
-      console.error('❌ deepgramRef.current is null!');
-      addLog('❌ Cannot toggle TTS mute: deepgramRef is null');
-      return;
-    }
-    
-    const newMutedState = !isTtsMuted;
-    console.log(`🔇 [APP] Changing mute state: ${isTtsMuted} → ${newMutedState}`);
-    
-    // Update local mute state (parent responsibility)
-    setIsTtsMuted(newMutedState);
-    
-    if (newMutedState) {
-      // Muting: Call interruptAgent() to stop audio immediately
-      console.log('🔇 [APP] Muting - calling interruptAgent() to stop audio');
-      deepgramRef.current.interruptAgent();
-      addLog('🔇 Audio interrupted via interruptAgent()');
-    } else {
-      // Unmuting: Audio will resume naturally when agent speaks
-      console.log('🔇 [APP] Unmuting - audio will resume on next agent response');
-      addLog('🔇 Audio unmuted - will resume on next agent response');
-    }
-  };
   
   // Show error if API key or project ID is missing
   if (shouldShowError) {

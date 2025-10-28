@@ -13,7 +13,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { setupTestPage, waitForConnection } from './helpers/test-helpers.js';
+import { setupTestPage, waitForConnection, waitForGreetingIfPresent } from './helpers/test-helpers.js';
 
 test.describe('Audio Interruption Timing', () => {
   
@@ -42,6 +42,9 @@ test.describe('Audio Interruption Timing', () => {
     
     // Wait a bit for connection to be fully established
     await page.waitForTimeout(1000);
+    
+    // If greeting plays, wait for it to finish before sending message
+    await waitForGreetingIfPresent(page);
     
     // Send a message that triggers audio playback
     await page.fill('[data-testid="text-input"]', 'Tell me a short story about dogs');
@@ -109,6 +112,9 @@ test.describe('Audio Interruption Timing', () => {
     
     // Wait a bit for connection to be fully established
     await page.waitForTimeout(1000);
+    
+    // If greeting plays, wait for it to finish
+    await waitForGreetingIfPresent(page);
     
     // Send first message and interrupt
     await page.fill('[data-testid="text-input"]', 'First message');
