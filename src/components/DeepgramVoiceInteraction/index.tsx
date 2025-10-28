@@ -173,6 +173,9 @@ function DeepgramVoiceInteraction(
   // Track when settings were sent to add proper delay
   const settingsSentTimeRef = useRef<number | null>(null);
   
+  // Track whether agent audio is allowed
+  const allowAgentRef = useRef(true);
+  
   // Global flag to prevent settings from being sent multiple times across component instances
   if (!(window as any).globalSettingsSent) {
     (window as any).globalSettingsSent = false;
@@ -1443,6 +1446,12 @@ function DeepgramVoiceInteraction(
       }
     }
     
+    // Check if agent audio is blocked
+    if (!allowAgentRef.current) {
+      log('🔇 Agent audio blocked - discarding audio buffer to prevent playback');
+      return;
+    }
+    
     log('Passing buffer to AudioManager.queueAudio()');
     if (props.debug) lazyLog('🎵 [AUDIO] Audio context state:', audioManagerRef.current?.getAudioContext?.()?.state);
     audioManagerRef.current!.queueAudio(data)
@@ -1681,7 +1690,18 @@ function DeepgramVoiceInteraction(
     log('🔴 Setting agent state to idle');
     sleepLog('Dispatching AGENT_STATE_CHANGE to idle (from interruptAgent)');
     dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+    
+    // Block agent audio to prevent future audio from queuing
+    allowAgentRef.current = false;
+    log('🔇 Agent audio blocked - future audio will be discarded');
+    
     log('🔴 interruptAgent method completed');
+  };
+  
+  const allowAgent = (): void => {
+    log('🔊 allowAgent method called');
+    allowAgentRef.current = true;
+    log('🔊 Agent audio allowed - audio will play normally');
   };
 
   // Put agent to sleep - only if agent is configured
@@ -1836,6 +1856,7 @@ function DeepgramVoiceInteraction(
     // Agent interaction methods
     updateAgentInstructions,
     interruptAgent,
+    allowAgent,
     sleep,
     wake,
     toggleSleep,

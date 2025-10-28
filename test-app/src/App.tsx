@@ -300,13 +300,7 @@ function App() {
   const handlePlaybackStateChange = useCallback((isPlaying: boolean) => {
     setIsPlaying(isPlaying);
     addLog(`Audio playback: ${isPlaying ? 'started' : 'stopped'}`);
-    
-    // If muted and audio started playing, interrupt it immediately
-    if (isPlaying && ttsMuted && deepgramRef.current) {
-      console.log('🔇 Audio started while muted - interrupting immediately');
-      deepgramRef.current.interruptAgent();
-    }
-  }, [addLog, ttsMuted]);
+  }, [addLog]);
   
   const handleConnectionStateChange = useCallback((service: ServiceType, state: ConnectionState) => {
     setConnectionStates(prev => ({
@@ -434,14 +428,21 @@ function App() {
     }
   };
   
-  const toggleTtsMute = () => {
-    const newMutedState = !ttsMuted;
-    setTtsMuted(newMutedState);
-    addLog(newMutedState ? '🔇 TTS Muted' : '🔊 TTS Unmuted');
-    
-    if (newMutedState && deepgramRef.current) {
-      // When muting, interrupt any currently playing audio
+  // Handle push button: down = block agent audio
+  const handleMuteDown = () => {
+    setTtsMuted(true);
+    addLog('🔇 Agent audio blocked');
+    if (deepgramRef.current) {
       deepgramRef.current.interruptAgent();
+    }
+  };
+  
+  // Handle push button: up = allow agent audio
+  const handleMuteUp = () => {
+    setTtsMuted(false);
+    addLog('🔊 Agent audio allowed');
+    if (deepgramRef.current) {
+      deepgramRef.current.allowAgent();
     }
   };
   
@@ -696,7 +697,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           </button>
         )}
         <button 
-          onClick={toggleTtsMute}
+          onMouseDown={handleMuteDown}
+          onMouseUp={handleMuteUp}
+          onMouseLeave={handleMuteUp}
           disabled={!isRecording}
           style={{ 
             padding: '10px 20px',
@@ -705,7 +708,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           }}
           data-testid="tts-mute-button"
         >
-          {ttsMuted ? '🔇 TTS Muted' : '🔊 TTS Enabled'}
+          {ttsMuted ? '🔇 Mute' : '🔊 Enable'}
         </button>
         <button 
           onClick={updateContext}

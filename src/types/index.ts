@@ -235,6 +235,11 @@ export interface DeepgramVoiceInteractionHandle {
   interruptAgent: () => void;
   
   /**
+   * Allow agent audio to play (clears block state set by interruptAgent)
+   */
+  allowAgent: () => void;
+  
+  /**
    * Put the agent to sleep
    */
   sleep: () => void;
