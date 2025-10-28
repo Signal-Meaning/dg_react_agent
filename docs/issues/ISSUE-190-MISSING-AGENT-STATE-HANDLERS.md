@@ -144,6 +144,10 @@ Test agent state message handling in isolation:
 - Issue #157: Remove TTS Methods and Refactor Muting Responsibility
 - This bug was discovered while investigating E2E test failures after the TTS refactoring
 
+## ⚠️ **Blocker Relationship**
+
+**This issue is a blocker for Issue #157.** Issue #157 cannot be considered complete until this regression is fixed. The status of Issue #157 has been updated to "PARTIAL" until this issue is resolved.
+
 ---
 
-**Labels:** `bug`, `high-priority`, `regression`, `agent-state`, `e2e-tests`, `idle-timeout`
+**Labels:** `bug`, `high-priority`, `regression`, `agent-state`, `e2e-tests`, `idle-timeout`, `blocker`

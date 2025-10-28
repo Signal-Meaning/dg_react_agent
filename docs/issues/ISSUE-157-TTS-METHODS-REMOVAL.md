@@ -257,7 +257,7 @@ const handleMuteUp = () => {
 
 **Impact:** Agent state didn't transition properly (`listening` → `idle`, skipping `thinking`/`speaking`), causing idle timeout to fire prematurely.
 
-**Status:** Documented as separate issue #190
+**Status:** Documented as separate issue #190 - **MUST BE RESOLVED BEFORE ISSUE 157 CAN BE CONSIDERED COMPLETE**
 
 ## 🔗 Migration Guide
 
@@ -364,12 +364,15 @@ function VoiceApp() {
 ## 🚀 Final Status
 
 **Branch**: `davidrmcgee/issue157`  
-**Status**: ✅ All tests passing, ready for merge  
+**Status**: ⚠️ PARTIAL - Core refactoring complete, but regression fix required  
+**Blocking Issue**: #190 must be resolved before this issue can be considered complete  
 **Breaking Changes**: TTS mute methods removed (migration guide provided)  
 **Test Coverage**: All existing tests pass with updated patterns  
 **Documentation**: Complete migration guide and examples provided  
 
 **Key Achievement**: Removed redundant TTS mute methods and shifted to parent-controlled muting pattern with `interruptAgent()` (blocks) and `allowAgent()` (unblocks) methods.
+
+**Known Regression**: Issue #190 (missing agent state handlers) was identified and must be fixed before closing issue #157.
 
 ---
 
