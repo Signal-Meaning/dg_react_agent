@@ -1489,6 +1489,17 @@ function DeepgramVoiceInteraction(
       return;
     }
     
+    if (data.type === 'AgentStoppedSpeaking') {
+      console.log('🎯 [AGENT] AgentStoppedSpeaking received - agent finished speaking');
+      sleepLog('Dispatching AGENT_STATE_CHANGE to idle');
+      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+      
+      // Call onAgentSilent when agent stops speaking
+      onAgentSilent?.();
+      
+      return;
+    }
+    
     if (data.type === 'AgentAudioDone') {
       sleepLog('AgentAudioDone received - audio generation complete, but playback may continue');
       
