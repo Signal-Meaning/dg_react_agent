@@ -2071,10 +2071,10 @@ function DeepgramVoiceInteraction(
   };
 
   // Inject a user message to the agent
-  const injectUserMessage = (message: string): void => {
+  const injectUserMessage = async (message: string): Promise<void> => {
     if (!agentManagerRef.current) {
       log('Cannot inject user message: agent manager not initialized or not configured');
-      return;
+      throw new Error('Agent manager not configured');
     }
     
     // Check WebSocket state before sending
@@ -2083,15 +2083,46 @@ function DeepgramVoiceInteraction(
     console.log('📝 [TEXT_MESSAGE] Attempting to send:', message, '- Connection state:', connectionState);
     
     if (connectionState !== 'connected') {
-      console.error('❌ [TEXT_MESSAGE] Cannot send: WebSocket not connected. State:', connectionState);
-      log('Cannot inject user message: WebSocket not connected. State:', connectionState);
-      return;
+      console.log('📝 [TEXT_MESSAGE] WebSocket not connected. Auto-connecting...');
+      
+      if (connectionState === 'closed') {
+        // WebSocket is closed, need to reconnect
+        log('WebSocket is closed, establishing connection for text message...');
+        
+        if (agentManagerRef.current) {
+          // Connect the agent WebSocket
+          await agentManagerRef.current.connect();
+          log('Agent WebSocket connected for text message');
+          console.log('📝 [TEXT_MESSAGE] Connection established');
+        }
+      } else if (connectionState === 'connecting') {
+        // Wait for connection to be established
+        log('Waiting for WebSocket connection to establish...');
+        let attempts = 0;
+        while (agentManagerRef.current.getState() !== 'connected' && attempts < 50) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        
+        if (agentManagerRef.current.getState() !== 'connected') {
+          throw new Error('Connection timeout: WebSocket failed to connect');
+        }
+      }
     }
     
+    // Now that we're connected, send the message
+    const finalState = agentManagerRef.current.getState();
+    if (finalState !== 'connected') {
+      console.error('❌ [TEXT_MESSAGE] Cannot send: WebSocket not connected. State:', finalState);
+      throw new Error(`Cannot send message: WebSocket is in '${finalState}' state`);
+    }
+    
+    console.log('📝 [TEXT_MESSAGE] Sending message to agent');
     agentManagerRef.current.sendJSON({
       type: 'InjectUserMessage',
       content: message
     });
+    console.log('📝 [TEXT_MESSAGE] Message sent successfully');
   };
 
   // Helper function to create and initialize AudioManager

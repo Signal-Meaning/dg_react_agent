@@ -286,8 +286,9 @@ export interface DeepgramVoiceInteractionHandle {
   
   /**
    * Inject a user message to the agent
+   * Auto-connects the WebSocket if not already connected
    */
-  injectUserMessage: (message: string) => void;
+  injectUserMessage: (message: string) => Promise<void>;
 
   /**
    * Start audio capture (lazy initialization)
