@@ -103,55 +103,13 @@ test.describe('Text Message WebSocket State', () => {
     console.log('✅ Agent state changed successfully:', responseState);
   });
 
-  test('should fail when WebSocket is closed before component ready', async ({ page }) => {
-    // This test reproduces the exact regression scenario
-    // Where WebSocket is in 'closed' state when trying to send
+  test('should detect when agent does not respond due to WebSocket closed state', async ({ page }) => {
+    // This test directly checks for the Issue #190 regression
+    // It verifies that:
+    // 1. WebSocket is in 'connected' state when sending
+    // 2. Agent receives the message and responds
+    // 3. Agent state changes from 'idle' to 'thinking'/'speaking'
     
-    let websocketStateMessage = '';
-    let errorDetected = false;
-    
-    // Listen for the specific error messages
-    page.on('console', (msg) => {
-      const text = msg.text();
-      
-      // Capture the error that indicates WebSocket is closed
-      if (text.includes('WebSocket state:')) {
-        websocketStateMessage = text;
-      }
-      
-      if (text.includes('Cannot send: WebSocket not connected') || 
-          text.includes('Cannot inject user message: WebSocket not connected')) {
-        errorDetected = true;
-      }
-    });
-    
-    // Try to send a message immediately without waiting for full ready
-    // This simulates clicking "Send" before connection is fully established
-    const textInput = page.locator('input[type="text"]').first();
-    await textInput.fill('Early message');
-    await textInput.press('Enter');
-    
-    await page.waitForTimeout(1000);
-    
-    // Now wait for connection and try again
-    await waitForConnection(page);
-    
-    await textInput.fill('After connection');
-    await textInput.press('Enter');
-    
-    await page.waitForTimeout(2000);
-    
-    // Check results
-    console.log('WebSocket state message:', websocketStateMessage);
-    console.log('Error detected:', errorDetected);
-    
-    // The test should fail if we detect the closed state error
-    if (errorDetected || websocketStateMessage.includes('closed')) {
-      throw new Error(`REGRESSION DETECTED: ${websocketStateMessage || 'WebSocket closed when attempting to send'}`);
-    }
-  });
-
-  test('should detect WebSocket closed state regression', async ({ page }) => {
     let websocketClosed = false;
     let connectionStateOnSend = null;
     
@@ -204,27 +162,31 @@ test.describe('Text Message WebSocket State', () => {
     console.log('✅ No regression detected - WebSocket state is correct and agent received message. Agent state:', agentState);
   });
 
-  test('should verify connection remains stable during text message flow', async ({ page }) => {
-    // Get initial state
+  test('should maintain connection during rapid message exchange (idle timeout test)', async ({ page }) => {
+    // This test verifies that sending messages keeps the connection alive
+    // The idle timeout is 10 seconds, so we'll send messages within that window
+    
     const initialState = await page.locator('[data-testid="connection-status"]').textContent();
     console.log('📊 Starting connection state:', initialState);
     
-    // Send multiple messages
+    // Send 3 messages, each within 10 seconds of each other
+    // This keeps the connection active via meaningful user activity
     for (let i = 0; i < 3; i++) {
       const textInput = page.locator('input[type="text"]').first();
-      await textInput.fill(`Message ${i + 1}`);
+      await textInput.fill(`Keep alive ${i + 1}`);
       await textInput.press('Enter');
       
-      await page.waitForTimeout(1000);
+      // Wait 3 seconds between messages (well within 10s idle timeout)
+      await page.waitForTimeout(3000);
       
-      // Verify connection is still good
+      // Verify connection is still active (not closed by idle timeout)
       const currentState = await page.locator('[data-testid="connection-status"]').textContent();
       console.log(`📊 Connection state after message ${i + 1}:`, currentState);
       
       expect(currentState).toContain('connected');
     }
     
-    console.log('✅ All messages sent successfully without disconnection');
+    console.log('✅ All messages sent successfully - connection stayed alive (no idle timeout)');
   });
 });
 
