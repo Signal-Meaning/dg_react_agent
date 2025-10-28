@@ -162,31 +162,30 @@ test.describe('Audio Interruption Timing', () => {
     await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
     console.log('✅ Connection established');
     
-    // Mute TTS
-    await page.click('[data-testid="tts-mute-button"]');
+    // Hold down mute button (push button)
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
-    await expect(muteButton).toContainText('Muted');
-    console.log('✅ TTS muted');
+    await muteButton.dispatchEvent('mousedown');
+    await page.waitForTimeout(100);
     
-    // Send a message - should not play audio (or should be interrupted immediately)
+    // Verify button shows "Mute" while held down
+    await expect(muteButton).toContainText('Mute');
+    console.log('✅ Button pressed - audio blocked');
+    
+    // Send a message - should not play audio
     await page.fill('[data-testid="text-input"]', 'Hello test message');
     await page.click('[data-testid="send-button"]');
     console.log('✅ Message sent');
     
-    // Wait and verify audio either doesn't start or is stopped quickly
+    // Wait and verify audio didn't start
     await page.waitForTimeout(2000);
     const isPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
     expect(isPlaying).toBe('false');
-    console.log('✅ Audio did not play (as expected when muted)');
+    console.log('✅ Audio did not play (as expected when button held)');
     
-    // Verify mute state persists
-    await expect(muteButton).toContainText('Muted');
-    console.log('✅ Mute state persisted');
-    
-    // Unmute
-    await page.click('[data-testid="tts-mute-button"]');
-    await expect(muteButton).toContainText('Enabled');
-    console.log('✅ TTS unmuted');
+    // Release button
+    await muteButton.dispatchEvent('mouseup');
+    await expect(muteButton).toContainText('Enable');
+    console.log('✅ Button released - audio allowed again');
     
     console.log('✅ Mute state persisted and prevented audio');
   });
