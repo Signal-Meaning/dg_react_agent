@@ -1818,13 +1818,7 @@ function DeepgramVoiceInteraction(
       
       // Start recording if audio manager is available and microphone is enabled
       if (audioManagerRef.current) {
-        if (state.micEnabledInternal) {
-          log('Starting recording...');
-          await audioManagerRef.current.startRecording();
-          log('Recording started');
-        } else {
-          log('Microphone disabled, skipping recording start');
-        }
+        log('AudioManager not available for recording - this is expected for text-only agent interactions');
       } else {
         log('AudioManager not available for recording - this is expected for text-only agent interactions');
       }
@@ -1849,15 +1843,6 @@ function DeepgramVoiceInteraction(
   const connectTextOnly = async (): Promise<void> => {
     try {
       log('ConnectTextOnly method called');
-      
-      // Connect transcription WebSocket if configured
-      if (transcriptionManagerRef.current) {
-        log('Connecting Transcription WebSocket...');
-        await transcriptionManagerRef.current.connect();
-        log('Transcription WebSocket connected');
-      } else {
-        log('Transcription manager not configured, skipping connection');
-      }
       
       // Connect agent WebSocket if configured
       if (agentManagerRef.current) {
