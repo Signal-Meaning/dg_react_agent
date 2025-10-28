@@ -2,7 +2,7 @@
  * VAD Dual Source Test
  * 
  * This test verifies that both VAD event sources are working:
- * 1. Transcription WebSocket: SpeechStarted/UtteranceEnd
+ * 1. Transcription WebSocket: UserStartedSpeaking/UtteranceEnd
  * 2. Agent WebSocket: UserStartedSpeaking/UserStoppedSpeaking
  */
 

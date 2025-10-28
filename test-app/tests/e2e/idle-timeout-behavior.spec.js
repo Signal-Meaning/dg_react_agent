@@ -33,10 +33,11 @@
  */
 
 import { test, expect } from '@playwright/test';
-import {
-  SELECTORS, waitForConnection
+import { 
+  SELECTORS,
+  waitForConnection 
 } from './helpers/test-helpers.js';
-import { setupTestPage } from './helpers/audio-mocks';
+import { setupTestPage } from './helpers/audio-mocks.js';
 
 test.describe('Idle Timeout Behavior', () => {
   
@@ -189,7 +190,7 @@ test.describe('Idle Timeout Behavior', () => {
     
     // Import audio simulation utilities
     const { VADTestUtilities } = await import('../utils/vad-test-utilities.js');
-    const SimpleVADHelpers = (await import('../utils/simple-vad-helpers.js')).default;
+    const { default: SimpleVADHelpers } = await import('../utils/simple-vad-helpers.js');
     
     // Track connection close events
     const connectionCloses = [];
@@ -245,8 +246,8 @@ test.describe('Idle Timeout Behavior', () => {
       // Wait for VAD events to be processed (this is what keeps the connection alive)
       console.log('⏳ Waiting for VAD events...');
       const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
-        'SpeechStarted',    // From transcription service
-        'UtteranceEnd'      // From transcription service  
+        'UserStartedSpeaking',  // From Voice Agent API
+        'UtteranceEnd'          // From Voice Agent API  
       ], 5000); // Longer timeout to account for 2s offset silence
       
       console.log(`✅ VAD events detected: ${vadEvents.length}`);
@@ -284,7 +285,7 @@ test.describe('Idle Timeout Behavior', () => {
     
     // Import audio simulation utilities
     const { VADTestUtilities } = await import('../utils/vad-test-utilities.js');
-    const SimpleVADHelpers = (await import('../utils/simple-vad-helpers.js')).default;
+    const { default: SimpleVADHelpers } = await import('../utils/simple-vad-helpers.js');
     
     // Track connection close events
     const connectionCloses = [];
@@ -354,8 +355,8 @@ test.describe('Idle Timeout Behavior', () => {
       // Wait for VAD events to be processed
       console.log('⏳ Waiting for VAD events...');
       const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
-        'SpeechStarted',    // From transcription service
-        'UtteranceEnd'      // From transcription service  
+        'UserStartedSpeaking',  // From Voice Agent API
+        'UtteranceEnd'        // From Voice Agent API  
       ], 6000); // Longer timeout to account for 2s offset silence
       
       console.log(`✅ VAD events detected: ${vadEvents.length}`);

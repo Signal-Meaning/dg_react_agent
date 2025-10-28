@@ -2,6 +2,15 @@
 
 This guide explains how to develop, test, and package the `dg_react_agent` library.
 
+## **Fork Information**
+
+**Important:** This component was forked from the original Deepgram repository at commit `7191eb4a062f35344896e873f02eba69c9c46a2d` (pre-fork). All development after that point is considered post-fork.
+
+- **Pre-fork (7191eb4a062f35344896e873f02eba69c9c46a2d):** Original Deepgram component with basic microphone functionality via `startAudioCapture()` method
+- **Post-fork:** All enhancements, bug fixes, and new features added by Signal Meaning
+
+The original component provided basic microphone functionality via `startAudioCapture()` method, which is preserved in this fork. Additional microphone control features like `toggleMic()` and `microphoneEnabled` prop were added post-fork and may be causing connection issues in E2E tests.
+
 ## **Quick Start**
 
 ```bash
@@ -415,6 +424,46 @@ npm run workflow
 # Clean everything
 npm run clean
 ```
+
+## API Governance Process
+
+### Two-Layer API Validation
+
+The component validates TWO separate APIs:
+
+1. **Deepgram Server API**: Ensures component correctly implements Deepgram Voice Agent v1 API
+2. **Component Public API**: Ensures component's own API remains stable for integrators
+
+### Adding Component Methods/Props
+
+When adding new methods to `DeepgramVoiceInteractionHandle`:
+
+1. **Create GitHub Issue**: Use `.github/ISSUE_TEMPLATE/api-addition.md` template
+2. **Document Addition**: Add to `tests/api-baseline/approved-additions.ts`
+3. **Release Notes**: Update `docs/releases/vX.Y.Z/API-CHANGES.md`
+4. **Examples**: Add usage examples if applicable
+5. **JSDoc**: Add `@since vX.Y.Z` annotation
+
+### API Validation Scripts
+
+```bash
+# Fetch latest official Deepgram API spec
+npm run api:fetch-spec
+
+# Validate against official Deepgram API
+npm run api:validate
+
+# Run all API validation tests
+npm test api-validation
+```
+
+### CI Behavior
+
+- **Local**: Warnings for unauthorized additions
+- **CI**: Failures for unauthorized additions
+- **Purpose**: Catch accidental API changes early
+
+---
 
 ## **Resources**
 

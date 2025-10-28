@@ -136,7 +136,7 @@ test.describe('VAD Debug Test', () => {
       log.includes('speech_detected') ||
       log.includes('UserStartedSpeaking') ||
       log.includes('UserStoppedSpeaking') ||
-      log.includes('SpeechStarted') ||
+      log.includes('UserStartedSpeaking') ||
       log.includes('UtteranceEnd')  // Use UtteranceEnd instead of fictional SpeechStopped
     );
     

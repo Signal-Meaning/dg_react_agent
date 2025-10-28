@@ -11,7 +11,7 @@
  */
 export const REAL_DEEPGRAM_VAD_EVENTS = {
   USER_STARTED_SPEAKING: 'UserStartedSpeaking',
-  SPEECH_STARTED: 'SpeechStarted', 
+  // NOTE: SpeechStarted was part of old Transcription API, not used in Voice Agent API
   UTTERANCE_END: 'UtteranceEnd'
 } as const;
 
@@ -41,8 +41,7 @@ export const VAD_EVENT_MESSAGES = {
  */
 export const VAD_EVENT_SOURCES = {
   [REAL_DEEPGRAM_VAD_EVENTS.USER_STARTED_SPEAKING]: 'Voice Agent API',
-  [REAL_DEEPGRAM_VAD_EVENTS.SPEECH_STARTED]: 'Transcription API',
-  [REAL_DEEPGRAM_VAD_EVENTS.UTTERANCE_END]: 'Transcription API'
+  [REAL_DEEPGRAM_VAD_EVENTS.UTTERANCE_END]: 'Voice Agent API'
 } as const;
 
 /**
@@ -51,7 +50,6 @@ export const VAD_EVENT_SOURCES = {
  */
 export const VAD_EVENT_STATUS = {
   [REAL_DEEPGRAM_VAD_EVENTS.USER_STARTED_SPEAKING]: '✅ REAL',
-  [REAL_DEEPGRAM_VAD_EVENTS.SPEECH_STARTED]: '✅ REAL',
   [REAL_DEEPGRAM_VAD_EVENTS.UTTERANCE_END]: '✅ REAL',
   [FICTIONAL_VAD_EVENTS.USER_STOPPED_SPEAKING]: '❌ FICTIONAL',
   [FICTIONAL_VAD_EVENTS.SPEECH_STOPPED]: '❌ FICTIONAL'

@@ -116,7 +116,7 @@ test.describe('VAD Transcript Analysis', () => {
     // Wait for VAD events and transcripts
     console.log('⏳ Waiting for VAD events and transcripts...');
     const detectedVADEvents = await SimpleVADHelpers.waitForVADEvents(page, [
-      'SpeechStarted',    // From transcription service
+      'UserStartedSpeaking',    // From transcription service
       'UtteranceEnd'      // From transcription service
     ], 10000);
     
@@ -159,12 +159,12 @@ test.describe('VAD Transcript Analysis', () => {
       return acc;
     }, {}));
     
-    // Verify we got at least SpeechStarted
-    const hasSpeechStarted = detectedVADEvents.some(event => event.type === 'SpeechStarted');
+    // Verify we got at least UserStartedSpeaking
+    const hasUserStartedSpeaking = detectedVADEvents.some(event => event.type === 'UserStartedSpeaking');
     const hasUtteranceEnd = detectedVADEvents.some(event => event.type === 'UtteranceEnd');
     
-    expect(hasSpeechStarted).toBe(true);
-    console.log('✅ SpeechStarted detected:', hasSpeechStarted);
+    expect(hasUserStartedSpeaking).toBe(true);
+    console.log('✅ UserStartedSpeaking detected:', hasUserStartedSpeaking);
     console.log('✅ UtteranceEnd detected:', hasUtteranceEnd);
     
     if (!hasUtteranceEnd) {
@@ -260,7 +260,7 @@ test.describe('VAD Transcript Analysis', () => {
       
       // Wait for VAD events
       const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
-        'SpeechStarted',
+        'UserStartedSpeaking',
         'UtteranceEnd'
       ], 8000);
       
@@ -380,7 +380,7 @@ test.describe('VAD Transcript Analysis', () => {
     // Wait longer for UtteranceEnd with long pause sample
     console.log('⏳ Waiting for UtteranceEnd with extended timeout...');
     const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
-      'SpeechStarted',
+      'UserStartedSpeaking',
       'UtteranceEnd'
     ], 15000);
     

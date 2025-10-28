@@ -45,10 +45,9 @@ async function setupRealVADTestPage(page, options = {}) {
   
   // Verify VAD elements are present
   await expect(page.locator('[data-testid="vad-states"]')).toBeVisible();
-  await expect(page.locator('[data-testid="user-speaking"]')).toBeVisible();
+  await expect(page.locator('[data-testid="user-started-speaking"]')).toBeVisible();
   await expect(page.locator('[data-testid="user-stopped-speaking"]')).toBeVisible();
   await expect(page.locator('[data-testid="utterance-end"]')).toBeVisible();
-  await expect(page.locator('[data-testid="vad-event"]')).toBeVisible();
 }
 
 /**

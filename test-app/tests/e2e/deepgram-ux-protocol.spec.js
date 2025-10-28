@@ -22,6 +22,7 @@ import {
   waitForAgentGreeting,
   sendTextMessage,
   assertConnectionHealthy,
+  MicrophoneHelpers,
 } from './helpers/test-helpers.js';
 
 // Run only in chromium for focused testing
@@ -115,43 +116,42 @@ test.describe('Deepgram Protocol UX Validation', () => {
   test('should handle microphone protocol states', async ({ page }) => {
     console.log('🎤 Starting Microphone Protocol State Test...');
     
-    // Setup
-    await setupTestPage(page);
-    await waitForConnection(page);
-    console.log('✅ Connection established');
+    // Use MicrophoneHelpers for reliable microphone activation
+    const result = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      connectionTimeout: 10000,
+      greetingTimeout: 8000,
+      micEnableTimeout: 5000
+    });
     
-    // Wait for agent to finish greeting
-    await waitForAgentGreeting(page);
-    console.log('✅ Agent finished greeting');
-    
-    // Check mic status
-    const micStatus = page.locator(SELECTORS.micStatus);
-    const currentMicStatus = await micStatus.textContent();
-    console.log(`Current mic status: ${currentMicStatus}`);
-    
-    // Find microphone button
-    const micButton = page.locator(SELECTORS.micButton);
-    await expect(micButton).toBeVisible();
-    
-    // Check if button is enabled
-    const isEnabled = await micButton.isEnabled();
-    console.log(`Microphone button enabled: ${isEnabled}`);
-    
-    if (isEnabled) {
-      await micButton.click();
-      console.log('✅ Clicked microphone button');
-      
-      await page.waitForTimeout(500);
-      
-      const newMicStatus = await micStatus.textContent();
-      console.log(`New mic status: ${newMicStatus}`);
-    } else {
-      console.log('ℹ️  Microphone button disabled (expected during agent speaking)');
+    if (!result.success) {
+      throw new Error(`Microphone activation failed: ${result.error}`);
     }
     
-    // Verify connection remains stable
-    await assertConnectionHealthy(page, expect);
-    console.log('✅ Connection stable (protocol maintains connection)');
+    console.log('✅ Microphone activated successfully');
+    
+    // Verify microphone is enabled
+    const micStatus = page.locator(SELECTORS.micStatus);
+    const currentMicStatus = await micStatus.textContent();
+    expect(currentMicStatus).toBe('Enabled');
+    console.log(`✅ Mic status confirmed: ${currentMicStatus}`);
+    
+    // Verify microphone button is visible and enabled
+    const micButton = page.locator(SELECTORS.micButton);
+    await expect(micButton).toBeVisible();
+    const isEnabled = await micButton.isEnabled();
+    expect(isEnabled).toBe(true);
+    console.log('✅ Microphone button is visible and enabled');
+    
+    // Test microphone disable
+    await micButton.click();
+    console.log('✅ Clicked microphone button to disable');
+    
+    await page.waitForTimeout(1000);
+    
+    // Verify microphone is disabled
+    const disabledMicStatus = await micStatus.textContent();
+    expect(disabledMicStatus).toBe('Disabled');
+    console.log(`✅ Mic status after disable: ${disabledMicStatus}`);
     
     console.log('🎉 MICROPHONE PROTOCOL STATE TEST PASSED!');
   });

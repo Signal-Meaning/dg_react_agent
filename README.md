@@ -2,8 +2,31 @@
 
 A headless React component designed to drastically simplify the integration of Deepgram's real-time transcription and voice agent capabilities into web applications. It handles the low-level complexities of WebSocket connections, browser microphone access, and agent audio playback, allowing you to focus on building your application's UI and logic.
 
+**Development Note:** This component was forked from the original Deepgram repository at commit `7191eb4a062f35344896e873f02eba69c9c46a2d` (pre-fork). All development after that point is considered post-fork. The original component provided basic microphone functionality via `startAudioCapture()` method, which is preserved in this fork.
+
 [![npm version](https://img.shields.io/npm/v/@signal-meaning/deepgram-voice-interaction-react?registry_uri=https://npm.pkg.github.com)](https://npm.pkg.github.com/@signal-meaning/deepgram-voice-interaction-react)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Project Objectives
+
+**Fork Purpose:** This fork of `dg_react_agent` adds `test-app` as a demonstration of a React web testable frontend to the dg_react_agent React component.
+
+**API Compatibility Requirement:** The component MUST maintain API compatibility with the Deepgram Voice Agent API:
+- Voice Agent API v1: https://developers.deepgram.com/docs/voice-agent
+- Migration Guide: https://developers.deepgram.com/docs/voice-agent-v1-migration
+
+Any improvements must be justified and maintain compatibility with the Voice Agent API.
+
+**API Validation**: This component validates against two APIs:
+- **Deepgram Voice Agent v1 Server API** (endpoint: `wss://agent.deepgram.com/v1/agent/converse`)
+- **Component Public API** (interface: `DeepgramVoiceInteractionHandle` tracked since commit 7191eb4)
+All API changes require approval and documentation. See [API Governance](docs/DEVELOPMENT.md#api-governance-process) for details.
+
+**Test App Goals:** The test-app and its related tests are intended to:
+- Recommend certain integration patterns and avoid others
+- Act as a starting point for React developers
+- Demonstrate proper usage of the headless dg_react_agent component
+- MUST maintain API compatibility with the headless dg_react_agent component
 
 ## Features
 
