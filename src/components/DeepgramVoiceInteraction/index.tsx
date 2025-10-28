@@ -2077,7 +2077,16 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    log('Injecting user message:', message);
+    // Check WebSocket state before sending
+    const connectionState = agentManagerRef.current.getState();
+    log('Injecting user message:', message, '- WebSocket state:', connectionState);
+    console.log('📝 [TEXT_MESSAGE] Attempting to send:', message, '- Connection state:', connectionState);
+    
+    if (connectionState !== 'connected') {
+      console.error('❌ [TEXT_MESSAGE] Cannot send: WebSocket not connected. State:', connectionState);
+      log('Cannot inject user message: WebSocket not connected. State:', connectionState);
+      return;
+    }
     
     agentManagerRef.current.sendJSON({
       type: 'InjectUserMessage',
