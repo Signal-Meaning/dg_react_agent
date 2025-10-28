@@ -2098,6 +2098,12 @@ function DeepgramVoiceInteraction(
           // Wait a moment for connection to fully establish
           await new Promise(resolve => setTimeout(resolve, 200));
           
+          // Reset settings flags to allow settings to be sent again
+          // This is important for reconnection after idle timeout
+          hasSentSettingsRef.current = false;
+          (window as any).globalSettingsSent = false;
+          log('Reset settings flags for auto-connect reconnection');
+          
           // Send settings to initialize the agent
           sendAgentSettings();
         }
