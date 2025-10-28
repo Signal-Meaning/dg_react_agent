@@ -693,6 +693,7 @@ function DeepgramVoiceInteraction(
           log('Connection established but auto-connect will handle settings sending, skipping');
         }
       } else if (event.type === 'message') {
+        console.log('📨 [WEBSOCKET] Received agent message event:', event.data);
         handleAgentMessage(event.data);
       } else if (event.type === 'binary') {
         handleAgentAudio(event.data);
