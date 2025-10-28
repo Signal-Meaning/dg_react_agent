@@ -33,6 +33,10 @@ test.describe('Audio Interruption Timing', () => {
   test('should interrupt audio within 50ms when interruptAgent() is called', async ({ page }) => {
     console.log('🔊 Testing audio interruption timing...');
     
+    // Get user interaction by clicking text input to enable audio playback
+    await page.click('[data-testid="text-input"]');
+    await page.waitForTimeout(200);
+    
     // Start the connection
     await page.click('[data-testid="start-button"]');
     await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
@@ -82,6 +86,10 @@ test.describe('Audio Interruption Timing', () => {
 
   test('should maintain interruption state for future messages', async ({ page }) => {
     console.log('🔊 Testing that interrupted audio stays stopped...');
+    
+    // Get user interaction by clicking text input to enable audio playback
+    await page.click('[data-testid="text-input"]');
+    await page.waitForTimeout(200);
     
     // Start the connection
     await page.click('[data-testid="start-button"]');
@@ -144,6 +152,10 @@ test.describe('Audio Interruption Timing', () => {
 
   test('should persist mute state and prevent future audio', async ({ page }) => {
     console.log('🔊 Testing TTS mute state persistence...');
+    
+    // Get user interaction by clicking text input to enable audio playback
+    await page.click('[data-testid="text-input"]');
+    await page.waitForTimeout(200);
     
     // Start connection
     await page.click('[data-testid="start-button"]');
