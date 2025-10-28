@@ -1465,6 +1465,7 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentThinking') {
+      console.log('🎯 [AGENT] AgentThinking received - transitioning to thinking state');
       sleepLog('Dispatching AGENT_STATE_CHANGE to thinking');
       dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
       
@@ -1474,10 +1475,10 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-        if (data.type === 'AgentStartedSpeaking') {
-          console.log('🎯 [AGENT] AgentStartedSpeaking received - disabling idle timeout resets');
-          sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
-          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
+    if (data.type === 'AgentStartedSpeaking') {
+      console.log('🎯 [AGENT] AgentStartedSpeaking received - transitioning to speaking state');
+      sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
+      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
 
       // Track agent speaking
       if (state.greetingInProgress && !state.greetingStarted) {
@@ -1490,6 +1491,7 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentAudioDone') {
+      console.log('🎯 [AGENT] AgentAudioDone received - audio generation complete, playback may continue');
       sleepLog('AgentAudioDone received - audio generation complete, but playback may continue');
       
       // DON'T transition to idle yet - the agent is still speaking (audio is playing)
@@ -2100,12 +2102,16 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: event.isRecording });
       } else if (event.type === 'playing') {
         log('Playing state:', event.isPlaying);
+        console.log(`🎯 [AUDIO] Playback state changed: ${event.isPlaying ? 'PLAYING' : 'NOT PLAYING'}, current agent state: ${stateRef.current.agentState}`);
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: event.isPlaying });
         
         // Transition agent to idle when audio playback stops
         if (!event.isPlaying && stateRef.current.agentState === 'speaking') {
+          console.log('🎯 [AGENT] Audio playback finished - transitioning agent from speaking to idle');
           sleepLog('Audio playback finished - transitioning agent to idle');
           dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+        } else if (!event.isPlaying && stateRef.current.agentState !== 'speaking') {
+          console.log(`🎯 [AGENT] Audio playback stopped but agent state is ${stateRef.current.agentState} (not speaking) - skipping transition to idle`);
         }
       } else if (event.type === 'error') {
         handleError(event.error);
