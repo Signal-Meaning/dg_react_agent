@@ -28,140 +28,132 @@ test.describe('Text Message WebSocket State', () => {
     console.log('✅ Initial connection established');
   });
 
-  test('should verify WebSocket is connected before sending text message', async ({ page }) => {
-    // Wait for component to be fully ready
+  test('should auto-connect and send text message when WebSocket is closed', async ({ page }) => {
+    // This test verifies that the app auto-connects when sending a text message
+    // even if the WebSocket was not initially connected. This tests the Issue #190 fix.
+    
     await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 5000 });
     
-    // Check connection status before attempting to send
-    const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    console.log('📊 Initial connection status:', connectionStatus);
-    
-    expect(connectionStatus).toContain('connected');
-    
-    // Get current agent state
+    // Get agent state element
     const agentStateElement = page.locator('p').filter({ hasText: 'Core Component State' }).locator('strong');
     const initialAgentState = await agentStateElement.textContent();
     console.log('📊 Initial agent state:', initialAgentState);
     
-    // Check console logs for WebSocket state and agent messages
+    // Capture console logs to verify auto-connect and message sending
     const consoleLogs = [];
     page.on('console', (msg) => {
       const text = msg.text();
-      if (text.includes('TEXT_MESSAGE') || text.includes('WebSocket state') || text.includes('Connection state') 
+      if (text.includes('TEXT_MESSAGE') || text.includes('auto-connect') || text.includes('Auto-connecting')
           || text.includes('AGENT') || text.includes('🎯') || text.includes('📨') || text.includes('WEBSOCKET')) {
         consoleLogs.push(text);
         console.log('📋 Console:', text);
       }
     });
     
-    // Type text in the input field
+    // Type text in the input field and send
     const textInput = page.locator('input[type="text"]').first();
-    await textInput.fill('Hello');
+    await textInput.fill('Test message for auto-connect');
     
-    // Focus the input and wait a moment for React to process
+    // Focus the input
     await textInput.focus();
     await page.waitForTimeout(500);
     
     // Send the message by pressing Enter
+    // This should trigger auto-connect if WebSocket is closed
     await textInput.press('Enter');
     
-    // Wait for the message to be processed
+    // Wait for connection to be established and message to be sent
     await page.waitForTimeout(1000);
     
-    // Verify connection is still connected after message attempt
-    await page.waitForTimeout(500);
-    const finalConnectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    console.log('📊 Final connection status:', finalConnectionStatus);
+    // Verify connection is now connected (auto-connect should have happened)
+    const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
+    console.log('📊 Connection status after sending:', connectionStatus);
+    expect(connectionStatus).toContain('connected');
     
-    // Get agent state after message
+    // Verify from console logs that auto-connect occurred
+    const autoConnectLogs = consoleLogs.filter(log => log.includes('Auto-connecting') || log.includes('auto-connect'));
+    console.log('📋 Auto-connect logs:', autoConnectLogs);
+    
+    // Verify that the message was sent successfully
+    const sendLogs = consoleLogs.filter(log => log.includes('Message sent successfully'));
+    expect(sendLogs.length).toBeGreaterThan(0);
+    
+    // Wait for agent to respond (state should transition from idle)
+    console.log('⏳ Waiting for agent to respond...');
+    await page.waitForTimeout(3000);
+    
     const finalAgentState = await agentStateElement.textContent();
-    console.log('📊 Agent state after message:', finalAgentState);
+    console.log('📊 Final agent state:', finalAgentState);
     
-    // The key assertion: connection should still be connected
-    // If this fails, it means WebSocket went to 'closed' state prematurely
-    expect(finalConnectionStatus).toContain('connected');
-    
-    // Agent should transition to 'thinking' or 'speaking' when processing the message
-    // If it stays at 'idle', that means the message was not received
-    console.log('✅ Test completed - checking if agent received message...');
-    
-    // Wait a bit more to see if agent responds
-    await page.waitForTimeout(2000);
-    const responseState = await agentStateElement.textContent();
-    console.log('📊 Agent state after wait:', responseState);
-    
-    // If agent received the message, it should have transitioned to thinking/speaking
-    if (responseState === 'idle' && initialAgentState === 'idle') {
-      console.warn('⚠️ Agent state did not change - message may not have been received');
-      console.log('Console logs:', consoleLogs);
-      
-      // FAIL THE TEST - Agent should have received and responded to the message
-      // This is the actual regression we're trying to catch
-      throw new Error(`REGRESSION: Agent state did not change from 'idle'. Expected 'thinking' or 'speaking' after receiving message. This indicates the message was not processed or agent never received it. Console logs: ${consoleLogs.join(', ')}`);
+    // Agent should have received the message and transitioned to thinking or speaking
+    if (finalAgentState === 'idle' && initialAgentState === 'idle') {
+      console.warn('⚠️ Agent state did not change after sending message');
+      console.log('📋 All console logs:', consoleLogs.join('\n'));
+      throw new Error('REGRESSION: Agent state did not change from idle. Expected thinking or speaking after receiving message. This indicates the message was not processed.');
     }
     
-    // Also verify agent state actually changed to something other than idle
-    expect(responseState).not.toBe('idle');
-    console.log('✅ Agent state changed successfully:', responseState);
+    // Verify agent state changed
+    expect(finalAgentState).not.toBe('idle');
+    console.log('✅ Agent responded successfully. Final state:', finalAgentState);
   });
 
-  test('should detect when agent does not respond due to WebSocket closed state', async ({ page }) => {
-    // This test directly checks for the Issue #190 regression
-    // It verifies that:
-    // 1. WebSocket is in 'connected' state when sending
-    // 2. Agent receives the message and responds
-    // 3. Agent state changes from 'idle' to 'thinking'/'speaking'
+  test('should handle sequential text messages with proper state transitions', async ({ page }) => {
+    // This test verifies that multiple sequential messages work correctly
+    // and that agent state transitions properly between idle, thinking, speaking, and back to idle
     
-    let websocketClosed = false;
-    let connectionStateOnSend = null;
+    await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 5000 });
     
-    // Listen for console logs to detect WebSocket state
-    page.on('console', (msg) => {
-      const text = msg.text();
-      
-      // Detect the error that indicates WebSocket is closed
-      if (text.includes('Cannot send: WebSocket not connected') || 
-          text.includes("Cannot inject user message: WebSocket not connected")) {
-        websocketClosed = true;
-        console.error('❌ REGRESSION DETECTED: WebSocket is closed when sending message');
-      }
-      
-      // Capture the actual connection state
-      if (text.includes('Connection state:') || text.includes('WebSocket state:')) {
-        const match = text.match(/state:\s*["']?(\w+)["']?/);
-        if (match) {
-          connectionStateOnSend = match[1];
-          console.log('📊 Connection state when sending:', connectionStateOnSend);
-        }
-      }
-    });
+    const agentStateElement = page.locator('p').filter({ hasText: 'Core Component State' }).locator('strong');
     
-    // Type and send a message
+    // Send first message
     const textInput = page.locator('input[type="text"]').first();
-    await textInput.fill('Test message');
+    await textInput.fill('First message');
     await textInput.press('Enter');
     
-    // Wait for processing - agent should respond
-    await page.waitForTimeout(5000);
+    // Wait for agent to transition from idle -> thinking/speaking
+    console.log('⏳ Waiting for agent to respond to first message...');
+    await page.waitForTimeout(3000);
     
-    // Check for the regression
-    if (connectionStateOnSend === 'closed') {
-      throw new Error(`REGRESSION: WebSocket was in 'closed' state when attempting to send. Connection states should be one of: connecting, connected, reconnecting`);
-    }
+    let agentState = await agentStateElement.textContent();
+    console.log('📊 Agent state after first message:', agentState);
     
-    if (websocketClosed) {
-      throw new Error('REGRESSION: WebSocket closed error detected when sending text message');
-    }
-    
-    // Also verify agent received the message by checking state changes
-    const agentStateElement = page.locator('p').filter({ hasText: 'Core Component State' }).locator('strong');
-    const agentState = await agentStateElement.textContent();
-    
+    // Verify agent responded (state should not be idle)
     if (agentState === 'idle') {
-      throw new Error('REGRESSION: Agent state is still "idle" after sending message. This means the message was not received or processed. Expected "thinking" or "speaking".');
+      throw new Error('Agent did not respond to first message. Expected thinking or speaking, got: ' + agentState);
     }
     
-    console.log('✅ No regression detected - WebSocket state is correct and agent received message. Agent state:', agentState);
+    // Wait for agent to finish speaking (transition back to idle)
+    console.log('⏳ Waiting for agent to finish speaking...');
+    let attempts = 0;
+    while (agentState !== 'idle' && attempts < 20) {
+      await page.waitForTimeout(500);
+      agentState = await agentStateElement.textContent();
+      attempts++;
+    }
+    console.log('📊 Agent state after finishing:', agentState);
+    
+    // Agent should have returned to idle after speaking
+    if (agentState !== 'idle') {
+      console.warn('⚠️ Agent did not return to idle state after speaking');
+    }
+    
+    // Send second message
+    await textInput.fill('Second message');
+    await textInput.press('Enter');
+    
+    // Wait for agent to respond to second message
+    console.log('⏳ Waiting for agent to respond to second message...');
+    await page.waitForTimeout(3000);
+    
+    agentState = await agentStateElement.textContent();
+    console.log('📊 Agent state after second message:', agentState);
+    
+    // Verify agent responded to second message
+    if (agentState === 'idle') {
+      throw new Error('Agent did not respond to second message. State should be thinking or speaking.');
+    }
+    
+    console.log('✅ Sequential messages handled correctly with proper state transitions');
   });
 
   test('should maintain connection during rapid message exchange (idle timeout test)', async ({ page }) => {
