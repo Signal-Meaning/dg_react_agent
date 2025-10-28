@@ -181,6 +181,11 @@ function DeepgramVoiceInteraction(
   // Track when settings were sent to add proper delay
   const settingsSentTimeRef = useRef<number | null>(null);
   
+  // Track whether agent audio is allowed
+  const ALLOW_AUDIO = true;
+  const BLOCK_AUDIO = false;
+  const allowAgentRef = useRef(ALLOW_AUDIO);
+  
   // Global flag to prevent settings from being sent multiple times across component instances
   if (!(window as any).globalSettingsSent) {
     (window as any).globalSettingsSent = false;
@@ -1664,6 +1669,12 @@ function DeepgramVoiceInteraction(
       return;
     }
     
+    // Check if agent audio is blocked
+    if (!allowAgentRef.current) {
+      log('🔇 Agent audio blocked - discarding audio buffer to prevent playback');
+      return;
+    }
+    
     // Create AudioManager lazily if it doesn't exist (for TTS-only playback)
     if (!audioManagerRef.current) {
       log('Creating AudioManager lazily for TTS playback');
@@ -1763,6 +1774,10 @@ function DeepgramVoiceInteraction(
   const start = async (): Promise<void> => {
     try {
       log('Start method called');
+      
+      // Reset audio blocking state on fresh connection
+      allowAgentRef.current = ALLOW_AUDIO;
+      log('🔄 Connection starting - resetting audio blocking state');
       
       // Initialize audio if available (should already be initialized from the main useEffect)
       if (audioManagerRef.current) {
@@ -1972,10 +1987,19 @@ function DeepgramVoiceInteraction(
     }
     
     clearAudio();
+    allowAgentRef.current = BLOCK_AUDIO;
+    log('🔇 Agent audio blocked - future audio will be discarded');
+    
     log('🔴 Setting agent state to idle');
     sleepLog('Dispatching AGENT_STATE_CHANGE to idle (from interruptAgent)');
     dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
     log('🔴 interruptAgent method completed');
+  };
+
+  const allowAgent = (): void => {
+    log('🔊 allowAgent method called');
+    allowAgentRef.current = ALLOW_AUDIO;
+    log('🔊 Agent audio allowed - audio will play normally');
   };
 
   // Put agent to sleep - only if agent is configured
@@ -2128,6 +2152,7 @@ function DeepgramVoiceInteraction(
     // Agent interaction methods
     updateAgentInstructions,
     interruptAgent,
+    allowAgent,
     sleep,
     wake,
     toggleSleep,

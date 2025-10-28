@@ -30,7 +30,7 @@ test.describe('Audio Interruption Timing', () => {
     await expect(page.locator('[data-testid="connection-status"]')).toContainText('closed', { timeout: 10000 });
   });
 
-  test.skip('should interrupt audio within 50ms when interruptAgent() is called', async ({ page }) => {
+  test('should interrupt audio within 50ms when interruptAgent() is called', async ({ page }) => {
     console.log('🔊 Testing audio interruption timing...');
     
     // Get user interaction by clicking text input to enable audio playback
@@ -84,7 +84,7 @@ test.describe('Audio Interruption Timing', () => {
     console.log('✅ SUCCESS: Audio interrupted within 50ms');
   });
 
-  test.skip('should maintain interruption state for future messages', async ({ page }) => {
+  test('should maintain interruption state for future messages', async ({ page }) => {
     console.log('🔊 Testing that interrupted audio stays stopped...');
     
     // Get user interaction by clicking text input to enable audio playback
