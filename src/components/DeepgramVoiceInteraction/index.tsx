@@ -2089,23 +2089,17 @@ function DeepgramVoiceInteraction(
         // WebSocket is closed, need to reconnect
         log('WebSocket is closed, establishing connection for text message...');
         
+        // Reset settings flags BEFORE connecting so the connection state handler will send settings
+        // This is important for reconnection after idle timeout
+        hasSentSettingsRef.current = false;
+        (window as any).globalSettingsSent = false;
+        log('Reset settings flags for auto-connect reconnection - connection state handler will send settings');
+        
         if (agentManagerRef.current) {
           // Connect the agent WebSocket
           await agentManagerRef.current.connect();
           log('Agent WebSocket connected for text message');
           console.log('📝 [TEXT_MESSAGE] Connection established');
-          
-          // Wait a moment for connection to fully establish
-          await new Promise(resolve => setTimeout(resolve, 200));
-          
-          // Reset settings flags to allow settings to be sent again
-          // This is important for reconnection after idle timeout
-          hasSentSettingsRef.current = false;
-          (window as any).globalSettingsSent = false;
-          log('Reset settings flags for auto-connect reconnection');
-          
-          // Send settings to initialize the agent
-          sendAgentSettings();
         }
       } else if (connectionState === 'connecting') {
         // Wait for connection to be established
