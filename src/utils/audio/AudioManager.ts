@@ -743,7 +743,7 @@ export class AudioManager {
   /**
    * Flushes the audio buffer to ensure no pending audio plays
    */
-  private flushAudioBuffer(): void {
+  public flushAudioBuffer(): void {
     this.log('🧹 Flushing audio buffer to prevent any pending audio playback');
     
     if (!this.audioContext) {

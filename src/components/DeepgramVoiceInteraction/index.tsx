@@ -1443,12 +1443,6 @@ function DeepgramVoiceInteraction(
       }
     }
     
-    // Check TTS mute state before processing audio
-    if (audioManagerRef.current?.isTtsMuted) {
-      log('🔇 TTS is muted - discarding audio buffer to prevent playback');
-      return;
-    }
-    
     log('Passing buffer to AudioManager.queueAudio()');
     if (props.debug) lazyLog('🎵 [AUDIO] Audio context state:', audioManagerRef.current?.getAudioContext?.()?.state);
     audioManagerRef.current!.queueAudio(data)
@@ -1664,20 +1658,9 @@ function DeepgramVoiceInteraction(
       log('🔴 Calling audioManager.clearAudioQueue()');
       audioManagerRef.current.clearAudioQueue();
       
-      // Additional audio cleanup
-      if (audioManagerRef.current['audioContext']) {
-        log('🔄 Manipulating audio context time reference');
-        const ctx = audioManagerRef.current['audioContext'] as AudioContext;
-        try {
-          const silentBuffer = ctx.createBuffer(1, 1024, ctx.sampleRate);
-          const silentSource = ctx.createBufferSource();
-          silentSource.buffer = silentBuffer;
-          silentSource.connect(ctx.destination);
-          silentSource.start();
-        } catch (e) {
-          log('⚠️ Error creating silent buffer:', e);
-        }
-      }
+      // Flush any pending audio to ensure complete stop
+      log('🧹 Calling audioManager.flushAudioBuffer()');
+      audioManagerRef.current.flushAudioBuffer();
     } catch (err) {
       log('❌ Error in clearAudio:', err);
     }

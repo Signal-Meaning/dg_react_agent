@@ -300,7 +300,13 @@ function App() {
   const handlePlaybackStateChange = useCallback((isPlaying: boolean) => {
     setIsPlaying(isPlaying);
     addLog(`Audio playback: ${isPlaying ? 'started' : 'stopped'}`);
-  }, [addLog]);
+    
+    // If muted and audio started playing, interrupt it immediately
+    if (isPlaying && ttsMuted && deepgramRef.current) {
+      console.log('🔇 Audio started while muted - interrupting immediately');
+      deepgramRef.current.interruptAgent();
+    }
+  }, [addLog, ttsMuted]);
   
   const handleConnectionStateChange = useCallback((service: ServiceType, state: ConnectionState) => {
     setConnectionStates(prev => ({
