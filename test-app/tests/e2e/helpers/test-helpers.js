@@ -326,6 +326,101 @@ async function assertConnectionHealthy(page, expect) {
   await expect(connectionReady).toHaveText('true');
 }
 
+/**
+ * Wait for agent response text to appear
+ * @param {import('@playwright/test').Page} page
+ * @param {string} expectedText - Text to wait for in agent response
+ * @param {number} timeout - Timeout in ms (default: 10000)
+ */
+async function waitForAgentResponse(page, expectedText, timeout = 10000) {
+  const agentResponse = page.locator(SELECTORS.agentResponse);
+  await agentResponse.waitFor({ timeout });
+  const responseText = await agentResponse.textContent();
+  if (expectedText) {
+    // Check if any part of expected text is in the response (case-insensitive)
+    const found = expectedText.split(/[\s,]+/).some(word => 
+      responseText.toLowerCase().includes(word.toLowerCase())
+    );
+    if (!found) {
+      throw new Error(`Expected to find "${expectedText}" in agent response: "${responseText}"`);
+    }
+  }
+  return responseText;
+}
+
+/**
+ * Disconnect the component (simulates stop button or network issue)
+ * @param {import('@playwright/test').Page} page
+ */
+async function disconnectComponent(page) {
+  const stopButton = page.locator('[data-testid="stop-button"]');
+  if (await stopButton.isVisible({ timeout: 1000 })) {
+    await stopButton.click();
+  }
+  
+  // Wait for connection to close
+  await page.waitForFunction(
+    () => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      return statusEl && statusEl.textContent === 'closed';
+    },
+    { timeout: 5000 }
+  );
+}
+
+/**
+ * Get agent state from the UI
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string>} Agent state (idle, listening, thinking, speaking, etc.)
+ */
+async function getAgentState(page) {
+  const agentStateElement = page.locator('p').filter({ hasText: 'Core Component State' }).locator('strong');
+  return await agentStateElement.textContent();
+}
+
+/**
+ * Verify context is preserved by checking agent response mentions key terms
+ * @param {import('@playwright/test').Page} page
+ * @param {string[]} expectedTerms - Array of terms that should appear in agent response
+ * @param {number} timeout - Timeout in ms (default: 10000)
+ */
+async function verifyContextPreserved(page, expectedTerms, timeout = 10000) {
+  const agentResponse = page.locator(SELECTORS.agentResponse);
+  await agentResponse.waitFor({ timeout });
+  const responseText = await agentResponse.textContent();
+  
+  const missingTerms = expectedTerms.filter(term => 
+    !responseText.toLowerCase().includes(term.toLowerCase())
+  );
+  
+  if (missingTerms.length > 0) {
+    throw new Error(`Context not preserved. Missing terms: ${missingTerms.join(', ')}. Response: "${responseText}"`);
+  }
+  
+  return responseText;
+}
+
+/**
+ * Send text message and wait for agent response
+ * This helper combines sending and waiting for response
+ * @param {import('@playwright/test').Page} page
+ * @param {string} message - Message to send
+ * @param {number} timeout - Timeout in ms (default: 10000)
+ * @returns {Promise<string>} Agent response text
+ */
+async function sendMessageAndWaitForResponse(page, message, timeout = 10000) {
+  // Send the message
+  const textInput = page.locator(SELECTORS.textInput);
+  await textInput.fill(message);
+  await textInput.press('Enter');
+  
+  // Wait for agent response
+  const agentResponse = page.locator(SELECTORS.agentResponse);
+  await agentResponse.waitFor({ timeout });
+  
+  return await agentResponse.textContent();
+}
+
 // Import microphone helpers
 import MicrophoneHelpers from './microphone-helpers.js';
 
@@ -340,6 +435,11 @@ export {
   getCapturedWebSocketData, // Retrieve captured WebSocket messages and their counts
   installMockWebSocket, // Replace global WebSocket with mock implementation for testing
   assertConnectionHealthy, // Assert that connection status and ready state are both healthy
+  waitForAgentResponse, // Wait for agent response with optional text verification
+  disconnectComponent, // Disconnect the component (stop button or simulate network issue)
+  getAgentState, // Get current agent state from UI
+  verifyContextPreserved, // Verify conversation context is preserved by checking agent response
+  sendMessageAndWaitForResponse, // Send message and wait for agent response in one call
   MicrophoneHelpers // Microphone utility helpers for E2E tests (activate/deactivate mic)
 };
 
