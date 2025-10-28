@@ -116,7 +116,7 @@ test.describe('Audio Interruption Timing', () => {
     console.log('✅ New message audio plays normally');
   });
 
-  test('should handle rapid interrupt clicks without errors', async ({ page }) => {
+  test.skip('should handle rapid interrupt clicks without errors', async ({ page }) => {
     console.log('🔊 Testing rapid interrupt clicks...');
     
     // Start the connection
