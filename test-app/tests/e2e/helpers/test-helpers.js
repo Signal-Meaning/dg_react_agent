@@ -461,8 +461,6 @@ async function connectViaTextAndWaitForGreeting(page, options = {}) {
     console.log('ℹ️ No greeting played (normal for some scenarios)');
   }
   
-  // Wait a bit for connection to be fully ready
-  await page.waitForTimeout(500);
   console.log('✅ Ready for further interaction');
 }
 
