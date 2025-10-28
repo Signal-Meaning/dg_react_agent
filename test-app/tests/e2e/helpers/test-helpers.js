@@ -421,6 +421,51 @@ async function sendMessageAndWaitForResponse(page, message, timeout = 10000) {
   return await agentResponse.textContent();
 }
 
+/**
+ * Connect via text input (auto-connect) and wait for greeting to complete
+ * This is the recommended pattern for text-based tests - connects via text input
+ * which triggers auto-connect, then waits for greeting audio to finish
+ * 
+ * @param {import('@playwright/test').Page} page
+ * @param {Object} options - Configuration options
+ * @param {number} options.greetingTimeout - Timeout for greeting (default: 8000)
+ * @returns {Promise<void>}
+ */
+async function connectViaTextAndWaitForGreeting(page, options = {}) {
+  const { greetingTimeout = 8000 } = options;
+  
+  console.log('🔌 Connecting via text input and waiting for greeting...');
+  
+  // Click text input to trigger auto-connect
+  await page.click(SELECTORS.textInput);
+  await page.waitForTimeout(200);
+  
+  // Send a message to trigger auto-connect
+  const textInput = page.locator(SELECTORS.textInput);
+  await textInput.fill('Hello');
+  await textInput.press('Enter');
+  
+  // Wait for connection to be established
+  await waitForConnection(page, 5000);
+  console.log('✅ Connection established via auto-connect');
+  
+  // Wait for greeting to complete (if it plays)
+  const greetingPlayed = await waitForGreetingIfPresent(page, { 
+    checkTimeout: 3000, 
+    playTimeout: greetingTimeout 
+  });
+  
+  if (greetingPlayed) {
+    console.log('✅ Greeting audio completed');
+  } else {
+    console.log('ℹ️ No greeting played (normal for some scenarios)');
+  }
+  
+  // Wait a bit for connection to be fully ready
+  await page.waitForTimeout(500);
+  console.log('✅ Ready for further interaction');
+}
+
 // Import microphone helpers
 import MicrophoneHelpers from './microphone-helpers.js';
 
@@ -440,6 +485,7 @@ export {
   getAgentState, // Get current agent state from UI
   verifyContextPreserved, // Verify conversation context is preserved by checking agent response
   sendMessageAndWaitForResponse, // Send message and wait for agent response in one call
+  connectViaTextAndWaitForGreeting, // Connect via text input (auto-connect) and wait for greeting to complete
   MicrophoneHelpers // Microphone utility helpers for E2E tests (activate/deactivate mic)
 };
 
