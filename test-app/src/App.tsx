@@ -819,15 +819,25 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
             onFocus={async () => {
-              // Resume AudioContext on user interaction
-              const audioContext = deepgramRef.current?.getAudioContext?.();
-              if (audioContext?.state === 'suspended') {
-                try {
-                  await audioContext.resume();
-                  addLog('✅ AudioContext resumed on text input focus');
-                } catch (error) {
-                  addLog(`⚠️ Failed to resume AudioContext on focus: ${error}`);
+              // Trigger AudioManager initialization (getAudioContext() does this lazily)
+              // Then wait for AudioContext to be ready and resume if suspended
+              deepgramRef.current?.getAudioContext?.();
+              
+              // Wait a moment for AudioManager to initialize, then check for AudioContext
+              for (let i = 0; i < 10; i++) {
+                const audioContext = deepgramRef.current?.getAudioContext?.();
+                if (audioContext) {
+                  if (audioContext.state === 'suspended') {
+                    try {
+                      await audioContext.resume();
+                      addLog('✅ AudioContext resumed on text input focus');
+                    } catch (error) {
+                      addLog(`⚠️ Failed to resume AudioContext on focus: ${error}`);
+                    }
+                  }
+                  break; // AudioContext found, done
                 }
+                await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms before retry
               }
             }}
             onKeyDown={(e) => {

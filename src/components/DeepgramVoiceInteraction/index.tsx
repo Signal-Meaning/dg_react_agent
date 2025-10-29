@@ -2122,8 +2122,9 @@ function DeepgramVoiceInteraction(
         log('AudioManager initialized proactively');
         
         // Resume AudioContext if it's suspended (browser autoplay policy)
-        if (audioManagerRef.current) {
-          const audioContext = audioManagerRef.current.getAudioContext();
+        const audioManager = audioManagerRef.current;
+        if (audioManager) {
+          const audioContext = audioManager.getAudioContext();
           if (audioContext && audioContext.state === 'suspended') {
             log('Resuming suspended AudioContext (user interaction permits this)');
             await audioContext.resume();
@@ -2246,7 +2247,17 @@ function DeepgramVoiceInteraction(
     isPlaybackActive: () => state.isPlaying,
     
     // Audio context access
-    getAudioContext: () => audioManagerRef.current?.getAudioContext() || undefined,
+    getAudioContext: () => {
+      // If AudioManager doesn't exist, trigger lazy initialization (fire-and-forget)
+      // This allows user interaction (like text input focus) to initialize AudioContext
+      if (!audioManagerRef.current && agentOptions) {
+        log('getAudioContext() called - triggering lazy AudioManager initialization');
+        createAudioManager().catch((error) => {
+          log('Failed to initialize AudioManager from getAudioContext():', error);
+        });
+      }
+      return audioManagerRef.current?.getAudioContext() || undefined;
+    },
     
     // Debug methods for testing
     getConnectionStates: () => ({
