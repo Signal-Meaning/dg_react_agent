@@ -436,32 +436,12 @@ async function connectViaTextAndWaitForGreeting(page, options = {}) {
   
   console.log('🔌 Connecting via text input and waiting for greeting...');
   
-  // Click text input to trigger auto-connect
+  // DON'T send a message - just prepare the connection by clicking the input
+  // The actual test will send the message and trigger auto-connect
   await page.click(SELECTORS.textInput);
   await page.waitForTimeout(200);
   
-  // Send a message to trigger auto-connect
-  const textInput = page.locator(SELECTORS.textInput);
-  await textInput.fill('Hello');
-  await textInput.press('Enter');
-  
-  // Wait for connection to be established
-  await waitForConnection(page, 5000);
-  console.log('✅ Connection established via auto-connect');
-  
-  // Wait for greeting to complete (if it plays)
-  const greetingPlayed = await waitForGreetingIfPresent(page, { 
-    checkTimeout: 3000, 
-    playTimeout: greetingTimeout 
-  });
-  
-  if (greetingPlayed) {
-    console.log('✅ Greeting audio completed');
-  } else {
-    console.log('ℹ️ No greeting played (normal for some scenarios)');
-  }
-  
-  console.log('✅ Ready for further interaction');
+  console.log('✅ Ready to send message (will auto-connect)');
 }
 
 // Import microphone helpers
