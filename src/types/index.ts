@@ -235,7 +235,18 @@ export interface DeepgramVoiceInteractionProps {
  */
 export interface DeepgramVoiceInteractionHandle {
   /**
-   * Start the voice interaction
+   * Start the voice interaction by connecting WebSockets
+   * 
+   * ⚠️ BREAKING CHANGE (v0.5.1+): This method NO LONGER starts audio recording.
+   * - Connects WebSocket(s) for transcription and/or agent services
+   * - Initializes AudioManager if needed
+   * - Does NOT start microphone recording (use startAudioCapture() for that)
+   * 
+   * To start recording after calling start(), you must separately call:
+   * - toggleMic(true) - enables microphone via UI toggle
+   * - OR startAudioCapture() - programmatically enables microphone
+   * 
+   * @see startAudioCapture() - For starting microphone recording
    */
   start: () => Promise<void>;
   

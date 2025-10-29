@@ -616,7 +616,7 @@ These methods are accessed via the `ref` attached to the component (e.g., `deepg
 
 | Method                    | Parameters                           | Return Type     | Description                                                                |
 | :------------------------ | :----------------------------------- | :-------------- | :------------------------------------------------------------------------- |
-| `start`                   | `none`                               | `Promise<void>` | Initializes connections, requests mic access, and starts recording/streaming. |
+| `start`                   | `none`                               | `Promise<void>` | ⚠️ **BREAKING CHANGE**: Connects WebSocket(s) only - does NOT start recording. Call `startAudioCapture()` separately to enable microphone. |
 | `stop`                    | `none`                               | `Promise<void>` | Stops recording/streaming and closes WebSocket connections.                |
 | `updateAgentInstructions` | `payload: UpdateInstructionsPayload` | `void`          | Sends new instructions or context to the agent mid-session. Only works in agent or dual mode. |
 | `interruptAgent`          | `none`                               | `void`          | Immediately stops agent audio playback and clears the audio queue. Only works in agent or dual mode. |
