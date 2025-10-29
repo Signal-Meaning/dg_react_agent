@@ -39,9 +39,6 @@ test.describe('Audio Interruption Timing', () => {
     // Connect via text input and wait for greeting
     await connectViaTextAndWaitForGreeting(page, { greetingTimeout: 8000 });
     
-    // Give page a moment to stabilize after connection
-    await page.waitForTimeout(500);
-    
     // Now send the actual test message that will trigger audio we want to interrupt
     await page.fill('[data-testid="text-input"]', 'Tell me a short story about dogs');
     await page.press('[data-testid="text-input"]', 'Enter');
@@ -91,9 +88,6 @@ test.describe('Audio Interruption Timing', () => {
     
     // Connect via text input and wait for greeting
     await connectViaTextAndWaitForGreeting(page, { greetingTimeout: 8000 });
-    
-    // Give page a moment to stabilize
-    await page.waitForTimeout(500);
     
     // Send first message and wait for response
     await page.fill('[data-testid="text-input"]', 'Tell me a joke');
@@ -157,11 +151,11 @@ test.describe('Audio Interruption Timing', () => {
   test('should persist mute state and prevent future audio', async ({ page }) => {
     console.log('🔊 Testing TTS mute state persistence...');
     
-    // Connect via text input and wait for greeting
-    await connectViaTextAndWaitForGreeting(page, { greetingTimeout: 8000 });
-    
-    // Give page a moment to stabilize
-    await page.waitForTimeout(500);
+    // Send first message to connect
+    await page.fill('[data-testid="text-input"]', 'Tell me a story');
+    await page.press('[data-testid="text-input"]', 'Enter');
+    await waitForConnection(page, 5000);
+    console.log('✅ Connection established');
     
     // Hold down mute button (push button)
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
@@ -195,11 +189,11 @@ test.describe('Audio Interruption Timing', () => {
   test('should allow audio after calling allowAgent()', async ({ page }) => {
     console.log('🔊 Testing allowAgent() functionality...');
     
-    // Connect via text input and wait for greeting
-    await connectViaTextAndWaitForGreeting(page, { greetingTimeout: 8000 });
-    
-    // Give page a moment to stabilize
-    await page.waitForTimeout(500);
+    // Send first message to connect
+    await page.fill('[data-testid="text-input"]', 'Tell me something');
+    await page.press('[data-testid="text-input"]', 'Enter');
+    await waitForConnection(page, 5000);
+    console.log('✅ Connection established');
     
     // Block audio with interruptAgent
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
@@ -226,11 +220,11 @@ test.describe('Audio Interruption Timing', () => {
   test('should toggle between interruptAgent and allowAgent', async ({ page }) => {
     console.log('🔊 Testing interruptAgent/allowAgent toggle...');
     
-    // Connect via text input and wait for greeting
-    await connectViaTextAndWaitForGreeting(page, { greetingTimeout: 8000 });
-    
-    // Give page a moment to stabilize
-    await page.waitForTimeout(500);
+    // Send first message to connect
+    await page.fill('[data-testid="text-input"]', 'Tell me a joke');
+    await page.press('[data-testid="text-input"]', 'Enter');
+    await waitForConnection(page, 5000);
+    console.log('✅ Connection established');
     
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
     
