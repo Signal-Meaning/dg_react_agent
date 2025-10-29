@@ -483,11 +483,14 @@ export class WebSocketManager {
   private isMeaningfulUserActivity(data: any): boolean {
     // Only reset idle timeout on ACTUAL user activity, not on every message
     
-    // For agent service, only reset on user messages, not agent responses or protocol messages
+    // For agent service, reset on both user messages and agent responses
     if (this.options.service === 'agent') {
-      // Only reset on actual user messages
+      // User messages
       const userActivityMessages = ['ConversationText', 'InjectUserMessage']; // User sending text
-      const isMeaningful = userActivityMessages.includes(data.type);
+      // Agent activity that should keep connection alive
+      const agentActivityMessages = ['AgentThinking', 'AgentStartedSpeaking', 'AgentAudioDone']; // Agent responding
+      
+      const isMeaningful = userActivityMessages.includes(data.type) || agentActivityMessages.includes(data.type);
       if (isMeaningful) {
         this.options.onMeaningfulActivity?.(data.type);
       }
