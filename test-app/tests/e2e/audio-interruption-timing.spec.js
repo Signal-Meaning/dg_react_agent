@@ -53,11 +53,14 @@ test.describe('Audio Interruption Timing', () => {
     }, { timeout: 10000 });
     console.log('✅ Agent response received');
     
+    // Give TTS a moment to start processing
+    await page.waitForTimeout(2000);
+    
     // Wait for audio to start playing (may take time for TTS to start)
     await page.waitForFunction(() => {
       const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
       return audioPlaying && audioPlaying.textContent === 'true';
-    }, { timeout: 8000 });
+    }, { timeout: 6000 });
     console.log('✅ Audio started playing');
     
     // Get timestamp when audio started
@@ -110,11 +113,14 @@ test.describe('Audio Interruption Timing', () => {
     }, { timeout: 10000 });
     console.log('✅ Agent response received');
     
+    // Give TTS a moment to start processing
+    await page.waitForTimeout(2000);
+    
     // Wait for audio and interrupt
     await page.waitForFunction(() => {
       const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
       return audioPlaying && audioPlaying.textContent === 'true';
-    }, { timeout: 8000 });
+    }, { timeout: 6000 });
     await page.click('[data-testid="tts-mute-button"]');
     await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 50 });
     
@@ -178,13 +184,16 @@ test.describe('Audio Interruption Timing', () => {
       const agentResponse = document.querySelector('[data-testid="agent-response"]');
       return agentResponse && agentResponse.textContent && 
              agentResponse.textContent !== '(Waiting for agent response...)';
-    }, { timeout: 10000 });
+    }, { timeout: 10000     });
+    
+    // Give TTS a moment to start processing
+    await page.waitForTimeout(2000);
     
     // Wait for audio to start playing
     await page.waitForFunction(() => {
       const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
       return audioPlaying && audioPlaying.textContent === 'true';
-    }, { timeout: 8000 });
+    }, { timeout: 6000 });
     console.log('✅ Audio is playing');
     
     // Now hold down mute button (push button)
