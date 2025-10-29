@@ -31,42 +31,29 @@ test.describe('Audio Interruption Timing', () => {
     
     // Wait for connection to be closed initially
     await expect(page.locator('[data-testid="connection-status"]')).toContainText('closed', { timeout: 10000 });
-    
-    // NOTE: These tests use start() button rather than text-input auto-connect
-    // because they need to test TTS audio playback (agent speaking), not just connection
   });
 
   test('should interrupt audio within 50ms when interruptAgent() is called', async ({ page }) => {
     console.log('🔊 Testing audio interruption timing...');
     
-    // Get user interaction by clicking text input to enable audio playback
-    await page.click('[data-testid="text-input"]');
-    await page.waitForTimeout(200);
+    // Send initial message to connect (auto-connect) and wait for greeting
+    await page.fill('[data-testid="text-input"]', 'Tell me a short story about dogs');
+    await page.press('[data-testid="text-input"]', 'Enter');
+    console.log('✅ Initial message sent to trigger auto-connect');
     
-    // Start the connection
-    await page.click('[data-testid="start-button"]');
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
-    console.log('✅ Connection established');
+    // Wait for connection
+    await waitForConnection(page, 5000);
+    console.log('✅ Connection established via auto-connect');
     
-    // Wait a bit for connection to be fully established
-    await page.waitForTimeout(1000);
-    
-    // If greeting plays, wait for it to finish before sending message
+    // Wait for greeting to complete (if it plays)
     await waitForGreetingIfPresent(page);
     
-    // Send a message that triggers audio playback
-    await page.fill('[data-testid="text-input"]', 'Tell me a short story about dogs');
-    await page.click('[data-testid="send-button"]');
-    console.log('✅ Message sent');
-    
-    // Wait for agent response to arrive
+    // Wait for agent response (this triggers TTS audio playback)
     await page.waitForFunction(() => {
       const agentResponse = document.querySelector('[data-testid="agent-response"]');
       return agentResponse && agentResponse.textContent && 
              agentResponse.textContent !== '(Waiting for agent response...)';
     }, { timeout: 10000 });
-    console.log('✅ Agent response received');
-    
     // Wait for audio to start playing (may take time for TTS to start)
     await page.waitForFunction(() => {
       const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
@@ -110,23 +97,16 @@ test.describe('Audio Interruption Timing', () => {
   test('should maintain interruption state for future messages', async ({ page }) => {
     console.log('🔊 Testing that interrupted audio stays stopped...');
     
-    // Get user interaction by clicking text input to enable audio playback
-    await page.click('[data-testid="text-input"]');
-    await page.waitForTimeout(200);
+    // Send first message to connect via auto-connect
+    await page.fill('[data-testid="text-input"]', 'Tell me a joke');
+    await page.press('[data-testid="text-input"]', 'Enter');
     
-    // Start the connection
-    await page.click('[data-testid="start-button"]');
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
+    // Wait for connection
+    await waitForConnection(page, 5000);
+    console.log('✅ Connection established via auto-connect');
     
-    // Wait a bit for connection to be fully established
-    await page.waitForTimeout(1000);
-    
-    // If greeting plays, wait for it to finish
+    // Wait for greeting to complete (if it plays)
     await waitForGreetingIfPresent(page);
-    
-    // Send first message and interrupt
-    await page.fill('[data-testid="text-input"]', 'First message');
-    await page.click('[data-testid="send-button"]');
     
     // Wait for agent response to arrive
     await page.waitForFunction(() => {
@@ -167,13 +147,13 @@ test.describe('Audio Interruption Timing', () => {
   test.skip('should handle rapid interrupt clicks without errors', async ({ page }) => {
     console.log('🔊 Testing rapid interrupt clicks...');
     
-    // Start the connection
-    await page.click('[data-testid="start-button"]');
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
+    // Send initial message to connect via auto-connect
+    await page.fill('[data-testid="text-input"]', 'Tell me a long story');
+    await page.press('[data-testid="text-input"]', 'Enter');
     
-    // Send a message
-    await page.fill('[data-testid="text-input"]', 'Long message');
-    await page.click('[data-testid="send-button"]');
+    // Wait for connection
+    await waitForConnection(page, 5000);
+    await waitForGreetingIfPresent(page);
     
     // Wait for audio
     await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('true', { timeout: 5000 });
@@ -193,14 +173,14 @@ test.describe('Audio Interruption Timing', () => {
   test('should persist mute state and prevent future audio', async ({ page }) => {
     console.log('🔊 Testing TTS mute state persistence...');
     
-    // Get user interaction by clicking text input to enable audio playback
-    await page.click('[data-testid="text-input"]');
-    await page.waitForTimeout(200);
+    // Send initial message to connect via auto-connect
+    await page.fill('[data-testid="text-input"]', 'Tell me a story');
+    await page.press('[data-testid="text-input"]', 'Enter');
     
-    // Start connection
-    await page.click('[data-testid="start-button"]');
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
-    console.log('✅ Connection established');
+    // Wait for connection
+    await waitForConnection(page, 5000);
+    await waitForGreetingIfPresent(page);
+    console.log('✅ Connection established via auto-connect');
     
     // Hold down mute button (push button)
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
@@ -211,9 +191,9 @@ test.describe('Audio Interruption Timing', () => {
     await expect(muteButton).toContainText('Mute');
     console.log('✅ Button pressed - audio blocked');
     
-    // Send a message - should not play audio
-    await page.fill('[data-testid="text-input"]', 'Hello test message');
-    await page.click('[data-testid="send-button"]');
+    // Send another message - should not play audio
+    await page.fill('[data-testid="text-input"]', 'Tell me more');
+    await page.press('[data-testid="text-input"]', 'Enter');
     console.log('✅ Message sent');
     
     // Wait and verify audio didn't start
@@ -234,14 +214,14 @@ test.describe('Audio Interruption Timing', () => {
   test('should allow audio after calling allowAgent()', async ({ page }) => {
     console.log('🔊 Testing allowAgent() functionality...');
     
-    // Get user interaction by clicking text input
-    await page.click('[data-testid="text-input"]');
-    await page.waitForTimeout(200);
+    // Send initial message to connect via auto-connect
+    await page.fill('[data-testid="text-input"]', 'Tell me something');
+    await page.press('[data-testid="text-input"]', 'Enter');
     
-    // Start connection
-    await page.click('[data-testid="start-button"]');
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
-    console.log('✅ Connection established');
+    // Wait for connection
+    await waitForConnection(page, 5000);
+    await waitForGreetingIfPresent(page);
+    console.log('✅ Connection established via auto-connect');
     
     // Block audio with interruptAgent
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
@@ -250,7 +230,7 @@ test.describe('Audio Interruption Timing', () => {
     
     // Verify audio is blocked
     await page.fill('[data-testid="text-input"]', 'Blocked message');
-    await page.click('[data-testid="send-button"]');
+    await page.press('[data-testid="text-input"]', 'Enter');
     await page.waitForTimeout(1000);
     let isPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
     expect(isPlaying).toBe('false');
@@ -268,14 +248,14 @@ test.describe('Audio Interruption Timing', () => {
   test('should toggle between interruptAgent and allowAgent', async ({ page }) => {
     console.log('🔊 Testing interruptAgent/allowAgent toggle...');
     
-    // Get user interaction by clicking text input
-    await page.click('[data-testid="text-input"]');
-    await page.waitForTimeout(200);
+    // Send initial message to connect via auto-connect
+    await page.fill('[data-testid="text-input"]', 'Tell me a joke');
+    await page.press('[data-testid="text-input"]', 'Enter');
     
-    // Start connection
-    await page.click('[data-testid="start-button"]');
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
-    console.log('✅ Connection established');
+    // Wait for connection
+    await waitForConnection(page, 5000);
+    await waitForGreetingIfPresent(page);
+    console.log('✅ Connection established via auto-connect');
     
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
     
