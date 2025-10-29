@@ -39,6 +39,9 @@ test.describe('Audio Interruption Timing', () => {
     // Connect via text input and wait for greeting
     await connectViaTextAndWaitForGreeting(page, { greetingTimeout: 8000 });
     
+    // Give page a moment to stabilize after connection
+    await page.waitForTimeout(500);
+    
     // Now send the actual test message that will trigger audio we want to interrupt
     await page.fill('[data-testid="text-input"]', 'Tell me a short story about dogs');
     await page.press('[data-testid="text-input"]', 'Enter');
@@ -88,6 +91,9 @@ test.describe('Audio Interruption Timing', () => {
     
     // Connect via text input and wait for greeting
     await connectViaTextAndWaitForGreeting(page, { greetingTimeout: 8000 });
+    
+    // Give page a moment to stabilize
+    await page.waitForTimeout(500);
     
     // Send first message and wait for response
     await page.fill('[data-testid="text-input"]', 'Tell me a joke');
@@ -154,6 +160,9 @@ test.describe('Audio Interruption Timing', () => {
     // Connect via text input and wait for greeting
     await connectViaTextAndWaitForGreeting(page, { greetingTimeout: 8000 });
     
+    // Give page a moment to stabilize
+    await page.waitForTimeout(500);
+    
     // Hold down mute button (push button)
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
     await muteButton.dispatchEvent('mousedown');
@@ -189,6 +198,9 @@ test.describe('Audio Interruption Timing', () => {
     // Connect via text input and wait for greeting
     await connectViaTextAndWaitForGreeting(page, { greetingTimeout: 8000 });
     
+    // Give page a moment to stabilize
+    await page.waitForTimeout(500);
+    
     // Block audio with interruptAgent
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
     await muteButton.dispatchEvent('mousedown');
@@ -216,6 +228,9 @@ test.describe('Audio Interruption Timing', () => {
     
     // Connect via text input and wait for greeting
     await connectViaTextAndWaitForGreeting(page, { greetingTimeout: 8000 });
+    
+    // Give page a moment to stabilize
+    await page.waitForTimeout(500);
     
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
     
