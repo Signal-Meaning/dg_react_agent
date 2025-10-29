@@ -228,42 +228,94 @@ test.describe('Audio Interruption Timing', () => {
   test('should allow audio after calling allowAgent()', async ({ page }) => {
     console.log('🔊 Testing allowAgent() functionality...');
     
-    // Send first message to connect
+    // Send first message to connect and get audio playing
     await page.fill('[data-testid="text-input"]', 'Tell me something');
     await page.press('[data-testid="text-input"]', 'Enter');
     await waitForConnection(page, 5000);
     console.log('✅ Connection established');
+    
+    // Wait for agent response
+    await page.waitForFunction(() => {
+      const agentResponse = document.querySelector('[data-testid="agent-response"]');
+      return agentResponse && agentResponse.textContent && 
+             agentResponse.textContent !== '(Waiting for agent response...)';
+    }, { timeout: 10000 });
+    console.log('✅ Agent response received');
+    
+    // Give TTS a moment to start processing
+    await page.waitForTimeout(2000);
+    
+    // Wait for audio to start playing
+    await page.waitForFunction(() => {
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+      return audioPlaying && audioPlaying.textContent === 'true';
+    }, { timeout: 6000 });
+    console.log('✅ Audio started playing');
     
     // Block audio with interruptAgent
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
     await muteButton.dispatchEvent('mousedown');
     console.log('✅ Audio blocked via interruptAgent');
     
-    // Verify audio is blocked
-    await page.fill('[data-testid="text-input"]', 'Blocked message');
-    await page.press('[data-testid="text-input"]', 'Enter');
-    await page.waitForTimeout(1000);
+    // Verify audio is now stopped
+    await page.waitForTimeout(100);
     let isPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
     expect(isPlaying).toBe('false');
-    console.log('✅ Audio blocked as expected');
+    console.log('✅ Audio stopped after muting');
     
     // Release button to call allowAgent
     await muteButton.dispatchEvent('mouseup');
     console.log('✅ allowAgent() called via button release');
     
-    // Verify audio is now allowed by waiting to see if next message plays
-    await page.waitForTimeout(500);
-    console.log('✅ allowAgent functionality verified');
+    // Send another message to verify audio can play again
+    await page.fill('[data-testid="text-input"]', 'Can you hear me now?');
+    await page.press('[data-testid="text-input"]', 'Enter');
+    
+    // Wait for agent response
+    await page.waitForFunction(() => {
+      const agentResponse = document.querySelector('[data-testid="agent-response"]');
+      return agentResponse && agentResponse.textContent && 
+             agentResponse.textContent !== '(Waiting for agent response...)';
+    }, { timeout: 10000 });
+    console.log('✅ Agent responded again');
+    
+    // Give TTS a moment to start processing
+    await page.waitForTimeout(2000);
+    
+    // Verify audio is now playing again
+    await page.waitForFunction(() => {
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+      return audioPlaying && audioPlaying.textContent === 'true';
+    }, { timeout: 6000 });
+    console.log('✅ Audio playing again after unmuting - allowAgent() working correctly');
   });
 
   test('should toggle between interruptAgent and allowAgent', async ({ page }) => {
     console.log('🔊 Testing interruptAgent/allowAgent toggle...');
     
-    // Send first message to connect
+    // Send first message to connect and get audio playing
     await page.fill('[data-testid="text-input"]', 'Tell me a joke');
     await page.press('[data-testid="text-input"]', 'Enter');
     await waitForConnection(page, 5000);
     console.log('✅ Connection established');
+    
+    // Wait for agent response
+    await page.waitForFunction(() => {
+      const agentResponse = document.querySelector('[data-testid="agent-response"]');
+      return agentResponse && agentResponse.textContent && 
+             agentResponse.textContent !== '(Waiting for agent response...)';
+    }, { timeout: 10000 });
+    console.log('✅ Agent response received');
+    
+    // Give TTS a moment to start processing
+    await page.waitForTimeout(2000);
+    
+    // Wait for audio to start playing
+    await page.waitForFunction(() => {
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+      return audioPlaying && audioPlaying.textContent === 'true';
+    }, { timeout: 6000 });
+    console.log('✅ Audio started playing');
     
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
     
@@ -273,19 +325,39 @@ test.describe('Audio Interruption Timing', () => {
       await muteButton.dispatchEvent('mousedown');
       console.log(`✅ Toggle ${i + 1}: Blocked audio`);
       
-      // Verify blocked
-      await page.fill('[data-testid="text-input"]', `Toggle test ${i}`);
-      await page.click('[data-testid="send-button"]');
-      await page.waitForTimeout(500);
+      // Verify audio stopped
+      await page.waitForTimeout(100);
       let isPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
       expect(isPlaying).toBe('false');
+      console.log(`✅ Toggle ${i + 1}: Audio confirmed stopped`);
       
       // Allow
       await muteButton.dispatchEvent('mouseup');
       console.log(`✅ Toggle ${i + 1}: Allowed audio`);
       await page.waitForTimeout(200);
+      
+      // Send a message and verify audio can play again
+      await page.fill('[data-testid="text-input"]', `Message ${i}`);
+      await page.press('[data-testid="text-input"]', 'Enter');
+      
+      // Wait for agent response
+      await page.waitForFunction(() => {
+        const agentResponse = document.querySelector('[data-testid="agent-response"]');
+        return agentResponse && agentResponse.textContent && 
+               agentResponse.textContent !== '(Waiting for agent response...)';
+      }, { timeout: 10000 });
+      
+      // Give TTS a moment to start processing
+      await page.waitForTimeout(2000);
+      
+      // Verify audio is playing again
+      await page.waitForFunction(() => {
+        const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+        return audioPlaying && audioPlaying.textContent === 'true';
+      }, { timeout: 6000 });
+      console.log(`✅ Toggle ${i + 1}: Audio confirmed playing after unmuting`);
     }
     
-    console.log('✅ interruptAgent/allowAgent toggle verified');
+    console.log('✅ interruptAgent/allowAgent toggle verified with audio playback');
   });
 });
