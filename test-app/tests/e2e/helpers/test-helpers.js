@@ -51,6 +51,38 @@ async function waitForConnection(page, timeout = 5000) {
 }
 
 /**
+ * Wait for agent settings to be applied (SettingsApplied received from server)
+ * This ensures the agent is fully initialized and ready to respond
+ * @param {import('@playwright/test').Page} page
+ * @param {number} timeout - Timeout in ms (default: 10000)
+ */
+async function waitForSettingsApplied(page, timeout = 10000) {
+  await page.waitForFunction(
+    () => {
+      const deepgramRef = (window as any).deepgramRef;
+      if (!deepgramRef?.current) {
+        return false;
+      }
+      const state = deepgramRef.current.getState();
+      return state?.hasSentSettings === true;
+    },
+    { timeout }
+  );
+}
+
+/**
+ * Wait for connection and settings to be applied
+ * This is the recommended pattern for ensuring agent is ready to respond
+ * @param {import('@playwright/test').Page} page
+ * @param {number} connectionTimeout - Timeout for connection (default: 5000)
+ * @param {number} settingsTimeout - Timeout for settings (default: 10000)
+ */
+async function waitForConnectionAndSettings(page, connectionTimeout = 5000, settingsTimeout = 10000) {
+  await waitForConnection(page, connectionTimeout);
+  await waitForSettingsApplied(page, settingsTimeout);
+}
+
+/**
  * Wait for agent to finish greeting
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 8000)
@@ -451,6 +483,8 @@ export {
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   waitForConnection, // Wait for agent connection to be established (waits for "connected" status)
+  waitForSettingsApplied, // Wait for agent settings to be applied (SettingsApplied received from server)
+  waitForConnectionAndSettings, // Wait for both connection and settings to be applied (recommended pattern)
   waitForAgentGreeting, // Wait for agent to finish speaking its greeting message
   waitForGreetingIfPresent, // Safely wait for greeting if it plays, otherwise continue (doesn't fail if no greeting)
   sendTextMessage, // Send a text message through the UI and wait for input to clear

@@ -16,6 +16,7 @@ import { test, expect } from '@playwright/test';
 import { 
   setupTestPage, 
   waitForConnection, 
+  waitForConnectionAndSettings,
   waitForGreetingIfPresent,
   connectViaTextAndWaitForGreeting 
 } from './helpers/test-helpers.js';
@@ -125,11 +126,17 @@ test.describe('Audio Interruption Timing', () => {
   test('should persist mute state and prevent future audio', async ({ page }) => {
     console.log('🔊 Testing TTS mute state persistence...');
     
+    // Focus text input first to trigger AudioManager initialization
+    await page.click('[data-testid="text-input"]');
+    await page.waitForTimeout(300); // Give time for AudioContext initialization
+    
     // Send first message to connect and get audio playing
     await page.fill('[data-testid="text-input"]', 'Tell me a story');
     await page.press('[data-testid="text-input"]', 'Enter');
-    await waitForConnection(page, 5000);
-    console.log('✅ Connection established');
+    
+    // Wait for connection and settings to be applied (agent ready to respond)
+    await waitForConnectionAndSettings(page, 5000, 10000);
+    console.log('✅ Connection established and settings applied');
     
     // Wait for agent response
     await page.waitForFunction(() => {
@@ -180,11 +187,17 @@ test.describe('Audio Interruption Timing', () => {
   test('should interrupt and allow audio repeatedly', async ({ page }) => {
     console.log('🔊 Testing interruptAgent/allowAgent functionality...');
     
+    // Focus text input first to trigger AudioManager initialization
+    await page.click('[data-testid="text-input"]');
+    await page.waitForTimeout(300); // Give time for AudioContext initialization
+    
     // Send first message to connect and get audio playing
     await page.fill('[data-testid="text-input"]', 'Tell me a joke');
     await page.press('[data-testid="text-input"]', 'Enter');
-    await waitForConnection(page, 5000);
-    console.log('✅ Connection established');
+    
+    // Wait for connection and settings to be applied (agent ready to respond)
+    await waitForConnectionAndSettings(page, 5000, 10000);
+    console.log('✅ Connection established and settings applied');
     
     // Wait for agent response
     await page.waitForFunction(() => {
