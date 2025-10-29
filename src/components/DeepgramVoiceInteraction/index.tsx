@@ -2112,6 +2112,42 @@ function DeepgramVoiceInteraction(
       throw new Error(`Cannot send message: WebSocket is in '${finalState}' state`);
     }
     
+    // Initialize AudioManager proactively if it doesn't exist
+    // This ensures AudioContext is ready when agent responds with binary audio
+    // User interaction (sending message) allows AudioContext to be unsuspended
+    if (!audioManagerRef.current) {
+      log('Initializing AudioManager proactively for TTS playback (user interaction via text message)');
+      try {
+        await createAudioManager();
+        log('AudioManager initialized proactively');
+        
+        // Resume AudioContext if it's suspended (browser autoplay policy)
+        if (audioManagerRef.current) {
+          const audioContext = audioManagerRef.current.getAudioContext();
+          if (audioContext && audioContext.state === 'suspended') {
+            log('Resuming suspended AudioContext (user interaction permits this)');
+            await audioContext.resume();
+            log('AudioContext resumed successfully');
+          }
+        }
+      } catch (error) {
+        log('Failed to initialize AudioManager proactively:', error);
+        // Don't block message sending - audio might work anyway
+      }
+    } else {
+      // AudioManager exists, but ensure AudioContext is resumed
+      const audioContext = audioManagerRef.current.getAudioContext();
+      if (audioContext && audioContext.state === 'suspended') {
+        log('Resuming suspended AudioContext (user interaction permits this)');
+        try {
+          await audioContext.resume();
+          log('AudioContext resumed successfully');
+        } catch (error) {
+          log('Failed to resume AudioContext:', error);
+        }
+      }
+    }
+    
     console.log('📝 [TEXT_MESSAGE] Sending message to agent');
     agentManagerRef.current.sendJSON({
       type: 'InjectUserMessage',
