@@ -44,6 +44,15 @@ test.describe('Audio Interruption Timing', () => {
     // Wait for connection
     await waitForConnection(page, 5000);
     console.log('✅ Connection established');
+    
+    // Wait for agent response to arrive
+    await page.waitForFunction(() => {
+      const agentResponse = document.querySelector('[data-testid="agent-response"]');
+      return agentResponse && agentResponse.textContent && 
+             agentResponse.textContent !== '(Waiting for agent response...)';
+    }, { timeout: 10000 });
+    console.log('✅ Agent response received');
+    
     // Wait for audio to start playing (may take time for TTS to start)
     await page.waitForFunction(() => {
       const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
@@ -90,7 +99,16 @@ test.describe('Audio Interruption Timing', () => {
     // Send first message to connect
     await page.fill('[data-testid="text-input"]', 'Tell me a joke');
     await page.press('[data-testid="text-input"]', 'Enter');
-    console.log('✅ First message sent');
+    await waitForConnection(page, 5000);
+    console.log('✅ First message sent and connection established');
+    
+    // Wait for agent response
+    await page.waitForFunction(() => {
+      const agentResponse = document.querySelector('[data-testid="agent-response"]');
+      return agentResponse && agentResponse.textContent && 
+             agentResponse.textContent !== '(Waiting for agent response...)';
+    }, { timeout: 10000 });
+    console.log('✅ Agent response received');
     
     // Wait for audio and interrupt
     await page.waitForFunction(() => {
@@ -149,13 +167,27 @@ test.describe('Audio Interruption Timing', () => {
   test('should persist mute state and prevent future audio', async ({ page }) => {
     console.log('🔊 Testing TTS mute state persistence...');
     
-    // Send first message to connect
+    // Send first message to connect and get audio playing
     await page.fill('[data-testid="text-input"]', 'Tell me a story');
     await page.press('[data-testid="text-input"]', 'Enter');
     await waitForConnection(page, 5000);
     console.log('✅ Connection established');
     
-    // Hold down mute button (push button)
+    // Wait for agent response
+    await page.waitForFunction(() => {
+      const agentResponse = document.querySelector('[data-testid="agent-response"]');
+      return agentResponse && agentResponse.textContent && 
+             agentResponse.textContent !== '(Waiting for agent response...)';
+    }, { timeout: 10000 });
+    
+    // Wait for audio to start playing
+    await page.waitForFunction(() => {
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+      return audioPlaying && audioPlaying.textContent === 'true';
+    }, { timeout: 8000 });
+    console.log('✅ Audio is playing');
+    
+    // Now hold down mute button (push button)
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
     await muteButton.dispatchEvent('mousedown');
     await page.waitForTimeout(100);
