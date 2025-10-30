@@ -7,37 +7,23 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { 
+  installWebSocketCapture, 
+  waitForConnection, 
+  pollForBinaryWebSocketMessages,
+  getAudioContextState,
+  waitForAppReady,
+  getMicStatus,
+  getAudioPlayingStatus,
+  waitForAudioPlaybackStart,
+  logFirstSettingsPreview
+} from './helpers/test-helpers.js';
+const ENABLE_AUDIO = process.env.PW_ENABLE_AUDIO === 'true';
 
 test.describe('Greeting Audio Timing', () => {
-  // Helper function to get AudioContext state
-  const getAudioContextState = async (page) => {
-    return await page.evaluate(() => window.audioContext?.state || 'not-initialized');
-  };
-
-  // Helper function to wait for basic app state
-  const waitForAppReady = async (page) => {
-    await page.waitForSelector('[data-testid="voice-agent"]');
-    await page.waitForSelector('[data-testid="connection-status"]:has-text("connected")', { timeout: 10000 });
-    // Note: greeting-sent element doesn't exist in current test app
-    // Greetings may not always occur in test environments
-  };
-
-  // Helper function to check microphone status
-  const getMicStatus = async (page) => {
-    return await page.locator('[data-testid="mic-status"]').textContent();
-  };
-
-  // Helper function to check audio playback status
-  const getAudioPlayingStatus = async (page) => {
-    return await page.locator('[data-testid="audio-playing-status"]').textContent();
-  };
-
-  // Helper function to wait for audio playback to start
-  const waitForAudioPlaybackStart = async (page, timeout = 5000) => {
-    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('true', { timeout });
-  };
-
-  // Helper function to verify initial state (DRY)
+  test.skip(!ENABLE_AUDIO, 'PW_ENABLE_AUDIO is not enabled; skipping greeting audio playback tests.');
+  
+  // Helper function to verify initial state (test-specific)
   const verifyInitialState = async (page) => {
     const micStatus = await getMicStatus(page);
     const audioPlayingStatus = await getAudioPlayingStatus(page);
@@ -55,29 +41,36 @@ test.describe('Greeting Audio Timing', () => {
 
 
   test.beforeEach(async ({ page }) => {
+    // Install WS capture BEFORE navigation so the wrapper covers the first socket
+    await installWebSocketCapture(page);
     await page.goto('http://localhost:5173');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    // Print the first Settings message we send (speak model and greeting preview)
+    await logFirstSettingsPreview(page);
   });
 
   test('should play greeting audio when user clicks into text input field', async ({ page }) => {
     console.log('🎵 Testing greeting playback on text input focus...');
     
-    // Wait for app ready and agent connection established
+    // Wait for app root only (no auto-connect)
     await waitForAppReady(page);
-    console.log('✅ App ready, agent connection established, greeting buffered');
+    console.log('✅ App ready (no connection yet)');
 
     // Verify initial state - microphone disabled, audio not playing
     await verifyInitialState(page);
 
-    // Click into text input field to trigger greeting playback
+    // Click into text input field to start agent and trigger greeting playback
     await page.click('input[type="text"]');
-    console.log('✅ Text input field clicked - should trigger greeting playback');
+    console.log('✅ Text input field clicked - starting agent connection');
+    await waitForConnection(page, 10000);
+    console.log('✅ Agent connection established');
+
+    // Briefly capture current websocket traffic before asserting playback
+    await pollForBinaryWebSocketMessages(page, { label: 'pre-assert' });
 
     // Wait for audio playback to start
     await waitForAudioPlaybackStart(page);
     console.log('✅ Greeting audio playback started');
-
-    // Verify audio is playing
     const playingStatus = await getAudioPlayingStatus(page);
     expect(playingStatus).toBe('true');
     console.log('✅ SUCCESS: Greeting audio is playing after text input focus');
@@ -115,16 +108,20 @@ test.describe('Greeting Audio Timing', () => {
   test('should replay greeting audio immediately on reconnection', async ({ page }) => {
     console.log('🎵 Testing greeting replay on reconnection...');
     
-    // Wait for app ready and agent connection established
+    // Wait for app root only (no auto-connect)
     await waitForAppReady(page);
-    console.log('✅ App ready, agent connection established, greeting buffered');
+    console.log('✅ App ready (no connection yet)');
 
     // Verify initial state
     const audioPlayingStatus = await getAudioPlayingStatus(page);
     expect(audioPlayingStatus).toBe('false');
 
-    // Trigger initial greeting playback via text input
+    // Trigger initial greeting playback via text input (starts agent)
     await page.click('input[type="text"]');
+    await waitForConnection(page, 10000);
+    console.log('✅ Agent connection established');
+    // Capture websocket traffic just after reconnection click
+    await pollForBinaryWebSocketMessages(page, { label: 'reconnect pre-assert' });
     await waitForAudioPlaybackStart(page);
     console.log('✅ Initial greeting played successfully');
 
@@ -141,6 +138,8 @@ test.describe('Greeting Audio Timing', () => {
 
     // Reconnect by clicking into text input field (triggers agent connection)
     await page.click('input[type="text"]');
+    await waitForConnection(page, 10000);
+    console.log('✅ Agent reconnected');
     console.log('✅ Text input clicked - should trigger reconnection and greeting replay');
 
     // Wait for audio playback to start (should happen immediately on reconnection)

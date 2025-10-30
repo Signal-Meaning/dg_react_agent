@@ -1200,7 +1200,9 @@ function DeepgramVoiceInteraction(
     console.log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
       conversationHistoryLength: agentOptions.context?.messages?.length || 0,
       contextMessages: agentOptions.context?.messages || [],
-      hasSpeakProvider: 'speak' in settingsMessage.agent
+      hasSpeakProvider: 'speak' in settingsMessage.agent,
+      speakModel: settingsMessage.agent.speak?.provider?.model,
+      greetingPreview: (settingsMessage.agent.greeting || '').slice(0, 60)
     });
     agentManagerRef.current.sendJSON(settingsMessage);
     console.log('📤 [Protocol] Settings message sent successfully');
@@ -1364,6 +1366,11 @@ function DeepgramVoiceInteraction(
     // Debug: Log all agent messages with type
     const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as any).type : 'unknown';
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
+    // Also print to console for e2e trace collection regardless of debug flag
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      console.log('📨 [AGENT MESSAGE] type=', (data as any)?.type);
+    } catch {}
     
     // Don't re-enable idle timeout resets here
     // Let WebSocketManager handle meaningful message detection
@@ -1466,6 +1473,7 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentThinking') {
+      console.log('🧠 [AGENT EVENT] AgentThinking received');
       console.log('🎯 [AGENT] AgentThinking received - transitioning to thinking state');
       sleepLog('Dispatching AGENT_STATE_CHANGE to thinking');
       dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
@@ -1477,6 +1485,7 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentStartedSpeaking') {
+      console.log('🗣️ [AGENT EVENT] AgentStartedSpeaking received');
       console.log('🎯 [AGENT] AgentStartedSpeaking received - transitioning to speaking state');
       sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
       dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
@@ -1492,6 +1501,7 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentAudioDone') {
+      console.log('🔊 [AGENT EVENT] AgentAudioDone received');
       console.log('🎯 [AGENT] AgentAudioDone received - audio generation complete, playback may continue');
       sleepLog('AgentAudioDone received - audio generation complete, but playback may continue');
       
@@ -1523,6 +1533,7 @@ function DeepgramVoiceInteraction(
     
     // Handle conversation text
     if (data.type === 'ConversationText') {
+      console.log('💬 [AGENT EVENT] ConversationText received role=', data.role);
       const content = typeof data.content === 'string' ? data.content : '';
       
       // If we receive ConversationText, this means the agent is actively responding
@@ -1655,6 +1666,7 @@ function DeepgramVoiceInteraction(
 
   // Handle agent audio - only relevant if agent is configured
   const handleAgentAudio = async (data: ArrayBuffer) => {
+    console.log('🎵 [AUDIO EVENT] handleAgentAudio received buffer bytes=', data?.byteLength);
     // Don't re-enable idle timeout resets here
     // After UtteranceEnd, only new connection should re-enable
     
@@ -1674,6 +1686,7 @@ function DeepgramVoiceInteraction(
     
     // Check if agent audio is blocked
     if (!allowAgentRef.current) {
+      console.log('🔇 [AUDIO EVENT] Agent audio currently blocked (allowAgentRef=false) - discarding buffer');
       log('🔇 Agent audio blocked - discarding audio buffer to prevent playback');
       return;
     }
@@ -2177,6 +2190,12 @@ function DeepgramVoiceInteraction(
         log('Playing state:', event.isPlaying);
         console.log(`🎯 [AUDIO] Playback state changed: ${event.isPlaying ? 'PLAYING' : 'NOT PLAYING'}, current agent state: ${stateRef.current.agentState}`);
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: event.isPlaying });
+        
+        // Transition agent to speaking when playback starts (in case AgentStartedSpeaking isn't emitted)
+        if (event.isPlaying && stateRef.current.agentState !== 'speaking') {
+          sleepLog('Dispatching AGENT_STATE_CHANGE to speaking (from playback start)');
+          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
+        }
         
         // Transition agent to idle when audio playback stops
         if (!event.isPlaying && stateRef.current.agentState === 'speaking') {

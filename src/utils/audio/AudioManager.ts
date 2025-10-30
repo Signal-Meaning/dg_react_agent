@@ -429,11 +429,17 @@ export class AudioManager {
       throw new Error('AudioContext not available for audio playback - initialization may have failed silently');
     }
     
-    // Resume the AudioContext if it's suspended (required for playback)
+    // Attempt to resume the AudioContext if it's suspended. Do not fail if user gesture has not occurred yet;
+    // allow scheduling so playback can start once the context is resumed by user interaction (e.g., text focus).
     if (this.audioContext.state === 'suspended') {
-      this.log('AudioContext suspended, resuming for playback...');
-      await this.audioContext.resume();
-      this.log('AudioContext resumed successfully');
+      this.log('AudioContext suspended, attempting resume for playback...');
+      try {
+        await this.audioContext.resume();
+        this.log('AudioContext resumed successfully');
+      } catch (e) {
+        this.log('AudioContext resume failed (likely no user gesture yet) — scheduling to play after resume');
+        // Continue without throwing; scheduling below will take effect once context is resumed.
+      }
     }
     
     try {

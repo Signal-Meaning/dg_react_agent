@@ -13,12 +13,15 @@
  */
 
 import { test, expect } from '@playwright/test';
+const ENABLE_AUDIO = process.env.PW_ENABLE_AUDIO === 'true';
 import { 
   setupTestPage, 
   waitForConnection, 
   waitForConnectionAndSettings,
   waitForGreetingIfPresent,
-  connectViaTextAndWaitForGreeting 
+  sendMessageAndWaitForResponse,
+  waitForPlaybackStart,
+  getAudioDiagnostics
 } from './helpers/test-helpers.js';
 
 test.describe('Audio Interruption Timing', () => {
@@ -123,32 +126,36 @@ test.describe('Audio Interruption Timing', () => {
     console.log('✅ Rapid interrupt clicks handled without errors');
   });
 
+  if (!ENABLE_AUDIO) {
+    test.skip(true, 'PW_ENABLE_AUDIO is not enabled; skipping audio playback-dependent test.');
+  }
   test('should persist mute state and prevent future audio', async ({ page }) => {
     console.log('🔊 Testing TTS mute state persistence...');
     
-    // Focus text input first to trigger AudioManager initialization
+    // Focus text input first to trigger AudioManager initialization and allow AudioContext resume
     await page.click('[data-testid="text-input"]');
-    await page.waitForTimeout(300); // Give time for AudioContext initialization
-    
-    // Send first message to connect and get audio playing
-    await page.fill('[data-testid="text-input"]', 'Tell me a story');
-    await page.press('[data-testid="text-input"]', 'Enter');
     
     // Wait for connection and settings to be applied (agent ready to respond)
     await waitForConnectionAndSettings(page, 5000, 10000);
     console.log('✅ Connection established and settings applied');
     
-    // Wait for agent response
-    await page.waitForFunction(() => {
-      const agentResponse = document.querySelector('[data-testid="agent-response"]');
-      return agentResponse && agentResponse.textContent && 
-             agentResponse.textContent !== '(Waiting for agent response...)';
-    }, { timeout: 10000     });
     
-    // Give TTS a moment to start processing
-    await page.waitForTimeout(2000);
+    // Detect greeting playback immediately after connection/settings
+    try {
+      await waitForPlaybackStart(page, 6000);
+      console.log('✅ Greeting/agent playback detected');
+    } catch (e) {
+      throw new Error('Gate failed: No playback started within 6s after SettingsApplied (no greeting audio detected)');
+    }
+
+    // Send first message and wait for agent response
+    await sendMessageAndWaitForResponse(page, 'Tell me a story');
+    // Minimal diagnostic: log AudioContext state and isPlaying at response time
+    const diag1 = await getAudioDiagnostics(page);
+    console.log('🔎 Audio diagnostic after first response:', diag1);
+    console.log('✅ Agent response received');
     
-    // Wait for audio to start playing
+    // Wait for audio to start playing (after greeting/response begins)
     await page.waitForFunction(() => {
       const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
       return audioPlaying && audioPlaying.textContent === 'true';
@@ -158,21 +165,21 @@ test.describe('Audio Interruption Timing', () => {
     // Now hold down mute button (push button)
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
     await muteButton.dispatchEvent('mousedown');
-    await page.waitForTimeout(100);
+    // Wait until audio has stopped instead of a fixed delay
+    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 2000 });
     
     // Verify button shows "Mute" while held down
     await expect(muteButton).toContainText('Mute');
     console.log('✅ Button pressed - audio blocked');
     
-    // Send another message - should not play audio
-    await page.fill('[data-testid="text-input"]', 'Tell me more');
-    await page.press('[data-testid="text-input"]', 'Enter');
+    // Send another message - should not play audio while held
+    await sendMessageAndWaitForResponse(page, 'Tell me more');
+    const diag2 = await getAudioDiagnostics(page);
+    console.log('🔎 Audio diagnostic after second response (while held):', diag2);
     console.log('✅ Message sent');
     
-    // Wait and verify audio didn't start
-    await page.waitForTimeout(2000);
-    const isPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
-    expect(isPlaying).toBe('false');
+    // Verify audio did not start while muted
+    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 2000 });
     console.log('✅ Audio did not play (as expected when button held)');
     
     // Release button
@@ -184,31 +191,34 @@ test.describe('Audio Interruption Timing', () => {
   });
 
 
+  if (!ENABLE_AUDIO) {
+    test.skip(true, 'PW_ENABLE_AUDIO is not enabled; skipping audio playback-dependent test.');
+  }
   test('should interrupt and allow audio repeatedly', async ({ page }) => {
     console.log('🔊 Testing interruptAgent/allowAgent functionality...');
     
-    // Focus text input first to trigger AudioManager initialization
+    // Focus text input first to trigger AudioManager initialization and allow AudioContext resume
     await page.click('[data-testid="text-input"]');
-    await page.waitForTimeout(300); // Give time for AudioContext initialization
-    
-    // Send first message to connect and get audio playing
-    await page.fill('[data-testid="text-input"]', 'Tell me a joke');
-    await page.press('[data-testid="text-input"]', 'Enter');
+  
     
     // Wait for connection and settings to be applied (agent ready to respond)
     await waitForConnectionAndSettings(page, 5000, 10000);
     console.log('✅ Connection established and settings applied');
     
-    // Wait for agent response
-    await page.waitForFunction(() => {
-      const agentResponse = document.querySelector('[data-testid="agent-response"]');
-      return agentResponse && agentResponse.textContent && 
-             agentResponse.textContent !== '(Waiting for agent response...)';
-    }, { timeout: 10000 });
-    console.log('✅ Agent response received');
+    // Detect greeting playback immediately after connection/settings
+    try {
+      await waitForPlaybackStart(page, 6000);
+      console.log('✅ Greeting/agent playback detected');
+    } catch (e) {
+      throw new Error('Gate failed: No playback started within 6s after SettingsApplied (no greeting audio detected)');
+    }
+
+    // Send first message to connect and wait for response
+    await sendMessageAndWaitForResponse(page, 'Tell me a joke');
+    const diag3 = await getAudioDiagnostics(page);
+    console.log('🔎 Audio diagnostic after joke response:', diag3);
     
-    // Give TTS a moment to start processing
-    await page.waitForTimeout(2000);
+    console.log('✅ Agent response received');
     
     // Wait for audio to start playing
     await page.waitForFunction(() => {
@@ -234,11 +244,9 @@ test.describe('Audio Interruption Timing', () => {
       // Allow audio
       await muteButton.dispatchEvent('mouseup');
       console.log(`✅ Toggle ${i + 1}: Allowed audio`);
-      await page.waitForTimeout(200);
       
       // Send a message and verify audio can play again
-      await page.fill('[data-testid="text-input"]', `Message ${i}`);
-      await page.press('[data-testid="text-input"]', 'Enter');
+      await sendMessageAndWaitForResponse(page, `Message ${i}`);
       
       // Wait for agent response
       await page.waitForFunction(() => {
@@ -246,9 +254,6 @@ test.describe('Audio Interruption Timing', () => {
         return agentResponse && agentResponse.textContent && 
                agentResponse.textContent !== '(Waiting for agent response...)';
       }, { timeout: 10000 });
-      
-      // Give TTS a moment to start processing
-      await page.waitForTimeout(2000);
       
       // Verify audio is playing again
       await page.waitForFunction(() => {

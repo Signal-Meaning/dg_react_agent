@@ -7,6 +7,8 @@ dotenv.config({ path: '../.env' });
 
 // Debug: Log the baseURL being used
 console.log('Playwright baseURL:', process.env.VITE_BASE_URL || 'http://localhost:5173');
+const ENABLE_AUDIO = process.env.PW_ENABLE_AUDIO === 'true';
+console.log('PW_ENABLE_AUDIO:', ENABLE_AUDIO);
 
 /**
  * @see https://playwright.dev/docs/test-configuration
@@ -49,8 +51,8 @@ export default defineConfig({
       args: [
         '--use-fake-ui-for-media-stream',
         '--use-fake-device-for-media-stream',
-        '--disable-audio-output',
-        '--mute-audio'
+        // Only mute/disable audio when PW_ENABLE_AUDIO is not explicitly enabled
+        ...(!ENABLE_AUDIO ? ['--disable-audio-output', '--mute-audio'] : [])
       ]
     },
     

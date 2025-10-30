@@ -4,6 +4,7 @@
  * Shared utilities for Playwright E2E tests to promote DRY principles
  * and consistent testing patterns across the test suite.
  */
+import { expect } from '@playwright/test';
 
 /**
  * Common test selectors
@@ -59,7 +60,7 @@ async function waitForConnection(page, timeout = 5000) {
 async function waitForSettingsApplied(page, timeout = 10000) {
   await page.waitForFunction(
     () => {
-      const deepgramRef = (window as any).deepgramRef;
+      const deepgramRef = window.deepgramRef;
       if (!deepgramRef?.current) {
         return false;
       }
@@ -70,17 +71,6 @@ async function waitForSettingsApplied(page, timeout = 10000) {
   );
 }
 
-/**
- * Wait for connection and settings to be applied
- * This is the recommended pattern for ensuring agent is ready to respond
- * @param {import('@playwright/test').Page} page
- * @param {number} connectionTimeout - Timeout for connection (default: 5000)
- * @param {number} settingsTimeout - Timeout for settings (default: 10000)
- */
-async function waitForConnectionAndSettings(page, connectionTimeout = 5000, settingsTimeout = 10000) {
-  await waitForConnection(page, connectionTimeout);
-  await waitForSettingsApplied(page, settingsTimeout);
-}
 
 /**
  * Wait for agent to finish greeting
@@ -234,6 +224,28 @@ async function getCapturedWebSocketData(page) {
     sent: window.capturedSentMessages || [],
     received: window.capturedReceivedMessages || []
   }));
+}
+
+/**
+ * Poll for binary WebSocket messages with logging
+ * @param {import('@playwright/test').Page} page
+ * @param {Object} options - Configuration options
+ * @param {number} options.maxTicks - Maximum polling iterations (default: 6)
+ * @param {number} options.tickInterval - Delay between polls in ms (default: 500)
+ * @param {string} options.label - Label for console logs (default: 'pre-assert')
+ * @returns {Promise<void>}
+ */
+async function pollForBinaryWebSocketMessages(page, options = {}) {
+  const { maxTicks = 6, tickInterval = 500, label = 'pre-assert' } = options;
+  
+  for (let i = 0; i < maxTicks; i++) {
+    await page.waitForTimeout(tickInterval);
+    const wsData = await getCapturedWebSocketData(page);
+    const receivedTypes = wsData.received.map(m => m.type);
+    const binaryCount = receivedTypes.filter(t => t === 'binary').length;
+    console.log(`[WS CAPTURE] ${label} tick=${i+1} URL=${wsData.url}, total=${wsData.received.length}, binary=${binaryCount}`);
+    if (binaryCount > 0) break;
+  }
 }
 
 /**
@@ -411,6 +423,82 @@ async function getAgentState(page) {
 }
 
 /**
+ * Get AudioContext state and audio playing status for diagnostics
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<{state: string, playing: string}>} Audio diagnostics with AudioContext state and playing status
+ */
+async function getAudioDiagnostics(page) {
+  return await page.evaluate(() => {
+    const ctx = window.deepgramRef?.current?.getAudioContext?.();
+    const state = ctx ? ctx.state : 'no-context';
+    const playingEl = document.querySelector('[data-testid="audio-playing-status"]');
+    const playing = playingEl ? playingEl.textContent : 'unknown';
+    return { state, playing };
+  });
+}
+
+/**
+ * Get AudioContext state from window (test-app specific)
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string>} AudioContext state or 'not-initialized'
+ */
+async function getAudioContextState(page) {
+  return await page.evaluate(() => window.audioContext?.state || 'not-initialized');
+}
+
+/**
+ * Wait for app root to be ready (waits for voice-agent selector)
+ * @param {import('@playwright/test').Page} page
+ * @param {number} timeout - Timeout in ms (default: 10000)
+ */
+async function waitForAppReady(page, timeout = 10000) {
+  await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
+}
+
+/**
+ * Get microphone status from the UI
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string>} Microphone status text
+ */
+async function getMicStatus(page) {
+  return await page.locator(SELECTORS.micStatus).textContent();
+}
+
+/**
+ * Get audio playing status from the UI
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string>} Audio playing status ('true' or 'false')
+ */
+async function getAudioPlayingStatus(page) {
+  return await page.locator('[data-testid="audio-playing-status"]').textContent();
+}
+
+/**
+ * Wait for audio playback to start
+ * @param {import('@playwright/test').Page} page
+ * @param {number} timeout - Timeout in ms (default: 5000)
+ */
+async function waitForAudioPlaybackStart(page, timeout = 5000) {
+  await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('true', { timeout });
+}
+
+/**
+ * Log first Settings WebSocket message details (speak model and greeting preview)
+ * @param {import('@playwright/test').Page} page
+ */
+async function logFirstSettingsPreview(page) {
+  const wsData = await getCapturedWebSocketData(page);
+  const settingsMsg = wsData.sent.find(m => m.type === 'Settings');
+  if (settingsMsg && settingsMsg.data) {
+    const speakModel = settingsMsg.data?.agent?.speak?.provider?.model;
+    const greeting = settingsMsg.data?.agent?.greeting || '';
+    console.log('[WS SENT] Settings speakModel=', speakModel, 'greetingPreview=', String(greeting).slice(0, 60));
+  } else {
+    console.log('[WS SENT] Settings message not captured yet');
+  }
+}
+
+/**
  * Verify context is preserved by checking agent response mentions key terms
  * @param {import('@playwright/test').Page} page
  * @param {string[]} expectedTerms - Array of terms that should appear in agent response
@@ -482,19 +570,25 @@ import MicrophoneHelpers from './microphone-helpers.js';
 export {
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
-  waitForConnection, // Wait for agent connection to be established (waits for "connected" status)
   waitForSettingsApplied, // Wait for agent settings to be applied (SettingsApplied received from server)
-  waitForConnectionAndSettings, // Wait for both connection and settings to be applied (recommended pattern)
   waitForAgentGreeting, // Wait for agent to finish speaking its greeting message
   waitForGreetingIfPresent, // Safely wait for greeting if it plays, otherwise continue (doesn't fail if no greeting)
   sendTextMessage, // Send a text message through the UI and wait for input to clear
   installWebSocketCapture, // Install WebSocket message capture in browser context for testing
   getCapturedWebSocketData, // Retrieve captured WebSocket messages and their counts
+  pollForBinaryWebSocketMessages, // Poll for binary WebSocket messages with logging
   installMockWebSocket, // Replace global WebSocket with mock implementation for testing
   assertConnectionHealthy, // Assert that connection status and ready state are both healthy
   waitForAgentResponse, // Wait for agent response with optional text verification
   disconnectComponent, // Disconnect the component (stop button or simulate network issue)
   getAgentState, // Get current agent state from UI
+  getAudioDiagnostics, // Get AudioContext state and audio playing status for diagnostics
+  getAudioContextState, // Get AudioContext state from window (test-app specific)
+  waitForAppReady, // Wait for app root to be ready (waits for voice-agent selector)
+  getMicStatus, // Get microphone status from the UI
+  getAudioPlayingStatus, // Get audio playing status from the UI
+  waitForAudioPlaybackStart, // Wait for audio playback to start
+  logFirstSettingsPreview, // Log first Settings WebSocket message details
   verifyContextPreserved, // Verify conversation context is preserved by checking agent response
   sendMessageAndWaitForResponse, // Send message and wait for agent response in one call
   connectViaTextAndWaitForGreeting, // Connect via text input (auto-connect) and wait for greeting to complete
