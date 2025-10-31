@@ -328,6 +328,22 @@ npm test -- tests/start-stop-methods.test.js
 cd test-app && npm run test:e2e -- tests/e2e/audio-interruption-timing.spec.js
 ```
 
+### Test Results Status
+
+**Unit Tests:**
+- ✅ `tests/module-exports.test.js` - **PASSING** (validates interruptAgent/allowAgent exports)
+- ✅ `tests/start-stop-methods.test.js` - **PASSING** (10/10 tests pass, validates start/stop with audio blocking reset)
+- ⚠️ `tests/voice-agent-api-validation.test.tsx` - **1 test failing** (unrelated to Issue #157)
+  - `should fail if methods marked for removal still exist` - FAILS because `connectTextOnly` and `isPlaybackActive` still exist
+  - These are marked for removal in Issue #194 and #195 but haven't been removed yet
+  - All Issue #157-related tests (interruptAgent validation) are passing
+
+**E2E Tests:**
+- ⏭️ `test-app/tests/e2e/audio-interruption-timing.spec.js` - Tests are intentionally skipped (as designed)
+  - 2 tests explicitly skipped with `test.skip()` (timing and rapid clicks)
+  - 2 tests conditionally skipped based on `PW_ENABLE_AUDIO` environment variable
+  - Test helpers fixed (`waitForConnectionAndSettings`, `waitForPlaybackStart` alias)
+
 ## 🎯 Success Criteria
 
 ### Technical
