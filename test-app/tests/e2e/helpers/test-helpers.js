@@ -382,8 +382,6 @@ async function assertConnectionHealthy(page, expect) {
   await expect(connectionReady).toHaveText('true');
 }
 
-<<<<<<< HEAD
-=======
 /**
  * Wait for agent response text to appear
  * @param {import('@playwright/test').Page} page
@@ -578,24 +576,10 @@ async function connectViaTextAndWaitForGreeting(page, options = {}) {
   console.log('✅ Ready to send message (will auto-connect)');
 }
 
->>>>>>> davidrmcgee/issue157
 // Import microphone helpers
 import MicrophoneHelpers from './microphone-helpers.js';
 
 export {
-<<<<<<< HEAD
-  SELECTORS,
-  setupTestPage,
-  waitForConnection,
-  waitForAgentGreeting,
-  sendTextMessage,
-  installWebSocketCapture,
-  getCapturedWebSocketData,
-  installMockWebSocket,
-  assertConnectionHealthy,
-  // Export microphone helpers
-  MicrophoneHelpers
-=======
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   waitForConnection, // Wait for connection to be established
@@ -623,6 +607,5 @@ export {
   sendMessageAndWaitForResponse, // Send message and wait for agent response in one call
   connectViaTextAndWaitForGreeting, // Connect via text input (auto-connect) and wait for greeting to complete
   MicrophoneHelpers // Microphone utility helpers for E2E tests (activate/deactivate mic)
->>>>>>> davidrmcgee/issue157
 };
 

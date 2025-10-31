@@ -21,41 +21,9 @@ import {
 const ENABLE_AUDIO = process.env.PW_ENABLE_AUDIO === 'true';
 
 test.describe('Greeting Audio Timing', () => {
-<<<<<<< HEAD
-  // Helper function to get AudioContext state
-  const getAudioContextState = async (page) => {
-    return await page.evaluate(() => window.audioContext?.state || 'not-initialized');
-  };
-
-  // Helper function to wait for basic app state
-  const waitForAppReady = async (page) => {
-    await page.waitForSelector('[data-testid="voice-agent"]');
-    await page.waitForSelector('[data-testid="connection-status"]:has-text("connected")', { timeout: 10000 });
-    // Note: greeting-sent element doesn't exist in current test app
-    // Greetings may not always occur in test environments
-  };
-
-  // Helper function to check microphone status
-  const getMicStatus = async (page) => {
-    return await page.locator('[data-testid="mic-status"]').textContent();
-  };
-
-  // Helper function to check audio playback status
-  const getAudioPlayingStatus = async (page) => {
-    return await page.locator('[data-testid="audio-playing-status"]').textContent();
-  };
-
-  // Helper function to wait for audio playback to start
-  const waitForAudioPlaybackStart = async (page, timeout = 5000) => {
-    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('true', { timeout });
-  };
-
-  // Helper function to verify initial state (DRY)
-=======
   test.skip(!ENABLE_AUDIO, 'PW_ENABLE_AUDIO is not enabled; skipping greeting audio playback tests.');
   
   // Helper function to verify initial state (test-specific)
->>>>>>> davidrmcgee/issue157
   const verifyInitialState = async (page) => {
     const micStatus = await getMicStatus(page);
     const audioPlayingStatus = await getAudioPlayingStatus(page);

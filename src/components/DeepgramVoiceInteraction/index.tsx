@@ -720,102 +720,10 @@ function DeepgramVoiceInteraction(
     }
 
     // --- AGENT SETUP (CONDITIONAL) ---
+    // Note: With lazy initialization, managers are created on-demand via start() or startAudioCapture()
+    // We don't create managers here during initialization anymore
     if (isAgentConfigured) {
-      // Create Agent WebSocket manager
-      agentManagerRef.current = new WebSocketManager({
-        url: endpoints.agentUrl,
-        apiKey,
-        service: 'agent',
-        debug: props.debug,
-        onMeaningfulActivity: handleMeaningfulActivity,
-      });
-
-    // Set up event listeners for agent WebSocket
-      const unsubscribeResult = agentManagerRef.current.addEventListener((event: WebSocketEvent) => {
-      if (event.type === 'state') {
-        // Only log and dispatch if state actually changed
-        if (props.debug) {
-          console.log('🔧 [DEBUG] Agent state event:', event.state, 'Previous:', lastConnectionStates.current.agent);
-        }
-        if (lastConnectionStates.current.agent !== event.state) {
-          log('Agent state:', event.state);
-          if (event.state === 'connected') {
-            console.info('🔗 [Protocol] Agent WebSocket connected');
-            
-            // Handle reconnection logic
-            if (event.isReconnection) {
-              log('Agent WebSocket reconnected - resetting greeting state');
-              dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
-              dispatch({ type: 'RESET_GREETING_STATE' });
-            } else {
-              log('Agent WebSocket connected for first time');
-              dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: true });
-            }
-          }
-          
-          dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
-          onConnectionStateChange?.('agent', event.state);
-          lastConnectionStates.current.agent = event.state;
-        } else {
-          if (props.debug) {
-            console.log('🔧 [DEBUG] Agent state unchanged, skipping:', event.state);
-          }
-        }
-        
-        // Reset settings flag when connection closes
-        if (event.state === 'closed') {
-          if (props.debug) {
-            console.log('🔧 [Connection] Agent connection closed - checking for errors or reasons');
-            console.log('🔧 [Connection] Connection close event details:', event);
-          }
-          
-          dispatch({ type: 'SETTINGS_SENT', sent: false });
-          hasSentSettingsRef.current = false; // Reset ref when connection closes
-          (window as any).globalSettingsSent = false; // Reset global flag when connection closes
-          settingsSentTimeRef.current = null; // Reset settings time
-          if (props.debug) {
-            console.log('🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
-          }
-          lazyLog('Reset hasSentSettings flag due to connection close');
-          
-          // Disable microphone when connection closes (async operation)
-          if (audioManagerRef.current && audioManagerRef.current.isRecordingActive()) {
-            if (props.debug) {
-              console.log('🔧 [Connection] Connection closed, disabling microphone');
-            }
-            // Use setTimeout to avoid blocking the event handler
-            setTimeout(async () => {
-              try {
-                await audioManagerRef.current?.stopRecording();
-                if (props.debug) {
-                  console.log('🔧 [Connection] Recording stopped due to connection close');
-                }
-              } catch (error) {
-                if (props.debug) {
-                  console.log('🔧 [Connection] Error stopping recording:', error);
-                }
-              }
-            }, 0);
-          }
-        }
-        
-        // Send settings message when connection is established
-        if (event.state === 'connected' && !hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
-          log('Connection established, sending settings via connection state handler');
-          sendAgentSettings();
-        } else if (event.state === 'connected' && state.hasSentSettings) {
-          log('Connection established but settings already sent, skipping');
-        }
-      } else if (event.type === 'message') {
-        handleAgentMessage(event.data);
-      } else if (event.type === 'binary') {
-        handleAgentAudio(event.data);
-      } else if (event.type === 'error') {
-        handleError(event.error);
-      }
-    });
-      console.log('Agent unsubscribe result:', typeof unsubscribeResult, unsubscribeResult);
-      agentUnsubscribe = unsubscribeResult;
+      log('Agent service is configured (manager will be created on demand)');
     } else {
       log('Agent service not configured, skipping setup');
     }
