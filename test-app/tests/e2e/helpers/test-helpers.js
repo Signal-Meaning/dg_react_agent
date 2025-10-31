@@ -86,15 +86,32 @@ async function waitForSettingsApplied(page, timeout = 10000) {
 /**
  * Setup connection state tracking via onConnectionStateChange callback
  * Returns tracked state that can be queried later
+ * Checks initial connection state from DOM to handle connections established before tracking
  * @param {import('@playwright/test').Page} page
  * @returns {Promise<Object>} Object with methods to get tracked state
  */
 async function setupConnectionStateTracking(page) {
-  await page.evaluate(() => {
-    // Initialize connection state tracking
+  // Check initial connection state from DOM (test-app updates this via onConnectionStateChange)
+  const initialAgentState = await page.evaluate(() => {
+    const connectionStatusEl = document.querySelector('[data-testid="connection-status"]');
+    const statusText = connectionStatusEl?.textContent?.toLowerCase() || '';
+    
+    // Map DOM text to connection state
+    if (statusText.includes('connected')) {
+      return 'connected';
+    } else if (statusText.includes('connecting')) {
+      return 'connecting';
+    } else if (statusText.includes('closed') || statusText.includes('disconnected')) {
+      return 'closed';
+    }
+    return 'closed'; // Default
+  });
+  
+  await page.evaluate((initialAgent) => {
+    // Initialize connection state tracking with current state from DOM
     window.testConnectionStates = {
-      agent: 'closed',
-      transcription: 'closed'
+      agent: initialAgent || 'closed',
+      transcription: 'closed' // Transcription state not shown in DOM, default to closed
     };
     
     // Store original callback if it exists
@@ -112,7 +129,7 @@ async function setupConnectionStateTracking(page) {
         originalCallback(service, state);
       }
     };
-  });
+  }, initialAgentState);
   
   // Return helper functions to query state
   return {

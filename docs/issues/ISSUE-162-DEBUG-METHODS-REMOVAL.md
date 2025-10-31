@@ -842,23 +842,27 @@ These tests verify core functionality affected by debug method removal:
 
 ### 📋 Action Items for Test Fixes
 
-#### Immediate Fixes Needed
+#### ✅ Completed Fixes
 
-1. **Fix connection state tracking timing** (Category A - 4 tests)
-   - [ ] Update `setupConnectionStateTracking()` to check initial state
-   - [ ] Ensure tracking is set up before connections
-   - [ ] Increase timeouts if needed
-   - [ ] Verify callback firing
+1. **✅ Fix connection state tracking timing** (Category A - 4 tests)
+   - [x] Updated `setupConnectionStateTracking()` to check initial state from DOM
+   - [x] Now reads `[data-testid="connection-status"]` to initialize agent state
+   - [x] Handles connections established before tracking is set up
+   - **Status**: Fixed - helper now checks initial connection state
 
-2. **Fix serialization errors** (Category B - 2 tests)
-   - [ ] Update `transcription-config-test.spec.js` to avoid `import.meta.env` in `page.evaluate()`
-   - [ ] Update `vad-event-validation.spec.js` to fix serialization
-   - [ ] Use proper test environment setup
+2. **✅ Fix serialization errors** (Category B - 2 tests)
+   - [x] Updated `transcription-config-test.spec.js` to remove `import.meta.env` usage
+   - [x] Updated `vad-event-validation.spec.js` to remove `import.meta.env` debug logs
+   - [x] Tests now verify configuration via connection state instead
+   - **Status**: Fixed - serialization errors removed
+
+#### ⏳ Remaining Investigation
 
 3. **Investigate VAD failures** (Category C - 13 tests)
    - [ ] Verify failures existed before Phase 4
    - [ ] Check if callback-based tracking interferes
    - [ ] Fix VAD event detection issues if needed
+   - **Note**: These failures may be pre-existing and unrelated to debug method removal
 
 ### 🔧 Issues Identified from Test Run
 

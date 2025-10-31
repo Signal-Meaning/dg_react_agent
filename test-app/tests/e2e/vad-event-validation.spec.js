@@ -35,9 +35,8 @@ test.describe('VAD Event Validation with Real APIs', () => {
       // Store VAD events for validation
       window.vadEvents = [];
       
-      // Debug API key and environment
-      console.log('🔑 [DEBUG] API Key:', import.meta.env.VITE_DEEPGRAM_API_KEY ? 'Present' : 'Missing');
-      console.log('🔑 [DEBUG] Project ID:', import.meta.env.VITE_DEEPGRAM_PROJECT_ID ? 'Present' : 'Missing');
+      // Note: Cannot access import.meta.env in page.evaluate() due to serialization
+      // API key presence is verified by connection success
       
       // Override the component's VAD callbacks to capture events
       const originalOnUserStartedSpeaking = window.onUserStartedSpeaking;
