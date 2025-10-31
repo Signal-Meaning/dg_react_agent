@@ -851,9 +851,6 @@ describe('Component API Surface Validation', () => {
     });
   });
 
-  // NOTE: State Inspection Methods (getState, getConnectionStates) are excluded
-  // These are debug/testing methods, not part of the public API
-
   describe('Step 2: Component Public API Validation', () => {
     it('should fail on CI if unauthorized component methods detected', async () => {
       const ref = React.createRef<any>();
