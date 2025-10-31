@@ -1,8 +1,12 @@
 # Migration to Voice Agent API
 
+**Related Issues**: #190, #192, #200
+
 ## Overview
 
 This document describes the migration from the old Transcription API architecture to the Voice Agent API-only architecture.
+
+This migration was tracked across multiple issues and completed with Issue #192 (PR #200) which implements comprehensive API validation.
 
 ## Background
 
@@ -93,9 +97,10 @@ The component now correctly handles only Voice Agent API events:
 
 ## Related Issues
 
-- Issue #190: Missing Agent State Handlers (FIXED)
+- Issue #190: Missing Agent State Handlers (FIXED) - Partially related migration work
 - Issue #191: Idle Timeout Bug during Active Conversation (DUPLICATE of #190, FIXED)
-- Issue #192: API Validation Tests (OPEN)
+- Issue #192: API Validation Tests (OPEN) - Includes API migration validation
+- Issue #200: Two-Layer API Validation Framework (PR OPEN) - Implements validation for migrated API
 
 ## References
 
@@ -105,12 +110,16 @@ The component now correctly handles only Voice Agent API events:
 
 ## Commit History
 
-```
-b84d6f9 - Update tests to use Voice Agent API events (remove SpeechStarted)
-0f8decf - Remove Transcription API references (SpeechStarted)
-3cdde64 - Add project objectives and cursor rules documentation
-42c535e - Fix idle timeout during active conversation (Issue #190)
-```
+Migration work spans multiple issues:
+- Issue #190: Fix idle timeout during active conversation (42c535e)
+- Issue #192: API validation framework (65cd04d, 051a30d, 14d3c30, 6f02de6, 4525f9c, bdd482c)
+- PR #200: Two-Layer API Validation Framework (merged/external)
+
+Previous commits from HEAD:
+- b84d6f9 - Update tests to use Voice Agent API events (remove SpeechStarted)
+- 0f8decf - Remove Transcription API references (SpeechStarted)
+- 3cdde64 - Add project objectives and cursor rules documentation
+- 42c535e - Fix idle timeout during active conversation (Issue #190)
 
 ## Verification Checklist
 
@@ -122,7 +131,7 @@ b84d6f9 - Update tests to use Voice Agent API events (remove SpeechStarted)
 - [x] Created `.cursorrules` file
 - [x] Added project objectives to README
 - [x] Created Issue #192 for API validation
+- [x] Issue #192 implemented (PR #200)
 - [ ] Run E2E tests to verify changes
 - [ ] Verify Voice Agent API event handling
-- [ ] Implement Issue #192 tests
 

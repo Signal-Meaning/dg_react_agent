@@ -2,7 +2,11 @@
 const { defineConfig, devices } = require('@playwright/test');
 
 // Load environment variables from .env file
-require('dotenv').config();
+require('dotenv').config({ path: '../.env' });
+
+// Debug: Log the baseURL being used
+console.log('Playwright baseURL:', process.env.VITE_BASE_URL || 'http://localhost:5173');
+console.log('All env vars:', Object.keys(process.env).filter(k => k.includes('BASE')));
 
 /**
  * @see https://playwright.dev/docs/test-configuration
@@ -26,7 +30,7 @@ module.exports = defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.TEST_BASE_URL || 'http://localhost:5173',
+    baseURL: process.env.VITE_BASE_URL || 'http://localhost:5173',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -81,7 +85,7 @@ module.exports = defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: 'npm run dev',
-    cwd: './test-app',
+    cwd: '..', // Go up one level from tests/ to test-app/ directory
     url: 'http://localhost:5173', // Vite default port
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,

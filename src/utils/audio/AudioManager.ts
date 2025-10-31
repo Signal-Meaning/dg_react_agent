@@ -150,7 +150,6 @@ export class AudioManager {
   private isRecording = false;
   private isPlaying = false;
   private isInitialized = false;
-  public isTtsMuted = false;
   private eventListeners: Array<(event: AudioEvent) => void> = [];
   
   // Improved audio playback variables
@@ -416,7 +415,7 @@ export class AudioManager {
    * @param data ArrayBuffer containing audio data (Linear16 PCM expected)
    */
   public async queueAudio(data: ArrayBuffer): Promise<void> {
-    this.log(`🎵 [queueAudio] Received audio data: ${data.byteLength} bytes, TTS muted: ${this.isTtsMuted}`);
+    this.log(`🎵 [queueAudio] Received audio data: ${data.byteLength} bytes`);
     
     if (!this.isInitialized) {
       this.log('AudioManager not initialized, initializing now...');
@@ -424,21 +423,29 @@ export class AudioManager {
       this.log('AudioManager initialized from queueAudio');
     }
     
-    // Resume the AudioContext if it's suspended (required for playback)
-    if (this.audioContext && this.audioContext.state === 'suspended') {
-      this.log('AudioContext suspended, resuming for playback...');
-      await this.audioContext.resume();
-      this.log('AudioContext resumed successfully');
+    // Check if audioContext is available AFTER initialization
+    if (!this.audioContext) {
+      this.log('ERROR: AudioContext is null after initialization! isInitialized:', this.isInitialized);
+      throw new Error('AudioContext not available for audio playback - initialization may have failed silently');
+    }
+    
+    // Attempt to resume the AudioContext if it's suspended. Do not fail if user gesture has not occurred yet;
+    // allow scheduling so playback can start once the context is resumed by user interaction (e.g., text focus).
+    if (this.audioContext.state === 'suspended') {
+      this.log('AudioContext suspended, attempting resume for playback...');
+      try {
+        await this.audioContext.resume();
+        this.log('AudioContext resumed successfully');
+      } catch (e) {
+        this.log('AudioContext resume failed (likely no user gesture yet) — scheduling to play after resume');
+        // Continue without throwing; scheduling below will take effect once context is resumed.
+      }
     }
     
     try {
       this.log(`Processing audio data (${data.byteLength} bytes)...`);
       this.log(`[queueAudio] Before: activeSourceNodes.length = ${this.activeSourceNodes.length}, startTimeRef.current = ${this.startTimeRef.current}`);
-      
-      // Check if audioContext is available
-      if (!this.audioContext) {
-        throw new Error('AudioContext not available for audio playback');
-      }
+      this.log(`[queueAudio] AudioContext state: ${this.audioContext.state}`);
       
       // Create an audio buffer from the raw data
       const buffer = createAudioBuffer(
@@ -462,18 +469,8 @@ export class AudioManager {
       );
       this.log(`[queueAudio] Scheduled source to start at ${this.startTimeRef.current - buffer.duration} (duration: ${buffer.duration})`);
       
-      // If TTS is muted, redirect audio to silent destination
-      if (this.isTtsMuted) {
-        this.log('🔇 TTS is muted - redirecting audio to silent destination');
-        // Create a silent gain node to consume the audio
-        const silentGain = this.audioContext.createGain();
-        silentGain.gain.value = 0; // Silent
-        source.connect(silentGain);
-        // Don't connect to destination - audio goes nowhere
-      } else {
-        // Normal playback - connect to speakers
-        source.connect(this.audioContext.destination);
-      }
+      // Connect to audio output
+      source.connect(this.audioContext.destination);
       
       // Add to active sources array for tracking
       this.activeSourceNodes.push(source);
@@ -726,52 +723,7 @@ export class AudioManager {
   }
 
   /**
-   * Sets the TTS mute state
+   * Gets the AudioContext instance for playback readiness checks
+   * Used to ensure AudioContext is ready before greeting audio arrives
    */
-  public setTtsMuted(muted: boolean): void {
-    this.log(`Setting TTS muted to: ${muted}`);
-    this.isTtsMuted = muted;
-    
-    // If muting and audio is currently playing, stop it immediately and flush buffer
-    if (muted && this.isPlaying) {
-      this.log('🔇 TTS muted while audio is playing - stopping current audio immediately and flushing buffer');
-      this.clearAudioQueue();
-      this.flushAudioBuffer();
-    }
-  }
-
-  /**
-   * Flushes the audio buffer to ensure no pending audio plays
-   */
-  private flushAudioBuffer(): void {
-    this.log('🧹 Flushing audio buffer to prevent any pending audio playback');
-    
-    if (!this.audioContext) {
-      this.log('No audio context available for flushing');
-      return;
-    }
-    
-    try {
-      // Create a very short silent buffer and play it to flush any pending audio
-      const silentBuffer = this.audioContext.createBuffer(1, 1, this.audioContext.sampleRate);
-      const silentSource = this.audioContext.createBufferSource();
-      silentSource.buffer = silentBuffer;
-      silentSource.connect(this.audioContext.destination);
-      silentSource.start();
-      
-      // Immediately stop it
-      silentSource.stop();
-      this.log('✅ Audio buffer flushed successfully');
-    } catch (error) {
-      this.log('⚠️ Error flushing audio buffer:', error);
-    }
-  }
-
-
-  /**
-   * Toggles the TTS mute state
-   */
-  public toggleTtsMute(): void {
-    this.setTtsMuted(!this.isTtsMuted);
-  }
 } 

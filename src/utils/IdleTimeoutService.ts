@@ -34,9 +34,9 @@ export class IdleTimeoutService {
 
   constructor(config: IdleTimeoutConfig) {
     this.config = config;
-    console.log('🎯 [DEBUG] IdleTimeoutService constructor - debug:', this.config.debug);
-    console.log('🎯 [DEBUG] IdleTimeoutService constructor - VERSION 3.0 - SIMPLE TEST');
-    console.log('🎯 [DEBUG] IdleTimeoutService constructor - VERSION 5.0 - HMR TEST');
+    if (this.config.debug) {
+      console.log('🎯 [DEBUG] IdleTimeoutService constructor - debug:', this.config.debug);
+    }
     this.currentState = {
       isUserSpeaking: false,
       agentState: 'idle',
@@ -63,7 +63,9 @@ export class IdleTimeoutService {
    */
   public handleEvent(event: IdleTimeoutEvent): void {
     this.log(`🎯 [DEBUG] handleEvent called with event type: ${event.type}`);
-    console.log(`🎯 [DEBUG] handleEvent called with event type: ${event.type}`);
+    if (this.config.debug) {
+      console.log(`🎯 [DEBUG] handleEvent called with event type: ${event.type}`);
+    }
     const prevState = { ...this.currentState };
     
     switch (event.type) {
@@ -80,19 +82,26 @@ export class IdleTimeoutService {
       case 'UTTERANCE_END':
         // UtteranceEnd indicates ongoing conversation - keep resets disabled
         // This prevents timeout during active conversation with pauses
-        console.log('🎯 [DEBUG] UTTERANCE_END case reached - processing event');
-        console.log('🎯 [DEBUG] UTTERANCE_END case reached - processing event - SIMPLE TEST');
+        if (this.config.debug) {
+          console.log('🎯 [DEBUG] UTTERANCE_END case reached - processing event');
+        }
         this.log('🎯 [DEBUG] UTTERANCE_END case reached - processing event');
         this.currentState.isUserSpeaking = false;
         this.disableResets();
         // Always stop any existing timeout when UtteranceEnd is received
-        console.log('🎯 [DEBUG] About to call stopTimeout()');
+        if (this.config.debug) {
+          console.log('🎯 [DEBUG] About to call stopTimeout()');
+        }
         this.log('🎯 [DEBUG] About to call stopTimeout()');
         try {
           this.stopTimeout();
-          console.log('🎯 [DEBUG] stopTimeout() completed successfully');
+          if (this.config.debug) {
+            console.log('🎯 [DEBUG] stopTimeout() completed successfully');
+          }
         } catch (error) {
-          console.log('🎯 [DEBUG] stopTimeout() threw error:', error);
+          if (this.config.debug) {
+            console.log('🎯 [DEBUG] stopTimeout() threw error:', error);
+          }
         }
         // Ensure no new timeouts can be started during ongoing conversation
         this.isDisabled = true;
@@ -147,7 +156,9 @@ export class IdleTimeoutService {
    * Disable idle timeout resets (during activity)
    */
   private disableResets(): void {
-    console.log('🎯 [DEBUG] disableResets() called - VERSION 4.0 - SIMPLE TEST');
+    if (this.config.debug) {
+      console.log('🎯 [DEBUG] disableResets() called');
+    }
     if (!this.isDisabled) {
       this.isDisabled = true;
       this.stopTimeout();
@@ -171,12 +182,16 @@ export class IdleTimeoutService {
   private startTimeout(): void {
     this.stopTimeout(); // Clear any existing timeout
     
-    console.log('🎯 [DEBUG] Starting timeout with timeoutId:', this.timeoutId);
+    if (this.config.debug) {
+      console.log('🎯 [DEBUG] Starting timeout with timeoutId:', this.timeoutId);
+    }
     this.timeoutId = window.setTimeout(() => {
       this.log(`Idle timeout reached (${this.config.timeoutMs}ms) - firing callback`);
       this.onTimeoutCallback?.();
     }, this.config.timeoutMs);
-    console.log('🎯 [DEBUG] Timeout started with timeoutId:', this.timeoutId);
+    if (this.config.debug) {
+      console.log('🎯 [DEBUG] Timeout started with timeoutId:', this.timeoutId);
+    }
     this.log(`Started idle timeout (${this.config.timeoutMs}ms)`);
   }
 
@@ -184,16 +199,22 @@ export class IdleTimeoutService {
    * Stop the idle timeout
    */
   private stopTimeout(): void {
-    console.log('🎯 [DEBUG] stopTimeout() called - timeoutId:', this.timeoutId);
+    if (this.config.debug) {
+      console.log('🎯 [DEBUG] stopTimeout() called - timeoutId:', this.timeoutId);
+    }
     this.log(`stopTimeout() called - timeoutId: ${this.timeoutId}`);
     if (this.timeoutId !== null) {
       window.clearTimeout(this.timeoutId);
       this.timeoutId = null;
       this.log('Stopped idle timeout');
-      console.log('🎯 [DEBUG] Timeout cleared successfully');
+      if (this.config.debug) {
+        console.log('🎯 [DEBUG] Timeout cleared successfully');
+      }
     } else {
       this.log('No timeout to stop (timeoutId is null)');
-      console.log('🎯 [DEBUG] No timeout to stop (timeoutId is null)');
+      if (this.config.debug) {
+        console.log('🎯 [DEBUG] No timeout to stop (timeoutId is null)');
+      }
     }
   }
 

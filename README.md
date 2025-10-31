@@ -17,6 +17,11 @@ A headless React component designed to drastically simplify the integration of D
 
 Any improvements must be justified and maintain compatibility with the Voice Agent API.
 
+**API Validation**: This component validates against two APIs:
+- **Deepgram Voice Agent v1 Server API** (endpoint: `wss://agent.deepgram.com/v1/agent/converse`)
+- **Component Public API** (interface: `DeepgramVoiceInteractionHandle` tracked since commit 7191eb4)
+All API changes require approval and documentation. See [API Governance](docs/DEVELOPMENT.md#api-governance-process) for details.
+
 **Test App Goals:** The test-app and its related tests are intended to:
 - Recommend certain integration patterns and avoid others
 - Act as a starting point for React developers
@@ -145,27 +150,43 @@ When prompted, use your GitHub username and your Personal Access Token as the pa
 
 ## Migration Guide
 
-### From v0.1.0 to v0.1.1
+### From v0.4.x to v0.5.0+ (Lazy Initialization)
 
-**Breaking Change:** `autoConnect` prop behavior changed
-- **Before:** `autoConnect` defaulted to `undefined` and auto-connected
-- **After:** `autoConnect` defaults to `undefined` and does NOT auto-connect
-- **Fix:** Explicitly set `autoConnect={true}` if you want auto-connection behavior
+**Breaking Change:** Auto-connect behavior removed - connections are now lazy
+- **Before (v0.4.x):** Component could auto-connect when `autoConnect={true}` prop was set
+- **After (v0.5.0+):** No auto-connect - connections are only established when explicitly started
+- **Migration:** Replace `autoConnect` prop usage with explicit `start()` calls
 
 ```tsx
-// Before (v0.1.0) - auto-connected by default
+// Before (v0.4.x) - auto-connect enabled
 <DeepgramVoiceInteraction
   apiKey={apiKey}
+  autoConnect={true}
   agentOptions={agentOptions}
 />
 
-// After (v0.1.1) - requires explicit autoConnect
+// After (v0.5.0+) - explicit start() required
+const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
+
 <DeepgramVoiceInteraction
+  ref={deepgramRef}
   apiKey={apiKey}
-  autoConnect={true}  // Add this for auto-connection
   agentOptions={agentOptions}
+  onReady={(isReady) => {
+    if (isReady) {
+      // Start when ready (or trigger on user interaction)
+      deepgramRef.current?.start({ agent: true });
+    }
+  }}
 />
 ```
+
+**Key Changes:**
+- `autoConnect` prop removed - component never auto-connects
+- `start()` method now accepts optional service flags: `start({ agent?: boolean, transcription?: boolean })`
+- WebSocket managers created lazily only when `start()` is called or user interacts
+- `injectUserMessage()` is now async and creates agent manager lazily if needed
+- `startAudioCapture()` creates managers lazily when microphone is activated
 
 ## Quick Start
 
@@ -265,34 +286,77 @@ const transcriptionOptions = useMemo(() => ({
 
 **Development Warning:** In development mode, the component will warn you if it detects non-memoized options props.
 
-## Auto-Connect Behavior
+## Lazy Initialization (Issue #206)
 
-The `autoConnect` prop controls whether the component automatically establishes connections when ready:
+The component uses **lazy initialization** - WebSocket connections are only established when explicitly needed, not during component initialization. This gives you full control over when connections are created and reduces unnecessary resource usage.
 
-- `autoConnect={true}`: Automatically connects to services when ready (enables text-only interactions)
-- `autoConnect={false}`: Requires manual connection via `start()` method
-- `autoConnect={undefined}` (default): Same as `false` - no auto-connection
+### Connection Behavior
 
-**Important:** When `autoConnect` is `true`, the component will establish WebSocket connections immediately when ready, enabling text-only interactions even before microphone access is granted.
+- **No auto-connect**: Connections are never established automatically
+- **Lazy manager creation**: WebSocket managers are created only when:
+  - `start()` is called with service flags
+  - `injectUserMessage()` is called (creates agent manager)
+  - `startAudioCapture()` is called (creates both managers if configured)
+- **Explicit control**: You must explicitly call `start()` or interact with the component to establish connections
+
+### Starting Services
+
+The `start()` method accepts optional flags to control which services are started:
 
 ```tsx
-// Auto-connect enabled (recommended for most use cases)
-<DeepgramVoiceInteraction
-  apiKey={apiKey}
-  autoConnect={true}
-  agentOptions={memoizedAgentOptions}
-/>
+// Start only agent service
+await deepgramRef.current?.start({ agent: true });
 
-// Manual connection control
+// Start only transcription service
+await deepgramRef.current?.start({ transcription: true });
+
+// Start both services (dual mode)
+await deepgramRef.current?.start({ agent: true, transcription: true });
+
+// Start services based on configured props (if no flags provided)
+await deepgramRef.current?.start();
+```
+
+### Example: Text-Only Interaction
+
+```tsx
+const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
+
+// When user focuses text input, start agent service
+const handleTextInputFocus = async () => {
+  await deepgramRef.current?.start({ agent: true });
+};
+
+// When user sends message, injectUserMessage creates/connects agent lazily
+const handleSendMessage = async (message: string) => {
+  await deepgramRef.current?.injectUserMessage(message);
+};
+
 <DeepgramVoiceInteraction
+  ref={deepgramRef}
   apiKey={apiKey}
-  autoConnect={false}
   agentOptions={memoizedAgentOptions}
   onReady={(isReady) => {
-    if (isReady) {
-      deepgramRef.current?.start();
-    }
+    // Component is ready, but not connected yet
+    console.log('Ready:', isReady);
   }}
+/>
+```
+
+### Example: Microphone Interaction
+
+```tsx
+// When user clicks microphone button
+const handleMicClick = async () => {
+  // startAudioCapture() creates managers lazily
+  await deepgramRef.current?.startAudioCapture();
+};
+
+<DeepgramVoiceInteraction
+  ref={deepgramRef}
+  apiKey={apiKey}
+  agentOptions={memoizedAgentOptions}
+  transcriptionOptions={memoizedTranscriptionOptions}
 />
 ```
 
@@ -581,7 +645,6 @@ export default CombinedInteraction;
 | `transcriptionOptions`  | `TranscriptionOptions`                                   | *        | Options for the transcription service. See `TranscriptionOptions` type & [Deepgram STT Docs][stt-docs]. **Omit completely** (not just `{}`) when not using transcription. |
 | `agentOptions`          | `AgentOptions`                                           | *        | Options for the agent service. See `AgentOptions` type & [Deepgram Agent Docs][agent-docs]. **Omit completely** (not just `{}`) when not using agent. |
 | `endpointConfig`        | `EndpointConfig` (`{ transcriptionUrl?, agentUrl? }`)    | No       | Override default Deepgram WebSocket URLs.                                                                 |
-| `autoConnect`           | `boolean`                                                | No       | Whether to automatically connect when ready. Default: `undefined` (no auto-connect).                     |
 | `microphoneEnabled`     | `boolean`                                                | No       | Whether microphone is enabled. Default: `false`.                                                          |
 | `sleepOptions`          | `SleepOptions`                                           | No       | Configuration for agent sleep behavior.                                                                   |
 | `onReady`               | `(isReady: boolean) => void`                             | No       | Called when the component is initialized and ready to start.                                              |
@@ -611,8 +674,8 @@ These methods are accessed via the `ref` attached to the component (e.g., `deepg
 
 | Method                    | Parameters                           | Return Type     | Description                                                                |
 | :------------------------ | :----------------------------------- | :-------------- | :------------------------------------------------------------------------- |
-| `start`                   | `none`                               | `Promise<void>` | Initializes connections, requests mic access, and starts recording/streaming. |
-| `stop`                    | `none`                               | `Promise<void>` | Stops recording/streaming and closes WebSocket connections.                |
+| `start`                   | `options?: { agent?: boolean, transcription?: boolean }` | `Promise<void>` | Starts WebSocket connections for specified services. Creates managers lazily if needed. If no options provided, starts services based on configured props. ⚠️ **Note**: Does NOT start recording. Call `startAudioCapture()` separately to enable microphone. |
+| `stop`                    | `none`                               | `Promise<void>` | Stops recording/streaming and closes WebSocket connections. Clears manager refs to allow lazy recreation. |
 | `updateAgentInstructions` | `payload: UpdateInstructionsPayload` | `void`          | Sends new instructions or context to the agent mid-session. Only works in agent or dual mode. |
 | `interruptAgent`          | `none`                               | `void`          | Immediately stops agent audio playback and clears the audio queue. Only works in agent or dual mode. |
 | `sleep`                   | `none`                               | `void`          | Puts the agent into sleep mode (ignores audio input). Only works in agent or dual mode. |
@@ -776,6 +839,7 @@ const handleError = (error) => {
 
 ### Voice Assistant with Text Fallback
 ```tsx
+const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
 const [micEnabled, setMicEnabled] = useState(false);
 const [response, setResponse] = useState('');
 
@@ -785,13 +849,21 @@ const agentOptions = useMemo(() => ({
   greeting: "Hello! How can I help you today?"
 }), []);
 
+// Start agent service when ready (for text-only interactions)
+const handleReady = useCallback((isReady: boolean) => {
+  if (isReady) {
+    deepgramRef.current?.start({ agent: true });
+  }
+}, []);
+
 return (
   <DeepgramVoiceInteraction
+    ref={deepgramRef}
     apiKey={apiKey}
-    autoConnect={true}
     microphoneEnabled={micEnabled}
     onMicToggle={setMicEnabled}
     agentOptions={agentOptions}
+    onReady={handleReady}
     onAgentUtterance={(utterance) => setResponse(utterance.text)}
   />
 );
@@ -823,6 +895,7 @@ return (
 
 ### Dual Mode with Full Control
 ```tsx
+const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
 const [isReady, setIsReady] = useState(false);
 const [isConnected, setIsConnected] = useState(false);
 
@@ -836,14 +909,26 @@ const transcriptionOptions = useMemo(() => ({
   language: 'en-US'
 }), []);
 
+// Start both services when ready
+const handleReady = useCallback((isReady: boolean) => {
+  setIsReady(isReady);
+  if (isReady) {
+    deepgramRef.current?.start({ agent: true, transcription: true });
+  }
+}, []);
+
 return (
   <DeepgramVoiceInteraction
+    ref={deepgramRef}
     apiKey={apiKey}
-    autoConnect={true}
     agentOptions={agentOptions}
     transcriptionOptions={transcriptionOptions}
-    onReady={setIsReady}
-    onConnectionReady={() => setIsConnected(true)}
+    onReady={handleReady}
+    onConnectionStateChange={(service, state) => {
+      if (service === 'agent' && state === 'connected') {
+        setIsConnected(true);
+      }
+    }}
     onTranscriptUpdate={(data) => console.log('Transcript:', data)}
     onAgentUtterance={(utterance) => console.log('Agent:', utterance.text)}
   />
@@ -856,7 +941,7 @@ return (
 A: The component's useEffect depends on these props. Inline objects create new references on every render, causing infinite re-initialization loops.
 
 ### Q: Can I use this without a microphone?
-A: Yes! Set `autoConnect={true}` and use text input. The agent will work without audio.
+A: Yes! Call `start({ agent: true })` and use `injectUserMessage()` for text input. The agent will work without audio.
 
 ### Q: How do I handle microphone permissions?
 A: The component handles this automatically. Check the `onError` callback for permission-related errors.

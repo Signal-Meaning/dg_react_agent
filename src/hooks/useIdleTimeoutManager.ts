@@ -19,13 +19,17 @@ export function useIdleTimeoutManager(
 
   // Initialize the service
   useEffect(() => {
-    console.log('🎯 [DEBUG] Creating new IdleTimeoutService');
-    console.log('🎯 [DEBUG] About to create IdleTimeoutService - VERSION 6.0 - HMR TEST');
+    if (debug) {
+      console.log('🎯 [DEBUG] Creating new IdleTimeoutService');
+      console.log('🎯 [DEBUG] About to create IdleTimeoutService');
+    }
     serviceRef.current = new IdleTimeoutService({
       timeoutMs: 10000, // 10 seconds
       debug,
     });
-    console.log('🎯 [DEBUG] IdleTimeoutService created successfully - VERSION 6.0');
+    if (debug) {
+      console.log('🎯 [DEBUG] IdleTimeoutService created successfully');
+    }
 
     // Set up timeout callback
     serviceRef.current.onTimeout(() => {
@@ -34,7 +38,9 @@ export function useIdleTimeoutManager(
     });
 
     return () => {
-      console.log('🎯 [DEBUG] Destroying IdleTimeoutService');
+      if (debug) {
+        console.log('🎯 [DEBUG] Destroying IdleTimeoutService');
+      }
       serviceRef.current?.destroy();
       serviceRef.current = null;
     };
@@ -93,18 +99,26 @@ export function useIdleTimeoutManager(
 
   // Handle UtteranceEnd events specifically
   const handleUtteranceEnd = useCallback(() => {
-    console.log('🎯 [DEBUG] handleUtteranceEnd called - VERSION 2.0');
+    if (debug) {
+      console.log('🎯 [DEBUG] handleUtteranceEnd called');
+    }
     if (serviceRef.current) {
-      console.log('🎯 [DEBUG] Service exists, calling handleEvent - VERSION 2.0');
-      console.log('🎯 [DEBUG] About to call serviceRef.current.handleEvent with UTTERANCE_END');
+      if (debug) {
+        console.log('🎯 [DEBUG] Service exists, calling handleEvent');
+        console.log('🎯 [DEBUG] About to call serviceRef.current.handleEvent with UTTERANCE_END');
+      }
       serviceRef.current.handleEvent({ 
         type: 'UTTERANCE_END'
       });
-      console.log('🎯 [DEBUG] serviceRef.current.handleEvent call completed');
+      if (debug) {
+        console.log('🎯 [DEBUG] serviceRef.current.handleEvent call completed');
+      }
     } else {
-      console.log('🎯 [DEBUG] Service is null! - VERSION 2.0');
+      if (debug) {
+        console.log('🎯 [DEBUG] Service is null!');
+      }
     }
-  }, []);
+  }, [debug]);
 
   return {
     handleMeaningfulActivity,

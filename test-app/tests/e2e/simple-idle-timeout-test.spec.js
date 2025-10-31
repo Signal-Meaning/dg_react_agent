@@ -10,12 +10,10 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { 
-  SELECTORS,
-  waitForConnection,
-  sendTextMessage
+import {
+  SELECTORS, waitForConnection, sendTextMessage
 } from './helpers/test-helpers.js';
-import { setupTestPage } from './helpers/audio-mocks.js';
+import { setupTestPage } from './helpers/audio-mocks';
 
 test.describe('Simple Idle Timeout Test', () => {
   

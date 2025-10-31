@@ -15,7 +15,7 @@ async function setupTestMode(page, apiKeyScenario) {
     window.testApiKey = scenario;
   }, apiKeyScenario);
 
-  await page.goto('/?test-mode=true');
+  await page.goto('http://localhost:5173/?test-mode=true');
   await page.waitForLoadState('networkidle');
 }
 

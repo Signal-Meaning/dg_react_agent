@@ -45,6 +45,26 @@ releases/
 - **Methods**: New methods, deprecated methods
 - **Types**: New TypeScript types and interfaces
 
+#### API Validation
+
+Every release must validate:
+
+1. **Deepgram Server API Compliance**
+   - Run `npm run api:fetch-spec` to get latest official API
+   - Verify all official events are handled
+   - Document any new Deepgram events
+
+2. **Component API Changes**
+   - Document all new methods/props in `API-CHANGES.md`
+   - Add to `tests/api-baseline/approved-additions.ts`
+   - Provide usage examples
+   - Justify necessity of each addition
+
+3. **Pre-Release Validation**
+   - Run `npm run api:validate` before release
+   - All API validation tests must pass
+   - No unauthorized additions in CI
+
 ### EXAMPLES.md
 - **Basic Usage**: Simple implementation examples
 - **Advanced Usage**: Complex scenarios and patterns

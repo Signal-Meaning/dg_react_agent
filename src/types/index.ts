@@ -216,8 +216,16 @@ export interface DeepgramVoiceInteractionProps {
 export interface DeepgramVoiceInteractionHandle {
   /**
    * Start the voice interaction
+   * 
+   * @param options - Optional flags to control which services to start
+   *   - agent: Start agent service (default: true if agentOptions prop provided)
+   *   - transcription: Start transcription service (default: true if transcriptionOptions prop provided)
+   * If no options provided, starts services based on which props are configured
+   * 
+   * ⚠️ Note: This method connects WebSocket(s) but does NOT start audio recording.
+   * To start recording, call `startAudioCapture()` separately.
    */
-  start: () => Promise<void>;
+  start: (options?: { agent?: boolean; transcription?: boolean }) => Promise<void>;
   
   /**
    * Stop the voice interaction
@@ -233,6 +241,11 @@ export interface DeepgramVoiceInteractionHandle {
    * Interrupt the agent while it is speaking
    */
   interruptAgent: () => void;
+  
+  /**
+   * Allow agent audio to play (clears block state set by interruptAgent)
+   */
+  allowAgent: () => void;
   
   /**
    * Put the agent to sleep
@@ -261,8 +274,9 @@ export interface DeepgramVoiceInteractionHandle {
   
   /**
    * Inject a user message to the agent
+   * Creates agent manager lazily if needed and ensures connection is established
    */
-  injectUserMessage: (message: string) => void;
+  injectUserMessage: (message: string) => Promise<void>;
 
   /**
    * Start audio capture (lazy initialization)

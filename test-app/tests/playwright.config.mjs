@@ -3,7 +3,12 @@ import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
-dotenv.config();
+dotenv.config({ path: '../.env' });
+
+// Debug: Log the baseURL being used
+console.log('Playwright baseURL:', process.env.VITE_BASE_URL || 'http://localhost:5173');
+const ENABLE_AUDIO = process.env.PW_ENABLE_AUDIO === 'true';
+console.log('PW_ENABLE_AUDIO:', ENABLE_AUDIO);
 
 /**
  * @see https://playwright.dev/docs/test-configuration
@@ -27,7 +32,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.TEST_BASE_URL || 'http://localhost:5173',
+    baseURL: process.env.VITE_BASE_URL || 'http://localhost:5173',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -46,8 +51,8 @@ export default defineConfig({
       args: [
         '--use-fake-ui-for-media-stream',
         '--use-fake-device-for-media-stream',
-        '--disable-audio-output',
-        '--mute-audio'
+        // Only mute/disable audio when PW_ENABLE_AUDIO is not explicitly enabled
+        ...(!ENABLE_AUDIO ? ['--disable-audio-output', '--mute-audio'] : [])
       ]
     },
     
@@ -82,7 +87,7 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: 'npm run dev',
-    cwd: './test-app',
+    cwd: '..', // Go up one level from tests/ to test-app/ directory
     url: 'http://localhost:5173', // Vite default port
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,

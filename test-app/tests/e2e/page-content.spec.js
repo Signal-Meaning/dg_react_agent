@@ -45,4 +45,17 @@ test.describe('Page Content Tests', () => {
     // Test passes if we can access the page
     expect(title).toBeDefined();
   });
+
+  test('should render voice agent component correctly', async ({ page }) => {
+    // Navigate to test app
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    
+    // Verify component renders
+    await expect(page.locator('[data-testid="voice-agent"]')).toBeVisible();
+    
+    // Verify initial state UI elements are present
+    await expect(page.locator('[data-testid="connection-status"]')).toBeVisible();
+    await expect(page.locator('[data-testid="microphone-button"]')).toBeVisible();
+  });
 });

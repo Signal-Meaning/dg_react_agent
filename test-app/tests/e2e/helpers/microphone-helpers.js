@@ -9,7 +9,10 @@
  * the microphone.
  */
 
+<<<<<<< HEAD
 import { expect } from '@playwright/test';
+=======
+>>>>>>> davidrmcgee/issue157
 import { SELECTORS, waitForConnection } from './test-helpers.js';
 import { setupTestPage } from './audio-mocks.js';
 
@@ -44,8 +47,31 @@ export async function waitForMicrophoneReady(page, options = {}) {
   console.log('🎤 [MICROPHONE_HELPER] Step 1: Setting up test page...');
   await setupTestPage(page);
   
+<<<<<<< HEAD
   // Step 2: Wait for agent connection to be established
   console.log('🎤 [MICROPHONE_HELPER] Step 2: Waiting for agent connection...');
+=======
+  // Step 2: Wait for component to be ready (lazy initialization - Issue #206)
+  console.log('🎤 [MICROPHONE_HELPER] Step 2: Waiting for component to be ready...');
+  await page.waitForFunction(
+    () => {
+      const readyStatus = document.querySelector('[data-testid="component-ready-status"]');
+      return readyStatus && readyStatus.textContent === 'true';
+    },
+    { timeout: 5000 }
+  );
+  console.log('🎤 [MICROPHONE_HELPER] Component is ready');
+  
+  // With lazy initialization, connection doesn't start automatically
+  // We'll trigger it by clicking the microphone button
+  console.log('🎤 [MICROPHONE_HELPER] Step 3: Clicking microphone button to trigger lazy initialization...');
+  const micButton = page.locator(SELECTORS.micButton);
+  await micButton.click();
+  console.log('🎤 [MICROPHONE_HELPER] Microphone button clicked');
+  
+  // Step 4: Wait for agent connection to be established (triggered by mic click)
+  console.log('🎤 [MICROPHONE_HELPER] Step 4: Waiting for agent connection...');
+>>>>>>> davidrmcgee/issue157
   await waitForConnection(page, connectionTimeout);
   
   const connectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
@@ -55,9 +81,15 @@ export async function waitForMicrophoneReady(page, options = {}) {
     throw new Error(`Agent connection not established. Status: ${connectionStatus}`);
   }
 
+<<<<<<< HEAD
   // Step 3: Wait for agent greeting to complete (settings applied)
   if (!skipGreetingWait) {
     console.log('🎤 [MICROPHONE_HELPER] Step 3: Waiting for agent greeting completion...');
+=======
+  // Step 5: Wait for agent greeting to complete (settings applied)
+  if (!skipGreetingWait) {
+    console.log('🎤 [MICROPHONE_HELPER] Step 5: Waiting for agent greeting completion...');
+>>>>>>> davidrmcgee/issue157
     try {
       await waitForAgentGreeting(page, greetingTimeout);
       
@@ -69,6 +101,7 @@ export async function waitForMicrophoneReady(page, options = {}) {
     }
   }
 
+<<<<<<< HEAD
   // Step 4: Enable microphone with retry logic for connection issues
   console.log('🎤 [MICROPHONE_HELPER] Step 4: Enabling microphone...');
   const micButton = page.locator(SELECTORS.micButton);
@@ -81,12 +114,32 @@ export async function waitForMicrophoneReady(page, options = {}) {
   
   // Wait a moment for the click to process
   await page.waitForTimeout(1000);
+=======
+  // Step 6: Check microphone status (should be enabled after mic button click)
+  console.log('🎤 [MICROPHONE_HELPER] Step 6: Checking microphone status...');
+  const initialMicStatus = await page.locator(SELECTORS.micStatus).textContent();
+  console.log(`🎤 [MICROPHONE_HELPER] Initial mic status: ${initialMicStatus}`);
+  
+  // Wait for click to process - wait for connection status or mic status to update
+  await page.waitForFunction(
+    (initialStatus) => {
+      const connectionStatus = document.querySelector('[data-testid="connection-status"]');
+      const micStatus = document.querySelector('[data-testid="mic-status"]');
+      // Wait for either status to update (not be null/empty or different from initial)
+      return (connectionStatus && connectionStatus.textContent && connectionStatus.textContent.trim().length > 0) || 
+             (micStatus && micStatus.textContent && micStatus.textContent !== initialStatus);
+    },
+    initialMicStatus,
+    { timeout: 5000 }
+  );
+>>>>>>> davidrmcgee/issue157
   
   // Check if connection is still stable after clicking
   const connectionAfterClick = await page.locator(SELECTORS.connectionStatus).textContent();
   console.log(`🎤 [MICROPHONE_HELPER] Connection after click: ${connectionAfterClick}`);
   
   // If connection closed, wait for it to reconnect
+<<<<<<< HEAD
   if (connectionAfterClick === 'closed') {
     console.log('🎤 [MICROPHONE_HELPER] ⚠️ Connection closed after mic click, waiting for reconnection...');
     
@@ -133,6 +186,54 @@ export async function waitForMicrophoneReady(page, options = {}) {
     attempts++;
   }
   
+=======
+  if (connectionAfterClick === 'closed' || !connectionAfterClick.includes('connected')) {
+    console.log('🎤 [MICROPHONE_HELPER] ⚠️ Connection closed after mic click, waiting for reconnection...');
+    
+    // Wait for reconnection (up to 10 seconds)
+    // Use condition-based wait instead of polling loop
+    try {
+      await page.waitForFunction(
+        () => {
+          const connectionStatus = document.querySelector('[data-testid="connection-status"]');
+          const status = connectionStatus?.textContent || '';
+          return status.includes('connected');
+        },
+        { timeout: 10000 }
+      );
+      console.log('🎤 [MICROPHONE_HELPER] ✅ Connection re-established!');
+      reconnected = true;
+    } catch (error) {
+      console.log('🎤 [MICROPHONE_HELPER] ⚠️ Reconnection timeout');
+      reconnected = false;
+    }
+    
+    if (!reconnected) {
+      const finalConnectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
+      throw new Error(`Connection failed to re-establish after mic click. Final status: ${finalConnectionStatus}`);
+    }
+  }
+
+  // Step 7: Wait for microphone to be enabled (if not already)
+  console.log('🎤 [MICROPHONE_HELPER] Step 7: Waiting for microphone enablement...');
+  
+  // Wait for microphone status to be 'Enabled' (condition-based wait)
+  try {
+    await page.waitForFunction(
+      () => {
+        const micStatus = document.querySelector('[data-testid="mic-status"]');
+        return micStatus && micStatus.textContent === 'Enabled';
+      },
+      { timeout: micEnableTimeout }
+    );
+    console.log('🎤 [MICROPHONE_HELPER] ✅ Microphone enabled successfully!');
+  } catch (error) {
+    console.log('🎤 [MICROPHONE_HELPER] ⚠️ Microphone enablement timeout');
+    // Continue to check final status below
+  }
+  
+  const micStatusElement = page.locator(SELECTORS.micStatus);
+>>>>>>> davidrmcgee/issue157
   const finalMicStatus = await micStatusElement.textContent();
   console.log(`🎤 [MICROPHONE_HELPER] Final mic status: ${finalMicStatus}`);
 
@@ -168,7 +269,10 @@ export async function waitForMicrophoneReady(page, options = {}) {
  * @param {number} timeout - Timeout in ms (default: 8000)
  */
 export async function waitForAgentGreeting(page, timeout = 8000) {
+<<<<<<< HEAD
   const greetingSent = page.locator(SELECTORS.greetingSent);
+=======
+>>>>>>> davidrmcgee/issue157
   await page.waitForFunction(
     (selector) => {
       const element = document.querySelector(selector);
@@ -259,8 +363,19 @@ export async function verifyMicrophonePrerequisites(page) {
     results.pageLoaded = true;
     console.log('🎤 [MICROPHONE_VERIFY] ✅ Page loaded');
 
+<<<<<<< HEAD
     // Wait a bit for the component to initialize
     await page.waitForTimeout(1000);
+=======
+    // Wait for component to initialize - wait for connection status element to have content
+    await page.waitForFunction(
+      () => {
+        const connectionStatus = document.querySelector('[data-testid="connection-status"]');
+        return connectionStatus && connectionStatus.textContent && connectionStatus.textContent.trim().length > 0;
+      },
+      { timeout: 5000 }
+    );
+>>>>>>> davidrmcgee/issue157
 
     // Check if component is initialized
     const connectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();

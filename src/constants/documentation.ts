@@ -49,8 +49,4 @@ const transcriptionOptions = useMemo(() => ({
   DEV_WARNING: '**Development Warning:** In development mode, the component will warn you if it detects non-memoized options props.'
 };
 
-export const AUTO_CONNECT_BEHAVIOR = {
-  UNDEFINED: 'When `autoConnect` is undefined (default), the component will NOT auto-connect',
-  TRUE: 'When `autoConnect` is explicitly set to `true`, the component will auto-connect',
-  FALSE: 'When `autoConnect` is explicitly set to `false`, the component will NOT auto-connect'
-};
+// Component requires explicit start() call with service flags
