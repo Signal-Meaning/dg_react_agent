@@ -2000,13 +2000,16 @@ function DeepgramVoiceInteraction(
         log('AudioManager initialized proactively');
         
         // Resume AudioContext if it's suspended (browser autoplay policy)
-        const audioManager = audioManagerRef.current;
-        if (audioManager) {
-          const audioContext = audioManager.getAudioContext();
+        if (audioManagerRef.current) {
+          try {
+            const audioContext = (audioManagerRef.current as AudioManager).getAudioContext();
           if (audioContext && audioContext.state === 'suspended') {
             log('Resuming suspended AudioContext (user interaction permits this)');
             await audioContext.resume();
             log('AudioContext resumed successfully');
+            }
+          } catch (error) {
+            log('Failed to get or resume AudioContext:', error);
           }
         }
       } catch (error) {
@@ -2015,17 +2018,16 @@ function DeepgramVoiceInteraction(
       }
     } else {
       // AudioManager exists, but ensure AudioContext is resumed
-      const audioManager = audioManagerRef.current;
-      if (audioManager) {
-        const audioContext = audioManager.getAudioContext();
+      if (audioManagerRef.current) {
+        try {
+          const audioContext = (audioManagerRef.current as AudioManager).getAudioContext();
       if (audioContext && audioContext.state === 'suspended') {
         log('Resuming suspended AudioContext (user interaction permits this)');
-        try {
           await audioContext.resume();
           log('AudioContext resumed successfully');
+          }
         } catch (error) {
-          log('Failed to resume AudioContext:', error);
-        }
+          log('Failed to get or resume AudioContext:', error);
       }
     }
     }
@@ -2059,19 +2061,32 @@ function DeepgramVoiceInteraction(
         console.log(`🎯 [AUDIO] Playback state changed: ${event.isPlaying ? 'PLAYING' : 'NOT PLAYING'}, current agent state: ${stateRef.current.agentState}`);
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: event.isPlaying });
         
-        // Transition agent to speaking when playback starts (in case AgentStartedSpeaking isn't emitted)
-        if (event.isPlaying && stateRef.current.agentState !== 'speaking') {
-          sleepLog('Dispatching AGENT_STATE_CHANGE to speaking (from playback start)');
-          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
+        // Transition agent to speaking when playback starts
+        // This is the primary mechanism for detecting TTS playback and transitioning to speaking state
+        // It handles cases where AgentStartedSpeaking message isn't received or is delayed
+        // This works for transitions from: idle -> speaking, thinking -> speaking, listening -> speaking
+        if (event.isPlaying) {
+          const currentState = stateRef.current.agentState;
+          if (currentState !== 'speaking') {
+            console.log(`🎯 [AGENT] Audio playback started - transitioning from ${currentState} to speaking`);
+            sleepLog(`Dispatching AGENT_STATE_CHANGE to speaking (from playback start, previous state: ${currentState})`);
+            dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
+          } else {
+            console.log(`🎯 [AGENT] Audio playback started but already in speaking state - no transition needed`);
+          }
         }
         
         // Transition agent to idle when audio playback stops
-        if (!event.isPlaying && stateRef.current.agentState === 'speaking') {
-          console.log('🎯 [AGENT] Audio playback finished - transitioning agent from speaking to idle');
-          sleepLog('Audio playback finished - transitioning agent to idle');
-          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
-        } else if (!event.isPlaying && stateRef.current.agentState !== 'speaking') {
-          console.log(`🎯 [AGENT] Audio playback stopped but agent state is ${stateRef.current.agentState} (not speaking) - skipping transition to idle`);
+        // Only transition if we're currently in speaking state (prevents invalid transitions)
+        if (!event.isPlaying) {
+          const currentState = stateRef.current.agentState;
+          if (currentState === 'speaking') {
+            console.log('🎯 [AGENT] Audio playback finished - transitioning agent from speaking to idle');
+            sleepLog('Audio playback finished - transitioning agent to idle');
+            dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+          } else {
+            console.log(`🎯 [AGENT] Audio playback stopped but agent state is ${currentState} (not speaking) - skipping transition to idle`);
+          }
         }
       } else if (event.type === 'error') {
         handleError(event.error);

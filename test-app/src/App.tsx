@@ -659,7 +659,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       <div style={{ border: '1px solid blue', padding: '10px', margin: '15px 0' }}>
         <h4>Component States:</h4>
         <p>App UI State (isSleeping): <strong>{(isSleeping || agentState === 'entering_sleep').toString()}</strong></p>
-        <p>Core Component State (agentState via callback): <strong>{agentState}</strong></p>
+        <p>Core Component State (agentState via callback): <strong data-testid="agent-state">{agentState}</strong></p>
         {/* Hidden indicator used by E2E tests to detect greeting was sent */}
         {greetingSent && <span data-testid="greeting-sent" style={{ opacity: 0 }}>true</span>}
         
