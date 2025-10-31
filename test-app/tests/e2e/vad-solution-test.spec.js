@@ -8,7 +8,7 @@
 
 import { test, expect } from '@playwright/test';
 import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
-import { setupConnectionStateTracking } from './helpers/test-helpers';
+import { MicrophoneHelpers, setupConnectionStateTracking } from './helpers/test-helpers';
 
 test.describe('VAD Solution Test', () => {
   test.beforeEach(async ({ page }) => {
@@ -50,15 +50,25 @@ test.describe('VAD Solution Test', () => {
     // Wait for component to be ready
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
-    // Enable microphone
-    await page.click('[data-testid="microphone-button"]');
-    
-    // Wait for connection
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
-    
-    // Setup connection state tracking
+    // Setup connection state tracking BEFORE microphone activation to catch all connection events
+    console.log('🔍 [SOLUTION] Setting up connection state tracking...');
     const stateTracker = await setupConnectionStateTracking(page);
-    await page.waitForTimeout(500); // Wait for state to be tracked
+    
+    // Use MicrophoneHelpers to ensure proper microphone activation with transcription service
+    console.log('🔍 [SOLUTION] Activating microphone with MicrophoneHelpers...');
+    const micResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      connectionTimeout: 10000,
+      greetingTimeout: 8000,
+      skipGreetingWait: false
+    });
+    
+    expect(micResult.success).toBe(true);
+    console.log('🔍 [SOLUTION] Microphone activated successfully');
+    
+    // Wait for transcription service to connect (required for VAD)
+    // startAudioCapture() should have triggered transcription connection
+    console.log('🔍 [SOLUTION] Waiting for transcription service connection...');
+    await stateTracker.waitForTranscriptionConnected(10000);
     
     // Verify component state using callback-based tracking
     const componentState = await stateTracker.getStates();

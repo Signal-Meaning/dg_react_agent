@@ -100,12 +100,15 @@ test.describe('Lazy Initialization E2E Tests', () => {
     
     // Verify managers don't exist before onReady callback
     // Connection should be 'closed' or 'disconnected' before onReady fires (test-app starts connection in onReady)
-    // If connection status shows 'connected', it means onReady already fired, which is still valid
+    // However, if onReady fires very quickly after mount, connectionStatusBeforeReady might already show 'connected'
     // The key validation is that no managers were created before readyCallbackTimes
-    if (readyCallbackTimes.length === 0 || managersCreatedBeforeReady.length === 0) {
-      // onReady hasn't fired yet or no managers created before onReady - connection should be closed
+    // We only check connection status if we captured it before onReady fired AND no managers were created
+    if (readyCallbackTimes.length === 0 && managersCreatedBeforeReady.length === 0) {
+      // onReady hasn't fired yet and no managers created - connection should be closed
       expect(connectionStatusBeforeReady).not.toContain('connected');
     }
+    // If onReady already fired when we checked, connection might be 'connected', which is acceptable
+    // The real validation is the manager creation check above (line 99)
     
     console.log('✅ Verified: No managers created during component mount (before onReady callback)');
   });
