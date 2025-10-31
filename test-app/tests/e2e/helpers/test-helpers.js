@@ -430,7 +430,24 @@ async function disconnectComponent(page) {
  * @returns {Promise<string>} Agent state (idle, listening, thinking, speaking, etc.)
  */
 async function getAgentState(page) {
-  const agentStateElement = page.locator('p').filter({ hasText: 'Core Component State' }).locator('strong');
+  const agentStateElement = page.locator('[data-testid="agent-state"]');
+  return await agentStateElement.textContent();
+}
+
+/**
+ * Wait for agent state to become a specific value
+ * @param {import('@playwright/test').Page} page
+ * @param {string} expectedState - Expected agent state (idle, listening, thinking, speaking, etc.)
+ * @param {number} timeout - Timeout in ms (default: 10000)
+ * @returns {Promise<string>} The agent state text content
+ */
+async function waitForAgentState(page, expectedState, timeout = 10000) {
+  const agentStateElement = page.locator('[data-testid="agent-state"]');
+  await agentStateElement.waitFor({ 
+    state: 'visible', 
+    timeout 
+  });
+  await expect(agentStateElement).toHaveText(expectedState, { timeout });
   return await agentStateElement.textContent();
 }
 
@@ -596,6 +613,7 @@ export {
   waitForAgentResponse, // Wait for agent response with optional text verification
   disconnectComponent, // Disconnect the component (stop button or simulate network issue)
   getAgentState, // Get current agent state from UI
+  waitForAgentState, // Wait for agent state to become a specific value
   getAudioDiagnostics, // Get AudioContext state and audio playing status for diagnostics
   getAudioContextState, // Get AudioContext state from window (test-app specific)
   waitForAppReady, // Wait for app root to be ready (waits for voice-agent selector)

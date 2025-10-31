@@ -7,8 +7,9 @@
 // import type { AgentOptions, AgentState, AgentFunction, AgentSettingsMessage, UpdateInstructionsPayload } from './agent'; // REMOVED - Handled by export *
 import type { ConnectionState, ServiceType, EndpointConfig, DeepgramError } from './connection';
 import type { TranscriptionOptions, TranscriptResponse } from './transcription';
+import type { VoiceInteractionState } from '../utils/state/VoiceInteractionState';
 // Import AgentState specifically because DeepgramVoiceInteractionProps uses it directly
-import type { AgentState, AgentOptions, UpdateInstructionsPayload, ConversationMessage } from './agent';
+import type { AgentState, AgentOptions, UpdateInstructionsPayload } from './agent';
 
 // Re-export all types from specific files
 export * from './agent';
@@ -159,26 +160,6 @@ export interface DeepgramVoiceInteractionProps {
   };
 
   /**
-   * Auto-connect dual mode behavior options
-   */
-  autoConnect?: boolean;
-
-  /**
-   * Whether microphone is enabled (controlled or initial state)
-   */
-  microphoneEnabled?: boolean;
-
-  /**
-   * Called when microphone is toggled on/off
-   */
-  onMicToggle?: (enabled: boolean) => void;
-
-  /**
-   * Called when dual mode connection is established and settings are sent
-   */
-  onConnectionReady?: () => void;
-
-  /**
    * Called when agent starts speaking (TTS begins)
    */
   onAgentSpeaking?: () => void;
@@ -203,10 +184,9 @@ export interface DeepgramVoiceInteractionProps {
    */
   onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
   
-  /**
-   * Called when SpeechStarted is detected from Deepgram Transcription API
-   */
-  onSpeechStarted?: (data: { channel: number[]; timestamp: number }) => void;
+  // Note: onSpeechStarted removed - SpeechStarted was from old Transcription API
+  // Voice Agent API uses UserStartedSpeaking instead
+  // Use onUserStartedSpeaking for speech start detection
   
   // Note: onSpeechStopped removed - SpeechStopped is not a real Deepgram event
   // Use onUtteranceEnd for speech end detection instead
@@ -320,7 +300,7 @@ export interface DeepgramVoiceInteractionHandle {
   /**
    * Get current component state for debugging (testing only)
    */
-  getState: () => any;
+  getState: () => VoiceInteractionState;
 
   /**
    * Check if audio is currently playing

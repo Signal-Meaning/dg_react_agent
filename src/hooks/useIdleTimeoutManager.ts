@@ -118,7 +118,7 @@ export function useIdleTimeoutManager(
         console.log('🎯 [DEBUG] Service is null!');
       }
     }
-  }, []);
+  }, [debug]);
 
   return {
     handleMeaningfulActivity,

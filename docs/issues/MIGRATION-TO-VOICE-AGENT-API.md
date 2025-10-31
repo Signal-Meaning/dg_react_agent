@@ -115,6 +115,12 @@ Migration work spans multiple issues:
 - Issue #192: API validation framework (65cd04d, 051a30d, 14d3c30, 6f02de6, 4525f9c, bdd482c)
 - PR #200: Two-Layer API Validation Framework (merged/external)
 
+Previous commits from HEAD:
+- b84d6f9 - Update tests to use Voice Agent API events (remove SpeechStarted)
+- 0f8decf - Remove Transcription API references (SpeechStarted)
+- 3cdde64 - Add project objectives and cursor rules documentation
+- 42c535e - Fix idle timeout during active conversation (Issue #190)
+
 ## Verification Checklist
 
 - [x] Removed `SpeechStarted` from component source

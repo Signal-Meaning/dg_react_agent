@@ -114,6 +114,7 @@ export async function waitForMicrophoneReady(page, options = {}) {
     
     // Wait for reconnection (up to 10 seconds)
     // Use condition-based wait instead of polling loop
+    let reconnected = false;
     try {
       await page.waitForFunction(
         () => {

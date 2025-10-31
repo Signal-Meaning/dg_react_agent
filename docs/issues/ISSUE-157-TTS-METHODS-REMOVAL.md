@@ -412,6 +412,7 @@ cd test-app && npm run test:e2e -- tests/e2e/audio-interruption-timing.spec.js
 
 **Branch**: `davidrmcgee/issue157`  
 **Status**: ✅ **COMPLETE** - All refactoring complete, all regressions resolved, all required tests passing  
+~~**Blocking Issue**: #190 must be resolved before this issue can be considered complete~~ ✅ **RESOLVED**  
 **Breaking Changes**: TTS mute methods removed (migration guide provided)  
 **Test Coverage**: All Issue #157-related tests passing with updated patterns  
 **Documentation**: Complete migration guide and examples provided  
@@ -422,7 +423,7 @@ cd test-app && npm run test:e2e -- tests/e2e/audio-interruption-timing.spec.js
 - ✅ `module-exports.test.js` - Validates both `interruptAgent` and `allowAgent` are exported (15/15 tests passing)
 - ✅ `start-stop-methods.test.js` - Validates audio blocking reset behavior (10/10 tests passing)
 - ✅ `voice-agent-api-validation.test.tsx` - Validates `interruptAgent()` method exists (Issue #157 tests passing)
-- ✅ Issue #190 regression resolved - All agent state handlers implemented and tested
+- ✅ Issue #190 regression resolved - All agent state handlers implemented and tested. See [ISSUE-190-MISSING-AGENT-STATE-HANDLERS.md](./ISSUE-190-MISSING-AGENT-STATE-HANDLERS.md).
 
 ---
 
