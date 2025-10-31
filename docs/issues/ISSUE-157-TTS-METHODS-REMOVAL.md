@@ -4,7 +4,7 @@
 **Created**: October 2025  
 **Completed**: October 2025  
 **Branch**: `davidrmcgee/issue157`  
-**Related Issues**: #190 (regression), #121 (original TTS mute functionality)
+**Related Issues**: #190 (regression), #121 (original TTS mute functionality), #206 (lazy initialization)
 
 ## 🎯 Executive Summary
 
@@ -73,7 +73,7 @@ if (!allowAgentRef.current) {
 }
 ```
 
-**Audio Block Reset:** The component resets `allowAgentRef.current = ALLOW_AUDIO` in the `start()` method (line 1779), ensuring audio is allowed on fresh connections.
+**Audio Block Reset:** The component resets `allowAgentRef.current = ALLOW_AUDIO` in the `start()` method (line 1837) and `stop()` method (line 2093), ensuring audio is allowed on fresh connections. **Note:** With Issue #206 (lazy initialization), `start()` now accepts optional service flags `{ agent?: boolean, transcription?: boolean }` and creates managers lazily.
 
 **Why This Pattern?** Provides a threading mechanism where parent can control when agent audio can play, enabling features like:
 - Push-to-talk muting (hold button to interrupt, release to allow)
@@ -203,10 +203,12 @@ const handleMuteUp = () => {
 ```
 
 **Threading Control in Component:**
-- Component uses internal `allowAgentRef` (lines 185-187, 1779) to track whether audio should be played
-- When `interruptAgent()` is called (lines 1981-1997), `allowAgentRef.current = false` blocks all audio
-- When `allowAgent()` is called (lines 1999-2003), `allowAgentRef.current = true` allows audio to play  
-- When `start()` is called (line 1779), audio blocking is reset to allow audio on fresh connections
+- Component uses internal `allowAgentRef` (line 196) to track whether audio should be played
+- When `interruptAgent()` is called, `allowAgentRef.current = false` blocks all audio
+- When `allowAgent()` is called, `allowAgentRef.current = true` allows audio to play  
+- When `start()` is called (line 1837), audio blocking is reset to allow audio on fresh connections
+- When `stop()` is called (line 2093), audio blocking is also reset
+- **Note:** With Issue #206 (lazy initialization), `start()` now accepts optional service flags and creates managers lazily
 
 **Before:** Multiple methods for mute control (`toggleTtsMute`, `setTtsMuted`, `agentMute`, `agentUnmute`)  
 **After:** Two methods `interruptAgent()` and `allowAgent()` handle all audio blocking needs
@@ -299,6 +301,33 @@ function VoiceApp() {
 }
 ```
 
+## 🧪 Test Coverage
+
+### Unit Tests
+- `tests/voice-agent-api-validation.test.tsx` - Validates `interruptAgent()` method exists and can be called
+- `tests/module-exports.test.js` - Validates `interruptAgent` and `allowAgent` are exported in types
+- `tests/start-stop-methods.test.js` - Validates `start()` and `stop()` methods work correctly with audio blocking reset
+
+### E2E Tests
+- `test-app/tests/e2e/audio-interruption-timing.spec.js` - Tests `interruptAgent()` and `allowAgent()` functionality
+  - ⚠️ **Note:** Some tests are intentionally skipped (marked with `test.skip`)
+  - `should interrupt audio within 50ms when interruptAgent() is called` - **SKIPPED** (intentionally)
+  - `should handle rapid interrupt clicks without errors` - **SKIPPED** (intentionally)
+  - `should persist mute state and prevent future audio` - Runs when `PW_ENABLE_AUDIO=true`, otherwise skipped
+  - `should interrupt and allow audio repeatedly` - Runs when `PW_ENABLE_AUDIO=true`, otherwise skipped
+  - Tests validate push-button interrupt behavior (`interruptAgent()` and `allowAgent()` via test-app button handlers)
+
+### Running Tests
+```bash
+# Unit tests
+npm test -- tests/voice-agent-api-validation.test.tsx
+npm test -- tests/module-exports.test.js
+npm test -- tests/start-stop-methods.test.js
+
+# E2E tests (requires test app server)
+cd test-app && npm run test:e2e -- tests/e2e/audio-interruption-timing.spec.js
+```
+
 ## 🎯 Success Criteria
 
 ### Technical
@@ -311,6 +340,7 @@ function VoiceApp() {
 - [x] Parent-controlled muting pattern established (test-app demonstrates this)
 - [x] All existing tests pass
 - [x] No regressions in audio functionality
+- [x] Tests updated for Issue #206 lazy initialization compatibility
 
 ### User Experience
 - [x] Developers understand new muting pattern
@@ -380,6 +410,7 @@ function VoiceApp() {
 - Issue #190: Missing Agent State Handlers (regression from this refactor)
 - Issue #121: Original TTS mute functionality
 - Issue #159: Session management migration (complementary refactor)
+- Issue #206: Lazy initialization (managers created on-demand; `start()` accepts service flags)
 
 **Lessons Learned:**
 1. Component-managed mute state creates synchronization issues between component and parent
@@ -403,7 +434,8 @@ The test app demonstrates push-to-talk control:
    - Button also uses `onMouseLeave` to ensure release even if mouse leaves button
 
 **Audio Blocking Flow:**
-- Component tracks blocking state internally via `allowAgentRef` (lines 185-187)
-- Component resets blocking on `start()` (line 1779) to ensure clean connection state  
+- Component tracks blocking state internally via `allowAgentRef` (line 196)
+- Component resets blocking on `start()` (line 1837) and `stop()` (line 2093) to ensure clean connection state  
 - Parent controls when to block/unblock by calling `interruptAgent()`/`allowAgent()`
 - No toggle exists - all control is explicit block/unblock calls
+- **Issue #206 Impact:** With lazy initialization, `start()` may be called with service flags, and managers are created on-demand. Audio blocking reset still applies when connections are established.

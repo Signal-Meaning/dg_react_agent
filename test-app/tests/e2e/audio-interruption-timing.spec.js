@@ -20,7 +20,7 @@ import {
   waitForConnectionAndSettings,
   waitForGreetingIfPresent,
   sendMessageAndWaitForResponse,
-  waitForPlaybackStart,
+  waitForAudioPlaybackStart as waitForPlaybackStart,
   getAudioDiagnostics
 } from './helpers/test-helpers.js';
 

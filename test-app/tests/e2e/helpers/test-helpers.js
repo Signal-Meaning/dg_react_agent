@@ -71,6 +71,18 @@ async function waitForSettingsApplied(page, timeout = 10000) {
   );
 }
 
+/**
+ * Wait for connection to be established and settings to be applied
+ * This is a convenience function that waits for both connection and settings
+ * @param {import('@playwright/test').Page} page
+ * @param {number} connectionTimeout - Timeout for connection in ms (default: 5000)
+ * @param {number} settingsTimeout - Timeout for settings in ms (default: 10000)
+ */
+async function waitForConnectionAndSettings(page, connectionTimeout = 5000, settingsTimeout = 10000) {
+  await waitForConnection(page, connectionTimeout);
+  await waitForSettingsApplied(page, settingsTimeout);
+}
+
 
 /**
  * Wait for agent to finish greeting
@@ -572,6 +584,7 @@ export {
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   waitForConnection, // Wait for connection to be established
   waitForSettingsApplied, // Wait for agent settings to be applied (SettingsApplied received from server)
+  waitForConnectionAndSettings, // Wait for both connection and settings to be applied
   waitForAgentGreeting, // Wait for agent to finish speaking its greeting message
   waitForGreetingIfPresent, // Safely wait for greeting if it plays, otherwise continue (doesn't fail if no greeting)
   sendTextMessage, // Send a text message through the UI and wait for input to clear
