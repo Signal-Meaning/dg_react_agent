@@ -2202,15 +2202,6 @@ function DeepgramVoiceInteraction(
       }
       return audioManagerRef.current?.getAudioContext() || undefined;
     },
-    
-    // Debug methods for testing
-    getConnectionStates: () => ({
-      transcription: transcriptionManagerRef.current?.getState() || 'not-found',
-      agent: agentManagerRef.current?.getState() || 'not-found',
-      transcriptionConnected: transcriptionManagerRef.current?.isConnected() || false,
-      agentConnected: agentManagerRef.current?.isConnected() || false,
-    }),
-    getState: () => state,
   }));
 
   // Render nothing (headless component)
