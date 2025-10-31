@@ -38,26 +38,6 @@ export const APPROVED_COMPONENT_METHOD_ADDITIONS = {
     confirmed: true,
     usage: 'test-app/src/App.tsx:handleMuteUp',
   },
-  
-  // UNDER REVIEW - debate needed
-  'getConnectionStates': {
-    addedIn: 'v0.5.0',
-    issue: 'ISSUE-XXX',
-    rationale: 'Connection state inspection. Used in test-app to check if agent connection is closed.',
-    breaking: false,
-    requiresDebate: true,
-    question: 'Can test-app get this info from onConnectionStateChange callback instead?',
-    usage: 'test-app/src/App.tsx:488',
-  },
-  'getState': {
-    addedIn: 'v0.5.0',
-    issue: 'ISSUE-XXX',
-    rationale: 'Component state inspection for debugging.',
-    breaking: false,
-    requiresDebate: true,
-    question: 'Can test-app get this info from existing callbacks (onAgentStateChange, etc.)?',
-  },
-  
 
 } as const;
 
@@ -76,6 +56,22 @@ export const METHODS_TO_REMOVE = {
     removeImmediately: true,
     removed: true,
     removedIn: 'Issue #195',
+  },
+  'getConnectionStates': {
+    reason: 'Debug method that exposes internal implementation. Not part of public API.',
+    replacement: 'onConnectionStateChange callback to track connection state',
+    removeImmediately: true,
+    removed: false,
+    issue: 'Issue #162',
+    note: 'Connection state available via onConnectionStateChange(service, state) callback',
+  },
+  'getState': {
+    reason: 'Debug method that exposes internal implementation. Not part of public API.',
+    replacement: 'Appropriate callbacks: onReady, onAgentStateChange, onConnectionStateChange, onSettingsApplied, etc.',
+    removeImmediately: true,
+    removed: false,
+    issue: 'Issue #162',
+    note: 'Component state available via public callbacks. onSettingsApplied added in Phase 0 to replace hasSentSettings polling.',
   },
 } as const;
 

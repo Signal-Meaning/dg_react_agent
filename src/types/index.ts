@@ -7,7 +7,6 @@
 // import type { AgentOptions, AgentState, AgentFunction, AgentSettingsMessage, UpdateInstructionsPayload } from './agent'; // REMOVED - Handled by export *
 import type { ConnectionState, ServiceType, EndpointConfig, DeepgramError } from './connection';
 import type { TranscriptionOptions, TranscriptResponse } from './transcription';
-import type { VoiceInteractionState } from '../utils/state/VoiceInteractionState';
 // Import AgentState specifically because DeepgramVoiceInteractionProps uses it directly
 import type { AgentState, AgentOptions, UpdateInstructionsPayload } from './agent';
 
@@ -127,7 +126,12 @@ export interface DeepgramVoiceInteractionProps {
    */
   onUserStartedSpeaking?: () => void;
   
-  
+  /**
+   * Called when SettingsApplied event is received from Deepgram
+   * Indicates that agent settings have been successfully applied and the connection is ready
+   * for audio data processing. This replaces the need to poll internal state via getState().
+   */
+  onSettingsApplied?: () => void;
   
   /**
    * Called when an error occurs
@@ -282,21 +286,6 @@ export interface DeepgramVoiceInteractionHandle {
    */
   startAudioCapture: () => Promise<void>;
   
-  /**
-   * Get connection states for debugging (testing only)
-   */
-  getConnectionStates: () => {
-    transcription: string;
-    agent: string;
-    transcriptionConnected: boolean;
-    agentConnected: boolean;
-  };
-  
-  /**
-   * Get current component state for debugging (testing only)
-   */
-  getState: () => VoiceInteractionState;
-
   /**
    * Get the AudioContext for debugging and testing
    * 

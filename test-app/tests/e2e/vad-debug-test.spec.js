@@ -7,7 +7,7 @@
 
 import { test, expect } from '@playwright/test';
 import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
-import AudioTestHelpers from '../utils/audio-helpers';
+import { setupConnectionStateTracking } from './helpers/test-helpers';
 
 test.describe('VAD Debug Test', () => {
   test.beforeEach(async ({ page }) => {
@@ -60,71 +60,66 @@ test.describe('VAD Debug Test', () => {
     );
     console.log('🔍 [DEBUG] Component initialization logs:', initLogs);
     
-    // Enable microphone
+    // Setup connection state tracking BEFORE microphone activation to catch all connection events
+    console.log('🔍 [DEBUG] Setting up connection state tracking...');
+    const stateTracker = await setupConnectionStateTracking(page);
+    
+    // Activate microphone directly (page is already set up in beforeEach)
+    // Transcription will connect when microphone activates and audio is sent
+    console.log('🔍 [DEBUG] Activating microphone...');
     await page.click('[data-testid="microphone-button"]');
     
-    // Wait for connection
+    // Wait for agent connection
     await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    console.log('🔍 [DEBUG] Agent connection established');
     
-    // Check component state
-    const componentState = await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      if (deepgramComponent && deepgramComponent.getConnectionStates) {
-        return deepgramComponent.getConnectionStates();
-      }
-      return null;
-    });
+    // Wait for microphone to be enabled
+    // When mic is enabled, test-app has:
+    // 1. Established connections (agent + transcription if configured)
+    // 2. Applied settings (agent SettingsApplied received)
+    // 3. Started audio capture (AudioManager recording)
+    // 4. Transcription should be connected and receiving audio
+    await page.waitForFunction(
+      () => {
+        const micStatus = document.querySelector('[data-testid="mic-status"]');
+        return micStatus && micStatus.textContent === 'Enabled';
+      },
+      { timeout: 15000 }
+    );
+    console.log('🔍 [DEBUG] Microphone enabled - all prerequisites met (connections, settings, audio capture)');
     
-    console.log('🔍 [DEBUG] Component connection states:', componentState);
+    // After mic is enabled, transcription should already be connected
+    // (startAudioCapture connects transcription if configured, and audio is being sent)
+    const componentState = await stateTracker.getStates();
+    console.log('🔍 [DEBUG] Component connection states after mic enabled:', componentState);
+    
+    // Transcription should be connected for VAD tests (they require transcription service)
+    // If not connected, that indicates a problem with the test setup or audio flow
+    if (!componentState.transcriptionConnected) {
+      console.log('⚠️ [DEBUG] WARNING: Transcription not connected after mic enabled');
+      console.log('⚠️ [DEBUG] This may indicate:');
+      console.log('⚠️ [DEBUG]   - Audio mocks not producing audio samples');
+      console.log('⚠️ [DEBUG]   - Transcription service timeout (no audio received)');
+      console.log('⚠️ [DEBUG]   - Connection failed to establish');
+    } else {
+      console.log('✅ [DEBUG] Transcription connected - ready for VAD events');
+    }
+    
+    // Give a moment for any async connection state updates
+    await page.waitForTimeout(1000);
+    
+    // Get final state
+    const finalState = await stateTracker.getStates();
+    console.log('🔍 [DEBUG] Final component connection states:', finalState);
     
     // Check if VAD events are enabled in transcription options
-    const transcriptionConfig = await page.evaluate(() => {
-      // Try to access the component's transcription options
-      const deepgramComponent = window.deepgramRef?.current;
-      if (deepgramComponent && deepgramComponent.getState) {
-        const state = deepgramComponent.getState();
-        return {
-          hasTranscriptionManager: !!state.connections?.transcription,
-          transcriptionState: state.connections?.transcription
-        };
-      }
-      return null;
-    });
+    // Note: Transcription options are not exposed via public API, so we check connection state only
+    const transcriptionConfig = {
+      hasTranscriptionManager: finalState.transcription !== 'closed' && finalState.transcription !== 'not-found',
+      transcriptionState: finalState.transcription
+    };
     
     console.log('🔍 [DEBUG] Transcription configuration:', transcriptionConfig);
-    
-    // Send a simple audio buffer directly
-    console.log('🔍 [DEBUG] Sending simple audio buffer...');
-    await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      if (deepgramComponent && deepgramComponent.sendAudioData) {
-        // Create a simple audio buffer with speech-like pattern
-        const sampleRate = 16000;
-        const duration = 1; // 1 second
-        const samples = sampleRate * duration;
-        const audioBuffer = new ArrayBuffer(samples * 2); // 16-bit PCM
-        const audioView = new Int16Array(audioBuffer);
-        
-        // Fill with a sine wave pattern that should trigger VAD
-        for (let i = 0; i < samples; i++) {
-          const frequency = 440; // A4 note
-          const amplitude = 16000; // Strong signal
-          const sample = Math.sin(2 * Math.PI * frequency * i / sampleRate) * amplitude;
-          audioView[i] = Math.floor(sample);
-        }
-        
-        console.log('🔍 [DEBUG] Created audio buffer:', {
-          size: audioBuffer.byteLength,
-          samples: samples,
-          firstFewSamples: Array.from(audioView.slice(0, 10))
-        });
-        
-        deepgramComponent.sendAudioData(audioBuffer);
-        console.log('🔍 [DEBUG] Audio buffer sent to component');
-      } else {
-        console.log('🔍 [DEBUG] Component or sendAudioData not available');
-      }
-    });
     
     // Wait a bit for processing
     await page.waitForTimeout(2000);
@@ -154,9 +149,11 @@ test.describe('VAD Debug Test', () => {
     
     console.log('🔍 [DEBUG] VAD events detected:', vadEventsDetected);
     
-    // The test passes if we can at least send audio data
+    // VAD tests require transcription service to be connected
+    // When mic is enabled, test-app should have established transcription connection
+    // If not connected, it indicates audio mocks aren't producing audio samples
     expect(componentState).toBeTruthy();
-    expect(componentState.transcriptionConnected).toBe(true);
+    expect(finalState.transcriptionConnected).toBe(true);
     
     console.log('🔍 [DEBUG] Test completed - check logs above for VAD event flow');
   });

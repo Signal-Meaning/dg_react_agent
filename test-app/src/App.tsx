@@ -213,29 +213,20 @@ function App() {
   const handleReady = useCallback((ready: boolean) => {
     setIsReady(ready);
     addLog(`Component is ${ready ? 'ready' : 'not ready'}`);
-    
-    // Start connections when component is ready
-    if (ready && deepgramRef.current) {
-      console.log('🎤 [APP] Starting connections...');
-      deepgramRef.current.start().catch(error => {
-        console.error('🎤 [APP] Failed to start connections:', error);
-        addLog(`Failed to start connections: ${error.message}`);
-      });
-    }
+    // Note: Connections start lazily when needed (e.g., when microphone is activated)
+    // This is the lazy initialization pattern - no automatic connection on ready
   }, [addLog]); // Depends on addLog
 
-  // Keep a lightweight mirror of hasSentSettings in the DOM for E2E assertions
-  useEffect(() => {
-    const id = setInterval(() => {
-      try {
-        const st = deepgramRef.current?.getState?.();
-        setHasSentSettingsDom(Boolean(st?.hasSentSettings));
-      } catch {
-        // ignore transient errors while ref is initializing
-      }
-    }, 250);
-    return () => clearInterval(id);
-  }, []);
+  // Handle SettingsApplied event via callback (replaces getState() polling)
+  const handleSettingsApplied = useCallback(() => {
+    setHasSentSettingsDom(true);
+    // Also mark greeting as sent if not already shown (fallback detection)
+    if (!hasShownGreetingRef.current) {
+      setGreetingSent(true);
+      hasShownGreetingRef.current = true;
+      addLog('Greeting marked sent (SettingsApplied received via callback)');
+    }
+  }, [addLog]);
   
   const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
     // Use type assertion to handle the actual structure from Deepgram
@@ -324,21 +315,6 @@ function App() {
       addLog('Greeting detected (heuristic): marked greeting-sent for tests');
     }
   }, [agentState, conversationHistory, addLog]);
-
-  // Fallback: if SettingsApplied is observed via getState(), mark greeting-sent for tests
-  useEffect(() => {
-    if (hasShownGreetingRef.current) return;
-    const interval = setInterval(() => {
-      const st = deepgramRef.current?.getState?.();
-      if (st?.hasSentSettings) {
-        setGreetingSent(true);
-        hasShownGreetingRef.current = true;
-        addLog('Greeting marked sent (SettingsApplied detected via ref)');
-        clearInterval(interval);
-      }
-    }, 200);
-    return () => clearInterval(interval);
-  }, [addLog]);
   
   // Add a handler for audio playing status
   const handlePlaybackStateChange = useCallback((isPlaying: boolean) => {
@@ -544,9 +520,8 @@ function App() {
           console.log('🎤 [APP] deepgramRef.current exists, calling startAudioCapture()');
           console.log('🎤 [APP] deepgramRef.current methods:', Object.keys(deepgramRef.current));
           
-          // Check if connection is closed and needs to be re-established
-          const connectionStates = deepgramRef.current.getConnectionStates();
-          if (!connectionStates.agentConnected) {
+          // Check if connection is closed and needs to be re-established (using tracked state)
+          if (connectionStates.agent !== 'connected') {
             console.log('🎤 [APP] Agent connection closed, re-establishing connection...');
             addLog('Re-establishing agent connection...');
             await deepgramRef.current.start();
@@ -647,6 +622,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onConnectionStateChange={handleConnectionStateChange}
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
+        onSettingsApplied={handleSettingsApplied}
         // VAD event handlers
         onUserStartedSpeaking={handleUserStartedSpeaking}
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
@@ -887,8 +863,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
 
               // Ensure agent connection is started on user gesture (gate start behind focus)
               try {
-                const states = deepgramRef.current?.getConnectionStates?.();
-                const isConnected = states?.agentConnected === true;
+                const isConnected = connectionStates.agent === 'connected';
                 if (!isConnected) {
                   addLog('Starting agent connection on text focus gesture');
                   await deepgramRef.current?.start?.();
