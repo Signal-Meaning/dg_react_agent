@@ -181,6 +181,9 @@ function DeepgramVoiceInteraction(
   
   // Track whether agent audio is allowed
   const ALLOW_AUDIO = true;
+  
+  // Connection timeout for settings to be sent after manager connection
+  const SETTINGS_SEND_DELAY_MS = 500;
   const BLOCK_AUDIO = false;
   const allowAgentRef = useRef(ALLOW_AUDIO);
   
@@ -1926,7 +1929,7 @@ function DeepgramVoiceInteraction(
       }
       
       // Wait a moment for settings to be sent
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, SETTINGS_SEND_DELAY_MS));
       
       // Final check - manager should still exist
       if (!agentManagerRef.current || agentManagerRef.current !== managerBeforeConnect) {
