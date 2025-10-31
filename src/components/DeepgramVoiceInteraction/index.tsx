@@ -861,12 +861,6 @@ function DeepgramVoiceInteraction(
           audioManagerRef.current = null;
         }
         
-        // Cleanup agent state service
-        if (agentStateServiceRef.current) {
-          agentStateServiceRef.current.reset();
-          agentStateServiceRef.current = null;
-        }
-        
         // Ensure state is reset on unmount
         dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
         dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: 'closed' });
@@ -2250,14 +2244,17 @@ function DeepgramVoiceInteraction(
       }
     } else {
       // AudioManager exists, but ensure AudioContext is resumed
-      const audioContext = audioManagerRef.current.getAudioContext();
-      if (audioContext && audioContext.state === 'suspended') {
-        log('Resuming suspended AudioContext (user interaction permits this)');
-        try {
-          await audioContext.resume();
-          log('AudioContext resumed successfully');
-        } catch (error) {
-          log('Failed to resume AudioContext:', error);
+      const audioManager = audioManagerRef.current;
+      if (audioManager) {
+        const audioContext = audioManager.getAudioContext();
+        if (audioContext && audioContext.state === 'suspended') {
+          log('Resuming suspended AudioContext (user interaction permits this)');
+          try {
+            await audioContext.resume();
+            log('AudioContext resumed successfully');
+          } catch (error) {
+            log('Failed to resume AudioContext:', error);
+          }
         }
       }
     }

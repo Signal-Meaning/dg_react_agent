@@ -570,6 +570,7 @@ import MicrophoneHelpers from './microphone-helpers.js';
 export {
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
+  waitForConnection, // Wait for connection to be established
   waitForSettingsApplied, // Wait for agent settings to be applied (SettingsApplied received from server)
   waitForAgentGreeting, // Wait for agent to finish speaking its greeting message
   waitForGreetingIfPresent, // Safely wait for greeting if it plays, otherwise continue (doesn't fail if no greeting)
