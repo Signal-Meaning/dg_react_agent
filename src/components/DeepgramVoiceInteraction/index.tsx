@@ -1704,38 +1704,6 @@ function DeepgramVoiceInteraction(
     }
   };
 
-  // Connect for text-only interactions (no microphone)
-  const connectTextOnly = async (): Promise<void> => {
-    try {
-      log('ConnectTextOnly method called');
-      
-      // Connect agent WebSocket if configured
-      if (agentManagerRef.current) {
-        log('Connecting Agent WebSocket...');
-        await agentManagerRef.current.connect();
-        log('Agent WebSocket connected');
-      } else {
-        log('Agent manager not configured, skipping connection');
-      }
-      
-      // DO NOT start recording - this is text-only mode
-      log('Text-only connection established (no audio recording)');
-      
-      // Set ready state to true after successful text-only connection
-      dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
-    } catch (error) {
-      log('Error within connectTextOnly method:', error);
-      handleError({
-        service: 'agent',
-        code: 'connection_error',
-        message: 'Failed to establish text-only connection',
-        details: error,
-      });
-      dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
-      throw error;
-    }
-  };
-
   // Stop the connection
   const stop = async (): Promise<void> => {
     log('Stopping voice interaction');
@@ -2199,7 +2167,6 @@ function DeepgramVoiceInteraction(
   useImperativeHandle(ref, () => ({
     // Core connection methods
     start,
-    connectTextOnly,
     stop,
     
     // Agent interaction methods
@@ -2217,8 +2184,6 @@ function DeepgramVoiceInteraction(
     
     // Audio data handling
     sendAudioData, // Expose sendAudioData for testing and external use
-    
-    isPlaybackActive: () => state.isPlaying,
     
     // Audio context access
     getAudioContext: () => {

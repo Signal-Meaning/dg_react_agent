@@ -268,11 +268,6 @@ export interface DeepgramVoiceInteractionHandle {
   injectAgentMessage: (message: string) => void;
   
   /**
-   * Connect for text-only interactions (no microphone)
-   */
-  connectTextOnly: () => Promise<void>;
-  
-  /**
    * Inject a user message to the agent
    * Creates agent manager lazily if needed and ensures connection is established
    */
@@ -301,13 +296,6 @@ export interface DeepgramVoiceInteractionHandle {
    * Get current component state for debugging (testing only)
    */
   getState: () => VoiceInteractionState;
-
-  /**
-   * Check if audio is currently playing
-   * 
-   * @returns true if audio is currently playing, false otherwise
-   */
-  isPlaybackActive: () => boolean;
 
   /**
    * Get the AudioContext for debugging and testing
