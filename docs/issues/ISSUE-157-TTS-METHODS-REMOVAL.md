@@ -304,9 +304,7 @@ function VoiceApp() {
 ## 🧪 Test Coverage
 
 ### Unit Tests
-- `tests/voice-agent-api-validation.test.tsx` - **Issue #157-specific test:** Validates `interruptAgent()` method exists and can be called (✅ PASSING)
-  - **Note:** This test suite also contains general API governance tests that check ALL methods marked for removal, not just Issue #157 methods
-  - The failing test `should fail if methods marked for removal still exist` is a **general API validation test**, not Issue #157-specific
+- `tests/voice-agent-api-validation.test.tsx` - Validates `interruptAgent()` method exists and can be called
 - `tests/module-exports.test.js` - Validates `interruptAgent` and `allowAgent` are exported in types
 - `tests/start-stop-methods.test.js` - Validates `start()` and `stop()` methods work correctly with audio blocking reset
 
@@ -335,13 +333,10 @@ cd test-app && npm run test:e2e -- tests/e2e/audio-interruption-timing.spec.js
 **Unit Tests:**
 - ✅ `tests/module-exports.test.js` - **PASSING** (validates interruptAgent/allowAgent exports)
 - ✅ `tests/start-stop-methods.test.js` - **PASSING** (10/10 tests pass, validates start/stop with audio blocking reset)
-- ✅ `tests/voice-agent-api-validation.test.tsx` - **Issue #157-specific test PASSING**
-  - ✅ `should expose interruptAgent() method` - **PASSING** (Issue #157 functionality validated)
-  - ⚠️ **General API governance test failing** (unrelated to Issue #157):
-    - `should fail if methods marked for removal still exist` - FAILS because `connectTextOnly` and `isPlaybackActive` still exist
-    - **Why this affects the test suite:** This is a general API validation test that checks ALL methods in the `METHODS_TO_REMOVE` registry
-    - **Root cause:** These methods are marked for removal in Issue #194 and #195 but haven't been removed yet
-    - **Impact on Issue #157:** **NONE** - This test failure is about Issue #194/#195, not Issue #157. All Issue #157-specific functionality tests are passing.
+- ⚠️ `tests/voice-agent-api-validation.test.tsx` - **1 test failing** (unrelated to Issue #157)
+  - `should fail if methods marked for removal still exist` - FAILS because `connectTextOnly` and `isPlaybackActive` still exist
+  - These are marked for removal in Issue #194 and #195 but haven't been removed yet
+  - All Issue #157-related tests (interruptAgent validation) are passing
 
 **E2E Tests:**
 - ⏭️ `test-app/tests/e2e/audio-interruption-timing.spec.js` - Tests are intentionally skipped (as designed)

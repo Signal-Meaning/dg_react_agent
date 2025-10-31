@@ -2247,16 +2247,16 @@ function DeepgramVoiceInteraction(
       const audioManager = audioManagerRef.current;
       if (audioManager) {
         const audioContext = audioManager.getAudioContext();
-        if (audioContext && audioContext.state === 'suspended') {
-          log('Resuming suspended AudioContext (user interaction permits this)');
-          try {
-            await audioContext.resume();
-            log('AudioContext resumed successfully');
-          } catch (error) {
-            log('Failed to resume AudioContext:', error);
-          }
+      if (audioContext && audioContext.state === 'suspended') {
+        log('Resuming suspended AudioContext (user interaction permits this)');
+        try {
+          await audioContext.resume();
+          log('AudioContext resumed successfully');
+        } catch (error) {
+          log('Failed to resume AudioContext:', error);
         }
       }
+    }
     }
     
     agentManagerRef.current.sendJSON({
