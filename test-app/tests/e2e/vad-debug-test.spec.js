@@ -7,7 +7,7 @@
 
 import { test, expect } from '@playwright/test';
 import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
-import AudioTestHelpers from '../utils/audio-helpers';
+import { setupConnectionStateTracking } from './helpers/test-helpers';
 
 test.describe('VAD Debug Test', () => {
   test.beforeEach(async ({ page }) => {
@@ -66,30 +66,20 @@ test.describe('VAD Debug Test', () => {
     // Wait for connection
     await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
     
-    // Check component state
-    const componentState = await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      if (deepgramComponent && deepgramComponent.getConnectionStates) {
-        return deepgramComponent.getConnectionStates();
-      }
-      return null;
-    });
+    // Setup connection state tracking
+    const stateTracker = await setupConnectionStateTracking(page);
+    await page.waitForTimeout(500); // Wait for state to be tracked
     
+    // Check component state using callback-based tracking
+    const componentState = await stateTracker.getStates();
     console.log('🔍 [DEBUG] Component connection states:', componentState);
     
     // Check if VAD events are enabled in transcription options
-    const transcriptionConfig = await page.evaluate(() => {
-      // Try to access the component's transcription options
-      const deepgramComponent = window.deepgramRef?.current;
-      if (deepgramComponent && deepgramComponent.getState) {
-        const state = deepgramComponent.getState();
-        return {
-          hasTranscriptionManager: !!state.connections?.transcription,
-          transcriptionState: state.connections?.transcription
-        };
-      }
-      return null;
-    });
+    // Note: Transcription options are not exposed via public API, so we check connection state only
+    const transcriptionConfig = {
+      hasTranscriptionManager: componentState.transcription !== 'closed' && componentState.transcription !== 'not-found',
+      transcriptionState: componentState.transcription
+    };
     
     console.log('🔍 [DEBUG] Transcription configuration:', transcriptionConfig);
     

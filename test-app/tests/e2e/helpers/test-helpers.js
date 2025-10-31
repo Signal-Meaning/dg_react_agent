@@ -54,21 +54,89 @@ async function waitForConnection(page, timeout = 5000) {
 /**
  * Wait for agent settings to be applied (SettingsApplied received from server)
  * This ensures the agent is fully initialized and ready to respond
+ * Uses onSettingsApplied callback instead of polling getState() debug method
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
 async function waitForSettingsApplied(page, timeout = 10000) {
-  await page.waitForFunction(
-    () => {
-      const deepgramRef = window.deepgramRef;
-      if (!deepgramRef?.current) {
-        return false;
+  // Setup callback-based tracking in page context
+  await page.evaluate(() => {
+    window.testSettingsApplied = false;
+    
+    // Store original callback if it exists
+    const originalCallback = window.onSettingsApplied;
+    
+    // Override onSettingsApplied to track state
+    window.onSettingsApplied = () => {
+      window.testSettingsApplied = true;
+      // Also call original callback if it exists (test-app may have one)
+      if (originalCallback) {
+        originalCallback();
       }
-      const state = deepgramRef.current.getState();
-      return state?.hasSentSettings === true;
-    },
+    };
+  });
+  
+  // Wait for callback to fire
+  await page.waitForFunction(
+    () => window.testSettingsApplied === true,
     { timeout }
   );
+}
+
+/**
+ * Setup connection state tracking via onConnectionStateChange callback
+ * Returns tracked state that can be queried later
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<Object>} Object with methods to get tracked state
+ */
+async function setupConnectionStateTracking(page) {
+  await page.evaluate(() => {
+    // Initialize connection state tracking
+    window.testConnectionStates = {
+      agent: 'closed',
+      transcription: 'closed'
+    };
+    
+    // Store original callback if it exists
+    const originalCallback = window.onConnectionStateChange;
+    
+    // Override onConnectionStateChange to track state
+    window.onConnectionStateChange = (service, state) => {
+      if (service === 'agent') {
+        window.testConnectionStates.agent = state;
+      } else if (service === 'transcription') {
+        window.testConnectionStates.transcription = state;
+      }
+      // Also call original callback if it exists (test-app has one)
+      if (originalCallback) {
+        originalCallback(service, state);
+      }
+    };
+  });
+  
+  // Return helper functions to query state
+  return {
+    getStates: async () => {
+      return await page.evaluate(() => ({
+        agent: window.testConnectionStates?.agent || 'closed',
+        transcription: window.testConnectionStates?.transcription || 'closed',
+        agentConnected: window.testConnectionStates?.agent === 'connected',
+        transcriptionConnected: window.testConnectionStates?.transcription === 'connected'
+      }));
+    },
+    waitForAgentConnected: async (timeout = 5000) => {
+      await page.waitForFunction(
+        () => window.testConnectionStates?.agent === 'connected',
+        { timeout }
+      );
+    },
+    waitForTranscriptionConnected: async (timeout = 5000) => {
+      await page.waitForFunction(
+        () => window.testConnectionStates?.transcription === 'connected',
+        { timeout }
+      );
+    }
+  };
 }
 
 /**
@@ -601,6 +669,7 @@ export {
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   waitForConnection, // Wait for connection to be established
   waitForSettingsApplied, // Wait for agent settings to be applied (SettingsApplied received from server)
+  setupConnectionStateTracking, // Setup connection state tracking via onConnectionStateChange callback
   waitForConnectionAndSettings, // Wait for both connection and settings to be applied
   waitForAgentGreeting, // Wait for agent to finish speaking its greeting message
   waitForGreetingIfPresent, // Safely wait for greeting if it plays, otherwise continue (doesn't fail if no greeting)

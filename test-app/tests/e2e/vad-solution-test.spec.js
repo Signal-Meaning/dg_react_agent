@@ -8,6 +8,7 @@
 
 import { test, expect } from '@playwright/test';
 import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
+import { setupConnectionStateTracking } from './helpers/test-helpers';
 
 test.describe('VAD Solution Test', () => {
   test.beforeEach(async ({ page }) => {
@@ -55,15 +56,12 @@ test.describe('VAD Solution Test', () => {
     // Wait for connection
     await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
     
-    // Verify component state
-    const componentState = await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      if (deepgramComponent && deepgramComponent.getConnectionStates) {
-        return deepgramComponent.getConnectionStates();
-      }
-      return null;
-    });
+    // Setup connection state tracking
+    const stateTracker = await setupConnectionStateTracking(page);
+    await page.waitForTimeout(500); // Wait for state to be tracked
     
+    // Verify component state using callback-based tracking
+    const componentState = await stateTracker.getStates();
     console.log('🔍 [SOLUTION] Component state:', componentState);
     
     // Verify VAD configuration is correct - look for any VAD-related logs

@@ -10,6 +10,7 @@
 
 import { test, expect } from '@playwright/test';
 import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
+import { setupConnectionStateTracking } from './helpers/test-helpers';
 import AudioTestHelpers from '../utils/audio-helpers';
 import AudioSimulator from '../utils/audio-simulator';
 import SimpleVADHelpers from '../utils/simple-vad-helpers';
@@ -99,40 +100,22 @@ test.describe('VAD Realistic Audio Simulation', () => {
       console.log('✅ Microphone enabled');
     }
     
-    // Check if transcription service is connected
-    const transcriptionInfo = await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      console.log('🔧 [VAD] Deepgram component:', !!deepgramComponent);
-      console.log('🔧 [VAD] Component keys:', deepgramComponent ? Object.keys(deepgramComponent) : 'none');
-      
-      if (deepgramComponent) {
-        // Use the new debug methods
-        if (deepgramComponent.getConnectionStates) {
-          const connectionStates = deepgramComponent.getConnectionStates();
-          console.log('🔧 [VAD] Connection states:', connectionStates);
-          return {
-            connected: connectionStates.transcriptionConnected,
-            state: connectionStates.transcription,
-            agentConnected: connectionStates.agentConnected,
-            agentState: connectionStates.agent
-          };
-        }
-        
-        // Fallback to component state
-        if (deepgramComponent.getState) {
-          const componentState = deepgramComponent.getState();
-          console.log('🔧 [VAD] Component state:', componentState);
-          return {
-            connected: componentState.connections?.transcription === 'connected',
-            state: componentState.connections?.transcription || 'not-found',
-            agentConnected: componentState.connections?.agent === 'connected',
-            agentState: componentState.connections?.agent || 'not-found'
-          };
-        }
-      }
-      
-      return { connected: false, state: 'not-found', agentConnected: false, agentState: 'not-found' };
-    });
+    // Setup connection state tracking
+    const stateTracker = await setupConnectionStateTracking(page);
+    
+    // Wait a bit for state to be tracked via callbacks
+    await page.waitForTimeout(500);
+    
+    // Check if transcription service is connected using callback-based tracking
+    const connectionStates = await stateTracker.getStates();
+    const transcriptionInfo = {
+      connected: connectionStates.transcriptionConnected,
+      state: connectionStates.transcription,
+      agentConnected: connectionStates.agentConnected,
+      agentState: connectionStates.agent
+    };
+    
+    console.log('🔧 [VAD] Connection states:', transcriptionInfo);
     
     console.log('🔧 [VAD] Transcription service info:', transcriptionInfo);
     

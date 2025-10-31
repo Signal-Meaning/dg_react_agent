@@ -72,24 +72,15 @@ test.describe('onUserStoppedSpeaking Callback Verification', () => {
       const callbackSetup = await page.evaluate(() => {
         const deepgramComponent = window.deepgramRef?.current;
         if (deepgramComponent) {
-          // Check if the component has the expected methods
-          const hasGetState = typeof deepgramComponent.getState === 'function';
-          const hasGetConnectionStates = typeof deepgramComponent.getConnectionStates === 'function';
-          
-          let state = null;
-          if (hasGetState) {
-            try {
-              state = deepgramComponent.getState();
-            } catch (error) {
-              console.log('Error getting state:', error);
-            }
-          }
+          // Check if the component has public API methods
+          const hasSendAudioData = typeof deepgramComponent.sendAudioData === 'function';
+          const hasStart = typeof deepgramComponent.start === 'function';
+          const hasStop = typeof deepgramComponent.stop === 'function';
           
           return {
-            hasGetState,
-            hasGetConnectionStates,
-            state: state,
-            transcriptionOptions: state?.transcriptionOptions,
+            hasSendAudioData,
+            hasStart,
+            hasStop,
             componentType: typeof deepgramComponent,
             componentKeys: Object.keys(deepgramComponent)
           };
@@ -99,14 +90,6 @@ test.describe('onUserStoppedSpeaking Callback Verification', () => {
       
       console.log('📊 Callback Setup:', callbackSetup);
       
-      // Check transcription configuration
-      if (callbackSetup?.transcriptionOptions) {
-        console.log('📊 Transcription Options:', {
-          vad_events: callbackSetup.transcriptionOptions.vad_events,
-          utterance_end_ms: callbackSetup.transcriptionOptions.utterance_end_ms,
-          interim_results: callbackSetup.transcriptionOptions.interim_results
-        });
-      }
       
       // Verify the callback is properly implemented in the component
       const callbackImplementation = await page.evaluate(() => {
@@ -165,13 +148,11 @@ test.describe('onUserStoppedSpeaking Callback Verification', () => {
       
       // Verify that the callback is working
       expect(callbackSetup).not.toBeNull();
-      expect(callbackSetup?.hasGetState).toBe(true);
-      expect(callbackSetup?.state).toBeDefined();
+      expect(callbackSetup?.hasSendAudioData).toBe(true);
+      expect(callbackSetup?.hasStart).toBe(true);
       
-      // The transcriptionOptions might not be in the state, but the component should still work
-      // Let's check if the component has the necessary methods for VAD events
+      // Check if the component has the necessary public methods for VAD events
       expect(callbackSetup?.componentKeys).toContain('sendAudioData');
-      expect(callbackSetup?.componentKeys).toContain('getState');
       
       console.log('✅ onUserStoppedSpeaking callback verification completed');
       console.log('✅ The callback is properly implemented and configured');

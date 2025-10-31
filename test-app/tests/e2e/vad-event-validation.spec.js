@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks.js';
+import { setupConnectionStateTracking } from './helpers/test-helpers.js';
 import AudioTestHelpers from '../utils/audio-helpers.js';
 
 test.describe('VAD Event Validation with Real APIs', () => {
@@ -75,27 +76,20 @@ test.describe('VAD Event Validation with Real APIs', () => {
       console.log('⚠️ Microphone not enabled, but continuing with test...');
     }
     
-    // Check if transcription service is connected
-    const transcriptionInfo = await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      console.log('🔧 [DEBUG] Deepgram component:', !!deepgramComponent);
-      console.log('🔧 [DEBUG] Component keys:', deepgramComponent ? Object.keys(deepgramComponent) : 'none');
-      
-      if (deepgramComponent && deepgramComponent.transcriptionManagerRef) {
-        console.log('🔧 [DEBUG] Transcription manager ref exists:', !!deepgramComponent.transcriptionManagerRef.current);
-        if (deepgramComponent.transcriptionManagerRef.current) {
-          const state = deepgramComponent.transcriptionManagerRef.current.getState();
-          console.log('🔧 [DEBUG] Transcription service state:', state);
-          return { connected: state === 'connected', state, managerExists: true };
-        } else {
-          console.log('🔧 [DEBUG] Transcription manager ref is null');
-          return { connected: false, state: 'null', managerExists: true };
-        }
-      } else {
-        console.log('🔧 [DEBUG] No transcription manager ref found');
-        return { connected: false, state: 'not-found', managerExists: false };
-      }
-    });
+    // Check if transcription service is connected using public API
+    // Note: transcriptionManagerRef is an internal ref, not part of public API
+    // We use callback-based connection state tracking instead
+    const stateTracker = await setupConnectionStateTracking(page);
+    await page.waitForTimeout(500); // Wait for state to be tracked
+    
+    const connectionStates = await stateTracker.getStates();
+    const transcriptionInfo = {
+      connected: connectionStates.transcriptionConnected,
+      state: connectionStates.transcription,
+      managerExists: connectionStates.transcription !== 'closed' && connectionStates.transcription !== 'not-found'
+    };
+    
+    console.log('🔧 [DEBUG] Transcription service info (via public API):', transcriptionInfo);
     
     console.log('🔧 Transcription service info:', transcriptionInfo);
     
