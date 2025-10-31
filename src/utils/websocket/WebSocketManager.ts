@@ -224,16 +224,14 @@ export class WebSocketManager {
 
         this.ws.onmessage = (event) => {
           // Log the type of data received for every message
-          console.log(`📨 [WEBSOCKET.onmessage] Received message from server`);
+          this.log(`📨 [WEBSOCKET.onmessage] Received message from server`);
           this.log(`Received message data type: ${typeof event.data}, is ArrayBuffer: ${event.data instanceof ArrayBuffer}, is Blob: ${event.data instanceof Blob}`);
           
           if (typeof event.data === 'string') {
             try {
-              console.log(`📨 [WEBSOCKET.onmessage] Raw string message:`, event.data);
-              this.log('Received raw string message:', event.data);
+              this.log(`📨 [WEBSOCKET.onmessage] Raw string message:`, event.data);
               const data = JSON.parse(event.data);
-              console.log(`📨 [WEBSOCKET.onmessage] Parsed JSON message:`, data);
-              this.log('Parsed message into JSON:', data);
+              this.log(`📨 [WEBSOCKET.onmessage] Parsed JSON message:`, data);
               
               // Only reset idle timeout on meaningful user activity (not every protocol message)
               const shouldResetTimeout = this.shouldResetIdleTimeout(data);
@@ -242,7 +240,7 @@ export class WebSocketManager {
                 // But DON'T automatically re-enable idle timeout resets if they're disabled
                 // This prevents the idle timeout from firing during agent responses
                 if (this.idleTimeoutDisabled) {
-                  console.log(`🎯 [IDLE_TIMEOUT] NOT re-enabling idle timeout resets due to meaningful activity: ${data.type} (resets are disabled)`);
+                  this.log(`🎯 [IDLE_TIMEOUT] NOT re-enabling idle timeout resets due to meaningful activity: ${data.type} (resets are disabled)`);
                   // Don't re-enable idle timeout resets - let the component manage this
                 } else {
                   // Only reset on truly meaningful user activity, not on every protocol message
@@ -252,9 +250,9 @@ export class WebSocketManager {
                 }
               }
               
-              console.log(`📨 [WEBSOCKET.onmessage] About to emit message event with type:`, data.type);
+              this.log(`📨 [WEBSOCKET.onmessage] About to emit message event with type:`, data.type);
               this.emit({ type: 'message', data });
-              console.log(`📨 [WEBSOCKET.onmessage] Emit completed for message type:`, data.type);
+              this.log(`📨 [WEBSOCKET.onmessage] Emit completed for message type:`, data.type);
             } catch (error) {
               this.log('Error parsing message:', error);
               this.emit({ 
@@ -389,10 +387,10 @@ export class WebSocketManager {
       window.clearInterval(this.keepaliveIntervalId);
       this.keepaliveIntervalId = null;
       this.log('Stopped keepalive interval');
-      console.log('🔧 [WebSocketManager] Keepalive interval cleared and stopped');
+      this.log('🔧 [WebSocketManager] Keepalive interval cleared and stopped');
     } else {
       this.log('No keepalive interval to stop');
-      console.log('🔧 [WebSocketManager] No keepalive interval was running to stop');
+      this.log('🔧 [WebSocketManager] No keepalive interval was running to stop');
     }
   }
 
@@ -440,7 +438,7 @@ export class WebSocketManager {
     if (this.idleTimeoutId !== null) {
       window.clearTimeout(this.idleTimeoutId);
       this.idleTimeoutId = null;
-      console.log(`🎯 [IDLE_TIMEOUT] Stopped idle timeout for ${this.options.service}`);
+      this.log(`🎯 [IDLE_TIMEOUT] Stopped idle timeout for ${this.options.service}`);
     }
   }
 
@@ -621,9 +619,7 @@ export class WebSocketManager {
     // Add stack trace to understand who is calling close()
     const stack = new Error().stack;
     this.log('Closing WebSocket');
-    if (this.options.debug) {
-      console.log(`🔧 [WebSocketManager] close() called from:`, stack?.split('\n').slice(2, 5).join('\n'));
-    }
+    this.log(`🔧 [WebSocketManager] close() called from:`, stack?.split('\n').slice(2, 5).join('\n'));
     this.stopKeepalive();
     this.stopIdleTimeout();
     
