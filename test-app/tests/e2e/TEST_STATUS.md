@@ -15,7 +15,10 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Key Findings from Test Run
 
 ### Files with 100% Passing Tests ✅
-1. **agent-state-transitions.spec.js** - 7/7 passed (41.8s) ⭐ **FIXED**
+1. **agent-state-transitions.spec.js** - 1/1 passed, 1 skipped (4.3s) ⭐ **REFACTORED**
+   - Refactored to use data-testid and shared helper functions
+   - Reduced from 7 tests to 2 (1 active, 1 skipped for Issue #212)
+   - Uses waitForAgentState() helper instead of repeated waitForFunction patterns
 2. **baseurl-test.spec.js** - 1/1 passed (1.2s)
 3. **deepgram-instructions-file.spec.js** - 4/4 passed (7.3s)
 4. **diagnostic-vad.spec.js** - 2/2 passed (11.6s)
@@ -35,7 +38,12 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 2. **greeting-audio-timing.spec.js** - All 3 skipped (requires PW_ENABLE_AUDIO=true)
 
 ### Recent Fixes 🎉
-- **agent-state-transitions.spec.js** - Fixed all 7 tests by removing assumption that `AgentThinking` always occurs. Tests now wait for agent responses rather than requiring specific state transitions, making them more robust and aligned with actual Deepgram API behavior.
+- **agent-state-transitions.spec.js** - Refactored to use data-testid and shared helper functions:
+  - Added `data-testid="agent-state"` to App.tsx for reliable state queries
+  - Created `waitForAgentState()` helper function to eliminate code duplication
+  - Updated `getAgentState()` to use data-testid instead of fragile text matching
+  - Reduced redundant tests, consolidated to core state transition scenarios
+  - Improved maintainability and readability with shared utilities
 
 ### Next Steps
 - Review API key validation failures
