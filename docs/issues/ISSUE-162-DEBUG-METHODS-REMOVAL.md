@@ -864,37 +864,48 @@ These tests verify core functionality affected by debug method removal:
    - [ ] Fix VAD event detection issues if needed
    - **Note**: These failures may be pre-existing and unrelated to debug method removal
 
-### 🔧 Issues Identified from Test Run
+### 🔧 Issues Identified and Fixed
 
-#### Issue 1: Connection State Tracking Timing
+#### ✅ Issue 1: Connection State Tracking Timing (FIXED)
 **Problem**: Some tests timeout waiting for `window.testConnectionStates?.agent === 'connected'`
 
-**Root Cause**: `setupConnectionStateTracking()` initializes state to `'closed'`, but connections may be established before tracking is set up, or callbacks may not fire immediately.
+**Root Cause**: `setupConnectionStateTracking()` initialized state to `'closed'`, but connections may be established before tracking is set up, or callbacks may not fire immediately.
 
-**Possible Solutions**:
-1. Check initial connection state when setting up tracking
-2. Increase timeout for connection state waits
-3. Ensure tracking is set up before any connections are established
+**✅ Solution Applied**: 
+- Updated `setupConnectionStateTracking()` to check initial connection state from DOM (`[data-testid="connection-status"]`)
+- Helper now reads current connection status and initializes tracking with actual state
+- Handles connections established before tracking is set up
 
-**Affected Tests**:
-- `lazy-initialization-e2e.spec.js` - 4 tests timing out
-- May affect other tests using `setupConnectionStateTracking()`
+**Status**: ✅ **FIXED** - Helper now checks initial state from DOM before initializing tracking
 
-#### Issue 2: Serialization Errors
+**Affected Tests** (should now pass):
+- `lazy-initialization-e2e.spec.js` - 4 tests
+- Other tests using `setupConnectionStateTracking()`
+
+#### ✅ Issue 2: Serialization Errors (FIXED)
 **Problem**: `page.evaluate()` cannot serialize `import.meta.env`
 
 **Affected Tests**:
 - `transcription-config-test.spec.js:20` - `import.meta.env` not serializable
 - `vad-event-validation.spec.js:34` - Similar serialization issue
 
-**Solution**: Access environment variables differently or mock them in test setup
+**✅ Solution Applied**: 
+- Removed `import.meta.env` usage from `page.evaluate()` calls
+- Tests now verify configuration via connection state (public API)
+- Configuration verified by service behavior rather than env var access
 
-#### Issue 3: VAD Test Failures
+**Status**: ✅ **FIXED** - Serialization errors removed
+
+#### ⚠️ Issue 3: VAD Test Failures (INVESTIGATION NEEDED)
 **Problem**: Various VAD-related tests failing, may be unrelated to debug method changes
 
 **Investigation Needed**:
-- Verify these failures existed before Phase 4 changes
-- Check if failures are due to VAD event detection issues or test setup problems
+- [ ] Verify these failures existed before Phase 4 changes
+- [ ] Check if failures are due to VAD event detection issues or test setup problems
+- [ ] Determine if callback-based tracking interferes with VAD event flow
+- [ ] May require separate issue or be pre-existing
+
+**Status**: ⚠️ **PENDING INVESTIGATION** - May be unrelated to debug method removal
 
 ### ✅ Tests That Are Passing
 

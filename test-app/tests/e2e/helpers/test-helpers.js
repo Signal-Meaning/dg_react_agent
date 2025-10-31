@@ -142,12 +142,24 @@ async function setupConnectionStateTracking(page) {
       }));
     },
     waitForAgentConnected: async (timeout = 5000) => {
+      // Check if already connected (may have been connected before tracking started)
+      const currentState = await page.evaluate(() => window.testConnectionStates?.agent);
+      if (currentState === 'connected') {
+        return; // Already connected, no need to wait
+      }
+      
       await page.waitForFunction(
         () => window.testConnectionStates?.agent === 'connected',
         { timeout }
       );
     },
     waitForTranscriptionConnected: async (timeout = 5000) => {
+      // Check if already connected (may have been connected before tracking started)
+      const currentState = await page.evaluate(() => window.testConnectionStates?.transcription);
+      if (currentState === 'connected') {
+        return; // Already connected, no need to wait
+      }
+      
       await page.waitForFunction(
         () => window.testConnectionStates?.transcription === 'connected',
         { timeout }
