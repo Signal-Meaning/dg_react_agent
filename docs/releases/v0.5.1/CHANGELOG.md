@@ -100,8 +100,8 @@ None in this release (focus on bug fixes and breaking change migration).
 
 ## 🔗 Related Issues
 
-- [#190](https://github.com/Signal-Meaning/dg_react_agent/issues/190): Missing Agent State Handlers (BLOCKING for #157)
-- [#157](https://github.com/Signal-Meaning/dg_react_agent/issues/157): TTS Methods Removal (PARTIAL - blocked by #190)
+- [#190](https://github.com/Signal-Meaning/dg_react_agent/issues/190): Missing Agent State Handlers ✅ **RESOLVED** (was blocking #157)
+- [#157](https://github.com/Signal-Meaning/dg_react_agent/issues/157): TTS Methods Removal ✅ **COMPLETE** (blocker resolved)
 
 ---
 

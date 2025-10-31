@@ -252,14 +252,14 @@ const handleMuteUp = () => {
 
 **Impact:** Agent responses now process correctly regardless of AudioContext state.
 
-### Regression #2: Missing Agent State Handlers
+### Regression #2: Missing Agent State Handlers ✅ **RESOLVED**
 **Issue:** #190 - Missing Agent State Handlers Cause Idle Timeout Regression
 
 **Root Cause:** During TTS methods removal refactoring, agent state message handlers were not added (`AgentStartedSpeaking`, `AgentStoppedSpeaking`, `AgentThinking`).
 
 **Impact:** Agent state didn't transition properly (`listening` → `idle`, skipping `thinking`/`speaking`), causing idle timeout to fire prematurely.
 
-**Status:** Documented as separate issue #190 - **MUST BE RESOLVED BEFORE ISSUE 157 CAN BE CONSIDERED COMPLETE**
+**Status:** ✅ **RESOLVED** - All agent state handlers have been implemented and tested. See [ISSUE-190-MISSING-AGENT-STATE-HANDLERS.md](./ISSUE-190-MISSING-AGENT-STATE-HANDLERS.md) for details.
 
 ## 🔗 Migration Guide
 
@@ -410,20 +410,20 @@ cd test-app && npm run test:e2e -- tests/e2e/audio-interruption-timing.spec.js
 ## 🚀 Final Status
 
 **Branch**: `davidrmcgee/issue157`  
-**Status**: ⚠️ PARTIAL - Core refactoring complete, but regression fix required  
-**Blocking Issue**: #190 must be resolved before this issue can be considered complete  
+**Status**: ✅ **COMPLETE** - Core refactoring complete and all regressions resolved  
+~~**Blocking Issue**: #190 must be resolved before this issue can be considered complete~~ ✅ **RESOLVED**  
 **Breaking Changes**: TTS mute methods removed (migration guide provided)  
 **Test Coverage**: All existing tests pass with updated patterns  
 **Documentation**: Complete migration guide and examples provided  
 
 **Key Achievement**: Removed redundant TTS mute methods and shifted to parent-controlled muting pattern with `interruptAgent()` (blocks) and `allowAgent()` (unblocks) methods.
 
-**Known Regression**: Issue #190 (missing agent state handlers) was identified and must be fixed before closing issue #157.
+~~**Known Regression**: Issue #190 (missing agent state handlers) was identified and must be fixed before closing issue #157.~~ ✅ **RESOLVED** - All agent state handlers implemented and tested. See [ISSUE-190-MISSING-AGENT-STATE-HANDLERS.md](./ISSUE-190-MISSING-AGENT-STATE-HANDLERS.md).
 
 ---
 
 **Related Issues:**
-- Issue #190: Missing Agent State Handlers (regression from this refactor)
+- Issue #190: Missing Agent State Handlers ✅ **RESOLVED** (regression from this refactor)
 - Issue #121: Original TTS mute functionality
 - Issue #159: Session management migration (complementary refactor)
 - Issue #206: Lazy initialization (managers created on-demand; `start()` accepts service flags)
