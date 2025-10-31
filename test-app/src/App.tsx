@@ -209,15 +209,6 @@ function App() {
   const handleReady = useCallback((ready: boolean) => {
     setIsReady(ready);
     addLog(`Component is ${ready ? 'ready' : 'not ready'}`);
-    
-    // Start connections when component is ready
-    if (ready && deepgramRef.current) {
-      console.log('🎤 [APP] Starting connections...');
-      deepgramRef.current.start().catch(error => {
-        console.error('🎤 [APP] Failed to start connections:', error);
-        addLog(`Failed to start connections: ${error.message}`);
-      });
-    }
   }, [addLog]); // Depends on addLog
   
   const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {

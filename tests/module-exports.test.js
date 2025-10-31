@@ -79,21 +79,16 @@ describe('Module Export Validation', () => {
     });
 
     test('should include all required methods in DeepgramVoiceInteractionHandle', () => {
-      const requiredMethods = [
-        'start: () => Promise<void>',
-        'stop: () => Promise<void>',
-        'injectUserMessage: (message: string) => void',
-        'injectAgentMessage: (message: string) => void',
-        'updateAgentInstructions: (payload: UpdateInstructionsPayload) => void',
-        'interruptAgent: () => void',
-        'sleep: () => void',
-        'wake: () => void',
-        'toggleSleep: () => void'
-      ];
-
-      requiredMethods.forEach(method => {
-        expect(typesContent).toContain(method);
-      });
+      // Check for method signatures (flexible matching for multi-line formatting)
+      expect(typesContent).toMatch(/start:\s*\(options\?:\s*\{[^}]*agent\?:\s*boolean[^}]*transcription\?:\s*boolean[^}]*\}\s*\)\s*=>\s*Promise<void>/s);
+      expect(typesContent).toContain('stop: () => Promise<void>');
+      expect(typesContent).toContain('injectUserMessage: (message: string) => Promise<void>');
+      expect(typesContent).toContain('injectAgentMessage: (message: string) => void');
+      expect(typesContent).toContain('updateAgentInstructions: (payload: UpdateInstructionsPayload) => void');
+      expect(typesContent).toContain('interruptAgent: () => void');
+      expect(typesContent).toContain('sleep: () => void');
+      expect(typesContent).toContain('wake: () => void');
+      expect(typesContent).toContain('toggleSleep: () => void');
     });
 
     test('should include DeepgramVoiceInteractionProps interface', () => {

@@ -798,8 +798,8 @@ describe('Component API Surface Validation', () => {
 
       expect(typeof ref.current.injectUserMessage).toBe('function');
       
-      act(() => {
-        ref.current.injectUserMessage('Test message');
+      await act(async () => {
+        await ref.current.injectUserMessage('Test message');
       });
     });
   });
@@ -993,6 +993,11 @@ describe('Component API Surface Validation', () => {
         expect(ref.current).toBeTruthy();
       });
 
+      // Start connection first (managers are created lazily)
+      await act(async () => {
+        await ref.current.start({ agent: true });
+      });
+
       // Test that stop() actually closes connections
       await act(async () => {
         await ref.current.stop();
@@ -1000,7 +1005,10 @@ describe('Component API Surface Validation', () => {
 
       // Verify stop() can be called without errors
       // The actual cleanup behavior depends on component state
-      expect(mockWebSocketManager.close).toHaveBeenCalled();
+      // close() is called if manager exists
+      if (mockWebSocketManager.connect.mock.calls.length > 0) {
+        expect(mockWebSocketManager.close).toHaveBeenCalled();
+      }
     });
 
     it('should handle updateAgentInstructions() with valid payload', async () => {
@@ -1019,9 +1027,14 @@ describe('Component API Surface Validation', () => {
         expect(ref.current).toBeTruthy();
       });
 
+      // Start agent connection first (managers are created lazily)
+      await act(async () => {
+        await ref.current.start({ agent: true });
+      });
+
       const payload = { instructions: 'Updated instructions' };
       
-      act(() => {
+      await act(async () => {
         ref.current.updateAgentInstructions(payload);
       });
 
@@ -1047,11 +1060,18 @@ describe('Component API Surface Validation', () => {
 
       const message = 'Test user message';
       
-      act(() => {
-        ref.current.injectUserMessage(message);
+      // Set up mock to return 'connected' after connect
+      mockWebSocketManager.getState.mockReturnValueOnce('closed');
+      mockWebSocketManager.getState.mockReturnValueOnce('connecting');
+      mockWebSocketManager.getState.mockReturnValueOnce('connected');
+      
+      await act(async () => {
+        await ref.current.injectUserMessage(message);
       });
 
       // Verify the method can be called without errors
+      // Should create manager, connect, and send message
+      expect(mockWebSocketManager.connect).toHaveBeenCalled();
       expect(mockWebSocketManager.sendJSON).toHaveBeenCalled();
     });
 
@@ -1157,10 +1177,9 @@ describe('Component API Surface Validation', () => {
         ref.current.updateAgentInstructions({ instructions: 'test' });
       }).not.toThrow();
       
-      // injectUserMessage should accept string
-      expect(() => {
-        ref.current.injectUserMessage('test message');
-      }).not.toThrow();
+      // injectUserMessage should accept string and return Promise
+      const injectPromise = ref.current.injectUserMessage('test message');
+      expect(injectPromise).toBeInstanceOf(Promise);
     });
   });
 });

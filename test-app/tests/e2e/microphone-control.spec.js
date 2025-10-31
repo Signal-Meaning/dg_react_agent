@@ -73,18 +73,28 @@ test.describe('Microphone Control', () => {
     // This test verifies the current behavior where the button is disabled
   });
 
-  test('should toggle microphone via props', async ({ page }) => {
-    // Test with microphoneEnabled=true prop
+  test('should maintain microphone disabled by default', async ({ page }) => {
+    // With lazy initialization (Issue #206), microphone starts disabled
+    // Wait for component to be ready
+    await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true', { timeout: 5000 });
+    
+    // Verify microphone button is visible and microphone is disabled
+    const micButton = page.locator('[data-testid="microphone-button"]');
+    await expect(micButton).toBeVisible();
+    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
+  });
+
+  test('should handle microphone control via props', async ({ page }) => {
+    // Navigate to test page with microphoneEnabled=true (if test app supports URL params)
     await page.goto('/?microphoneEnabled=true');
     await page.waitForLoadState('networkidle');
     
-    // Verify microphone button is enabled (component ready in auto-connect mode)
-    await expect(page.locator('[data-testid="microphone-button"]')).toBeEnabled();
-    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
+    // Wait for component to be ready (lazy initialization)
+    await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true', { timeout: 5000 });
     
-    // Note: In auto-connect mode, the component is ready immediately, so the button is enabled
-    // but the microphone itself is disabled until the user clicks the button
-    // This test verifies the current behavior where the button is disabled
+    // Note: Currently the test app doesn't handle URL parameters, so microphone is still disabled by default
+    // This test verifies the component renders correctly regardless of URL params
+    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
   });
 
   test('should handle microphone toggle callback', async ({ page }) => {

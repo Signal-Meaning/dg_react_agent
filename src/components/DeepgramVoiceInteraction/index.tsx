@@ -158,6 +158,12 @@ function DeepgramVoiceInteraction(
   // Ref to track connection type immediately and synchronously
   const isNewConnectionRef = useRef<boolean>(true);
 
+  // Track mount state to handle React StrictMode double-invocation
+  // StrictMode will call cleanup then immediately re-run the effect
+  // We use this to avoid closing connections during StrictMode cleanup
+  const isMountedRef = useRef(true);
+  const mountIdRef = useRef<string>('0');
+  
   // Managers - these may be null if the service is not required
   const transcriptionManagerRef = useRef<WebSocketManager | null>(null);
   const agentManagerRef = useRef<WebSocketManager | null>(null);
@@ -175,17 +181,15 @@ function DeepgramVoiceInteraction(
   
   // Track whether agent audio is allowed
   const ALLOW_AUDIO = true;
+  
+  // Connection timeout for settings to be sent after manager connection
+  const SETTINGS_SEND_DELAY_MS = 500;
   const BLOCK_AUDIO = false;
   const allowAgentRef = useRef(ALLOW_AUDIO);
   
   // Global flag to prevent settings from being sent multiple times across component instances
   if (!(window as any).globalSettingsSent) {
     (window as any).globalSettingsSent = false;
-  }
-  
-  // Global flag to prevent multiple auto-connect attempts across component re-initializations
-  if (!(window as any).globalAutoConnectAttempted) {
-    (window as any).globalAutoConnectAttempted = false;
   }
   
   // Global flag to prevent multiple component initializations during HMR
@@ -358,12 +362,291 @@ function DeepgramVoiceInteraction(
     onError?.(error);
   };
 
+  // Store configuration for lazy manager creation
+  const configRef = useRef({
+    apiKey,
+    transcriptionOptions,
+    agentOptions,
+    endpointConfig: endpointConfig || {},
+    endpoints: {
+      transcriptionUrl: (endpointConfig || {}).transcriptionUrl || DEFAULT_ENDPOINTS.transcriptionUrl,
+      agentUrl: (endpointConfig || {}).agentUrl || DEFAULT_ENDPOINTS.agentUrl,
+    },
+    debug: props.debug,
+  });
+
+  // Update config ref when dependencies change
+  useEffect(() => {
+    configRef.current = {
+      apiKey,
+      transcriptionOptions,
+      agentOptions,
+      endpointConfig: endpointConfig || {},
+      endpoints: {
+        transcriptionUrl: (endpointConfig || {}).transcriptionUrl || DEFAULT_ENDPOINTS.transcriptionUrl,
+        agentUrl: (endpointConfig || {}).agentUrl || DEFAULT_ENDPOINTS.agentUrl,
+      },
+      debug: props.debug,
+    };
+  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, props.debug]);
+
+  // Factory function to create transcription manager
+  const createTranscriptionManager = (): WebSocketManager | null => {
+    const config = configRef.current;
+    if (!config.transcriptionOptions) {
+      return null;
+    }
+
+    try {
+      log('🔧 [TRANSCRIPTION] Creating transcription manager lazily');
+      let transcriptionUrl = config.endpoints.transcriptionUrl;
+      let transcriptionQueryParams: Record<string, string | boolean | number> = {};
+
+      // Base transcription parameters
+      const baseTranscriptionParams = {
+        ...config.transcriptionOptions,
+        sample_rate: config.transcriptionOptions.sample_rate || 16000,
+        encoding: config.transcriptionOptions.encoding || 'linear16',
+        channels: config.transcriptionOptions.channels || 1,
+      };
+
+      // Add VAD configuration if provided
+      if (config.transcriptionOptions.utterance_end_ms) {
+        baseTranscriptionParams.utterance_end_ms = config.transcriptionOptions.utterance_end_ms;
+        console.log(`VAD: utterance_end_ms set to ${config.transcriptionOptions.utterance_end_ms}ms`);
+      }
+      
+      if (config.transcriptionOptions.interim_results !== undefined) {
+        baseTranscriptionParams.interim_results = config.transcriptionOptions.interim_results;
+        console.log(`VAD: interim_results set to ${config.transcriptionOptions.interim_results}`);
+      }
+
+      // Check for Nova-3 Keyterm Prompting conditions
+      const useKeytermPrompting = 
+        baseTranscriptionParams.model === 'nova-3' &&
+        Array.isArray(baseTranscriptionParams.keyterm) &&
+        baseTranscriptionParams.keyterm.length > 0;
+
+      if (useKeytermPrompting) {
+        log('Nova-3 and keyterms detected. Building transcription URL with keyterm parameters.');
+        // Build URL manually, appending keyterms
+        const url = new URL(transcriptionUrl);
+        const params = new URLSearchParams();
+        
+        // Append all other options EXCEPT keyterm array itself
+        for (const [key, value] of Object.entries(baseTranscriptionParams)) {
+          if (key !== 'keyterm' && value !== undefined) {
+            params.append(key, String(value));
+          }
+        }
+        
+        // Append each keyterm as a separate parameter
+        baseTranscriptionParams.keyterm?.forEach(term => {
+          if (term) { // Ensure term is not empty
+            params.append('keyterm', term);
+          }
+        });
+
+        url.search = params.toString();
+        transcriptionUrl = url.toString();
+        log('Constructed transcription URL with keyterms:', transcriptionUrl);
+      } else {
+        // Standard setup: Build queryParams object, excluding array types like keyterm and keywords
+        log('Not using keyterm prompting. Building queryParams object excluding array types.');
+        const { ...otherParams } = baseTranscriptionParams;
+        
+        // Ensure only primitive types are included in queryParams
+        const filteredParams: Record<string, string | number | boolean> = {};
+        for (const [key, value] of Object.entries(otherParams)) {
+          if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+            filteredParams[key] = value;
+          } else {
+            log(`Skipping non-primitive param ${key} for queryParams object.`);
+          }
+        }
+        transcriptionQueryParams = filteredParams;
+      }
+      
+      // Create Transcription WebSocket manager
+      const manager = new WebSocketManager({
+        url: transcriptionUrl,
+        apiKey: config.apiKey,
+        service: 'transcription',
+        queryParams: useKeytermPrompting ? undefined : transcriptionQueryParams, 
+        debug: config.debug,
+        keepaliveInterval: 0, // Disable keepalives for transcription service
+        onMeaningfulActivity: handleMeaningfulActivity,
+      });
+    
+      // Set up event listeners for transcription WebSocket
+      manager.addEventListener((event: WebSocketEvent) => {
+        if (event.type === 'state') {
+          // Only log and dispatch if state actually changed
+          if (config.debug) {
+            console.log('🔧 [DEBUG] Transcription state event:', event.state, 'Previous:', lastConnectionStates.current.transcription);
+          }
+          if (lastConnectionStates.current.transcription !== event.state) {
+            log('Transcription state:', event.state);
+            dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: event.state });
+            onConnectionStateChange?.('transcription', event.state);
+            lastConnectionStates.current.transcription = event.state;
+          } else {
+            if (config.debug) {
+              console.log('🔧 [DEBUG] Transcription state unchanged, skipping:', event.state);
+            }
+          }
+        } else if (event.type === 'message') {
+          handleTranscriptionMessage(event.data);
+        } else if (event.type === 'error') {
+          handleError(event.error);
+        }
+      });
+
+      return manager;
+    } catch (error) {
+      console.error('Exception in transcription manager creation:', error);
+      handleError({
+        service: 'transcription',
+        code: 'setup_error',
+        message: `Transcription manager creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+      return null;
+    }
+  };
+
+  // Factory function to create agent manager
+  const createAgentManager = (): WebSocketManager | null => {
+    const config = configRef.current;
+    if (!config.agentOptions) {
+      return null;
+    }
+
+    try {
+      log('🔧 [AGENT] Creating agent manager lazily');
+      
+      // Create Agent WebSocket manager
+      const manager = new WebSocketManager({
+        url: config.endpoints.agentUrl,
+        apiKey: config.apiKey,
+        service: 'agent',
+        debug: config.debug,
+        onMeaningfulActivity: handleMeaningfulActivity,
+      });
+
+      // Set up event listeners for agent WebSocket
+      manager.addEventListener((event: WebSocketEvent) => {
+        if (event.type === 'state') {
+          // Only log and dispatch if state actually changed
+          if (config.debug) {
+            console.log('🔧 [DEBUG] Agent state event:', event.state, 'Previous:', lastConnectionStates.current.agent);
+          }
+          if (lastConnectionStates.current.agent !== event.state) {
+            log('Agent state:', event.state);
+            if (event.state === 'connected') {
+              console.info('🔗 [Protocol] Agent WebSocket connected');
+              
+              // Handle reconnection logic
+              if (event.isReconnection) {
+                log('Agent WebSocket reconnected - resetting greeting state');
+                dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
+                dispatch({ type: 'RESET_GREETING_STATE' });
+              } else {
+                log('Agent WebSocket connected for first time');
+                dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: true });
+              }
+            }
+            
+            dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
+            onConnectionStateChange?.('agent', event.state);
+            lastConnectionStates.current.agent = event.state;
+          } else {
+            if (config.debug) {
+              console.log('🔧 [DEBUG] Agent state unchanged, skipping:', event.state);
+            }
+          }
+          
+          // Reset settings flag when connection closes
+          if (event.state === 'closed') {
+            if (config.debug) {
+              console.log('🔧 [Connection] Agent connection closed - checking for errors or reasons');
+              console.log('🔧 [Connection] Connection close event details:', event);
+            }
+            
+            dispatch({ type: 'SETTINGS_SENT', sent: false });
+            hasSentSettingsRef.current = false; // Reset ref when connection closes
+            (window as any).globalSettingsSent = false; // Reset global flag when connection closes
+            settingsSentTimeRef.current = null; // Reset settings time
+            if (config.debug) {
+              console.log('🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
+            }
+            lazyLog('Reset hasSentSettings flag due to connection close');
+            
+            // Disable microphone when connection closes (async operation)
+            if (audioManagerRef.current && audioManagerRef.current.isRecordingActive()) {
+              if (config.debug) {
+                console.log('🔧 [Connection] Connection closed, disabling microphone');
+              }
+              // Use setTimeout to avoid blocking the event handler
+              setTimeout(async () => {
+                try {
+                  await audioManagerRef.current?.stopRecording();
+                  if (config.debug) {
+                    console.log('🔧 [Connection] Recording stopped due to connection close');
+                  }
+                } catch (error) {
+                  if (config.debug) {
+                    console.log('🔧 [Connection] Error stopping recording:', error);
+                  }
+                }
+              }, 0);
+            }
+          }
+          
+          // Send settings message when connection is established
+          if (event.state === 'connected' && !hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
+            log('Connection established, sending settings via connection state handler');
+            sendAgentSettings();
+          } else if (event.state === 'connected' && state.hasSentSettings) {
+            log('Connection established but settings already sent, skipping');
+          }
+        } else if (event.type === 'message') {
+          handleAgentMessage(event.data);
+        } else if (event.type === 'binary') {
+          handleAgentAudio(event.data);
+        } else if (event.type === 'error') {
+          handleError(event.error);
+        }
+      });
+
+      return manager;
+    } catch (error) {
+      console.error('Exception in agent manager creation:', error);
+      handleError({
+        service: 'agent',
+        code: 'setup_error',
+        message: `Agent manager creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+      return null;
+    }
+  };
+
   // Initialize the component based on provided options
   useEffect(() => {
+    // Mark as mounted and generate new mount ID for this effect run
+    // This helps us detect StrictMode double-invocation
+    const currentMountId = `${Date.now()}-${Math.random()}`;
+    const previousMountId = mountIdRef.current;
+    mountIdRef.current = currentMountId;
+    isMountedRef.current = true;
+    
     // Debug: Log component initialization (but limit frequency to avoid spam)
     const initTime = Date.now();
     if (!(window as any).lastComponentInitTime || initTime - (window as any).lastComponentInitTime > 1000) {
-      console.log('🔧 [Component] DeepgramVoiceInteraction component initialized');
+      console.log('🔧 [Component] DeepgramVoiceInteraction component initialized', {
+        mountId: currentMountId,
+        previousMountId,
+        isStrictModeReInvoke: previousMountId !== '0' && previousMountId !== currentMountId
+      });
       (window as any).lastComponentInitTime = initTime;
     }
     
@@ -425,282 +708,14 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    // Log which services are being configured (always show this critical info)
-    const mode = isTranscriptionConfigured && isAgentConfigured ? 'DUAL MODE' : 
-      isTranscriptionConfigured ? 'TRANSCRIPTION-ONLY MODE' : 'AGENT-ONLY MODE';
-    console.log(`[DeepgramVoiceInteraction] Initializing in ${mode}`);
-    log(`Initializing in ${mode}`);
-
-    // Prepare endpoints, using defaults ONLY if endpointConfig prop is not provided
-    const currentEndpointConfig = endpointConfig || {};
-    const endpoints = {
-      transcriptionUrl: currentEndpointConfig.transcriptionUrl || DEFAULT_ENDPOINTS.transcriptionUrl,
-      agentUrl: currentEndpointConfig.agentUrl || DEFAULT_ENDPOINTS.agentUrl,
-    };
-
-    // --- Event listener cleanup functions ---
-    let transcriptionUnsubscribe: () => void = () => {};
-    let agentUnsubscribe: () => void = () => {};
-    let audioUnsubscribe: () => void = () => {};
-
-    // --- TRANSCRIPTION SETUP (CONDITIONAL) ---
-    if (isTranscriptionConfigured) {
-      console.log('🔧 [TRANSCRIPTION] Transcription service is configured, proceeding with setup');
-      console.log('🔧 [TRANSCRIPTION] transcriptionManagerRef.current:', transcriptionManagerRef.current);
-      
-      if (!transcriptionManagerRef.current) {
-        try {
-          log('🔧 [TRANSCRIPTION] Starting transcription setup');
-          console.log('🔧 [TRANSCRIPTION] Creating new transcription manager...');
-      let transcriptionUrl = endpoints.transcriptionUrl;
-      let transcriptionQueryParams: Record<string, string | boolean | number> = {};
-
-      // Base transcription parameters
-      const baseTranscriptionParams = {
-      ...transcriptionOptions,
-      sample_rate: transcriptionOptions.sample_rate || 16000,
-      encoding: transcriptionOptions.encoding || 'linear16',
-      channels: transcriptionOptions.channels || 1,
-    };
-
-      // Add VAD configuration if provided
-      if (transcriptionOptions.utterance_end_ms) {
-        baseTranscriptionParams.utterance_end_ms = transcriptionOptions.utterance_end_ms;
-        console.log(`VAD: utterance_end_ms set to ${transcriptionOptions.utterance_end_ms}ms`);
-      }
-      
-      if (transcriptionOptions.interim_results !== undefined) {
-        baseTranscriptionParams.interim_results = transcriptionOptions.interim_results;
-        console.log(`VAD: interim_results set to ${transcriptionOptions.interim_results}`);
-      }
-
-      // Check for Nova-3 Keyterm Prompting conditions
-      const useKeytermPrompting = 
-        baseTranscriptionParams.model === 'nova-3' &&
-        Array.isArray(baseTranscriptionParams.keyterm) &&
-        baseTranscriptionParams.keyterm.length > 0;
-
-      if (useKeytermPrompting) {
-        log('Nova-3 and keyterms detected. Building transcription URL with keyterm parameters.');
-        // Build URL manually, appending keyterms
-        const url = new URL(transcriptionUrl);
-        const params = new URLSearchParams();
-        
-        // Append all other options EXCEPT keyterm array itself
-        for (const [key, value] of Object.entries(baseTranscriptionParams)) {
-          if (key !== 'keyterm' && value !== undefined) {
-            params.append(key, String(value));
-          }
-        }
-        
-        // Append each keyterm as a separate parameter
-        baseTranscriptionParams.keyterm?.forEach(term => {
-          if (term) { // Ensure term is not empty
-            params.append('keyterm', term);
-          }
-        });
-
-        url.search = params.toString();
-        transcriptionUrl = url.toString();
-        log('Constructed transcription URL with keyterms:', transcriptionUrl);
-        // queryParams remain empty as they are in the URL now
-      } else {
-        // Standard setup: Build queryParams object, excluding array types like keyterm and keywords
-        log('Not using keyterm prompting. Building queryParams object excluding array types.');
-        const { ...otherParams } = baseTranscriptionParams;
-        
-        // Ensure only primitive types are included in queryParams
-        const filteredParams: Record<string, string | number | boolean> = {};
-        for (const [key, value] of Object.entries(otherParams)) {
-          if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-            filteredParams[key] = value;
-          } else {
-            log(`Skipping non-primitive param ${key} for queryParams object.`);
-          }
-        }
-        transcriptionQueryParams = filteredParams;
-      }
-      
-      // Log final transcription URL with VAD parameters
-      console.log('Final transcription URL:', transcriptionUrl);
-      if (props.debug) {
-        console.log('🔧 [VAD] VAD configuration check:');
-        console.log('  - vad_events in baseTranscriptionParams:', baseTranscriptionParams.vad_events);
-        console.log('  - vad_events in transcriptionOptions:', transcriptionOptions.vad_events);
-        console.log('  - utterance_end_ms in baseTranscriptionParams:', baseTranscriptionParams.utterance_end_ms);
-        console.log('  - utterance_end_ms in transcriptionOptions:', transcriptionOptions.utterance_end_ms);
-      }
-      
-      if (useKeytermPrompting) {
-        log('Using keyterm prompting - VAD params in URL');
-        if (props.debug) {
-          console.log('🔧 [VAD] URL contains VAD params:', transcriptionUrl.includes('vad_events'));
-        }
-      } else {
-        log('Using queryParams - VAD params:', transcriptionQueryParams);
-        if (props.debug) {
-          console.log('🔧 [VAD] queryParams contains vad_events:', 'vad_events' in transcriptionQueryParams);
-        }
-      }
-      
-      // Create Transcription WebSocket manager
-      console.log('🔧 [TRANSCRIPTION] Creating WebSocketManager with config:');
-      console.log('  - url:', transcriptionUrl);
-      console.log('  - apiKey present:', !!apiKey);
-      console.log('  - service: transcription');
-      console.log('  - queryParams:', useKeytermPrompting ? 'undefined (using keyterm prompting)' : transcriptionQueryParams);
-      console.log('  - debug:', props.debug);
-      
-    transcriptionManagerRef.current = new WebSocketManager({
-        url: transcriptionUrl,
-      apiKey,
-      service: 'transcription',
-        queryParams: useKeytermPrompting ? undefined : transcriptionQueryParams, 
-      debug: props.debug,
-      keepaliveInterval: 0, // Disable keepalives for transcription service
-      onMeaningfulActivity: handleMeaningfulActivity,
-    });
-    
-    console.log('🔧 [TRANSCRIPTION] WebSocketManager created successfully:', !!transcriptionManagerRef.current);
-
-    // Set up event listeners for transcription WebSocket
-      transcriptionUnsubscribe = transcriptionManagerRef.current.addEventListener((event: WebSocketEvent) => {
-      if (event.type === 'state') {
-        // Only log and dispatch if state actually changed
-        if (props.debug) {
-          console.log('🔧 [DEBUG] Transcription state event:', event.state, 'Previous:', lastConnectionStates.current.transcription);
-        }
-        if (lastConnectionStates.current.transcription !== event.state) {
-          log('Transcription state:', event.state);
-          dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: event.state });
-          onConnectionStateChange?.('transcription', event.state);
-          lastConnectionStates.current.transcription = event.state;
-        } else {
-          if (props.debug) {
-            console.log('🔧 [DEBUG] Transcription state unchanged, skipping:', event.state);
-          }
-        }
-      } else if (event.type === 'message') {
-        handleTranscriptionMessage(event.data);
-      } else if (event.type === 'error') {
-        handleError(event.error);
-      }
-    });
-        } catch (error) {
-          console.error('Exception in transcription setup:', error);
-          handleError({
-            service: 'transcription',
-            code: 'setup_error',
-            message: `Transcription setup failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          });
-        }
-      } else {
-        log('Transcription manager already exists, skipping setup');
-      }
+    // Log which services are available for configuration (informational only)
+    // Managers will be created lazily when start() is called
+    if (isTranscriptionConfigured && isAgentConfigured) {
+      log('Transcription and agent services are configured (managers will be created on demand)');
+    } else if (isTranscriptionConfigured) {
+      log('Transcription service is configured (manager will be created on demand)');
     } else {
-      console.log('🔧 [TRANSCRIPTION] Transcription service NOT configured, skipping setup');
-      log('Transcription service not configured, skipping setup');
-    }
-
-    // --- AGENT SETUP (CONDITIONAL) ---
-    if (isAgentConfigured) {
-      // Create Agent WebSocket manager
-      agentManagerRef.current = new WebSocketManager({
-        url: endpoints.agentUrl,
-        apiKey,
-        service: 'agent',
-        debug: props.debug,
-        onMeaningfulActivity: handleMeaningfulActivity,
-      });
-
-    // Set up event listeners for agent WebSocket
-      const unsubscribeResult = agentManagerRef.current.addEventListener((event: WebSocketEvent) => {
-      if (event.type === 'state') {
-        // Only log and dispatch if state actually changed
-        if (props.debug) {
-          console.log('🔧 [DEBUG] Agent state event:', event.state, 'Previous:', lastConnectionStates.current.agent);
-        }
-        if (lastConnectionStates.current.agent !== event.state) {
-          log('Agent state:', event.state);
-          if (event.state === 'connected') {
-            console.info('🔗 [Protocol] Agent WebSocket connected');
-            
-            // Handle reconnection logic
-            if (event.isReconnection) {
-              log('Agent WebSocket reconnected - resetting greeting state');
-              dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
-              dispatch({ type: 'RESET_GREETING_STATE' });
-            } else {
-              log('Agent WebSocket connected for first time');
-              dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: true });
-            }
-          }
-          
-          dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: event.state });
-          onConnectionStateChange?.('agent', event.state);
-          lastConnectionStates.current.agent = event.state;
-        } else {
-          if (props.debug) {
-            console.log('🔧 [DEBUG] Agent state unchanged, skipping:', event.state);
-          }
-        }
-        
-        // Reset settings flag when connection closes
-        if (event.state === 'closed') {
-          if (props.debug) {
-            console.log('🔧 [Connection] Agent connection closed - checking for errors or reasons');
-            console.log('🔧 [Connection] Connection close event details:', event);
-          }
-          
-          dispatch({ type: 'SETTINGS_SENT', sent: false });
-          hasSentSettingsRef.current = false; // Reset ref when connection closes
-          (window as any).globalSettingsSent = false; // Reset global flag when connection closes
-          settingsSentTimeRef.current = null; // Reset settings time
-          if (props.debug) {
-            console.log('🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
-          }
-          lazyLog('Reset hasSentSettings flag due to connection close');
-          
-          // Disable microphone when connection closes (async operation)
-          if (audioManagerRef.current && audioManagerRef.current.isRecordingActive()) {
-            if (props.debug) {
-              console.log('🔧 [Connection] Connection closed, disabling microphone');
-            }
-            // Use setTimeout to avoid blocking the event handler
-            setTimeout(async () => {
-              try {
-                await audioManagerRef.current?.stopRecording();
-                if (props.debug) {
-                  console.log('🔧 [Connection] Recording stopped due to connection close');
-                }
-              } catch (error) {
-                if (props.debug) {
-                  console.log('🔧 [Connection] Error stopping recording:', error);
-                }
-              }
-            }, 0);
-          }
-        }
-        
-        // Send settings message when connection is established
-        if (event.state === 'connected' && !hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
-          log('Connection established, sending settings via connection state handler');
-          sendAgentSettings();
-        } else if (event.state === 'connected' && state.hasSentSettings) {
-          log('Connection established but settings already sent, skipping');
-        }
-      } else if (event.type === 'message') {
-        handleAgentMessage(event.data);
-      } else if (event.type === 'binary') {
-        handleAgentAudio(event.data);
-      } else if (event.type === 'error') {
-        handleError(event.error);
-      }
-    });
-      console.log('Agent unsubscribe result:', typeof unsubscribeResult, unsubscribeResult);
-      agentUnsubscribe = unsubscribeResult;
-    } else {
-      log('Agent service not configured, skipping setup');
+      log('Agent service is configured (manager will be created on demand)');
     }
 
     // --- AUDIO SETUP (LAZY INITIALIZATION) ---
@@ -722,40 +737,76 @@ function DeepgramVoiceInteraction(
 
     // Clean up
     return () => {
-      transcriptionUnsubscribe();
-      if (isAgentConfigured && typeof agentUnsubscribe === 'function') {
-        agentUnsubscribe();
-      }
-      audioUnsubscribe();
+      // Capture the mount ID at cleanup time
+      const cleanupMountId = mountIdRef.current;
       
-      if (transcriptionManagerRef.current) {
-        transcriptionManagerRef.current.close();
-      transcriptionManagerRef.current = null;
-      }
+      // Mark as unmounted
+      isMountedRef.current = false;
       
-      if (agentManagerRef.current) {
-        agentManagerRef.current.close();
-      agentManagerRef.current = null;
-      }
-      
-      if (audioManagerRef.current) {
-        audioManagerRef.current.dispose();
-      audioManagerRef.current = null;
+      // Debug: Log cleanup to understand when it runs
+      if (props.debug) {
+        const stack = new Error().stack;
+        console.log('🔧 [Component] useEffect cleanup running', {
+          mountId: cleanupMountId,
+          transcriptionManagerExists: !!transcriptionManagerRef.current,
+          agentManagerExists: !!agentManagerRef.current
+        });
+        console.log('🔧 [Component] Cleanup stack trace:', stack?.split('\n').slice(2, 6).join('\n'));
       }
       
-      // Cleanup agent state service
-      if (agentStateServiceRef.current) {
-        agentStateServiceRef.current.reset();
-        agentStateServiceRef.current = null;
-      }
-      
-      // Ensure state is reset on unmount
-      dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
-      dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: 'closed' });
-      dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: 'closed' });
-      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
-      dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: false });
-      dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
+      // Check if this is a StrictMode cleanup (component will immediately re-mount)
+      // We delay checking re-mount to see if StrictMode re-invokes the effect
+      setTimeout(() => {
+        // If component re-mounted quickly (within 100ms), this was likely StrictMode
+        // In that case, don't close connections as they'll be needed for the re-mounted component
+        if (isMountedRef.current) {
+          if (props.debug) {
+            console.log('🔧 [Component] Cleanup detected StrictMode re-invocation - preserving connections');
+          }
+          return; // Component re-mounted, don't close connections
+        }
+        
+        // Component is truly unmounting - close connections
+        if (props.debug) {
+          console.log('🔧 [Component] Component truly unmounting - closing connections');
+        }
+        
+        // Close managers if they were created (they handle their own event listener cleanup)
+        if (transcriptionManagerRef.current) {
+          if (props.debug) {
+            console.log('🔧 [Component] Closing transcription manager in cleanup');
+          }
+          transcriptionManagerRef.current.close();
+          transcriptionManagerRef.current = null;
+        }
+        
+        if (agentManagerRef.current) {
+          if (props.debug) {
+            console.log('🔧 [Component] Closing agent manager in cleanup');
+          }
+          agentManagerRef.current.close();
+          agentManagerRef.current = null;
+        }
+        
+        if (audioManagerRef.current) {
+          audioManagerRef.current.dispose();
+          audioManagerRef.current = null;
+        }
+        
+        // Cleanup agent state service
+        if (agentStateServiceRef.current) {
+          agentStateServiceRef.current.reset();
+          agentStateServiceRef.current = null;
+        }
+        
+        // Ensure state is reset on unmount
+        dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
+        dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: 'closed' });
+        dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: 'closed' });
+        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+        dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: false });
+        dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
+      }, 100); // Small delay to detect StrictMode re-mount
     };
   }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, props.debug]); 
 
@@ -1533,13 +1584,56 @@ function DeepgramVoiceInteraction(
   };
 
   // Start the connection
-  const start = async (): Promise<void> => {
+  const start = async (options?: { agent?: boolean; transcription?: boolean }): Promise<void> => {
     try {
-      log('Start method called');
+      log('Start method called', options ? `with options: ${JSON.stringify(options)}` : 'without options');
       
       // Reset audio blocking state on fresh connection
       allowAgentRef.current = ALLOW_AUDIO;
       log('🔄 Connection starting - resetting audio blocking state');
+      
+      // Determine which services to start
+      const config = configRef.current;
+      const isTranscriptionConfigured = !!config.transcriptionOptions;
+      const isAgentConfigured = !!config.agentOptions;
+      
+      // If options object provided (even if only one key), only start explicitly requested services
+      // If no options object provided, default to props configuration
+      const hasExplicitOptions = options !== undefined;
+      
+      const shouldStartTranscription = hasExplicitOptions
+        ? (options.transcription === true)
+        : isTranscriptionConfigured;
+      const shouldStartAgent = hasExplicitOptions
+        ? (options.agent === true)
+        : isAgentConfigured;
+      
+      log(`Service start flags: transcription=${shouldStartTranscription}, agent=${shouldStartAgent}`);
+      
+      // Validate that requested services are configured
+      if (shouldStartTranscription && !isTranscriptionConfigured) {
+        throw new Error('Transcription service requested but transcriptionOptions not configured');
+      }
+      if (shouldStartAgent && !isAgentConfigured) {
+        throw new Error('Agent service requested but agentOptions not configured');
+      }
+      
+      // Create managers lazily if needed
+      if (shouldStartTranscription && !transcriptionManagerRef.current) {
+        log('Creating transcription manager lazily...');
+        transcriptionManagerRef.current = createTranscriptionManager();
+        if (!transcriptionManagerRef.current) {
+          throw new Error('Failed to create transcription manager');
+        }
+      }
+      
+      if (shouldStartAgent && !agentManagerRef.current) {
+        log('Creating agent manager lazily...');
+        agentManagerRef.current = createAgentManager();
+        if (!agentManagerRef.current) {
+          throw new Error('Failed to create agent manager');
+        }
+      }
       
       // Initialize audio if available (should already be initialized from the main useEffect)
       if (audioManagerRef.current) {
@@ -1557,22 +1651,26 @@ function DeepgramVoiceInteraction(
         log('AudioManager not configured, skipping initialization');
       }
 
-      // Connect transcription WebSocket if configured
-      if (transcriptionManagerRef.current) {
+      // Connect transcription WebSocket if it should be started
+      if (shouldStartTranscription && transcriptionManagerRef.current) {
         log('Connecting Transcription WebSocket...');
         await transcriptionManagerRef.current.connect();
         log('Transcription WebSocket connected');
+      } else if (shouldStartTranscription) {
+        log('Transcription manager not available despite being requested');
       } else {
-        log('Transcription manager not configured, skipping connection');
+        log('Transcription service not requested, skipping connection');
       }
       
-      // Connect agent WebSocket if configured
-      if (agentManagerRef.current) {
+      // Connect agent WebSocket if it should be started
+      if (shouldStartAgent && agentManagerRef.current) {
         log('Connecting Agent WebSocket...');
         await agentManagerRef.current.connect();
         log('Agent WebSocket connected');
+      } else if (shouldStartAgent) {
+        log('Agent manager not available despite being requested');
       } else {
-        log('Agent manager not configured, skipping connection');
+        log('Agent service not requested, skipping connection');
       }
       
       // Note: Recording is controlled externally via startAudioCapture()
@@ -1622,10 +1720,12 @@ function DeepgramVoiceInteraction(
       // Close WebSockets if configured
       if (transcriptionManagerRef.current) {
         transcriptionManagerRef.current.close();
+        transcriptionManagerRef.current = null; // Clear ref so manager can be recreated
       }
       
       if (agentManagerRef.current) {
         agentManagerRef.current.close();
+        agentManagerRef.current = null; // Clear ref so manager can be recreated
       }
       
       // Signal ready after stopping - component can accept new connections
@@ -1793,18 +1893,68 @@ function DeepgramVoiceInteraction(
   };
 
   // Inject a user message to the agent
-  const injectUserMessage = (message: string): void => {
+  const injectUserMessage = async (message: string): Promise<void> => {
+    const config = configRef.current;
+    if (!config.agentOptions) {
+      log('Cannot inject user message: agentOptions not configured');
+      throw new Error('Agent service not configured');
+    }
+    
+    // Create agent manager if it doesn't exist
     if (!agentManagerRef.current) {
-      log('Cannot inject user message: agent manager not initialized or not configured');
-      return;
+      log('Creating agent manager lazily for injectUserMessage...');
+      agentManagerRef.current = createAgentManager();
+      if (!agentManagerRef.current) {
+        throw new Error('Failed to create agent manager - createAgentManager returned null');
+      }
+      log('Agent manager created successfully');
+    } else {
+      log('Agent manager already exists, reusing');
+    }
+    
+    // Store reference to manager to check if it gets cleared
+    const managerBeforeConnect = agentManagerRef.current;
+    log('Manager reference stored, state:', managerBeforeConnect.getState());
+    
+    // Ensure connection is established
+    const connectionState = managerBeforeConnect.getState();
+    if (connectionState !== 'connected') {
+      log('Agent manager not connected, establishing connection...', 'Current state:', connectionState);
+      await managerBeforeConnect.connect();
+      
+      // Check if manager still exists and is the same instance
+      if (!agentManagerRef.current || agentManagerRef.current !== managerBeforeConnect) {
+        log('⚠️ Manager was cleared or replaced during connection');
+        throw new Error('Agent manager was cleared or replaced during connection');
+      }
+      
+      // Wait a moment for settings to be sent
+      await new Promise(resolve => setTimeout(resolve, SETTINGS_SEND_DELAY_MS));
+      
+      // Final check - manager should still exist
+      if (!agentManagerRef.current || agentManagerRef.current !== managerBeforeConnect) {
+        log('⚠️ Manager was cleared or replaced after connection');
+        throw new Error('Agent manager was cleared or replaced after connection');
+      }
+      
+      const finalState = agentManagerRef.current.getState();
+      log('Connection established, final state:', finalState);
+    } else {
+      log('Agent manager already connected');
     }
     
     log('Injecting user message:', message);
+    
+    if (!agentManagerRef.current) {
+      throw new Error('Agent manager is null when trying to send message');
+    }
     
     agentManagerRef.current.sendJSON({
       type: 'InjectUserMessage',
       content: message
     });
+    
+    log('User message sent successfully');
   };
 
   // TTS mute control methods
@@ -1849,11 +1999,88 @@ function DeepgramVoiceInteraction(
     try {
       log('startAudioCapture called - initializing audio manager lazily');
       
+      const config = configRef.current;
+      const isTranscriptionConfigured = !!config.transcriptionOptions;
+      const isAgentConfigured = !!config.agentOptions;
+      
       // Create AudioManager if it doesn't exist
       await createAudioManager();
+      
+      // Verify AudioManager was created
+      if (!audioManagerRef.current) {
+        throw new Error('AudioManager creation failed or was cleared');
+      }
 
+      // Handle lazy manager creation for microphone use case
+      // When microphone starts, we typically need both transcription (for VAD) and agent
+      
+      // Check if agent is already connected
+      const agentAlreadyConnected = agentManagerRef.current?.getState() === 'connected';
+      
+      // Create and connect transcription manager if needed
+      if (isTranscriptionConfigured) {
+        if (!transcriptionManagerRef.current) {
+          log('Creating transcription manager lazily for microphone...');
+          transcriptionManagerRef.current = createTranscriptionManager();
+          if (!transcriptionManagerRef.current) {
+            throw new Error('Failed to create transcription manager');
+          }
+        }
+        
+        // Connect transcription if not already connected
+        if (transcriptionManagerRef.current.getState() !== 'connected') {
+          log('Connecting transcription service for microphone/VAD...');
+          await transcriptionManagerRef.current.connect();
+        }
+      }
+      
+      // Create and connect agent manager if needed (only if not already connected)
+      if (isAgentConfigured && !agentAlreadyConnected) {
+        if (!agentManagerRef.current) {
+          log('Creating agent manager lazily for microphone...');
+          agentManagerRef.current = createAgentManager();
+          if (!agentManagerRef.current) {
+            throw new Error('Failed to create agent manager');
+          }
+        }
+        
+        // Connect agent if not already connected
+        if (agentManagerRef.current.getState() !== 'connected') {
+          log('Connecting agent service for microphone...');
+          await agentManagerRef.current.connect();
+          // Wait for settings to be sent
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      } else if (isAgentConfigured && agentAlreadyConnected) {
+        log('Agent service already connected, skipping connection');
+      }
+
+      // Final check before starting recording
+      if (!audioManagerRef.current) {
+        throw new Error('AudioManager was cleared before starting recording');
+      }
+      
+      // Verify connections are established before starting recording
+      // Agent connection is required for microphone use
+      if (isAgentConfigured) {
+        const agentState = agentManagerRef.current?.getState();
+        if (agentState !== 'connected') {
+          log(`⚠️ Agent connection is ${agentState}, not 'connected'. Cannot start microphone.`);
+          throw new Error(`Cannot start microphone: agent connection is ${agentState}, expected 'connected'`);
+        }
+      }
+      
+      // Transcription connection should also be connected if configured
+      if (isTranscriptionConfigured) {
+        const transcriptionState = transcriptionManagerRef.current?.getState();
+        if (transcriptionState !== 'connected') {
+          log(`⚠️ Transcription connection is ${transcriptionState}, not 'connected'. Cannot start microphone.`);
+          throw new Error(`Cannot start microphone: transcription connection is ${transcriptionState}, expected 'connected'`);
+        }
+      }
+      
       // Start recording
-      await audioManagerRef.current!.startRecording();
+      await audioManagerRef.current.startRecording();
       
       log('Audio capture started successfully');
     } catch (error) {
