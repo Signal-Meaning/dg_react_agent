@@ -8,7 +8,7 @@
 
 import { test, expect } from '@playwright/test';
 import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
-import { MicrophoneHelpers, setupConnectionStateTracking } from './helpers/test-helpers';
+import { setupConnectionStateTracking } from './helpers/test-helpers';
 
 test.describe('VAD Solution Test', () => {
   test.beforeEach(async ({ page }) => {
@@ -54,24 +54,49 @@ test.describe('VAD Solution Test', () => {
     console.log('🔍 [SOLUTION] Setting up connection state tracking...');
     const stateTracker = await setupConnectionStateTracking(page);
     
-    // Use MicrophoneHelpers to ensure proper microphone activation with transcription service
-    console.log('🔍 [SOLUTION] Activating microphone with MicrophoneHelpers...');
-    const micResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
-      connectionTimeout: 10000,
-      greetingTimeout: 8000,
-      skipGreetingWait: false
-    });
+    // Activate microphone directly (page is already set up in beforeEach)
+    // Transcription will connect when microphone activates and audio is sent
+    console.log('🔍 [SOLUTION] Activating microphone...');
+    await page.click('[data-testid="microphone-button"]');
     
-    expect(micResult.success).toBe(true);
-    console.log('🔍 [SOLUTION] Microphone activated successfully');
+    // Wait for agent connection
+    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    console.log('🔍 [SOLUTION] Agent connection established');
     
-    // Wait for transcription service to connect (required for VAD)
-    // startAudioCapture() should have triggered transcription connection
-    console.log('🔍 [SOLUTION] Waiting for transcription service connection...');
-    await stateTracker.waitForTranscriptionConnected(10000);
+    // Wait for microphone to be enabled
+    // When mic is enabled, test-app has:
+    // 1. Established connections (agent + transcription if configured)
+    // 2. Applied settings (agent SettingsApplied received)
+    // 3. Started audio capture (AudioManager recording)
+    // 4. Transcription should be connected and receiving audio
+    await page.waitForFunction(
+      () => {
+        const micStatus = document.querySelector('[data-testid="mic-status"]');
+        return micStatus && micStatus.textContent === 'Enabled';
+      },
+      { timeout: 15000 }
+    );
+    console.log('🔍 [SOLUTION] Microphone enabled - all prerequisites met (connections, settings, audio capture)');
     
-    // Verify component state using callback-based tracking
+    // After mic is enabled, transcription should already be connected
+    // (startAudioCapture connects transcription if configured, and audio is being sent)
     const componentState = await stateTracker.getStates();
+    console.log('🔍 [SOLUTION] Component connection states after mic enabled:', componentState);
+    
+    // Transcription should be connected for VAD tests (they require transcription service)
+    // If not connected, that indicates a problem with the test setup or audio flow
+    if (!componentState.transcriptionConnected) {
+      console.log('⚠️ [SOLUTION] WARNING: Transcription not connected after mic enabled');
+      console.log('⚠️ [SOLUTION] This may indicate audio mocks not producing audio samples');
+    } else {
+      console.log('✅ [SOLUTION] Transcription connected - ready for VAD events');
+    }
+    
+    // Give a moment for any async connection state updates
+    await page.waitForTimeout(1000);
+    
+    // Get final state
+    const finalState = await stateTracker.getStates();
     console.log('🔍 [SOLUTION] Component state:', componentState);
     
     // Verify VAD configuration is correct - look for any VAD-related logs
@@ -86,10 +111,12 @@ test.describe('VAD Solution Test', () => {
     console.log('🔍 [SOLUTION] VAD configuration logs found:', vadConfigLogs.length);
     console.log('🔍 [SOLUTION] Sample VAD logs:', vadConfigLogs.slice(0, 3));
     
-    // The test passes if the component is working correctly
+    // VAD tests require transcription service to be connected
+    // When mic is enabled, test-app should have established transcription connection
+    // If not connected, it indicates audio mocks aren't producing audio samples
     expect(componentState).toBeTruthy();
-    expect(componentState.transcriptionConnected).toBe(true);
-    expect(componentState.agentConnected).toBe(true);
+    expect(finalState.transcriptionConnected).toBe(true);
+    expect(finalState.agentConnected).toBe(true);
     
     // Don't require specific VAD log patterns - just verify component is working
     console.log('✅ [SOLUTION] Component state verification passed');
