@@ -283,4 +283,31 @@ test.describe('Real User Workflow Tests', () => {
       console.log('Backward compatibility test completed');
     });
   });
+
+  test.describe('Error Handling', () => {
+    test('should handle connection errors gracefully', async ({ page }) => {
+      // Mock connection failure
+      await page.addInitScript(() => {
+        // Override WebSocket to simulate connection failure
+        const OriginalWebSocket = window.WebSocket;
+        window.WebSocket = class extends OriginalWebSocket {
+          constructor(url) {
+            super(url);
+            setTimeout(() => {
+              this.dispatchEvent(new Event('error'));
+            }, 100);
+          }
+        };
+      });
+
+      await page.goto('/');
+      await page.waitForLoadState('networkidle');
+      
+      // Verify component still renders despite connection errors
+      await expect(page.locator('[data-testid="voice-agent"]')).toBeVisible();
+      
+      // Verify connection status shows some state (could be connected, disconnected, or connecting)
+      await expect(page.locator('[data-testid="connection-status"]')).toBeVisible();
+    });
+  });
 });

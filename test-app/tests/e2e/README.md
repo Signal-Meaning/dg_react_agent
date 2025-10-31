@@ -30,7 +30,7 @@ VITE_DEEPGRAM_VOICE=aura-asteria-en
 npm run test:e2e
 
 # Run specific test file
-npx playwright test tests/e2e/auto-connect-dual-mode.spec.js
+npx playwright test tests/e2e/text-only-conversation.spec.js
 
 # Run with UI
 npm run test:e2e:ui
@@ -57,9 +57,7 @@ npx playwright test --grep "Microphone"     # All microphone tests
 - **`deepgram-ux-protocol.spec.js`** - UX-focused protocol validation tests (3 tests)
 - **`protocol-validation-modes.spec.js`** - Real API + Mock mode validation (2 tests)
 - **`api-key-validation.spec.js`** - API key validation and error handling
-- **`auto-connect-dual-mode.spec.js`** - Auto-connect behavior and dual mode functionality
-- **`auto-connect-behavior.spec.js`** - Auto-connect property behavior validation
-- **`auto-connect-prop-behavior.spec.js`** - Auto-connect prop edge cases
+- **`lazy-initialization-e2e.spec.js`** - Lazy initialization behavior (no auto-connect, Issue #206)
 
 ### Timeout & Reconnection Tests
 - **`websocket-timeout-context-preservation.spec.js`** - Context preservation across timeout with TEXT input (accelerated time)
@@ -74,7 +72,8 @@ npx playwright test --grep "Microphone"     # All microphone tests
 
 ### Conversation & Interaction Tests
 - **`text-only-conversation.spec.js`** - Text-only conversation without audio
-- **`real-user-workflows.spec.js`** - Real-world user interaction workflows
+- **`real-user-workflows.spec.js`** - Real-world user interaction workflows (includes error handling)
+- **`page-content.spec.js`** - Basic component rendering validation
 
 ### VAD (Voice Activity Detection) Tests
 - **`vad-websocket-events.spec.js`** - VAD event WebSocket validation
