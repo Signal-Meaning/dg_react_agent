@@ -213,15 +213,6 @@ function App() {
   const handleReady = useCallback((ready: boolean) => {
     setIsReady(ready);
     addLog(`Component is ${ready ? 'ready' : 'not ready'}`);
-    // Pre-warm AudioManager when component becomes ready (no mic permission, no resume)
-    if (ready) {
-      try {
-        deepgramRef.current?.getAudioContext();
-        addLog('Pre-initialized AudioManager context (no resume)');
-      } catch (e) {
-        addLog(`Audio pre-initialization failed: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
   }, [addLog]); // Depends on addLog
 
   // Keep a lightweight mirror of hasSentSettings in the DOM for E2E assertions

@@ -1,8 +1,10 @@
-# Deepgram Voice Agent - Auto-Connect Dual Mode
+# Deepgram Voice Agent - Lazy Initialization (Issue #206)
 
 ## Overview
 
-The `dg_react_agent` package provides a React component for real-time transcription and voice agent interactions using Deepgram APIs. This implementation features **auto-connect dual mode** behavior that establishes both transcription and agent connections immediately when ready, submits settings, and provides controlled microphone access.
+The `dg_react_agent` package provides a React component for real-time transcription and voice agent interactions using Deepgram APIs. This implementation features **lazy initialization** (Issue #206) - WebSocket connections are only established when explicitly needed, not during component initialization.
+
+> **Note**: This document is historical. The auto-connect behavior described below was removed in Issue #206. See the main [README.md](../README.md) for current documentation.
 
 ## Core Features
 

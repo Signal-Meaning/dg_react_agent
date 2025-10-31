@@ -618,7 +618,12 @@ export class WebSocketManager {
    * Closes the WebSocket connection
    */
   public close(): void {
+    // Add stack trace to understand who is calling close()
+    const stack = new Error().stack;
     this.log('Closing WebSocket');
+    if (this.options.debug) {
+      console.log(`🔧 [WebSocketManager] close() called from:`, stack?.split('\n').slice(2, 5).join('\n'));
+    }
     this.stopKeepalive();
     this.stopIdleTimeout();
     

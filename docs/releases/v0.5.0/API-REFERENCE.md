@@ -165,12 +165,8 @@ voiceRef.current?.stop();
 
 | Method | Parameters | Return | Description |
 |--------|------------|--------|-------------|
-| `start` | None | `Promise<void>` | Start all configured services (requires `transcriptionOptions` and/or `agentOptions`) |
-| `stop` | None | `Promise<void>` | Stop all services and connections |
-| `startTranscription` | None | `Promise<void>` | Start only transcription service (requires `transcriptionOptions`) |
-| `stopTranscription` | None | `Promise<void>` | Stop transcription service |
-| `startAgent` | None | `Promise<void>` | Start only agent service (requires `agentOptions`) |
-| `stopAgent` | None | `Promise<void>` | Stop agent service |
+| `start` | `options?: { agent?: boolean, transcription?: boolean }` | `Promise<void>` | Start WebSocket connections for specified services. Creates managers lazily if needed. If no options provided, starts services based on configured props. |
+| `stop` | None | `Promise<void>` | Stop all services and connections. Clears manager refs to allow lazy recreation. |
 
 ### Agent Control Methods
 
@@ -181,7 +177,8 @@ voiceRef.current?.stop();
 | `wake` | None | `void` | Wake agent from sleep |
 | `toggleSleep` | None | `void` | Toggle between sleep and wake |
 | `updateAgentInstructions` | `UpdateInstructionsPayload` | `void` | Update agent instructions |
-| `injectMessage` | `role: 'agent' \| 'user', message: string` | `void` | Inject message as agent or user |
+| `injectUserMessage` | `message: string` | `Promise<void>` | Inject user message to agent. Creates agent manager lazily if needed. |
+| `injectAgentMessage` | `message: string` | `void` | Inject message as agent (deprecated, use `injectUserMessage` for user messages) |
 
 ---
 
@@ -798,7 +795,7 @@ voiceRef.current?.injectMessage('agent', "Hello from agent");
 
 **Key Philosophy Shifts**:
 
-1. **Manual Control Over Auto-Connect**: Removed automatic connection patterns in favor of explicit control, giving developers full control over when voice services are active.
+1. **Lazy Initialization (Issue #206)**: Removed automatic connection patterns. WebSocket managers are created lazily only when `start()` is called or user interacts (via `injectUserMessage()` or `startAudioCapture()`).
 
 2. **Unified Audio Control**: Consolidated multiple audio control methods into a single `interruptAgent()` method that handles both stopping audio and clearing buffers.
 
@@ -835,8 +832,9 @@ voiceRef.current?.injectMessage('agent', "Hello from agent");
 - `agentMute()` / `agentUnmute()` - Replaced with `interruptAgent()` method
 - `getConnectionStates()` / `getState()` - Debug methods removed from public API
 
-#### **Renamed Methods**
-- `injectAgentMessage()` → `injectMessage('agent', message)` (deprecated, will be removed in v1.0.0)
+#### **Changed Methods**
+- `injectUserMessage()` is now async and returns `Promise<void>` - creates agent manager lazily if needed
+- `injectAgentMessage()` remains available but deprecated (no lazy initialization)
 
 #### **Migration Guide**
 
@@ -870,9 +868,9 @@ voiceRef.current?.injectAgentMessage("Hello");
 />
 
 // Methods
-voiceRef.current?.start(); // Explicit control
+await voiceRef.current?.start({ agent: true }); // Explicit control with service flags
 voiceRef.current?.interruptAgent(); // Unified audio control
-voiceRef.current?.injectMessage('agent', "Hello"); // Unified text input
+await voiceRef.current?.injectUserMessage("Hello"); // Lazy initialization for text input
 ```
 
 #### **Impact Assessment**
