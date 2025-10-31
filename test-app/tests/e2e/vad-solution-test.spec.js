@@ -77,11 +77,9 @@ test.describe('VAD Solution Test', () => {
     console.log('🔍 [SOLUTION] Sample VAD logs:', vadConfigLogs.slice(0, 3));
     
     // The test passes if the component is working correctly
-    // Note: Transcription may not always connect when mic is clicked (depends on configuration)
-    // The key validation is that agent connects and component is functional
     expect(componentState).toBeTruthy();
+    expect(componentState.transcriptionConnected).toBe(true);
     expect(componentState.agentConnected).toBe(true);
-    // Transcription connection is optional - if configured, it will connect
     
     // Don't require specific VAD log patterns - just verify component is working
     console.log('✅ [SOLUTION] Component state verification passed');

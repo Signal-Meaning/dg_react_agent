@@ -732,7 +732,16 @@ These tests were updated to use callback-based state tracking:
 
 ### 🧪 Tests That Need to Pass
 
-**Total**: 27 tests in this changeset (8 passed, 19 need fixes)
+**Total**: 27 tests in this changeset
+
+**Test Run Results** (after Category A & B fixes):
+- **Passing**: 4 tests
+- **Fixed Issues**: 
+  - Category A (connection state timing) - Fixed by reading initial state from DOM
+  - Category B (serialization errors) - Fixed by removing `import.meta.env` usage
+- **Remaining Issues**:
+  - Test expectation mismatches (tests expect 'closed' when already 'connected')
+  - Transcription connection expectations need adjustment
 
 Based on test run results, the following tests should pass after Phase 4 updates:
 
@@ -740,17 +749,17 @@ Based on test run results, the following tests should pass after Phase 4 updates
 
 These tests verify core functionality affected by debug method removal:
 
-1. ✅ `lazy-initialization-e2e.spec.js`
-   - ✅ `should not create WebSocket managers during component initialization` - **PASSING**
-   - ⚠️ `should create agent manager when start() is called with agent flag` - **TIMEOUT** (connection state tracking)
-   - ⚠️ `should create both managers when start() is called with both flags` - **TIMEOUT** (connection state tracking)
-   - ✅ `should create agent manager when injectUserMessage() is called` - **PASSING**
+1. ⚠️ `lazy-initialization-e2e.spec.js`
+   - ⚠️ `should not create WebSocket managers during component initialization` - **FAILING** (test expects 'closed' but connection already 'connected' from onReady)
+   - ⚠️ `should create agent manager when start() is called with agent flag` - **TIMEOUT** (waitForAgentConnected timing out - callback may not fire after stop/start)
+   - ⚠️ `should create both managers when start() is called with both flags` - **TIMEOUT** (waitForTranscriptionConnected timing out)
+   - ⚠️ `should create agent manager when injectUserMessage() is called` - **FAILING** (test expects 'closed' but connection already 'connected')
    - ✅ `should verify lazy initialization via microphone activation` - **PASSING**
-   - ⚠️ `should create managers when startAudioCapture() is called` - **TIMEOUT** (connection state tracking)
-   - ⚠️ `should handle agent already connected when microphone is activated` - **TIMEOUT** (connection state tracking)
+   - ✅ `should create managers when startAudioCapture() is called` - **PASSING** (after fix)
+   - ⚠️ `should handle agent already connected when microphone is activated` - **FAILING** (test expects 'not-found' but gets 'closed')
 
 2. ⚠️ `vad-debug-test.spec.js`
-   - ⚠️ `should debug VAD event flow step by step` - **FAILING** (connection state tracking timing issue)
+   - ⚠️ `should debug VAD event flow step by step` - **FAILING** (transcription not connected - VAD tests require transcription service)
 
 3. ⚠️ `transcription-config-test.spec.js`
    - ⚠️ `should verify transcription service is properly configured` - **FAILING** (`import.meta.env` serialization error)
@@ -779,7 +788,7 @@ These tests verify core functionality affected by debug method removal:
    - ⚠️ `should maintain consistent idle timeout state machine` - **FAILING**
 
 8. ⚠️ `vad-solution-test.spec.js`
-   - ⚠️ `should demonstrate that component is working correctly` - **FAILING**
+   - ⚠️ `should demonstrate that component is working correctly` - **FAILING** (transcription not connected - VAD tests require transcription)
 
 9. ⚠️ `vad-transcript-analysis.spec.js`
    - ⚠️ `should analyze transcript responses and VAD events with recorded audio` - **FAILING**
@@ -788,19 +797,24 @@ These tests verify core functionality affected by debug method removal:
 
 ### 🔧 Test Failure Categories
 
-#### Category A: Connection State Tracking Timing (4 tests)
-**Issue**: `setupConnectionStateTracking()` initializes to `'closed'` but connections may be established before tracking or callbacks don't fire
+#### Category A: Connection State Tracking Timing (FIXED - with follow-up issues)
+**Issue**: `setupConnectionStateTracking()` initialized to `'closed'` but connections may be established before tracking
+
+**✅ Fix Applied**: 
+- Updated helper to check initial connection state from DOM (`[data-testid="connection-status"]`)
+- Helper now initializes tracking with actual current state
+
+**⚠️ Remaining Issues**:
+1. Test expectations need adjustment - tests expect 'closed' when connection is already 'connected' (from test-app's onReady)
+2. `waitForAgentConnected` timing out after stop/start - callback may not fire if already connected when tracking starts
+3. Test expectations for 'not-found' vs 'closed' - tracking initializes to 'closed', tests should expect 'closed' not 'not-found'
 
 **Affected Tests**:
-1. `lazy-initialization-e2e.spec.js:106` - `should create agent manager when start() is called with agent flag`
-2. `lazy-initialization-e2e.spec.js:197` - `should create both managers when start() is called with both flags`
-3. `lazy-initialization-e2e.spec.js:389` - `should create managers when startAudioCapture() is called`
-4. `lazy-initialization-e2e.spec.js:459` - `should handle agent already connected when microphone is activated`
-
-**Fix Required**: 
-- Check initial connection state when setting up tracking
-- Increase timeout or ensure tracking is set up before connections
-- Verify `onConnectionStateChange` callbacks fire correctly
+1. `lazy-initialization-e2e.spec.js:32` - Expects 'closed' but connection already 'connected'
+2. `lazy-initialization-e2e.spec.js:106` - Timeout waiting for connection (callback may not fire)
+3. `lazy-initialization-e2e.spec.js:197` - Timeout waiting for transcription connection
+4. `lazy-initialization-e2e.spec.js:240` - Expects 'closed' but connection already 'connected'
+5. `lazy-initialization-e2e.spec.js:459` - Expects 'not-found' but gets 'closed'
 
 #### Category B: Serialization Errors (2 tests)
 **Issue**: `page.evaluate()` cannot serialize `import.meta.env`
@@ -815,40 +829,44 @@ These tests verify core functionality affected by debug method removal:
 - Use test environment setup patterns
 
 #### Category C: VAD Test Failures (13 tests)
-**Issue**: Various VAD-related test failures, may be unrelated to debug method changes
+**Issue**: VAD tests require transcription service to be connected (VAD events come from transcription service)
+
+**Root Cause**: 
+- VAD tests expect transcription to be connected when microphone is activated
+- Transcription service may not be starting correctly, or tests need to wait for it
+- VAD events require transcription service connection to function
 
 **Affected Tests**:
-- `vad-realistic-audio.spec.js` - 5 tests
-- `vad-redundancy-and-agent-timeout.spec.js` - 3 tests
-- `vad-solution-test.spec.js` - 1 test
-- `vad-transcript-analysis.spec.js` - 2 tests
-- `vad-debug-test.spec.js` - 1 test (timing issue)
-- `vad-event-validation.spec.js` - 1 test (serialization)
+- `vad-realistic-audio.spec.js` - 5 tests (transcription not connecting)
+- `vad-redundancy-and-agent-timeout.spec.js` - 3 tests (may be unrelated)
+- `vad-solution-test.spec.js` - 1 test (transcription not connected)
+- `vad-transcript-analysis.spec.js` - 2 tests (may need transcription)
+- `vad-debug-test.spec.js` - 1 test (transcription not connected)
+- `vad-event-validation.spec.js` - 1 test (transcription not connected - test handles this)
 
 **Investigation Needed**:
-- Verify these failures existed before Phase 4 changes
-- Check if failures are due to VAD event detection issues
-- Verify callback-based tracking doesn't interfere with VAD event flow
+- Verify why transcription service isn't connecting when microphone is activated
+- Check if this is a test-app configuration issue or component behavior
+- Ensure VAD tests properly start transcription service before testing VAD events
 
-### ✅ Tests Currently Passing (8/27)
+### ✅ Tests Currently Passing
 
-1. ✅ `lazy-initialization-e2e.spec.js:32` - `should not create WebSocket managers during component initialization`
-2. ✅ `lazy-initialization-e2e.spec.js:240` - `should create agent manager when injectUserMessage() is called`
-3. ✅ `lazy-initialization-e2e.spec.js:356` - `should verify lazy initialization via microphone activation`
-4. ✅ `vad-redundancy-and-agent-timeout.spec.js:67` - `should detect and handle VAD signal redundancy`
-5. ✅ `vad-redundancy-and-agent-timeout.spec.js:151` - `should prove AgentThinking disables idle timeout resets`
-6. ✅ `vad-transcript-analysis.spec.js:295` - `should test utterance_end_ms configuration impact`
-7. ✅ Additional passing tests from other test suites (not in this changeset)
+From last test run:
+1. ✅ `lazy-initialization-e2e.spec.js:356` - `should verify lazy initialization via microphone activation`
+2. ✅ `lazy-initialization-e2e.spec.js:389` - `should create managers when startAudioCapture() is called`
+3. ✅ `user-stopped-speaking-callback.spec.js` - `should verify onUserStoppedSpeaking callback is implemented and working`
+4. ✅ `vad-event-validation.spec.js` - `should trigger onUserStartedSpeaking and onUtteranceEnd with real APIs` (handles transcription not connected)
 
 ### 📋 Action Items for Test Fixes
 
 #### ✅ Completed Fixes
 
-1. **✅ Fix connection state tracking timing** (Category A - 4 tests)
+1. **✅ Fix connection state tracking timing** (Category A - Core fix completed)
    - [x] Updated `setupConnectionStateTracking()` to check initial state from DOM
    - [x] Now reads `[data-testid="connection-status"]` to initialize agent state
    - [x] Handles connections established before tracking is set up
-   - **Status**: Fixed - helper now checks initial connection state
+   - **Status**: ✅ **CORE FIX COMPLETE** - Helper now checks initial connection state
+   - **Follow-up**: Test expectations need adjustment for cases where connection is already established
 
 2. **✅ Fix serialization errors** (Category B - 2 tests)
    - [x] Updated `transcription-config-test.spec.js` to remove `import.meta.env` usage
@@ -856,13 +874,19 @@ These tests verify core functionality affected by debug method removal:
    - [x] Tests now verify configuration via connection state instead
    - **Status**: Fixed - serialization errors removed
 
-#### ⏳ Remaining Investigation
+#### ⏳ Remaining Issues
 
-3. **Investigate VAD failures** (Category C - 13 tests)
-   - [ ] Verify failures existed before Phase 4
-   - [ ] Check if callback-based tracking interferes
-   - [ ] Fix VAD event detection issues if needed
-   - **Note**: These failures may be pre-existing and unrelated to debug method removal
+3. **Fix test expectation mismatches** (Category A follow-up)
+   - [ ] Update tests to handle connections already established when tracking starts
+   - [ ] Fix expectations: use 'closed' (tracking default) instead of 'not-found'
+   - [ ] Investigate `waitForAgentConnected` timeout - ensure callbacks fire after stop/start sequence
+
+4. **Investigate VAD failures** (Category C - 13 tests)
+   - [ ] Verify transcription service connection - VAD tests require transcription to be connected
+   - [ ] Ensure microphone activation properly starts transcription service in test-app
+   - [ ] Check if transcription service configuration is correct for VAD tests
+   - **Note**: VAD events come from transcription service, so transcription must be connected
+   - **Clarification**: VAD tests must fail if transcription service is not connected. Tests should not accept "agent only" connections as valid for VAD testing.
 
 ### 🔧 Issues Identified and Fixed
 
