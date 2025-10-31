@@ -127,7 +127,12 @@ export interface DeepgramVoiceInteractionProps {
    */
   onUserStartedSpeaking?: () => void;
   
-  
+  /**
+   * Called when SettingsApplied event is received from Deepgram
+   * Indicates that agent settings have been successfully applied and the connection is ready
+   * for audio data processing. This replaces the need to poll internal state via getState().
+   */
+  onSettingsApplied?: () => void;
   
   /**
    * Called when an error occurs

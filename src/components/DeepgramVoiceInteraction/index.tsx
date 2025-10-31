@@ -147,6 +147,7 @@ function DeepgramVoiceInteraction(
     onError,
     onAgentSpeaking,
     onAgentSilent,
+    onSettingsApplied,
   } = props;
 
   // Internal state
@@ -1274,6 +1275,10 @@ function DeepgramVoiceInteraction(
       (window as any).globalSettingsSent = true;
       dispatch({ type: 'SETTINGS_SENT', sent: true });
       console.log('🎯 [SettingsApplied] Settings confirmed by Deepgram, audio data can now be processed');
+      
+      // Call public API callback to notify that settings have been applied
+      onSettingsApplied?.();
+      
       return;
     }
     
