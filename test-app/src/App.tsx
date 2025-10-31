@@ -747,7 +747,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           onMouseDown={handleMuteDown}
           onMouseUp={handleMuteUp}
           onMouseLeave={handleMuteUp}
-          disabled={!isRecording}
+          disabled={connectionStates.agent !== 'connected'}
           style={{ 
             padding: '10px 20px',
             backgroundColor: isPressed ? '#f56565' : (ttsMuted ? '#feb2b2' : 'transparent'),
