@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { setupTestPage } from './helpers/audio-mocks.js';
+import {
+  setupTestPage
+} from './helpers/audio-mocks.js';
 
 test.describe('Suspended AudioContext Idle Timeout (Issue #139)', () => {
   test('should timeout even with suspended AudioContext', async ({ page }) => {

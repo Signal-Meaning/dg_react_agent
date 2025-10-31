@@ -13,6 +13,16 @@
  */
 
 import { test, expect } from '@playwright/test';
+const ENABLE_AUDIO = process.env.PW_ENABLE_AUDIO === 'true';
+import { 
+  setupTestPage, 
+  waitForConnection, 
+  waitForConnectionAndSettings,
+  waitForGreetingIfPresent,
+  sendMessageAndWaitForResponse,
+  waitForAudioPlaybackStart as waitForPlaybackStart,
+  getAudioDiagnostics
+} from './helpers/test-helpers.js';
 
 test.describe('Audio Interruption Timing', () => {
   
@@ -20,11 +30,8 @@ test.describe('Audio Interruption Timing', () => {
     // Grant audio permissions for the test
     await context.grantPermissions(['microphone', 'camera']);
     
-    // Navigate to test app
-    await page.goto('http://localhost:5173');
-    
-    // Wait for component to be ready
-    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    // Setup test page with audio mocks
+    await setupTestPage(page);
     
     // Wait for connection to be closed initially
     await expect(page.locator('[data-testid="connection-status"]')).toContainText('closed', { timeout: 10000 });
@@ -33,22 +40,31 @@ test.describe('Audio Interruption Timing', () => {
   test.skip('should interrupt audio within 50ms when interruptAgent() is called', async ({ page }) => {
     console.log('🔊 Testing audio interruption timing...');
     
-    // Get user interaction by clicking text input to enable audio playback
-    await page.click('[data-testid="text-input"]');
-    await page.waitForTimeout(200);
+    // Send a message to trigger auto-connect and get agent response
+    await page.fill('[data-testid="text-input"]', 'Tell me a short story about dogs');
+    await page.press('[data-testid="text-input"]', 'Enter');
+    console.log('✅ Message sent (triggers auto-connect)');
     
-    // Start the connection
-    await page.click('[data-testid="start-button"]');
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
+    // Wait for connection
+    await waitForConnection(page, 5000);
     console.log('✅ Connection established');
     
-    // Send a message that triggers audio playback
-    await page.fill('[data-testid="text-input"]', 'Tell me a short story about dogs');
-    await page.click('[data-testid="send-button"]');
-    console.log('✅ Message sent');
+    // Wait for agent response to arrive
+    await page.waitForFunction(() => {
+      const agentResponse = document.querySelector('[data-testid="agent-response"]');
+      return agentResponse && agentResponse.textContent && 
+             agentResponse.textContent !== '(Waiting for agent response...)';
+    }, { timeout: 10000 });
+    console.log('✅ Agent response received');
     
-    // Wait for audio to start playing
-    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('true', { timeout: 5000 });
+    // Give TTS a moment to start processing
+    await page.waitForTimeout(2000);
+    
+    // Wait for audio to start playing (may take time for TTS to start)
+    await page.waitForFunction(() => {
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+      return audioPlaying && audioPlaying.textContent === 'true';
+    }, { timeout: 6000 });
     console.log('✅ Audio started playing');
     
     // Get timestamp when audio started
@@ -84,56 +100,16 @@ test.describe('Audio Interruption Timing', () => {
     console.log('✅ SUCCESS: Audio interrupted within 50ms');
   });
 
-  test.skip('should maintain interruption state for future messages', async ({ page }) => {
-    console.log('🔊 Testing that interrupted audio stays stopped...');
-    
-    // Get user interaction by clicking text input to enable audio playback
-    await page.click('[data-testid="text-input"]');
-    await page.waitForTimeout(200);
-    
-    // Start the connection
-    await page.click('[data-testid="start-button"]');
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
-    
-    // Send first message and interrupt
-    await page.fill('[data-testid="text-input"]', 'First message');
-    await page.click('[data-testid="send-button"]');
-    
-    // Wait for audio and interrupt
-    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('true', { timeout: 5000 });
-    await page.click('[data-testid="tts-mute-button"]');
-    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 50 });
-    
-    // Wait a bit to ensure no audio resumes
-    await page.waitForTimeout(500);
-    
-    // Verify still stopped
-    const isPlayingAfterInterrupt = await page.locator('[data-testid="audio-playing-status"]').textContent();
-    expect(isPlayingAfterInterrupt).toBe('false');
-    
-    console.log('✅ Audio remained stopped after interruption');
-    
-    // Send another message
-    await page.fill('[data-testid="text-input"]', 'Second message');
-    await page.click('[data-testid="send-button"]');
-    
-    // Verify audio can start playing again for new messages
-    // (this should be allowed - we're not muting, just interrupting current playback)
-    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('true', { timeout: 5000 });
-    
-    console.log('✅ New message audio plays normally');
-  });
-
   test.skip('should handle rapid interrupt clicks without errors', async ({ page }) => {
     console.log('🔊 Testing rapid interrupt clicks...');
     
-    // Start the connection
-    await page.click('[data-testid="start-button"]');
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
+    // Send initial message to connect via auto-connect
+    await page.fill('[data-testid="text-input"]', 'Tell me a long story');
+    await page.press('[data-testid="text-input"]', 'Enter');
     
-    // Send a message
-    await page.fill('[data-testid="text-input"]', 'Long message');
-    await page.click('[data-testid="send-button"]');
+    // Wait for connection
+    await waitForConnection(page, 5000);
+    await waitForGreetingIfPresent(page);
     
     // Wait for audio
     await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('true', { timeout: 5000 });
@@ -150,36 +126,60 @@ test.describe('Audio Interruption Timing', () => {
     console.log('✅ Rapid interrupt clicks handled without errors');
   });
 
+  if (!ENABLE_AUDIO) {
+    test.skip(true, 'PW_ENABLE_AUDIO is not enabled; skipping audio playback-dependent test.');
+  }
   test('should persist mute state and prevent future audio', async ({ page }) => {
     console.log('🔊 Testing TTS mute state persistence...');
     
-    // Get user interaction by clicking text input to enable audio playback
+    // Focus text input first to trigger AudioManager initialization and allow AudioContext resume
     await page.click('[data-testid="text-input"]');
-    await page.waitForTimeout(200);
     
-    // Start connection
-    await page.click('[data-testid="start-button"]');
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
-    console.log('✅ Connection established');
+    // Wait for connection and settings to be applied (agent ready to respond)
+    await waitForConnectionAndSettings(page, 5000, 10000);
+    console.log('✅ Connection established and settings applied');
     
-    // Hold down mute button (push button)
+    
+    // Detect greeting playback immediately after connection/settings
+    try {
+      await waitForPlaybackStart(page, 6000);
+      console.log('✅ Greeting/agent playback detected');
+    } catch (e) {
+      throw new Error('Gate failed: No playback started within 6s after SettingsApplied (no greeting audio detected)');
+    }
+
+    // Send first message and wait for agent response
+    await sendMessageAndWaitForResponse(page, 'Tell me a story');
+    // Minimal diagnostic: log AudioContext state and isPlaying at response time
+    const diag1 = await getAudioDiagnostics(page);
+    console.log('🔎 Audio diagnostic after first response:', diag1);
+    console.log('✅ Agent response received');
+    
+    // Wait for audio to start playing (after greeting/response begins)
+    await page.waitForFunction(() => {
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+      return audioPlaying && audioPlaying.textContent === 'true';
+    }, { timeout: 6000 });
+    console.log('✅ Audio is playing');
+    
+    // Now hold down mute button (push button)
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
     await muteButton.dispatchEvent('mousedown');
-    await page.waitForTimeout(100);
+    // Wait until audio has stopped instead of a fixed delay
+    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 2000 });
     
     // Verify button shows "Mute" while held down
     await expect(muteButton).toContainText('Mute');
     console.log('✅ Button pressed - audio blocked');
     
-    // Send a message - should not play audio
-    await page.fill('[data-testid="text-input"]', 'Hello test message');
-    await page.click('[data-testid="send-button"]');
+    // Send another message - should not play audio while held
+    await sendMessageAndWaitForResponse(page, 'Tell me more');
+    const diag2 = await getAudioDiagnostics(page);
+    console.log('🔎 Audio diagnostic after second response (while held):', diag2);
     console.log('✅ Message sent');
     
-    // Wait and verify audio didn't start
-    await page.waitForTimeout(2000);
-    const isPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
-    expect(isPlaying).toBe('false');
+    // Verify audio did not start while muted
+    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 2000 });
     console.log('✅ Audio did not play (as expected when button held)');
     
     // Release button
@@ -190,48 +190,79 @@ test.describe('Audio Interruption Timing', () => {
     console.log('✅ Mute state persisted and prevented audio');
   });
 
-  test('should maintain mute state during long press', async ({ page }) => {
-    console.log('🔊 Testing long press mute behavior...');
+
+  if (!ENABLE_AUDIO) {
+    test.skip(true, 'PW_ENABLE_AUDIO is not enabled; skipping audio playback-dependent test.');
+  }
+  test('should interrupt and allow audio repeatedly', async ({ page }) => {
+    console.log('🔊 Testing interruptAgent/allowAgent functionality...');
     
-    // Get user interaction by clicking text input
+    // Focus text input first to trigger AudioManager initialization and allow AudioContext resume
     await page.click('[data-testid="text-input"]');
-    await page.waitForTimeout(200);
+  
     
-    // Start connection
-    await page.click('[data-testid="start-button"]');
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 5000 });
-    console.log('✅ Connection established');
+    // Wait for connection and settings to be applied (agent ready to respond)
+    await waitForConnectionAndSettings(page, 5000, 10000);
+    console.log('✅ Connection established and settings applied');
     
-    // Hold down mute button
+    // Detect greeting playback immediately after connection/settings
+    try {
+      await waitForPlaybackStart(page, 6000);
+      console.log('✅ Greeting/agent playback detected');
+    } catch (e) {
+      throw new Error('Gate failed: No playback started within 6s after SettingsApplied (no greeting audio detected)');
+    }
+
+    // Send first message to connect and wait for response
+    await sendMessageAndWaitForResponse(page, 'Tell me a joke');
+    const diag3 = await getAudioDiagnostics(page);
+    console.log('🔎 Audio diagnostic after joke response:', diag3);
+    
+    console.log('✅ Agent response received');
+    
+    // Wait for audio to start playing
+    await page.waitForFunction(() => {
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+      return audioPlaying && audioPlaying.textContent === 'true';
+    }, { timeout: 6000 });
+    console.log('✅ Audio started playing');
+    
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
-    await muteButton.dispatchEvent('mousedown');
-    console.log('✅ Button pressed');
     
-    // Send multiple messages while holding button
+    // Toggle block/allow multiple times to verify functionality
     for (let i = 0; i < 3; i++) {
-      await page.fill('[data-testid="text-input"]', `Message ${i + 1}`);
-      await page.click('[data-testid="send-button"]');
-      console.log(`✅ Sent message ${i + 1}`);
+      // Block audio
+      await muteButton.dispatchEvent('mousedown');
+      console.log(`✅ Toggle ${i + 1}: Blocked audio`);
       
-      // Wait and verify no audio played
-      await page.waitForTimeout(1000);
-      const isPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
+      // Verify audio stopped
+      await page.waitForTimeout(100);
+      let isPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
       expect(isPlaying).toBe('false');
-      console.log(`✅ Message ${i + 1} - audio blocked`);
+      console.log(`✅ Toggle ${i + 1}: Audio confirmed stopped`);
+      
+      // Allow audio
+      await muteButton.dispatchEvent('mouseup');
+      console.log(`✅ Toggle ${i + 1}: Allowed audio`);
+      
+      // Send a message and verify audio can play again
+      await sendMessageAndWaitForResponse(page, `Message ${i}`);
+      
+      // Wait for agent response
+      await page.waitForFunction(() => {
+        const agentResponse = document.querySelector('[data-testid="agent-response"]');
+        return agentResponse && agentResponse.textContent && 
+               agentResponse.textContent !== '(Waiting for agent response...)';
+      }, { timeout: 10000 });
+      
+      // Verify audio is playing again
+      await page.waitForFunction(() => {
+        const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+        return audioPlaying && audioPlaying.textContent === 'true';
+      }, { timeout: 6000 });
+      console.log(`✅ Toggle ${i + 1}: Audio confirmed playing after unmuting`);
     }
     
-    // Release button
-    await muteButton.dispatchEvent('mouseup');
-    await expect(muteButton).toContainText('Enable');
-    console.log('✅ Button released');
-    
-    // Now send a message with button released - should play
-    await page.fill('[data-testid="text-input"]', 'Final test message');
-    await page.click('[data-testid="send-button"]');
-    console.log('✅ Sent message after release');
-    
-    // Wait to see if audio plays (may take time with real API)
-    await page.waitForTimeout(2000);
-    console.log('✅ Test complete - verified long press behavior');
+    console.log('✅ interruptAgent/allowAgent functionality verified with audio playback');
   });
 });

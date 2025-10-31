@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { setupTestPage } from './helpers/audio-mocks.js';
+import {
+  setupTestPage
+} from './helpers/audio-mocks.js';
 
 test.describe('Initial Greeting Idle Timeout (Issue #139)', () => {
   test('should timeout after initial greeting on page load', async ({ page }) => {

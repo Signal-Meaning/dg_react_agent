@@ -224,12 +224,15 @@ export class WebSocketManager {
 
         this.ws.onmessage = (event) => {
           // Log the type of data received for every message
+          console.log(`📨 [WEBSOCKET.onmessage] Received message from server`);
           this.log(`Received message data type: ${typeof event.data}, is ArrayBuffer: ${event.data instanceof ArrayBuffer}, is Blob: ${event.data instanceof Blob}`);
           
           if (typeof event.data === 'string') {
             try {
+              console.log(`📨 [WEBSOCKET.onmessage] Raw string message:`, event.data);
               this.log('Received raw string message:', event.data);
               const data = JSON.parse(event.data);
+              console.log(`📨 [WEBSOCKET.onmessage] Parsed JSON message:`, data);
               this.log('Parsed message into JSON:', data);
               
               // Only reset idle timeout on meaningful user activity (not every protocol message)
@@ -249,7 +252,9 @@ export class WebSocketManager {
                 }
               }
               
+              console.log(`📨 [WEBSOCKET.onmessage] About to emit message event with type:`, data.type);
               this.emit({ type: 'message', data });
+              console.log(`📨 [WEBSOCKET.onmessage] Emit completed for message type:`, data.type);
             } catch (error) {
               this.log('Error parsing message:', error);
               this.emit({ 
@@ -478,11 +483,14 @@ export class WebSocketManager {
   private isMeaningfulUserActivity(data: any): boolean {
     // Only reset idle timeout on ACTUAL user activity, not on every message
     
-    // For agent service, only reset on user messages, not agent responses or protocol messages
+    // For agent service, reset on both user messages and agent responses
     if (this.options.service === 'agent') {
-      // Only reset on actual user messages
-      const userActivityMessages = ['ConversationText']; // User sending text
-      const isMeaningful = userActivityMessages.includes(data.type);
+      // User messages
+      const userActivityMessages = ['ConversationText', 'InjectUserMessage']; // User sending text
+      // Agent activity that should keep connection alive
+      const agentActivityMessages = ['AgentThinking', 'AgentStartedSpeaking', 'AgentAudioDone']; // Agent responding
+      
+      const isMeaningful = userActivityMessages.includes(data.type) || agentActivityMessages.includes(data.type);
       if (isMeaningful) {
         this.options.onMeaningfulActivity?.(data.type);
       }

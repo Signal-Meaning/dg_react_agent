@@ -221,6 +221,9 @@ export interface DeepgramVoiceInteractionHandle {
    *   - agent: Start agent service (default: true if agentOptions prop provided)
    *   - transcription: Start transcription service (default: true if transcriptionOptions prop provided)
    * If no options provided, starts services based on which props are configured
+   * 
+   * ⚠️ Note: This method connects WebSocket(s) but does NOT start audio recording.
+   * To start recording, call `startAudioCapture()` separately.
    */
   start: (options?: { agent?: boolean; transcription?: boolean }) => Promise<void>;
   
@@ -241,24 +244,6 @@ export interface DeepgramVoiceInteractionHandle {
   
   /**
    * Allow agent audio to play (clears block state set by interruptAgent)
-   * 
-   * @description
-   * Re-enables audio queueing after a previous `interruptAgent()` call.
-   * This is the counterpart to `interruptAgent()` for push-button mute scenarios.
-   * 
-   * @example
-   * // In a push-button mute implementation
-   * <button 
-   *   onMouseDown={() => ref.current?.interruptAgent()}
-   *   onMouseUp={() => ref.current?.allowAgent()}
-   * >
-   *   Hold to Mute
-   * </button>
-   * 
-   * @note
-   * - Safe to call multiple times
-   * - No-op if already allowed
-   * - Does NOT resume paused or stopped audio, only allows future audio
    */
   allowAgent: () => void;
   
@@ -282,7 +267,11 @@ export interface DeepgramVoiceInteractionHandle {
    */
   injectAgentMessage: (message: string) => void;
   
-
+  /**
+   * Connect for text-only interactions (no microphone)
+   */
+  connectTextOnly: () => Promise<void>;
+  
   /**
    * Inject a user message to the agent
    * Creates agent manager lazily if needed and ensures connection is established
@@ -312,6 +301,13 @@ export interface DeepgramVoiceInteractionHandle {
    * Get current component state for debugging (testing only)
    */
   getState: () => VoiceInteractionState;
+
+  /**
+   * Check if audio is currently playing
+   * 
+   * @returns true if audio is currently playing, false otherwise
+   */
+  isPlaybackActive: () => boolean;
 
   /**
    * Get the AudioContext for debugging and testing

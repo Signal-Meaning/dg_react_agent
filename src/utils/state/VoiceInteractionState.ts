@@ -92,7 +92,6 @@ export interface VoiceInteractionState {
     lastWordEnd: number;
   };
 
-  
   /**
    * Flag to track if agent is waiting for completion after AgentAudioDone
    */
@@ -147,8 +146,6 @@ export const initialState: VoiceInteractionState = {
   isUserSpeaking: false,
   lastUserSpeechTime: null,
   currentSpeechDuration: null,
-  
-  // TTS state
   
   // Agent completion tracking
   agentWaitingForCompletion: false,
@@ -287,7 +284,6 @@ export function stateReducer(state: VoiceInteractionState, event: StateEvent): V
         utteranceEndData: undefined,
       };
       
-
     default:
       return state;
   }

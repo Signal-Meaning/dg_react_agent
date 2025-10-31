@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { setupTestPage } from './helpers/audio-mocks.js';
+import {
+  setupTestPage
+} from './helpers/audio-mocks.js';
 
 test.describe('VAD Typing Idle Timeout (Issue #139)', () => {
   test('should timeout even with VAD detecting typing as speech', async ({ page }) => {

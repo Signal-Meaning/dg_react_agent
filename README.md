@@ -674,7 +674,7 @@ These methods are accessed via the `ref` attached to the component (e.g., `deepg
 
 | Method                    | Parameters                           | Return Type     | Description                                                                |
 | :------------------------ | :----------------------------------- | :-------------- | :------------------------------------------------------------------------- |
-| `start`                   | `options?: { agent?: boolean, transcription?: boolean }` | `Promise<void>` | Starts WebSocket connections for specified services. Creates managers lazily if needed. If no options provided, starts services based on configured props. |
+| `start`                   | `options?: { agent?: boolean, transcription?: boolean }` | `Promise<void>` | Starts WebSocket connections for specified services. Creates managers lazily if needed. If no options provided, starts services based on configured props. ⚠️ **Note**: Does NOT start recording. Call `startAudioCapture()` separately to enable microphone. |
 | `stop`                    | `none`                               | `Promise<void>` | Stops recording/streaming and closes WebSocket connections. Clears manager refs to allow lazy recreation. |
 | `updateAgentInstructions` | `payload: UpdateInstructionsPayload` | `void`          | Sends new instructions or context to the agent mid-session. Only works in agent or dual mode. |
 | `interruptAgent`          | `none`                               | `void`          | Immediately stops agent audio playback and clears the audio queue. Only works in agent or dual mode. |

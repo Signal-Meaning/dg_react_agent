@@ -22,7 +22,7 @@ test.describe('Protocol Validation - Mock API Mode', () => {
     });
     
     // Navigate to test mode
-    await page.goto('/?test-mode=true');
+    await page.goto('http://localhost:5173/?test-mode=true');
     await page.waitForLoadState('networkidle');
     
     // Install mock WebSocket to prevent real API calls
@@ -58,7 +58,7 @@ test.describe('Protocol Validation - Mock Mode', () => {
     });
     
     // Navigate to test mode
-    await page.goto('/?test-mode=true');
+    await page.goto('http://localhost:5173/?test-mode=true');
     await page.waitForLoadState('networkidle');
     
     // Install mock WebSocket

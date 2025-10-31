@@ -715,7 +715,17 @@ function DeepgramVoiceInteraction(
     } else if (isTranscriptionConfigured) {
       log('Transcription service is configured (manager will be created on demand)');
     } else {
+      console.log('🔧 [TRANSCRIPTION] Transcription service NOT configured, skipping setup');
+      log('Transcription service not configured, skipping setup');
+    }
+
+    // --- AGENT SETUP (CONDITIONAL) ---
+    // Note: With lazy initialization, managers are created on-demand via start() or startAudioCapture()
+    // We don't create managers here during initialization anymore
+    if (isAgentConfigured) {
       log('Agent service is configured (manager will be created on demand)');
+    } else {
+      log('Agent service not configured, skipping setup');
     }
 
     // --- AUDIO SETUP (LAZY INITIALIZATION) ---
@@ -791,12 +801,6 @@ function DeepgramVoiceInteraction(
         if (audioManagerRef.current) {
           audioManagerRef.current.dispose();
           audioManagerRef.current = null;
-        }
-        
-        // Cleanup agent state service
-        if (agentStateServiceRef.current) {
-          agentStateServiceRef.current.reset();
-          agentStateServiceRef.current = null;
         }
         
         // Ensure state is reset on unmount
@@ -1132,7 +1136,7 @@ function DeepgramVoiceInteraction(
             }
           } : {})
         },
-        // Only include speak provider if TTS is not muted
+        // Include speak provider for TTS
         speak: {
           provider: {
             type: 'deepgram',
@@ -1147,7 +1151,9 @@ function DeepgramVoiceInteraction(
     console.log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
       conversationHistoryLength: agentOptions.context?.messages?.length || 0,
       contextMessages: agentOptions.context?.messages || [],
-      hasSpeakProvider: 'speak' in settingsMessage.agent
+      hasSpeakProvider: 'speak' in settingsMessage.agent,
+      speakModel: settingsMessage.agent.speak?.provider?.model,
+      greetingPreview: (settingsMessage.agent.greeting || '').slice(0, 60)
     });
     agentManagerRef.current.sendJSON(settingsMessage);
     console.log('📤 [Protocol] Settings message sent successfully');
@@ -1171,6 +1177,11 @@ function DeepgramVoiceInteraction(
     console.log('🎯 [DEBUG] handleAgentMessage called - VERSION 7.0 - HMR TEST');
     console.error('🎯 [ERROR] handleAgentMessage called - VERSION 7.0 - ERROR TEST');
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
+    // Also print to console for e2e trace collection regardless of debug flag
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      console.log('📨 [AGENT MESSAGE] type=', (data as any)?.type);
+    } catch {}
     
     // Don't re-enable idle timeout resets here
     // Let WebSocketManager handle meaningful message detection
@@ -1272,7 +1283,10 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentThinking') {
-      agentStateServiceRef.current?.handleAgentThinking();
+      console.log('🧠 [AGENT EVENT] AgentThinking received');
+      console.log('🎯 [AGENT] AgentThinking received - transitioning to thinking state');
+      sleepLog('Dispatching AGENT_STATE_CHANGE to thinking');
+      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
       
       // Disable keepalives when agent starts thinking (user stopped speaking)
       updateKeepaliveState(false);
@@ -1281,12 +1295,12 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentStartedSpeaking') {
-      agentStateServiceRef.current?.handleAgentStartedSpeaking(
-        state.greetingInProgress, 
-        state.greetingStarted
-      );
-      
-      // Track agent speaking for greeting state
+      console.log('🗣️ [AGENT EVENT] AgentStartedSpeaking received');
+      console.log('🎯 [AGENT] AgentStartedSpeaking received - transitioning to speaking state');
+      sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
+      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
+
+      // Track agent speaking
       if (state.greetingInProgress && !state.greetingStarted) {
         dispatch({ type: 'GREETING_STARTED', started: true });
       }
@@ -1300,7 +1314,9 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentAudioDone') {
-      agentStateServiceRef.current?.handleAgentAudioDone(state.greetingInProgress);
+      console.log('🔊 [AGENT EVENT] AgentAudioDone received');
+      console.log('🎯 [AGENT] AgentAudioDone received - audio generation complete, playback may continue');
+      sleepLog('AgentAudioDone received - audio generation complete, but playback may continue');
       
       // Track agent silent for greeting state
       if (state.greetingInProgress) {
@@ -1326,14 +1342,8 @@ function DeepgramVoiceInteraction(
     
     // Handle conversation text
     if (data.type === 'ConversationText') {
+      console.log('💬 [AGENT EVENT] ConversationText received role=', data.role);
       const content = typeof data.content === 'string' ? data.content : '';
-      
-      // CRITICAL FIX: Skip processing if AudioContext is suspended (prevents idle timeout bug)
-      const audioContext = audioManagerRef.current?.getAudioContext();
-      if (audioContext?.state === 'suspended') {
-        log('⚠️ Skipping ConversationText processing - AudioContext is suspended, waiting for user interaction');
-        return;
-      }
       
       // If we receive ConversationText, this means the agent is actively responding
       
@@ -1465,6 +1475,7 @@ function DeepgramVoiceInteraction(
 
   // Handle agent audio - only relevant if agent is configured
   const handleAgentAudio = async (data: ArrayBuffer) => {
+    console.log('🎵 [AUDIO EVENT] handleAgentAudio received buffer bytes=', data?.byteLength);
     // Don't re-enable idle timeout resets here
     // After UtteranceEnd, only new connection should re-enable
     
@@ -1479,6 +1490,13 @@ function DeepgramVoiceInteraction(
     // Skip audio playback if we're waiting for user voice after sleep
     if (isWaitingForUserVoiceAfterSleep.current) {
       log('Skipping audio playback because waiting for user voice after sleep');
+      return;
+    }
+    
+    // Check if agent audio is blocked
+    if (!allowAgentRef.current) {
+      console.log('🔇 [AUDIO EVENT] Agent audio currently blocked (allowAgentRef=false) - discarding buffer');
+      log('🔇 Agent audio blocked - discarding audio buffer to prevent playback');
       return;
     }
     
@@ -1497,12 +1515,6 @@ function DeepgramVoiceInteraction(
         });
         return;
       }
-    }
-    
-    // Check if agent audio is blocked
-    if (!allowAgentRef.current) {
-      log('🔇 Agent audio blocked - discarding audio buffer to prevent playback');
-      return;
     }
     
     log('Passing buffer to AudioManager.queueAudio()');
@@ -1697,6 +1709,37 @@ function DeepgramVoiceInteraction(
     }
   };
 
+  // Connect for text-only interactions (no microphone)
+  const connectTextOnly = async (): Promise<void> => {
+    try {
+      log('ConnectTextOnly method called');
+      
+      // Connect agent WebSocket if configured
+      if (agentManagerRef.current) {
+        log('Connecting Agent WebSocket...');
+        await agentManagerRef.current.connect();
+        log('Agent WebSocket connected');
+      } else {
+        log('Agent manager not configured, skipping connection');
+      }
+      
+      // DO NOT start recording - this is text-only mode
+      log('Text-only connection established (no audio recording)');
+      
+      // Set ready state to true after successful text-only connection
+      dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
+    } catch (error) {
+      log('Error within connectTextOnly method:', error);
+      handleError({
+        service: 'agent',
+        code: 'connection_error',
+        message: 'Failed to establish text-only connection',
+        details: error,
+      });
+      dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
+      throw error;
+    }
+  };
 
   // Stop the connection
   const stop = async (): Promise<void> => {
@@ -1773,9 +1816,20 @@ function DeepgramVoiceInteraction(
       log('🔴 Calling audioManager.clearAudioQueue()');
       audioManagerRef.current.clearAudioQueue();
       
-      // Flush any pending audio to ensure complete stop
-      log('🧹 Calling audioManager.flushAudioBuffer()');
-      audioManagerRef.current.flushAudioBuffer();
+      // Additional audio cleanup
+      if (audioManagerRef.current['audioContext']) {
+        log('🔄 Manipulating audio context time reference');
+        const ctx = audioManagerRef.current['audioContext'] as AudioContext;
+        try {
+          const silentBuffer = ctx.createBuffer(1, 1024, ctx.sampleRate);
+          const silentSource = ctx.createBufferSource();
+          silentSource.buffer = silentBuffer;
+          silentSource.connect(ctx.destination);
+          silentSource.start();
+        } catch (e) {
+          log('⚠️ Error creating silent buffer:', e);
+        }
+      }
     } catch (err) {
       log('❌ Error in clearAudio:', err);
     }
@@ -1793,31 +1847,15 @@ function DeepgramVoiceInteraction(
     }
     
     clearAudio();
-    log('🔴 Setting agent state to idle');
-    sleepLog('Dispatching AGENT_STATE_CHANGE to idle (from interruptAgent)');
-    dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
-    
-    // Block agent audio to prevent future audio from queuing
     allowAgentRef.current = BLOCK_AUDIO;
     log('🔇 Agent audio blocked - future audio will be discarded');
     
+    log('🔴 Setting agent state to idle');
+    sleepLog('Dispatching AGENT_STATE_CHANGE to idle (from interruptAgent)');
+    dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
     log('🔴 interruptAgent method completed');
   };
-  
-  /**
-   * Allows agent audio to queue after being blocked by interruptAgent()
-   * 
-   * Sets the internal allowAgentRef flag to true, allowing audio buffers
-   * to pass through handleAgentAudio() and queue for playback.
-   * 
-   * This is the counterpart to interruptAgent() and is typically used
-   * in push-button mute scenarios where the user releases the mute button.
-   * 
-   * @remarks
-   * - Safe to call multiple times
-   * - No-op if already allowed
-   * - Does not resume paused audio, only allows future audio
-   */
+
   const allowAgent = (): void => {
     log('🔊 allowAgent method called');
     allowAgentRef.current = ALLOW_AUDIO;
@@ -1943,10 +1981,55 @@ function DeepgramVoiceInteraction(
       log('Agent manager already connected');
     }
     
-    log('Injecting user message:', message);
+    // Check WebSocket state before sending
+    const finalConnectionState = agentManagerRef.current.getState();
+    log('Injecting user message:', message, '- WebSocket state:', finalConnectionState);
+    console.log('📝 [TEXT_MESSAGE] Attempting to send:', message, '- Connection state:', finalConnectionState);
     
     if (!agentManagerRef.current) {
       throw new Error('Agent manager is null when trying to send message');
+    }
+    
+    // Initialize AudioManager proactively if it doesn't exist
+    // This ensures AudioContext is ready when agent responds with binary audio
+    // User interaction (sending message) allows AudioContext to be unsuspended
+    if (!audioManagerRef.current) {
+      log('Initializing AudioManager proactively for TTS playback (user interaction via text message)');
+      try {
+        await createAudioManager();
+        log('AudioManager initialized proactively');
+        
+        // Resume AudioContext if it's suspended (browser autoplay policy)
+        if (audioManagerRef.current) {
+          try {
+            const audioContext = (audioManagerRef.current as AudioManager).getAudioContext();
+          if (audioContext && audioContext.state === 'suspended') {
+            log('Resuming suspended AudioContext (user interaction permits this)');
+            await audioContext.resume();
+            log('AudioContext resumed successfully');
+            }
+          } catch (error) {
+            log('Failed to get or resume AudioContext:', error);
+          }
+        }
+      } catch (error) {
+        log('Failed to initialize AudioManager proactively:', error);
+        // Don't block message sending - audio might work anyway
+      }
+    } else {
+      // AudioManager exists, but ensure AudioContext is resumed
+      if (audioManagerRef.current) {
+        try {
+          const audioContext = (audioManagerRef.current as AudioManager).getAudioContext();
+      if (audioContext && audioContext.state === 'suspended') {
+        log('Resuming suspended AudioContext (user interaction permits this)');
+          await audioContext.resume();
+          log('AudioContext resumed successfully');
+          }
+        } catch (error) {
+          log('Failed to get or resume AudioContext:', error);
+      }
+    }
     }
     
     agentManagerRef.current.sendJSON({
@@ -1954,17 +2037,14 @@ function DeepgramVoiceInteraction(
       content: message
     });
     
+    console.log('📝 [TEXT_MESSAGE] Message sent successfully');
     log('User message sent successfully');
   };
-
-  // TTS mute control methods
   // Helper function to create and initialize AudioManager
   const createAudioManager = async (): Promise<void> => {
     if (audioManagerRef.current) {
       return; // Already exists
     }
-
-    log('Creating AudioManager');
     audioManagerRef.current = new AudioManager({
       debug: props.debug,
     });
@@ -1978,10 +2058,36 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: event.isRecording });
       } else if (event.type === 'playing') {
         log('Playing state:', event.isPlaying);
+        console.log(`🎯 [AUDIO] Playback state changed: ${event.isPlaying ? 'PLAYING' : 'NOT PLAYING'}, current agent state: ${stateRef.current.agentState}`);
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: event.isPlaying });
         
-        // Use agent state service for audio playback state changes
-        agentStateServiceRef.current?.handleAudioPlaybackChange(event.isPlaying);
+        // Transition agent to speaking when playback starts
+        // This is the primary mechanism for detecting TTS playback and transitioning to speaking state
+        // It handles cases where AgentStartedSpeaking message isn't received or is delayed
+        // This works for transitions from: idle -> speaking, thinking -> speaking, listening -> speaking
+        if (event.isPlaying) {
+          const currentState = stateRef.current.agentState;
+          if (currentState !== 'speaking') {
+            console.log(`🎯 [AGENT] Audio playback started - transitioning from ${currentState} to speaking`);
+            sleepLog(`Dispatching AGENT_STATE_CHANGE to speaking (from playback start, previous state: ${currentState})`);
+            dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
+          } else {
+            console.log(`🎯 [AGENT] Audio playback started but already in speaking state - no transition needed`);
+          }
+        }
+        
+        // Transition agent to idle when audio playback stops
+        // Only transition if we're currently in speaking state (prevents invalid transitions)
+        if (!event.isPlaying) {
+          const currentState = stateRef.current.agentState;
+          if (currentState === 'speaking') {
+            console.log('🎯 [AGENT] Audio playback finished - transitioning agent from speaking to idle');
+            sleepLog('Audio playback finished - transitioning agent to idle');
+            dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+          } else {
+            console.log(`🎯 [AGENT] Audio playback stopped but agent state is ${currentState} (not speaking) - skipping transition to idle`);
+          }
+        }
       } else if (event.type === 'error') {
         handleError(event.error);
       } else if (event.type === 'data') {
@@ -2098,6 +2204,7 @@ function DeepgramVoiceInteraction(
   useImperativeHandle(ref, () => ({
     // Core connection methods
     start,
+    connectTextOnly,
     stop,
     
     // Agent interaction methods
@@ -2116,8 +2223,20 @@ function DeepgramVoiceInteraction(
     // Audio data handling
     sendAudioData, // Expose sendAudioData for testing and external use
     
+    isPlaybackActive: () => state.isPlaying,
+    
     // Audio context access
-    getAudioContext: () => audioManagerRef.current?.getAudioContext() || undefined,
+    getAudioContext: () => {
+      // If AudioManager doesn't exist, trigger lazy initialization (fire-and-forget)
+      // This allows user interaction (like text input focus) to initialize AudioContext
+      if (!audioManagerRef.current && agentOptions) {
+        log('getAudioContext() called - triggering lazy AudioManager initialization');
+        createAudioManager().catch((error) => {
+          log('Failed to initialize AudioManager from getAudioContext():', error);
+        });
+      }
+      return audioManagerRef.current?.getAudioContext() || undefined;
+    },
     
     // Debug methods for testing
     getConnectionStates: () => ({
