@@ -86,6 +86,7 @@ describe('Module Export Validation', () => {
       expect(typesContent).toContain('injectAgentMessage: (message: string) => void');
       expect(typesContent).toContain('updateAgentInstructions: (payload: UpdateInstructionsPayload) => void');
       expect(typesContent).toContain('interruptAgent: () => void');
+      expect(typesContent).toContain('allowAgent: () => void');
       expect(typesContent).toContain('sleep: () => void');
       expect(typesContent).toContain('wake: () => void');
       expect(typesContent).toContain('toggleSleep: () => void');

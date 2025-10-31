@@ -653,7 +653,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onUtteranceEnd={handleUtteranceEnd}
         onAgentSpeaking={handleAgentSpeaking}
         onAgentSilent={handleAgentSilent}
-        debug={true} // Enable debug for VAD testing
+        debug={isDebugMode} // Enable debug only when debug mode is explicitly enabled
       />
       
       <div style={{ border: '1px solid blue', padding: '10px', margin: '15px 0' }}>
@@ -747,7 +747,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           onMouseDown={handleMuteDown}
           onMouseUp={handleMuteUp}
           onMouseLeave={handleMuteUp}
-          disabled={!isRecording}
+          disabled={connectionStates.agent !== 'connected'}
           style={{ 
             padding: '10px 20px',
             backgroundColor: isPressed ? '#f56565' : (ttsMuted ? '#feb2b2' : 'transparent'),

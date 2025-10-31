@@ -165,11 +165,13 @@ test.describe('Audio Interruption Timing', () => {
     // Now hold down mute button (push button)
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
     await muteButton.dispatchEvent('mousedown');
+    
+    // Wait for button text to update (React state update)
+    await expect(muteButton).toContainText('Mute', { timeout: 2000 });
+    console.log('✅ Button pressed - button text updated');
+    
     // Wait until audio has stopped instead of a fixed delay
     await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 2000 });
-    
-    // Verify button shows "Mute" while held down
-    await expect(muteButton).toContainText('Mute');
     console.log('✅ Button pressed - audio blocked');
     
     // Send another message - should not play audio while held
@@ -235,10 +237,8 @@ test.describe('Audio Interruption Timing', () => {
       await muteButton.dispatchEvent('mousedown');
       console.log(`✅ Toggle ${i + 1}: Blocked audio`);
       
-      // Verify audio stopped
-      await page.waitForTimeout(100);
-      let isPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
-      expect(isPlaying).toBe('false');
+      // Wait for audio to actually stop (not just a fixed delay)
+      await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 2000 });
       console.log(`✅ Toggle ${i + 1}: Audio confirmed stopped`);
       
       // Allow audio

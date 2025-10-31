@@ -268,26 +268,26 @@ function DeepgramVoiceInteraction(
       const cutoffTime = Date.now() - VAD_TRACKING_CONSTANTS.HISTORY_RETENTION_MS;
       vadEventHistory.current = vadEventHistory.current.filter(e => e.timestamp > cutoffTime);
       
-      // Detect redundancy for same event type
-      const recentEvents = vadEventHistory.current.filter(e => 
-        e.timestamp > Date.now() - VAD_TRACKING_CONSTANTS.REDUNDANCY_WINDOW_MS &&
-        e.speechDetected === event.speechDetected
-      );
-      
-      if (recentEvents.length > 1) {
-        console.log('🔄 [VAD] Redundant signals detected:', recentEvents.map(e => `${e.source}:${e.type}`));
-      }
-      
       // Detect conflicts (opposite speech states within short time)
+      // Note: We don't track redundant signals - multiple sources (UserStartedSpeaking, UtteranceEnd, etc.)
+      // can legitimately report the same speech state. This is normal and doesn't indicate a problem.
       const conflictingEvents = vadEventHistory.current.filter(e => 
         e.timestamp > Date.now() - VAD_TRACKING_CONSTANTS.CONFLICT_WINDOW_MS &&
         e.speechDetected !== event.speechDetected
       );
       
-      if (conflictingEvents.length > 0) {
-        console.warn('⚠️ [VAD] Conflicting signals detected:', {
+      // Conflicts: opposite speech states reported within 2 seconds
+      // This is usually normal (rapid speech, network timing). Only action needed if:
+      // - Conflicts are frequent AND causing incorrect behavior (idle timeouts, state issues)
+      // - You have both Voice Agent API and Transcription API VAD enabled simultaneously
+      // Check: Is idle timeout firing incorrectly? Are agent states transitioning unexpectedly?
+      // If yes: Review VAD source configuration (consider disabling one if both enabled).
+      // If no: Safe to ignore - conflicts are expected when multiple VAD sources are active.
+      if (conflictingEvents.length > 0 && props.debug) {
+        console.warn('⚠️ [VAD] Conflicting signals detected (usually harmless):', {
           current: `${event.source}:${event.type} (${event.speechDetected})`,
-          conflicts: conflictingEvents.map(e => `${e.source}:${e.type} (${e.speechDetected})`)
+          conflicts: conflictingEvents.map(e => `${e.source}:${e.type} (${e.speechDetected})`),
+          note: 'Only investigate if seeing frequent conflicts AND incorrect behavior (idle timeouts, state issues)'
         });
       }
     } catch (error) {
@@ -418,7 +418,9 @@ function DeepgramVoiceInteraction(
       
       if (config.transcriptionOptions.interim_results !== undefined) {
         baseTranscriptionParams.interim_results = config.transcriptionOptions.interim_results;
-        console.log(`VAD: interim_results set to ${config.transcriptionOptions.interim_results}`);
+        if (config.debug) {
+          console.log(`VAD: interim_results set to ${config.transcriptionOptions.interim_results}`);
+        }
       }
 
       // Check for Nova-3 Keyterm Prompting conditions
@@ -1174,14 +1176,7 @@ function DeepgramVoiceInteraction(
   const handleAgentMessage = (data: unknown) => {
     // Debug: Log all agent messages with type
     const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as any).type : 'unknown';
-    console.log('🎯 [DEBUG] handleAgentMessage called - VERSION 7.0 - HMR TEST');
-    console.error('🎯 [ERROR] handleAgentMessage called - VERSION 7.0 - ERROR TEST');
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
-    // Also print to console for e2e trace collection regardless of debug flag
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      console.log('📨 [AGENT MESSAGE] type=', (data as any)?.type);
-    } catch {}
     
     // Don't re-enable idle timeout resets here
     // Let WebSocketManager handle meaningful message detection
