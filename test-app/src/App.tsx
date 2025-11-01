@@ -521,10 +521,12 @@ function App() {
           console.log('🎤 [APP] deepgramRef.current methods:', Object.keys(deepgramRef.current));
           
           // Check if connection is closed and needs to be re-established (using tracked state)
+          // Per issue #206: microphone button should start both services if configured
           if (connectionStates.agent !== 'connected') {
             console.log('🎤 [APP] Agent connection closed, re-establishing connection...');
             addLog('Re-establishing agent connection...');
-            await deepgramRef.current.start();
+            // Start both services when microphone is activated
+            await deepgramRef.current.start({ agent: true, transcription: true });
             console.log('🎤 [APP] Connection re-established');
           }
           
@@ -861,11 +863,12 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
               }
 
               // Ensure agent connection is started on user gesture (gate start behind focus)
+              // Per issue #206: text input focus should start only agent service
               try {
                 const isConnected = connectionStates.agent === 'connected';
                 if (!isConnected) {
                   addLog('Starting agent connection on text focus gesture');
-                  await deepgramRef.current?.start?.();
+                  await deepgramRef.current?.start?.({ agent: true, transcription: false });
                 }
               } catch (e) {
                 addLog(`⚠️ Failed to start agent on focus: ${e instanceof Error ? e.message : String(e)}`);
