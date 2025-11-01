@@ -39,11 +39,36 @@ const VAD_TEST_CONSTANTS = {
  * Provides consistent VAD testing patterns across all test files
  */
 class VADTestUtilities {
-  constructor(page) {
+  constructor(page, context = null) {
     this.page = page;
+    this.context = context || page.context(); // Use provided context or get from page
     this.consoleLogs = [];
     this.vadEvents = [];
     this.setupConsoleCapture();
+  }
+
+  /**
+   * Setup microphone permissions for VAD testing
+   * Most VAD tests require microphone permissions to work properly (80% case)
+   * This should be called before loading/sending audio samples if permissions aren't
+   * already granted in beforeEach.
+   * 
+   * Note: For the 80% case, permissions are typically granted in test beforeEach.
+   * This method is available for the 20% case where tests need to manage permissions differently.
+   */
+  async setupMicrophonePermissions() {
+    if (!this.context) {
+      console.warn('⚠️ No context available - cannot grant microphone permissions');
+      return;
+    }
+    
+    try {
+      await this.context.grantPermissions(['microphone']);
+      console.log('✅ Microphone permissions granted via VADTestUtilities');
+    } catch (error) {
+      console.warn('⚠️ Failed to grant microphone permissions:', error.message);
+      // Don't throw - permissions might already be granted or test might work without them
+    }
   }
 
   /**
