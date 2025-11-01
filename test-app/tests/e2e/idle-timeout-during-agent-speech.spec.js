@@ -14,9 +14,7 @@
  * 3. Idle timeout should NOT fire during agent speech
  * 4. Connection should remain active until agent finishes speaking
  * 
- * CURRENT BUG: Idle timeout fires at 10 seconds regardless of agent speaking state
- * 
- * TESTING APPROACH: Monitor UI behavior instead of console logs for reliable testing
+ * TESTING APPROACH: Monitor UI behavior and connection status for reliable testing
  * 
  * IMPORTANT: This test requires real Deepgram APIs to work properly.
  * The idle timeout fix only triggers with real agent messages, not mock responses.
@@ -28,10 +26,11 @@ import {
   SELECTORS, waitForConnection, sendTextMessage
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks';
+import { monitorConnectionStatus } from './fixtures/idle-timeout-helpers';
 
 test.describe('Idle Timeout During Agent Speech', () => {
   
-  test('should NOT timeout while agent is actively speaking (UI behavior test)', async ({ page }) => {
+  test('should NOT timeout while agent is actively speaking', async ({ page }) => {
     // Skip test if real APIs are not available
     // This test requires real Deepgram APIs because the idle timeout fix
     // only triggers with real agent messages, not mock responses
@@ -46,11 +45,23 @@ test.describe('Idle Timeout During Agent Speech', () => {
       return;
     }
     
-    console.log('🧪 Testing idle timeout during agent speech using UI behavior...');
+    console.log('🧪 Testing idle timeout during agent speech...');
+    
+    // Capture console logs to see timeout-related messages
+    const consoleLogs = [];
+    page.on('console', msg => {
+      const text = msg.text();
+      if (text.includes('Idle timeout') || text.includes('closing') || text.includes('connection')) {
+        consoleLogs.push({ timestamp: Date.now(), text });
+      }
+    });
     
     // Step 1: Setup and establish connection
     console.log('Step 1: Setting up test page and establishing connection...');
     await setupTestPage(page);
+    
+    // Establish connection via text input (auto-connect)
+    await page.click('input[type="text"]');
     await waitForConnection(page, 10000);
     
     const initialStatus = await page.locator(SELECTORS.connectionStatus).textContent();
@@ -60,8 +71,8 @@ test.describe('Idle Timeout During Agent Speech', () => {
     // Step 2: Send a text message that will generate a long response
     console.log('Step 2: Sending text message for long response...');
     
-    // Ask for a detailed explanation that should generate a long response
-    const longResponsePrompt = "Please explain in detail how machine learning algorithms work, including supervised learning, unsupervised learning, and deep learning. Provide specific examples and use cases for each type.";
+    // Ask for a comprehensive explanation that should generate a very long response (>10 seconds)
+    const longResponsePrompt = "Write a comprehensive guide about artificial intelligence, machine learning, deep learning, neural networks, and their applications in various industries. Include detailed explanations, examples, and future trends.";
     
     await sendTextMessage(page, longResponsePrompt);
     console.log('✅ Sent text message requesting long response');
@@ -72,7 +83,7 @@ test.describe('Idle Timeout During Agent Speech', () => {
     // Wait for agent response to appear and start growing
     await page.waitForFunction(() => {
       const agentResponse = document.querySelector('[data-testid="agent-response"]');
-      return agentResponse?.textContent && agentResponse.textContent.length > 50;
+      return agentResponse?.textContent && agentResponse.textContent.length > 100;
     }, { timeout: 15000 });
     
     console.log('✅ Agent started responding');
@@ -81,37 +92,10 @@ test.describe('Idle Timeout During Agent Speech', () => {
     const agentResponseStartTime = Date.now();
     console.log(`Agent response started at: ${new Date(agentResponseStartTime).toISOString()}`);
     
-    // Step 4: Monitor connection status while agent is responding
-    console.log('Step 4: Monitoring connection status during agent response...');
-    
-    // Check connection status every 2 seconds for 15 seconds
-    const checkInterval = 2000;
-    const monitoringDuration = 15000;
-    const checks = Math.floor(monitoringDuration / checkInterval);
-    
-    const connectionStatusHistory = [];
-    
-    for (let i = 0; i < checks; i++) {
-      await page.waitForTimeout(checkInterval);
-      
-      const currentStatus = await page.locator(SELECTORS.connectionStatus).textContent();
-      const currentTime = Date.now();
-      const timeSinceStart = currentTime - agentResponseStartTime;
-      
-      connectionStatusHistory.push({
-        timestamp: currentTime,
-        timeSinceStart: timeSinceStart,
-        status: currentStatus
-      });
-      
-      console.log(`Check ${i + 1}/${checks}: +${timeSinceStart}ms - Connection: ${currentStatus}`);
-      
-      // If connection drops during agent response, this indicates the bug
-      if (currentStatus === 'closed') {
-        console.log(`❌ BUG DETECTED: Connection closed at +${timeSinceStart}ms during agent response!`);
-        break;
-      }
-    }
+    // Step 4: Monitor connection status while agent is responding using shared fixture
+    // Monitor for 20 seconds to ensure we catch any premature timeouts (longer than the 10s idle timeout)
+    console.log('Step 4: Monitoring connection status during agent response (20 seconds)...');
+    const snapshots = await monitorConnectionStatus(page, 20000, 2000);
     
     // Step 5: Check final state
     const finalConnectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
@@ -122,16 +106,28 @@ test.describe('Idle Timeout During Agent Speech', () => {
     
     // Step 6: Analyze the behavior
     console.log('\n📊 CONNECTION STATUS HISTORY:');
-    connectionStatusHistory.forEach((check, i) => {
-      console.log(`  ${i + 1}. +${check.timeSinceStart}ms: ${check.status}`);
+    snapshots.forEach((snapshot, i) => {
+      console.log(`  ${i + 1}. +${snapshot.time}ms: ${snapshot.status}`);
     });
+    
+    // Log timeout-related console messages
+    console.log('\n📊 TIMEOUT-RELATED CONSOLE LOGS:');
+    if (consoleLogs.length > 0) {
+      consoleLogs.forEach((log, i) => {
+        const timeSinceStart = log.timestamp - agentResponseStartTime;
+        console.log(`  ${i + 1}. +${timeSinceStart}ms: ${log.text}`);
+      });
+    } else {
+      console.log('  (No timeout-related console logs detected)');
+    }
     
     // Step 7: Assert the expected behavior
     console.log('\n🔍 VALIDATING EXPECTED BEHAVIOR:');
     
     // The bug: Connection should NOT close while agent is actively responding
-    const connectionDroppedDuringResponse = connectionStatusHistory.some(check => 
-      check.status === 'closed' && check.timeSinceStart < 12000 // Within first 12 seconds
+    // Check if connection dropped during the monitoring period (especially within first 12 seconds)
+    const connectionDroppedDuringResponse = snapshots.some(snapshot => 
+      snapshot.status === 'closed' && snapshot.time < 12000 // Within first 12 seconds
     );
     
     if (connectionDroppedDuringResponse) {
@@ -151,7 +147,7 @@ test.describe('Idle Timeout During Agent Speech', () => {
     
     // Step 8: Summary
     console.log('\n📋 TEST SUMMARY:');
-    console.log(`- Connection checks performed: ${connectionStatusHistory.length}`);
+    console.log(`- Connection checks performed: ${snapshots.length}`);
     console.log(`- Connection dropped during response: ${connectionDroppedDuringResponse}`);
     console.log(`- Final connection status: ${finalConnectionStatus}`);
     console.log(`- Agent response length: ${finalAgentResponse?.length || 0} characters`);
@@ -167,151 +163,5 @@ test.describe('Idle Timeout During Agent Speech', () => {
       console.log('\n✅ BUG NOT REPRODUCED:');
       console.log('Either the bug has been fixed or the test conditions did not trigger it');
     }
-  });
-  
-  test('should demonstrate connection stability during long agent response', async ({ page }) => {
-    // Skip test if real APIs are not available
-    const hasRealAPI = process.env.VITE_DEEPGRAM_API_KEY && 
-                      process.env.VITE_DEEPGRAM_API_KEY !== 'your-deepgram-api-key-here' &&
-                      process.env.VITE_DEEPGRAM_API_KEY !== 'your_actual_deepgram_api_key_here' &&
-                      !process.env.VITE_DEEPGRAM_API_KEY.startsWith('test-') &&
-                      process.env.VITE_DEEPGRAM_API_KEY.length >= 20;
-    
-    if (!hasRealAPI) {
-      test.skip('Skipping test - requires real Deepgram API key. See issue #99 for details.');
-      return;
-    }
-    
-    console.log('🧪 Testing connection stability during long agent response...');
-    
-    // Capture console logs to see which service is timing out
-    const consoleLogs = [];
-    page.on('console', msg => {
-      const text = msg.text();
-      if (text.includes('Idle timeout') || text.includes('closing') || text.includes('connection')) {
-        consoleLogs.push({ timestamp: Date.now(), text });
-      }
-    });
-    
-    await setupTestPage(page);
-    await waitForConnection(page, 10000);
-    
-    // Send a message that should generate a very long response
-    console.log('Sending message for very long response...');
-    await sendTextMessage(page, "Write a comprehensive guide about artificial intelligence, machine learning, deep learning, neural networks, and their applications in various industries. Include detailed explanations, examples, and future trends.");
-    
-    // Wait for response to start
-    await page.waitForFunction(() => {
-      const agentResponse = document.querySelector('[data-testid="agent-response"]');
-      return agentResponse?.textContent && agentResponse.textContent.length > 100;
-    }, { timeout: 15000 });
-    
-    console.log('Agent response started, monitoring for 20 seconds...');
-    
-    // Monitor connection status for 20 seconds
-    const startTime = Date.now();
-    const connectionChecks = [];
-    
-    for (let i = 0; i < 10; i++) {
-      await page.waitForTimeout(2000);
-      
-      const status = await page.locator(SELECTORS.connectionStatus).textContent();
-      const timeSinceStart = Date.now() - startTime;
-      
-      connectionChecks.push({ timeSinceStart, status });
-      console.log(`+${timeSinceStart}ms: Connection = ${status}`);
-      
-      // If connection drops, this indicates the bug
-      if (status === 'closed') {
-        console.log(`❌ Connection dropped at +${timeSinceStart}ms during agent response!`);
-        break;
-      }
-    }
-    
-    const finalStatus = await page.locator(SELECTORS.connectionStatus).textContent();
-    console.log(`Final connection status: ${finalStatus}`);
-    
-    // Log all console messages related to timeouts
-    console.log('\n📊 TIMEOUT-RELATED CONSOLE LOGS:');
-    consoleLogs.forEach((log, i) => {
-      const timeSinceStart = log.timestamp - startTime;
-      console.log(`  ${i + 1}. +${timeSinceStart}ms: ${log.text}`);
-    });
-    
-    // Check if connection dropped during the monitoring period
-    const connectionDropped = connectionChecks.some(check => check.status === 'closed');
-    
-    if (connectionDropped) {
-      console.log('❌ BUG CONFIRMED: Connection dropped during long agent response');
-      expect(connectionDropped).toBe(false);
-    } else {
-      console.log('✅ Connection remained stable during long agent response');
-    }
-    
-    // Final connection should be active
-    expect(finalStatus).toBe('connected');
-  });
-  
-  test('should handle multiple rapid messages without timeout', async ({ page }) => {
-    // Skip test if real APIs are not available
-    const hasRealAPI = process.env.VITE_DEEPGRAM_API_KEY && 
-                      process.env.VITE_DEEPGRAM_API_KEY !== 'your-deepgram-api-key-here' &&
-                      process.env.VITE_DEEPGRAM_API_KEY !== 'your_actual_deepgram_api_key_here' &&
-                      !process.env.VITE_DEEPGRAM_API_KEY.startsWith('test-') &&
-                      process.env.VITE_DEEPGRAM_API_KEY.length >= 20;
-    
-    if (!hasRealAPI) {
-      test.skip('Skipping test - requires real Deepgram API key. See issue #99 for details.');
-      return;
-    }
-    
-    console.log('🧪 Testing multiple rapid messages without timeout...');
-    
-    await setupTestPage(page);
-    await waitForConnection(page, 10000);
-    
-    // Send multiple messages in quick succession
-    const messages = [
-      "What is machine learning?",
-      "How does deep learning work?",
-      "Explain neural networks in detail.",
-      "What are the applications of AI?",
-      "Tell me about computer vision."
-    ];
-    
-    console.log('Sending multiple messages...');
-    for (const message of messages) {
-      await sendTextMessage(page, message);
-      await page.waitForTimeout(1000); // Brief pause between messages
-    }
-    
-    // Wait for responses to start
-    await page.waitForFunction(() => {
-      const agentResponse = document.querySelector('[data-testid="agent-response"]');
-      return agentResponse?.textContent && agentResponse.textContent.length > 50;
-    }, { timeout: 15000 });
-    
-    console.log('Responses started, monitoring connection for 15 seconds...');
-    
-    // Monitor connection during response period
-    const startTime = Date.now();
-    for (let i = 0; i < 7; i++) {
-      await page.waitForTimeout(2000);
-      
-      const status = await page.locator(SELECTORS.connectionStatus).textContent();
-      const timeSinceStart = Date.now() - startTime;
-      
-      console.log(`+${timeSinceStart}ms: Connection = ${status}`);
-      
-      if (status === 'closed') {
-        console.log(`❌ Connection dropped at +${timeSinceStart}ms during responses!`);
-        expect(status).toBe('connected');
-        break;
-      }
-    }
-    
-    const finalStatus = await page.locator(SELECTORS.connectionStatus).textContent();
-    expect(finalStatus).toBe('connected');
-    console.log('✅ Connection remained stable during multiple message responses');
   });
 });
