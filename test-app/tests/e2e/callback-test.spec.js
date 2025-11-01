@@ -97,8 +97,17 @@ test.describe('Callback Test Suite', () => {
     
     // Wait for connection to be established
     await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
-    
     console.log('✅ Connection established');
+    
+    // Wait for settings to be applied (critical: sendAudioData requires SettingsApplied)
+    // The refactoring added a check that prevents audio from being sent until SettingsApplied is received
+    // Test app exposes this via data-testid="has-sent-settings" DOM element
+    await expect(page.locator('[data-testid="has-sent-settings"]')).toHaveText('true', { timeout: 10000 });
+    console.log('✅ Settings applied (SettingsApplied received)');
+    
+    // Brief delay to ensure the 500ms settings processing delay has passed (component requirement)
+    // This matches the delay in sendAudioData: if (settingsSentTimeRef.current && Date.now() - settingsSentTimeRef.current < 500)
+    await page.waitForTimeout(600); // Slightly longer than 500ms to ensure settings are fully processed
     
     // Wait for the VAD element to be visible first
     await page.waitForSelector('[data-testid="user-started-speaking"]', { timeout: 5000 });
@@ -156,8 +165,13 @@ test.describe('Callback Test Suite', () => {
     
     // Wait for connection to be established
     await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
-    
     console.log('✅ Connection established');
+    
+    // Wait for settings to be applied (critical: sendAudioData requires SettingsApplied)
+    // The refactoring added a check that prevents audio from being sent until SettingsApplied is received
+    // Test app exposes this via data-testid="has-sent-settings" DOM element
+    await expect(page.locator('[data-testid="has-sent-settings"]')).toHaveText('true', { timeout: 10000 });
+    console.log('✅ Settings applied (SettingsApplied received)');
     
     // Use VADTestUtilities to load and send existing audio sample with proper silence duration (>2 seconds for UtteranceEnd)
     await vadUtils.loadAndSendAudioSample('hello'); // Use existing 'hello' sample
