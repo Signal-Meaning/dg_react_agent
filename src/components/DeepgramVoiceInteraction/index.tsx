@@ -1484,9 +1484,11 @@ function DeepgramVoiceInteraction(
     }
     
     // Check if agent audio is blocked
-    // DIAGNOSTIC: Log allowAgentRef state for Issue #223 debugging
+    // DIAGNOSTIC: Log allowAgentRef state for Issue #223 debugging (debug mode only)
     const isBlocked = !allowAgentRef.current;
-    console.log(`🔍 [ISSUE #223] handleAgentAudio - allowAgentRef.current=${allowAgentRef.current} (BLOCKED=${isBlocked})`);
+    if (props.debug) {
+      console.log(`🔍 [ISSUE #223] handleAgentAudio - allowAgentRef.current=${allowAgentRef.current} (BLOCKED=${isBlocked})`);
+    }
     if (!allowAgentRef.current) {
       console.log('🔇 [AUDIO EVENT] Agent audio currently blocked (allowAgentRef=false) - discarding buffer');
       log('🔇 Agent audio blocked - discarding audio buffer to prevent playback');
@@ -1612,10 +1614,14 @@ function DeepgramVoiceInteraction(
       if (isFreshStart) {
         const previousBlockingState = allowAgentRef.current;
         allowAgentRef.current = ALLOW_AUDIO;
-        console.log(`🔍 [ISSUE #223] start() - Fresh connection detected, resetting allowAgentRef from ${previousBlockingState} to ${ALLOW_AUDIO}`);
+        if (props.debug) {
+          console.log(`🔍 [ISSUE #223] start() - Fresh connection detected, resetting allowAgentRef from ${previousBlockingState} to ${ALLOW_AUDIO}`);
+        }
         log('🔄 Fresh connection starting - resetting audio blocking state');
       } else {
-        console.log(`🔍 [ISSUE #223] start() - Connection already exists (agent=${agentAlreadyConnected}, transcription=${transcriptionAlreadyConnected}), preserving allowAgentRef.current=${allowAgentRef.current}`);
+        if (props.debug) {
+          console.log(`🔍 [ISSUE #223] start() - Connection already exists (agent=${agentAlreadyConnected}, transcription=${transcriptionAlreadyConnected}), preserving allowAgentRef.current=${allowAgentRef.current}`);
+        }
         log('🔄 Connection already exists - preserving audio blocking state');
       }
       
@@ -1832,7 +1838,9 @@ function DeepgramVoiceInteraction(
     clearAudio();
     const previousBlockingState = allowAgentRef.current;
     allowAgentRef.current = BLOCK_AUDIO;
-    console.log(`🔍 [ISSUE #223] interruptAgent() - Set allowAgentRef from ${previousBlockingState} to ${BLOCK_AUDIO}`);
+    if (props.debug) {
+      console.log(`🔍 [ISSUE #223] interruptAgent() - Set allowAgentRef from ${previousBlockingState} to ${BLOCK_AUDIO}`);
+    }
     log('🔇 Agent audio blocked - future audio will be discarded');
     
     log('🔴 Setting agent state to idle');
@@ -1845,7 +1853,9 @@ function DeepgramVoiceInteraction(
     log('🔊 allowAgent method called');
     const previousBlockingState = allowAgentRef.current;
     allowAgentRef.current = ALLOW_AUDIO;
-    console.log(`🔍 [ISSUE #223] allowAgent() - Set allowAgentRef from ${previousBlockingState} to ${ALLOW_AUDIO}`);
+    if (props.debug) {
+      console.log(`🔍 [ISSUE #223] allowAgent() - Set allowAgentRef from ${previousBlockingState} to ${ALLOW_AUDIO}`);
+    }
     log('🔊 Agent audio allowed - audio will play normally');
   };
 
