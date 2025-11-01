@@ -59,28 +59,16 @@ async function waitForConnection(page, timeout = 5000) {
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
 async function waitForSettingsApplied(page, timeout = 10000) {
-  // Setup callback-based tracking in page context
-  await page.evaluate(() => {
-    window.testSettingsApplied = false;
-    
-    // Store original callback if it exists
-    const originalCallback = window.onSettingsApplied;
-    
-    // Override onSettingsApplied to track state
-    window.onSettingsApplied = () => {
-      window.testSettingsApplied = true;
-      // Also call original callback if it exists (test-app may have one)
-      if (originalCallback) {
-        originalCallback();
-      }
-    };
-  });
+  // Use DOM-based detection instead of callback interception
+  // The test-app updates has-sent-settings DOM element when SettingsApplied is received
+  // This is more reliable than intercepting callbacks since the component uses React props
+  await expect(page.locator('[data-testid="has-sent-settings"]')).toHaveText('true', { timeout });
   
-  // Wait for callback to fire
-  await page.waitForFunction(
-    () => window.testSettingsApplied === true,
-    { timeout }
-  );
+  // Alternative: Also set up callback tracking for tests that might need it
+  // But use DOM as primary mechanism since it's more reliable
+  await page.evaluate(() => {
+    window.testSettingsApplied = true; // Mark as applied since DOM is the source of truth
+  });
 }
 
 /**
