@@ -169,11 +169,6 @@ export interface DeepgramVoiceInteractionProps {
   onAgentSpeaking?: () => void;
 
   /**
-   * Called when agent finishes speaking (AgentAudioDone)
-   */
-  onAgentSilent?: () => void;
-
-  /**
    * VAD (Voice Activity Detection) Event Callbacks
    */
   

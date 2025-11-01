@@ -57,7 +57,7 @@
  *   - AgentThinking: Agent is processing
  *   - AgentStartedSpeaking: Agent audio begins
  *   - ConversationText: Transcript messages (user & assistant)
- *   - AgentAudioDone: Audio playback complete
+ *   - AgentAudioDone: TTS audio generation complete (not playback complete)
  *   - Error: Error handling
  *   - Warning: Warning messages
  * 
@@ -401,14 +401,12 @@ describe('Voice Agent API - Event Validation', () => {
   describe('AgentAudioDone Event', () => {
     it('should handle AgentAudioDone message', async () => {
       const ref = React.createRef<any>();
-      const onAgentSilent = jest.fn();
       
       render(
         <DeepgramVoiceInteraction
           ref={ref}
           apiKey={MOCK_API_KEY}
           agentOptions={createMockAgentOptions()}
-          onAgentSilent={onAgentSilent}
           debug={true}
         />
       );
@@ -422,7 +420,7 @@ describe('Voice Agent API - Event Validation', () => {
         type: 'AgentAudioDone',
       };
 
-      // This test documents that AgentAudioDone is a valid Voice Agent API event
+      // This test documents that AgentAudioDone is a valid Voice Agent API event (marks the end of TTS generation)
       expect(agentAudioDoneMessage.type).toBe(AgentResponseType.AGENT_AUDIO_DONE);
     });
   });

@@ -214,7 +214,6 @@ function App() {
     setIsReady(ready);
     addLog(`Component is ${ready ? 'ready' : 'not ready'}`);
     // Note: Connections start lazily when needed (e.g., when microphone is activated)
-    // This is the lazy initialization pattern - no automatic connection on ready
   }, [addLog]); // Depends on addLog
 
   // Handle SettingsApplied event via callback (replaces getState() polling)
@@ -316,10 +315,17 @@ function App() {
     }
   }, [agentState, conversationHistory, addLog]);
   
-  // Add a handler for audio playing status
+  // Handler for audio playing status - now also manages agent speaking/silent state
   const handlePlaybackStateChange = useCallback((isPlaying: boolean) => {
     setIsPlaying(isPlaying);
-    addLog(`Audio playback: ${isPlaying ? 'started' : 'stopped'}`);
+    // Update agent speaking/silent state based on actual playback
+    setAgentSpeaking(isPlaying);
+    setAgentSilent(!isPlaying);
+    if (isPlaying) {
+      addLog('Audio playback: started');
+    } else {
+      addLog('Audio playback: stopped - Agent playback completed');
+    }
   }, [addLog]);
   
   const handleConnectionStateChange = useCallback((service: ServiceType, state: ConnectionState) => {
@@ -405,17 +411,10 @@ function App() {
 
 
   const handleAgentSpeaking = useCallback(() => {
-    setAgentSpeaking(true);
-    setAgentSilent(false); // Reset silent state when agent starts speaking
+    // Note: onPlaybackStateChange will also update agentSpeaking when playback actually starts
     addLog('Agent started speaking');
   }, [addLog]);
 
-  const handleAgentSilent = useCallback(() => {
-    setAgentSpeaking(false); // Reset speaking state when agent finishes
-    setAgentSilent(true);
-    addLog('Agent finished speaking');
-  }, [addLog]);
-  
   // Control functions
   const startInteraction = async () => {
     try {
@@ -628,7 +627,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
         onUtteranceEnd={handleUtteranceEnd}
         onAgentSpeaking={handleAgentSpeaking}
-        onAgentSilent={handleAgentSilent}
         debug={isDebugMode} // Enable debug only when debug mode is explicitly enabled
       />
       

@@ -108,14 +108,20 @@ const interruptAgent = () => {
 
 <DeepgramVoiceInteraction
   onAgentStartedSpeaking={() => setIsPlaying(true)}
-  onAgentStoppedSpeaking={() => setIsPlaying(false)}
+  onPlaybackStateChange={(isPlaying) => {
+    setIsPlaying(isPlaying);
+    // This fires when playback actually completes - agent has truly stopped speaking
+    if (!isPlaying) {
+      // Agent playback finished
+    }
+  }}
 />
 ```
 
 **Key Changes**:
 - **Unified control**: `interruptAgent()` replaces all audio control methods
 - **Buffer management**: Automatically clears Web Audio API buffers
-- **Simplified state**: Use `onAgentStartedSpeaking`/`onAgentStoppedSpeaking` for audio state
+- **Audio state management**: Use `onAgentStartedSpeaking` for TTS start and `onPlaybackStateChange(false)` for actual playback completion (when agent has stopped speaking). Note: `onAgentSilent` was removed (misleading - fired on TTS generation, not playback). `onAgentStoppedSpeaking` was never implemented - `AgentStoppedSpeaking` is not a real Deepgram event (Issue #198).
 
 ### 4. Context Preservation
 
@@ -192,7 +198,7 @@ const switchToSession = async (newSessionId: string) => {
 | `onVADEvent` | Specific VAD callbacks | Use `onUserStartedSpeaking`, `onUserStoppedSpeaking`, `onUtteranceEnd` |
 | `onKeepalive` | Internal implementation | Not needed for integration |
 | `agentMuted` | `interruptAgent()` method | Use `interruptAgent()` for audio control |
-| `onAgentMuteChange` | `onAgentStoppedSpeaking` | Use agent speaking callbacks |
+| `onAgentMuteChange` | `onPlaybackStateChange(false)` | Use `onPlaybackStateChange(false)` to detect when agent playback completes. Note: `onAgentSilent` was removed (misleading). `onAgentStoppedSpeaking` was never implemented - `AgentStoppedSpeaking` is not a real Deepgram event (Issue #198). |
 
 ### Removed Methods
 
@@ -284,7 +290,7 @@ function VoiceApp() {
         onUserStartedSpeaking={() => console.log('User started speaking')}
         onUserStoppedSpeaking={() => console.log('User stopped speaking')}
         onAgentStartedSpeaking={() => setIsPlaying(true)}
-        onAgentStoppedSpeaking={() => setIsPlaying(false)}
+        onPlaybackStateChange={(isPlaying) => setIsPlaying(isPlaying)}
         onUtteranceEnd={(data) => console.log('Utterance ended:', data.lastWordEnd)}
       />
     </div>

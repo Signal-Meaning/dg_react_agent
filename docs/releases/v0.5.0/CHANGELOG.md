@@ -15,7 +15,7 @@
 **Solution**: Implemented all agent state handlers:
 - `AgentThinking` → `thinking` state (disables idle timeout)
 - `AgentStartedSpeaking` → `speaking` state (disables idle timeout)
-- `AgentStoppedSpeaking` → handled via AgentStateService
+- `AgentStoppedSpeaking` → Not a real Deepgram event (Issue #198). Agent state transitions to idle via `onPlaybackStateChange(false)` when playback completes.
 - Playback event fallback → ensures `speaking` state even if `AgentStartedSpeaking` message is delayed
 
 **Impact**: Agent state now transitions properly (`idle → speaking → idle` for text input, `idle → listening → [thinking] → speaking → idle` for voice input), and idle timeout is correctly disabled during agent responses.

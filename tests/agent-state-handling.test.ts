@@ -103,20 +103,34 @@ describe('Agent State Message Handling', () => {
     });
   });
 
-  describe('AgentStoppedSpeaking message handling', () => {
-    it('should transition agent state to idle and enable idle timeout resets', () => {
-      // First set agent to speaking
+  describe('Agent state → idle transition (playback completion)', () => {
+    it('should enable idle timeout resets when playback completes and agent transitions to idle', () => {
+      // Set agent to speaking state with playback active
       idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'speaking' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: true });
 
-      // Then simulate AgentStoppedSpeaking message
+      const speakingState = idleTimeoutService.getState();
+      expect(speakingState.agentState).toBe('speaking');
+      expect(speakingState.isPlaying).toBe(true);
+
+      // Verify timeout resets are disabled during playback
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'test' });
+      expect(timeoutCallback).not.toHaveBeenCalled();
+
+      // Simulate playback completion (this would trigger agent state → idle in actual component)
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      
+      // Also transition agent state to idle (component does this when playback stops)
       idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
 
-      const state = idleTimeoutService.getState();
-      expect(state.agentState).toBe('idle');
+      const idleState = idleTimeoutService.getState();
+      expect(idleState.agentState).toBe('idle');
+      expect(idleState.isPlaying).toBe(false);
 
-      // Verify timeout resets are enabled when idle
+      // Verify timeout resets are now enabled after playback completes and agent is idle
       idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'test' });
-      // Should not immediately call timeout callback, but should reset timeout
+      // Should reset timeout, not immediately call callback
+      expect(timeoutCallback).not.toHaveBeenCalled();
     });
 
     it('should start timeout when agent becomes idle', () => {
@@ -283,14 +297,12 @@ describe('AgentStateService', () => {
   let agentStateService: AgentStateService;
   let mockCallbacks: {
     onAgentSpeaking: jest.Mock;
-    onAgentSilent: jest.Mock;
     onStateChange: jest.Mock;
   };
 
   beforeEach(() => {
     mockCallbacks = {
       onAgentSpeaking: jest.fn(),
-      onAgentSilent: jest.fn(),
       onStateChange: jest.fn(),
     };
     
@@ -346,17 +358,19 @@ describe('AgentStateService', () => {
     });
   });
 
-  describe('AgentStoppedSpeaking message handling', () => {
-    it('should transition to idle state and call onAgentSilent', () => {
+  describe('AgentAudioDone message handling', () => {
+    it('should NOT transition to idle on AgentAudioDone (playback may continue)', () => {
       // First set to speaking state
       agentStateService.handleAgentStartedSpeaking(false, false);
+      expect(agentStateService.getCurrentState()).toBe('speaking');
       jest.clearAllMocks();
       
-      agentStateService.handleAgentStoppedSpeaking();
+      // AgentAudioDone does NOT transition to idle because playback may continue
+      agentStateService.handleAgentAudioDone(false);
       
-      expect(agentStateService.getCurrentState()).toBe('idle');
-      expect(mockCallbacks.onAgentSilent).toHaveBeenCalled();
-      expect(mockCallbacks.onStateChange).toHaveBeenCalledWith('idle');
+      // State should remain speaking (actual idle transition happens on playback completion)
+      expect(agentStateService.getCurrentState()).toBe('speaking');
+      // Note: onAgentSilent callback was removed - use onPlaybackStateChange for playback completion
     });
   });
 
@@ -478,7 +492,10 @@ describe('AgentStateService', () => {
       agentStateService.handleAgentStartedSpeaking(false, false);
       expect(agentStateService.isActive()).toBe(true); // speaking
       
-      agentStateService.handleAgentStoppedSpeaking();
+      // Note: AgentStoppedSpeaking is not a real Deepgram event (Issue #198)
+      // Actual flow: AgentAudioDone (doesn't transition) → playback completion → idle
+      // For test purposes, simulate playback completion to transition to idle
+      agentStateService.handleAudioPlaybackChange(false);
       expect(agentStateService.isActive()).toBe(false); // idle
     });
 

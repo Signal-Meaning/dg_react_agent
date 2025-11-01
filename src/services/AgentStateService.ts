@@ -17,7 +17,6 @@ export interface AgentStateTransition {
 
 export interface AgentStateCallbacks {
   onAgentSpeaking?: () => void;
-  onAgentSilent?: () => void;
   onStateChange?: (state: AgentState) => void;
 }
 
@@ -72,16 +71,6 @@ export class AgentStateService {
     
     // Call agent speaking callback
     this.callbacks.onAgentSpeaking?.();
-  }
-
-  /**
-   * Handle AgentStoppedSpeaking message
-   */
-  public handleAgentStoppedSpeaking(): void {
-    this.transitionTo('idle', 'AgentStoppedSpeaking message received');
-    
-    // Call agent silent callback
-    this.callbacks.onAgentSilent?.();
   }
 
   /**
