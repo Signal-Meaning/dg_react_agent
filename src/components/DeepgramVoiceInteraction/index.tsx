@@ -2146,6 +2146,10 @@ function DeepgramVoiceInteraction(
       // Start recording
       await audioManagerRef.current.startRecording();
       
+      // Reset idle timeout - starting recording is meaningful user activity
+      // This prevents race condition where timeout fires before first transcript arrives
+      handleMeaningfulActivity('startAudioCapture');
+      
       log('Audio capture started successfully');
     } catch (error) {
       log('Failed to start audio capture:', error);
