@@ -321,12 +321,25 @@ function App() {
     // Update agent speaking/silent state based on actual playback
     setAgentSpeaking(isPlaying);
     setAgentSilent(!isPlaying);
+    
+    // Audio playing when it should be blocked
+    // If mute button is pressed (ttsMuted === true) but audio starts playing,
+    // this indicates allowAgentRef blocking state was lost/reset between turns
+    if (isPlaying && ttsMuted) {
+      console.error('⚠️ Audio playback started while mute button is active!');
+      console.error('   This indicates allowAgentRef blocking state was reset/lost between agent turns.');
+      console.error('   - Mute button state: PRESSED (ttsMuted=true)');
+      console.error('   - Audio playback state: PLAYING (isPlaying=true)');
+      console.error('   - Expected: Audio should be blocked and NOT playing');
+      addLog('⚠️ [BUG DETECTED] Audio playing while muted - Issue #223!');
+    }
+    
     if (isPlaying) {
       addLog('Audio playback: started');
     } else {
       addLog('Audio playback: stopped - Agent playback completed');
     }
-  }, [addLog]);
+  }, [addLog, ttsMuted]); // Include ttsMuted in dependencies
   
   const handleConnectionStateChange = useCallback((service: ServiceType, state: ConnectionState) => {
     setConnectionStates(prev => ({

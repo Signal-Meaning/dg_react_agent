@@ -196,6 +196,118 @@ test.describe('Audio Interruption Timing', () => {
   if (!ENABLE_AUDIO) {
     test.skip(true, 'PW_ENABLE_AUDIO is not enabled; skipping audio playback-dependent test.');
   }
+  test('should persist audio blocking across agent response turns (Issue #223)', async ({ page }) => {
+    console.log('🔊 Testing audio blocking persistence across turns (Issue #223)...');
+    
+    // Focus text input first to trigger AudioManager initialization and allow AudioContext resume
+    await page.click('[data-testid="text-input"]');
+    
+    // Wait for connection and settings to be applied (agent ready to respond)
+    await waitForConnectionAndSettings(page, 5000, 10000);
+    console.log('✅ Connection established and settings applied');
+    
+    // Detect greeting playback immediately after connection/settings
+    try {
+      await waitForPlaybackStart(page, 6000);
+      console.log('✅ Greeting/agent playback detected');
+    } catch (e) {
+      throw new Error('Gate failed: No playback started within 6s after SettingsApplied (no greeting audio detected)');
+    }
+
+    // Send first message and wait for agent response
+    await sendMessageAndWaitForResponse(page, 'Tell me a story');
+    const diag1 = await getAudioDiagnostics(page);
+    console.log('🔎 Audio diagnostic after first response:', diag1);
+    console.log('✅ First agent response received');
+    
+    // Wait for audio to start playing (after greeting/response begins)
+    await page.waitForFunction(() => {
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+      return audioPlaying && audioPlaying.textContent === 'true';
+    }, { timeout: 6000 });
+    console.log('✅ Audio is playing from first response');
+    
+    // Call interruptAgent() via the pushbutton to block audio
+    // The button uses pushbutton pattern:
+    // - onMouseDown → interruptAgent() (blocks audio)
+    // - onMouseUp → allowAgent() (allows audio)
+    // - onMouseLeave → allowAgent() (allows audio if user drags mouse off)
+    // 
+    // For this test, we need interruptAgent() called but NOT allowAgent().
+    // We'll use mousedown, then temporarily disable onMouseLeave to prevent allowAgent() being called.
+    const muteButton = page.locator('[data-testid="tts-mute-button"]');
+    
+    // Step 1: Disable onMouseLeave handler BEFORE triggering mousedown
+    // This prevents allowAgent() from being called when mouse moves away
+    await page.evaluate(() => {
+      const button = document.querySelector('[data-testid="tts-mute-button"]');
+      if (button) {
+        // Store original handler so we can restore it if needed
+        button._originalOnMouseLeave = button.onmouseleave;
+        button.onmouseleave = null;
+      }
+    });
+    
+    // Step 2: Trigger mousedown to call interruptAgent()
+    await muteButton.hover();
+    await muteButton.dispatchEvent('mousedown');
+    console.log('✅ interruptAgent() called via mousedown (onMouseLeave disabled)');
+    
+    // Step 3: Wait for audio to stop (confirming interruptAgent worked)
+    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 2000 });
+    console.log('✅ Audio blocked');
+    
+    // Step 4: Verify button shows muted state
+    await expect(muteButton).toContainText('Mute', { timeout: 2000 });
+    const buttonText = await muteButton.textContent();
+    console.log(`🔘 Button state: ${buttonText}`);
+    
+    // Send another message (continue conversation) WITHOUT calling allowAgent()
+    await sendMessageAndWaitForResponse(page, 'Tell me more about that');
+    const diag2 = await getAudioDiagnostics(page);
+    console.log('🔎 Audio diagnostic after second response (while blocked):', diag2);
+    console.log('✅ Second agent response received');
+    
+    // CRITICAL TEST: Audio should still be blocked in this next turn
+    // The issue is that allowAgentRef blocking state is lost/reset between agent turns
+    // Wait for agent audio to potentially arrive (it should be discarded if blocking persisted)
+    await page.waitForTimeout(4000); // Give time for TTS to potentially start
+    
+    // Verify audio did NOT start playing in the next turn
+    // This is the core assertion for Issue #223 - blocking should persist across turns
+    const audioStatus = await page.locator('[data-testid="audio-playing-status"]').textContent();
+    expect(audioStatus).toBe('false');
+    
+    // Log for debugging
+    const diag3 = await getAudioDiagnostics(page);
+    console.log('🔎 Audio diagnostic after wait period:', diag3);
+    
+    if (audioStatus === 'true') {
+      console.error('❌ FAILURE: Audio started playing in second turn despite interruptAgent() being called');
+      console.error('   This indicates allowAgentRef blocking state was reset/lost between turns');
+    } else {
+      console.log('✅ Audio blocking persisted across agent response turns');
+    }
+    
+    // Verify agent response was received (conversation continued)
+    await page.waitForFunction(() => {
+      const agentResponse = document.querySelector('[data-testid="agent-response"]');
+      return agentResponse && agentResponse.textContent && 
+             agentResponse.textContent !== '(Waiting for agent response...)' &&
+             agentResponse.textContent !== 'Tell me a story' && // Not the first response
+             agentResponse.textContent.trim().length > 0;
+    }, { timeout: 10000 });
+    console.log('✅ Agent response received in second turn');
+    
+    // Double-check audio is still blocked
+    const finalAudioStatus = await page.locator('[data-testid="audio-playing-status"]').textContent();
+    expect(finalAudioStatus).toBe('false');
+    console.log('✅ Test passed: Audio blocking persisted across turns');
+  });
+
+  if (!ENABLE_AUDIO) {
+    test.skip(true, 'PW_ENABLE_AUDIO is not enabled; skipping audio playback-dependent test.');
+  }
   test('should interrupt and allow audio repeatedly', async ({ page }) => {
     console.log('🔊 Testing interruptAgent/allowAgent functionality...');
     
