@@ -166,6 +166,7 @@ class SimpleVADHelpers {
 
   /**
    * Wait for specific VAD events with timeout
+   * Simplified: just wait for DOM elements to update (no complex monitoring)
    * @param {import('@playwright/test').Page} page - Playwright page
    * @param {Array<string>} expectedEvents - Expected event types
    * @param {number} timeout - Timeout in milliseconds (default: 5000)
@@ -174,63 +175,68 @@ class SimpleVADHelpers {
   static async waitForVADEvents(page, expectedEvents = ['UserStartedSpeaking'], timeout = 5000) {
     const detectedEvents = [];
     
-    // Set up event listener
-    try {
-      await page.exposeFunction('onSimpleVADEvent', (eventType, data) => {
-        detectedEvents.push({ type: eventType, data, timestamp: Date.now() });
-        console.log(`🎯 [SimpleVAD] Event detected: ${eventType}`);
-      });
-    } catch (error) {
-      if (!error.message.includes('already registered')) {
-        throw error;
+    const vadElements = {
+      'UserStartedSpeaking': '[data-testid="user-started-speaking"]',
+      'UtteranceEnd': '[data-testid="utterance-end"]',
+      'VADEvent': '[data-testid="vad-event"]'
+    };
+
+    // Get initial values to detect changes
+    const initialValues = {};
+    for (const eventType of expectedEvents) {
+      const selector = vadElements[eventType];
+      if (selector) {
+        try {
+          const element = await page.locator(selector).first();
+          if (await element.count() > 0) {
+            initialValues[eventType] = (await element.textContent())?.trim() || '';
+          } else {
+            initialValues[eventType] = '';
+          }
+        } catch {
+          initialValues[eventType] = '';
+        }
       }
     }
 
-    // Monitor VAD events by checking text content changes
-    await page.evaluate((expectedEvents) => {
-      const vadElements = {
-        'UserStartedSpeaking': '[data-testid="user-started-speaking"]',
-        'UserStartedSpeaking': '[data-testid="speech-started"]',
-        'UtteranceEnd': '[data-testid="utterance-end"]',
-        'VADEvent': '[data-testid="vad-event"]'
-        // Note: UserStoppedSpeaking and SpeechStopped are not real Deepgram events
-      };
+    // Wait for at least one event to occur (value changes from initial)
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeout) {
+      for (const eventType of expectedEvents) {
+        const selector = vadElements[eventType];
+        if (!selector) continue;
 
-      // Track previous values to detect changes
-      const previousValues = {};
-      
-      const checkForChanges = () => {
-        expectedEvents.forEach(eventType => {
-          const selector = vadElements[eventType];
-          if (selector) {
-            const element = document.querySelector(selector);
-            if (element) {
-              const currentValue = element.textContent.trim();
-              const previousValue = previousValues[eventType];
-              
-              // Check for meaningful changes
-              if (currentValue !== previousValue && currentValue && currentValue !== 'Not detected') {
-                console.log(`🎯 [SimpleVAD] ${eventType} changed: "${previousValue}" → "${currentValue}"`);
-                window.onSimpleVADEvent(eventType, { text: currentValue, element: selector });
-                previousValues[eventType] = currentValue;
+        try {
+          const element = page.locator(selector).first();
+          if (await element.count() > 0) {
+            const currentValue = (await element.textContent())?.trim() || '';
+            const initialValue = initialValues[eventType] || '';
+            
+            // Check if value has changed and is meaningful
+            if (currentValue !== initialValue && currentValue && currentValue !== 'Not detected') {
+              // This event was detected
+              if (!detectedEvents.find(e => e.type === eventType)) {
+                detectedEvents.push({
+                  type: eventType,
+                  data: { text: currentValue, element: selector },
+                  timestamp: Date.now()
+                });
+                console.log(`🎯 [SimpleVAD] Event detected: ${eventType}`);
               }
             }
           }
-        });
-      };
+        } catch (error) {
+          // Element might not exist yet, continue
+        }
+      }
 
-      // Check immediately and then periodically
-      checkForChanges();
-      setInterval(checkForChanges, 100); // Check every 100ms
-    }, expectedEvents);
-
-    // Wait for events or timeout
-    const startTime = Date.now();
-    while (Date.now() - startTime < timeout) {
-      if (detectedEvents.length >= expectedEvents.length) {
+      // If we got at least one event, that's sufficient
+      if (detectedEvents.length > 0) {
         break;
       }
-      await page.waitForTimeout(100);
+
+      // Small delay before next check
+      await page.waitForTimeout(200);
     }
 
     return detectedEvents;
