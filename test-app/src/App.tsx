@@ -460,24 +460,31 @@ function App() {
   // (removed unused interruptAgent helper)
   
   // Handle push button: down = block agent audio
-  const handleMuteDown = () => {
+  const handleMuteDown = useCallback(() => {
     setIsPressed(true);
     setTtsMuted(true);
     addLog('🔇 Agent audio blocked');
     if (deepgramRef.current) {
       deepgramRef.current.interruptAgent();
     }
-  };
+  }, [addLog]);
   
   // Handle push button: up = allow agent audio
-  const handleMuteUp = () => {
-    setIsPressed(false);
-    setTtsMuted(false);
-    addLog('🔊 Agent audio allowed');
-    if (deepgramRef.current) {
-      deepgramRef.current.allowAgent();
-    }
-  };
+  // Only allow if button was actually pressed (prevents onMouseLeave from firing on accidental movement)
+  const handleMuteUp = useCallback(() => {
+    // Check if button was actually pressed before allowing
+    setIsPressed(prev => {
+      if (prev) {
+        setTtsMuted(false);
+        addLog('🔊 Agent audio allowed');
+        if (deepgramRef.current) {
+          deepgramRef.current.allowAgent();
+        }
+        return false;
+      }
+      return prev; // Don't change state if button wasn't pressed
+    });
+  }, [addLog]);
   
   const updateContext = () => {
     // Define the possible instruction prompts
