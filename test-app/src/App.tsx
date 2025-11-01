@@ -748,7 +748,12 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <button 
           onMouseDown={handleMuteDown}
           onMouseUp={handleMuteUp}
-          onMouseLeave={handleMuteUp}
+          onMouseLeave={(e) => {
+            // Only trigger if button was actually pressed (prevents accidental triggers)
+            if (isPressed) {
+              handleMuteUp();
+            }
+          }}
           disabled={connectionStates.agent !== 'connected'}
           style={{ 
             padding: '10px 20px',
