@@ -80,32 +80,21 @@ export class IdleTimeoutService {
         break;
         
       case 'UTTERANCE_END':
-        // UtteranceEnd indicates ongoing conversation - keep resets disabled
-        // This prevents timeout during active conversation with pauses
+        // UtteranceEnd indicates user has finished speaking
+        // Enable resets and let updateTimeoutBehavior decide if timeout should start
+        // based on agent state (timeout should start if agent is idle/listening, not if speaking/thinking)
         if (this.config.debug) {
           console.log('🎯 [DEBUG] UTTERANCE_END case reached - processing event');
         }
         this.log('🎯 [DEBUG] UTTERANCE_END case reached - processing event');
         this.currentState.isUserSpeaking = false;
-        this.disableResets();
-        // Always stop any existing timeout when UtteranceEnd is received
-        if (this.config.debug) {
-          console.log('🎯 [DEBUG] About to call stopTimeout()');
-        }
-        this.log('🎯 [DEBUG] About to call stopTimeout()');
-        try {
-          this.stopTimeout();
-          if (this.config.debug) {
-            console.log('🎯 [DEBUG] stopTimeout() completed successfully');
-          }
-        } catch (error) {
-          if (this.config.debug) {
-            console.log('🎯 [DEBUG] stopTimeout() threw error:', error);
-          }
-        }
-        // Ensure no new timeouts can be started during ongoing conversation
-        this.isDisabled = true;
-        this.log('UtteranceEnd received - keeping idle timeout disabled for ongoing conversation');
+        // Enable resets so timeout can work - updateTimeoutBehavior will determine
+        // if timeout should start based on agent state
+        this.enableResets();
+        // Update timeout behavior - this will start timeout if agent is idle/listening
+        // and not playing, or keep it disabled if agent is speaking/thinking/playing
+        this.updateTimeoutBehavior();
+        this.log('UtteranceEnd received - enabled resets, timeout behavior updated based on agent state');
         break;
         
       case 'AGENT_STATE_CHANGED':

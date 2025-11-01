@@ -35,9 +35,14 @@
 import { test, expect } from '@playwright/test';
 import { 
   SELECTORS,
-  waitForConnection 
+  waitForConnection,
+  sendTextMessage,
+  waitForAgentGreeting,
+  setupAudioSendingPrerequisites
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks.js';
+import { waitForIdleTimeout, monitorConnectionStatus } from './fixtures/idle-timeout-helpers';
+import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
 
 test.describe('Idle Timeout Behavior', () => {
   
@@ -62,6 +67,9 @@ test.describe('Idle Timeout Behavior', () => {
     // Step 1: Setup and wait for initial connection
     console.log('Step 1: Setting up test page and waiting for connection...');
     await setupTestPage(page);
+    
+    // Establish connection via text input (auto-connect)
+    await page.click('input[type="text"]');
     await waitForConnection(page, 10000);
     
     const initialStatus = await page.locator(SELECTORS.connectionStatus).textContent();
@@ -70,20 +78,23 @@ test.describe('Idle Timeout Behavior', () => {
     
     // Step 2: Send a brief message to get agent response, then wait for idle timeout
     console.log('Step 2: Sending brief message to trigger agent response...');
-    await page.fill(SELECTORS.textInput, 'one moment');
-    await page.press(SELECTORS.textInput, 'Enter');
+    await sendTextMessage(page, 'one moment');
     
-    // Wait for agent to respond and finish
+    // Wait for agent to respond and finish using shared helper
     console.log('Waiting for agent to respond and finish...');
-    await page.waitForTimeout(3000); // Give agent time to respond
+    await waitForAgentGreeting(page, 15000);
     
-    // Now wait for idle timeout (10+ seconds of inactivity after agent finishes)
-    console.log('Step 3: Waiting for idle timeout after agent response (12 seconds)...');
-    await page.waitForTimeout(12000);
+    // Now wait for idle timeout using shared fixture
+    console.log('Step 3: Waiting for idle timeout after agent response...');
+    const timeoutResult = await waitForIdleTimeout(page, {
+      expectedTimeout: 10000,
+      maxWaitTime: 15000,
+      checkInterval: 1000
+    });
     
+    expect(timeoutResult.closed).toBe(true);
     const statusAfterTimeout = await page.locator(SELECTORS.connectionStatus).textContent();
     console.log(`Connection status after timeout: ${statusAfterTimeout}`);
-    // Connection should be closed after idle timeout
     expect(statusAfterTimeout).toBe('closed');
     
     // Step 4: Attempt to activate microphone
@@ -153,6 +164,9 @@ test.describe('Idle Timeout Behavior', () => {
     console.log('🧪 Testing loading state during reconnection...');
     
     await setupTestPage(page);
+    
+    // Establish connection via text input (auto-connect)
+    await page.click('input[type="text"]');
     await waitForConnection(page, 10000);
     
     // Wait for timeout
@@ -185,12 +199,8 @@ test.describe('Idle Timeout Behavior', () => {
     console.log(`Final button text: ${finalButtonText}`);
   });
 
-  test('should not timeout during active conversation after UtteranceEnd', async ({ page }) => {
+  test('should not timeout during active conversation after UtteranceEnd', async ({ page, context }) => {
     console.log('🧪 Testing idle timeout behavior during active conversation with REAL AUDIO...');
-    
-    // Import audio simulation utilities
-    const { VADTestUtilities } = await import('../utils/vad-test-utilities.js');
-    const { default: SimpleVADHelpers } = await import('../utils/simple-vad-helpers.js');
     
     // Track connection close events
     const connectionCloses = [];
@@ -202,14 +212,12 @@ test.describe('Idle Timeout Behavior', () => {
     });
     
     await setupTestPage(page);
-    await waitForConnection(page, 10000);
     
-    // Enable microphone to start conversation
-    console.log('Step 1: Enabling microphone...');
-    const micButton = page.locator(SELECTORS.micButton);
-    await micButton.click();
-    await page.waitForTimeout(1000);
+    // Setup all audio sending prerequisites in one call
+    // This handles: mic permissions, component ready, mic button click, connection, settings applied, processing delay
+    await setupAudioSendingPrerequisites(page, context);
     
+    // Verify microphone is enabled
     const micStatus = await page.locator(SELECTORS.micStatus).textContent();
     console.log(`Microphone status: ${micStatus}`);
     expect(micStatus).toBe('Enabled');
@@ -217,9 +225,6 @@ test.describe('Idle Timeout Behavior', () => {
     // Simulate REAL conversation using existing audio samples with proper timing
     // These samples have: 300ms onset silence + speech + 2000ms offset silence
     console.log('Step 2: Simulating ongoing conversation with REAL AUDIO SAMPLES...');
-    
-    // Initialize VAD test utilities
-    const vadUtils = new VADTestUtilities(page);
     
     const startTime = Date.now();
     const conversationSamples = [
@@ -239,18 +244,15 @@ test.describe('Idle Timeout Behavior', () => {
       
       console.log(`Speaking: "${sample}"`);
       
-      // Use VADTestUtilities to load and send pre-recorded audio samples
-      // These samples have proper timing: 300ms onset silence + speech + 2000ms offset silence
-      await vadUtils.loadAndSendAudioSample(sample);
+      // Load and send audio sample using fixture
+      await loadAndSendAudioSample(page, sample);
       
-      // Wait for VAD events to be processed (this is what keeps the connection alive)
-      console.log('⏳ Waiting for VAD events...');
-      const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
-        'UserStartedSpeaking',  // From Voice Agent API
-        'UtteranceEnd'          // From Voice Agent API  
-      ], 5000); // Longer timeout to account for 2s offset silence
+      // Wait for VAD events to be detected (replaces fixed timeout)
+      const eventsDetected = await waitForVADEvents(page, ['UserStartedSpeaking', 'UtteranceEnd'], 7000);
+      console.log(`✅ VAD events detected: ${eventsDetected} (UserStartedSpeaking, UtteranceEnd)`);
       
-      console.log(`✅ VAD events detected: ${vadEvents.length}`);
+      // Verify we got at least one VAD event
+      expect(eventsDetected).toBeGreaterThan(0);
     }
     
     console.log('Step 3: Checking connection stayed alive during REAL conversation...');
@@ -280,12 +282,8 @@ test.describe('Idle Timeout Behavior', () => {
     console.log('✅ No premature idle timeouts during REAL conversation');
   });
 
-  test('should handle conversation with realistic timing and padding', async ({ page }) => {
+  test('should handle conversation with realistic timing and padding', async ({ page, context }) => {
     console.log('🧪 Testing idle timeout with realistic conversation timing (2.3s padding)...');
-    
-    // Import audio simulation utilities
-    const { VADTestUtilities } = await import('../utils/vad-test-utilities.js');
-    const { default: SimpleVADHelpers } = await import('../utils/simple-vad-helpers.js');
     
     // Track connection close events
     const connectionCloses = [];
@@ -297,14 +295,12 @@ test.describe('Idle Timeout Behavior', () => {
     });
     
     await setupTestPage(page);
-    await waitForConnection(page, 10000);
     
-    // Enable microphone
-    console.log('Step 1: Enabling microphone...');
-    const micButton = page.locator(SELECTORS.micButton);
-    await micButton.click();
-    await page.waitForTimeout(1000);
+    // Setup all audio sending prerequisites in one call
+    // This handles: mic permissions, component ready, mic button click, connection, settings applied, processing delay
+    await setupAudioSendingPrerequisites(page, context);
     
+    // Verify microphone is enabled
     const micStatus = await page.locator(SELECTORS.micStatus).textContent();
     console.log(`Microphone status: ${micStatus}`);
     expect(micStatus).toBe('Enabled');
@@ -312,9 +308,6 @@ test.describe('Idle Timeout Behavior', () => {
     // Simulate a realistic conversation using existing audio samples
     // These samples have: 300ms onset silence + speech + 2000ms offset silence
     console.log('Step 2: Simulating realistic conversation with proper timing...');
-    
-    // Initialize VAD test utilities
-    const vadUtils = new VADTestUtilities(page);
     
     const startTime = Date.now();
     const conversationFlow = [
@@ -349,20 +342,15 @@ test.describe('Idle Timeout Behavior', () => {
       
       console.log(`Speaking: "${sample}" (expected duration: ${expectedDuration}ms)`);
       
-      // Use VADTestUtilities to load and send pre-recorded audio samples
-      await vadUtils.loadAndSendAudioSample(sample);
+      // Load and send audio sample using fixture
+      await loadAndSendAudioSample(page, sample);
       
-      // Wait for VAD events to be processed
-      console.log('⏳ Waiting for VAD events...');
-      const vadEvents = await SimpleVADHelpers.waitForVADEvents(page, [
-        'UserStartedSpeaking',  // From Voice Agent API
-        'UtteranceEnd'        // From Voice Agent API  
-      ], 6000); // Longer timeout to account for 2s offset silence
+      // Wait for VAD events to be detected (replaces fixed timeout)
+      const eventsDetected = await waitForVADEvents(page, ['UserStartedSpeaking', 'UtteranceEnd'], 7000);
+      console.log(`✅ VAD events detected: ${eventsDetected}`);
       
-      console.log(`✅ VAD events detected: ${vadEvents.length}`);
-      
-      // Verify we got the expected VAD events
-      expect(vadEvents.length).toBeGreaterThan(0);
+      // Verify we got at least one VAD event
+      expect(eventsDetected).toBeGreaterThan(0);
     }
     
     console.log('Step 3: Verifying connection stayed alive during realistic conversation...');
@@ -392,7 +380,7 @@ test.describe('Idle Timeout Behavior', () => {
     console.log('✅ No premature idle timeouts during realistic conversation with 2.3s padding');
   });
 
-  test('should handle idle timeout correctly - connection closes after 10 seconds of inactivity', async ({ page }) => {
+  test('should handle idle timeout correctly - connection closes after 10 seconds of inactivity', async ({ page, context }) => {
     console.log('🧪 Testing idle timeout behavior: connection should close after 10 seconds of inactivity...');
     
     // Capture console logs to see what's happening
@@ -407,6 +395,9 @@ test.describe('Idle Timeout Behavior', () => {
     });
     
     await setupTestPage(page);
+    
+    // Establish connection via text input (auto-connect)
+    await page.click('input[type="text"]');
     await waitForConnection(page, 10000);
     
     // Enable microphone to start connection
@@ -443,24 +434,16 @@ test.describe('Idle Timeout Behavior', () => {
     });
     console.log('🔍 Initial timeout state:', timeoutState);
     
-    // Test 3: Wait for idle timeout to close connection (10 seconds + buffer)
-    console.log('Step 3: Waiting for idle timeout to close connection (10 seconds)...');
+    // Test 3: Wait for idle timeout to close connection using shared fixture
+    console.log('Step 3: Waiting for idle timeout to close connection...');
+    const timeoutResult = await waitForIdleTimeout(page, {
+      expectedTimeout: 10000,
+      maxWaitTime: 20000,
+      checkInterval: 2000
+    });
     
-    // Check connection status every 2 seconds for debugging
-    for (let i = 0; i < 8; i++) {
-      await page.waitForTimeout(2000);
-      const currentStatus = await page.locator(SELECTORS.connectionStatus).textContent();
-      console.log(`⏰ After ${(i + 1) * 2} seconds: ${currentStatus}`);
-      
-      if (currentStatus.includes('closed')) {
-        console.log('✅ Connection closed due to idle timeout');
-        return; // Test passes
-      }
-    }
-    
-    // If we get here, the connection didn't close
-    const finalConnectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
-    console.log(`❌ Connection did not close after 16 seconds. Final status: ${finalConnectionStatus}`);
+    expect(timeoutResult.closed).toBe(true);
+    console.log(`✅ Connection closed due to idle timeout after ${timeoutResult.actualTimeout}ms`);
     
     // Check final timeout state
     const finalTimeoutState = await page.evaluate(() => {
