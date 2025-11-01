@@ -6,7 +6,9 @@ import {
   SELECTORS,
   waitForConnection,
   waitForAgentGreeting,
-  sendTextMessage
+  sendTextMessage,
+  establishConnectionViaText,
+  getComponentAudioContextState
 } from './helpers/test-helpers.js';
 import { waitForIdleTimeout } from './fixtures/idle-timeout-helpers';
 
@@ -18,19 +20,14 @@ test.describe('Text Input Idle Timeout with Suspended AudioContext', () => {
 
     // Step 1: Establish connection via text input (auto-connect)
     console.log('Step 1: Establishing connection via text input...');
-    await page.click('input[type="text"]');
-    await waitForConnection(page, 10000);
+    await establishConnectionViaText(page);
     
     const initialStatus = await page.locator(SELECTORS.connectionStatus).textContent();
     console.log(`Initial connection status: ${initialStatus}`);
     expect(initialStatus).toBe('connected');
     
     // Step 2: Check AudioContext state (for logging)
-    const audioState = await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      const audioContext = deepgramComponent?.getAudioContext?.();
-      return audioContext?.state || 'not-initialized';
-    });
+    const audioState = await getComponentAudioContextState(page);
     console.log(`Initial AudioContext state: ${audioState}`);
 
     // Step 3: Send text message
@@ -42,11 +39,7 @@ test.describe('Text Input Idle Timeout with Suspended AudioContext', () => {
     await waitForAgentGreeting(page, 15000);
     
     // Step 5: Check AudioContext state after response (for logging)
-    const audioStateAfter = await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      const audioContext = deepgramComponent?.getAudioContext?.();
-      return audioContext?.state || 'not-initialized';
-    });
+    const audioStateAfter = await getComponentAudioContextState(page);
     console.log(`AudioContext state after response: ${audioStateAfter}`);
     
     // Note: AudioContext state may vary, but idle timeout should work regardless
@@ -73,15 +66,10 @@ test.describe('Text Input Idle Timeout with Suspended AudioContext', () => {
     await setupTestPage(page);
     
     // Establish connection via text input (auto-connect)
-    await page.click('input[type="text"]');
-    await waitForConnection(page, 10000);
+    await establishConnectionViaText(page);
 
     // Step 1: Check initial AudioContext state
-    const initialState = await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      const audioContext = deepgramComponent?.getAudioContext?.();
-      return audioContext?.state || 'not-initialized';
-    });
+    const initialState = await getComponentAudioContextState(page);
     console.log(`Initial AudioContext state: ${initialState}`);
 
     // Step 2: Focus on text input (this should resume AudioContext if suspended)
@@ -89,11 +77,7 @@ test.describe('Text Input Idle Timeout with Suspended AudioContext', () => {
     await page.waitForTimeout(500); // Brief pause for state change
     
     // Step 3: Check AudioContext state after focus
-    const stateAfterFocus = await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      const audioContext = deepgramComponent?.getAudioContext?.();
-      return audioContext?.state || 'not-initialized';
-    });
+    const stateAfterFocus = await getComponentAudioContextState(page);
     console.log(`AudioContext state after focus: ${stateAfterFocus}`);
 
     // AudioContext should be running after user interaction (if initialized)

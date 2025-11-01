@@ -23,7 +23,8 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  SELECTORS, waitForConnection, sendTextMessage
+  SELECTORS, waitForConnection, sendTextMessage,
+  establishConnectionViaText
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks';
 import { monitorConnectionStatus } from './fixtures/idle-timeout-helpers';
@@ -61,8 +62,7 @@ test.describe('Idle Timeout During Agent Speech', () => {
     await setupTestPage(page);
     
     // Establish connection via text input (auto-connect)
-    await page.click('input[type="text"]');
-    await waitForConnection(page, 10000);
+    await establishConnectionViaText(page);
     
     const initialStatus = await page.locator(SELECTORS.connectionStatus).textContent();
     console.log(`Initial connection status: ${initialStatus}`);

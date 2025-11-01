@@ -772,6 +772,49 @@ async function setupAudioSendingPrerequisites(page, context = null, options = {}
   console.log('🎤 [AUDIO_SETUP] 💡 Component is now ready to accept audio data via sendAudioData()');
 }
 
+/**
+ * Establish connection via text input (auto-connect pattern)
+ * Common pattern: click text input → wait for connection
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {number} timeout - Timeout for connection wait (default: 10000)
+ * @returns {Promise<void>}
+ */
+async function establishConnectionViaText(page, timeout = 10000) {
+  await page.click('input[type="text"]');
+  await waitForConnection(page, timeout);
+}
+
+/**
+ * Establish connection via microphone button
+ * Common pattern: grant permissions → click mic button → wait for connection
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {import('@playwright/test').BrowserContext} [context] - Browser context for permissions
+ * @param {number} timeout - Timeout for connection wait (default: 10000)
+ * @returns {Promise<void>}
+ */
+async function establishConnectionViaMicrophone(page, context = null, timeout = 10000) {
+  if (context) {
+    await context.grantPermissions(['microphone']);
+  }
+  await page.waitForSelector(SELECTORS.micButton, { timeout: 5000 });
+  await page.click(SELECTORS.micButton);
+  await waitForConnection(page, timeout);
+}
+
+/**
+ * Get AudioContext state from the component (recommended method)
+ * Uses component's getAudioContext() method instead of window.audioContext
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @returns {Promise<string>} AudioContext state ('running', 'suspended', 'closed', or 'not-initialized')
+ */
+async function getComponentAudioContextState(page) {
+  return await page.evaluate(() => {
+    const deepgramComponent = window.deepgramRef?.current;
+    const audioContext = deepgramComponent?.getAudioContext?.();
+    return audioContext?.state || 'not-initialized';
+  });
+}
+
 // Import microphone helpers
 import MicrophoneHelpers from './microphone-helpers.js';
 
@@ -805,6 +848,9 @@ export {
   sendMessageAndWaitForResponse, // Send message and wait for agent response in one call
   connectViaTextAndWaitForGreeting, // Connect via text input (auto-connect) and wait for greeting to complete
   setupAudioSendingPrerequisites, // Complete setup for audio sending: permissions, ready, mic click, connection, settings applied
+  establishConnectionViaText, // Establish connection by clicking text input (auto-connect pattern)
+  establishConnectionViaMicrophone, // Establish connection via microphone button (permissions + click)
+  getComponentAudioContextState, // Get AudioContext state from component (recommended over window.audioContext)
   MicrophoneHelpers // Microphone utility helpers for E2E tests (activate/deactivate mic)
 };
 

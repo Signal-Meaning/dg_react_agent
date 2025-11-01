@@ -35,13 +35,13 @@
 import { test, expect } from '@playwright/test';
 import { 
   SELECTORS,
-  waitForConnection,
   sendTextMessage,
   waitForAgentGreeting,
-  setupAudioSendingPrerequisites
+  setupAudioSendingPrerequisites,
+  establishConnectionViaText
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks.js';
-import { waitForIdleTimeout, monitorConnectionStatus } from './fixtures/idle-timeout-helpers';
+import { waitForIdleTimeout } from './fixtures/idle-timeout-helpers';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
 
 test.describe('Idle Timeout Behavior', () => {
@@ -69,8 +69,7 @@ test.describe('Idle Timeout Behavior', () => {
     await setupTestPage(page);
     
     // Establish connection via text input (auto-connect)
-    await page.click('input[type="text"]');
-    await waitForConnection(page, 10000);
+    await establishConnectionViaText(page);
     
     const initialStatus = await page.locator(SELECTORS.connectionStatus).textContent();
     console.log(`Initial connection status: ${initialStatus}`);
@@ -166,8 +165,7 @@ test.describe('Idle Timeout Behavior', () => {
     await setupTestPage(page);
     
     // Establish connection via text input (auto-connect)
-    await page.click('input[type="text"]');
-    await waitForConnection(page, 10000);
+    await establishConnectionViaText(page);
     
     // Wait for timeout
     console.log('Waiting for idle timeout...');
@@ -397,8 +395,7 @@ test.describe('Idle Timeout Behavior', () => {
     await setupTestPage(page);
     
     // Establish connection via text input (auto-connect)
-    await page.click('input[type="text"]');
-    await waitForConnection(page, 10000);
+    await establishConnectionViaText(page);
     
     // Enable microphone to start connection
     console.log('Step 1: Enabling microphone...');

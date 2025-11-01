@@ -23,7 +23,8 @@
 import { test, expect } from '@playwright/test';
 import { 
   SELECTORS,
-  waitForConnection 
+  waitForConnection,
+  establishConnectionViaText
 } from './helpers/test-helpers.js';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks.js';
@@ -48,8 +49,7 @@ test.describe('Microphone Activation After Idle Timeout', () => {
     await setupTestPage(page);
     
     // Establish connection via text input (auto-connect)
-    await page.click('input[type="text"]');
-    await waitForConnection(page, 10000);
+    await establishConnectionViaText(page);
     
     const initialStatus = await page.locator(SELECTORS.connectionStatus).textContent();
     console.log(`Initial connection status: ${initialStatus}`);
@@ -101,8 +101,7 @@ test.describe('Microphone Activation After Idle Timeout', () => {
     await setupTestPage(page);
     
     // Establish connection via text input (auto-connect)
-    await page.click('input[type="text"]');
-    await waitForConnection(page, 10000);
+    await establishConnectionViaText(page);
     
     // Wait for timeout using shared fixture
     console.log('Waiting for idle timeout...');

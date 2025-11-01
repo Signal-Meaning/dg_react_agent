@@ -4,8 +4,9 @@ import {
 } from './helpers/audio-mocks.js';
 import {
   SELECTORS,
-  waitForConnection,
-  waitForAgentGreeting
+  waitForAgentGreeting,
+  establishConnectionViaMicrophone,
+  getComponentAudioContextState
 } from './helpers/test-helpers.js';
 import { waitForIdleTimeout } from './fixtures/idle-timeout-helpers';
 
@@ -17,12 +18,7 @@ test.describe('Suspended AudioContext Idle Timeout (Issue #139)', () => {
     
     // Step 1: Establish connection
     console.log('Step 1: Establishing connection...');
-    if (context) {
-      await context.grantPermissions(['microphone']);
-    }
-    await page.waitForSelector('[data-testid="microphone-button"]', { timeout: 5000 });
-    await page.click('[data-testid="microphone-button"]');
-    await waitForConnection(page, 10000);
+    await establishConnectionViaMicrophone(page, context);
     
     const initialStatus = await page.locator(SELECTORS.connectionStatus).textContent();
     console.log(`Initial connection status: ${initialStatus}`);
@@ -36,11 +32,7 @@ test.describe('Suspended AudioContext Idle Timeout (Issue #139)', () => {
     // Step 3: Check AudioContext state (for logging/debugging)
     // Note: This test verifies that idle timeout works regardless of AudioContext state
     // Issue #139 fixed a bug where idle timeout didn't work when AudioContext was suspended
-    const audioState = await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      const audioContext = deepgramComponent?.getAudioContext?.();
-      return audioContext?.state || 'not-initialized';
-    });
+    const audioState = await getComponentAudioContextState(page);
     console.log(`AudioContext state after greeting: ${audioState}`);
     
     // AudioContext may be running (audio finished), suspended, or not-initialized

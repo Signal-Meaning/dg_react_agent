@@ -26,7 +26,8 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  SELECTORS, waitForConnection, sendTextMessage, waitForAgentGreeting
+  SELECTORS, waitForConnection, sendTextMessage, waitForAgentGreeting,
+  establishConnectionViaMicrophone
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks';
 import { waitForIdleTimeout, verifyIdleTimeoutTiming } from './fixtures/idle-timeout-helpers';
@@ -40,16 +41,9 @@ test.describe('Greeting Idle Timeout', () => {
     console.log('Step 1: Starting fresh browser session...');
     await setupTestPage(page);
     
-    // Grant microphone permissions and click mic button to establish connection
-    if (context) {
-      await context.grantPermissions(['microphone']);
-    }
-    await page.waitForSelector('[data-testid="microphone-button"]', { timeout: 5000 });
-    await page.click('[data-testid="microphone-button"]');
-    
-    // Step 2: Wait for agent connection to be truthy
-    console.log('Step 2: Waiting for agent connection...');
-    await waitForConnection(page, 10000);
+    // Step 2: Establish connection via microphone button
+    console.log('Step 2: Establishing connection via microphone...');
+    await establishConnectionViaMicrophone(page, context);
     
     const initialConnectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
     console.log(`Initial connection status: ${initialConnectionStatus}`);
@@ -140,14 +134,7 @@ test.describe('Greeting Idle Timeout', () => {
     await setupTestPage(page);
     
     // Establish connection by clicking microphone button
-    if (context) {
-      await context.grantPermissions(['microphone']);
-    }
-    await page.waitForSelector('[data-testid="microphone-button"]', { timeout: 5000 });
-    await page.click('[data-testid="microphone-button"]');
-    
-    // Wait for connection to be established
-    await waitForConnection(page, 10000);
+    await establishConnectionViaMicrophone(page, context);
 
     // Wait for initial greeting to complete
     await waitForAgentGreeting(page, 10000);
@@ -179,13 +166,8 @@ test.describe('Greeting Idle Timeout', () => {
   test('should NOT play greeting if AudioContext is suspended', async ({ page, context }) => {
     await setupTestPage(page);
     
-    // Establish connection
-    if (context) {
-      await context.grantPermissions(['microphone']);
-    }
-    await page.waitForSelector('[data-testid="microphone-button"]', { timeout: 5000 });
-    await page.click('[data-testid="microphone-button"]');
-    await waitForConnection(page, 10000);
+    // Establish connection via microphone button
+    await establishConnectionViaMicrophone(page, context);
     
     // Wait for greeting to be sent
     await page.waitForSelector('[data-testid="greeting-sent"]', { timeout: 10000 });
