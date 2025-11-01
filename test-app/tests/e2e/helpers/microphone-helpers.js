@@ -186,21 +186,27 @@ export async function waitForMicrophoneReady(page, options = {}) {
  * Wait for agent greeting to complete
  * 
  * This ensures that agent settings have been applied before microphone activation.
+ * Uses state-based detection via data-testid selectors instead of log parsing.
  * 
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {number} timeout - Timeout in ms (default: 8000)
  */
 export async function waitForAgentGreeting(page, timeout = 8000) {
+  // Wait for agent to finish speaking using state-based detection
+  // Options: agent-silent=true, agent-speaking=false, audio-playing-status=false, or agent-state=idle
   await page.waitForFunction(
-    (selector) => {
-      const element = document.querySelector(selector);
-      const text = element?.textContent || '';
-      return text.includes('Agent finished speaking') || 
-             text.includes('ready for interaction') ||
-             text.includes('Agent is speaking') ||
-             text.includes('Agent finished speaking');
+    () => {
+      const agentSilent = document.querySelector('[data-testid="agent-silent"]')?.textContent?.trim();
+      const agentSpeaking = document.querySelector('[data-testid="agent-speaking"]')?.textContent?.trim();
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]')?.textContent?.trim();
+      const agentState = document.querySelector('[data-testid="agent-state"]')?.textContent?.trim();
+      
+      // Agent has finished speaking if any of these conditions are met
+      return agentSilent === 'true' || 
+             agentSpeaking === 'false' || 
+             audioPlaying === 'false' || 
+             agentState === 'idle';
     },
-    SELECTORS.greetingSent,
     { timeout }
   );
 }

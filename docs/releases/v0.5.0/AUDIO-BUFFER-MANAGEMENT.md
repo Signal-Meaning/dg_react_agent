@@ -230,11 +230,11 @@ const toggleMute = () => {
 // ✅ CORRECT - Monitor state changes for reactivity
 const toggleMute = () => {
   voiceRef.current?.interruptAgent();
-  // State will be updated via onAgentStoppedSpeaking callback
+  // State will be updated via onPlaybackStateChange callback
 };
 
-const handleAgentStoppedSpeaking = useCallback(() => {
-  setIsMuted(true); // Update UI when agent actually stops
+const handlePlaybackStateChange = useCallback((isPlaying: boolean) => {
+  setIsMuted(!isPlaying); // Update UI when agent actually stops/starts playing
 }, []);
 
 const handleAgentStartedSpeaking = useCallback(() => {
@@ -244,9 +244,11 @@ const handleAgentStartedSpeaking = useCallback(() => {
 
 **Key Points:**
 - **`interruptAgent()` is async** - don't assume immediate state change
-- **Monitor `onAgentStoppedSpeaking`** for reliable mute state updates
+- **Monitor `onPlaybackStateChange(false)`** for reliable mute state updates (when playback actually stops)
 - **Monitor `onAgentStartedSpeaking`** for unmute state updates
+- **Note**: `onAgentSilent` was removed - it fired on TTS generation complete, not playback complete, which was misleading. Use `onPlaybackStateChange(false)` to detect when agent stopped speaking.
 - **UI should reflect actual audio state**, not button clicks
+- **Note**: `onAgentStoppedSpeaking` was never implemented - `AgentStoppedSpeaking` is not a real Deepgram event (Issue #198)
 
 ## 🔍 Debugging Audio Issues
 
@@ -316,7 +318,7 @@ useEffect(() => {
 - [ ] **Handle `onError`** for audio-specific error recovery
 - [ ] **Use `onConnectionStateChange`** to interrupt audio on connection loss
 - [ ] **Handle AudioContext suspension** - ensure user gesture for audio activation
-- [ ] **Monitor `onAgentStoppedSpeaking`** for reliable mute state updates
+- [ ] **Monitor `onPlaybackStateChange(false)`** for reliable mute state updates (Note: `onAgentStoppedSpeaking` was never implemented - `AgentStoppedSpeaking` is not a real Deepgram event, Issue #198)
 - [ ] **Monitor `onAgentStartedSpeaking`** for unmute state updates
 - [ ] **Never assume immediate state changes** - `interruptAgent()` is async
 - [ ] **Enable debug mode** during development

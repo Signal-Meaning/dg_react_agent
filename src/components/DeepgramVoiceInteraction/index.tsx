@@ -146,7 +146,6 @@ function DeepgramVoiceInteraction(
     onPlaybackStateChange,
     onError,
     onAgentSpeaking,
-    onAgentSilent,
     onSettingsApplied,
   } = props;
 
@@ -309,7 +308,6 @@ function DeepgramVoiceInteraction(
     agentStateServiceRef.current = new AgentStateService(props.debug);
     agentStateServiceRef.current.setCallbacks({
       onAgentSpeaking,
-      onAgentSilent,
       onStateChange: (newState) => {
         dispatch({ type: 'AGENT_STATE_CHANGE', state: newState });
       }
@@ -1212,7 +1210,7 @@ function DeepgramVoiceInteraction(
         if (audioManagerRef.current) {
           audioManagerRef.current.abortPlayback();
         }
-        onAgentSilent?.();
+        // Note: onAgentSilent callback was removed - playback state is managed via onPlaybackStateChange
         dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
         dispatch({ type: 'GREETING_STARTED', started: false });
       }
@@ -1308,11 +1306,6 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    if (data.type === 'AgentStoppedSpeaking') {
-      agentStateServiceRef.current?.handleAgentStoppedSpeaking();
-      return;
-    }
-    
     if (data.type === 'AgentAudioDone') {
       console.log('🔊 [AGENT EVENT] AgentAudioDone received');
       console.log('🎯 [AGENT] AgentAudioDone received - audio generation complete, playback may continue');
@@ -1334,9 +1327,7 @@ function DeepgramVoiceInteraction(
       // DON'T re-enable idle timeout resets on AgentAudioDone
       // This is the generation event, not the playback event
       // The actual playback completion is handled by the audio manager
-      
-      // Always call onAgentSilent when agent finishes speaking
-      onAgentSilent?.();
+      // Note: onAgentSilent callback was removed - use onPlaybackStateChange(false) for playback completion
       return;
     }
     

@@ -171,18 +171,26 @@ async function waitForConnectionAndSettings(page, connectionTimeout = 5000, sett
 
 /**
  * Wait for agent to finish greeting
+ * Uses state-based detection via data-testid selectors instead of log parsing
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 8000)
  */
 async function waitForAgentGreeting(page, timeout = 8000) {
-  const greetingSent = page.locator(SELECTORS.greetingSent);
+  // Wait for agent to finish speaking using state-based detection
+  // Options: agent-silent=true, agent-speaking=false, audio-playing-status=false, or agent-state=idle
   await page.waitForFunction(
-    (selector) => {
-      const element = document.querySelector(selector);
-      const text = element?.textContent || '';
-      return text.includes('Agent finished speaking') || text.includes('ready for interaction');
+    () => {
+      const agentSilent = document.querySelector('[data-testid="agent-silent"]')?.textContent?.trim();
+      const agentSpeaking = document.querySelector('[data-testid="agent-speaking"]')?.textContent?.trim();
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]')?.textContent?.trim();
+      const agentState = document.querySelector('[data-testid="agent-state"]')?.textContent?.trim();
+      
+      // Agent has finished speaking if any of these conditions are met
+      return agentSilent === 'true' || 
+             agentSpeaking === 'false' || 
+             audioPlaying === 'false' || 
+             agentState === 'idle';
     },
-    SELECTORS.greetingSent,
     { timeout }
   );
 }

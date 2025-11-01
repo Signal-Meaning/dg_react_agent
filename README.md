@@ -655,11 +655,10 @@ export default CombinedInteraction;
 | `onUserMessage`         | `(message: UserMessageResponse) => void`                 | No       | Called when a user message is received from the server (`role:user`).                                     |
 | `onUserStartedSpeaking` | `() => void`                                             | No       | Called when user speech starts (VAD).                                                                     |
 | `onUserStoppedSpeaking` | `() => void`                                             | No       | Called when user speech stops (VAD).                                                                      |
-| `onPlaybackStateChange` | `(isPlaying: boolean) => void`                           | No       | Called when agent audio playback starts or stops.                                                         |
+| `onPlaybackStateChange` | `(isPlaying: boolean) => void`                           | No       | Called when agent audio playback starts or stops. Use `isPlaying === false` to detect when agent playback completes (agent has stopped speaking). |
 | `onMicToggle`           | `(enabled: boolean) => void`                             | No       | Called when microphone state changes.                                                                     |
 | `onConnectionReady`     | `() => void`                                             | No       | Called when dual mode connection is established.                                                          |
 | `onAgentSpeaking`       | `() => void`                                             | No       | Called when agent starts speaking.                                                                        |
-| `onAgentSilent`         | `() => void`                                             | No       | Called when agent finishes speaking.                                                                      |
 | `onError`               | `(error: DeepgramError) => void`                         | No       | Called when an error occurs (mic, WebSocket, API, etc.).                                                  |
 | `debug`                 | `boolean`                                                | No       | Enable verbose logging to the browser console.                                                            |
 

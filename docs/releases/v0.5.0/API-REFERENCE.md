@@ -78,7 +78,6 @@ interface DeepgramVoiceInteractionProps {
   onUserStartedSpeaking?: () => void;
   onUserStoppedSpeaking?: () => void;
   onAgentStartedSpeaking?: () => void;
-  onAgentStoppedSpeaking?: () => void;
   onUtteranceEnd?: (data: { channel: number[]; lastWordEnd: number }) => void;
   
   // Error Handling
@@ -137,8 +136,8 @@ interface DeepgramVoiceInteractionProps {
 | `onUserStartedSpeaking` | `() => void` | Called when user starts speaking |
 | `onUserStoppedSpeaking` | `() => void` | Called when user stops speaking (triggered by endpointing) |
 | `onAgentStartedSpeaking` | `() => void` | Called when agent starts speaking (simplifies `onAgentStateChange` + `onPlaybackStateChange`) |
-| `onAgentStoppedSpeaking` | `() => void` | Called when agent stops speaking (simplifies `onAgentStateChange` + `onPlaybackStateChange`) |
 | `onUtteranceEnd` | `(data: { channel: number[]; lastWordEnd: number }) => void` | Called when utterance ends (word-timing based) |
+| `onPlaybackStateChange` | `(isPlaying: boolean) => void` | Called when audio playback state changes. Use `isPlaying === false` to detect when agent playback completes (agent has stopped speaking). |
 
 #### Error Handling
 | Prop | Type | Description |
@@ -388,8 +387,13 @@ onAgentStartedSpeaking={() => {
   console.log('Agent started speaking');
 }}
 
-onAgentStoppedSpeaking={() => {
-  console.log('Agent finished speaking');
+// Use onPlaybackStateChange(false) to detect when agent playback completes
+onPlaybackStateChange={(isPlaying) => {
+  if (!isPlaying) {
+    console.log('Agent playback completed - agent has stopped speaking');
+  } else {
+    console.log('Agent playback started');
+  }
 }}
 ```
 
@@ -754,8 +758,8 @@ This section documents changes made to the API since the original fork (commit `
 
 ### Props Added Since Fork
 
-- **`onAgentStartedSpeaking` / `onAgentStoppedSpeaking`** - Agent speaking event callbacks
-  - *Why added*: Provides simplified, dedicated callbacks for agent audio state changes, reducing the need to monitor both `onAgentStateChange` and `onPlaybackStateChange` for basic agent speaking detection.
+- **`onAgentStartedSpeaking`** - Agent speaking callback
+  - *Why added*: Provides callback when agent starts speaking. Note: `onAgentSilent` was removed - use `onPlaybackStateChange(false)` + `onAgentStateChange('idle')` for detecting when agent playback completes. `onAgentStoppedSpeaking` was never implemented - `AgentStoppedSpeaking` is not a real Deepgram event (Issue #198).
 
 - **`onUserStartedSpeaking` / `onUserStoppedSpeaking`** - User speaking event callbacks  
   - *Why added*: Enables applications to provide real-time visual feedback during user speech and implement proper idle timeout management based on actual voice activity rather than microphone state.
@@ -822,7 +826,7 @@ voiceRef.current?.injectMessage('agent', "Hello from agent");
 - `onVADEvent` - Replaced with specific VAD callbacks (`onUserStartedSpeaking`, etc.)
 - `onKeepalive` - Internal implementation detail, not needed for integration
 - `agentMuted` - Audio control simplified to `interruptAgent()` method
-- `onAgentMuteChange` - Replaced with `onAgentStoppedSpeaking` callback
+- `onAgentMuteChange` - Replaced with `onPlaybackStateChange(false)` for detecting when agent playback completes. Note: `onAgentSilent` was removed (misleading - fired on TTS generation, not playback). `onAgentStoppedSpeaking` was never implemented - `AgentStoppedSpeaking` is not a real Deepgram event (Issue #198).
 
 #### **Removed Methods**
 - `toggleMicrophone()` - Microphone control is not a component responsibility
@@ -864,7 +868,9 @@ voiceRef.current?.injectAgentMessage("Hello");
     }
   }}
   onUserStartedSpeaking={() => console.log('User speaking')}
-  onAgentStoppedSpeaking={() => console.log('Agent stopped')}
+  onPlaybackStateChange={(isPlaying) => {
+    if (!isPlaying) console.log('Agent playback completed');
+  }}
 />
 
 // Methods

@@ -214,8 +214,12 @@ function VoiceApp() {
     setIsSpeaking(true);
   }, []);
 
-  const handleAgentStoppedSpeaking = useCallback(() => {
-    setIsSpeaking(false);
+  const handlePlaybackStateChange = useCallback((isPlaying: boolean) => {
+    setIsSpeaking(isPlaying);
+    // This fires when playback actually completes - agent has truly stopped speaking
+    if (!isPlaying) {
+      // Agent playback finished
+    }
   }, []);
 
   return (
@@ -225,7 +229,7 @@ function VoiceApp() {
       onAgentStateChange={handleAgentStateChange}
       onConnectionStateChange={handleConnectionStateChange}
       onAgentStartedSpeaking={handleAgentStartedSpeaking}
-      onAgentStoppedSpeaking={handleAgentStoppedSpeaking}
+      onPlaybackStateChange={handlePlaybackStateChange}
     />
   );
 }
@@ -359,7 +363,9 @@ function AutoConnectApp() {
         onConnectionReady={handleConnectionReady}
         onMicToggle={handleMicToggle}
         onAgentStartedSpeaking={() => console.log('Agent speaking')}
-        onAgentStoppedSpeaking={() => console.log('Agent finished')}
+        onPlaybackStateChange={(isPlaying) => {
+          if (!isPlaying) console.log('Agent playback completed');
+        }}
       />
     </div>
   );
@@ -586,9 +592,11 @@ The greeting plays automatically when the agent connection is ready:
     // Called when greeting starts playing
     console.log('Greeting started');
   }}
-  onAgentStoppedSpeaking={() => {
-    // Called when greeting finishes
-    console.log('Ready for user input');
+  onPlaybackStateChange={(isPlaying) => {
+    if (!isPlaying) {
+      // Called when greeting playback actually completes
+      console.log('Ready for user input - playback finished');
+    }
   }}
 />
 ```

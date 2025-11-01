@@ -16,10 +16,18 @@ test.describe('Suspended AudioContext Idle Timeout (Issue #139)', () => {
       }
     });
 
-    // Wait for initial greeting to complete
+    // Wait for initial greeting to complete using state-based detection
     await page.waitForFunction(() => {
-      const eventLog = document.querySelector('[data-testid="event-log"] pre');
-      return eventLog && eventLog.textContent.includes('Agent finished speaking');
+      const agentSilent = document.querySelector('[data-testid="agent-silent"]')?.textContent?.trim();
+      const agentSpeaking = document.querySelector('[data-testid="agent-speaking"]')?.textContent?.trim();
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]')?.textContent?.trim();
+      const agentState = document.querySelector('[data-testid="agent-state"]')?.textContent?.trim();
+      
+      // Agent has finished speaking if any of these conditions are met
+      return agentSilent === 'true' || 
+             agentSpeaking === 'false' || 
+             audioPlaying === 'false' || 
+             agentState === 'idle';
     }, { timeout: 10000 });
 
     // Verify AudioContext is suspended
@@ -54,10 +62,18 @@ test.describe('Suspended AudioContext Idle Timeout (Issue #139)', () => {
       }
     });
 
-    // Wait for initial greeting to complete
+    // Wait for initial greeting to complete using state-based detection
     await page.waitForFunction(() => {
-      const eventLog = document.querySelector('[data-testid="event-log"] pre');
-      return eventLog && eventLog.textContent.includes('Agent finished speaking');
+      const agentSilent = document.querySelector('[data-testid="agent-silent"]')?.textContent?.trim();
+      const agentSpeaking = document.querySelector('[data-testid="agent-speaking"]')?.textContent?.trim();
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]')?.textContent?.trim();
+      const agentState = document.querySelector('[data-testid="agent-state"]')?.textContent?.trim();
+      
+      // Agent has finished speaking if any of these conditions are met
+      return agentSilent === 'true' || 
+             agentSpeaking === 'false' || 
+             audioPlaying === 'false' || 
+             agentState === 'idle';
     }, { timeout: 10000 });
 
     // Verify AudioContext is suspended

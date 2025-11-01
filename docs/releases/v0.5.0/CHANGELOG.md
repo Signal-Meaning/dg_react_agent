@@ -4,6 +4,38 @@
 **Package**: `@signal-meaning/deepgram-voice-interaction-react`  
 **Release Date**: October 2024
 
+## 🔴 Breaking Changes
+
+### Removed Callback: `onAgentSilent`
+
+**Removed in**: v0.5.0+ (Issue #198)
+
+**Reason**: This callback fired on `AgentAudioDone` (TTS generation complete), NOT when playback completed. This was misleading - audio may still be playing for several seconds after TTS generation finishes.
+
+**Migration**: Use `onPlaybackStateChange(false)` to detect when agent playback actually completes.
+
+**Before**:
+```tsx
+<DeepgramVoiceInteraction
+  onAgentSilent={() => {
+    console.log('Agent finished speaking');
+  }}
+/>
+```
+
+**After**:
+```tsx
+<DeepgramVoiceInteraction
+  onPlaybackStateChange={(isPlaying) => {
+    if (!isPlaying) {
+      console.log('Agent finished speaking');
+    }
+  }}
+/>
+```
+
+**Note**: `AgentStoppedSpeaking` is not a real Deepgram event (Issue #198). Agent state transitions to `idle` via `onPlaybackStateChange(false)` when playback completes.
+
 ## 🐛 Bug Fixes
 
 ### Issue #190: Missing Agent State Handlers ✅ **RESOLVED**
@@ -15,7 +47,7 @@
 **Solution**: Implemented all agent state handlers:
 - `AgentThinking` → `thinking` state (disables idle timeout)
 - `AgentStartedSpeaking` → `speaking` state (disables idle timeout)
-- `AgentStoppedSpeaking` → handled via AgentStateService
+- `AgentStoppedSpeaking` → Not a real Deepgram event (Issue #198). Agent state transitions to idle via `onPlaybackStateChange(false)` when playback completes.
 - Playback event fallback → ensures `speaking` state even if `AgentStartedSpeaking` message is delayed
 
 **Impact**: Agent state now transitions properly (`idle → speaking → idle` for text input, `idle → listening → [thinking] → speaking → idle` for voice input), and idle timeout is correctly disabled during agent responses.
