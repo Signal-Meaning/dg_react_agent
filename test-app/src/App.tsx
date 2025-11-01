@@ -29,6 +29,11 @@ function App() {
 
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
   
+  // Expose deepgramRef to window for testing
+  useEffect(() => {
+    (window as any).deepgramRef = deepgramRef;
+  }, []);
+  
   // State for UI
   const [isReady, setIsReady] = useState(false);
   const [lastTranscript, setLastTranscript] = useState('');

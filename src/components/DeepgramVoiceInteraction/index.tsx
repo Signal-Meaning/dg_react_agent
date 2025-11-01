@@ -1595,9 +1595,17 @@ function DeepgramVoiceInteraction(
       
       // Check if we're starting a fresh connection or just ensuring an existing one
       // Only reset audio blocking state if we're actually creating a NEW connection
+      // CRITICAL: If ANY manager exists (even if not connected), we're not doing a fresh start
+      // This preserves blocking state when start() is called to ensure an existing connection
+      const agentManagerExists = !!agentManagerRef.current;
+      const transcriptionManagerExists = !!transcriptionManagerRef.current;
       const agentAlreadyConnected = agentManagerRef.current?.getState() === 'connected';
       const transcriptionAlreadyConnected = transcriptionManagerRef.current?.getState() === 'connected';
-      const isFreshStart = !agentAlreadyConnected && !transcriptionAlreadyConnected;
+      
+      // Fresh start ONLY if NO managers exist AND we're requesting at least one service
+      // If any manager exists, this is NOT a fresh start (preserve blocking state)
+      const isRequestingServices = (options?.agent === true) || (options?.transcription === true) || (!options && (!!configRef.current.agentOptions || !!configRef.current.transcriptionOptions));
+      const isFreshStart = !agentManagerExists && !transcriptionManagerExists && isRequestingServices;
       
       // Reset audio blocking state ONLY on fresh connection (Issue #223 fix)
       // This prevents resetting blocking state when start() is called on an existing connection

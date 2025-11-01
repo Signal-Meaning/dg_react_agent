@@ -42,7 +42,6 @@ const createMockAgentOptions = () => ({
 describe('Audio Blocking Persistence (Issue #223)', () => {
   let mockAgentManager: any;
   let mockAudioManager: any;
-  let audioEventListener: ((event: any) => void) | null = null;
   let agentEventListener: ((event: any) => void) | null = null;
 
   beforeEach(() => {
