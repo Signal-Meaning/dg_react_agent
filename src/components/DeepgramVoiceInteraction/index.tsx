@@ -1593,11 +1593,23 @@ function DeepgramVoiceInteraction(
     try {
       log('Start method called', options ? `with options: ${JSON.stringify(options)}` : 'without options');
       
-      // Reset audio blocking state on fresh connection
-      const previousBlockingState = allowAgentRef.current;
-      allowAgentRef.current = ALLOW_AUDIO;
-      console.log(`🔍 [ISSUE #223] start() - Reset allowAgentRef from ${previousBlockingState} to ${ALLOW_AUDIO}`);
-      log('🔄 Connection starting - resetting audio blocking state');
+      // Check if we're starting a fresh connection or just ensuring an existing one
+      // Only reset audio blocking state if we're actually creating a NEW connection
+      const agentAlreadyConnected = agentManagerRef.current?.getState() === 'connected';
+      const transcriptionAlreadyConnected = transcriptionManagerRef.current?.getState() === 'connected';
+      const isFreshStart = !agentAlreadyConnected && !transcriptionAlreadyConnected;
+      
+      // Reset audio blocking state ONLY on fresh connection (Issue #223 fix)
+      // This prevents resetting blocking state when start() is called on an existing connection
+      if (isFreshStart) {
+        const previousBlockingState = allowAgentRef.current;
+        allowAgentRef.current = ALLOW_AUDIO;
+        console.log(`🔍 [ISSUE #223] start() - Fresh connection detected, resetting allowAgentRef from ${previousBlockingState} to ${ALLOW_AUDIO}`);
+        log('🔄 Fresh connection starting - resetting audio blocking state');
+      } else {
+        console.log(`🔍 [ISSUE #223] start() - Connection already exists (agent=${agentAlreadyConnected}, transcription=${transcriptionAlreadyConnected}), preserving allowAgentRef.current=${allowAgentRef.current}`);
+        log('🔄 Connection already exists - preserving audio blocking state');
+      }
       
       // Determine which services to start
       const config = configRef.current;

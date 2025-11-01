@@ -199,6 +199,18 @@ test.describe('Audio Interruption Timing', () => {
   test('should persist audio blocking across agent response turns (Issue #223)', async ({ page }) => {
     console.log('🔊 Testing audio blocking persistence across turns (Issue #223)...');
     
+    // Capture console logs to see diagnostic output for allowAgentRef tracking
+    const consoleLogs = [];
+    page.on('console', msg => {
+      const text = msg.text();
+      if (text.includes('ISSUE #223') || text.includes('allowAgentRef') || 
+          text.includes('interruptAgent') || text.includes('start()') ||
+          text.includes('handleAgentAudio') || text.includes('🔍')) {
+        consoleLogs.push(`[${msg.type()}] ${text}`);
+        console.log(`[PAGE CONSOLE] ${text}`);
+      }
+    });
+    
     // Focus text input first to trigger AudioManager initialization and allow AudioContext resume
     await page.click('[data-testid="text-input"]');
     
@@ -273,21 +285,36 @@ test.describe('Audio Interruption Timing', () => {
     // Wait for agent audio to potentially arrive (it should be discarded if blocking persisted)
     await page.waitForTimeout(4000); // Give time for TTS to potentially start
     
+    // Log diagnostic information about allowAgentRef state
+    const diagnosticInfo = await page.evaluate(() => {
+      // Try to access allowAgentRef if possible (for debugging)
+      return {
+        // We can't directly access internal refs, but we can check the behavior
+        timestamp: Date.now()
+      };
+    });
+    
     // Verify audio did NOT start playing in the next turn
     // This is the core assertion for Issue #223 - blocking should persist across turns
     const audioStatus = await page.locator('[data-testid="audio-playing-status"]').textContent();
-    expect(audioStatus).toBe('false');
     
     // Log for debugging
     const diag3 = await getAudioDiagnostics(page);
     console.log('🔎 Audio diagnostic after wait period:', diag3);
     
+    // Output diagnostic logs captured from console
+    console.log('\n📋 DIAGNOSTIC LOGS (allowAgentRef tracking):');
+    consoleLogs.forEach(log => console.log(`   ${log}`));
+    
     if (audioStatus === 'true') {
       console.error('❌ FAILURE: Audio started playing in second turn despite interruptAgent() being called');
       console.error('   This indicates allowAgentRef blocking state was reset/lost between turns');
+      console.error('   Check diagnostic logs above to see when allowAgentRef was reset');
     } else {
       console.log('✅ Audio blocking persisted across agent response turns');
     }
+    
+    expect(audioStatus).toBe('false');
     
     // Verify agent response was received (conversation continued)
     await page.waitForFunction(() => {
