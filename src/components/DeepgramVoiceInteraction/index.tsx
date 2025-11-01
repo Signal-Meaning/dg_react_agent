@@ -1327,7 +1327,6 @@ function DeepgramVoiceInteraction(
       // DON'T re-enable idle timeout resets on AgentAudioDone
       // This is the generation event, not the playback event
       // The actual playback completion is handled by the audio manager
-      // Note: onAgentSilent callback was removed - use onPlaybackStateChange(false) for playback completion
       return;
     }
     

@@ -686,6 +686,135 @@ async function connectViaTextAndWaitForGreeting(page, options = {}) {
   console.log('✅ Ready to send message (will auto-connect)');
 }
 
+/**
+ * Setup complete audio-sending prerequisites
+ * 
+ * This utility combines all the common setup steps needed before sending audio data:
+ * 1. Grant microphone permissions (if context provided)
+ * 2. Wait for component to be ready
+ * 3. Click microphone button
+ * 4. Wait for connection to be established
+ * 5. Wait for settings to be applied (SettingsApplied received)
+ * 6. Wait for 500ms settings processing delay to pass
+ * 
+ * This is required before calling sendAudioData() because the component checks:
+ * - hasSentSettingsRef.current must be true
+ * - Date.now() - settingsSentTimeRef.current >= 500ms
+ * 
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {import('@playwright/test').BrowserContext} [context] - Optional browser context for permissions
+ * @param {Object} options - Configuration options
+ * @param {number} options.componentReadyTimeout - Timeout for component ready (default: 5000)
+ * @param {number} options.connectionTimeout - Timeout for connection (default: 10000)
+ * @param {number} options.settingsTimeout - Timeout for settings applied (default: 10000)
+ * @param {number} options.settingsProcessingDelay - Additional delay after settings applied (default: 600)
+ * @returns {Promise<void>}
+ */
+async function setupAudioSendingPrerequisites(page, context = null, options = {}) {
+  const {
+    componentReadyTimeout = 5000,
+    connectionTimeout = 10000,
+    settingsTimeout = 10000,
+    settingsProcessingDelay = 600
+  } = options;
+
+  console.log('🎤 [AUDIO_SETUP] Starting audio sending prerequisites setup...');
+
+  // Step 1: Grant microphone permissions (if context provided)
+  if (context) {
+    console.log('🎤 [AUDIO_SETUP] Step 1: Granting microphone permissions...');
+    await context.grantPermissions(['microphone']);
+    console.log('🎤 [AUDIO_SETUP] ✅ Microphone permissions granted');
+  }
+
+  // Step 2: Wait for component to be ready
+  console.log('🎤 [AUDIO_SETUP] Step 2: Waiting for component to be ready...');
+  await page.waitForSelector('[data-testid="component-ready-status"]', { timeout: componentReadyTimeout });
+  const isReady = await page.locator('[data-testid="component-ready-status"]').textContent();
+  if (isReady !== 'true') {
+    throw new Error(`Component not ready. Status: ${isReady}`);
+  }
+  console.log('🎤 [AUDIO_SETUP] ✅ Component is ready');
+
+  // Step 3: Click microphone button
+  console.log('🎤 [AUDIO_SETUP] Step 3: Clicking microphone button...');
+  await page.waitForSelector('[data-testid="microphone-button"]', { timeout: 5000 });
+  await page.click('[data-testid="microphone-button"]');
+  console.log('🎤 [AUDIO_SETUP] ✅ Microphone button clicked');
+
+  // Step 4: Wait for connection to be established
+  console.log('🎤 [AUDIO_SETUP] Step 4: Waiting for connection...');
+  await page.waitForSelector('[data-testid="connection-status"]', { timeout: connectionTimeout });
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="connection-status"]')?.textContent === 'connected',
+    { timeout: connectionTimeout }
+  );
+  const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
+  if (connectionStatus !== 'connected') {
+    throw new Error(`Connection not established. Status: ${connectionStatus}`);
+  }
+  console.log('🎤 [AUDIO_SETUP] ✅ Connection established');
+
+  // Step 5: Wait for settings to be applied (SettingsApplied received)
+  // Test app exposes this via data-testid="has-sent-settings" DOM element
+  console.log('🎤 [AUDIO_SETUP] Step 5: Waiting for settings to be applied...');
+  await expect(page.locator('[data-testid="has-sent-settings"]')).toHaveText('true', { timeout: settingsTimeout });
+  console.log('🎤 [AUDIO_SETUP] ✅ Settings applied (SettingsApplied received)');
+
+  // Step 6: Wait for settings processing delay to pass
+  // The component requires: Date.now() - settingsSentTimeRef.current >= 500ms
+  // We use 600ms (slightly longer) to ensure settings are fully processed
+  console.log(`🎤 [AUDIO_SETUP] Step 6: Waiting ${settingsProcessingDelay}ms for settings processing delay...`);
+  await page.waitForTimeout(settingsProcessingDelay);
+  console.log('🎤 [AUDIO_SETUP] ✅ Settings processing delay passed');
+
+  console.log('🎤 [AUDIO_SETUP] ✅ All audio sending prerequisites complete!');
+  console.log('🎤 [AUDIO_SETUP] 💡 Component is now ready to accept audio data via sendAudioData()');
+}
+
+/**
+ * Establish connection via text input (auto-connect pattern)
+ * Common pattern: click text input → wait for connection
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {number} timeout - Timeout for connection wait (default: 10000)
+ * @returns {Promise<void>}
+ */
+async function establishConnectionViaText(page, timeout = 10000) {
+  await page.click('input[type="text"]');
+  await waitForConnection(page, timeout);
+}
+
+/**
+ * Establish connection via microphone button
+ * Common pattern: grant permissions → click mic button → wait for connection
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {import('@playwright/test').BrowserContext} [context] - Browser context for permissions
+ * @param {number} timeout - Timeout for connection wait (default: 10000)
+ * @returns {Promise<void>}
+ */
+async function establishConnectionViaMicrophone(page, context = null, timeout = 10000) {
+  if (context) {
+    await context.grantPermissions(['microphone']);
+  }
+  await page.waitForSelector(SELECTORS.micButton, { timeout: 5000 });
+  await page.click(SELECTORS.micButton);
+  await waitForConnection(page, timeout);
+}
+
+/**
+ * Get AudioContext state from the component (recommended method)
+ * Uses component's getAudioContext() method instead of window.audioContext
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @returns {Promise<string>} AudioContext state ('running', 'suspended', 'closed', or 'not-initialized')
+ */
+async function getComponentAudioContextState(page) {
+  return await page.evaluate(() => {
+    const deepgramComponent = window.deepgramRef?.current;
+    const audioContext = deepgramComponent?.getAudioContext?.();
+    return audioContext?.state || 'not-initialized';
+  });
+}
+
 // Import microphone helpers
 import MicrophoneHelpers from './microphone-helpers.js';
 
@@ -718,6 +847,10 @@ export {
   verifyContextPreserved, // Verify conversation context is preserved by checking agent response
   sendMessageAndWaitForResponse, // Send message and wait for agent response in one call
   connectViaTextAndWaitForGreeting, // Connect via text input (auto-connect) and wait for greeting to complete
+  setupAudioSendingPrerequisites, // Complete setup for audio sending: permissions, ready, mic click, connection, settings applied
+  establishConnectionViaText, // Establish connection by clicking text input (auto-connect pattern)
+  establishConnectionViaMicrophone, // Establish connection via microphone button (permissions + click)
+  getComponentAudioContextState, // Get AudioContext state from component (recommended over window.audioContext)
   MicrophoneHelpers // Microphone utility helpers for E2E tests (activate/deactivate mic)
 };
 
