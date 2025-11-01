@@ -411,7 +411,8 @@ function App() {
 
 
   const handleAgentSpeaking = useCallback(() => {
-    // Note: onPlaybackStateChange will also update agentSpeaking when playback actually starts
+    // Note: agentSpeaking state is updated by handlePlaybackStateChange when playback actually starts
+    // This callback only logs - state management is handled by onPlaybackStateChange
     addLog('Agent started speaking');
   }, [addLog]);
 

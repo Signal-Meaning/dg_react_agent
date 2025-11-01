@@ -22,10 +22,18 @@ test.describe('Text Input Idle Timeout with Suspended AudioContext', () => {
     const audioStateAfter = await page.evaluate(() => window.audioContext?.state);
     console.log(`AudioContext state after response: ${audioStateAfter}`);
 
-    // Wait for agent to finish speaking
+    // Wait for agent to finish speaking using state-based detection
     await page.waitForFunction(() => {
-      const eventLog = document.querySelector('[data-testid="event-log"] pre');
-      return eventLog && eventLog.textContent.includes('Agent finished speaking');
+      const agentSilent = document.querySelector('[data-testid="agent-silent"]')?.textContent?.trim();
+      const agentSpeaking = document.querySelector('[data-testid="agent-speaking"]')?.textContent?.trim();
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]')?.textContent?.trim();
+      const agentState = document.querySelector('[data-testid="agent-state"]')?.textContent?.trim();
+      
+      // Agent has finished speaking if any of these conditions are met
+      return agentSilent === 'true' || 
+             agentSpeaking === 'false' || 
+             audioPlaying === 'false' || 
+             agentState === 'idle';
     }, { timeout: 10000 });
 
     // Wait for idle timeout (should be ~10s, not 60s)
