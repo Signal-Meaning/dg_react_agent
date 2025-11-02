@@ -84,8 +84,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 - ✅ Verified `logging-behavior.spec.js` - All 4 tests passing (logging synchronization validation)
 - ✅ Verified `manual-diagnostic.spec.js` - All 2 tests passing (comprehensive diagnostic tool)
 - ⚠️ Verified `manual-vad-workflow.spec.js` - 2/3 tests passing (VAD event detection test failing)
+- ✅ Verified `microphone-activation-after-idle-timeout.spec.js` - All 2 tests passing (microphone activation after timeout)
 - **Pattern**: All recent tests use fixtures (`waitForConnectionAndSettings`, `establishConnectionViaText`, `MicrophoneHelpers`, etc.)
-- **Status**: 23/24 fully passing files, 1 partially passing - 96% fully passing rate!
+- **Status**: 24/25 fully passing files, 1 partially passing - 96% fully passing rate!
 
 ### Next Steps
 - Continue executing remaining 40 untested test files
