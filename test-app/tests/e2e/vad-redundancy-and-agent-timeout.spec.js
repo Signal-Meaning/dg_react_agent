@@ -31,7 +31,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { setupConnectionStateTracking, MicrophoneHelpers } from './helpers/test-helpers.js';
+import { setupConnectionStateTracking, MicrophoneHelpers, establishConnectionViaText } from './helpers/test-helpers.js';
 import {
   SELECTORS, waitForConnection
 } from './helpers/test-helpers.js';
@@ -54,10 +54,12 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     // Setup VAD test environment using shared utilities
     await setupVADTestEnvironment(page, context);
     
-    // Setup test page
+    // Setup test page (connection will be established by individual tests as needed)
     await setupTestPage(page);
     await page.waitForLoadState('networkidle');
-    await waitForConnection(page, VAD_TEST_CONSTANTS.CONNECTION_TIMEOUT_MS);
+    
+    // Wait for component to be ready (don't wait for connection - lazy initialization)
+    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
     // Initialize VAD utilities
     vadUtils = new VADTestUtilities(page);
@@ -99,6 +101,9 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
 
   test('should handle agent state transitions for idle timeout behavior with text input', async ({ page }) => {
     console.log('🧪 Testing agent state timeout behavior with text input...');
+    
+    // Establish connection via text input (triggers auto-connect)
+    await establishConnectionViaText(page, 15000);
     
     // Use text input to trigger agent responses (more reliable than audio)
     const testMessage = 'Can you make me a list of ways to keep my cats busy?';
@@ -162,8 +167,8 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
   test('should prove AgentThinking disables idle timeout resets by injecting message', async ({ page }) => {
     console.log('🧪 Testing AgentThinking functionality by injecting message...');
     
-    // Wait for connection to be established
-    await page.waitForSelector('[data-testid="text-input"]', { timeout: 10000 });
+    // Establish connection via text input (triggers auto-connect)
+    await establishConnectionViaText(page, 15000);
     
     // Instead of trying to inject messages, let's directly test the component's message handling
     // by simulating what happens when AgentThinking is received
@@ -206,6 +211,9 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
 
   test('should debug agent response flow and state transitions', async ({ page }) => {
     console.log('🔍 Debugging agent response flow and state transitions...');
+    
+    // Establish connection via text input (triggers auto-connect)
+    await establishConnectionViaText(page, 15000);
     
     // Use text input to trigger agent responses
     const testMessage = 'Can you make me a list of ways to keep my cats busy?';
@@ -290,6 +298,9 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
 
   test('should verify agent state transitions using state inspection', async ({ page }) => {
     console.log('🧪 Testing agent state transitions with state inspection...');
+    
+    // Establish connection via text input (triggers auto-connect)
+    await establishConnectionViaText(page, 15000);
     
     // Use text input to trigger agent responses
     const testMessage = 'Can you make me a list of ways to keep my cats busy?';
