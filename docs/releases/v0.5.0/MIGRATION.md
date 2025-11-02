@@ -208,20 +208,29 @@ const switchToSession = async (newSessionId: string) => {
 | `resumeWithText()` | `start()` + `injectMessage()` | Start service, then inject message |
 | `resumeWithAudio()` | `start()` | Use `start()` method |
 | `connectWithContext()` | `start()` with session ID | Pass session ID to `start()` |
-| `connectTextOnly()` | `start()` | Use `start()` method |
+| `connectTextOnly()` | `start()` | Use `start()` method (Issue #195) |
+| `isPlaybackActive()` | `onPlaybackStateChange` callback | Use `onPlaybackStateChange` callback to track playback state (Issue #195) |
 | `toggleTtsMute()` | `interruptAgent()` | Use `interruptAgent()` for audio control |
 | `setTtsMuted()` | `interruptAgent()` | Use `interruptAgent()` for audio control |
 | `agentMute()` | `interruptAgent()` | Use `interruptAgent()` for audio control |
 | `agentUnmute()` | `interruptAgent()` | Use `interruptAgent()` for audio control |
-| `getConnectionStates()` | Internal debugging | Not available in public API |
-| `getState()` | Internal debugging | Not available in public API |
+| `getConnectionStates()` | `onConnectionStateChange` callback | Use `onConnectionStateChange` callback to track connection state (Issue #162) |
+| `getState()` | Public callbacks | Use appropriate callbacks: `onReady`, `onAgentStateChange`, `onConnectionStateChange`, `onSettingsApplied`, etc. (Issue #162) |
+
+### New Methods
+
+| New Method | Purpose | Usage |
+|------------|---------|-------|
+| `allowAgent()` | Allow agent audio to play after `interruptAgent()` | Counterpart to `interruptAgent()` for push-button mute control. Call `allowAgent()` to unblock audio that was blocked by `interruptAgent()`. |
+| `startAudioCapture()` | Start microphone capture (lazy initialization) | Triggers browser microphone permission prompt and initializes AudioManager. Should be called when user explicitly requests microphone access. |
+| `getAudioContext()` | Get AudioContext for debugging/testing | Returns AudioContext instance or undefined. Used for browser autoplay policy compliance (e.g., resuming suspended AudioContext). |
 
 ### Renamed Methods
 
 | Old Method | New Method | Migration |
 |------------|------------|-----------|
-| `injectAgentMessage(message)` | `injectMessage('agent', message)` | Update method calls |
-| `injectUserMessage(message)` | `injectMessage('user', message)` | Update method calls |
+| `injectAgentMessage(message)` | `injectMessage('agent', message)` | Update method calls (Note: `injectAgentMessage` is deprecated but still available) |
+| `injectUserMessage(message)` | `injectMessage('user', message)` | `injectUserMessage` is now async and creates manager lazily. Still available, no rename needed. |
 
 ---
 

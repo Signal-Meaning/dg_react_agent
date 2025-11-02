@@ -171,13 +171,21 @@ voiceRef.current?.stop();
 
 | Method | Parameters | Return | Description |
 |--------|------------|--------|-------------|
-| `interruptAgent` | None | `void` | Interrupt agent while speaking |
+| `interruptAgent` | None | `void` | Interrupt agent while speaking. Stops audio playback and clears Web Audio API buffers. Blocks future audio until `allowAgent()` is called. |
+| `allowAgent` | None | `void` | Allow agent audio to play (clears block state set by `interruptAgent()`). Counterpart to `interruptAgent()` for push-button mute control. Enables hold-to-mute interactions. |
 | `sleep` | None | `void` | Put agent to sleep |
 | `wake` | None | `void` | Wake agent from sleep |
 | `toggleSleep` | None | `void` | Toggle between sleep and wake |
 | `updateAgentInstructions` | `UpdateInstructionsPayload` | `void` | Update agent instructions |
 | `injectUserMessage` | `message: string` | `Promise<void>` | Inject user message to agent. Creates agent manager lazily if needed. |
 | `injectAgentMessage` | `message: string` | `void` | Inject message as agent (deprecated, use `injectUserMessage` for user messages) |
+
+### Audio Control Methods
+
+| Method | Parameters | Return | Description |
+|--------|------------|--------|-------------|
+| `startAudioCapture` | None | `Promise<void>` | Start audio capture (lazy initialization). Triggers browser's microphone permission prompt and initializes AudioManager for voice interactions. Should only be called when user explicitly requests microphone access. |
+| `getAudioContext` | None | `AudioContext \| undefined` | Get the AudioContext instance for debugging and testing. Returns undefined if AudioManager not initialized. Used for browser autoplay policy compliance (e.g., resuming suspended AudioContext). |
 
 ---
 
@@ -526,6 +534,11 @@ function AudioControlApp() {
     setIsPlaying(false);
   }, []);
 
+  const allowAgent = useCallback(() => {
+    // Re-enable audio after interruptAgent()
+    voiceRef.current?.allowAgent();
+  }, []);
+
   const handlePlaybackStateChange = useCallback((playing: boolean) => {
     setIsPlaying(playing);
   }, []);
@@ -534,6 +547,9 @@ function AudioControlApp() {
     <div>
       <button onClick={stopAgent} disabled={!isPlaying}>
         Stop Agent Audio
+      </button>
+      <button onClick={allowAgent}>
+        Allow Agent Audio
       </button>
       
       <DeepgramVoiceInteraction
@@ -547,11 +563,46 @@ function AudioControlApp() {
 }
 ```
 
+**Push-Button Mute Example:**
+```tsx
+function PushButtonMuteApp() {
+  const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
+
+  const handleMouseDown = useCallback(() => {
+    // Block audio while button is pressed
+    voiceRef.current?.interruptAgent();
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    // Allow audio when button is released
+    voiceRef.current?.allowAgent();
+  }, []);
+
+  return (
+    <div>
+      <button 
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+      >
+        Hold to Mute
+      </button>
+      
+      <DeepgramVoiceInteraction
+        ref={voiceRef}
+        apiKey={apiKey}
+        agentOptions={agentOptions}
+      />
+    </div>
+  );
+}
+```
+
 **Why this approach is essential:**
-- **`interruptAgent()`** immediately stops audio and clears Web Audio API buffers
+- **`interruptAgent()`** immediately stops audio and clears Web Audio API buffers, blocks future audio
+- **`allowAgent()`** re-enables audio after `interruptAgent()`, enabling push-button mute patterns
 - **Prevents memory leaks** from accumulated audio buffers
 - **Avoids connection timeouts** caused by audio queue buildup
-- **Parent controls audio** through `start()`/`interruptAgent()` pattern
+- **Parent controls audio** through `interruptAgent()`/`allowAgent()` pattern
 
 > **⚠️ Important**: See [Audio Buffer Management Guide](./AUDIO-BUFFER-MANAGEMENT.md) for comprehensive guidance on managing TTS audio streams and preventing common audio-related issues.
 
@@ -624,6 +675,80 @@ function BasicControlApp() {
 ```
 
 > **⚠️ Important**: Calling `start()` without providing `transcriptionOptions` or `agentOptions` will result in no services being started. Always ensure you provide the appropriate options for the services you want to use.
+
+### Microphone Control with startAudioCapture
+
+**Purpose**: Demonstrates explicit microphone control using `startAudioCapture()` for lazy initialization.
+
+**Context**: The `start()` method connects WebSocket(s) but does NOT start audio recording. You must call `startAudioCapture()` separately when the user explicitly requests microphone access. This enables better user experience and compliance with browser autoplay policies.
+
+```tsx
+function MicrophoneControlApp() {
+  const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
+  const [isRecording, setIsRecording] = useState(false);
+
+  const startInteraction = async () => {
+    try {
+      // Connect WebSocket first
+      await voiceRef.current?.start();
+      
+      // Then request microphone permission and start capture
+      await voiceRef.current?.startAudioCapture();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Failed to start:', error);
+    }
+  };
+
+  const stopInteraction = async () => {
+    try {
+      await voiceRef.current?.stop();
+      setIsRecording(false);
+    } catch (error) {
+      console.error('Failed to stop:', error);
+    }
+  };
+
+  // Handle AudioContext autoplay policy
+  const handleAudioContext = useCallback(() => {
+    const audioContext = voiceRef.current?.getAudioContext();
+    if (audioContext && audioContext.state === 'suspended') {
+      audioContext.resume();
+    }
+  }, []);
+
+  return (
+    <div>
+      <button onClick={startInteraction} disabled={isRecording}>
+        Start Voice Interaction
+      </button>
+      <button onClick={stopInteraction} disabled={!isRecording}>
+        Stop Voice Interaction
+      </button>
+      <button onClick={handleAudioContext}>
+        Resume Audio Context
+      </button>
+      
+      <DeepgramVoiceInteraction
+        ref={voiceRef}
+        apiKey={apiKey}
+        agentOptions={agentOptions}
+        onConnectionStateChange={(service, state) => {
+          if (service === 'agent' && state === 'open') {
+            console.log('Connection established');
+          }
+        }}
+      />
+    </div>
+  );
+}
+```
+
+**Key Points:**
+- **`start()`** connects WebSocket but does NOT start microphone
+- **`startAudioCapture()`** triggers browser permission prompt and initializes AudioManager
+- **`getAudioContext()`** can be used to resume suspended AudioContext (autoplay policy)
+- **Separation of concerns**: Connection vs. microphone access are independent operations
 
 ### Service-Specific Control
 
@@ -831,10 +956,11 @@ voiceRef.current?.injectMessage('agent', "Hello from agent");
 #### **Removed Methods**
 - `toggleMicrophone()` - Microphone control is not a component responsibility
 - `resumeWithText()` / `resumeWithAudio()` - Redundant with `start()` method
-- `connectWithContext()` / `connectTextOnly()` - Redundant with `start()` method
+- `connectWithContext()` / `connectTextOnly()` - Redundant with `start()` method (Issue #195)
+- `isPlaybackActive()` - Removed (Issue #195), use `onPlaybackStateChange` callback pattern
 - `toggleTtsMute()` / `setTtsMuted()` - Replaced with `interruptAgent()` method
 - `agentMute()` / `agentUnmute()` - Replaced with `interruptAgent()` method
-- `getConnectionStates()` / `getState()` - Debug methods removed from public API
+- `getConnectionStates()` / `getState()` - Debug methods removed from public API (Issue #162)
 
 #### **Changed Methods**
 - `injectUserMessage()` is now async and returns `Promise<void>` - creates agent manager lazily if needed
@@ -855,6 +981,8 @@ voiceRef.current?.injectMessage('agent', "Hello from agent");
 
 // Methods
 voiceRef.current?.toggleMicrophone();
+voiceRef.current?.isPlaybackActive(); // ❌ Removed
+voiceRef.current?.connectTextOnly(); // ❌ Removed
 voiceRef.current?.agentMute();
 voiceRef.current?.injectAgentMessage("Hello");
 ```
@@ -875,6 +1003,7 @@ voiceRef.current?.injectAgentMessage("Hello");
 
 // Methods
 await voiceRef.current?.start({ agent: true }); // Explicit control with service flags
+// ❌ isPlaybackActive() removed - use onPlaybackStateChange callback to track state
 voiceRef.current?.interruptAgent(); // Unified audio control
 await voiceRef.current?.injectUserMessage("Hello"); // Lazy initialization for text input
 ```

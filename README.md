@@ -676,11 +676,15 @@ These methods are accessed via the `ref` attached to the component (e.g., `deepg
 | `start`                   | `options?: { agent?: boolean, transcription?: boolean }` | `Promise<void>` | Starts WebSocket connections for specified services. Creates managers lazily if needed. If no options provided, starts services based on configured props. ⚠️ **Note**: Does NOT start recording. Call `startAudioCapture()` separately to enable microphone. |
 | `stop`                    | `none`                               | `Promise<void>` | Stops recording/streaming and closes WebSocket connections. Clears manager refs to allow lazy recreation. |
 | `updateAgentInstructions` | `payload: UpdateInstructionsPayload` | `void`          | Sends new instructions or context to the agent mid-session. Only works in agent or dual mode. |
-| `interruptAgent`          | `none`                               | `void`          | Immediately stops agent audio playback and clears the audio queue. Only works in agent or dual mode. |
+| `interruptAgent`          | `none`                               | `void`          | Immediately stops agent audio playback and clears the audio queue. Blocks future audio until `allowAgent()` is called. Only works in agent or dual mode. |
+| `allowAgent`              | `none`                               | `void`          | Allow agent audio to play (clears block state set by `interruptAgent()`). Counterpart to `interruptAgent()` for push-button mute control. Enables hold-to-mute interactions. Only works in agent or dual mode. |
 | `sleep`                   | `none`                               | `void`          | Puts the agent into sleep mode (ignores audio input). Only works in agent or dual mode. |
 | `wake`                    | `none`                               | `void`          | Wakes the agent from sleep mode. Only works in agent or dual mode. |
 | `toggleSleep`             | `none`                               | `void`          | Toggles the agent between active and sleep states. Only works in agent or dual mode. |
 | `injectAgentMessage`      | `message: string`                    | `void`          | Sends a message directly to the agent. Only works in agent or dual mode.    |
+| `injectUserMessage`       | `message: string`                    | `Promise<void>` | Injects a user message to the agent. Creates agent manager lazily if needed. Only works in agent or dual mode. |
+| `startAudioCapture`       | `none`                               | `Promise<void>` | Start audio capture (lazy initialization). Triggers browser's microphone permission prompt and initializes AudioManager for voice interactions. Should only be called when user explicitly requests microphone access. |
+| `getAudioContext`         | `none`                               | `AudioContext \| undefined` | Get the AudioContext instance for debugging and testing. Returns undefined if AudioManager not initialized. Used for browser autoplay policy compliance (e.g., resuming suspended AudioContext). |
 
 ## Advanced Configuration
 
