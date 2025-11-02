@@ -40,7 +40,7 @@ test.describe('Fixed Microphone Functionality Tests', () => {
     console.log('🎤 Testing VAD elements with proper microphone activation...');
     
     // Use comprehensive microphone test
-    const result = await MicrophoneHelpers.testMicrophoneFunctionality(page);
+    const result = await MicrophoneHelpers.setupMicrophoneWithVADValidation(page);
     
     // Verify the result
     expect(result.success).toBe(true);

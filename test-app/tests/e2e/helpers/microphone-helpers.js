@@ -332,25 +332,25 @@ export async function verifyMicrophonePrerequisites(page) {
 }
 
 /**
- * Test microphone functionality with comprehensive validation
+ * Setup microphone with VAD validation
  * 
- * This function provides a complete test for microphone functionality
- * including activation, VAD elements, and state verification.
+ * This function sets up the microphone activation sequence and validates
+ * that all VAD elements are present and in their initial state.
  * 
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {Object} options - Configuration options
- * @returns {Promise<Object>} - Test result object
+ * @returns {Promise<Object>} - Setup result object with activation and VAD validation
  */
-export async function testMicrophoneFunctionality(page, options = {}) {
-  console.log('🎤 [MICROPHONE_TEST] Starting comprehensive microphone test...');
+export async function setupMicrophoneWithVADValidation(page, options = {}) {
+  console.log('🎤 [MICROPHONE_SETUP] Setting up microphone with VAD validation...');
   
   try {
     // Step 1: Setup test page properly
-    console.log('🎤 [MICROPHONE_TEST] Setting up test page...');
+    console.log('🎤 [MICROPHONE_SETUP] Setting up test page...');
     await setupTestPage(page);
     
     // Step 2: Enable microphone using the working pattern
-    console.log('🎤 [MICROPHONE_TEST] Enabling microphone...');
+    console.log('🎤 [MICROPHONE_SETUP] Enabling microphone...');
     const activationResult = await waitForMicrophoneReady(page, options);
     if (!activationResult.success) {
       throw new Error('Microphone activation failed');
@@ -364,7 +364,7 @@ export async function testMicrophoneFunctionality(page, options = {}) {
       utteranceEnd: await page.locator('[data-testid="utterance-end"]').isVisible()
     };
 
-    console.log('🎤 [MICROPHONE_TEST] VAD elements visibility:', vadElements);
+    console.log('🎤 [MICROPHONE_SETUP] VAD elements visibility:', vadElements);
 
     // Step 4: Verify initial VAD states
     const initialVadStates = {
@@ -372,7 +372,7 @@ export async function testMicrophoneFunctionality(page, options = {}) {
       utteranceEnd: await page.locator('[data-testid="utterance-end"]').textContent()
     };
 
-    console.log('🎤 [MICROPHONE_TEST] Initial VAD states:', initialVadStates);
+    console.log('🎤 [MICROPHONE_SETUP] Initial VAD states:', initialVadStates);
 
     return {
       success: true,
@@ -383,7 +383,7 @@ export async function testMicrophoneFunctionality(page, options = {}) {
     };
 
   } catch (error) {
-    console.log(`🎤 [MICROPHONE_TEST] ❌ Test failed:`, error.message);
+    console.log(`🎤 [MICROPHONE_SETUP] ❌ Setup failed:`, error.message);
     return {
       success: false,
       error: error.message,
@@ -411,10 +411,10 @@ export const MICROPHONE_TEST_PATTERNS = {
   },
 
   /**
-   * Comprehensive microphone functionality test
+   * Setup microphone with VAD validation
    */
-  async fullFunctionality(page) {
-    return await testMicrophoneFunctionality(page);
+  async setupWithVADValidation(page) {
+    return await setupMicrophoneWithVADValidation(page);
   },
 
   /**
@@ -476,6 +476,6 @@ export default {
   waitForAgentGreeting,
   enableMicrophoneWithRetry,
   verifyMicrophonePrerequisites,
-  testMicrophoneFunctionality,
+  setupMicrophoneWithVADValidation,
   MICROPHONE_TEST_PATTERNS
 };
