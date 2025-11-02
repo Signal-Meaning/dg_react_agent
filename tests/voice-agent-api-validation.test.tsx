@@ -853,7 +853,7 @@ describe('Component API Surface Validation', () => {
   });
 
   describe('Step 2: Component Public API Validation', () => {
-    it('should fail on CI if unauthorized component methods detected', async () => {
+    it('should fail if unauthorized component methods detected', async () => {
       const ref = React.createRef<any>();
       
       render(
@@ -885,8 +885,6 @@ describe('Component API Surface Validation', () => {
         return !isPreFork && !isApproved && !shouldBeRemoved;
       });
       
-      const isCI = process.env.CI === 'true';
-      
       if (unauthorizedMethods.length > 0) {
         const errorMessage = 
           `❌ UNAUTHORIZED COMPONENT API METHODS:\n` +
@@ -901,14 +899,13 @@ describe('Component API Surface Validation', () => {
           `   - Version added  \n` +
           `   - Detailed rationale\n` +
           `   - Breaking/non-breaking flag\n` +
-          `3. Document in docs/releases/vX.Y.Z/API-CHANGES.md\n` +
-          `4. Add JSDoc @approved comment in src/types/index.ts\n`;
+          `   - Internal/testing-only flags if applicable\n` +
+          `3. Document in docs/releases/vX.Y.Z/API-CHANGES.md (if public API)\n` +
+          `4. Add JSDoc @approved comment in src/types/index.ts (if public API)\n` +
+          `\n` +
+          `NOTE: This test now fails in both local and CI environments to catch API changes early.\n`;
         
-        if (isCI) {
-          throw new Error(errorMessage);
-        } else {
-          console.warn('⚠️ LOCAL MODE:\n' + errorMessage);
-        }
+        throw new Error(errorMessage);
       }
     });
 
