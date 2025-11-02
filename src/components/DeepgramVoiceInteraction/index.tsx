@@ -179,13 +179,15 @@ function DeepgramVoiceInteraction(
   // Track when settings were sent to add proper delay
   const settingsSentTimeRef = useRef<number | null>(null);
   
-  // Track whether agent audio is allowed
+  // Audio blocking state management
+  // When false, agent audio buffers are discarded to prevent playback
+  // When true, agent audio buffers are queued and played normally
   const ALLOW_AUDIO = true;
+  const BLOCK_AUDIO = false;
+  const allowAgentRef = useRef<boolean>(ALLOW_AUDIO);
   
   // Connection timeout for settings to be sent after manager connection
   const SETTINGS_SEND_DELAY_MS = 500;
-  const BLOCK_AUDIO = false;
-  const allowAgentRef = useRef(ALLOW_AUDIO);
   
   // Global flag to prevent settings from being sent multiple times across component instances
   if (!(window as any).globalSettingsSent) {
@@ -1465,7 +1467,9 @@ function DeepgramVoiceInteraction(
 
   // Handle agent audio - only relevant if agent is configured
   const handleAgentAudio = async (data: ArrayBuffer) => {
-    console.log('🎵 [AUDIO EVENT] handleAgentAudio received buffer bytes=', data?.byteLength);
+    if (props.debug) {
+      console.log('🎵 [AUDIO EVENT] handleAgentAudio received buffer bytes=', data?.byteLength);
+    }
     // Don't re-enable idle timeout resets here
     // After UtteranceEnd, only new connection should re-enable
     
@@ -1484,8 +1488,14 @@ function DeepgramVoiceInteraction(
     }
     
     // Check if agent audio is blocked
+    if (props.debug) {
+      const isBlocked = !allowAgentRef.current;
+      console.log(`🔍 [AUDIO BLOCKING] handleAgentAudio - allowAgentRef.current=${allowAgentRef.current} (BLOCKED=${isBlocked})`);
+    }
     if (!allowAgentRef.current) {
-      console.log('🔇 [AUDIO EVENT] Agent audio currently blocked (allowAgentRef=false) - discarding buffer');
+      if (props.debug) {
+        console.log('🔇 [AUDIO EVENT] Agent audio currently blocked (allowAgentRef=false) - discarding buffer');
+      }
       log('🔇 Agent audio blocked - discarding audio buffer to prevent playback');
       return;
     }
@@ -1590,12 +1600,43 @@ function DeepgramVoiceInteraction(
     try {
       log('Start method called', options ? `with options: ${JSON.stringify(options)}` : 'without options');
       
-      // Reset audio blocking state on fresh connection
-      allowAgentRef.current = ALLOW_AUDIO;
-      log('🔄 Connection starting - resetting audio blocking state');
+      // Check if we're starting a fresh connection or just ensuring an existing one
+      // Only reset audio blocking state if we're actually creating a NEW connection
+      // CRITICAL: If ANY manager exists (even if not connected), we're not doing a fresh start
+      // This preserves blocking state when start() is called to ensure an existing connection
+      const config = configRef.current;
+      const agentManagerExists = !!agentManagerRef.current;
+      const transcriptionManagerExists = !!transcriptionManagerRef.current;
+      const agentAlreadyConnected = agentManagerRef.current?.getState() === 'connected';
+      const transcriptionAlreadyConnected = transcriptionManagerRef.current?.getState() === 'connected';
+      
+      // Fresh start ONLY if NO managers exist AND we're requesting at least one service
+      // If any manager exists, this is NOT a fresh start (preserve blocking state)
+      const isRequestingServices = 
+        (options?.agent === true) || 
+        (options?.transcription === true) || 
+        (!options && (!!config.agentOptions || !!config.transcriptionOptions));
+      const isFreshStart = !agentManagerExists && !transcriptionManagerExists && isRequestingServices;
+      
+      // Reset audio blocking state ONLY on fresh connection
+      // This preserves blocking state when start() is called on an existing connection
+      // (Fix for Issue #223: blocking state was being reset unnecessarily)
+      if (isFreshStart) {
+        const previousBlockingState = allowAgentRef.current;
+        allowAgentRef.current = ALLOW_AUDIO;
+        if (props.debug) {
+          console.log(`🔍 [AUDIO BLOCKING] start() - Fresh connection detected, resetting allowAgentRef from ${previousBlockingState} to ${ALLOW_AUDIO}`);
+        }
+        log('🔄 Fresh connection starting - resetting audio blocking state');
+      } else {
+        if (props.debug) {
+          console.log(`🔍 [AUDIO BLOCKING] start() - Connection already exists (agent=${agentAlreadyConnected}, transcription=${transcriptionAlreadyConnected}), preserving allowAgentRef.current=${allowAgentRef.current}`);
+        }
+        log('🔄 Connection already exists - preserving audio blocking state');
+      }
       
       // Determine which services to start
-      const config = configRef.current;
+      // (config already extracted above)
       const isTranscriptionConfigured = !!config.transcriptionOptions;
       const isAgentConfigured = !!config.agentOptions;
       
@@ -1805,7 +1846,11 @@ function DeepgramVoiceInteraction(
     }
     
     clearAudio();
+    const previousBlockingState = allowAgentRef.current;
     allowAgentRef.current = BLOCK_AUDIO;
+    if (props.debug) {
+      console.log(`🔍 [AUDIO BLOCKING] interruptAgent() - Set allowAgentRef from ${previousBlockingState} to ${BLOCK_AUDIO}`);
+    }
     log('🔇 Agent audio blocked - future audio will be discarded');
     
     log('🔴 Setting agent state to idle');
@@ -1816,7 +1861,11 @@ function DeepgramVoiceInteraction(
 
   const allowAgent = (): void => {
     log('🔊 allowAgent method called');
+    const previousBlockingState = allowAgentRef.current;
     allowAgentRef.current = ALLOW_AUDIO;
+    if (props.debug) {
+      console.log(`🔍 [AUDIO BLOCKING] allowAgent() - Set allowAgentRef from ${previousBlockingState} to ${ALLOW_AUDIO}`);
+    }
     log('🔊 Agent audio allowed - audio will play normally');
   };
 

@@ -29,6 +29,11 @@ function App() {
 
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
   
+  // Expose deepgramRef to window for testing
+  useEffect(() => {
+    (window as any).deepgramRef = deepgramRef;
+  }, []);
+  
   // State for UI
   const [isReady, setIsReady] = useState(false);
   const [lastTranscript, setLastTranscript] = useState('');
@@ -66,7 +71,6 @@ function App() {
   
   // TTS mute state
   const [ttsMuted, setTtsMuted] = useState(false);
-  const [isPressed, setIsPressed] = useState(false);
   
   // VAD state
   const [userStartedSpeaking, setUserStartedSpeaking] = useState<string | null>(null);
@@ -321,12 +325,25 @@ function App() {
     // Update agent speaking/silent state based on actual playback
     setAgentSpeaking(isPlaying);
     setAgentSilent(!isPlaying);
+    
+    // Audio playing when it should be blocked
+    // If mute button is pressed (ttsMuted === true) but audio starts playing,
+    // this indicates allowAgentRef blocking state was lost/reset between turns
+    if (isPlaying && ttsMuted) {
+      console.error('⚠️ Audio playback started while mute button is active!');
+      console.error('   This indicates allowAgentRef blocking state was reset/lost between agent turns.');
+      console.error('   - Mute button state: PRESSED (ttsMuted=true)');
+      console.error('   - Audio playback state: PLAYING (isPlaying=true)');
+      console.error('   - Expected: Audio should be blocked and NOT playing');
+      addLog('⚠️ [BUG DETECTED] Audio playing while muted - Issue #223!');
+    }
+    
     if (isPlaying) {
       addLog('Audio playback: started');
     } else {
       addLog('Audio playback: stopped - Agent playback completed');
     }
-  }, [addLog]);
+  }, [addLog, ttsMuted]); // Include ttsMuted in dependencies
   
   const handleConnectionStateChange = useCallback((service: ServiceType, state: ConnectionState) => {
     setConnectionStates(prev => ({
@@ -441,25 +458,24 @@ function App() {
   
   // (removed unused interruptAgent helper)
   
-  // Handle push button: down = block agent audio
-  const handleMuteDown = () => {
-    setIsPressed(true);
-    setTtsMuted(true);
-    addLog('🔇 Agent audio blocked');
-    if (deepgramRef.current) {
-      deepgramRef.current.interruptAgent();
-    }
-  };
-  
-  // Handle push button: up = allow agent audio
-  const handleMuteUp = () => {
-    setIsPressed(false);
-    setTtsMuted(false);
-    addLog('🔊 Agent audio allowed');
-    if (deepgramRef.current) {
-      deepgramRef.current.allowAgent();
-    }
-  };
+  // Toggle mute button - simple switch: click to mute, click again to unmute
+  const handleMuteToggle = useCallback(() => {
+    setTtsMuted(prevMuted => {
+      const newMuted = !prevMuted;
+      if (newMuted) {
+        addLog('🔇 Agent audio blocked');
+        if (deepgramRef.current) {
+          deepgramRef.current.interruptAgent();
+        }
+      } else {
+        addLog('🔊 Agent audio allowed');
+        if (deepgramRef.current) {
+          deepgramRef.current.allowAgent();
+        }
+      }
+      return newMuted;
+    });
+  }, [addLog]);
   
   const updateContext = () => {
     // Define the possible instruction prompts
@@ -721,16 +737,15 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           Settings Applied: <strong data-testid="has-sent-settings">{String(hasSentSettingsDom)}</strong>
         </div>
         <button 
-          onMouseDown={handleMuteDown}
-          onMouseUp={handleMuteUp}
-          onMouseLeave={handleMuteUp}
+          onClick={handleMuteToggle}
           disabled={connectionStates.agent !== 'connected'}
           style={{ 
             padding: '10px 20px',
-            backgroundColor: isPressed ? '#f56565' : (ttsMuted ? '#feb2b2' : 'transparent'),
-            transform: isPressed ? 'scale(0.95)' : 'scale(1)',
+            backgroundColor: ttsMuted ? '#f56565' : 'transparent',
+            transform: ttsMuted ? 'scale(0.95)' : 'scale(1)',
             transition: 'all 0.1s ease',
-            pointerEvents: 'auto'
+            pointerEvents: 'auto',
+            border: ttsMuted ? '2px inset' : '2px outset'
           }}
           data-testid="tts-mute-button"
         >
