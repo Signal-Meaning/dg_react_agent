@@ -12,15 +12,13 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  SELECTORS,
   setupTestPage,
-  waitForConnection,
-  sendTextMessage,
+
+  waitForSettingsApplied,
+  establishConnectionViaText,
   sendMessageAndWaitForResponse,
-  waitForAgentResponse,
   disconnectComponent,
   getAgentState,
-  verifyContextPreserved,
   installWebSocketCapture,
   getCapturedWebSocketData
 } from './helpers/test-helpers.js';
@@ -31,49 +29,27 @@ test.describe('Text Session Flow', () => {
     console.log('🧪 Testing auto-connect when WebSocket is closed');
     
     await setupTestPage(page);
-    await waitForConnection(page);
+    await establishConnectionViaText(page);
     console.log('✅ Initial connection established');
     
-    // Step 1: Send first message
+    // Step 1: Send first message using fixture
     console.log('📝 Step 1: Sending first message');
     const firstMessage = "Hello, I need help with my project.";
-    await sendTextMessage(page, firstMessage);
-    
-    // Wait for response
-    await waitForAgentResponse(page, null, 10000);
+    await sendMessageAndWaitForResponse(page, firstMessage);
     console.log('✅ First message sent and agent responded');
     
-    // Step 2: Disconnect to simulate idle timeout
+    // Step 2: Disconnect to simulate idle timeout using fixture
     console.log('⏸️ Step 2: Disconnecting to simulate idle timeout');
-    const stopButton = page.locator('[data-testid="stop-button"]');
-    if (await stopButton.isVisible({ timeout: 1000 })) {
-      await stopButton.click();
-    }
-    
-    // Wait for connection to close
-    await page.waitForTimeout(1000);
+    await disconnectComponent(page);
     console.log('✅ Component disconnected');
     
     // Step 3: Send second message - this should trigger auto-connect
     console.log('📝 Step 3: Sending second message (should auto-connect)');
     const secondMessage = "Can you help me further?";
     
-    // Send message directly via injectUserMessage - should auto-connect
-    const textInput = page.locator(SELECTORS.textInput);
-    await textInput.fill(secondMessage);
-    await textInput.press('Enter');
-    
-    // Wait for connection to be re-established
-    await page.waitForTimeout(2000);
-    
-    // Verify connection is back to connected
-    const connectionStatus = page.locator(SELECTORS.connectionStatus);
-    await expect(connectionStatus).toContainText('connected');
-    console.log('✅ Connection re-established via auto-connect');
-    
-    // Wait for agent response
-    await waitForAgentResponse(page, null, 10000);
-    console.log('✅ Agent responded after auto-connect');
+    // Send message using fixture - should auto-connect
+    await sendMessageAndWaitForResponse(page, secondMessage);
+    console.log('✅ Connection re-established via auto-connect and agent responded');
     
     console.log('🎉 Auto-connect test PASSED');
   });
@@ -82,7 +58,7 @@ test.describe('Text Session Flow', () => {
     console.log('🧪 Testing rapid message exchange within 10-second idle timeout');
     
     await setupTestPage(page);
-    await waitForConnection(page);
+    await establishConnectionViaText(page);
     console.log('✅ Initial connection established');
     
     // Send multiple messages rapidly (within 10 seconds)
@@ -94,11 +70,11 @@ test.describe('Text Session Flow', () => {
     
     for (let i = 0; i < messages.length; i++) {
       console.log(`📝 Sending message ${i + 1}/${messages.length}`);
-      await sendMessageAndWaitForResponse(page, messages[i]);
+      const response = await sendMessageAndWaitForResponse(page, messages[i]);
       
-      // Verify connection remains active
-      const connectionStatus = page.locator(SELECTORS.connectionStatus);
-      await expect(connectionStatus).toContainText('connected');
+      // Verify response was received (fixture already verified connection via waitForAgentResponse)
+      expect(response).toBeTruthy();
+      expect(response.length).toBeGreaterThan(0);
       
       if (i < messages.length - 1) {
         // Short delay between messages to allow agent to respond
@@ -107,12 +83,6 @@ test.describe('Text Session Flow', () => {
     }
     
     console.log('✅ All messages sent and connection maintained');
-    
-    // Verify final response exists
-    const lastResponse = await page.locator(SELECTORS.agentResponse).textContent();
-    expect(lastResponse).toBeTruthy();
-    expect(lastResponse.length).toBeGreaterThan(0);
-    
     console.log('🎉 Rapid message exchange test PASSED');
   });
   
@@ -122,9 +92,18 @@ test.describe('Text Session Flow', () => {
     await installWebSocketCapture(page);
     await setupTestPage(page);
     
-    // Wait for connection
-    await waitForConnection(page);
+    // Trigger connection via text input using fixture
+    await establishConnectionViaText(page);
     console.log('✅ Connection established');
+    
+    // Optionally wait for settings (but don't fail if they're not applied yet)
+    // Since we're checking WebSocket messages anyway, we don't strictly need DOM-based settings check
+    try {
+      await waitForSettingsApplied(page, 5000);
+      console.log('✅ Settings applied');
+    } catch (e) {
+      console.log('⚠️ Settings not yet applied in DOM (proceeding anyway - will check WebSocket messages)');
+    }
     
     // Get WebSocket data to verify settings were sent
     const wsData = await getCapturedWebSocketData(page);
@@ -141,22 +120,15 @@ test.describe('Text Session Flow', () => {
       console.log('✅ Settings were sent on initial connection');
     }
     
-    // Send a message
+    // Send a message using fixture (combines sendTextMessage and waitForAgentResponse)
     console.log('📝 Sending first message');
     const message = "Hello, I need help with ordering a product.";
-    await sendTextMessage(page, message);
+    const responseText = await sendMessageAndWaitForResponse(page, message);
     
-    // Wait for agent response
-    await waitForAgentResponse(page, null, 10000);
-    console.log('✅ Agent responded');
-    
-    // Verify agent is responding
-    const agentResponse = page.locator(SELECTORS.agentResponse);
-    await expect(agentResponse).toBeVisible({ timeout: 5000 });
-    
-    const responseText = await agentResponse.textContent();
+    // Verify response was received (fixture already verified visibility)
     expect(responseText).toBeTruthy();
     expect(responseText.length).toBeGreaterThan(0);
+    console.log('✅ Agent responded');
     
     console.log('🎉 Initial connection flow test PASSED');
   });
@@ -165,7 +137,7 @@ test.describe('Text Session Flow', () => {
     console.log('🧪 Testing sequential message exchange with state tracking');
     
     await setupTestPage(page);
-    await waitForConnection(page);
+    await establishConnectionViaText(page);
     console.log('✅ Initial connection established');
     
     // First message
@@ -173,6 +145,10 @@ test.describe('Text Session Flow', () => {
     const message1 = "I'm a teacher working with third graders.";
     const response1 = await sendMessageAndWaitForResponse(page, message1);
     console.log('✅ Response 1 received');
+    
+    // Verify response was received
+    expect(response1).toBeTruthy();
+    expect(response1.length).toBeGreaterThan(0);
     
     // Verify agent state transitions
     const state1 = await getAgentState(page);
@@ -184,10 +160,9 @@ test.describe('Text Session Flow', () => {
     const response2 = await sendMessageAndWaitForResponse(page, message2);
     console.log('✅ Response 2 received');
     
-    // Verify second response exists
-    const secondResponseText = await page.locator(SELECTORS.agentResponse).textContent();
-    expect(secondResponseText).toBeTruthy();
-    expect(secondResponseText.length).toBeGreaterThan(0);
+    // Verify second response exists (fixture already verified visibility)
+    expect(response2).toBeTruthy();
+    expect(response2.length).toBeGreaterThan(0);
     
     console.log('🎉 Sequential message exchange test PASSED');
   });

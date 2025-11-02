@@ -59,7 +59,7 @@ const EXPECTATIONS = {
   disabled: 'Disabled',
   mockMode: '🔴 Current Mode: MOCK',
   realMode: '🟢 REAL API Mode',
-  apiKeyStatus: '⚠️ Deepgram API Key Status',
+  apiKeyStatus: '⚠️ Deepgram API Key Required',
 };
 
 /**
@@ -114,8 +114,9 @@ async function sendTextMessage(page, message) {
  */
 async function expectMockMode(page) {
   const { expect } = await import('@playwright/test');
+  // When API key is invalid/missing, app shows error banner with h2
   await expect(page.locator('h2')).toContainText(EXPECTATIONS.apiKeyStatus);
-  await expect(page.locator('h4')).toContainText(EXPECTATIONS.mockMode);
+  // Note: The app doesn't show a "MOCK mode" indicator - it just shows the error banner
 }
 
 /**

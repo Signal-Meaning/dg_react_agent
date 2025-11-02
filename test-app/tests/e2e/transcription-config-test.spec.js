@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { setupConnectionStateTracking } from './helpers/test-helpers';
+import { setupConnectionStateTracking, MicrophoneHelpers } from './helpers/test-helpers.js';
 
 test.describe('Transcription Configuration Test', () => {
   test('should verify transcription service is properly configured', async ({ page }) => {
@@ -8,13 +8,18 @@ test.describe('Transcription Configuration Test', () => {
     // Navigate to test app
     await page.goto('http://localhost:5173');
     
-    // Enable microphone to start WebSocket connection
-    await page.click('[data-testid="microphone-button"]');
+    // Use proper microphone setup with fixtures (same pattern as passing tests)
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Wait for connection to be established
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
+    }
     
-    console.log('✅ Connection established');
+    console.log('✅ Connection established and microphone enabled');
     
     // Note: import.meta.env cannot be serialized in page.evaluate()
     // Instead, verify configuration by checking if services are working
@@ -22,7 +27,6 @@ test.describe('Transcription Configuration Test', () => {
     
     // Setup connection state tracking
     const stateTracker = await setupConnectionStateTracking(page);
-    await page.waitForTimeout(500); // Wait for state to be tracked
     
     // Check transcription configuration via connection states (public API)
     const connectionStates = await stateTracker.getStates();
