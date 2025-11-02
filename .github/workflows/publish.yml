@@ -40,25 +40,42 @@ jobs:
       - name: Run tests
         run: npm test
         
-      - name: Configure npm authentication
+      - name: Verify npm configuration
         run: |
-          # Note: setup-node@v4 already creates .npmrc, but we need to ensure it's complete
-          # The action creates: @signal-meaning:registry and auth token
-          # We'll verify and enhance if needed
-          echo "📋 Current npm configuration:"
-          npm config get registry
-          npm config get @signal-meaning:registry
-          cat ~/.npmrc || echo "No .npmrc found"
+          # setup-node@v4 automatically configures authentication
+          # We just verify the registry is set correctly
+          echo "📋 Verifying npm configuration..."
+          echo "Default registry: $(npm config get registry)"
+          echo "Scope registry: $(npm config get @signal-meaning:registry)"
+          
+          # Verify .npmrc exists (location set by setup-node@v4)
+          if [ -n "$NPM_CONFIG_USERCONFIG" ]; then
+            if [ -f "$NPM_CONFIG_USERCONFIG" ]; then
+              echo "✅ npmrc configuration file exists"
+            else
+              echo "⚠️ npmrc file not found at expected location"
+            fi
+          fi
         
       - name: Verify authentication
         run: |
-          echo "🔐 Testing authentication..."
+          echo "🔐 Verifying authentication..."
           npm whoami --registry https://npm.pkg.github.com || {
-            echo "❌ Authentication check failed"
-            echo "📋 Current .npmrc:"
-            cat ~/.npmrc || echo "No .npmrc found"
+            echo "❌ Authentication verification failed"
+            echo ""
+            echo "Common causes:"
+            echo "  1. NPM_PACKAGES_TOKEN secret missing or invalid"
+            echo "  2. Token lacks 'write:packages' permission"
+            echo "  3. Token lacks access to @signal-meaning organization"
+            echo "  4. Token expired"
+            echo ""
+            echo "Check repository settings:"
+            echo "  - Secrets > NPM_PACKAGES_TOKEN exists"
+            echo "  - Token has write:packages scope"
+            echo "  - Token has organization access"
             exit 1
           }
+          echo "✅ Authentication verified"
           
       - name: Check if version already exists
         id: check_version
