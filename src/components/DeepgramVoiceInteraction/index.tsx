@@ -1636,7 +1636,7 @@ function DeepgramVoiceInteraction(
       }
       
       // Determine which services to start
-      const config = configRef.current;
+      // (config already extracted above)
       const isTranscriptionConfigured = !!config.transcriptionOptions;
       const isAgentConfigured = !!config.agentOptions;
       
