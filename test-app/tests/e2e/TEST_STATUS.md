@@ -5,9 +5,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Summary
 - **Total E2E Test Files**: 58
 - **Total Individual Tests**: 175 (discovered via `--list` command)
-- **Tests Executed**: 16 files (partial run)
+- **Tests Executed**: 17 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 16 files (100% passing for active tests)
+  - ✅ **Passing**: 17 files (100% passing for active tests)
   - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
 
@@ -32,6 +32,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 13. **greeting-audio-timing.spec.js** - 3/3 passed (21.8s) ✅ **FIXED**
 14. **audio-interruption-timing.spec.js** - 4/4 passed, 2 skipped (10.0s) ✅ **ALREADY PASSING**
 15. **greeting-idle-timeout.spec.js** - 3/3 passed (45.9s) ✅ **ALREADY PASSING**
+16. **idle-timeout-behavior.spec.js** - 6/6 passed (1.3m) ✅ **ALREADY PASSING**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -212,14 +213,16 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 ---
 
 ### 13. idle-timeout-behavior.spec.js
-**Tests (5):**
-- [ ] should handle microphone activation after idle timeout
-- [ ] should show loading state during reconnection attempt
-- [ ] should not timeout during active conversation after UtteranceEnd
-- [ ] should handle conversation with realistic timing and padding
-- [ ] should handle idle timeout correctly - connection closes after 10 seconds of inactivity
+**Tests (6):**
+- [x] should handle microphone activation after idle timeout
+- [x] should show loading state during reconnection attempt
+- [x] should not timeout during active conversation after UtteranceEnd
+- [x] should handle conversation with realistic timing and padding
+- [x] should handle idle timeout correctly - connection closes after 10 seconds of inactivity
+- [x] should reset idle timeout when startAudioCapture() is called (Issue #222)
 
-**Status**: ❓ Not yet tested
+**Status**: ✅ **PASSING** - 6 passed (1.3m execution time)
+**Notes**: All tests passing. Validates idle timeout behavior in various scenarios including microphone activation after timeout, active conversation continuity, and Issue #222 fix. Tests use fixtures like `setupAudioSendingPrerequisites()`, `waitForIdleTimeout()`, `loadAndSendAudioSample()`, and `waitForVADEvents()`.
 
 ---
 
@@ -634,7 +637,8 @@ Based on the merge and recent changes, these tests should be prioritized:
 6. ✅ **greeting-audio-timing.spec.js** - **COMPLETED** - All 3 tests passing (audio timing validation)
 7. ✅ **audio-interruption-timing.spec.js** - **COMPLETED** - 4/4 active tests passing (audio interruption validation)
 8. ✅ **greeting-idle-timeout.spec.js** - **COMPLETED** - All 3 tests passing (Issue #139 validation)
-9. **idle-timeout-behavior.spec.js** - Idle timeout behavior validation (NEXT)
+9. ✅ **idle-timeout-behavior.spec.js** - **COMPLETED** - All 6 tests passing (idle timeout behavior validation)
+10. **idle-timeout-during-agent-speech.spec.js** - Idle timeout during agent speech validation (NEXT)
 
 ## Notes
 
