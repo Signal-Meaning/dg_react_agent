@@ -5,12 +5,12 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Summary
 - **Total E2E Test Files**: 58
 - **Total Individual Tests**: 175 (discovered via `--list` command)
-- **Tests Executed**: 22 files (partial run)
+- **Tests Executed**: 23 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 22 files (100% passing for active tests)
+  - ✅ **Passing**: 23 files (100% passing for active tests)
   - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
-- **Progress**: 38% of test files verified (22/58)
+- **Progress**: 40% of test files verified (23/58)
 - **Key Achievement**: All tested files are passing - excellent test quality!
 
 ## Key Findings from Test Run
@@ -40,6 +40,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 19. **text-idle-timeout-suspended-audio.spec.js** - 2/2 passed (16.9s) ✅ **ALREADY PASSING**
 20. **js-error-test.spec.js** - 1/1 passed (5.9s) ✅ **ALREADY PASSING**
 21. **logging-behavior.spec.js** - 4/4 passed (18.9s) ✅ **ALREADY PASSING**
+22. **manual-diagnostic.spec.js** - 2/2 passed (10.9s) ✅ **ALREADY PASSING**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -75,8 +76,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 - ✅ Verified `text-idle-timeout-suspended-audio.spec.js` - All 2 tests passing (Issue #139 validation)
 - ✅ Verified `js-error-test.spec.js` - 1 test passing (JavaScript error detection)
 - ✅ Verified `logging-behavior.spec.js` - All 4 tests passing (logging synchronization validation)
+- ✅ Verified `manual-diagnostic.spec.js` - All 2 tests passing (comprehensive diagnostic tool)
 - **Pattern**: All recent tests use fixtures (`waitForConnectionAndSettings`, `establishConnectionViaText`, `MicrophoneHelpers`, etc.)
-- **Status**: 22/58 files verified, all passing - 100% success rate!
+- **Status**: 23/58 files verified, all passing - 100% success rate!
 
 ### Next Steps
 - Continue executing remaining 40 untested test files
@@ -302,10 +304,11 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ### 19. manual-diagnostic.spec.js
 **Tests (2):**
-- [ ] should capture and analyze all console traffic during manual testing
-- [ ] should test VAD configuration specifically
+- [x] should capture and analyze all console traffic during manual testing
+- [x] should test VAD configuration specifically
 
-**Status**: ❓ Not yet tested
+**Status**: ✅ **PASSING** - 2 passed (10.9s execution time)
+**Notes**: All tests passing. Comprehensive diagnostic tool for analyzing console traffic during manual testing. Captures and categorizes logs (audio, WebSocket, VAD, settings, errors). Validates VAD configuration and component availability. Captured 2371 logs with 1790 audio-related, 470 WebSocket-related, and 3 VAD events. No errors detected.
 
 ---
 
