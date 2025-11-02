@@ -5,14 +5,14 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Summary
 - **Total E2E Test Files**: 58
 - **Total Individual Tests**: 175 (discovered via `--list` command)
-- **Tests Executed**: 24 files (partial run)
+- **Tests Executed**: 25 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 23 files (100% passing for active tests)
+  - ✅ **Passing**: 24 files (100% passing for active tests)
   - ⚠️ **Partial**: 1 file (2/3 tests passing)
   - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
-- **Progress**: 41% of test files verified (24/58)
-- **Key Achievement**: 23/24 tested files fully passing, 1 partially passing
+- **Progress**: 43% of test files verified (25/58)
+- **Key Achievement**: 24/25 tested files fully passing, 1 partially passing
 
 ## Key Findings from Test Run
 
@@ -43,6 +43,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 21. **logging-behavior.spec.js** - 4/4 passed (18.9s) ✅ **ALREADY PASSING**
 22. **manual-diagnostic.spec.js** - 2/2 passed (10.9s) ✅ **ALREADY PASSING**
 23. **manual-vad-workflow.spec.js** - 2/3 passed (34.8s) ⚠️ **PARTIAL**
+24. **microphone-activation-after-idle-timeout.spec.js** - 2/2 passed (41.9s) ✅ **ALREADY PASSING**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -330,12 +331,12 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 ---
 
 ### 21. microphone-activation-after-idle-timeout.spec.js
-**Tests (3):**
-- [ ] should handle microphone activation after idle timeout
-- [ ] should show loading state during reconnection attempt
-- [ ] should not timeout during active conversation after UtteranceEnd
+**Tests (2):**
+- [x] should handle microphone activation after idle timeout
+- [x] should show loading state during reconnection attempt
 
-**Status**: ❓ Not yet tested
+**Status**: ✅ **PASSING** - 2 passed (41.9s execution time)
+**Notes**: All tests passing. Validates microphone activation after idle timeout. Uses MicrophoneHelpers for proper activation sequence after timeout. Tests verify that microphone can be successfully enabled after connection has timed out due to inactivity, and that connection is re-established correctly.
 
 ---
 
