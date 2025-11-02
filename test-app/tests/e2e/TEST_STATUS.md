@@ -5,9 +5,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Summary
 - **Total E2E Test Files**: 58
 - **Total Individual Tests**: 175 (discovered via `--list` command)
-- **Tests Executed**: 15 files (partial run)
+- **Tests Executed**: 16 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 15 files (100% passing for active tests)
+  - ✅ **Passing**: 16 files (100% passing for active tests)
   - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
 
@@ -31,6 +31,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 12. **microphone-control.spec.js** - 8/9 passed, 1 skipped (20.8s) ✅ **FIXED**
 13. **greeting-audio-timing.spec.js** - 3/3 passed (21.8s) ✅ **FIXED**
 14. **audio-interruption-timing.spec.js** - 4/4 passed, 2 skipped (10.0s) ✅ **ALREADY PASSING**
+15. **greeting-idle-timeout.spec.js** - 3/3 passed (45.9s) ✅ **ALREADY PASSING**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -200,11 +201,13 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 ---
 
 ### 12. greeting-idle-timeout.spec.js
-**Tests (2):**
-- [ ] should timeout after greeting completes (Issue #139)
-- [ ] should demonstrate current bug behavior (Issue #139)
+**Tests (3):**
+- [x] should timeout after greeting completes (Issue #139)
+- [x] should timeout after initial greeting on page load
+- [x] should NOT play greeting if AudioContext is suspended
 
-**Status**: ❓ Not yet tested
+**Status**: ✅ **PASSING** - 3 passed (45.9s execution time)
+**Notes**: All tests passing. Validates Issue #139 fix - idle timeout works correctly after agent speech completes (~10 seconds, not 60 seconds). Tests use fixtures like `establishConnectionViaMicrophone()`, `waitForAgentGreeting()`, and `waitForIdleTimeout()`.
 
 ---
 
@@ -630,7 +633,8 @@ Based on the merge and recent changes, these tests should be prioritized:
 5. ✅ **microphone-control.spec.js** - **COMPLETED** - 8/9 tests passing (1 skipped for Issue #178)
 6. ✅ **greeting-audio-timing.spec.js** - **COMPLETED** - All 3 tests passing (audio timing validation)
 7. ✅ **audio-interruption-timing.spec.js** - **COMPLETED** - 4/4 active tests passing (audio interruption validation)
-8. **greeting-idle-timeout.spec.js** - Idle timeout after greeting completion (NEXT)
+8. ✅ **greeting-idle-timeout.spec.js** - **COMPLETED** - All 3 tests passing (Issue #139 validation)
+9. **idle-timeout-behavior.spec.js** - Idle timeout behavior validation (NEXT)
 
 ## Notes
 
