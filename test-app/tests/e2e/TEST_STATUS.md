@@ -5,14 +5,14 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Summary
 - **Total E2E Test Files**: 58
 - **Total Individual Tests**: 175 (discovered via `--list` command)
-- **Tests Executed**: 32 files (partial run)
+- **Tests Executed**: 33 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 30 files (100% passing for active tests)
+  - ✅ **Passing**: 31 files (100% passing for active tests)
   - ⚠️ **Partial**: 2 files (2/3 and 3/5 tests passing)
   - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
-- **Progress**: 55% of test files verified (32/58)
-- **Key Achievement**: 30/32 fully passing files, 2 partially passing
+- **Progress**: 57% of test files verified (33/58)
+- **Key Achievement**: 31/33 fully passing files, 2 partially passing
 
 ## Key Findings from Test Run
 
@@ -51,6 +51,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 29. **protocol-validation-modes.spec.js** - 2/2 passed (1.9s) ✅ **FIXED**
 30. **react-error-test.spec.js** - 1/1 passed (6.2s) ✅ **ALREADY PASSING**
 31. **real-user-workflows.spec.js** - 11/11 passed (35.5s) ✅ **FIXED**
+32. **suspended-audiocontext-idle-timeout.spec.js** - 1/1 passed (14.6s) ✅ **ALREADY PASSING**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -102,8 +103,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 - ✅ Fixed `protocol-validation-modes.spec.js` - All 2 tests passing (updated selectors to match actual error UI - "Deepgram API Key Required" instead of "Deepgram API Key Status")
 - ✅ Verified `react-error-test.spec.js` - 1 test passing (React error detection, no rendering errors detected)
 - ✅ Fixed `real-user-workflows.spec.js` - All 11 tests passing (refactored to use fixtures: `setupMicrophoneWithVADValidation`, removed `waitForTimeout` anti-patterns, renamed `testMicrophoneFunctionality` to better name)
+- ✅ Verified `suspended-audiocontext-idle-timeout.spec.js` - 1 test passing (Issue #139 validation - idle timeout works regardless of AudioContext state)
 - **Pattern**: All recent tests use fixtures (`waitForConnectionAndSettings`, `establishConnectionViaText`, `MicrophoneHelpers.setupMicrophoneWithVADValidation`, etc.)
-- **Status**: 30/32 fully passing files, 2 partially passing - 94% fully passing rate!
+- **Status**: 31/33 fully passing files, 2 partially passing - 94% fully passing rate!
 
 ### Next Steps
 - Continue executing remaining 40 untested test files
@@ -486,9 +488,11 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 ---
 
 ### 33. suspended-audiocontext-idle-timeout.spec.js
-**Tests**: (Count unknown - needs inspection)
+**Tests (1):**
+- [x] should timeout even with suspended AudioContext
 
-**Status**: ❓ Not yet tested
+**Status**: ✅ **PASSING** - 1 passed (14.6s execution time)
+**Notes**: Test passing. Validates Issue #139 fix - idle timeout works correctly regardless of AudioContext state (~12 seconds, within expected 15s window). Uses fixtures: `setupTestPage`, `establishConnectionViaMicrophone`, `waitForAgentGreeting`, `waitForIdleTimeout`. Test confirms that idle timeout mechanism works even when AudioContext state may vary, addressing the bug where timeout didn't work with suspended AudioContext.
 
 ---
 
@@ -522,16 +526,43 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 ---
 
 ### 37. vad-advanced-simulation.spec.js
-**Tests**: (Count unknown - needs inspection)
+**Tests (8):**
+- [ ] should support pre-recorded audio sources (refactored to use fixtures)
+- [ ] should work with pre-generated audio samples for VAD testing
+- [ ] should detect VAD events with longer audio samples
+- [ ] should handle multiple audio samples in sequence
+- [ ] should demonstrate production-ready VAD testing patterns
+- [ ] should verify VAD events with different sample types
+- [ ] should compare different pre-generated audio samples
 
-**Status**: ❓ Not yet tested
+**Status**: ❌ **HANGING** - Test hangs during execution, needs investigation
+**Review Notes**: 
+- **7 tests total** - Advanced VAD audio simulation tests (refactored from 8)
+- **Requires real Deepgram API** - Skips in CI (Issue #99)
+- **Refactored**: Replaced `waitForTimeout` anti-patterns with `MicrophoneHelpers.waitForMicrophoneReady()` and `loadAndSendAudioSample()` fixtures
+- **Issue**: Test hangs during execution - appears to hang in `waitForMicrophoneReady()` despite timeout protection
+- **Added**: Timeout protection (30s), skipGreetingWait=true, extensive logging - still hangs
+- **Status**: Needs deeper investigation into `waitForMicrophoneReady` helper or component initialization
 
 ---
 
 ### 38. vad-configuration-optimization.spec.js
-**Tests**: (Count unknown - needs inspection)
+**Tests (3):**
+- [x] should test different utterance_end_ms values for offset detection
+- [x] should test different VAD event combinations
+- [x] should test VAD event timing and sequencing
 
-**Status**: ❓ Not yet tested
+**Status**: ✅ **PASSING** - 3 passed (18.8s execution time)
+**Notes**: Fixed by refactoring to use working fixtures:
+- ✅ Uses `MicrophoneHelpers.waitForMicrophoneReady()` (same as passing tests)
+- ✅ Uses `loadAndSendAudioSample()` from `./fixtures/audio-helpers.js` (replaces `SimpleVADHelpers.generateOnsetOffsetAudio()`)
+- ✅ Uses `waitForVADEvents()` from `./fixtures/audio-helpers.js` (replaces `SimpleVADHelpers.waitForVADEvents()`)
+- ✅ Tests different `utterance_end_ms` values (500ms, 1000ms, 2000ms, 3000ms, 5000ms) to find optimal VAD configuration
+- ✅ Uses pre-recorded audio samples (`hello`) that work with real Deepgram API
+- ✅ All tests complete without timeouts or hangs
+- ✅ Removed `waitForTimeout` anti-patterns - `waitForVADEvents()` already handles proper waiting
+- **Observation**: Tests detect `UtteranceEnd` events successfully, but `UserStartedSpeaking` events may be timing-dependent with audio samples
+- **Pattern**: Same fixtures as `vad-advanced-simulation.spec.js` and `real-user-workflows.spec.js` passing tests
 
 ---
 
