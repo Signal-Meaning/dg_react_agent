@@ -89,8 +89,6 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 - ✅ Verified `manual-diagnostic.spec.js` - All 2 tests passing (comprehensive diagnostic tool)
 - ⚠️ Verified `manual-vad-workflow.spec.js` - 2/3 tests passing (VAD event detection test failing)
 - ✅ Verified `microphone-activation-after-idle-timeout.spec.js` - All 2 tests passing (microphone activation after timeout)
-- **Pattern**: All recent tests use fixtures (`waitForConnectionAndSettings`, `establishConnectionViaText`, `MicrophoneHelpers`, etc.)
-- ✅ Verified `microphone-activation-after-idle-timeout.spec.js` - All 2 tests passing (microphone activation after timeout)
 - ⚠️ Verified `microphone-functionality-fixed.spec.js` - 3/5 tests passing (prerequisites and timeout tests need fixes)
 - **Pattern**: All recent tests use fixtures (`waitForConnectionAndSettings`, `establishConnectionViaText`, `MicrophoneHelpers`, etc.)
 - **Status**: 24/26 fully passing files, 2 partially passing - 92% fully passing rate!
