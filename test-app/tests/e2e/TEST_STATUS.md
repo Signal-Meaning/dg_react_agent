@@ -5,9 +5,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Summary
 - **Total E2E Test Files**: 58
 - **Total Individual Tests**: 175 (discovered via `--list` command)
-- **Tests Executed**: 17 files (partial run)
+- **Tests Executed**: 18 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 17 files (100% passing for active tests)
+  - ✅ **Passing**: 18 files (100% passing for active tests)
   - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
 
@@ -33,6 +33,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 14. **audio-interruption-timing.spec.js** - 4/4 passed, 2 skipped (10.0s) ✅ **ALREADY PASSING**
 15. **greeting-idle-timeout.spec.js** - 3/3 passed (45.9s) ✅ **ALREADY PASSING**
 16. **idle-timeout-behavior.spec.js** - 6/6 passed (1.3m) ✅ **ALREADY PASSING**
+17. **idle-timeout-during-agent-speech.spec.js** - 1/1 passed (23.1s) ✅ **ALREADY PASSING**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -227,12 +228,11 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 ---
 
 ### 14. idle-timeout-during-agent-speech.spec.js
-**Tests (3):**
-- [ ] should NOT timeout while agent is actively speaking (UI behavior test)
-- [ ] should demonstrate connection stability during long agent response
-- [ ] should handle multiple rapid messages without timeout
+**Tests (1):**
+- [x] should NOT timeout while agent is actively speaking
 
-**Status**: ❓ Not yet tested
+**Status**: ✅ **PASSING** - 1 passed (23.1s execution time)
+**Notes**: Test passing. Validates that idle timeout does NOT fire during active agent speech. Connection remained stable during 20-second monitoring period. Test requires real Deepgram API key (skips if not available). Uses fixtures like `establishConnectionViaText()`, `sendTextMessage()`, and `monitorConnectionStatus()`.
 
 ---
 
@@ -638,7 +638,8 @@ Based on the merge and recent changes, these tests should be prioritized:
 7. ✅ **audio-interruption-timing.spec.js** - **COMPLETED** - 4/4 active tests passing (audio interruption validation)
 8. ✅ **greeting-idle-timeout.spec.js** - **COMPLETED** - All 3 tests passing (Issue #139 validation)
 9. ✅ **idle-timeout-behavior.spec.js** - **COMPLETED** - All 6 tests passing (idle timeout behavior validation)
-10. **idle-timeout-during-agent-speech.spec.js** - Idle timeout during agent speech validation (NEXT)
+10. ✅ **idle-timeout-during-agent-speech.spec.js** - **COMPLETED** - 1 test passing (connection stability during agent speech)
+11. **text-session-flow.spec.js** - Text session flow validation (NEXT)
 
 ## Notes
 
