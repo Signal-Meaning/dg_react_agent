@@ -14,17 +14,14 @@ import { test, expect } from '@playwright/test';
 import { setupTestPage } from './helpers/audio-mocks.js';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
+import { assertVADEventsDetected, setupVADTest } from './fixtures/vad-helpers.js';
 
 test.describe('Core VAD Events', () => {
   test.beforeEach(async ({ page }) => {
-    if (process.env.CI) {
-      test.skip(true, 'VAD tests require real Deepgram API connections - skipped in CI.');
-      return;
-    }
-    
-    await setupTestPage(page);
-    await page.waitForLoadState('networkidle');
-    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    await setupVADTest(page, {
+      skipInCI: true,
+      skipReason: 'VAD tests require real Deepgram API connections - skipped in CI.'
+    });
   });
 
   test('should detect basic VAD events (UserStartedSpeaking, UtteranceEnd)', async ({ page }) => {
@@ -55,20 +52,8 @@ test.describe('Core VAD Events', () => {
     // Verify events were detected (fixture already did the polling)
     expect(eventsDetected).toBeGreaterThan(0);
     
-    // Verify events in UI using page.evaluate (more reliable than locator)
-    const userStartedSpeaking = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="user-started-speaking"]');
-      return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
-    });
-    
-    const utteranceEnd = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="utterance-end"]');
-      return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
-    });
-    
-    // Be lenient - at least one event should be detected (not requiring both)
-    const hasAnyVADEvent = !!userStartedSpeaking || !!utteranceEnd;
-    expect(hasAnyVADEvent).toBe(true);
+    // Verify events in UI using new fixture (lenient - requires at least one)
+    await assertVADEventsDetected(page, expect, ['UserStartedSpeaking', 'UtteranceEnd']);
     
     console.log('✅ Basic VAD events detected successfully');
   });
@@ -165,20 +150,8 @@ test.describe('Core VAD Events', () => {
     // Verify callbacks were triggered (or verify via UI if callbacks not accessible)
     const callbackData = await page.evaluate(() => window.vadCallbackEvents || []);
     
-    // Verify VAD events appear in UI using page.evaluate (which demonstrates callbacks work)
-    const userStartedSpeaking = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="user-started-speaking"]');
-      return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
-    });
-    
-    const utteranceEnd = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="utterance-end"]');
-      return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
-    });
-    
-    // Be lenient - at least one event should be detected (not requiring both)
-    const hasAnyVADEvent = !!userStartedSpeaking || !!utteranceEnd;
-    expect(hasAnyVADEvent).toBe(true);
+    // Verify VAD events appear in UI using new fixture (which demonstrates callbacks work)
+    await assertVADEventsDetected(page, expect, ['UserStartedSpeaking', 'UtteranceEnd']);
     
     console.log('✅ VAD event callbacks verified (via UI display)');
   });

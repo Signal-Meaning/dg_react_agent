@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import { setupVADTestingEnvironment } from '../utils/audio-stream-mocks';
-import { setupAudioSendingPrerequisites } from './helpers/test-helpers';
+import { setupAudioSendingPrerequisites, assertConnectionState } from './helpers/test-helpers';
 
 // Load environment variables from test-app/.env
 // dotenv config handled by Playwright config
@@ -107,13 +107,9 @@ test.describe('Extended Silence Idle Timeout Test', () => {
     
     // 5. Wait for idle timeout (connection should close)
     console.log('⏳ Waiting for idle timeout (10 seconds)...');
-    await page.waitForFunction(() => 
-      document.querySelector('[data-testid="connection-status"]')?.textContent === 'closed'
-    , { timeout: 15000 });
-    
-    const finalConnectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    expect(finalConnectionStatus).toBe('closed');
-    console.log('✅ Connection closed due to idle timeout:', finalConnectionStatus);
+    // Use new fixture to verify connection state
+    await assertConnectionState(page, expect, 'closed', { timeout: 15000 });
+    console.log('✅ Connection closed due to idle timeout');
     
     console.log('\n🎉 SUCCESS: Extended silence test completed');
     console.log('💡 This demonstrates that:');

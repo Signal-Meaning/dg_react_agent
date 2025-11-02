@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { setupTestPage, simulateUserGesture, simulateSpeech } from './helpers/audio-mocks';
-import { MicrophoneHelpers } from './helpers/test-helpers.js';
+import { MicrophoneHelpers, assertConnectionState } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
+import { assertVADEventsDetected, setupVADTest } from './fixtures/vad-helpers.js';
 
 /**
  * Manual VAD Workflow Test
@@ -19,10 +20,10 @@ test.describe('Manual VAD Workflow Tests', () => {
   // Skip these tests in CI - they require real Deepgram API connections
   // See issue #99 for mock implementation
   test.beforeEach(async ({ page }) => {
-    if (process.env.CI) {
-      test.skip(true, 'VAD tests require real Deepgram API connections - skipped in CI. See issue #99 for mock implementation.');
-      return;
-    }
+    await setupVADTest(page, {
+      skipInCI: true,
+      skipReason: 'VAD tests require real Deepgram API connections - skipped in CI. See issue #99 for mock implementation.'
+    });
   });
 
   test('should handle complete manual workflow: speak → silence → timeout', async ({ page }) => {
@@ -80,13 +81,10 @@ test.describe('Manual VAD Workflow Tests', () => {
     // Wait for connection to close (should happen after timeout)
     await page.waitForTimeout(10000);
     
-    // Check if connection closed
-    const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    console.log('Final connection status:', connectionStatus);
-    
     // Verify the workflow completed
     expect(utteranceEndStatus).toContain('detected');
-    expect(connectionStatus).toContain('closed');
+    // Use new fixture to verify connection state
+    await assertConnectionState(page, expect, 'closed', { timeout: 10000 });
     
     console.log('✅ Manual VAD workflow completed successfully');
   });
@@ -121,23 +119,8 @@ test.describe('Manual VAD Workflow Tests', () => {
     // Verify we got VAD events
     expect(eventsDetected).toBeGreaterThan(0);
     
-    // Check specific event elements to verify they were detected
-    const userStartedSpeaking = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="user-started-speaking"]');
-      return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
-    });
-    
-    const utteranceEnd = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="utterance-end"]');
-      return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
-    });
-    
-    console.log('UserStartedSpeaking:', userStartedSpeaking);
-    console.log('UtteranceEnd:', utteranceEnd);
-    
-    // We should have at least one VAD event detected
-    const hasAnyVADEvent = !!userStartedSpeaking || !!utteranceEnd;
-    expect(hasAnyVADEvent).toBe(true);
+    // Check specific event elements to verify they were detected using new fixture
+    await assertVADEventsDetected(page, expect, ['UserStartedSpeaking', 'UtteranceEnd']);
     
     console.log('✅ VAD events successfully detected during manual workflow!');
   });

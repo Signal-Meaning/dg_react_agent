@@ -13,17 +13,14 @@ import { test, expect } from '@playwright/test';
 import { setupTestPage } from './helpers/audio-mocks.js';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
+import { setupVADTest } from './fixtures/vad-helpers.js';
 
 test.describe('VAD Audio Patterns', () => {
   test.beforeEach(async ({ page }) => {
-    if (process.env.CI) {
-      test.skip(true, 'VAD tests require real Deepgram API connections - skipped in CI.');
-      return;
-    }
-    
-    await setupTestPage(page);
-    await page.waitForLoadState('networkidle');
-    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    await setupVADTest(page, {
+      skipInCI: true,
+      skipReason: 'VAD tests require real Deepgram API connections - skipped in CI.'
+    });
   });
 
   test('should detect VAD events with pre-generated audio samples', async ({ page }) => {

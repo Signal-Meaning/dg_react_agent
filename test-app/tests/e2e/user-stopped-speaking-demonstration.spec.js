@@ -3,6 +3,7 @@ import path from 'path';
 import { setupVADTestingEnvironment } from '../utils/audio-stream-mocks';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
+import { getVADState } from './fixtures/vad-helpers.js';
 
 // Load environment variables from test-app/.env
 // dotenv config handled by Playwright config
@@ -93,11 +94,11 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
       // Use working fixture to send audio (same pattern as passing VAD tests)
       console.log('🎵 Loading pre-recorded audio sample...');
       await loadAndSendAudioSample(page, 'hello');
-      
-      // Wait for Deepgram's VAD to naturally detect the end of speech
-      console.log('⏳ Waiting for Deepgram VAD to naturally detect end of speech...');
-      console.log('📊 Audio sample has sufficient silence duration for UtteranceEnd detection');
-      
+          
+          // Wait for Deepgram's VAD to naturally detect the end of speech
+          console.log('⏳ Waiting for Deepgram VAD to naturally detect end of speech...');
+          console.log('📊 Audio sample has sufficient silence duration for UtteranceEnd detection');
+          
       // Wait for VAD events using working fixture (same pattern as passing VAD tests)
       console.log('⏳ Waiting for VAD events...');
       const eventsDetected = await waitForVADEvents(page, [
@@ -133,23 +134,14 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
       console.log('  - UtteranceEnd events:', utteranceEndEvents.length);
       console.log('  - User stopped speaking events:', userStoppedSpeakingEvents.length);
       
-      // Verify main validations using page.evaluate (more reliable than locator if page might be closing)
-      const vadStateCheck = await page.evaluate(() => {
-        const utteranceEnd = document.querySelector('[data-testid="utterance-end"]');
-        const userStoppedSpeaking = document.querySelector('[data-testid="user-stopped-speaking"]');
-        return {
-          utteranceEnd: utteranceEnd && utteranceEnd.textContent && utteranceEnd.textContent !== 'Not detected' 
-            ? utteranceEnd.textContent : null,
-          userStoppedSpeaking: userStoppedSpeaking && userStoppedSpeaking.textContent && userStoppedSpeaking.textContent !== 'Not detected'
-            ? userStoppedSpeaking.textContent : null
-        };
-      });
+      // Verify main validations using new fixture (more reliable than locator if page might be closing)
+      const vadStateCheck = await getVADState(page, ['UtteranceEnd', 'UserStoppedSpeaking']);
       
       // Main validations - these are the key things we're testing
-      expect(vadStateCheck.utteranceEnd).toBeTruthy();
-      expect(vadStateCheck.userStoppedSpeaking).toBeTruthy();
-      console.log('✅ UtteranceEnd detected:', vadStateCheck.utteranceEnd);
-      console.log('✅ User stopped speaking callback:', vadStateCheck.userStoppedSpeaking);
+      expect(vadStateCheck.UtteranceEnd).toBeTruthy();
+      expect(vadStateCheck.UserStoppedSpeaking).toBeTruthy();
+      console.log('✅ UtteranceEnd detected:', vadStateCheck.UtteranceEnd);
+      console.log('✅ User stopped speaking callback:', vadStateCheck.UserStoppedSpeaking);
       
       // Optional: Check user speaking state if accessible
       let isUserSpeaking = null;
@@ -159,7 +151,7 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
           return el ? el.textContent : null;
         });
         if (isUserSpeaking) {
-          console.log('📊 User speaking state:', isUserSpeaking);
+      console.log('📊 User speaking state:', isUserSpeaking);
         }
       } catch (error) {
         console.log('⚠️ User speaking state element not accessible (optional)');

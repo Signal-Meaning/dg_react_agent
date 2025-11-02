@@ -31,7 +31,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { setupConnectionStateTracking, MicrophoneHelpers, establishConnectionViaText } from './helpers/test-helpers.js';
+import { setupConnectionStateTracking, MicrophoneHelpers, establishConnectionViaText, verifyAgentResponse } from './helpers/test-helpers.js';
 import {
   SELECTORS, waitForConnection
 } from './helpers/test-helpers.js';
@@ -168,10 +168,8 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     // Log what we found for debugging
     console.log(`📊 Enable actions: ${validationResults.hasEnableActions}, Disable actions: ${validationResults.hasDisableActions}, Timeout actions: ${agentAnalysis.timeoutActions.length}`);
     
-    // Verify agent response was received
-    const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
-    expect(agentResponse).toBeTruthy();
-    expect(agentResponse).not.toBe('(Waiting for agent response...)');
+    // Verify agent response was received using new fixture
+    const agentResponse = await verifyAgentResponse(page, expect);
     console.log('✅ Agent provided response');
   });
 
@@ -268,7 +266,7 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     let agentState = null;
     try {
       agentState = await page.locator('[data-testid="agent-state"]').textContent({ timeout: 5000 });
-      console.log('🔍 Current Agent State:', agentState);
+    console.log('🔍 Current Agent State:', agentState);
     } catch (error) {
       console.log('🔍 Agent State element not found (optional for debug test)');
     }
@@ -277,7 +275,7 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     let audioPlaying = null;
     try {
       audioPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent({ timeout: 3000 });
-      console.log('🔍 Audio Playing Status:', audioPlaying);
+    console.log('🔍 Audio Playing Status:', audioPlaying);
     } catch (error) {
       console.log('🔍 Audio Playing Status element not found (optional for debug test)');
     }
@@ -310,9 +308,8 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     
     console.log('🔍 Agent Configuration:', JSON.stringify(agentConfig, null, 2));
     
-    // Basic assertions
-    expect(agentResponse).toBeTruthy();
-    expect(agentResponse).not.toBe('(Waiting for agent response...)');
+    // Basic assertions using new fixture
+    await verifyAgentResponse(page, expect);
     
     console.log('✅ Agent response debug completed');
   });
@@ -344,15 +341,15 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     let stateVerificationSucceeded = false;
     try {
       // Wait for agent to enter any non-idle state first
-      await page.waitForFunction(() => {
+    await page.waitForFunction(() => {
         const stateElement = document.querySelector('[data-testid="agent-state"]');
         return stateElement && stateElement.textContent && 
                !stateElement.textContent.includes('idle');
-      }, { timeout: 10000 });
-      
+    }, { timeout: 10000 });
+    
       const anyState = await page.locator('[data-testid="agent-state"]').textContent();
       console.log('✅ Agent state changed from idle:', anyState);
-      
+    
       // Wait for agent to return to idle (or speaking/listening)
       await page.waitForTimeout(2000); // Brief pause for state transitions
       
@@ -371,12 +368,10 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
       stateVerificationSucceeded = false;
     }
     
-    // Always verify agent response was received
-    const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
-    expect(agentResponse).toBeTruthy();
-    expect(agentResponse).not.toBe('(Waiting for agent response...)');
+    // Always verify agent response was received using new fixture
+    await verifyAgentResponse(page, expect);
     if (stateVerificationSucceeded) {
-      console.log('✅ Agent provided response');
+    console.log('✅ Agent provided response');
     } else {
       console.log('✅ Agent provided response (state verification skipped)');
     }

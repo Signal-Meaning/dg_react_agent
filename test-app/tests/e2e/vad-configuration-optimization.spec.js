@@ -10,6 +10,7 @@
 import { test, expect } from '@playwright/test';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
+import { getVADState } from './fixtures/vad-helpers.js';
 
 test.describe('VAD Configuration Optimization', () => {
   test.beforeEach(async ({ page }) => {
@@ -70,19 +71,11 @@ test.describe('VAD Configuration Optimization', () => {
           'UtteranceEnd'
         ], 15000); // 15 second timeout
         
-        // Determine which events were detected by checking DOM elements
-        const userStartedSpeaking = await page.evaluate(() => {
-          const el = document.querySelector('[data-testid="user-started-speaking"]');
-          return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
-        });
+        // Determine which events were detected using new fixture
+        const vadState = await getVADState(page, ['UserStartedSpeaking', 'UtteranceEnd']);
         
-        const utteranceEnd = await page.evaluate(() => {
-          const el = document.querySelector('[data-testid="utterance-end"]');
-          return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
-        });
-        
-        const hasOnsetEvents = !!userStartedSpeaking;
-        const hasOffsetEvents = !!utteranceEnd;
+        const hasOnsetEvents = !!vadState.UserStartedSpeaking;
+        const hasOffsetEvents = !!vadState.UtteranceEnd;
         const eventTypes = [];
         if (hasOnsetEvents) eventTypes.push('UserStartedSpeaking');
         if (hasOffsetEvents) eventTypes.push('UtteranceEnd');
@@ -190,32 +183,24 @@ test.describe('VAD Configuration Optimization', () => {
         'UtteranceEnd'
       ], 15000); // 15 second timeout
       
-      // Check which specific events were detected
-      const userStartedSpeaking = await page.evaluate(() => {
-        const el = document.querySelector('[data-testid="user-started-speaking"]');
-        return el && el.textContent && el.textContent.trim() !== 'Not detected' ? true : false;
-      });
-      
-      const utteranceEnd = await page.evaluate(() => {
-        const el = document.querySelector('[data-testid="utterance-end"]');
-        return el && el.textContent && el.textContent.trim() !== 'Not detected' ? true : false;
-      });
+      // Check which specific events were detected using new fixture
+      const vadState = await getVADState(page, ['UserStartedSpeaking', 'UtteranceEnd']);
       
       const eventTypes = [];
-      if (userStartedSpeaking) eventTypes.push('UserStartedSpeaking');
-      if (utteranceEnd) eventTypes.push('UtteranceEnd');
+      if (vadState.UserStartedSpeaking) eventTypes.push('UserStartedSpeaking');
+      if (vadState.UtteranceEnd) eventTypes.push('UtteranceEnd');
       
       patternResults.push({
         pattern: pattern.name,
         events: eventTypes,
-        onsetEvents: userStartedSpeaking,
-        offsetEvents: utteranceEnd,
+        onsetEvents: !!vadState.UserStartedSpeaking,
+        offsetEvents: !!vadState.UtteranceEnd,
         eventsDetected: eventsDetected,
-        status: userStartedSpeaking && utteranceEnd ? 'success' : 
-                userStartedSpeaking ? 'partial' : 'failed'
+        status: vadState.UserStartedSpeaking && vadState.UtteranceEnd ? 'success' : 
+                vadState.UserStartedSpeaking ? 'partial' : 'failed'
       });
       
-      console.log(`📊 ${pattern.name}: ${userStartedSpeaking ? '✅' : '❌'} onset, ${utteranceEnd ? '✅' : '❌'} offset (${eventsDetected} events detected)`);
+      console.log(`📊 ${pattern.name}: ${vadState.UserStartedSpeaking ? '✅' : '❌'} onset, ${vadState.UtteranceEnd ? '✅' : '❌'} offset (${eventsDetected} events detected)`);
       
       // No delay needed - waitForVADEvents() already handles proper waiting
     }

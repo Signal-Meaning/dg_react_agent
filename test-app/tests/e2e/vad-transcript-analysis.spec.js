@@ -8,6 +8,7 @@
 import { test, expect } from '@playwright/test';
 import { setupConnectionStateTracking, MicrophoneHelpers } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
+import { getVADState } from './fixtures/vad-helpers.js';
 
 test.describe('VAD Transcript Analysis', () => {
   test.beforeEach(async ({ page }) => {
@@ -89,19 +90,12 @@ test.describe('VAD Transcript Analysis', () => {
       'UtteranceEnd'
     ], 10000);
     
-    // Check which events were detected
-    const userStartedSpeaking = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="user-started-speaking"]');
-      return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
-    });
-    const utteranceEnd = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="utterance-end"]');
-      return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
-    });
+    // Check which events were detected using new fixture
+    const vadState = await getVADState(page, ['UserStartedSpeaking', 'UtteranceEnd']);
     
     const detectedVADEvents = [];
-    if (userStartedSpeaking) detectedVADEvents.push({ type: 'UserStartedSpeaking' });
-    if (utteranceEnd) detectedVADEvents.push({ type: 'UtteranceEnd' });
+    if (vadState.UserStartedSpeaking) detectedVADEvents.push({ type: 'UserStartedSpeaking' });
+    if (vadState.UtteranceEnd) detectedVADEvents.push({ type: 'UtteranceEnd' });
     
     // Stop monitoring
     clearInterval(transcriptMonitor);
@@ -232,18 +226,12 @@ test.describe('VAD Transcript Analysis', () => {
       ], 8000);
       
       // Check which events were detected
-      const userStartedSpeaking = await page.evaluate(() => {
-        const el = document.querySelector('[data-testid="user-started-speaking"]');
-        return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
-      });
-      const utteranceEnd = await page.evaluate(() => {
-        const el = document.querySelector('[data-testid="utterance-end"]');
-        return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
-      });
+      // Check which events were detected using new fixture
+      const vadState = await getVADState(page, ['UserStartedSpeaking', 'UtteranceEnd']);
       
       const vadEvents = [];
-      if (userStartedSpeaking) vadEvents.push({ type: 'UserStartedSpeaking' });
-      if (utteranceEnd) vadEvents.push({ type: 'UtteranceEnd' });
+      if (vadState.UserStartedSpeaking) vadEvents.push({ type: 'UserStartedSpeaking' });
+      if (vadState.UtteranceEnd) vadEvents.push({ type: 'UtteranceEnd' });
       
       // Analyze this sample
       console.log(`📊 ${sample.name} Results:`);
