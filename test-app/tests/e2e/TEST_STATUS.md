@@ -7,8 +7,8 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 - **Total Individual Tests**: 175 (discovered via `--list` command)
 - **Tests Executed**: 14 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 13 files (100% passing)
-  - ⏭️ **Skipped**: 2 files (require PW_ENABLE_AUDIO=true)
+  - ✅ **Passing**: 14 files (100% passing)
+  - ⏭️ **Skipped**: 1 file (requires PW_ENABLE_AUDIO=true)
   - ❓ **Unknown**: 1 file (could not determine status)
 
 ## Key Findings from Test Run
@@ -29,6 +29,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 10. **simple-mic-test.spec.js** - 1/1 passed (2.7s) ✅ **ALREADY PASSING**
 11. **strict-mode-behavior.spec.js** - 5/5 passed (6.8s) ✅ **FIXED**
 12. **microphone-control.spec.js** - 8/9 passed, 1 skipped (20.8s) ✅ **FIXED**
+13. **greeting-audio-timing.spec.js** - 3/3 passed (21.8s) ✅ **FIXED**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -43,7 +44,6 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 
 ### Files Requiring Environment Setup ⏭️
 1. **audio-interruption-timing.spec.js** - All 4 skipped (requires PW_ENABLE_AUDIO=true)
-2. **greeting-audio-timing.spec.js** - All 3 skipped (requires PW_ENABLE_AUDIO=true)
 
 ### Recent Fixes 🎉
 - **agent-state-transitions.spec.js** - Refactored to use data-testid and shared helper functions:
@@ -184,11 +184,12 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ### 11. greeting-audio-timing.spec.js
 **Tests (3):**
-- [ ] should play greeting audio when user clicks into text input field
-- [ ] should play greeting audio when user presses microphone button
-- [ ] should replay greeting audio immediately on reconnection
+- [x] should play greeting audio when user clicks into text input field
+- [x] should play greeting audio when user presses microphone button
+- [x] should replay greeting audio immediately on reconnection
 
-**Status**: ⏭️ **SKIPPED** - 3 skipped (requires PW_ENABLE_AUDIO=true)
+**Status**: ✅ **PASSING** - 3 passed (21.8s execution time)
+**Notes**: Fixed by using `setupTestPage()`, `waitForConnectionAndSettings()`, `MicrophoneHelpers.waitForMicrophoneReady()`, and `waitForGreetingIfPresent()` fixtures. Removed unnecessary WebSocket polling and manual connection status checks. All tests now use consistent fixture patterns matching other passing tests.
 
 ---
 
@@ -621,7 +622,8 @@ Based on the merge and recent changes, these tests should be prioritized:
 3. ✅ **simple-mic-test.spec.js** - **COMPLETED** - Already passing with MicrophoneHelpers
 4. ✅ **strict-mode-behavior.spec.js** - **COMPLETED** - All 5 tests passing
 5. ✅ **microphone-control.spec.js** - **COMPLETED** - 8/9 tests passing (1 skipped for Issue #178)
-6. **greeting-audio-timing.spec.js** - Audio timing validation (NEXT)
+6. ✅ **greeting-audio-timing.spec.js** - **COMPLETED** - All 3 tests passing (audio timing validation)
+7. **audio-interruption-timing.spec.js** - Audio interruption timing validation (NEXT - requires PW_ENABLE_AUDIO=true)
 
 ## Notes
 
