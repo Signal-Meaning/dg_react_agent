@@ -45,8 +45,34 @@ jobs:
           echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
           cat ~/.npmrc
         
+      - name: Verify authentication
+        run: |
+          npm whoami --registry https://npm.pkg.github.com || echo "Authentication check failed"
+          
+      - name: Check if version already exists
+        id: check_version
+        run: |
+          if npm view @signal-meaning/deepgram-voice-interaction-react@$(node -p "require('./package.json').version") --registry https://npm.pkg.github.com 2>/dev/null; then
+            echo "version_exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Version already exists in registry"
+          else
+            echo "version_exists=false" >> $GITHUB_OUTPUT
+            echo "✅ Version does not exist, ready to publish"
+          fi
+        continue-on-error: true
+        
       - name: Publish to GitHub Package Registry
-        run: npm publish
+        run: |
+          # Publish with explicit error handling
+          npm publish || {
+            echo "❌ Publish failed"
+            echo "Common causes:"
+            echo "  - Version already exists (409)"
+            echo "  - Authentication failed (401)"
+            echo "  - Insufficient permissions (403)"
+            exit 1
+          }
+          echo "✅ Package published successfully"
           
       - name: Verify package installation
         run: |
