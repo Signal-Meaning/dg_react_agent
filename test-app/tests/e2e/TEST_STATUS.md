@@ -5,9 +5,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Summary
 - **Total E2E Test Files**: 58
 - **Total Individual Tests**: 175 (discovered via `--list` command)
-- **Tests Executed**: 13 files (partial run)
+- **Tests Executed**: 14 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 12 files (100% passing)
+  - ✅ **Passing**: 13 files (100% passing)
   - ⏭️ **Skipped**: 2 files (require PW_ENABLE_AUDIO=true)
   - ❓ **Unknown**: 1 file (could not determine status)
 
@@ -28,6 +28,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 9. **lazy-initialization-e2e.spec.js** - 7/7 passed (14.9s) ✅ **FIXED**
 10. **simple-mic-test.spec.js** - 1/1 passed (2.7s) ✅ **ALREADY PASSING**
 11. **strict-mode-behavior.spec.js** - 5/5 passed (6.8s) ✅ **FIXED**
+12. **microphone-control.spec.js** - 8/9 passed, 1 skipped (20.8s) ✅ **FIXED**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -296,17 +297,18 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ### 22. microphone-control.spec.js
 **Tests (9):**
-- [ ] should enable microphone when button clicked
-- [ ] should disable microphone when button clicked again
-- [ ] should handle microphone permission denied
-- [ ] should handle microphone permission granted
-- [ ] should maintain microphone disabled by default
-- [ ] should handle microphone control via props
-- [ ] should handle microphone toggle callback
-- [ ] should maintain microphone state during reconnection
-- [ ] should handle microphone errors gracefully
+- [x] should enable microphone when button clicked
+- [x] should disable microphone when button clicked again
+- [ ] should handle microphone permission denied (skipped - Issue #178)
+- [x] should handle microphone permission granted
+- [x] should maintain microphone disabled by default
+- [x] should handle microphone control via props
+- [x] should handle microphone toggle callback
+- [x] should maintain microphone state during reconnection
+- [x] should handle microphone errors gracefully
 
-**Status**: ❓ Not yet tested
+**Status**: ✅ **PASSING** - 8 passed, 1 skipped (20.8s execution time)
+**Notes**: Fixed error handling test by overriding getUserMedia after page load instead of in addInitScript. Test now verifies graceful error handling rather than specific state.
 
 ---
 
@@ -618,8 +620,8 @@ Based on the merge and recent changes, these tests should be prioritized:
 2. ✅ **lazy-initialization-e2e.spec.js** - **COMPLETED** - All 7 tests passing (Issue #206 validation)
 3. ✅ **simple-mic-test.spec.js** - **COMPLETED** - Already passing with MicrophoneHelpers
 4. ✅ **strict-mode-behavior.spec.js** - **COMPLETED** - All 5 tests passing
-5. **microphone-control.spec.js** - Core microphone features (NEXT)
-6. **greeting-audio-timing.spec.js** - Audio timing validation
+5. ✅ **microphone-control.spec.js** - **COMPLETED** - 8/9 tests passing (1 skipped for Issue #178)
+6. **greeting-audio-timing.spec.js** - Audio timing validation (NEXT)
 
 ## Notes
 
