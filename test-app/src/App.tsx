@@ -749,6 +749,15 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           Settings Applied: <strong data-testid="has-sent-settings">{String(hasSentSettingsDom)}</strong>
         </div>
         <button 
+          onClick={(e) => {
+            // Ensure mousedown/mouseup handlers fire for click events
+            // Some browsers/events might not trigger onMouseDown/onMouseUp for click()
+            e.preventDefault();
+            handleMuteDown();
+            // Immediately call mouseup to simulate pushbutton release
+            // For a real pushbutton, user holds and releases, but for click we simulate both
+            setTimeout(() => handleMuteUp(), 0);
+          }}
           onMouseDown={handleMuteDown}
           onMouseUp={handleMuteUp}
           onMouseLeave={handleMuteUp}

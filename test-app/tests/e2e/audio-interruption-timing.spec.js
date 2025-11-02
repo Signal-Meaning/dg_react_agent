@@ -126,6 +126,132 @@ test.describe('Audio Interruption Timing', () => {
     console.log('✅ Rapid interrupt clicks handled without errors');
   });
 
+  test('should respond to button click and change state (basic functionality)', async ({ page }) => {
+    console.log('🔊 Testing basic mute button click functionality...');
+    
+    // Focus text input first to trigger connection
+    await page.click('[data-testid="text-input"]');
+    
+    // Wait for connection to be established
+    await waitForConnectionAndSettings(page, 5000, 10000);
+    console.log('✅ Connection established');
+    
+    const muteButton = page.locator('[data-testid="tts-mute-button"]');
+    
+    // Verify initial state (should show "Enable" when unmuted)
+    const initialText = await muteButton.textContent();
+    console.log(`📋 Initial button text: "${initialText}"`);
+    expect(initialText).toContain('Enable'); // Should show unmuted state
+    
+    // Verify button is not disabled
+    const isDisabled = await muteButton.isDisabled();
+    console.log(`📋 Button disabled state: ${isDisabled}`);
+    if (isDisabled) {
+      throw new Error('BUG: Button is disabled! It should be enabled when agent connection is connected.');
+    }
+    
+    // CRITICAL TEST: Simulate a real click (mousedown + delay + mouseup)
+    // This mimics what happens in a real browser click
+    console.log('🖱️ Simulating real click (mousedown -> delay -> mouseup)...');
+    
+    // Step 1: Mouse down
+    await muteButton.dispatchEvent('mousedown');
+    
+    // Step 2: Wait for React to process state update
+    await page.waitForFunction(
+      (buttonSelector) => {
+        const btn = document.querySelector(buttonSelector);
+        return btn && btn.textContent && btn.textContent.includes('Mute');
+      },
+      '[data-testid="tts-mute-button"]',
+      { timeout: 2000 }
+    );
+    
+    const afterMouseDownText = await muteButton.textContent();
+    console.log(`📋 Button text after mousedown: "${afterMouseDownText}"`);
+    
+    // CRITICAL ASSERTION: Button MUST show "Mute" after mousedown
+    expect(afterMouseDownText).toContain('Mute');
+    console.log('✅ Button responds to mousedown and shows muted state');
+    
+    // If button doesn't show "Mute" after mousedown, the handlers aren't working
+    if (!afterMouseDownText.includes('Mute')) {
+      throw new Error('BUG DETECTED: Button does not change to muted state after mousedown event. This is the defect you reported!');
+    }
+    
+    // Step 3: Mouse up (simulating button release)
+    await muteButton.dispatchEvent('mouseup');
+    await page.waitForFunction(
+      (buttonSelector) => {
+        const btn = document.querySelector(buttonSelector);
+        return btn && btn.textContent && btn.textContent.includes('Enable');
+      },
+      '[data-testid="tts-mute-button"]',
+      { timeout: 2000 }
+    );
+    
+    const afterMouseUpText = await muteButton.textContent();
+    console.log(`📋 Button text after mouseup: "${afterMouseUpText}"`);
+    expect(afterMouseUpText).toContain('Enable');
+    console.log('✅ Button responds to mouseup and returns to unmuted state');
+    
+    // CRITICAL TEST: Verify that a real user click() actually triggers the handlers
+    // This test will FAIL if clicking doesn't change button state (the bug you reported)
+    console.log('🖱️ Testing that click() triggers state change...');
+    
+    // Monitor button state changes during click using a MutationObserver
+    const stateChangeDetected = await page.evaluate(() => {
+      return new Promise((resolve) => {
+        let stateChanged = false;
+        const button = document.querySelector('[data-testid="tts-mute-button"]');
+        if (!button) {
+          resolve(false);
+          return;
+        }
+        
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            if (mutation.type === 'childList' || 
+                (mutation.type === 'characterData' && mutation.target.textContent?.includes('Mute'))) {
+              stateChanged = true;
+            }
+          });
+        });
+        
+        observer.observe(button, {
+          childList: true,
+          subtree: true,
+          characterData: true
+        });
+        
+        // Click the button
+        button.click();
+        
+        // Wait a bit to see if state changes
+        setTimeout(() => {
+          observer.disconnect();
+          resolve(stateChanged);
+        }, 200);
+      });
+    });
+    
+    console.log(`📋 State change detected during click: ${stateChangeDetected}`);
+    
+    // If state never changed during click, the handlers aren't firing - this is the bug!
+    if (!stateChangeDetected) {
+      // Check current button state to confirm it didn't change
+      const finalState = await muteButton.textContent();
+      console.error(`❌ BUG DETECTED: Button click did not change state!`);
+      console.error(`   Initial state: "Enable"`);
+      console.error(`   Final state: "${finalState}"`);
+      console.error(`   Expected: Button should show "Mute" during click (even if briefly)`);
+      throw new Error('BUG: Button click does not trigger state change. Handlers may not be firing or state is being reset.');
+    }
+    
+    console.log('✅ Click event triggers state change');
+    console.log('✅ Basic button click functionality verified');
+  });
+
   if (!ENABLE_AUDIO) {
     test.skip(true, 'PW_ENABLE_AUDIO is not enabled; skipping audio playback-dependent test.');
   }
