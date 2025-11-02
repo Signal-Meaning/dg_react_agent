@@ -98,8 +98,7 @@ describe('Audio Blocking Persistence (Issue #223)', () => {
     AudioManager.mockImplementation(() => mockAudioManager);
 
     // Reset event listeners
-    audioEventListener = null;
-    agentEventListener = null;
+    // (Event listeners are stored in mock managers and will be cleaned up automatically)
   });
 
   it('should persist audio blocking across multiple agent response turns', async () => {
