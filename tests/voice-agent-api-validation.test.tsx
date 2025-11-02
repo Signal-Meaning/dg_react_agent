@@ -81,6 +81,9 @@
  *   - getState (testing only)
  *   - getConnectionStates (testing only)
  * 
+ * EXCLUDED (Internal/Testing Methods):
+ *   - sendAudioData (internal testing utility - exposed for E2E tests but not in TypeScript interface)
+ * 
  * EXCLUDED (Deprecated Methods):
  *   - connectTextOnly (deprecated - use start() instead)
  * 
@@ -686,6 +689,28 @@ describe('Component API Surface Validation', () => {
         ref.current.interruptAgent();
       });
     });
+
+    it('should expose allowAgent() method', async () => {
+      const ref = React.createRef<any>();
+      
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+        />
+      );
+
+      await waitFor(() => {
+        expect(ref.current).toBeTruthy();
+      });
+
+      expect(typeof ref.current.allowAgent).toBe('function');
+      
+      act(() => {
+        ref.current.allowAgent();
+      });
+    });
   });
 
   describe('Sleep/Wake Methods', () => {
@@ -850,7 +875,7 @@ describe('Component API Surface Validation', () => {
   });
 
   describe('Step 2: Component Public API Validation', () => {
-    it('should fail on CI if unauthorized component methods detected', async () => {
+    it('should fail if unauthorized component methods detected', async () => {
       const ref = React.createRef<any>();
       
       render(
@@ -882,8 +907,6 @@ describe('Component API Surface Validation', () => {
         return !isPreFork && !isApproved && !shouldBeRemoved;
       });
       
-      const isCI = process.env.CI === 'true';
-      
       if (unauthorizedMethods.length > 0) {
         const errorMessage = 
           `❌ UNAUTHORIZED COMPONENT API METHODS:\n` +
@@ -898,14 +921,13 @@ describe('Component API Surface Validation', () => {
           `   - Version added  \n` +
           `   - Detailed rationale\n` +
           `   - Breaking/non-breaking flag\n` +
-          `3. Document in docs/releases/vX.Y.Z/API-CHANGES.md\n` +
-          `4. Add JSDoc @approved comment in src/types/index.ts\n`;
+          `   - Internal/testing-only flags if applicable\n` +
+          `3. Document in docs/releases/vX.Y.Z/API-CHANGES.md (if public API)\n` +
+          `4. Add JSDoc @approved comment in src/types/index.ts (if public API)\n` +
+          `\n` +
+          `NOTE: This test now fails in both local and CI environments to catch API changes early.\n`;
         
-        if (isCI) {
           throw new Error(errorMessage);
-        } else {
-          console.warn('⚠️ LOCAL MODE:\n' + errorMessage);
-        }
       }
     });
 
@@ -1096,13 +1118,13 @@ describe('Component API Surface Validation', () => {
         'stop',
         'updateAgentInstructions',
         'interruptAgent',
+        'allowAgent',
         'sleep',
         'wake',
         'toggleSleep',
         'injectAgentMessage',
         'injectUserMessage',
         'startAudioCapture',
-
         'getAudioContext',
       ];
 

@@ -6,9 +6,15 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 0.3.3)'
-        required: true
+        description: 'Version to publish (leave empty to use package.json version)'
+        required: false
         type: string
+        default: ''
+      branch:
+        description: 'Branch to publish from (leave empty to use current branch)'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   publish:
@@ -19,8 +25,36 @@ jobs:
       id-token: write
       
     steps:
+      - name: Determine version and branch
+        id: vars
+        run: |
+          # For workflow_dispatch, we need to checkout first to read package.json
+          # But we'll use the branch input if provided
+          echo "version=placeholder" >> $GITHUB_OUTPUT
+          echo "branch=${{ inputs.branch || 'placeholder' }}" >> $GITHUB_OUTPUT
+      
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+      
+      - name: Determine version (after checkout)
+        id: version
+        run: |
+          # Determine version - use input if provided, otherwise read from package.json
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          
+          # Determine branch name for display
+          BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "📦 Version: $VERSION"
+          echo "🌿 Branch: $BRANCH_NAME"
         
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,6 +63,7 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
           scope: '@signal-meaning'
           token: ${{ secrets.NPM_PACKAGES_TOKEN }}
+          always-auth: true
           
       - name: Install dependencies
         run: npm ci
@@ -39,14 +74,124 @@ jobs:
       - name: Run tests
         run: npm test
         
-      - name: Configure npm authentication
+      - name: Verify npm configuration
         run: |
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
-          echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          cat ~/.npmrc
+          # setup-node@v4 automatically configures authentication
+          # We just verify the registry is set correctly
+          echo "📋 Verifying npm configuration..."
+          echo "Default registry: $(npm config get registry)"
+          echo "Scope registry: $(npm config get @signal-meaning:registry)"
+          
+          # Verify .npmrc exists (location set by setup-node@v4)
+          if [ -n "$NPM_CONFIG_USERCONFIG" ]; then
+            if [ -f "$NPM_CONFIG_USERCONFIG" ]; then
+              echo "✅ npmrc configuration file exists at: $NPM_CONFIG_USERCONFIG"
+              echo "📄 npmrc content (first few lines, masked):"
+              head -3 "$NPM_CONFIG_USERCONFIG" | sed 's/_authToken=.*/_authToken=***MASKED***/' || true
+            else
+              echo "⚠️ npmrc file not found at expected location: $NPM_CONFIG_USERCONFIG"
+              echo "🔧 Attempting to create .npmrc manually as fallback..."
+              echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
+              echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
+              echo "✅ Created ~/.npmrc as fallback"
+            fi
+          else
+            echo "⚠️ NPM_CONFIG_USERCONFIG not set, creating .npmrc manually..."
+            echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
+            echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
+            echo "✅ Created ~/.npmrc"
+          fi
+          
+          # Also ensure project-level .npmrc exists (for compatibility)
+          if [ ! -f .npmrc ]; then
+            echo "@signal-meaning:registry=https://npm.pkg.github.com" > .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" >> .npmrc
+            echo "✅ Created project-level .npmrc"
+          fi
+        
+      - name: Verify authentication
+        run: |
+          echo "🔐 Verifying authentication..."
+          npm whoami --registry https://npm.pkg.github.com || {
+            echo "❌ Authentication verification failed"
+            echo ""
+            echo "Common causes:"
+            echo "  1. NPM_PACKAGES_TOKEN secret missing or invalid"
+            echo "  2. Token lacks 'write:packages' permission"
+            echo "  3. Token lacks access to @signal-meaning organization"
+            echo "  4. Token expired"
+            echo ""
+            echo "Check repository settings:"
+            echo "  - Secrets > NPM_PACKAGES_TOKEN exists"
+            echo "  - Token has write:packages scope"
+            echo "  - Token has organization access"
+            exit 1
+          }
+          echo "✅ Authentication verified"
+          
+      - name: Check if version already exists
+        id: check_version
+        run: |
+          CHECK_VERSION="${{ steps.version.outputs.version }}"
+          if npm view @signal-meaning/deepgram-voice-interaction-react@$CHECK_VERSION --registry https://npm.pkg.github.com 2>/dev/null; then
+            echo "version_exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Version $CHECK_VERSION already exists in registry"
+          else
+            echo "version_exists=false" >> $GITHUB_OUTPUT
+            echo "✅ Version $CHECK_VERSION does not exist, ready to publish"
+          fi
+        continue-on-error: true
         
       - name: Publish to GitHub Package Registry
-        run: npm publish
+        run: |
+          set -e
+          # Use version from earlier step
+          PUBLISH_VERSION="${{ steps.version.outputs.version }}"
+          
+          # Show npm configuration before publish
+          echo "📦 Package name: $(node -p "require('./package.json').name")"
+          echo "📦 Publishing version: $PUBLISH_VERSION"
+          echo "📦 Package.json version: $(node -p "require('./package.json').version")"
+          echo "📦 Registry: $(npm config get registry)"
+          echo "📦 Scope registry: $(npm config get @signal-meaning:registry)"
+          
+          # Verify version matches package.json (unless explicitly overridden)
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PUBLISH_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "⚠️ Warning: Publishing version ($PUBLISH_VERSION) differs from package.json ($PACKAGE_VERSION)"
+            echo "⚠️ This may cause version mismatch issues"
+          fi
+          
+          # Show what will be published
+          echo "📋 Files to be published:"
+          npm pack --dry-run 2>/dev/null | tail -20 || true
+          
+          # Attempt publish with detailed error capture
+          npm publish 2>&1 | tee /tmp/npm-publish-output.log || {
+            EXIT_CODE=${PIPESTATUS[0]}
+            echo ""
+            echo "❌ Publish failed with exit code: $EXIT_CODE"
+            echo ""
+            echo "📋 npm publish output:"
+            cat /tmp/npm-publish-output.log || echo "No output captured"
+            echo ""
+            echo "📋 npm debug logs (most recent):"
+            find ~/.npm/_logs -name "*debug*.log" -type f -mtime -1 2>/dev/null | head -1 | xargs cat 2>/dev/null || {
+              echo "Listing all debug logs:"
+              ls -la ~/.npm/_logs/*debug*.log 2>/dev/null || echo "No debug logs found"
+              # Try to cat the most recent one
+              ls -t ~/.npm/_logs/*debug*.log 2>/dev/null | head -1 | xargs cat 2>/dev/null || echo "Could not read debug log"
+            }
+            echo ""
+            echo "Common causes:"
+            echo "  - Version already exists (409 Conflict)"
+            echo "  - Authentication failed (401 Unauthorized)"
+            echo "  - Insufficient permissions (403 Forbidden)"
+            echo "  - Missing files or invalid package.json"
+            echo "  - prepublishOnly script failed"
+            exit $EXIT_CODE
+          }
+          echo "✅ Package published successfully"
           
       - name: Verify package installation
         run: |
