@@ -5,14 +5,14 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Summary
 - **Total E2E Test Files**: 58
 - **Total Individual Tests**: 175 (discovered via `--list` command)
-- **Tests Executed**: 25 files (partial run)
+- **Tests Executed**: 26 files (partial run)
 - **Results Summary**: 
   - ✅ **Passing**: 24 files (100% passing for active tests)
-  - ⚠️ **Partial**: 1 file (2/3 tests passing)
+  - ⚠️ **Partial**: 2 files (2/3 and 3/5 tests passing)
   - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
-- **Progress**: 43% of test files verified (25/58)
-- **Key Achievement**: 24/25 tested files fully passing, 1 partially passing
+- **Progress**: 45% of test files verified (26/58)
+- **Key Achievement**: 24/26 fully passing files, 2 partially passing
 
 ## Key Findings from Test Run
 
@@ -44,6 +44,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 22. **manual-diagnostic.spec.js** - 2/2 passed (10.9s) ✅ **ALREADY PASSING**
 23. **manual-vad-workflow.spec.js** - 2/3 passed (34.8s) ⚠️ **PARTIAL**
 24. **microphone-activation-after-idle-timeout.spec.js** - 2/2 passed (41.9s) ✅ **ALREADY PASSING**
+25. **microphone-functionality-fixed.spec.js** - 3/5 passed (14.5s) ⚠️ **PARTIAL**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -58,6 +59,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 1. **manual-vad-workflow.spec.js** - 2/3 passed, 1 failure ⚠️ **PARTIAL**
    - "should detect VAD events during manual workflow" failing - VAD events not detected with simulated audio
    - May require actual Deepgram API responses or VAD event detection improvements
+2. **microphone-functionality-fixed.spec.js** - 3/5 passed, 2 failures ⚠️ **PARTIAL**
+   - "should verify microphone prerequisites before activation" - test logic issue, expects agentConnected before activation
+   - "should handle microphone activation after idle timeout" - test interrupted, may need timeout adjustment
 
 ### Files with Passing and Skipped Tests ✅
 1. **audio-interruption-timing.spec.js** - 4/4 passed, 2 skipped (10.0s) ✅ **PASSING**
@@ -360,13 +364,14 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ### 23. microphone-functionality-fixed.spec.js
 **Tests (5):**
-- [ ] should enable microphone when button is clicked (FIXED)
-- [ ] should show VAD elements when microphone is enabled (FIXED)
-- [ ] should handle microphone activation with retry logic (FIXED)
+- [x] should enable microphone when button is clicked (FIXED)
+- [x] should show VAD elements when microphone is enabled (FIXED)
+- [x] should handle microphone activation with retry logic (FIXED)
 - [ ] should verify microphone prerequisites before activation (FIXED)
 - [ ] should handle microphone activation after idle timeout (FIXED)
 
-**Status**: ❓ Not yet tested
+**Status**: ⚠️ **PARTIAL** - 3/5 passed (14.5s execution time)
+**Notes**: Three tests passing. Two tests failing/interrupted: "should verify microphone prerequisites before activation" - expects agentConnected to be true but connection not established yet (test logic issue, prerequisites check happens before activation). "should handle microphone activation after idle timeout" - test interrupted during waitForTimeout, may need timeout adjustment or use of waitForIdleTimeout fixture instead.
 
 ---
 
