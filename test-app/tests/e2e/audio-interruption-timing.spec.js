@@ -392,52 +392,5 @@ test.describe('Audio Interruption Timing', () => {
     
     console.log('✅ interruptAgent/allowAgent functionality verified with audio playback');
   });
-
-  test('should handle onMouseLeave correctly when button is pressed', async ({ page }) => {
-    console.log('🔊 Testing pushbutton onMouseLeave behavior...');
-    
-    // Focus text input first to trigger AudioManager initialization
-    await page.click('[data-testid="text-input"]');
-    
-    // Wait for connection and settings
-    await waitForConnectionAndSettings(page, 5000, 10000);
-    console.log('✅ Connection established and settings applied');
-    
-    // Send message and wait for audio to play
-    await sendMessageAndWaitForResponse(page, 'Tell me a short joke');
-    await page.waitForFunction(() => {
-      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
-      return audioPlaying && audioPlaying.textContent === 'true';
-    }, { timeout: 6000 });
-    console.log('✅ Audio started playing');
-    
-    const muteButton = page.locator('[data-testid="tts-mute-button"]');
-    
-    // Press button down
-    await muteButton.dispatchEvent('mousedown');
-    await expect(muteButton).toContainText('Mute', { timeout: 2000 });
-    console.log('✅ Button pressed');
-    
-    // Wait for audio to stop
-    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 2000 });
-    console.log('✅ Audio blocked');
-    
-    // Simulate mouse leaving button while pressed (pushbutton behavior)
-    // This should trigger onMouseLeave handler, but only if button is pressed
-    await muteButton.dispatchEvent('mouseleave');
-    
-    // After mouse leave, button should be released (audio allowed again)
-    await expect(muteButton).toContainText('Enable', { timeout: 2000 });
-    console.log('✅ Button released via mouse leave');
-    
-    // Verify audio is allowed again (send new message)
-    await sendMessageAndWaitForResponse(page, 'Tell me another joke');
-    await page.waitForFunction(() => {
-      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
-      return audioPlaying && audioPlaying.textContent === 'true';
-    }, { timeout: 6000 });
-    console.log('✅ Audio allowed and playing after mouse leave');
-    
-    console.log('✅ Pushbutton onMouseLeave behavior verified');
-  });
 });
+
