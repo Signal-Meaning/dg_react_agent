@@ -7,12 +7,12 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 - **Total Individual Tests**: 175 (discovered via `--list` command)
 - **Tests Executed**: 35 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 33 files (100% passing for active tests)
-  - ⚠️ **Partial**: 2 files (2/3 and 3/5 tests passing)
+  - ✅ **Passing**: 34 files (100% passing for active tests)
+  - ⚠️ **Partial**: 1 file (2/3 tests passing)
   - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
 - **Progress**: 60% of test files verified (35/58)
-- **Key Achievement**: 33/35 fully passing files, 2 partially passing
+- **Key Achievement**: 34/35 fully passing files, 1 partially passing
 
 ## Key Findings from Test Run
 
@@ -44,7 +44,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 22. **manual-diagnostic.spec.js** - 2/2 passed (10.9s) ✅ **ALREADY PASSING**
 23. **manual-vad-workflow.spec.js** - 2/3 passed (34.8s) ⚠️ **PARTIAL**
 24. **microphone-activation-after-idle-timeout.spec.js** - 2/2 passed (41.9s) ✅ **ALREADY PASSING**
-25. **microphone-functionality-fixed.spec.js** - 3/5 passed (14.5s) ⚠️ **PARTIAL**
+25. **microphone-functionality-fixed.spec.js** - 5/5 passed (38.7s) ✅ **FIXED**
 26. **microphone-functionality.spec.js** - 2/2 passed (5.4s) ✅ **ALREADY PASSING**
 27. **microphone-reliability.spec.js** - 2/2 passed (21.3s) ✅ **ALREADY PASSING**
 28. **page-content.spec.js** - 2/2 passed (4.9s) ✅ **ALREADY PASSING**
@@ -54,6 +54,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 32. **suspended-audiocontext-idle-timeout.spec.js** - 1/1 passed (14.6s) ✅ **ALREADY PASSING**
 33. **vad-advanced-simulation.spec.js** - 7/7 passed (13.7s) ✅ **FIXED**
 34. **vad-configuration-optimization.spec.js** - 3/3 passed (18.8s) ✅ **FIXED**
+35. **microphone-functionality-fixed.spec.js** - 5/5 passed (38.7s) ✅ **FIXED**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -68,9 +69,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 1. **manual-vad-workflow.spec.js** - 2/3 passed, 1 failure ⚠️ **PARTIAL**
    - "should detect VAD events during manual workflow" failing - VAD events not detected with simulated audio
    - May require actual Deepgram API responses or VAD event detection improvements
-2. **microphone-functionality-fixed.spec.js** - 3/5 passed, 2 failures ⚠️ **PARTIAL**
-   - "should verify microphone prerequisites before activation" - test logic issue, expects agentConnected before activation
-   - "should handle microphone activation after idle timeout" - test interrupted, may need timeout adjustment
+~~2. **microphone-functionality-fixed.spec.js** - 3/5 passed, 2 failures~~ ✅ **FIXED** - All 5 tests passing
+   - Fixed "should verify microphone prerequisites before activation" - Updated to handle lazy initialization (doesn't require agentConnected before activation)
+   - Fixed "should handle microphone activation after idle timeout" - Uses proper fixtures (establishConnectionViaText, waitForIdleTimeout) following same pattern as passing test
 
 ### Files with Passing and Skipped Tests ✅
 1. **audio-interruption-timing.spec.js** - 4/4 passed, 2 skipped (10.0s) ✅ **PASSING**
@@ -108,8 +109,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 - ✅ Verified `suspended-audiocontext-idle-timeout.spec.js` - 1 test passing (Issue #139 validation - idle timeout works regardless of AudioContext state)
 - ✅ Fixed `vad-advanced-simulation.spec.js` - All 7 tests passing (13.7s) - Removed test.only, Promise.race complexity, fixed event types, simplified to use working fixtures
 - ✅ Fixed `vad-configuration-optimization.spec.js` - All 3 tests passing (18.8s) - Refactored to use working fixtures, removed waitForTimeout anti-patterns
-- **Pattern**: All recent tests use fixtures (`waitForConnectionAndSettings`, `establishConnectionViaText`, `MicrophoneHelpers.setupMicrophoneWithVADValidation`, `loadAndSendAudioSample`, `waitForVADEvents`, etc.)
-- **Status**: 33/35 fully passing files, 2 partially passing - 94% fully passing rate!
+- ✅ Fixed `microphone-functionality-fixed.spec.js` - All 5 tests passing (38.7s) - Fixed prerequisites test to handle lazy initialization, fixed idle timeout test to use proper fixtures
+- **Pattern**: All recent tests use fixtures (`waitForConnectionAndSettings`, `establishConnectionViaText`, `MicrophoneHelpers.setupMicrophoneWithVADValidation`, `loadAndSendAudioSample`, `waitForVADEvents`, `waitForIdleTimeout`, etc.)
+- **Status**: 34/35 fully passing files, 1 partially passing - 97% fully passing rate!
 
 ### Next Steps
 - Continue executing remaining 40 untested test files
@@ -386,11 +388,13 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 - [x] should enable microphone when button is clicked (FIXED)
 - [x] should show VAD elements when microphone is enabled (FIXED)
 - [x] should handle microphone activation with retry logic (FIXED)
-- [ ] should verify microphone prerequisites before activation (FIXED)
-- [ ] should handle microphone activation after idle timeout (FIXED)
+- [x] should verify microphone prerequisites before activation (FIXED)
+- [x] should handle microphone activation after idle timeout (FIXED)
 
-**Status**: ⚠️ **PARTIAL** - 3/5 passed (14.5s execution time)
-**Notes**: Three tests passing. Two tests failing/interrupted: "should verify microphone prerequisites before activation" - expects agentConnected to be true but connection not established yet (test logic issue, prerequisites check happens before activation). "should handle microphone activation after idle timeout" - test interrupted during waitForTimeout, may need timeout adjustment or use of waitForIdleTimeout fixture instead.
+**Status**: ✅ **PASSING** - 5 passed (38.7s execution time)
+**Notes**: Fixed both failing tests:
+- ✅ Fixed "should verify microphone prerequisites before activation" - Updated test logic to handle lazy initialization. With lazy initialization, agent connection isn't established until microphone activation, so test now only requires core prerequisites (pageLoaded, componentInitialized, microphoneButtonVisible, microphoneButtonEnabled) and doesn't require agentConnected before activation.
+- ✅ Fixed "should handle microphone activation after idle timeout" - Updated to use proper fixtures following same pattern as passing test (`microphone-activation-after-idle-timeout.spec.js`): establishes connection via text first, waits for idle timeout using `waitForIdleTimeout` fixture, then uses `activationAfterTimeout` pattern. No more interruptions or timeout issues.
 
 ---
 
