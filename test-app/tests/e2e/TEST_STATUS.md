@@ -7,12 +7,12 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 - **Total Individual Tests**: 175 (discovered via `--list` command)
 - **Tests Executed**: 35 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 34 files (100% passing for active tests)
-  - ⚠️ **Partial**: 1 file (2/3 tests passing)
+  - ✅ **Passing**: 35 files (100% passing for active tests)
+  - ⚠️ **Partial**: 0 files
   - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
 - **Progress**: 60% of test files verified (35/58)
-- **Key Achievement**: 34/35 fully passing files, 1 partially passing
+- **Key Achievement**: 35/35 fully passing files - 100% passing rate for tested files! 🎉
 
 ## Key Findings from Test Run
 
@@ -42,7 +42,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 20. **js-error-test.spec.js** - 1/1 passed (5.9s) ✅ **ALREADY PASSING**
 21. **logging-behavior.spec.js** - 4/4 passed (18.9s) ✅ **ALREADY PASSING**
 22. **manual-diagnostic.spec.js** - 2/2 passed (10.9s) ✅ **ALREADY PASSING**
-23. **manual-vad-workflow.spec.js** - 2/3 passed (34.8s) ⚠️ **PARTIAL**
+23. **manual-vad-workflow.spec.js** - 3/3 passed (25.9s) ✅ **FIXED**
 24. **microphone-activation-after-idle-timeout.spec.js** - 2/2 passed (41.9s) ✅ **ALREADY PASSING**
 25. **microphone-functionality-fixed.spec.js** - 5/5 passed (38.7s) ✅ **FIXED**
 26. **microphone-functionality.spec.js** - 2/2 passed (5.4s) ✅ **ALREADY PASSING**
@@ -55,6 +55,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 33. **vad-advanced-simulation.spec.js** - 7/7 passed (13.7s) ✅ **FIXED**
 34. **vad-configuration-optimization.spec.js** - 3/3 passed (18.8s) ✅ **FIXED**
 35. **microphone-functionality-fixed.spec.js** - 5/5 passed (38.7s) ✅ **FIXED**
+36. **manual-vad-workflow.spec.js** - 3/3 passed (25.9s) ✅ **FIXED**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -66,9 +67,10 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
    - Fixed assertConnectionHealthy() to not check non-existent connection-ready element
 ~~4. **extended-silence-idle-timeout.spec.js** - 1/1 passed, 1 failure~~ ✅ **FIXED** - All 1 tests passing
    - Test was already using setupAudioSendingPrerequisites() correctly
-1. **manual-vad-workflow.spec.js** - 2/3 passed, 1 failure ⚠️ **PARTIAL**
-   - "should detect VAD events during manual workflow" failing - VAD events not detected with simulated audio
-   - May require actual Deepgram API responses or VAD event detection improvements
+~~1. **manual-vad-workflow.spec.js** - 2/3 passed, 1 failure~~ ✅ **FIXED** - All 3 tests passing
+   - Fixed "should detect VAD events during manual workflow" - Refactored to use working fixtures (MicrophoneHelpers.waitForMicrophoneReady, loadAndSendAudioSample, waitForVADEvents) following same pattern as passing VAD tests. Now correctly detects UtteranceEnd events.
+   - Fixed "should show VAD events in console logs" - Uses working fixtures to trigger real VAD events which generate console logs (detected 14 VAD-related console logs)
+   - Test adds value: Validates VAD behavior in realistic manual user workflow context
 ~~2. **microphone-functionality-fixed.spec.js** - 3/5 passed, 2 failures~~ ✅ **FIXED** - All 5 tests passing
    - Fixed "should verify microphone prerequisites before activation" - Updated to handle lazy initialization (doesn't require agentConnected before activation)
    - Fixed "should handle microphone activation after idle timeout" - Uses proper fixtures (establishConnectionViaText, waitForIdleTimeout) following same pattern as passing test
@@ -110,8 +112,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 - ✅ Fixed `vad-advanced-simulation.spec.js` - All 7 tests passing (13.7s) - Removed test.only, Promise.race complexity, fixed event types, simplified to use working fixtures
 - ✅ Fixed `vad-configuration-optimization.spec.js` - All 3 tests passing (18.8s) - Refactored to use working fixtures, removed waitForTimeout anti-patterns
 - ✅ Fixed `microphone-functionality-fixed.spec.js` - All 5 tests passing (38.7s) - Fixed prerequisites test to handle lazy initialization, fixed idle timeout test to use proper fixtures
+- ✅ Fixed `manual-vad-workflow.spec.js` - All 3 tests passing (25.9s) - Fixed VAD event detection test using working fixtures, fixed console logs test to use real audio samples
 - **Pattern**: All recent tests use fixtures (`waitForConnectionAndSettings`, `establishConnectionViaText`, `MicrophoneHelpers.setupMicrophoneWithVADValidation`, `loadAndSendAudioSample`, `waitForVADEvents`, `waitForIdleTimeout`, etc.)
-- **Status**: 34/35 fully passing files, 1 partially passing - 97% fully passing rate!
+- **Status**: 35/35 fully passing files - 100% passing rate for all tested files! 🎉
 
 ### Next Steps
 - Continue executing remaining 40 untested test files
@@ -348,11 +351,15 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 ### 20. manual-vad-workflow.spec.js
 **Tests (3):**
 - [x] should handle complete manual workflow: speak → silence → timeout
-- [ ] should detect VAD events during manual workflow
+- [x] should detect VAD events during manual workflow
 - [x] should show VAD events in console logs during manual workflow
 
-**Status**: ⚠️ **PARTIAL** - 2/3 passed (34.8s execution time)
-**Notes**: Two tests passing. One test failing: "should detect VAD events during manual workflow" - VAD events not detected with simulated audio. Test uses MutationObserver to monitor `[data-testid="user-speaking"]` but events may not trigger with simulated audio. May require actual Deepgram API responses or VAD event detection improvements. Other tests validate complete workflow and console log detection successfully.
+**Status**: ✅ **PASSING** - 3 passed (25.9s execution time)
+**Notes**: Fixed by refactoring failing tests to use working fixtures:
+- ✅ Fixed "should detect VAD events during manual workflow" - Replaced MutationObserver and simulated audio with working fixtures: `MicrophoneHelpers.waitForMicrophoneReady()`, `loadAndSendAudioSample()`, and `waitForVADEvents()`. Now correctly detects UtteranceEnd events (same pattern as passing VAD tests).
+- ✅ Fixed "should show VAD events in console logs" - Uses working fixtures to trigger real VAD events which generate console logs (detected 14 VAD-related console logs including UtteranceEnd processing)
+- ✅ Test adds value: Validates VAD behavior in realistic manual user workflow context (speak → silence → timeout), which is different from other VAD tests that focus on specific scenarios
+- **Pattern**: Same fixtures as `vad-advanced-simulation.spec.js`, `vad-configuration-optimization.spec.js`, and `real-user-workflows.spec.js` passing tests
 
 ---
 
