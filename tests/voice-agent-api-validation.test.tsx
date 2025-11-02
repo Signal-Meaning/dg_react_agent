@@ -81,6 +81,9 @@
  *   - getState (testing only)
  *   - getConnectionStates (testing only)
  * 
+ * EXCLUDED (Internal/Testing Methods):
+ *   - sendAudioData (internal testing utility - exposed for E2E tests but not in TypeScript interface)
+ * 
  * EXCLUDED (Deprecated Methods):
  *   - connectTextOnly (deprecated - use start() instead)
  * 

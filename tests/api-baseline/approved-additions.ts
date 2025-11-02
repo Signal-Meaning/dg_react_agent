@@ -38,6 +38,16 @@ export const APPROVED_COMPONENT_METHOD_ADDITIONS = {
     confirmed: true,
     usage: 'test-app/src/App.tsx:handleMuteUp',
   },
+  'sendAudioData': {
+    addedIn: 'v0.5.0',
+    issue: 'Internal testing utility',
+    rationale: 'Internal method exposed for E2E testing and audio simulation. Used by test utilities to simulate audio data without microphone access. NOT part of official public API (not in TypeScript interface). For testing purposes only.',
+    breaking: false,
+    internal: true,
+    testingOnly: true,
+    usage: 'tests/utils/audio-simulator.js, tests/utils/vad-audio-simulator.js',
+    note: 'This method is exposed via useImperativeHandle but is NOT documented in DeepgramVoiceInteractionHandle interface, indicating it is internal/testing-only.',
+  },
 
 } as const;
 
