@@ -473,8 +473,10 @@ function App() {
   // Only allow if button was actually pressed (prevents onMouseLeave from firing on accidental movement)
   const handleMuteUp = useCallback(() => {
     // Check if button was actually pressed before allowing
-    setIsPressed(prev => {
-      if (prev) {
+    // Use functional update to ensure we see the latest state
+    setIsPressed(prevPressed => {
+      if (prevPressed) {
+        // Button was pressed, so release it
         setTtsMuted(false);
         addLog('🔊 Agent audio allowed');
         if (deepgramRef.current) {
@@ -482,7 +484,8 @@ function App() {
         }
         return false;
       }
-      return prev; // Don't change state if button wasn't pressed
+      // Button wasn't pressed, don't change anything
+      return prevPressed;
     });
   }, [addLog]);
   
@@ -748,12 +751,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <button 
           onMouseDown={handleMuteDown}
           onMouseUp={handleMuteUp}
-          onMouseLeave={(e) => {
-            // Only trigger if button was actually pressed (prevents accidental triggers)
-            if (isPressed) {
-              handleMuteUp();
-            }
-          }}
+          onMouseLeave={handleMuteUp}
           disabled={connectionStates.agent !== 'connected'}
           style={{ 
             padding: '10px 20px',
