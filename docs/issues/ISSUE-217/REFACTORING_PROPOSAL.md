@@ -1,5 +1,7 @@
 # E2E Test Refactoring Proposal
 
+> **📖 NOTE:** This document is branch-specific to Issue #217. The implemented refactoring patterns and best practices have been consolidated into [E2E_TEST_DEVELOPMENT_GUIDE.md](./E2E_TEST_DEVELOPMENT_GUIDE.md).
+
 ## Current State Analysis
 
 **Achievement**: All 44/44 test files passing (100% pass rate) ✅

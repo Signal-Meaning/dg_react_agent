@@ -1,5 +1,7 @@
 # Migration Examples - VAD Fixtures
 
+> **📖 NOTE:** This document is branch-specific to Issue #217. Migration examples have been consolidated into [E2E_TEST_DEVELOPMENT_GUIDE.md](./E2E_TEST_DEVELOPMENT_GUIDE.md) under the "Migration Examples" section.
+
 This document shows concrete before/after examples of test migrations to use the new VAD fixtures.
 
 ## Example 1: VAD State Checking

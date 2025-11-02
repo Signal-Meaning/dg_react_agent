@@ -1,5 +1,7 @@
 # E2E Test Refactoring Progress
 
+> **📖 NOTE:** This document is branch-specific to Issue #217. The completed refactoring work and migration examples have been consolidated into [E2E_TEST_DEVELOPMENT_GUIDE.md](./E2E_TEST_DEVELOPMENT_GUIDE.md).
+
 ## ✅ Phase 1: High-Impact Fixtures - COMPLETED
 
 ### 1. VAD State Checking Fixtures ✅

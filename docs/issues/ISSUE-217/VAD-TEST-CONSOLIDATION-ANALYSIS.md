@@ -170,5 +170,5 @@ These test specific, non-redundant scenarios
 1. Create new consolidated files
 2. Run tests to verify they pass
 3. Delete old redundant files
-4. Update TEST_STATUS.md
+4. See docs/issues/ISSUE-217/TEST_STATUS.md for historical status
 

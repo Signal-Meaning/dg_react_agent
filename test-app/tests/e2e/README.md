@@ -97,6 +97,13 @@ npx playwright test --grep "Microphone"     # All microphone tests
 
 ## Writing New Tests
 
+**📖 See [E2E_TEST_DEVELOPMENT_GUIDE.md](./E2E_TEST_DEVELOPMENT_GUIDE.md) for comprehensive guide on:**
+- Available fixtures and their usage
+- Best practices and common patterns
+- Common pitfalls to avoid
+- Migration examples
+- Test structure guidelines
+
 ### Using Test Helpers
 
 All tests should use the shared helpers in `helpers/test-helpers.js` for consistency:
