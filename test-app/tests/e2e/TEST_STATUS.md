@@ -5,10 +5,10 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Summary
 - **Total E2E Test Files**: 58
 - **Total Individual Tests**: 175 (discovered via `--list` command)
-- **Tests Executed**: 14 files (partial run)
+- **Tests Executed**: 15 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 14 files (100% passing)
-  - ⏭️ **Skipped**: 1 file (requires PW_ENABLE_AUDIO=true)
+  - ✅ **Passing**: 15 files (100% passing for active tests)
+  - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
 
 ## Key Findings from Test Run
@@ -30,6 +30,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 11. **strict-mode-behavior.spec.js** - 5/5 passed (6.8s) ✅ **FIXED**
 12. **microphone-control.spec.js** - 8/9 passed, 1 skipped (20.8s) ✅ **FIXED**
 13. **greeting-audio-timing.spec.js** - 3/3 passed (21.8s) ✅ **FIXED**
+14. **audio-interruption-timing.spec.js** - 4/4 passed, 2 skipped (10.0s) ✅ **ALREADY PASSING**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -42,8 +43,10 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ~~4. **extended-silence-idle-timeout.spec.js** - 1/1 passed, 1 failure~~ ✅ **FIXED** - All 1 tests passing
    - Test was already using setupAudioSendingPrerequisites() correctly
 
-### Files Requiring Environment Setup ⏭️
-1. **audio-interruption-timing.spec.js** - All 4 skipped (requires PW_ENABLE_AUDIO=true)
+### Files with Passing and Skipped Tests ✅
+1. **audio-interruption-timing.spec.js** - 4/4 passed, 2 skipped (10.0s) ✅ **PASSING**
+   - 2 tests intentionally skipped (manual skip, not audio-dependent)
+   - All active tests passing with PW_ENABLE_AUDIO=true
 
 ### Recent Fixes 🎉
 - **agent-state-transitions.spec.js** - Refactored to use data-testid and shared helper functions:
@@ -104,13 +107,16 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 ---
 
 ### 3. audio-interruption-timing.spec.js
-**Tests (4):**
-- [ ] should interrupt audio within 50ms when interruptAgent() is called
-- [ ] should handle rapid interrupt clicks without errors
-- [ ] should persist mute state and prevent future audio
-- [ ] should interrupt and allow audio repeatedly
+**Tests (6 total, 4 active):**
+- [ ] should interrupt audio within 50ms when interruptAgent() is called (skipped - manual skip)
+- [ ] should handle rapid interrupt clicks without errors (skipped - manual skip)
+- [x] should respond to button click and change state (basic functionality)
+- [x] should persist mute state and prevent future audio
+- [x] should persist audio blocking across agent response turns (Issue #223)
+- [x] should interrupt and allow audio repeatedly
 
-**Status**: ⏭️ **SKIPPED** - 4 skipped (likely requires PW_ENABLE_AUDIO=true)
+**Status**: ✅ **PASSING** - 4 passed, 2 skipped (10.0s execution time)
+**Notes**: All active tests passing. Two tests are intentionally skipped (manual test.skip() calls). Tests validate TTS mute button functionality, audio blocking persistence, and interruptAgent/allowAgent behavior.
 
 ---
 
@@ -623,7 +629,8 @@ Based on the merge and recent changes, these tests should be prioritized:
 4. ✅ **strict-mode-behavior.spec.js** - **COMPLETED** - All 5 tests passing
 5. ✅ **microphone-control.spec.js** - **COMPLETED** - 8/9 tests passing (1 skipped for Issue #178)
 6. ✅ **greeting-audio-timing.spec.js** - **COMPLETED** - All 3 tests passing (audio timing validation)
-7. **audio-interruption-timing.spec.js** - Audio interruption timing validation (NEXT - requires PW_ENABLE_AUDIO=true)
+7. ✅ **audio-interruption-timing.spec.js** - **COMPLETED** - 4/4 active tests passing (audio interruption validation)
+8. **greeting-idle-timeout.spec.js** - Idle timeout after greeting completion (NEXT)
 
 ## Notes
 
