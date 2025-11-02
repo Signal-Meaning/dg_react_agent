@@ -689,6 +689,28 @@ describe('Component API Surface Validation', () => {
         ref.current.interruptAgent();
       });
     });
+
+    it('should expose allowAgent() method', async () => {
+      const ref = React.createRef<any>();
+      
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+        />
+      );
+
+      await waitFor(() => {
+        expect(ref.current).toBeTruthy();
+      });
+
+      expect(typeof ref.current.allowAgent).toBe('function');
+      
+      act(() => {
+        ref.current.allowAgent();
+      });
+    });
   });
 
   describe('Sleep/Wake Methods', () => {
@@ -905,7 +927,7 @@ describe('Component API Surface Validation', () => {
           `\n` +
           `NOTE: This test now fails in both local and CI environments to catch API changes early.\n`;
         
-        throw new Error(errorMessage);
+          throw new Error(errorMessage);
       }
     });
 
@@ -1096,13 +1118,13 @@ describe('Component API Surface Validation', () => {
         'stop',
         'updateAgentInstructions',
         'interruptAgent',
+        'allowAgent',
         'sleep',
         'wake',
         'toggleSleep',
         'injectAgentMessage',
         'injectUserMessage',
         'startAudioCapture',
-
         'getAudioContext',
       ];
 
