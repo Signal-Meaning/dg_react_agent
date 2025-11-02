@@ -55,6 +55,7 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
   - [ ] Create: `NEW-FEATURES.md` for new features
   - [ ] Create: `API-CHANGES.md` for API changes
   - [ ] Create: `EXAMPLES.md` with usage examples
+  - [ ] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
 - [ ] **Review Documentation**: Review documentation for completeness and accuracy
   - [ ] Check all examples work correctly
   - [ ] Verify migration guides are accurate
@@ -146,6 +147,10 @@ Follow the established documentation structure in `docs/releases/`:
 - **EXAMPLES.md**: Usage examples and best practices
   - Basic and advanced usage examples
   - Migration examples and common patterns
+- **PACKAGE-STRUCTURE.md**: Package directory structure and file listing
+  - Visual representation of included files and directories
+  - Package entry points and their purposes
+  - Installation and verification steps
 
 ### 🚨 Important Notes
 
