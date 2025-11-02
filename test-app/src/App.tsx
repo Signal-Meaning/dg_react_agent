@@ -71,7 +71,6 @@ function App() {
   
   // TTS mute state
   const [ttsMuted, setTtsMuted] = useState(false);
-  const [isPressed, setIsPressed] = useState(false);
   
   // VAD state
   const [userStartedSpeaking, setUserStartedSpeaking] = useState<string | null>(null);
@@ -459,33 +458,22 @@ function App() {
   
   // (removed unused interruptAgent helper)
   
-  // Handle push button: down = block agent audio
-  const handleMuteDown = useCallback(() => {
-    setIsPressed(true);
-    setTtsMuted(true);
-    addLog('🔇 Agent audio blocked');
-    if (deepgramRef.current) {
-      deepgramRef.current.interruptAgent();
-    }
-  }, [addLog]);
-  
-  // Handle push button: up = allow agent audio
-  // Only allow if button was actually pressed (prevents onMouseLeave from firing on accidental movement)
-  const handleMuteUp = useCallback(() => {
-    // Check if button was actually pressed before allowing
-    // Use functional update to ensure we see the latest state
-    setIsPressed(prevPressed => {
-      if (prevPressed) {
-        // Button was pressed, so release it
-        setTtsMuted(false);
+  // Toggle mute button - simple switch: click to mute, click again to unmute
+  const handleMuteToggle = useCallback(() => {
+    setTtsMuted(prevMuted => {
+      const newMuted = !prevMuted;
+      if (newMuted) {
+        addLog('🔇 Agent audio blocked');
+        if (deepgramRef.current) {
+          deepgramRef.current.interruptAgent();
+        }
+      } else {
         addLog('🔊 Agent audio allowed');
         if (deepgramRef.current) {
           deepgramRef.current.allowAgent();
         }
-        return false;
       }
-      // Button wasn't pressed, don't change anything
-      return prevPressed;
+      return newMuted;
     });
   }, [addLog]);
   
@@ -749,23 +737,11 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           Settings Applied: <strong data-testid="has-sent-settings">{String(hasSentSettingsDom)}</strong>
         </div>
         <button 
-          onClick={(e) => {
-            // Ensure mousedown/mouseup handlers fire for click events
-            // Some browsers/events might not trigger onMouseDown/onMouseUp for click()
-            e.preventDefault();
-            handleMuteDown();
-            // Immediately call mouseup to simulate pushbutton release
-            // For a real pushbutton, user holds and releases, but for click we simulate both
-            setTimeout(() => handleMuteUp(), 0);
-          }}
-          onMouseDown={handleMuteDown}
-          onMouseUp={handleMuteUp}
-          onMouseLeave={handleMuteUp}
+          onClick={handleMuteToggle}
           disabled={connectionStates.agent !== 'connected'}
           style={{ 
             padding: '10px 20px',
-            backgroundColor: isPressed ? '#f56565' : (ttsMuted ? '#feb2b2' : 'transparent'),
-            transform: isPressed ? 'scale(0.95)' : 'scale(1)',
+            backgroundColor: ttsMuted ? '#f56565' : 'transparent',
             transition: 'all 0.1s ease',
             pointerEvents: 'auto'
           }}

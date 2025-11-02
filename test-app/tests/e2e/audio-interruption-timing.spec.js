@@ -150,12 +150,12 @@ test.describe('Audio Interruption Timing', () => {
       throw new Error('BUG: Button is disabled! It should be enabled when agent connection is connected.');
     }
     
-    // CRITICAL TEST: Simulate a real click (mousedown + delay + mouseup)
-    // This mimics what happens in a real browser click
-    console.log('🖱️ Simulating real click (mousedown -> delay -> mouseup)...');
+    // CRITICAL TEST: Click the button - it should toggle state
+    // Simple toggle: click once to mute, click again to unmute
+    console.log('🖱️ Clicking button to toggle mute state...');
     
-    // Step 1: Mouse down
-    await muteButton.dispatchEvent('mousedown');
+    // Step 1: Click button (should toggle to muted)
+    await muteButton.click();
     
     // Step 2: Wait for React to process state update
     await page.waitForFunction(
@@ -167,20 +167,20 @@ test.describe('Audio Interruption Timing', () => {
       { timeout: 2000 }
     );
     
-    const afterMouseDownText = await muteButton.textContent();
-    console.log(`📋 Button text after mousedown: "${afterMouseDownText}"`);
+    const afterFirstClick = await muteButton.textContent();
+    console.log(`📋 Button text after first click: "${afterFirstClick}"`);
     
-    // CRITICAL ASSERTION: Button MUST show "Mute" after mousedown
-    expect(afterMouseDownText).toContain('Mute');
-    console.log('✅ Button responds to mousedown and shows muted state');
+    // CRITICAL ASSERTION: Button MUST show "Mute" after click
+    expect(afterFirstClick).toContain('Mute');
+    console.log('✅ Button toggles to muted state on click');
     
-    // If button doesn't show "Mute" after mousedown, the handlers aren't working
-    if (!afterMouseDownText.includes('Mute')) {
-      throw new Error('BUG DETECTED: Button does not change to muted state after mousedown event. This is the defect you reported!');
+    // If button doesn't show "Mute" after click, the handler isn't working
+    if (!afterFirstClick.includes('Mute')) {
+      throw new Error('BUG DETECTED: Button does not change to muted state after click. This is the defect you reported!');
     }
     
-    // Step 3: Mouse up (simulating button release)
-    await muteButton.dispatchEvent('mouseup');
+    // Step 3: Click again (should toggle back to unmuted)
+    await muteButton.click();
     await page.waitForFunction(
       (buttonSelector) => {
         const btn = document.querySelector(buttonSelector);
@@ -190,65 +190,11 @@ test.describe('Audio Interruption Timing', () => {
       { timeout: 2000 }
     );
     
-    const afterMouseUpText = await muteButton.textContent();
-    console.log(`📋 Button text after mouseup: "${afterMouseUpText}"`);
-    expect(afterMouseUpText).toContain('Enable');
-    console.log('✅ Button responds to mouseup and returns to unmuted state');
+    const afterSecondClick = await muteButton.textContent();
+    console.log(`📋 Button text after second click: "${afterSecondClick}"`);
+    expect(afterSecondClick).toContain('Enable');
+    console.log('✅ Button toggles back to unmuted state on second click');
     
-    // CRITICAL TEST: Verify that a real user click() actually triggers the handlers
-    // This test will FAIL if clicking doesn't change button state (the bug you reported)
-    console.log('🖱️ Testing that click() triggers state change...');
-    
-    // Monitor button state changes during click using a MutationObserver
-    const stateChangeDetected = await page.evaluate(() => {
-      return new Promise((resolve) => {
-        let stateChanged = false;
-        const button = document.querySelector('[data-testid="tts-mute-button"]');
-        if (!button) {
-          resolve(false);
-          return;
-        }
-        
-        const observer = new MutationObserver((mutations) => {
-          mutations.forEach((mutation) => {
-            if (mutation.type === 'childList' || 
-                (mutation.type === 'characterData' && mutation.target.textContent?.includes('Mute'))) {
-              stateChanged = true;
-            }
-          });
-        });
-        
-        observer.observe(button, {
-          childList: true,
-          subtree: true,
-          characterData: true
-        });
-        
-        // Click the button
-        button.click();
-        
-        // Wait a bit to see if state changes
-        setTimeout(() => {
-          observer.disconnect();
-          resolve(stateChanged);
-        }, 200);
-      });
-    });
-    
-    console.log(`📋 State change detected during click: ${stateChangeDetected}`);
-    
-    // If state never changed during click, the handlers aren't firing - this is the bug!
-    if (!stateChangeDetected) {
-      // Check current button state to confirm it didn't change
-      const finalState = await muteButton.textContent();
-      console.error(`❌ BUG DETECTED: Button click did not change state!`);
-      console.error(`   Initial state: "Enable"`);
-      console.error(`   Final state: "${finalState}"`);
-      console.error(`   Expected: Button should show "Mute" during click (even if briefly)`);
-      throw new Error('BUG: Button click does not trigger state change. Handlers may not be firing or state is being reset.');
-    }
-    
-    console.log('✅ Click event triggers state change');
     console.log('✅ Basic button click functionality verified');
   });
 
@@ -288,32 +234,32 @@ test.describe('Audio Interruption Timing', () => {
     }, { timeout: 6000 });
     console.log('✅ Audio is playing');
     
-    // Now hold down mute button (push button)
+    // Click mute button to toggle it on (simple toggle switch)
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
-    await muteButton.dispatchEvent('mousedown');
+    await muteButton.click();
     
     // Wait for button text to update (React state update)
     await expect(muteButton).toContainText('Mute', { timeout: 2000 });
-    console.log('✅ Button pressed - button text updated');
+    console.log('✅ Button clicked - button text updated to Mute');
     
     // Wait until audio has stopped instead of a fixed delay
     await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 2000 });
-    console.log('✅ Button pressed - audio blocked');
+    console.log('✅ Button toggled - audio blocked');
     
-    // Send another message - should not play audio while held
+    // Send another message - should not play audio while muted
     await sendMessageAndWaitForResponse(page, 'Tell me more');
     const diag2 = await getAudioDiagnostics(page);
-    console.log('🔎 Audio diagnostic after second response (while held):', diag2);
+    console.log('🔎 Audio diagnostic after second response (while muted):', diag2);
     console.log('✅ Message sent');
     
     // Verify audio did not start while muted
     await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 2000 });
-    console.log('✅ Audio did not play (as expected when button held)');
+    console.log('✅ Audio did not play (as expected when muted)');
     
-    // Release button
-    await muteButton.dispatchEvent('mouseup');
-    await expect(muteButton).toContainText('Enable');
-    console.log('✅ Button released - audio allowed again');
+    // Click button again to toggle it off
+    await muteButton.click();
+    await expect(muteButton).toContainText('Enable', { timeout: 2000 });
+    console.log('✅ Button toggled off - audio allowed again');
     
     console.log('✅ Mute state persisted and prevented audio');
   });
@@ -484,19 +430,19 @@ test.describe('Audio Interruption Timing', () => {
     
     const muteButton = page.locator('[data-testid="tts-mute-button"]');
     
-    // Toggle block/allow multiple times to verify functionality
+    // Toggle mute on/off multiple times to verify functionality
     for (let i = 0; i < 3; i++) {
-      // Block audio
-      await muteButton.dispatchEvent('mousedown');
-      console.log(`✅ Toggle ${i + 1}: Blocked audio`);
+      // Toggle mute on
+      await muteButton.click();
+      console.log(`✅ Toggle ${i + 1}: Muted audio`);
       
       // Wait for audio to actually stop (not just a fixed delay)
       await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', { timeout: 2000 });
       console.log(`✅ Toggle ${i + 1}: Audio confirmed stopped`);
       
-      // Allow audio
-      await muteButton.dispatchEvent('mouseup');
-      console.log(`✅ Toggle ${i + 1}: Allowed audio`);
+      // Toggle mute off
+      await muteButton.click();
+      console.log(`✅ Toggle ${i + 1}: Unmuted audio`);
       
       // Send a message and verify audio can play again
       await sendMessageAndWaitForResponse(page, `Message ${i}`);
