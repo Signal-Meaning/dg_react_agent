@@ -166,10 +166,9 @@ describe('Lazy Initialization Tests', () => {
       // Verify WebSocketManager was NOT called during initialization
       expect(WebSocketManager).not.toHaveBeenCalled();
       
-      // Verify managers are not accessible (they should be null)
-      const connectionStates = ref.current.getConnectionStates();
-      expect(connectionStates.transcription).toBe('not-found');
-      expect(connectionStates.agent).toBe('not-found');
+      // Verify managers are not accessible (getConnectionStates was removed in Issue #162)
+      // We verify this indirectly by ensuring WebSocketManager was not called
+      // If managers existed, WebSocketManager would have been instantiated
     });
 
     test('should not create managers even with both services configured', async () => {
