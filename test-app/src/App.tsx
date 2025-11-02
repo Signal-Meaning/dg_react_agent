@@ -742,8 +742,10 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           style={{ 
             padding: '10px 20px',
             backgroundColor: ttsMuted ? '#f56565' : 'transparent',
+            transform: ttsMuted ? 'scale(0.95)' : 'scale(1)',
             transition: 'all 0.1s ease',
-            pointerEvents: 'auto'
+            pointerEvents: 'auto',
+            border: ttsMuted ? '2px inset' : '2px outset'
           }}
           data-testid="tts-mute-button"
         >

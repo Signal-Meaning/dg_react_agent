@@ -1465,7 +1465,9 @@ function DeepgramVoiceInteraction(
 
   // Handle agent audio - only relevant if agent is configured
   const handleAgentAudio = async (data: ArrayBuffer) => {
-    console.log('🎵 [AUDIO EVENT] handleAgentAudio received buffer bytes=', data?.byteLength);
+    if (props.debug) {
+      console.log('🎵 [AUDIO EVENT] handleAgentAudio received buffer bytes=', data?.byteLength);
+    }
     // Don't re-enable idle timeout resets here
     // After UtteranceEnd, only new connection should re-enable
     
@@ -1490,7 +1492,9 @@ function DeepgramVoiceInteraction(
       console.log(`🔍 [ISSUE #223] handleAgentAudio - allowAgentRef.current=${allowAgentRef.current} (BLOCKED=${isBlocked})`);
     }
     if (!allowAgentRef.current) {
-      console.log('🔇 [AUDIO EVENT] Agent audio currently blocked (allowAgentRef=false) - discarding buffer');
+      if (props.debug) {
+        console.log('🔇 [AUDIO EVENT] Agent audio currently blocked (allowAgentRef=false) - discarding buffer');
+      }
       log('🔇 Agent audio blocked - discarding audio buffer to prevent playback');
       return;
     }
