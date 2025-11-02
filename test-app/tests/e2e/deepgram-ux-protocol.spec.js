@@ -18,7 +18,7 @@ import { test, expect } from '@playwright/test';
 import {
   SELECTORS,
   setupTestPage,
-  waitForConnection,
+  waitForConnectionAndSettings,
   waitForAgentGreeting,
   sendTextMessage,
   assertConnectionHealthy,
@@ -29,15 +29,25 @@ import {
 test.use({ browserName: 'chromium' });
 
 test.describe('Deepgram Protocol UX Validation', () => {
-  test('should complete full protocol flow through UI interactions', async ({ page }) => {
+  test('should complete full protocol flow through UI interactions', async ({ page, context }) => {
     console.log('🧪 Starting Deepgram Protocol UX Test...');
     
-    // Step 1: Setup and verify auto-connect
-    console.log('\n📡 Step 1: Setup and Verify Auto-Connect Protocol Handshake');
+    // Step 1: Setup and activate microphone using comprehensive helper
+    console.log('\n📡 Step 1: Setup and Activate Connection via Microphone');
     await setupTestPage(page);
     console.log('✅ Voice agent component loaded');
     
-    await waitForConnection(page);
+    // Use MicrophoneHelpers for reliable microphone activation and connection
+    const result = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      connectionTimeout: 10000,
+      greetingTimeout: 8000,
+      micEnableTimeout: 5000
+    });
+    
+    if (!result.success) {
+      throw new Error(`Microphone activation failed: ${result.error}`);
+    }
+    
     console.log('✅ Connection ready (Settings → Welcome handshake completed)');
     
     const connectionStatus = page.locator(SELECTORS.connectionStatus);
@@ -159,9 +169,20 @@ test.describe('Deepgram Protocol UX Validation', () => {
   test('should maintain protocol during rapid interactions', async ({ page }) => {
     console.log('⚡ Starting Rapid Interaction Protocol Test...');
     
-    // Setup
+    // Setup and activate microphone using comprehensive helper
     await setupTestPage(page);
-    await waitForConnection(page);
+    
+    // Use MicrophoneHelpers for reliable microphone activation and connection
+    const result = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      connectionTimeout: 10000,
+      greetingTimeout: 8000,
+      micEnableTimeout: 5000
+    });
+    
+    if (!result.success) {
+      throw new Error(`Microphone activation failed: ${result.error}`);
+    }
+    
     console.log('✅ Connection established');
     
     // Send multiple messages rapidly
