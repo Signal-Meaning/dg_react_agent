@@ -5,12 +5,12 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Summary
 - **Total E2E Test Files**: 58
 - **Total Individual Tests**: 175 (discovered via `--list` command)
-- **Tests Executed**: 20 files (partial run)
+- **Tests Executed**: 21 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 20 files (100% passing for active tests)
+  - ✅ **Passing**: 21 files (100% passing for active tests)
   - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
-- **Progress**: 34% of test files verified (20/58)
+- **Progress**: 36% of test files verified (21/58)
 - **Key Achievement**: All tested files are passing - excellent test quality!
 
 ## Key Findings from Test Run
@@ -38,6 +38,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 17. **idle-timeout-during-agent-speech.spec.js** - 1/1 passed (23.1s) ✅ **ALREADY PASSING**
 18. **text-session-flow.spec.js** - 4/4 passed (22.4s) ✅ **FIXED**
 19. **text-idle-timeout-suspended-audio.spec.js** - 2/2 passed (16.9s) ✅ **ALREADY PASSING**
+20. **js-error-test.spec.js** - 1/1 passed (5.9s) ✅ **ALREADY PASSING**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -71,8 +72,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 - ✅ Verified `idle-timeout-during-agent-speech.spec.js` - 1 test passing
 - ✅ Fixed `text-session-flow.spec.js` - Refactored to use fixtures consistently (establishConnectionViaText, sendMessageAndWaitForResponse, disconnectComponent)
 - ✅ Verified `text-idle-timeout-suspended-audio.spec.js` - All 2 tests passing (Issue #139 validation)
+- ✅ Verified `js-error-test.spec.js` - 1 test passing (JavaScript error detection)
 - **Pattern**: All recent tests use fixtures (`waitForConnectionAndSettings`, `establishConnectionViaText`, `MicrophoneHelpers`, etc.)
-- **Status**: 20/58 files verified, all passing - 100% success rate!
+- **Status**: 21/58 files verified, all passing - 100% success rate!
 
 ### Next Steps
 - Continue executing remaining 40 untested test files
@@ -262,9 +264,10 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ### 16. js-error-test.spec.js
 **Tests (1):**
-- [ ] should check for JavaScript errors
+- [x] should check for JavaScript errors
 
-**Status**: ❓ Not yet tested
+**Status**: ✅ **PASSING** - 1 passed (5.9s execution time)
+**Notes**: Test passing. Checks for JavaScript errors and warnings. Found expected warnings about file reading not being supported in browser environment (normal behavior). No actual errors detected.
 
 ---
 
