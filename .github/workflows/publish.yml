@@ -85,10 +85,28 @@ jobs:
           # Verify .npmrc exists (location set by setup-node@v4)
           if [ -n "$NPM_CONFIG_USERCONFIG" ]; then
             if [ -f "$NPM_CONFIG_USERCONFIG" ]; then
-              echo "✅ npmrc configuration file exists"
+              echo "✅ npmrc configuration file exists at: $NPM_CONFIG_USERCONFIG"
+              echo "📄 npmrc content (first few lines, masked):"
+              head -3 "$NPM_CONFIG_USERCONFIG" | sed 's/_authToken=.*/_authToken=***MASKED***/' || true
             else
-              echo "⚠️ npmrc file not found at expected location"
+              echo "⚠️ npmrc file not found at expected location: $NPM_CONFIG_USERCONFIG"
+              echo "🔧 Attempting to create .npmrc manually as fallback..."
+              echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
+              echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
+              echo "✅ Created ~/.npmrc as fallback"
             fi
+          else
+            echo "⚠️ NPM_CONFIG_USERCONFIG not set, creating .npmrc manually..."
+            echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
+            echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
+            echo "✅ Created ~/.npmrc"
+          fi
+          
+          # Also ensure project-level .npmrc exists (for compatibility)
+          if [ ! -f .npmrc ]; then
+            echo "@signal-meaning:registry=https://npm.pkg.github.com" > .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" >> .npmrc
+            echo "✅ Created project-level .npmrc"
           fi
         
       - name: Verify authentication
