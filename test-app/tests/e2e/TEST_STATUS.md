@@ -5,13 +5,14 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Summary
 - **Total E2E Test Files**: 58
 - **Total Individual Tests**: 175 (discovered via `--list` command)
-- **Tests Executed**: 23 files (partial run)
+- **Tests Executed**: 24 files (partial run)
 - **Results Summary**: 
   - ✅ **Passing**: 23 files (100% passing for active tests)
+  - ⚠️ **Partial**: 1 file (2/3 tests passing)
   - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
-- **Progress**: 40% of test files verified (23/58)
-- **Key Achievement**: All tested files are passing - excellent test quality!
+- **Progress**: 41% of test files verified (24/58)
+- **Key Achievement**: 23/24 tested files fully passing, 1 partially passing
 
 ## Key Findings from Test Run
 
@@ -41,6 +42,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 20. **js-error-test.spec.js** - 1/1 passed (5.9s) ✅ **ALREADY PASSING**
 21. **logging-behavior.spec.js** - 4/4 passed (18.9s) ✅ **ALREADY PASSING**
 22. **manual-diagnostic.spec.js** - 2/2 passed (10.9s) ✅ **ALREADY PASSING**
+23. **manual-vad-workflow.spec.js** - 2/3 passed (34.8s) ⚠️ **PARTIAL**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -52,6 +54,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
    - Fixed assertConnectionHealthy() to not check non-existent connection-ready element
 ~~4. **extended-silence-idle-timeout.spec.js** - 1/1 passed, 1 failure~~ ✅ **FIXED** - All 1 tests passing
    - Test was already using setupAudioSendingPrerequisites() correctly
+1. **manual-vad-workflow.spec.js** - 2/3 passed, 1 failure ⚠️ **PARTIAL**
+   - "should detect VAD events during manual workflow" failing - VAD events not detected with simulated audio
+   - May require actual Deepgram API responses or VAD event detection improvements
 
 ### Files with Passing and Skipped Tests ✅
 1. **audio-interruption-timing.spec.js** - 4/4 passed, 2 skipped (10.0s) ✅ **PASSING**
@@ -77,8 +82,9 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 - ✅ Verified `js-error-test.spec.js` - 1 test passing (JavaScript error detection)
 - ✅ Verified `logging-behavior.spec.js` - All 4 tests passing (logging synchronization validation)
 - ✅ Verified `manual-diagnostic.spec.js` - All 2 tests passing (comprehensive diagnostic tool)
+- ⚠️ Verified `manual-vad-workflow.spec.js` - 2/3 tests passing (VAD event detection test failing)
 - **Pattern**: All recent tests use fixtures (`waitForConnectionAndSettings`, `establishConnectionViaText`, `MicrophoneHelpers`, etc.)
-- **Status**: 23/58 files verified, all passing - 100% success rate!
+- **Status**: 23/24 fully passing files, 1 partially passing - 96% fully passing rate!
 
 ### Next Steps
 - Continue executing remaining 40 untested test files
@@ -314,11 +320,12 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ### 20. manual-vad-workflow.spec.js
 **Tests (3):**
-- [ ] should handle complete manual workflow: speak → silence → timeout
+- [x] should handle complete manual workflow: speak → silence → timeout
 - [ ] should detect VAD events during manual workflow
-- [ ] should show VAD events in console logs during manual workflow
+- [x] should show VAD events in console logs during manual workflow
 
-**Status**: ❓ Not yet tested
+**Status**: ⚠️ **PARTIAL** - 2/3 passed (34.8s execution time)
+**Notes**: Two tests passing. One test failing: "should detect VAD events during manual workflow" - VAD events not detected with simulated audio. Test uses MutationObserver to monitor `[data-testid="user-speaking"]` but events may not trigger with simulated audio. May require actual Deepgram API responses or VAD event detection improvements. Other tests validate complete workflow and console log detection successfully.
 
 ---
 
