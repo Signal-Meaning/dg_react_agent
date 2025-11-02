@@ -6,9 +6,15 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 0.3.3)'
-        required: true
+        description: 'Version to publish (leave empty to use package.json version)'
+        required: false
         type: string
+        default: ''
+      branch:
+        description: 'Branch to publish from (leave empty to use current branch)'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   publish:
@@ -19,8 +25,36 @@ jobs:
       id-token: write
       
     steps:
+      - name: Determine version and branch
+        id: vars
+        run: |
+          # For workflow_dispatch, we need to checkout first to read package.json
+          # But we'll use the branch input if provided
+          echo "version=placeholder" >> $GITHUB_OUTPUT
+          echo "branch=${{ inputs.branch || 'placeholder' }}" >> $GITHUB_OUTPUT
+      
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+      
+      - name: Determine version (after checkout)
+        id: version
+        run: |
+          # Determine version - use input if provided, otherwise read from package.json
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          
+          # Determine branch name for display
+          BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "📦 Version: $VERSION"
+          echo "🌿 Branch: $BRANCH_NAME"
         
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -80,23 +114,35 @@ jobs:
       - name: Check if version already exists
         id: check_version
         run: |
-          if npm view @signal-meaning/deepgram-voice-interaction-react@$(node -p "require('./package.json').version") --registry https://npm.pkg.github.com 2>/dev/null; then
+          CHECK_VERSION="${{ steps.version.outputs.version }}"
+          if npm view @signal-meaning/deepgram-voice-interaction-react@$CHECK_VERSION --registry https://npm.pkg.github.com 2>/dev/null; then
             echo "version_exists=true" >> $GITHUB_OUTPUT
-            echo "⚠️ Version already exists in registry"
+            echo "⚠️ Version $CHECK_VERSION already exists in registry"
           else
             echo "version_exists=false" >> $GITHUB_OUTPUT
-            echo "✅ Version does not exist, ready to publish"
+            echo "✅ Version $CHECK_VERSION does not exist, ready to publish"
           fi
         continue-on-error: true
         
       - name: Publish to GitHub Package Registry
         run: |
           set -e
+          # Use version from earlier step
+          PUBLISH_VERSION="${{ steps.version.outputs.version }}"
+          
           # Show npm configuration before publish
           echo "📦 Package name: $(node -p "require('./package.json').name")"
-          echo "📦 Package version: $(node -p "require('./package.json').version")"
+          echo "📦 Publishing version: $PUBLISH_VERSION"
+          echo "📦 Package.json version: $(node -p "require('./package.json').version")"
           echo "📦 Registry: $(npm config get registry)"
           echo "📦 Scope registry: $(npm config get @signal-meaning:registry)"
+          
+          # Verify version matches package.json (unless explicitly overridden)
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PUBLISH_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "⚠️ Warning: Publishing version ($PUBLISH_VERSION) differs from package.json ($PACKAGE_VERSION)"
+            echo "⚠️ This may cause version mismatch issues"
+          fi
           
           # Show what will be published
           echo "📋 Files to be published:"
