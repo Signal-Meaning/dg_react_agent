@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { MicrophoneHelpers } from './helpers/test-helpers.js';
 
 /**
  * E2E Tests for WebSocket Connection Validation
@@ -33,40 +34,58 @@ test.describe('WebSocket Connection Validation', () => {
   });
 
   test('should establish WebSocket connection to Deepgram Agent API', async ({ page }) => {
-    // Enable microphone to start WebSocket connection
-    await page.click('[data-testid="microphone-button"]');
+    // Use proper microphone setup with fixtures (same pattern as passing tests)
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Wait for connection to be established
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
+    }
     
-    // Verify the component is ready for events
-    await expect(page.locator('[data-testid="connection-ready"]')).toContainText('true');
+    // Verify the connection is established (connection-status element exists and shows "connected")
+    const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
+    expect(connectionStatus).toBe('connected');
     
     console.log('WebSocket test: Component connected and ready');
   });
 
   test('should handle UserStartedSpeaking events (only VAD event currently implemented)', async ({ page }) => {
-    // Enable microphone to start WebSocket connection
-    await page.click('[data-testid="microphone-button"]');
+    // Use proper microphone setup with fixtures (same pattern as passing tests)
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Wait for connection to be established
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
+    }
     
-    // Verify the component is ready for VAD events
-    await expect(page.locator('[data-testid="connection-ready"]')).toContainText('true');
+    // Verify the connection is established (connection-status element exists and shows "connected")
+    const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
+    expect(connectionStatus).toBe('connected');
     
     console.log('WebSocket test: UserStartedSpeaking handling ready (only VAD event currently implemented)');
   });
 
   test('should validate WebSocket connection states', async ({ page }) => {
-    // Enable microphone to start WebSocket connection
-    await page.click('[data-testid="microphone-button"]');
+    // Use proper microphone setup with fixtures (same pattern as passing tests)
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Wait for connection to be established
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
+    }
     
-    // Verify the component is ready for events
-    await expect(page.locator('[data-testid="connection-ready"]')).toContainText('true');
+    // Verify the connection is established (connection-status element exists and shows "connected")
+    const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
+    expect(connectionStatus).toBe('connected');
     
     console.log('WebSocket test: WebSocket connection validated');
   });

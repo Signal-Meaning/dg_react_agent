@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import { setupVADTestingEnvironment } from '../utils/audio-stream-mocks';
+import { MicrophoneHelpers } from './helpers/test-helpers.js';
+import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
 
 // Load environment variables from test-app/.env
 // dotenv config handled by Playwright config
@@ -66,17 +68,21 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
     await page.goto('http://localhost:5173');
     await page.waitForLoadState('networkidle');
     
-    // Wait for component to be ready
-    await page.waitForTimeout(3000);
-    
     console.log('✅ Test app loaded');
     
-    // Enable microphone to start WebSocket connection
+    // Use proper microphone setup with fixtures (same pattern as passing tests)
     console.log('🎤 Enabling microphone...');
-    await page.click('[data-testid="microphone-button"]');
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Wait for connection
-    await page.waitForTimeout(5000);
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
+    }
+    
+    console.log('✅ Connection established and microphone enabled');
     
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
     console.log('📡 Connection status:', connectionStatus);
@@ -84,40 +90,9 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
     if (connectionStatus.includes('connected')) {
       console.log('✅ Connection established');
       
-      // Load and send pre-recorded audio sample
+      // Use working fixture to send audio (same pattern as passing VAD tests)
       console.log('🎵 Loading pre-recorded audio sample...');
-      await page.evaluate(async () => {
-        const deepgramComponent = window.deepgramRef?.current;
-        if (!deepgramComponent || !deepgramComponent.sendAudioData) {
-          throw new Error('Deepgram component not available');
-        }
-        
-        try {
-          // Load the audio sample
-          const response = await fetch('/audio-samples/sample_hello.json');
-          if (!response.ok) {
-            throw new Error(`Failed to load audio sample: ${response.status}`);
-          }
-          
-          const sampleData = await response.json();
-          console.log('📊 Sample metadata:', {
-            phrase: sampleData.phrase,
-            sampleRate: sampleData.metadata.sampleRate,
-            totalDuration: sampleData.metadata.totalDuration,
-            speechDuration: sampleData.metadata.speechDuration
-          });
-          
-          // Convert base64 to ArrayBuffer
-          const binaryString = atob(sampleData.audioData);
-          const audioBuffer = new ArrayBuffer(binaryString.length);
-          const audioView = new Uint8Array(audioBuffer);
-          
-          for (let i = 0; i < binaryString.length; i++) {
-            audioView[i] = binaryString.charCodeAt(i);
-          }
-          
-          console.log('🎤 Sending pre-recorded audio to Deepgram...');
-          deepgramComponent.sendAudioData(audioBuffer);
+      await loadAndSendAudioSample(page, 'hello');
           
           // Wait for Deepgram's VAD to naturally detect the end of speech
           console.log('⏳ Waiting for Deepgram VAD to naturally detect end of speech...');

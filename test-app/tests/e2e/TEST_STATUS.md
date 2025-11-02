@@ -3,15 +3,15 @@
 Generated after merging issue157 into issue190 with lazy initialization improvements.
 
 ## Summary
-- **Total E2E Test Files**: 58
+- **Total E2E Test Files**: 51 (54 - 3 empty files removed)
 - **Total Individual Tests**: 175 (discovered via `--list` command)
 - **Tests Executed**: 35 files (partial run)
 - **Results Summary**: 
   - ✅ **Passing**: 35 files (100% passing for active tests)
   - ⚠️ **Partial**: 0 files
   - ⏭️ **Skipped**: 0 files requiring environment setup
-  - ❓ **Unknown**: 1 file (could not determine status)
-- **Progress**: 60% of test files verified (35/58)
+  - ❓ **Unknown**: 0 files
+- **Progress**: 69% of test files verified (35/51)
 - **Key Achievement**: 35/35 fully passing files - 100% passing rate for tested files! 🎉
 
 ## Key Findings from Test Run
@@ -54,8 +54,6 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 32. **suspended-audiocontext-idle-timeout.spec.js** - 1/1 passed (14.6s) ✅ **ALREADY PASSING**
 33. **vad-advanced-simulation.spec.js** - 7/7 passed (13.7s) ✅ **FIXED**
 34. **vad-configuration-optimization.spec.js** - 3/3 passed (18.8s) ✅ **FIXED**
-35. **microphone-functionality-fixed.spec.js** - 5/5 passed (38.7s) ✅ **FIXED**
-36. **manual-vad-workflow.spec.js** - 3/3 passed (25.9s) ✅ **FIXED**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -117,9 +115,69 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 - **Status**: 35/35 fully passing files - 100% passing rate for all tested files! 🎉
 
 ### Next Steps
-- Continue executing remaining 40 untested test files
+- Continue executing remaining 18 untested test files
 - Prioritize tests related to recent merges (lazy initialization, idle timeout fixes)
 - Run tests systematically, updating status as we go
+
+## Resolution Order for Remaining Tests
+
+The following order prioritizes tests that:
+1. Are most likely to pass with minimal fixes (similar to recently fixed tests)
+2. Group related functionality together
+3. Build on established patterns and fixtures
+
+### Phase 1: VAD Event & Validation Tests (Pattern Already Established)
+These should follow the same fixture pattern as recently fixed VAD tests:
+
+1. **vad-event-validation.spec.js** - VAD event validation (NEW - added to list)
+2. **vad-events-verification.spec.js** - VAD events verification
+3. **vad-websocket-events.spec.js** - WebSocket events related to VAD
+
+### Phase 2: VAD Audio & Simulation Tests (Use Existing Fixtures)
+Similar to vad-advanced-simulation and vad-configuration-optimization:
+
+4. **vad-pre-generated-audio.spec.js** - Pre-generated audio samples
+5. **vad-realistic-audio.spec.js** - Realistic audio patterns
+6. **vad-debug-test.spec.js** - VAD debugging functionality
+
+### Phase 3: VAD Specialized Scenarios
+More specific VAD scenarios:
+
+7. **vad-dual-source-test.spec.js** - Dual audio source handling
+8. **vad-fresh-init-test.spec.js** - Fresh initialization scenarios
+9. **vad-transcript-analysis.spec.js** - Transcript analysis with VAD
+10. **vad-solution-test.spec.js** - VAD solution testing
+
+### Phase 4: VAD Timeout Issue Tests (Issue #71 Related)
+Group of related timeout tests:
+
+11. **vad-timeout-issue-71.spec.js** - Original issue #71 test
+12. **vad-timeout-issue-71-fixed.spec.js** - Fixed version of issue #71
+13. **vad-timeout-issue-71-real.spec.js** - Real API version
+
+### Phase 5: VAD Advanced Features
+Advanced VAD functionality:
+
+14. **vad-redundancy-and-agent-timeout.spec.js** - Redundancy and timeout
+15. **vad-typing-idle-timeout.spec.js** - Typing and idle timeout interaction
+
+### Phase 6: User Speaking Callbacks
+Callback testing:
+
+16. **user-stopped-speaking-callback.spec.js** - UserStoppedSpeaking callback
+17. **user-stopped-speaking-demonstration.spec.js** - Callback demonstration
+
+### Phase 7: Configuration & Extended Scenarios
+Configuration and extended scenarios:
+
+18. **transcription-config-test.spec.js** - Transcription configuration
+19. **simple-extended-silence-idle-timeout.spec.js** - Extended silence scenarios
+
+**Note**: All VAD tests should use the established fixture pattern:
+- `MicrophoneHelpers.waitForMicrophoneReady()`
+- `loadAndSendAudioSample()` from `./fixtures/audio-helpers.js`
+- `waitForVADEvents()` from `./fixtures/audio-helpers.js`
+- Expect `UserStartedSpeaking` and `UtteranceEnd` events (not `UserStoppedSpeaking`)
 
 ## Test Execution Plan
 
@@ -221,12 +279,6 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 **Status**: ✅ **PASSING** - 3 passed (12.4s execution time)
 **Notes**: Fixed by using MicrophoneHelpers.waitForMicrophoneReady() for proper connection setup. Fixed assertConnectionHealthy() to not check non-existent connection-ready element.
 
----
-
-### 8. debug-real-api.spec.js
-**Tests**: (Count unknown - needs inspection)
-
-**Status**: ❓ **UNKNOWN** - Could not determine status from test run
 
 ---
 
@@ -293,16 +345,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 15. initial-greeting-idle-timeout.spec.js
-**Tests (2):**
-- [ ] should timeout after initial greeting on page load
-- [ ] should NOT play greeting if AudioContext is suspended
-
-**Status**: ❓ Not yet tested
-
----
-
-### 16. js-error-test.spec.js
+### 15. js-error-test.spec.js
 **Tests (1):**
 - [x] should check for JavaScript errors
 
@@ -311,7 +354,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 17. lazy-initialization-e2e.spec.js
+### 16. lazy-initialization-e2e.spec.js
 **Tests (7):**
 - [x] should not create WebSocket managers during component initialization
 - [x] should create agent manager when start() is called with agent flag
@@ -326,7 +369,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 18. logging-behavior.spec.js
+### 17. logging-behavior.spec.js
 **Tests (4):**
 - [x] should log event log entries to console
 - [x] should log transcript entries to both console and event log
@@ -338,7 +381,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 19. manual-diagnostic.spec.js
+### 18. manual-diagnostic.spec.js
 **Tests (2):**
 - [x] should capture and analyze all console traffic during manual testing
 - [x] should test VAD configuration specifically
@@ -348,7 +391,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 20. manual-vad-workflow.spec.js
+### 19. manual-vad-workflow.spec.js
 **Tests (3):**
 - [x] should handle complete manual workflow: speak → silence → timeout
 - [x] should detect VAD events during manual workflow
@@ -363,7 +406,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 21. microphone-activation-after-idle-timeout.spec.js
+### 20. microphone-activation-after-idle-timeout.spec.js
 **Tests (2):**
 - [x] should handle microphone activation after idle timeout
 - [x] should show loading state during reconnection attempt
@@ -373,7 +416,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 22. microphone-control.spec.js
+### 21. microphone-control.spec.js
 **Tests (9):**
 - [x] should enable microphone when button clicked
 - [x] should disable microphone when button clicked again
@@ -390,7 +433,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 23. microphone-functionality-fixed.spec.js
+### 22. microphone-functionality-fixed.spec.js
 **Tests (5):**
 - [x] should enable microphone when button is clicked (FIXED)
 - [x] should show VAD elements when microphone is enabled (FIXED)
@@ -405,7 +448,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 24. microphone-functionality.spec.js
+### 23. microphone-functionality.spec.js
 **Tests (2):**
 - [x] should actually enable microphone when button is clicked
 - [x] should show VAD elements when microphone is enabled
@@ -415,7 +458,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 25. microphone-reliability.spec.js
+### 24. microphone-reliability.spec.js
 **Tests (2):**
 - [x] should track microphone enable/disable reliability
 - [x] should test connection state consistency
@@ -425,7 +468,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 26. page-content.spec.js
+### 25. page-content.spec.js
 **Tests (2):**
 - [x] should check what elements are on the page
 - [x] should render voice agent component correctly
@@ -435,7 +478,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 29. protocol-validation-modes.spec.js
+### 26. protocol-validation-modes.spec.js
 **Tests (2):**
 - [x] should work with mocked WebSocket when no API key provided
 - [x] should work with mocked WebSocket (no API key)
@@ -445,7 +488,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 30. react-error-test.spec.js
+### 27. react-error-test.spec.js
 **Tests (1):**
 - [x] should detect React rendering errors
 
@@ -454,7 +497,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 31. real-user-workflows.spec.js
+### 28. real-user-workflows.spec.js
 **Tests (11):**
 - [x] should display VAD status elements
 - [x] should initialize with default VAD states
@@ -473,14 +516,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 30. simple-idle-timeout-test.spec.js
-**Tests**: (Count unknown - needs inspection)
-
-**Status**: ❓ Not yet tested
-
----
-
-### 31. simple-mic-test.spec.js
+### 29. simple-mic-test.spec.js
 **Tests (1):**
 - [x] should test basic microphone functionality
 
@@ -489,7 +525,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 32. strict-mode-behavior.spec.js
+### 30. strict-mode-behavior.spec.js
 **Tests (5):**
 - [x] should preserve connections during StrictMode cleanup/re-mount cycle
 - [x] should detect StrictMode cleanup in console logs
@@ -502,23 +538,17 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 33. suspended-audiocontext-idle-timeout.spec.js
+### 31. suspended-audiocontext-idle-timeout.spec.js
 **Tests (1):**
 - [x] should timeout even with suspended AudioContext
 
 **Status**: ✅ **PASSING** - 1 passed (14.6s execution time)
 **Notes**: Test passing. Validates Issue #139 fix - idle timeout works correctly regardless of AudioContext state (~12 seconds, within expected 15s window). Uses fixtures: `setupTestPage`, `establishConnectionViaMicrophone`, `waitForAgentGreeting`, `waitForIdleTimeout`. Test confirms that idle timeout mechanism works even when AudioContext state may vary, addressing the bug where timeout didn't work with suspended AudioContext.
 
----
-
-### 34. test-agent-response-fix.spec.js
-**Tests**: (Count unknown - needs inspection)
-
-**Status**: ❓ Not yet tested
 
 ---
 
-### 35. text-idle-timeout-suspended-audio.spec.js
+### 33. text-idle-timeout-suspended-audio.spec.js
 **Tests (2):**
 - [x] should timeout after text interaction even with suspended AudioContext
 - [x] should resume AudioContext on text input focus
@@ -528,7 +558,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 36. text-session-flow.spec.js
+### 34. text-session-flow.spec.js
 **Tests (4):**
 - [x] should auto-connect and re-establish connection when WebSocket is closed
 - [x] should handle rapid message exchange within idle timeout
@@ -540,7 +570,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 37. vad-advanced-simulation.spec.js
+### 35. vad-advanced-simulation.spec.js
 **Tests (7):**
 - [x] should support pre-recorded audio sources
 - [x] should work with pre-generated audio samples for VAD testing
@@ -563,7 +593,7 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 38. vad-configuration-optimization.spec.js
+### 36. vad-configuration-optimization.spec.js
 **Tests (3):**
 - [x] should test different utterance_end_ms values for offset detection
 - [x] should test different VAD event combinations
@@ -583,136 +613,143 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 
 ---
 
-### 39. vad-debug-test.spec.js
+### 37. vad-debug-test.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 40. vad-dual-source-test.spec.js
+### 38. vad-dual-source-test.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 41. vad-events-verification.spec.js
+### 39. vad-event-validation.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 42. vad-fresh-init-test.spec.js
+### 40. vad-events-verification.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 43. vad-pre-generated-audio.spec.js
+### 41. vad-fresh-init-test.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 44. vad-realistic-audio.spec.js
+### 42. vad-pre-generated-audio.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 45. vad-redundancy-and-agent-timeout.spec.js
+### 43. vad-realistic-audio.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 46. vad-solution-test.spec.js
+### 44. vad-redundancy-and-agent-timeout.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 47. vad-timeout-issue-71-fixed.spec.js
+### 45. vad-solution-test.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 48. vad-timeout-issue-71-real.spec.js
+### 46. vad-timeout-issue-71-fixed.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 49. vad-timeout-issue-71.spec.js
+### 47. vad-timeout-issue-71-real.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 50. vad-transcript-analysis.spec.js
+### 48. vad-timeout-issue-71.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 51. vad-typing-idle-timeout.spec.js
+### 49. vad-transcript-analysis.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 52. vad-websocket-events.spec.js
+### 50. vad-typing-idle-timeout.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 53. user-stopped-speaking-callback.spec.js
+### 51. vad-websocket-events.spec.js
+**Tests (5):**
+- [x] should establish WebSocket connection to Deepgram Agent API
+- [x] should handle UserStartedSpeaking events (only VAD event currently implemented)
+- [x] should validate WebSocket connection states
+- [x] should handle WebSocket connection errors gracefully
+- [x] should note that VAD events are not yet implemented
+
+**Status**: ✅ **PASSING** - 5 passed (9.5s execution time)
+**Notes**: Fixed by replacing non-existent `[data-testid="connection-ready"]` element check with existing `[data-testid="connection-status"]` element check. Tests now verify connection status is "connected" after microphone activation. Uses MicrophoneHelpers.waitForMicrophoneReady() for proper microphone setup.
+
+---
+
+### 52. user-stopped-speaking-callback.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 54. user-stopped-speaking-demonstration.spec.js
+### 53. user-stopped-speaking-demonstration.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 55. simple-extended-silence-idle-timeout.spec.js
+### 54. simple-extended-silence-idle-timeout.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
 ---
 
-### 56. transcription-config-test.spec.js
+### 55. transcription-config-test.spec.js
 **Tests**: (Count unknown - needs inspection)
 
 **Status**: ❓ Not yet tested
 
----
-
-### 57. simple-debug.spec.js
-**Tests**: (Count unknown - needs inspection)
-
-**Status**: ❓ Not yet tested
 
 ---
 

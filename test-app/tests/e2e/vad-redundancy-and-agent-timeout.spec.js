@@ -31,11 +31,12 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { setupConnectionStateTracking } from './helpers/test-helpers';
+import { setupConnectionStateTracking, MicrophoneHelpers } from './helpers/test-helpers.js';
 import {
   SELECTORS, waitForConnection
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks';
+import { loadAndSendAudioSample, waitForVADEvents as waitForVADEventsFixture } from './fixtures/audio-helpers.js';
 const {
   VADTestUtilities,
   setupVADTestEnvironment,
@@ -67,11 +68,22 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
   test('should detect and handle VAD signal redundancy with pre-recorded audio', async ({ page }) => {
     console.log('🧪 Testing VAD signal redundancy detection with pre-recorded audio...');
     
-    // Load and send pre-recorded audio sample (using working pattern)
-    await vadUtils.loadAndSendAudioSample('hello__how_are_you_today_');
+    // Use proper microphone setup with fixtures (required for audio tests)
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Wait for VAD events to be processed
-    await waitForVADEvents(page, 3000);
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
+    }
+    
+    // Use working fixture to send audio (same pattern as passing VAD tests)
+    await loadAndSendAudioSample(page, 'hello__how_are_you_today_');
+    
+    // Wait for VAD events using working fixture
+    await waitForVADEventsFixture(page, ['UserStartedSpeaking', 'UtteranceEnd'], 3000);
     
     // Analyze VAD events
     const vadAnalysis = vadUtils.analyzeVADEvents();
@@ -111,8 +123,7 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
       );
     }, { timeout: 10000 });
     
-    // Wait a bit more for complete processing
-    await page.waitForTimeout(2000);
+    // Brief pause for complete processing
     
     // Analyze agent state changes
     const agentAnalysis = vadUtils.analyzeAgentStateChanges();
@@ -179,8 +190,7 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
       }
     });
     
-    // Wait a moment for any processing
-    await page.waitForTimeout(1000);
+    // Brief pause for any processing
     
     // Since we can't easily inject the message, let's verify the functionality exists in the code
     console.log('✅ AgentThinking functionality verified:');
@@ -213,9 +223,6 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
       return agentResponse && agentResponse.textContent && 
              agentResponse.textContent !== '(Waiting for agent response...)';
     }, { timeout: 15000 });
-    
-    // Wait a bit more for complete processing
-    await page.waitForTimeout(3000);
     
     // Get all console logs and filter for agent-related messages
     const allLogs = await page.evaluate(() => window.consoleLogs || []);
@@ -264,7 +271,6 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     // Note: Agent options are not exposed via public API, but we can verify
     // the agent is working by checking connection state
     const stateTracker = await setupConnectionStateTracking(page);
-    await page.waitForTimeout(500); // Wait for state to be tracked
     
     const connectionStates = await stateTracker.getStates();
     const agentConfig = {
@@ -350,11 +356,22 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
   test('should maintain consistent idle timeout state machine', async ({ page }) => {
     console.log('🧪 Testing idle timeout state machine consistency with pre-recorded audio...');
     
-    // Load and send pre-recorded audio sample
-    await vadUtils.loadAndSendAudioSample('hello__how_are_you_today_');
+    // Use proper microphone setup with fixtures (required for audio tests)
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Wait for complete processing cycle
-    await page.waitForTimeout(VAD_TEST_CONSTANTS.VAD_EVENT_WAIT_MS);
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
+    }
+    
+    // Use working fixture to send audio (same pattern as passing VAD tests)
+    await loadAndSendAudioSample(page, 'hello__how_are_you_today_');
+    
+    // Wait for VAD events using working fixture
+    await waitForVADEventsFixture(page, ['UserStartedSpeaking', 'UtteranceEnd'], VAD_TEST_CONSTANTS.VAD_EVENT_WAIT_MS);
     
     // Analyze state machine consistency
     const agentAnalysis = vadUtils.analyzeAgentStateChanges();

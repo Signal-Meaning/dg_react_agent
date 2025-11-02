@@ -8,6 +8,8 @@
 
 import { test, expect } from '@playwright/test';
 import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
+import { MicrophoneHelpers } from './helpers/test-helpers.js';
+import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
 
 test.describe('VAD Dual Source Test', () => {
   test.beforeEach(async ({ page }) => {
@@ -49,11 +51,16 @@ test.describe('VAD Dual Source Test', () => {
     // Wait for component to be ready
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
-    // Enable microphone
-    await page.click('[data-testid="microphone-button"]');
+    // Use proper microphone setup with fixtures (same pattern as passing tests)
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Wait for connection
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
+    }
     
     // Check that VAD states section is displayed with both sources
     const vadStatesSection = page.locator('[data-testid="vad-states"]');
@@ -71,32 +78,9 @@ test.describe('VAD Dual Source Test', () => {
     
     console.log('✅ [DUAL] VAD states section displays both sources correctly');
     
-    // Simulate audio input
-    await page.evaluate(() => {
-      const deepgramComponent = window.deepgramRef?.current;
-      if (deepgramComponent && deepgramComponent.sendAudioData) {
-        // Create a simple audio buffer
-        const sampleRate = 16000;
-        const duration = 1; // 1 second
-        const samples = sampleRate * duration;
-        const audioBuffer = new ArrayBuffer(samples * 2); // 16-bit PCM
-        const audioView = new Int16Array(audioBuffer);
-        
-        // Fill with a sine wave pattern
-        for (let i = 0; i < samples; i++) {
-          const frequency = 440; // A4 note
-          const amplitude = 16000; // Strong signal
-          const sample = Math.sin(2 * Math.PI * frequency * i / sampleRate) * amplitude;
-          audioView[i] = Math.floor(sample);
-        }
-        
-        deepgramComponent.sendAudioData(audioBuffer);
-        console.log('🔍 [DUAL] Audio buffer sent to component');
-      }
-    });
-    
-    // Wait a bit for processing
-    await page.waitForTimeout(3000);
+    // Use working fixture to send audio (same pattern as passing VAD tests)
+    console.log('🔍 [DUAL] Sending audio sample...');
+    await loadAndSendAudioSample(page, 'hello');
     
     // Check console logs for VAD events
     const vadLogs = consoleLogs.filter(log => 

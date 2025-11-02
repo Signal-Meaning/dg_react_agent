@@ -8,7 +8,7 @@
 
 import { test, expect } from '@playwright/test';
 import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks';
-import { setupConnectionStateTracking } from './helpers/test-helpers';
+import { setupConnectionStateTracking, MicrophoneHelpers } from './helpers/test-helpers.js';
 
 test.describe('VAD Solution Test', () => {
   test.beforeEach(async ({ page }) => {
@@ -54,28 +54,19 @@ test.describe('VAD Solution Test', () => {
     console.log('🔍 [SOLUTION] Setting up connection state tracking...');
     const stateTracker = await setupConnectionStateTracking(page);
     
-    // Activate microphone directly (page is already set up in beforeEach)
-    // Transcription will connect when microphone activates and audio is sent
+    // Use proper microphone setup with fixtures (same pattern as passing tests)
     console.log('🔍 [SOLUTION] Activating microphone...');
-    await page.click('[data-testid="microphone-button"]');
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Wait for agent connection
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
-    console.log('🔍 [SOLUTION] Agent connection established');
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
+    }
     
-    // Wait for microphone to be enabled
-    // When mic is enabled, test-app has:
-    // 1. Established connections (agent + transcription if configured)
-    // 2. Applied settings (agent SettingsApplied received)
-    // 3. Started audio capture (AudioManager recording)
-    // 4. Transcription should be connected and receiving audio
-    await page.waitForFunction(
-      () => {
-        const micStatus = document.querySelector('[data-testid="mic-status"]');
-        return micStatus && micStatus.textContent === 'Enabled';
-      },
-      { timeout: 15000 }
-    );
+    console.log('🔍 [SOLUTION] Agent connection established and microphone enabled');
     console.log('🔍 [SOLUTION] Microphone enabled - all prerequisites met (connections, settings, audio capture)');
     
     // After mic is enabled, transcription should already be connected
@@ -91,9 +82,6 @@ test.describe('VAD Solution Test', () => {
     } else {
       console.log('✅ [SOLUTION] Transcription connected - ready for VAD events');
     }
-    
-    // Give a moment for any async connection state updates
-    await page.waitForTimeout(1000);
     
     // Get final state
     const finalState = await stateTracker.getStates();

@@ -52,9 +52,6 @@ test.describe('VAD Fresh Initialization Test', () => {
     // Wait for component to be ready
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
-    // Wait a bit more for initialization to complete
-    await page.waitForTimeout(3000);
-    
     // Check for initialization logs
     const initLogs = consoleLogs.filter(log => 
       log.includes('INIT') || 

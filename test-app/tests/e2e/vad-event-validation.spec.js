@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { setupTestPage, simulateUserGesture } from './helpers/audio-mocks.js';
-import { setupConnectionStateTracking } from './helpers/test-helpers.js';
+import { setupConnectionStateTracking, MicrophoneHelpers } from './helpers/test-helpers.js';
+import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
 import AudioTestHelpers from '../utils/audio-helpers.js';
 
 test.describe('VAD Event Validation with Real APIs', () => {
@@ -58,28 +59,23 @@ test.describe('VAD Event Validation with Real APIs', () => {
     // Simulate user gesture before microphone interaction
     await simulateUserGesture(page);
     
-    // Enable microphone
-    await page.click('[data-testid="microphone-button"]');
+    // Use proper microphone setup with fixtures (same pattern as passing tests)
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Wait for connection to be established first
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
-    
-    // Wait a bit for microphone to be enabled
-    await page.waitForTimeout(2000);
-    
-    // Check microphone status
-    const micStatus = await page.locator('[data-testid="mic-status"]').textContent();
-    console.log('Mic status:', micStatus);
-    
-    if (micStatus !== 'Enabled') {
-      console.log('⚠️ Microphone not enabled, but continuing with test...');
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
     }
+    
+    console.log('✅ Connection established and microphone enabled');
     
     // Check if transcription service is connected using public API
     // Note: transcriptionManagerRef is an internal ref, not part of public API
     // We use callback-based connection state tracking instead
     const stateTracker = await setupConnectionStateTracking(page);
-    await page.waitForTimeout(500); // Wait for state to be tracked
     
     const connectionStates = await stateTracker.getStates();
     const transcriptionInfo = {
@@ -97,15 +93,9 @@ test.describe('VAD Event Validation with Real APIs', () => {
       console.log('This is expected with fake API keys - real API key needed for full validation');
     }
     
-    // Simulate realistic speech with silence padding
-    console.log('🎤 Simulating speech...');
-    await AudioTestHelpers.simulateVADSpeech(page, 'Hello, this is a VAD test', {
-      silenceDuration: 1000,
-      onsetSilence: 300
-    });
-    
-    // Wait for VAD events to be captured
-    await page.waitForTimeout(3000);
+    // Use working fixture to send audio (same pattern as passing VAD tests)
+    console.log('🎤 Sending audio sample...');
+    await loadAndSendAudioSample(page, 'hello');
     
     // Get captured VAD events
     const capturedEvents = await page.evaluate(() => {

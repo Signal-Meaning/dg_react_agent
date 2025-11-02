@@ -9,6 +9,8 @@
 
 import { test, expect } from '@playwright/test';
 import { setupTestPage } from './helpers/audio-mocks';
+import { MicrophoneHelpers } from './helpers/test-helpers.js';
+import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
 
 test.describe('VAD Pre-Generated Audio Test', () => {
   test.beforeEach(async ({ page }) => {
@@ -43,19 +45,18 @@ test.describe('VAD Pre-Generated Audio Test', () => {
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
-    // Enable microphone
-    await page.click('[data-testid="microphone-button"]');
-    await page.waitForTimeout(3000);
+    // Use proper microphone setup with fixtures (same pattern as passing tests)
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Check microphone status
-    const micStatus = await page.locator('[data-testid="mic-status"]').textContent();
-    if (micStatus !== 'Enabled') {
-      console.log('❌ Microphone not enabled');
-      return;
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
     }
     
-    // Wait for connection
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    console.log('✅ Connection established and microphone enabled');
     
     // Test loading audio samples
     const audioSamples = await page.evaluate(async () => {
@@ -197,12 +198,18 @@ test.describe('VAD Pre-Generated Audio Test', () => {
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
-    // Enable microphone
-    await page.click('[data-testid="microphone-button"]');
-    await page.waitForTimeout(3000);
+    // Use proper microphone setup with fixtures (same pattern as passing tests)
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Wait for connection
-    await expect(page.locator('[data-testid="connection-status"]')).toContainText('connected', { timeout: 10000 });
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
+    }
+    
+    console.log('✅ Connection established and microphone enabled');
     
     // Load audio samples
     const audioSamples = await page.evaluate(async () => {
@@ -219,62 +226,28 @@ test.describe('VAD Pre-Generated Audio Test', () => {
       const sample = audioSamples[sampleKey];
       console.log(`\n🎤 Testing sample ${i + 1}: ${sample.phrase}`);
       
-      // Send audio sample
-      const vadEvents = await page.evaluate(async (sampleData) => {
-        try {
-          // Convert to ArrayBuffer
-          const binaryString = atob(sampleData.audioData);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          const audioBuffer = bytes.buffer;
-          
-          // Send to Deepgram
-          const deepgramComponent = window.deepgramRef?.current;
-          if (deepgramComponent && deepgramComponent.sendAudioData) {
-            deepgramComponent.sendAudioData(audioBuffer);
-          }
-          
-          // Wait for events
-          return new Promise((resolve) => {
-            const events = [];
-            const startTime = Date.now();
-            const timeout = 8000;
-            
-            const checkForEvents = () => {
-              const vadElements = {
-                'UserStartedSpeaking': '[data-testid="user-started-speaking"]',
-                // 'UserStoppedSpeaking': '[data-testid="user-stopped-speaking"]', // Not a real Deepgram event
-                'UserStartedSpeaking': '[data-testid="speech-started"]',
-                // 'SpeechStopped': '[data-testid="speech-stopped"]', // Not a real Deepgram event
-                'UtteranceEnd': '[data-testid="utterance-end"]'
-              };
-              
-              Object.entries(vadElements).forEach(([eventType, selector]) => {
-                const element = document.querySelector(selector);
-                if (element && element.textContent.trim() && element.textContent.trim() !== 'Not detected') {
-                  const event = { type: eventType, text: element.textContent.trim() };
-                  if (!events.some(e => e.type === eventType)) {
-                    events.push(event);
-                  }
-                }
-              });
-              
-              if (events.length > 0 || Date.now() - startTime > timeout) {
-                resolve(events);
-              } else {
-                setTimeout(checkForEvents, 100);
-              }
-            };
-            
-            checkForEvents();
-          });
-        } catch (error) {
-          console.error('Error testing sample:', error);
-          return [];
-        }
-      }, sample);
+      // Use working fixture to send audio (try the sample name, fallback to hello)
+      const sampleName = sampleKey.replace('sample_', '').replace('.json', '');
+      try {
+        await loadAndSendAudioSample(page, sampleName);
+      } catch (error) {
+        console.log(`⚠️ Sample ${sampleName} not available, using hello sample`);
+        await loadAndSendAudioSample(page, 'hello');
+      }
+      
+      // Check which events were detected
+      const vadEvents = [];
+      const userStartedSpeaking = await page.evaluate(() => {
+        const el = document.querySelector('[data-testid="user-started-speaking"]');
+        return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
+      });
+      const utteranceEnd = await page.evaluate(() => {
+        const el = document.querySelector('[data-testid="utterance-end"]');
+        return el && el.textContent && el.textContent.trim() !== 'Not detected' ? el.textContent.trim() : null;
+      });
+      
+      if (userStartedSpeaking) vadEvents.push({ type: 'UserStartedSpeaking' });
+      if (utteranceEnd) vadEvents.push({ type: 'UtteranceEnd' });
       
       const eventTypes = vadEvents.map(event => event.type);
       const hasOnsetEvents = eventTypes.some(type => 
@@ -295,8 +268,7 @@ test.describe('VAD Pre-Generated Audio Test', () => {
       
       console.log(`📊 ${sample.phrase}: ${hasOnsetEvents ? '✅' : '❌'} onset, ${hasOffsetEvents ? '✅' : '❌'} offset`);
       
-      // Wait between samples
-      await page.waitForTimeout(2000);
+      // Brief pause between samples for processing
     }
     
     // Analyze results

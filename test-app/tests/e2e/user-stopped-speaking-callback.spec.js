@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { MicrophoneHelpers } from './helpers/test-helpers.js';
+import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
 
 /**
  * Test to verify onUserStoppedSpeaking callback is working
@@ -30,9 +32,6 @@ test.describe('onUserStoppedSpeaking Callback Verification', () => {
     await page.goto('http://localhost:5173');
     await page.waitForLoadState('networkidle');
     
-    // Wait for component to be ready
-    await page.waitForTimeout(3000);
-    
     console.log('✅ Test app loaded');
     
     // Check if component is available
@@ -43,12 +42,19 @@ test.describe('onUserStoppedSpeaking Callback Verification', () => {
     expect(componentAvailable).toBe(true);
     console.log('✅ DeepgramVoiceInteraction component is available');
     
-    // Enable microphone
+    // Use proper microphone setup with fixtures (same pattern as passing tests)
     console.log('🎤 Enabling microphone...');
-    await page.click('[data-testid="microphone-button"]');
+    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      skipGreetingWait: true,
+      connectionTimeout: 15000,
+      micEnableTimeout: 10000
+    });
     
-    // Wait for connection
-    await page.waitForTimeout(5000);
+    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
+      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
+    }
+    
+    console.log('✅ Connection established and microphone enabled');
     
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
     console.log('📡 Connection status:', connectionStatus);
