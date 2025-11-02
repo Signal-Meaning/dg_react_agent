@@ -29,6 +29,7 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
           scope: '@signal-meaning'
           token: ${{ secrets.NPM_PACKAGES_TOKEN }}
+          always-auth: true
           
       - name: Install dependencies
         run: npm ci
@@ -41,13 +42,23 @@ jobs:
         
       - name: Configure npm authentication
         run: |
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
-          echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          cat ~/.npmrc
+          # Note: setup-node@v4 already creates .npmrc, but we need to ensure it's complete
+          # The action creates: @signal-meaning:registry and auth token
+          # We'll verify and enhance if needed
+          echo "📋 Current npm configuration:"
+          npm config get registry
+          npm config get @signal-meaning:registry
+          cat ~/.npmrc || echo "No .npmrc found"
         
       - name: Verify authentication
         run: |
-          npm whoami --registry https://npm.pkg.github.com || echo "Authentication check failed"
+          echo "🔐 Testing authentication..."
+          npm whoami --registry https://npm.pkg.github.com || {
+            echo "❌ Authentication check failed"
+            echo "📋 Current .npmrc:"
+            cat ~/.npmrc || echo "No .npmrc found"
+            exit 1
+          }
           
       - name: Check if version already exists
         id: check_version
@@ -63,14 +74,41 @@ jobs:
         
       - name: Publish to GitHub Package Registry
         run: |
-          # Publish with explicit error handling
-          npm publish || {
-            echo "❌ Publish failed"
+          set -e
+          # Show npm configuration before publish
+          echo "📦 Package name: $(node -p "require('./package.json').name")"
+          echo "📦 Package version: $(node -p "require('./package.json').version")"
+          echo "📦 Registry: $(npm config get registry)"
+          echo "📦 Scope registry: $(npm config get @signal-meaning:registry)"
+          
+          # Show what will be published
+          echo "📋 Files to be published:"
+          npm pack --dry-run 2>/dev/null | tail -20 || true
+          
+          # Attempt publish with detailed error capture
+          npm publish 2>&1 | tee /tmp/npm-publish-output.log || {
+            EXIT_CODE=${PIPESTATUS[0]}
+            echo ""
+            echo "❌ Publish failed with exit code: $EXIT_CODE"
+            echo ""
+            echo "📋 npm publish output:"
+            cat /tmp/npm-publish-output.log || echo "No output captured"
+            echo ""
+            echo "📋 npm debug logs (most recent):"
+            find ~/.npm/_logs -name "*debug*.log" -type f -mtime -1 2>/dev/null | head -1 | xargs cat 2>/dev/null || {
+              echo "Listing all debug logs:"
+              ls -la ~/.npm/_logs/*debug*.log 2>/dev/null || echo "No debug logs found"
+              # Try to cat the most recent one
+              ls -t ~/.npm/_logs/*debug*.log 2>/dev/null | head -1 | xargs cat 2>/dev/null || echo "Could not read debug log"
+            }
+            echo ""
             echo "Common causes:"
-            echo "  - Version already exists (409)"
-            echo "  - Authentication failed (401)"
-            echo "  - Insufficient permissions (403)"
-            exit 1
+            echo "  - Version already exists (409 Conflict)"
+            echo "  - Authentication failed (401 Unauthorized)"
+            echo "  - Insufficient permissions (403 Forbidden)"
+            echo "  - Missing files or invalid package.json"
+            echo "  - prepublishOnly script failed"
+            exit $EXIT_CODE
           }
           echo "✅ Package published successfully"
           
