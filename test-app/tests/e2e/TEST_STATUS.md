@@ -5,11 +5,13 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 ## Summary
 - **Total E2E Test Files**: 58
 - **Total Individual Tests**: 175 (discovered via `--list` command)
-- **Tests Executed**: 18 files (partial run)
+- **Tests Executed**: 19 files (partial run)
 - **Results Summary**: 
-  - ✅ **Passing**: 18 files (100% passing for active tests)
+  - ✅ **Passing**: 19 files (100% passing for active tests)
   - ⏭️ **Skipped**: 0 files requiring environment setup
   - ❓ **Unknown**: 1 file (could not determine status)
+- **Progress**: 33% of test files verified (19/58)
+- **Key Achievement**: All tested files are passing - excellent test quality!
 
 ## Key Findings from Test Run
 
@@ -34,6 +36,7 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
 15. **greeting-idle-timeout.spec.js** - 3/3 passed (45.9s) ✅ **ALREADY PASSING**
 16. **idle-timeout-behavior.spec.js** - 6/6 passed (1.3m) ✅ **ALREADY PASSING**
 17. **idle-timeout-during-agent-speech.spec.js** - 1/1 passed (23.1s) ✅ **ALREADY PASSING**
+18. **text-session-flow.spec.js** - 4/4 passed (22.4s) ✅ **FIXED**
 
 ### Files Requiring Attention ⚠️
 ~~1. **api-key-validation.spec.js** - 2/5 passed, 3 failures~~ ✅ **FIXED** - All 5 tests passing
@@ -59,10 +62,20 @@ Generated after merging issue157 into issue190 with lazy initialization improvem
   - Reduced redundant tests, consolidated to core state transition scenarios
   - Improved maintainability and readability with shared utilities
 
+### Recent Progress (2025-11-02)
+- ✅ Fixed `greeting-audio-timing.spec.js` - Refactored to use fixtures consistently
+- ✅ Verified `audio-interruption-timing.spec.js` - All 4 active tests passing
+- ✅ Verified `greeting-idle-timeout.spec.js` - All 3 tests passing
+- ✅ Verified `idle-timeout-behavior.spec.js` - All 6 tests passing
+- ✅ Verified `idle-timeout-during-agent-speech.spec.js` - 1 test passing
+- ✅ Fixed `text-session-flow.spec.js` - Refactored to use fixtures consistently (establishConnectionViaText, sendMessageAndWaitForResponse, disconnectComponent)
+- **Pattern**: All recent tests use fixtures (`waitForConnectionAndSettings`, `establishConnectionViaText`, `MicrophoneHelpers`, etc.)
+- **Status**: 19/58 files verified, all passing - 100% success rate!
+
 ### Next Steps
-- Review API key validation failures
-- Run audio tests with PW_ENABLE_AUDIO=true to get full picture
-- Continue executing remaining 48 test files
+- Continue executing remaining 40 untested test files
+- Prioritize tests related to recent merges (lazy initialization, idle timeout fixes)
+- Run tests systematically, updating status as we go
 
 ## Test Execution Plan
 
@@ -442,9 +455,14 @@ npm run test:e2e -- <test-file-name>.spec.js -g "<test-name>"
 ---
 
 ### 36. text-session-flow.spec.js
-**Tests**: (Count unknown - needs inspection)
+**Tests (4):**
+- [x] should auto-connect and re-establish connection when WebSocket is closed
+- [x] should handle rapid message exchange within idle timeout
+- [x] should establish connection, send settings, and respond to initial text
+- [x] should maintain connection through sequential messages
 
-**Status**: ❓ Not yet tested
+**Status**: ✅ **PASSING** - 4 passed (22.4s execution time)
+**Notes**: Fixed by refactoring to use fixtures consistently. Replaced manual code with `establishConnectionViaText()` for initial connection setup (fixes lazy initialization requirement), `disconnectComponent()` for disconnection, and `sendMessageAndWaitForResponse()` for sending messages and waiting for responses. All tests now follow consistent fixture patterns.
 
 ---
 
@@ -639,7 +657,7 @@ Based on the merge and recent changes, these tests should be prioritized:
 8. ✅ **greeting-idle-timeout.spec.js** - **COMPLETED** - All 3 tests passing (Issue #139 validation)
 9. ✅ **idle-timeout-behavior.spec.js** - **COMPLETED** - All 6 tests passing (idle timeout behavior validation)
 10. ✅ **idle-timeout-during-agent-speech.spec.js** - **COMPLETED** - 1 test passing (connection stability during agent speech)
-11. **text-session-flow.spec.js** - Text session flow validation (NEXT)
+11. ✅ **text-session-flow.spec.js** - **COMPLETED** - All 4 tests passing (text session flow validation)
 
 ## Notes
 
