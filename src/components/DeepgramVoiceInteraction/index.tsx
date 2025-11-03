@@ -1146,7 +1146,12 @@ function DeepgramVoiceInteraction(
             model: agentOptions.voice || 'aura-asteria-en'
           }
         },
-        greeting: agentOptions.greeting,
+        // Issue #234: Only include greeting if context is not provided or context.messages is empty
+        // When context with existing messages is provided, this is a reconnection and greeting should be omitted
+        // to avoid duplicate greeting on reconnection
+        ...(agentOptions.context?.messages && agentOptions.context.messages.length > 0 
+          ? {} 
+          : { greeting: agentOptions.greeting }),
         context: agentOptions.context // Context is already in Deepgram API format
       }
     };
@@ -1156,6 +1161,7 @@ function DeepgramVoiceInteraction(
       contextMessages: agentOptions.context?.messages || [],
       hasSpeakProvider: 'speak' in settingsMessage.agent,
       speakModel: settingsMessage.agent.speak?.provider?.model,
+      greetingIncluded: 'greeting' in settingsMessage.agent,
       greetingPreview: (settingsMessage.agent.greeting || '').slice(0, 60)
     });
     agentManagerRef.current.sendJSON(settingsMessage);
