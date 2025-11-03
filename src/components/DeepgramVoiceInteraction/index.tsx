@@ -169,6 +169,10 @@ function DeepgramVoiceInteraction(
   const agentManagerRef = useRef<WebSocketManager | null>(null);
   const audioManagerRef = useRef<AudioManager | null>(null);
   
+  // Guard to prevent race conditions between explicit stop() and connection close handler
+  // Fix for issue #239: Prevents double-stopping audio when both paths try to stop
+  const isStoppingAudioRef = useRef<boolean>(false);
+  
   // Track whether speech_final=true was received to implement Deepgram's recommended pattern:
   // "trigger when speech_final=true is received (ignore subsequent UtteranceEnd)"
   // Reference: https://developers.deepgram.com/docs/understanding-end-of-speech-detection#using-utteranceend
@@ -584,24 +588,40 @@ function DeepgramVoiceInteraction(
             }
             lazyLog('Reset hasSentSettings flag due to connection close');
             
-            // Disable microphone when connection closes (async operation)
+            // Disable microphone when connection closes
+            // CRITICAL: Stop audio synchronously to prevent race conditions with explicit stop() calls
+            // Fix for issue #239: Audio tracks were hanging because setTimeout deferred cleanup
             if (audioManagerRef.current && audioManagerRef.current.isRecordingActive()) {
+              // Check guard: if audio is already being stopped by explicit stop(), skip to prevent double-stop
+              if (isStoppingAudioRef.current) {
+                if (config.debug) {
+                  console.log('🔧 [Connection] Audio already being stopped by explicit stop(), skipping connection close handler');
+                }
+                return; // Early return to prevent double-stopping
+              }
+              
               if (config.debug) {
                 console.log('🔧 [Connection] Connection closed, disabling microphone');
               }
-              // Use setTimeout to avoid blocking the event handler
-              setTimeout(async () => {
-                try {
-                  await audioManagerRef.current?.stopRecording();
-                  if (config.debug) {
-                    console.log('🔧 [Connection] Recording stopped due to connection close');
-                  }
-                } catch (error) {
-                  if (config.debug) {
-                    console.log('🔧 [Connection] Error stopping recording:', error);
-                  }
+              try {
+                // Set guard to prevent double-stopping if explicit stop() is called concurrently
+                isStoppingAudioRef.current = true;
+                // Stop recording synchronously - stopRecording() is synchronous, no need for setTimeout
+                audioManagerRef.current.stopRecording();
+                if (config.debug) {
+                  console.log('🔧 [Connection] Recording stopped due to connection close');
                 }
-              }, 0);
+                // Reset guard immediately after stopping (synchronous operation is complete)
+                isStoppingAudioRef.current = false;
+              } catch (error) {
+                // Reset guard even on error
+                isStoppingAudioRef.current = false;
+                if (config.debug) {
+                  console.log('🔧 [Connection] Error stopping recording:', error);
+                }
+                // Log error but don't throw - connection is already closing
+                log('Error stopping recording on connection close:', error);
+              }
             }
           }
           
@@ -1758,8 +1778,29 @@ function DeepgramVoiceInteraction(
       }
       
       // Stop recording if audio manager is available
+      // CRITICAL: Stop audio BEFORE closing connections to prevent resource leaks
+      // Fix for issue #239: Ensures audio tracks are stopped before WebSocket cleanup
       if (audioManagerRef.current) {
-        audioManagerRef.current.stopRecording();
+        // Check guard: if audio is already being stopped by connection close handler, skip to prevent double-stop
+        if (isStoppingAudioRef.current) {
+          log('Audio already being stopped by connection close handler, skipping explicit stop()');
+          // Wait briefly to allow connection close handler to complete
+          await new Promise(resolve => setTimeout(resolve, 10));
+          return; // Return early, audio cleanup is already in progress
+        }
+        
+        try {
+          // Set guard to prevent double-stopping if connection close handler fires concurrently
+          isStoppingAudioRef.current = true;
+          audioManagerRef.current.stopRecording();
+          // Reset guard immediately after stopping (synchronous operation is complete)
+          isStoppingAudioRef.current = false;
+        } catch (error) {
+          // Reset guard even on error
+          isStoppingAudioRef.current = false;
+          log('Error stopping recording in stop() method:', error);
+          // Continue with cleanup even if stopping fails
+        }
       }
       
       // Add a small delay to allow final transcripts to be processed
