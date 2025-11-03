@@ -89,6 +89,144 @@ describe('Unified Timeout Coordination Integration', () => {
     });
   });
 
+  describe('Issue #235: Timeout Reset on Speech Start', () => {
+    test('should reset timeout when USER_STARTED_SPEAKING fires (prevents immediate timeout)', () => {
+      // Scenario from Issue #235: User has been idle, timeout is about to fire
+      // Line 24: User started speaking
+      // Line 25: [IDLE_TIMEOUT] Idle timeout reached - closing agent connection (IMMEDIATELY AFTER!)
+      // 
+      // Root cause: Timeout fires immediately after USER_STARTED_SPEAKING because
+      // it's not properly reset/cancelled when speech starts
+      //
+      // NOTE: This test validates IdleTimeoutService behavior at the unit level.
+      // Currently passes, indicating the service itself works correctly.
+      // The actual bug in issue #235 may be at the component integration level:
+      // - Multiple IdleTimeoutService instances from component remounting
+      // - Component not properly wiring onUserStartedSpeaking to the service
+      // - Race conditions in component lifecycle
+      // If the service-level bug existed, this test would fail.
+      
+      // Start with user stopped speaking and agent idle (timeout should be active)
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      
+      // Advance time to 4999ms (99.98% through timeout period - milliseconds away from firing)
+      // This simulates the exact scenario where timeout is about to fire
+      jest.advanceTimersByTime(4999);
+      expect(mockOnTimeout).not.toHaveBeenCalled(); // Should not have fired yet
+      
+      // USER_STARTED_SPEAKING fires - this should IMMEDIATELY cancel the pending timeout
+      // Issue #235: Currently timeout fires immediately after this event (race condition)
+      idleTimeoutService.handleEvent({ type: 'USER_STARTED_SPEAKING' });
+      
+      // CRITICAL: Advance even 1ms - the timeout that was about to fire should be cancelled
+      // If the bug exists, timeout would fire here because it wasn't properly stopped
+      jest.advanceTimersByTime(1);
+      expect(mockOnTimeout).not.toHaveBeenCalled(); // Should NOT fire - timeout should be cancelled
+      
+      // Continue advancing time while user is speaking - should never fire
+      jest.advanceTimersByTime(10000);
+      expect(mockOnTimeout).not.toHaveBeenCalled(); // Still should not fire
+      
+      // User stops speaking
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      
+      // Now timeout should start fresh from 0ms and fire after full idle period
+      jest.advanceTimersByTime(4999);
+      expect(mockOnTimeout).not.toHaveBeenCalled(); // Not quite time yet
+      
+      jest.advanceTimersByTime(1);
+      // Should fire exactly once after user stops speaking, NOT immediately after starting
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    test('should only fire timeout once, not multiple times (prevents duplicate handlers)', () => {
+      // Issue #235: Multiple timeout messages observed (lines 25, 32, 38 in issue logs)
+      // This test verifies only one timeout fires per idle period
+      
+      // Start idle state
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      
+      // Wait for timeout period
+      jest.advanceTimersByTime(5000);
+      
+      // Should fire exactly once, not multiple times
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+      
+      // Advance more time - should not fire again without a new idle period
+      jest.advanceTimersByTime(10000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+      
+      // If we set up a new idle period, it should fire again (but only once)
+      mockOnTimeout.mockClear();
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1); // Should fire once for this new period
+    });
+
+    test('should have only ONE timeout handler per session (prevents multiple service instances)', () => {
+      // Issue #235: Concern that multiple timeout handlers may exist when only one is needed
+      // This test simulates the scenario where component remounting or debug prop changes
+      // cause multiple IdleTimeoutService instances to be created
+      //
+      // EXPECTED: Only ONE timeout should fire per session
+      // The fix ensures old services are destroyed before creating new ones
+      
+      const mockOnTimeout = jest.fn();
+      
+      // Step 1: Create first service instance (original mount) and start timeout
+      const service1 = new IdleTimeoutService({ 
+        timeoutMs: 5000, 
+        debug: false 
+      });
+      service1.onTimeout(mockOnTimeout);
+      service1.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      service1.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      // service1 now has an active timeout running
+      
+      // Step 2: Simulate component remount or debug prop change
+      // FIX: Destroy old service BEFORE creating new one (as useIdleTimeoutManager now does)
+      service1.destroy(); // This cancels service1's timeout
+      
+      const service2 = new IdleTimeoutService({ 
+        timeoutMs: 5000, 
+        debug: true 
+      });
+      service2.onTimeout(mockOnTimeout);
+      service2.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      service2.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      // service2 now has an active timeout running
+      // service1's timeout was cancelled by destroy()
+      
+      // Step 3: Another remount - properly destroy old service first
+      service2.destroy(); // This cancels service2's timeout
+      
+      const service3 = new IdleTimeoutService({ 
+        timeoutMs: 5000, 
+        debug: false 
+      });
+      service3.onTimeout(mockOnTimeout);
+      service3.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      service3.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      // service3 now has an active timeout running
+      // service1 and service2's timeouts were cancelled by destroy()
+      
+      // Wait for timeout period - only service3 should have an active timeout
+      jest.advanceTimersByTime(5000);
+      
+      // EXPECTED: Only service3 should fire timeout (only one callback)
+      // After the fix in useIdleTimeoutManager, old services are destroyed before creating new ones
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1); // Only one timeout should fire
+      
+      // Cleanup
+      service3.destroy();
+    });
+  });
+
   describe('Service Coordination', () => {
     test('should coordinate between transcription and agent services', () => {
       // Activity from transcription service

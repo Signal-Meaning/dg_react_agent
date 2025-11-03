@@ -19,6 +19,16 @@ export function useIdleTimeoutManager(
 
   // Initialize the service
   useEffect(() => {
+    // Issue #235: Destroy any existing service BEFORE creating a new one
+    // This prevents multiple timeout handlers from existing simultaneously
+    if (serviceRef.current) {
+      if (debug) {
+        console.log('🎯 [DEBUG] Destroying existing IdleTimeoutService before creating new one');
+      }
+      serviceRef.current.destroy();
+      serviceRef.current = null;
+    }
+
     if (debug) {
       console.log('🎯 [DEBUG] Creating new IdleTimeoutService');
       console.log('🎯 [DEBUG] About to create IdleTimeoutService');
@@ -39,10 +49,13 @@ export function useIdleTimeoutManager(
 
     return () => {
       if (debug) {
-        console.log('🎯 [DEBUG] Destroying IdleTimeoutService');
+        console.log('🎯 [DEBUG] Destroying IdleTimeoutService (cleanup)');
       }
-      serviceRef.current?.destroy();
-      serviceRef.current = null;
+      // Issue #235: Ensure service is destroyed and timeout is cancelled
+      if (serviceRef.current) {
+        serviceRef.current.destroy();
+        serviceRef.current = null;
+      }
     };
   }, [debug]);
 
