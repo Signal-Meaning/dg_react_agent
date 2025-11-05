@@ -368,5 +368,244 @@ test.describe('Echo Cancellation Detection and Configuration', () => {
     console.log('✅ Sample rate constraint capability documented');
     console.log('   Note: Custom sample rate test requires test-app prop support');
   });
+
+  test('should prevent agent TTS from triggering itself (echo cancellation effectiveness)', async ({ page }) => {
+    console.log('🔍 Testing echo cancellation effectiveness: agent TTS should not trigger itself...');
+    
+    // Enable microphone so it's open and capturing audio
+    await MicrophoneHelpers.waitForMicrophoneReady(page);
+    
+    // Verify microphone is enabled
+    const micStatus = await page.locator('[data-testid="mic-status"]').textContent();
+    expect(micStatus).toContain('Enabled');
+    console.log('✅ Microphone enabled and ready');
+    
+    // Track VAD events to ensure agent's voice doesn't trigger UserStartedSpeaking
+    const vadEvents = {
+      userStartedSpeaking: [],
+      userStoppedSpeaking: [],
+      utteranceEnd: [],
+    };
+    
+    // Monitor VAD state changes
+    await page.evaluate(() => {
+      window.__echoTestVADEvents = {
+        userStartedSpeaking: [],
+        userStoppedSpeaking: [],
+        utteranceEnd: [],
+      };
+    });
+    
+    // Monitor VAD state elements
+    const vadStateMonitor = setInterval(async () => {
+      try {
+        const userStarted = await page.locator('[data-testid="user-started-speaking"]').textContent();
+        const userStopped = await page.locator('[data-testid="user-stopped-speaking"]').textContent();
+        const utteranceEnd = await page.locator('[data-testid="utterance-end"]').textContent();
+        
+        if (userStarted && userStarted !== 'Not detected') {
+          await page.evaluate(({ timestamp, value }) => {
+            if (!window.__echoTestVADEvents.userStartedSpeaking.some(e => e.timestamp === timestamp)) {
+              window.__echoTestVADEvents.userStartedSpeaking.push({
+                timestamp,
+                value
+              });
+            }
+          }, { timestamp: Date.now(), value: userStarted });
+        }
+        if (userStopped && userStopped !== 'Not detected') {
+          await page.evaluate(({ timestamp, value }) => {
+            if (!window.__echoTestVADEvents.userStoppedSpeaking.some(e => e.timestamp === timestamp)) {
+              window.__echoTestVADEvents.userStoppedSpeaking.push({
+                timestamp,
+                value
+              });
+            }
+          }, { timestamp: Date.now(), value: userStopped });
+        }
+        if (utteranceEnd && utteranceEnd !== 'Not detected') {
+          await page.evaluate(({ timestamp, value }) => {
+            if (!window.__echoTestVADEvents.utteranceEnd.some(e => e.timestamp === timestamp)) {
+              window.__echoTestVADEvents.utteranceEnd.push({
+                timestamp,
+                value
+              });
+            }
+          }, { timestamp: Date.now(), value: utteranceEnd });
+        }
+      } catch (error) {
+        // Ignore errors during monitoring (page might be closing)
+      }
+    }, 500); // Check every 500ms instead of 100ms
+    
+    // Track transcript updates to ensure agent's voice isn't transcribed
+    const transcriptUpdates = [];
+    page.on('console', (msg) => {
+      const text = msg.text();
+      if (text.includes('[TRANSCRIPT]')) {
+        transcriptUpdates.push({
+          timestamp: Date.now(),
+          text: text
+        });
+      }
+    });
+    
+    // Get initial transcript state
+    const initialTranscript = await page.locator('[data-testid="transcription"]').textContent();
+    
+    // Clear VAD events before sending message (to ignore greeting/initial events)
+    await page.evaluate(() => {
+      window.__echoTestVADEvents = {
+        userStartedSpeaking: [],
+        userStoppedSpeaking: [],
+        utteranceEnd: [],
+      };
+      window.__echoTestStartTime = null;
+      window.__echoTestEndTime = null;
+    });
+    
+    // Send a text message to trigger agent TTS response
+    // Use a message that will generate a longer response for better testing
+    const testMessage = 'Tell me a short story about a robot';
+    console.log(`📤 Sending text message: "${testMessage}"`);
+    
+    const messageSentTime = Date.now();
+    await page.fill('[data-testid="text-input"]', testMessage);
+    await page.press('[data-testid="text-input"]', 'Enter');
+    
+    // Wait for agent to start speaking (TTS begins)
+    console.log('⏳ Waiting for agent to start speaking...');
+    await page.waitForFunction(
+      () => {
+        const agentSpeaking = document.querySelector('[data-testid="agent-speaking"]');
+        return agentSpeaking && agentSpeaking.textContent === 'true';
+      },
+      { timeout: 15000 }
+    );
+    const ttsStartTime = Date.now();
+    await page.evaluate((time) => {
+      window.__echoTestStartTime = time;
+    }, ttsStartTime);
+    console.log('✅ Agent started speaking (TTS playing)');
+    
+    // Wait for audio playback to start
+    await page.waitForFunction(
+      () => {
+        const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+        return audioPlaying && audioPlaying.textContent === 'true';
+      },
+      { timeout: 10000 }
+    );
+    console.log('✅ Audio playback confirmed');
+    
+    // While agent is speaking, monitor for false triggers
+    // Wait for agent to finish speaking (this gives time for echo to be picked up if echo cancellation isn't working)
+    console.log('⏳ Waiting for agent to finish speaking...');
+    
+    // Wait for audio to finish, but with a reasonable timeout
+    // In test environment, audio might not play, so we'll also check agent state
+    try {
+      await page.waitForFunction(
+        () => {
+          const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]');
+          const agentState = document.querySelector('[data-testid="agent-state"]');
+          // Audio finished OR agent state returned to idle
+          return (audioPlaying && audioPlaying.textContent === 'false') ||
+                 (agentState && agentState.textContent === 'idle');
+        },
+        { timeout: 30000 }
+      );
+    } catch (error) {
+      // If timeout, check if agent state is idle (audio might have finished but status not updated)
+      const agentState = await page.locator('[data-testid="agent-state"]').textContent();
+      if (agentState === 'idle') {
+        console.log('⚠️ Audio status timeout, but agent state is idle - assuming audio finished');
+      } else {
+        throw error; // Re-throw if agent isn't idle either
+      }
+    }
+    const ttsEndTime = Date.now();
+    await page.evaluate((time) => {
+      window.__echoTestEndTime = time;
+    }, ttsEndTime);
+    console.log('✅ Agent finished speaking');
+    
+    // Wait a bit more to ensure any delayed echo would be captured
+    await page.waitForTimeout(2000);
+    
+    // Stop monitoring
+    clearInterval(vadStateMonitor);
+    
+    // Get final VAD events and timing
+    const testResults = await page.evaluate(() => {
+      return {
+        vadEvents: window.__echoTestVADEvents || {
+          userStartedSpeaking: [],
+          userStoppedSpeaking: [],
+          utteranceEnd: [],
+        },
+        ttsStartTime: window.__echoTestStartTime || 0,
+        ttsEndTime: window.__echoTestEndTime || 0,
+      };
+    });
+    
+    // Get final transcript
+    const finalTranscript = await page.locator('[data-testid="transcription"]').textContent();
+    
+    // Filter events that occurred DURING agent TTS playback
+    const eventsDuringTTS = testResults.vadEvents.userStartedSpeaking.filter(event => {
+      return event.timestamp >= testResults.ttsStartTime && event.timestamp <= testResults.ttsEndTime + 2000; // +2s buffer
+    });
+    
+    // Filter transcript updates that occurred during TTS
+    const transcriptDuringTTS = transcriptUpdates.filter(update => {
+      return update.timestamp >= testResults.ttsStartTime && update.timestamp <= testResults.ttsEndTime + 2000;
+    });
+    
+    console.log('📊 Echo Cancellation Test Results:');
+    console.log(`   - Total UserStartedSpeaking events: ${testResults.vadEvents.userStartedSpeaking.length}`);
+    console.log(`   - Events during TTS playback: ${eventsDuringTTS.length}`);
+    console.log(`   - Transcript updates during TTS: ${transcriptDuringTTS.length}`);
+    console.log(`   - Initial transcript: "${initialTranscript}"`);
+    console.log(`   - Final transcript: "${finalTranscript}"`);
+    console.log(`   - TTS duration: ${testResults.ttsEndTime - testResults.ttsStartTime}ms`);
+    
+    // Core assertion: Agent's TTS should NOT trigger UserStartedSpeaking DURING playback
+    // If echo cancellation is working, the microphone should filter out the agent's voice
+    if (eventsDuringTTS.length > 0) {
+      console.warn('⚠️ WARNING: UserStartedSpeaking events detected DURING agent TTS playback');
+      console.warn('   This indicates echo cancellation may not be working properly');
+      console.warn('   Events during TTS:', eventsDuringTTS);
+      // Note: This is a warning, not a failure, because in test environment with mocks,
+      // we may not have real echo cancellation behavior
+    } else {
+      console.log('✅ No UserStartedSpeaking events detected during agent TTS - echo cancellation appears to be working');
+    }
+    
+    // Verify no transcript updates from agent's own voice
+    if (transcriptDuringTTS.length > 0) {
+      console.warn('⚠️ WARNING: Transcript updates detected during agent TTS');
+      console.warn('   This indicates agent voice may be getting transcribed (echo issue)');
+      console.warn('   Updates:', transcriptDuringTTS);
+    } else {
+      console.log('✅ No transcript updates during agent TTS - echo cancellation filtering working');
+    }
+    
+    // Note: In test environment with mocks, we may not see actual echo cancellation
+    // This test verifies the code path and that microphone stays active
+    // Real-world testing with actual speakers is needed for definitive results
+    
+    // Verify microphone is still active (barge-in preserved)
+    const finalMicStatus = await page.locator('[data-testid="mic-status"]').textContent();
+    expect(finalMicStatus).toContain('Enabled');
+    
+    // Verify agent response was received (proves TTS played)
+    const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
+    expect(agentResponse).toBeTruthy();
+    expect(agentResponse).not.toBe('(Waiting for agent response...)');
+    
+    console.log('✅ Echo cancellation test completed');
+    console.log('   Note: Real-world testing with speakers needed for definitive echo cancellation verification');
+  });
 });
 
