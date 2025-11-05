@@ -9,7 +9,8 @@ import {
   ConnectionState,
   ServiceType,
   DeepgramError,
-  ConversationRole
+  ConversationRole,
+  AudioConstraints
 } from '../../src/types';
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 
@@ -76,6 +77,26 @@ function App() {
   const [userStartedSpeaking, setUserStartedSpeaking] = useState<string | null>(null);
   const [userStoppedSpeaking, setUserStoppedSpeaking] = useState<string | null>(null);
   const [utteranceEnd, setUtteranceEnd] = useState<string | null>(null);
+  
+  // Audio constraints for echo cancellation testing (Issue #243)
+  // Allow override via URL query params for E2E testing
+  const memoizedAudioConstraints = useMemo(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const constraintsParam = urlParams.get('audioConstraints');
+    
+    if (constraintsParam) {
+      try {
+        const parsed = JSON.parse(constraintsParam);
+        console.log('🎤 [APP] Using audio constraints from URL:', parsed);
+        return parsed as AudioConstraints;
+      } catch (error) {
+        console.warn('🎤 [APP] Failed to parse audioConstraints from URL:', error);
+      }
+    }
+    
+    // Default: return undefined to use component defaults
+    return undefined;
+  }, []);
   
   // Flag to prevent state override after UtteranceEnd
   const utteranceEndDetected = useRef(false);
@@ -646,6 +667,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
         onUtteranceEnd={handleUtteranceEnd}
         onAgentSpeaking={handleAgentSpeaking}
+        audioConstraints={memoizedAudioConstraints} // Issue #243: Echo cancellation configuration
         debug={isDebugMode} // Enable debug only when debug mode is explicitly enabled
       />
       
