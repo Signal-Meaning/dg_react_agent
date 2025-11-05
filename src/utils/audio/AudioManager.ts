@@ -307,7 +307,13 @@ export class AudioManager {
       this.log('Requesting microphone access');
       
       // Request microphone access with configurable constraints (Phase 2: Issue #243)
-      const audioConstraints = this.options.audioConstraints || DEFAULT_OPTIONS.audioConstraints!;
+      // Provide default constraints if none specified
+      const audioConstraints = this.options.audioConstraints || {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      };
       
       // Validate constraints before applying
       const validation = AudioConstraintValidator.validate(audioConstraints);
