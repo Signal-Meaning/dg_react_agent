@@ -1,4 +1,5 @@
 import { DeepgramError } from '../../types';
+import { EchoCancellationDetector, EchoCancellationSupport } from './EchoCancellationDetector';
 // Remove import/placeholder for worklet code and embed directly
 // Define the worklet code as a template string
 const audioWorkletCode = `/**
@@ -95,7 +96,8 @@ export type AudioEvent =
   | { type: 'recording'; isRecording: boolean }
   | { type: 'playing'; isPlaying: boolean }
   | { type: 'error'; error: DeepgramError }
-  | { type: 'data'; data: ArrayBuffer };
+  | { type: 'data'; data: ArrayBuffer }
+  | { type: 'echoCancellationSupport'; support: EchoCancellationSupport };
 
 /**
  * Options for the AudioManager
@@ -304,6 +306,25 @@ export class AudioManager {
         },
         video: false,
       });
+      
+      // Detect and verify echo cancellation support (Phase 1: Issue #243)
+      try {
+        const support = await EchoCancellationDetector.detectSupport(this.microphoneStream);
+        this.log('Echo cancellation support:', support);
+        
+        if (!support.active && support.supported) {
+          this.log('⚠️ Echo cancellation requested but not active');
+        }
+        
+        // Emit echo cancellation support information
+        this.emit({ 
+          type: 'echoCancellationSupport', 
+          support 
+        });
+      } catch (error) {
+        // Non-fatal: log but don't fail recording
+        this.log('Failed to detect echo cancellation support:', error);
+      }
       
       // Connect microphone to AudioWorklet
       this.sourceNode = this.audioContext.createMediaStreamSource(this.microphoneStream);
