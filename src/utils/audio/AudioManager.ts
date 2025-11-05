@@ -1,5 +1,6 @@
-import { DeepgramError } from '../../types';
+import { DeepgramError, AudioConstraints } from '../../types';
 import { EchoCancellationDetector, EchoCancellationSupport } from './EchoCancellationDetector';
+import { AudioConstraintValidator } from './AudioConstraintValidator';
 // Remove import/placeholder for worklet code and embed directly
 // Define the worklet code as a template string
 const audioWorkletCode = `/**
@@ -127,6 +128,14 @@ export interface AudioManagerOptions {
    * Enable verbose logging
    */
   debug?: boolean;
+  
+  /**
+   * Audio constraints for getUserMedia
+   * Used to configure echo cancellation and other audio processing features
+   * 
+   * Issue: #243 - Enhanced Echo Cancellation Support
+   */
+  audioConstraints?: AudioConstraints;
 }
 
 /**
@@ -297,15 +306,32 @@ export class AudioManager {
     try {
       this.log('Requesting microphone access');
       
-      // Request microphone access
-      this.microphoneStream = await navigator.mediaDevices.getUserMedia({
+      // Request microphone access with configurable constraints (Phase 2: Issue #243)
+      const audioConstraints = this.options.audioConstraints || DEFAULT_OPTIONS.audioConstraints!;
+      
+      // Validate constraints before applying
+      const validation = AudioConstraintValidator.validate(audioConstraints);
+      if (!validation.valid) {
+        this.log('⚠️ Audio constraint validation errors:', validation.errors);
+        // Log errors but continue with defaults if validation fails
+      }
+      if (validation.warnings.length > 0) {
+        this.log('⚠️ Audio constraint warnings:', validation.warnings);
+      }
+      
+      // Build constraints object, using validated values or defaults
+      const constraints = {
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: audioConstraints.echoCancellation ?? true,
+          noiseSuppression: audioConstraints.noiseSuppression ?? true,
+          autoGainControl: audioConstraints.autoGainControl ?? true,
+          ...(audioConstraints.sampleRate && { sampleRate: audioConstraints.sampleRate }),
+          channelCount: audioConstraints.channelCount ?? 1,
         },
         video: false,
-      });
+      };
+      
+      this.microphoneStream = await navigator.mediaDevices.getUserMedia(constraints);
       
       // Detect and verify echo cancellation support (Phase 1: Issue #243)
       try {

@@ -134,6 +134,7 @@ function DeepgramVoiceInteraction(
     transcriptionOptions, // = {}, - remove default
     agentOptions, // = {}, - remove default
     endpointConfig,
+    audioConstraints, // Phase 2: Issue #243
     onReady,
     onConnectionStateChange,
     onTranscriptUpdate,
@@ -2101,6 +2102,7 @@ function DeepgramVoiceInteraction(
     }
     audioManagerRef.current = new AudioManager({
       debug: props.debug,
+      audioConstraints: audioConstraints, // Phase 2: Issue #243 - Pass audio constraints from props
     });
 
     // Set up event listeners for audio manager
