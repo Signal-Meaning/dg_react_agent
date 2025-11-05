@@ -44,6 +44,44 @@ export type {
 */
 
 /**
+ * Audio constraints for getUserMedia
+ * Used to configure echo cancellation and other audio processing features
+ * 
+ * Issue: #243 - Enhanced Echo Cancellation Support
+ */
+export interface AudioConstraints {
+  /**
+   * Enable echo cancellation
+   * @default true
+   */
+  echoCancellation?: boolean;
+  
+  /**
+   * Enable noise suppression
+   * @default true
+   */
+  noiseSuppression?: boolean;
+  
+  /**
+   * Enable automatic gain control
+   * @default true
+   */
+  autoGainControl?: boolean;
+  
+  /**
+   * Sample rate in Hz (e.g., 16000, 24000, 48000)
+   * If not specified, browser default is used
+   */
+  sampleRate?: number;
+  
+  /**
+   * Number of audio channels (1 = mono, 2 = stereo)
+   * @default 1
+   */
+  channelCount?: number;
+}
+
+/**
  * LLM response format
  */
 export interface LLMResponse {
@@ -206,6 +244,16 @@ export interface DeepgramVoiceInteractionProps {
    * Enable interim results (required for UtteranceEnd)
    */
   interimResults?: boolean; // Default: true when utteranceEndMs is set
+
+  /**
+   * Audio constraints for getUserMedia
+   * Used to configure echo cancellation and other audio processing features
+   * 
+   * @default { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+   * 
+   * Issue: #243 - Enhanced Echo Cancellation Support
+   */
+  audioConstraints?: AudioConstraints;
 }
 
 /**
