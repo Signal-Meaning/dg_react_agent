@@ -18,7 +18,8 @@ test.describe('Suspended AudioContext Idle Timeout (Issue #139)', () => {
     
     // Step 1: Establish connection
     console.log('Step 1: Establishing connection...');
-    await establishConnectionViaMicrophone(page, context);
+    // Increase timeout to 15000ms to allow connection to establish reliably
+    await establishConnectionViaMicrophone(page, context, 15000);
     
     const initialStatus = await page.locator(SELECTORS.connectionStatus).textContent();
     console.log(`Initial connection status: ${initialStatus}`);

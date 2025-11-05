@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { setupTestPage, waitForConnection } from './helpers/test-helpers';
+import { setupTestPage, establishConnectionViaText, waitForConnection } from './helpers/test-helpers';
 
 /**
  * @fileoverview E2E tests for Deepgram Instructions File Configuration
@@ -17,7 +17,8 @@ test.describe('Deepgram Instructions File Configuration', () => {
     console.log('🧪 Testing environment variable override...');
     
     await setupTestPage(page);
-    await waitForConnection(page);
+    // Establish connection via text input (lazy initialization requires explicit trigger)
+    await establishConnectionViaText(page, 10000);
     
     // Check that the component loaded with instructions
     const instructionsStatus = await page.locator('text=Instructions Status').first();
@@ -34,7 +35,8 @@ test.describe('Deepgram Instructions File Configuration', () => {
     console.log('🧪 Testing instructions preview display...');
     
     await setupTestPage(page);
-    await waitForConnection(page);
+    // Establish connection via text input (lazy initialization requires explicit trigger)
+    await establishConnectionViaText(page, 10000);
     
     // Check that instructions status section is visible
     const instructionsSection = await page.locator('text=Instructions Status').first();
@@ -55,7 +57,8 @@ test.describe('Deepgram Instructions File Configuration', () => {
     console.log('🧪 Testing instructions integration with component...');
     
     await setupTestPage(page);
-    await waitForConnection(page);
+    // Establish connection via text input (lazy initialization requires explicit trigger)
+    await establishConnectionViaText(page, 10000);
     
     // Verify that the component is using the loaded instructions
     // by checking that the agent responds appropriately to commerce-related queries
@@ -81,7 +84,8 @@ test.describe('Deepgram Instructions File Configuration', () => {
     console.log('🧪 Testing different instruction sources...');
     
     await setupTestPage(page);
-    await waitForConnection(page);
+    // Establish connection via text input (lazy initialization requires explicit trigger)
+    await establishConnectionViaText(page, 10000);
     
     // Check that the instructions source is properly identified
     const sourceSection = await page.locator('text=Source:').first();
