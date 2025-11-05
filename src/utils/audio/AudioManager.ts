@@ -432,8 +432,30 @@ export class AudioManager {
   
   /**
    * Stops recording
+   * 
+   * CRITICAL: Always stops MediaStream tracks to ensure browser recording indicator
+   * disappears, even if isRecording state is false. This fixes issue #246 where
+   * tracks remain active after stop() is called.
    */
   public stopRecording(): void {
+    // CRITICAL FIX for issue #246: Always stop MediaStream tracks if they exist,
+    // regardless of isRecording state. This ensures the browser recording indicator
+    // disappears even if there's a state synchronization issue.
+    if (this.microphoneStream) {
+      this.log('Stopping MediaStream tracks (fix for issue #246)');
+      const tracks = this.microphoneStream.getTracks();
+      tracks.forEach(track => {
+        if (track.readyState !== 'ended') {
+          this.log(`Stopping track: ${track.kind} (${track.label})`);
+          track.stop();
+        } else {
+          this.log(`Track already ended: ${track.kind} (${track.label})`);
+        }
+      });
+      this.microphoneStream = null;
+    }
+    
+    // Early return if not recording (but tracks are already stopped above)
     if (!this.isRecording) {
       return;
     }
@@ -447,17 +469,13 @@ export class AudioManager {
       this.workletNode = null;
     }
     
-    // Stop the microphone
+    // Stop the microphone source node
     if (this.sourceNode) {
       this.sourceNode.disconnect();
       this.sourceNode = null;
     }
     
-    // Stop all microphone tracks
-    if (this.microphoneStream) {
-      this.microphoneStream.getTracks().forEach(track => track.stop());
-      this.microphoneStream = null;
-    }
+    // Note: MediaStream tracks are already stopped above, before the early return check
     
     this.isRecording = false;
     this.emit({ type: 'recording', isRecording: false });
