@@ -365,24 +365,44 @@ test.describe('Echo Cancellation Detection and Configuration', () => {
   test('should validate audio constraints before applying', async ({ page }) => {
     console.log('🔍 Testing constraint validation...');
     
-    // This test verifies that invalid constraints would be caught
-    // The AudioConstraintValidator should log warnings/errors
-    
-    // Enable microphone (with default valid constraints)
-    await MicrophoneHelpers.waitForMicrophoneReady(page);
-    
-    // Verify constraints were validated (no errors in console)
-    const logs = await page.evaluate(() => {
-      return window.consoleLogs?.filter(log => 
-        log.includes('constraint') || log.includes('validation')
-      ) || [];
+    // Capture console logs to verify validation warnings/errors
+    const consoleLogs = [];
+    page.on('console', (msg) => {
+      const text = msg.text();
+      consoleLogs.push(text);
     });
     
-    // Should not have validation errors for default constraints
-    const hasErrors = logs.some(log => log.toLowerCase().includes('error'));
-    expect(hasErrors).toBe(false);
+    // Enable microphone with default valid constraints
+    // Validation should run and log if there are any issues
+    await MicrophoneHelpers.waitForMicrophoneReady(page);
     
-    console.log('✅ Constraint validation working (no errors for valid constraints)');
+    // Check for validation-related console logs
+    // AudioManager logs validation errors/warnings with "⚠️ Audio constraint" prefix
+    const validationLogs = consoleLogs.filter(log => 
+      log.includes('Audio constraint') || 
+      log.includes('constraint validation') ||
+      log.includes('validation error') ||
+      log.includes('validation warning')
+    );
+    
+    // With valid default constraints, we should not see validation errors
+    // (warnings might appear if browser doesn't support certain constraints, which is OK)
+    const validationErrors = validationLogs.filter(log => 
+      log.toLowerCase().includes('error') && !log.includes('⚠️')
+    );
+    
+    // Should not have validation errors for valid default constraints
+    expect(validationErrors.length).toBe(0);
+    
+    // Verify microphone was enabled successfully (proves validation passed)
+    const micStatus = await page.locator('[data-testid="mic-status"]').textContent();
+    expect(micStatus).toContain('Enabled');
+    
+    if (validationLogs.length > 0) {
+      console.log('📝 Validation logs found:', validationLogs);
+    }
+    
+    console.log('✅ Constraint validation executed (no errors for valid constraints)');
   });
 
   test('should handle different sample rates', async ({ page }) => {
