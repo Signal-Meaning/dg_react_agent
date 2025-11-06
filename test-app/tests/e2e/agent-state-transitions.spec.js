@@ -37,7 +37,9 @@ const TOOL_TRIGGER_MESSAGE = 'Use the weather tool to get current conditions';
 test.describe('Agent State Transitions', () => {
   test.beforeEach(async ({ page }) => {
     await setupTestPage(page);
-    await waitForConnection(page);
+    // Establish connection via text input (lazy initialization requires explicit trigger)
+    await page.click('input[type="text"]');
+    await waitForConnection(page, 10000);
   });
 
   test('should transition: idle → speaking → idle (user types message and clicks send)', async ({ page }) => {
@@ -45,7 +47,7 @@ test.describe('Agent State Transitions', () => {
     // 1. User types message in text input field
     // 2. User clicks send button  
     // 3. Component sends InjectUserMessage to Deepgram
-    // 4. Agent responds with audio (TTS) - TTS is guaranteed unmuted for this test
+    // 4. Agent responds with audio (TTS) - TTS must be unmuted for this test
     // 
     // Expected State Sequence:
     // - idle (initial)
@@ -58,11 +60,30 @@ test.describe('Agent State Transitions', () => {
     const initialState = await getAgentState(page);
     expect(initialState).toBe('idle');
     
-    // Note: TTS is unmuted by default (allowAgentRef defaults to ALLOW_AUDIO=true)
-    // The test-app respects button state - if button shows muted, TTS won't play
-    // This test assumes default unmuted state, which should be the case after fresh page load
+    // Step 2: Verify TTS is unmuted (required for state transition to 'speaking')
+    // TTS must be unmuted for audio to play and trigger 'speaking' state
+    const ttsMuteButton = page.locator('[data-testid="tts-mute-button"]');
+    const ttsButtonText = await ttsMuteButton.textContent();
     
-    // Step 2: User types and sends message
+    // If TTS is muted (button shows "🔇 Mute"), unmute it before sending message
+    // Button text: "🔇 Mute" when muted, "🔊 Enable" when unmuted
+    if (ttsButtonText && ttsButtonText.includes('Mute')) {
+      console.log('🔊 TTS is muted, unmuting before test...');
+      await ttsMuteButton.click();
+      // Wait for button text to update to "Enable"
+      await page.waitForFunction(
+        () => {
+          const button = document.querySelector('[data-testid="tts-mute-button"]');
+          return button && button.textContent?.includes('Enable');
+        },
+        { timeout: 2000 }
+      );
+      console.log('✅ TTS unmuted');
+    } else {
+      console.log('✅ TTS is already unmuted');
+    }
+    
+    // Step 3: User types and sends message
     await sendTextMessage(page, 'Hello');
     
     // Step 4: Wait for agent to enter speaking state

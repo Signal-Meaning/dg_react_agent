@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import { setupVADTestingEnvironment } from '../utils/audio-stream-mocks';
-import { setupAudioSendingPrerequisites, assertConnectionState } from './helpers/test-helpers';
+import { setupAudioSendingPrerequisites, assertConnectionState, waitForAgentGreeting } from './helpers/test-helpers';
+import { getIdleState, waitForIdleConditions } from './fixtures/idle-timeout-helpers';
 
 // Load environment variables from test-app/.env
 // dotenv config handled by Playwright config
@@ -101,14 +102,85 @@ test.describe('Extended Silence Idle Timeout Test', () => {
     expect(userStoppedSpeaking).not.toBe('Not detected');
     console.log('✅ User stopped speaking callback:', userStoppedSpeaking);
     
-    // 4. Wait for agent response (if any)
-    console.log('⏳ Waiting for agent response...');
-    await page.waitForTimeout(2000); // Give agent time to respond
+    // 4. Wait for agent to finish responding (if any)
+    console.log('⏳ Waiting for agent to finish responding...');
+    await waitForAgentGreeting(page, 15000);
+    console.log('✅ Agent finished responding');
     
-    // 5. Wait for idle timeout (connection should close)
+    // 5. Wait for idle conditions (agent idle, user idle, audio not playing) and check timeout state
+    console.log('⏳ Waiting for idle conditions (agent idle, user idle, audio not playing)...');
+    const idleState = await waitForIdleConditions(page, 10000);
+    console.log(`📊 Idle state: agentIdle=${idleState.agentIdle}, userIdle=${idleState.userIdle}, audioNotPlaying=${idleState.audioNotPlaying}, timeoutActive=${idleState.timeoutActive}`);
+    
+    // Issue #244: Verify timeout should be active when all idle conditions are met
+    // The idle timeout requires: agent idle, user idle, AND audio not playing
+    if (idleState.agentIdle && idleState.userIdle && idleState.audioNotPlaying) {
+      if (!idleState.timeoutActive) {
+        console.log('❌ ISSUE #244 REPRODUCED: Timeout is NOT active when it should be!');
+        console.log('   Expected: timeoutActive=true when agentIdle=true, userIdle=true, audioNotPlaying=true');
+        console.log('   Actual: timeoutActive=false');
+      } else {
+        console.log('✅ Timeout is active as expected');
+      }
+    } else {
+      console.log(`⚠️ Conditions not met for timeout: agentIdle=${idleState.agentIdle}, userIdle=${idleState.userIdle}, audioNotPlaying=${idleState.audioNotPlaying}`);
+    }
+    
+    // 6. Wait for idle timeout to close connection
     console.log('⏳ Waiting for idle timeout (10 seconds)...');
-    // Use new fixture to verify connection state
-    await assertConnectionState(page, expect, 'closed', { timeout: 15000 });
+    
+    // Track state at key intervals
+    const checkpoints = [];
+    const startTime = Date.now();
+    
+    // Check state every 2 seconds
+    for (let i = 0; i < 8; i++) {
+      await page.waitForTimeout(2000);
+      const elapsed = Date.now() - startTime;
+      const currentIdleState = await getIdleState(page);
+      const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
+      
+      const currentState = {
+        elapsed,
+        ...currentIdleState,
+        connectionStatus
+      };
+      checkpoints.push(currentState);
+      
+      // Log if state changed
+      if (i === 0 || 
+          currentState.timeoutActive !== checkpoints[i - 1]?.timeoutActive ||
+          currentState.agentIdle !== checkpoints[i - 1]?.agentIdle ||
+          currentState.audioNotPlaying !== checkpoints[i - 1]?.audioNotPlaying) {
+        console.log(`  +${currentState.elapsed}ms: agentIdle=${currentState.agentIdle}, userIdle=${currentState.userIdle}, audioNotPlaying=${currentState.audioNotPlaying}, timeoutActive=${currentState.timeoutActive}, connection=${currentState.connectionStatus}`);
+      }
+      
+      // If connection closed, break early
+      if (currentState.connectionStatus === 'closed') {
+        break;
+      }
+    }
+    
+    // Use fixture to verify connection state (will timeout if not closed)
+    await assertConnectionState(page, expect, 'closed', { timeout: 5000 });
+    
+    // Log final analysis
+    console.log('\n📊 Idle Timeout State Analysis:');
+    const timeoutWasActive = checkpoints.some(s => s.timeoutActive);
+    if (!timeoutWasActive) {
+      console.log('❌ ISSUE #244: Timeout was never active!');
+      console.log('   This indicates the idle timeout never started after UtteranceEnd');
+      console.log('   Expected: timeoutActive should become true when agentIdle=true and userIdle=true');
+    } else {
+      console.log('✅ Timeout was active at some point');
+      const activeCheckpoint = checkpoints.find(s => s.timeoutActive);
+      console.log(`   Timeout became active at +${activeCheckpoint.elapsed}ms`);
+    }
+    
+    // Check final state before connection closed
+    const finalState = checkpoints[checkpoints.length - 1];
+    console.log(`\n📊 Final state: agentIdle=${finalState.agentIdle}, userIdle=${finalState.userIdle}, audioNotPlaying=${finalState.audioNotPlaying}, timeoutActive=${finalState.timeoutActive}`);
+    
     console.log('✅ Connection closed due to idle timeout');
     
     console.log('\n🎉 SUCCESS: Extended silence test completed');

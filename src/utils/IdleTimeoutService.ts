@@ -246,6 +246,13 @@ export class IdleTimeoutService {
   }
 
   /**
+   * Check if timeout is currently active (running)
+   */
+  public isTimeoutActive(): boolean {
+    return this.timeoutId !== null;
+  }
+
+  /**
    * Cleanup
    */
   public destroy(): void {

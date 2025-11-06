@@ -149,7 +149,7 @@ export class EchoCancellationDetector {
    * Gets supported constraints from the browser
    * @returns Object with boolean properties for each supported constraint
    */
-  private static getSupportedConstraints(): MediaTrackSupportedConstraints {
+  private static getSupportedConstraints(): ReturnType<typeof navigator.mediaDevices.getSupportedConstraints> {
     if (typeof navigator !== 'undefined' && 
         navigator.mediaDevices && 
         typeof navigator.mediaDevices.getSupportedConstraints === 'function') {
@@ -157,7 +157,7 @@ export class EchoCancellationDetector {
     }
     
     // Fallback: return empty object if API not available
-    return {};
+    return {} as ReturnType<typeof navigator.mediaDevices.getSupportedConstraints>;
   }
 }
 

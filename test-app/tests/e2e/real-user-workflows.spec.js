@@ -82,8 +82,11 @@ test.describe('Real User Workflow Tests', () => {
       
       expect(activationResult.success).toBe(true);
       
-      // Verify VAD elements are still present
-      await expect(page.locator('[data-testid="vad-states"]')).toBeVisible();
+      // Wait a moment for VAD elements to render after mic activation
+      await page.waitForTimeout(500);
+      
+      // Verify VAD elements are still present after microphone activation
+      await expect(page.locator('[data-testid="vad-states"]')).toBeVisible({ timeout: 5000 });
     });
   });
 

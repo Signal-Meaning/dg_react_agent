@@ -16,33 +16,6 @@ export * from './connection';
 export * from './transcription';
 export * from './voiceBot';
 
-// Remove the conflicting explicit re-export blocks for types already covered by export *
-/* // REMOVED Block
-export type {
-  AgentOptions,
-  AgentState,
-  AgentFunction,
-  AgentSettingsMessage,
-  UpdateInstructionsPayload
-} from './agent';
-*/
-
-/* // REMOVED Block 
-export type {
-  ConnectionState,
-  ServiceType,
-  EndpointConfig,
-  DeepgramError
-} from './connection';
-*/
-
-/* // REMOVED Block
-export type {
-  TranscriptionOptions,
-  TranscriptResponse
-} from './transcription';
-*/
-
 /**
  * Audio constraints for getUserMedia
  * Used to configure echo cancellation and other audio processing features
@@ -216,6 +189,12 @@ export interface DeepgramVoiceInteractionProps {
   onUserStoppedSpeaking?: () => void;
   
   /**
+   * Called when idle timeout active state changes (for testing/debugging)
+   * Indicates whether the idle timeout timer is currently running
+   */
+  onIdleTimeoutActiveChange?: (isActive: boolean) => void;
+
+  /**
    * Called when UtteranceEnd is detected from Deepgram's end-of-speech detection
    * Reference: https://developers.deepgram.com/docs/understanding-end-of-speech-detection
    */
@@ -336,14 +315,3 @@ export interface DeepgramVoiceInteractionHandle {
    */
   getAudioContext: () => AudioContext | undefined;
 }
-
-// REMOVE the duplicate AgentState definition at the end of this file
-/* // REMOVED Definition
-export type AgentState =
-  | 'idle'
-  | 'listening'
-  | 'thinking'
-  | 'speaking'
-  | 'entering_sleep'
-  | 'sleeping';
-*/ 

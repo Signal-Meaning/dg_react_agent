@@ -78,6 +78,9 @@ function App() {
   const [userStoppedSpeaking, setUserStoppedSpeaking] = useState<string | null>(null);
   const [utteranceEnd, setUtteranceEnd] = useState<string | null>(null);
   
+  // Idle timeout state
+  const [idleTimeoutActive, setIdleTimeoutActive] = useState<boolean>(false);
+  
   // Audio constraints for echo cancellation testing (Issue #243)
   // Allow override via URL query params for E2E testing
   const memoizedAudioConstraints = useMemo(() => {
@@ -416,6 +419,13 @@ function App() {
     }
   }, [addLog, isDebugMode]);
 
+  const handleIdleTimeoutActiveChange = useCallback((isActive: boolean) => {
+    setIdleTimeoutActive(isActive);
+    if (isDebugMode) {
+      addLog(`🎯 [IDLE_TIMEOUT] Timeout active: ${isActive}`);
+    }
+  }, [addLog, isDebugMode]);
+
   // Auto-connect dual mode event handlers
 
   const handleTextSubmit = useCallback(async () => {
@@ -667,6 +677,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
         onUtteranceEnd={handleUtteranceEnd}
         onAgentSpeaking={handleAgentSpeaking}
+        onIdleTimeoutActiveChange={handleIdleTimeoutActiveChange}
         audioConstraints={memoizedAudioConstraints} // Issue #243: Echo cancellation configuration
         debug={isDebugMode} // Enable debug only when debug mode is explicitly enabled
       />
@@ -728,6 +739,11 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <p>Utterance End: <strong data-testid="utterance-end">{utteranceEnd || 'Not detected'}</strong></p>
           
           <h5>From Agent Service:</h5>
+        </div>
+        
+        <h4>Idle Timeout State:</h4>
+        <div data-testid="idle-timeout-state">
+          <p>Timeout Active: <strong data-testid="idle-timeout-active">{idleTimeoutActive ? 'true' : 'false'}</strong></p>
         </div>
       </div>
       

@@ -247,6 +247,10 @@ function DeepgramVoiceInteraction(
   // Refs to track previous state values to prevent redundant callback calls
   const prevIsReadyRef = useRef<boolean | undefined>(undefined);
   const prevAgentStateRef = useRef<AgentState | undefined>(undefined);
+  
+  // Track if we've notified onAgentStateChange('speaking') for the current playback cycle
+  // This prevents duplicate callbacks when both AgentStartedSpeaking and playback events fire
+  const hasNotifiedSpeakingForPlaybackRef = useRef<boolean>(false);
   const prevIsPlayingRef = useRef<boolean | undefined>(undefined);
   
   // VAD event tracking for redundancy detection
@@ -306,7 +310,8 @@ function DeepgramVoiceInteraction(
   const { handleMeaningfulActivity, handleUtteranceEnd } = useIdleTimeoutManager(
     state,
     agentManagerRef,
-    props.debug
+    props.debug,
+    props.onIdleTimeoutActiveChange
   );
 
   // Initialize agent state service
@@ -853,6 +858,12 @@ function DeepgramVoiceInteraction(
       log('Notifying parent: agentState changed to', state.agentState);
       onAgentStateChange(state.agentState);
       prevAgentStateRef.current = state.agentState;
+      
+      // If transitioning to 'speaking', set the flag to prevent duplicate callback
+      // from the playback handler (fixes Issue #251)
+      if (state.agentState === 'speaking') {
+        hasNotifiedSpeakingForPlaybackRef.current = true;
+      }
     }
   }, [state.agentState, onAgentStateChange]);
 
@@ -2130,6 +2141,16 @@ function DeepgramVoiceInteraction(
           } else {
             console.log(`🎯 [AGENT] Audio playback started but already in speaking state - no transition needed`);
           }
+          
+          // Always ensure onAgentStateChange('speaking') is called when playback starts
+          // This fixes Issue #251: callback may not fire if AgentStartedSpeaking arrived first
+          // and React hasn't fired the useEffect yet due to batching/timing
+          // Use ref to prevent duplicate callbacks in the same playback cycle
+          if (onAgentStateChange && !hasNotifiedSpeakingForPlaybackRef.current) {
+            console.log(`🎯 [AGENT] Ensuring onAgentStateChange('speaking') is called for playback start`);
+            onAgentStateChange('speaking');
+            hasNotifiedSpeakingForPlaybackRef.current = true;
+          }
         }
         
         // Transition agent to idle when audio playback stops
@@ -2143,6 +2164,10 @@ function DeepgramVoiceInteraction(
           } else {
             console.log(`🎯 [AGENT] Audio playback stopped but agent state is ${currentState} (not speaking) - skipping transition to idle`);
           }
+          
+          // Reset the notification flag when playback stops
+          // This allows the callback to fire again for the next playback cycle
+          hasNotifiedSpeakingForPlaybackRef.current = false;
         }
       } else if (event.type === 'error') {
         handleError(event.error);

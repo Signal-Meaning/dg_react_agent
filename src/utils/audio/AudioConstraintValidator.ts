@@ -88,7 +88,7 @@ export class AudioConstraintValidator {
    * Gets supported constraints from the browser
    * @returns Object with boolean properties for each supported constraint
    */
-  private static getSupportedConstraints(): MediaTrackSupportedConstraints {
+  private static getSupportedConstraints(): ReturnType<typeof navigator.mediaDevices.getSupportedConstraints> {
     if (typeof navigator !== 'undefined' && 
         navigator.mediaDevices && 
         typeof navigator.mediaDevices.getSupportedConstraints === 'function') {
@@ -96,7 +96,7 @@ export class AudioConstraintValidator {
     }
     
     // Fallback: return empty object if API not available
-    return {};
+    return {} as ReturnType<typeof navigator.mediaDevices.getSupportedConstraints>;
   }
 
   /**
@@ -104,9 +104,9 @@ export class AudioConstraintValidator {
    * @param constraintName - Name of the constraint to check
    * @returns true if the constraint is supported
    */
-  static isConstraintSupported(constraintName: keyof MediaTrackSupportedConstraints): boolean {
+  static isConstraintSupported(constraintName: string): boolean {
     const supported = this.getSupportedConstraints();
-    return supported[constraintName] === true;
+    return (supported as Record<string, boolean>)[constraintName] === true;
   }
 }
 

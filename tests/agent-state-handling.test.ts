@@ -211,6 +211,81 @@ describe('Agent State Message Handling', () => {
       expect(mockWebSocketManager.startKeepalive).not.toHaveBeenCalled();
       expect(mockWebSocketManager.stopKeepalive).not.toHaveBeenCalled();
     });
+
+    it('should accept onIdleTimeoutActiveChange callback', () => {
+      const onIdleTimeoutActiveChange = jest.fn();
+      const { result } = renderHook(() => 
+        useIdleTimeoutManager(mockState, mockWebSocketManager, true, onIdleTimeoutActiveChange)
+      );
+
+      // Verify hook initializes correctly with callback
+      expect(result.current).toBeDefined();
+      expect(result.current.handleMeaningfulActivity).toBeDefined();
+      expect(result.current.handleUtteranceEnd).toBeDefined();
+    });
+
+    it('should call onIdleTimeoutActiveChange when timeout active state changes', () => {
+      const onIdleTimeoutActiveChange = jest.fn();
+      
+      // Create a service directly to test the callback mechanism
+      const testService = new IdleTimeoutService({
+        timeoutMs: 1000,
+        debug: true,
+      });
+
+      // Set up the callback mechanism similar to how the hook does it
+      let prevTimeoutActive = false;
+      testService.onStateChange(() => {
+        // Check timeout active state synchronously after state change
+        // updateTimeoutBehavior runs synchronously in handleEvent, so timeout should be set
+        const currentTimeoutActive = testService.isTimeoutActive();
+        if (currentTimeoutActive !== prevTimeoutActive) {
+          prevTimeoutActive = currentTimeoutActive;
+          onIdleTimeoutActiveChange(currentTimeoutActive);
+        }
+      });
+
+      // Start with agent speaking (timeout should not be active)
+      testService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'speaking' });
+      expect(testService.isTimeoutActive()).toBe(false);
+      expect(onIdleTimeoutActiveChange).not.toHaveBeenCalled(); // No change from initial false
+
+      // Now transition to idle state - this should start timeout and trigger callback
+      testService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      testService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      testService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+
+      // Verify timeout is active (updateTimeoutBehavior should have started it)
+      expect(testService.isTimeoutActive()).toBe(true);
+      
+      // The callback should have been called when state changed and timeout started
+      expect(onIdleTimeoutActiveChange).toHaveBeenCalledWith(true);
+      
+      // Clear and test stopping timeout
+      onIdleTimeoutActiveChange.mockClear();
+      
+      // Trigger state that should stop timeout (agent speaking)
+      testService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'speaking' });
+
+      // Verify timeout is stopped
+      expect(testService.isTimeoutActive()).toBe(false);
+
+      // Should have been called with false when timeout stopped
+      expect(onIdleTimeoutActiveChange).toHaveBeenCalledWith(false);
+      
+      testService.destroy();
+    });
+
+    it('should not call onIdleTimeoutActiveChange when callback is not provided', () => {
+      const { result } = renderHook(() => 
+        useIdleTimeoutManager(mockState, mockWebSocketManager, true)
+      );
+
+      // Should not throw or cause issues
+      expect(result.current).toBeDefined();
+      expect(result.current.handleMeaningfulActivity).toBeDefined();
+      expect(result.current.handleUtteranceEnd).toBeDefined();
+    });
   });
 
   describe('Edge cases and error handling', () => {
