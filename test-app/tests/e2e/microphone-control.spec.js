@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { BASE_URL, buildUrlWithParams } from './helpers/test-helpers.mjs';
+import { MicrophoneHelpers } from './helpers/test-helpers.js';
 
 /**
  * E2E Tests for Microphone Control
@@ -21,7 +23,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Microphone Control', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto(BASE_URL);
     await page.waitForLoadState('networkidle');
     
     // Note: Component doesn't connect without a valid API key
@@ -30,30 +32,30 @@ test.describe('Microphone Control', () => {
   });
 
   test('should enable microphone when button clicked', async ({ page }) => {
-    // Wait for component to be ready
-    await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true');
+    // Use proper microphone activation sequence (Issue #188)
+    // This ensures agent connection and greeting are complete before enabling mic
+    const result = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      connectionTimeout: 10000,
+      greetingTimeout: 8000,
+      micEnableTimeout: 5000
+    });
     
-    // Verify initial state - microphone should be disabled
-    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
-    
-    // Click the microphone button to enable it
-    await page.click('[data-testid="microphone-button"]');
-    
-    // Wait for state to update
-    await page.waitForTimeout(2000);
-    
-    // Verify microphone is now enabled
-    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Enabled');
+    // Verify microphone is enabled
+    expect(result.success).toBe(true);
+    expect(result.micStatus).toBe('Enabled');
+    expect(result.connectionStatus).toContain('connected');
   });
 
   test('should disable microphone when button clicked again', async ({ page }) => {
-    // Wait for component to be ready
-    await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true');
+    // First enable the microphone using proper sequence (Issue #188)
+    const result = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      connectionTimeout: 10000,
+      greetingTimeout: 8000,
+      micEnableTimeout: 5000
+    });
     
-    // First enable the microphone
-    await page.click('[data-testid="microphone-button"]');
-    await page.waitForTimeout(2000);
-    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Enabled');
+    expect(result.success).toBe(true);
+    expect(result.micStatus).toBe('Enabled');
     
     // Now disable it by clicking again
     await page.click('[data-testid="microphone-button"]');
@@ -82,20 +84,22 @@ test.describe('Microphone Control', () => {
   });
 
   test('should handle microphone permission granted', async ({ page }) => {
-    // Wait for component to be ready
-    await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true');
-    
     // Grant microphone permission - use the actual origin
     const currentUrl = page.url();
     const origin = new URL(currentUrl).origin;
     await page.context().grantPermissions(['microphone'], { origin });
     
-    // Try to enable microphone - should work with permission granted
-    await page.click('[data-testid="microphone-button"]');
-    await page.waitForTimeout(3000);
+    // Use proper microphone activation sequence (Issue #188)
+    // This ensures agent connection and greeting are complete before enabling mic
+    const result = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      connectionTimeout: 10000,
+      greetingTimeout: 8000,
+      micEnableTimeout: 5000
+    });
     
     // Should be enabled with permission granted
-    await expect(page.locator('[data-testid="mic-status"]')).toContainText('Enabled');
+    expect(result.success).toBe(true);
+    expect(result.micStatus).toBe('Enabled');
   });
 
   test('should maintain microphone disabled by default', async ({ page }) => {
@@ -111,7 +115,7 @@ test.describe('Microphone Control', () => {
 
   test('should handle microphone control via props', async ({ page }) => {
     // Navigate to test page with microphoneEnabled=true (if test app supports URL params)
-    await page.goto('/?microphoneEnabled=true');
+    await page.goto(buildUrlWithParams(BASE_URL, { microphoneEnabled: 'true' }));
     await page.waitForLoadState('networkidle');
     
     // Wait for component to be ready (lazy initialization)
@@ -151,7 +155,7 @@ test.describe('Microphone Control', () => {
     await context.grantPermissions(['microphone']);
     
     // Navigate and wait for component ready
-    await page.goto('/');
+    await page.goto(BASE_URL);
     await page.waitForLoadState('networkidle');
     await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true', { timeout: 5000 });
     

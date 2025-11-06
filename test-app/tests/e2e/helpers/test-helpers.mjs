@@ -6,6 +6,36 @@
  */
 
 /**
+ * Base URL for test app navigation
+ * Can be overridden via PLAYWRIGHT_BASE_URL environment variable
+ * Falls back to VITE_BASE_URL or default localhost URL
+ * Matches the baseURL configured in playwright.config.js
+ */
+export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || process.env.VITE_BASE_URL || 'http://localhost:5173';
+
+/**
+ * Safely build a URL with query parameters
+ * Prevents URL injection by properly constructing URLs
+ * @param {string} baseUrl - Base URL (should be BASE_URL constant)
+ * @param {Record<string, string>} params - Query parameters as key-value pairs
+ * @returns {string} Safe URL with query parameters
+ */
+export function buildUrlWithParams(baseUrl, params = {}) {
+  try {
+    const url = new URL(baseUrl);
+    // Add query parameters safely
+    Object.entries(params).forEach(([key, value]) => {
+      url.searchParams.set(key, value);
+    });
+    return url.toString();
+  } catch (error) {
+    // If URL construction fails, fall back to base URL
+    console.warn(`Failed to build URL with params: ${error.message}`);
+    return baseUrl;
+  }
+}
+
+/**
  * Common test selectors
  */
 const SELECTORS = {
@@ -30,7 +60,7 @@ const SELECTORS = {
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
 async function setupTestPage(page, timeout = 10000) {
-  await page.goto('/');
+  await page.goto(BASE_URL);
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
 }
 
@@ -298,7 +328,7 @@ async function assertConnectionHealthy(page, expect) {
   await expect(connectionReady).toHaveText('true');
 }
 
-module.exports = {
+export {
   SELECTORS,
   setupTestPage,
   waitForConnection,

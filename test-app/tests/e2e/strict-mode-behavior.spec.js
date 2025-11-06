@@ -17,6 +17,8 @@
 
 import { test, expect } from '@playwright/test';
 import { SELECTORS } from './helpers/test-helpers.js';
+import { BASE_URL } from './helpers/test-helpers.mjs';
+import { MicrophoneHelpers } from './helpers/test-helpers.js';
 
 test.describe('StrictMode Behavior Validation', () => {
   
@@ -41,17 +43,19 @@ test.describe('StrictMode Behavior Validation', () => {
     });
     
     // Navigate to test app (with StrictMode enabled in main.tsx)
-    await page.goto('/');
+    await page.goto(BASE_URL);
     await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 10000 });
     
-    // Wait for component to be ready
-    await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true', { timeout: 5000 });
+    // Use proper microphone activation sequence (Issue #188)
+    // This ensures agent connection and greeting are complete before enabling mic
+    const result = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      connectionTimeout: 10000,
+      greetingTimeout: 8000,
+      micEnableTimeout: 5000
+    });
     
-    // Establish connection by clicking mic button
-    await page.click(SELECTORS.micButton);
-    
-    // Wait for connection
-    await expect(page.locator(SELECTORS.connectionStatus)).toContainText('connected', { timeout: 10000 });
+    expect(result.success).toBe(true);
+    expect(result.micStatus).toBe('Enabled');
     
     const initialConnectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
     console.log('📊 Initial connection status:', initialConnectionStatus);
@@ -104,7 +108,7 @@ test.describe('StrictMode Behavior Validation', () => {
       }
     });
     
-    await page.goto('/');
+    await page.goto(BASE_URL);
     await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 10000 });
     
     // Wait for component to initialize and StrictMode cycle
@@ -152,7 +156,7 @@ test.describe('StrictMode Behavior Validation', () => {
       }
     });
     
-    await page.goto('/');
+    await page.goto(BASE_URL);
     await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 10000 });
     
     // Establish connection
@@ -184,15 +188,19 @@ test.describe('StrictMode Behavior Validation', () => {
   test('should maintain connection stability during multiple StrictMode cycles', async ({ page }) => {
     console.log('🔄 Testing connection stability across multiple StrictMode cycles...');
     
-    await page.goto('/');
+    await page.goto(BASE_URL);
     await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 10000 });
     
-    // Wait for initial mount
-    await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true', { timeout: 5000 });
+    // Use proper microphone activation sequence (Issue #188)
+    // This ensures agent connection and greeting are complete before enabling mic
+    const result = await MicrophoneHelpers.waitForMicrophoneReady(page, {
+      connectionTimeout: 10000,
+      greetingTimeout: 8000,
+      micEnableTimeout: 5000
+    });
     
-    // Trigger connection
-    await page.click(SELECTORS.micButton);
-    await expect(page.locator(SELECTORS.connectionStatus)).toContainText('connected', { timeout: 10000 });
+    expect(result.success).toBe(true);
+    expect(result.micStatus).toBe('Enabled');
     
     // Verify connection multiple times over a period where StrictMode cycles may occur
     for (let i = 0; i < 5; i++) {
@@ -222,7 +230,7 @@ test.describe('StrictMode Behavior Validation', () => {
     // 1. Mount → Cleanup → Mount (simulating unmount/remount)
     // This test verifies connections remain stable through this cycle
     
-    await page.goto('/');
+    await page.goto(BASE_URL);
     await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 10000 });
     
     // Wait for component ready

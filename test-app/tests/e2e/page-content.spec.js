@@ -5,12 +5,13 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { BASE_URL } from './helpers/test-helpers.mjs';
 
 test.describe('Page Content Tests', () => {
   
   test('should check what elements are on the page', async ({ page }) => {
     // Navigate to test app
-    await page.goto('http://localhost:5173');
+    await page.goto(BASE_URL);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(3000);
     
@@ -48,7 +49,7 @@ test.describe('Page Content Tests', () => {
 
   test('should render voice agent component correctly', async ({ page }) => {
     // Navigate to test app
-    await page.goto('/');
+    await page.goto(BASE_URL);
     await page.waitForLoadState('networkidle');
     
     // Verify component renders
