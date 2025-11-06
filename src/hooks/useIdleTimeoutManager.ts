@@ -17,6 +17,14 @@ export function useIdleTimeoutManager(
 ) {
   const serviceRef = useRef<IdleTimeoutService | null>(null);
   const prevStateRef = useRef<VoiceInteractionState>(state);
+  // Store callback in ref to avoid stale closures and allow it to change without recreating service
+  const callbackRef = useRef(onIdleTimeoutActiveChange);
+  const prevTimeoutActiveRef = useRef<boolean>(false);
+
+  // Update callback ref when it changes
+  useEffect(() => {
+    callbackRef.current = onIdleTimeoutActiveChange;
+  }, [onIdleTimeoutActiveChange]);
 
   // Initialize the service
   useEffect(() => {
@@ -44,21 +52,23 @@ export function useIdleTimeoutManager(
 
     // Set up timeout callback
     serviceRef.current.onTimeout(() => {
-      console.log('🎯 [IDLE_TIMEOUT] Idle timeout reached - closing agent connection');
+      if (debug) {
+        console.log('🎯 [IDLE_TIMEOUT] Idle timeout reached - closing agent connection');
+      }
       agentManagerRef.current?.close();
     });
 
     // Set up callback to expose idle timeout active state changes
-    if (onIdleTimeoutActiveChange) {
-      let prevTimeoutActive = false;
-      serviceRef.current.onStateChange(() => {
-        const currentTimeoutActive = serviceRef.current?.isTimeoutActive() ?? false;
-        if (currentTimeoutActive !== prevTimeoutActive) {
-          prevTimeoutActive = currentTimeoutActive;
-          onIdleTimeoutActiveChange(currentTimeoutActive);
-        }
-      });
-    }
+    // Use ref to access latest callback without recreating service when callback changes
+    prevTimeoutActiveRef.current = false;
+    serviceRef.current.onStateChange(() => {
+      const currentTimeoutActive = serviceRef.current?.isTimeoutActive() ?? false;
+      if (currentTimeoutActive !== prevTimeoutActiveRef.current) {
+        prevTimeoutActiveRef.current = currentTimeoutActive;
+        // Use ref to get latest callback, avoiding stale closures
+        callbackRef.current?.(currentTimeoutActive);
+      }
+    });
 
     return () => {
       if (debug) {
