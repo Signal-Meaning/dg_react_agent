@@ -130,3 +130,59 @@ export async function monitorConnectionStatus(page, duration = 30000, interval =
   return snapshots;
 }
 
+/**
+ * Get idle state information (agent idle, user idle, audio not playing, timeout active)
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @returns {Promise<{agentIdle: boolean, userIdle: boolean, audioNotPlaying: boolean, timeoutActive: boolean}>}
+ */
+export async function getIdleState(page) {
+  const agentState = await page.locator('[data-testid="agent-state"]').textContent();
+  const userStartedSpeaking = await page.locator('[data-testid="user-started-speaking"]').textContent();
+  const userStoppedSpeaking = await page.locator('[data-testid="user-stopped-speaking"]').textContent();
+  const audioPlaying = await page.locator('[data-testid="audio-playing-status"]').textContent();
+  const timeoutActive = await page.locator('[data-testid="idle-timeout-active"]').textContent();
+  
+  // User is idle if:
+  // 1. They never started speaking (userStartedSpeaking === 'Not detected'), OR
+  // 2. They stopped speaking (userStoppedSpeaking !== 'Not detected')
+  // User is NOT idle if they started speaking but haven't stopped yet
+  const userIdle = userStartedSpeaking === 'Not detected' || userStoppedSpeaking !== 'Not detected';
+  
+  // Audio is not playing if audio-playing-status is 'false'
+  const audioNotPlaying = audioPlaying === 'false';
+  
+  return {
+    agentIdle: agentState === 'idle',
+    userIdle,
+    audioNotPlaying,
+    timeoutActive: timeoutActive === 'true'
+  };
+}
+
+/**
+ * Wait for idle conditions to be met (agent idle, user idle, audio not playing)
+ * The idle timeout requires all three conditions to be true before it can start.
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {number} timeout - Timeout in ms (default: 10000)
+ * @returns {Promise<{agentIdle: boolean, userIdle: boolean, audioNotPlaying: boolean, timeoutActive: boolean}>}
+ */
+export async function waitForIdleConditions(page, timeout = 10000) {
+  await page.waitForFunction(() => {
+    const agentState = document.querySelector('[data-testid="agent-state"]')?.textContent;
+    const userStartedSpeaking = document.querySelector('[data-testid="user-started-speaking"]')?.textContent;
+    const userStoppedSpeaking = document.querySelector('[data-testid="user-stopped-speaking"]')?.textContent;
+    const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]')?.textContent;
+    
+    // User is idle if they never started OR they stopped
+    const userIdle = userStartedSpeaking === 'Not detected' || userStoppedSpeaking !== 'Not detected';
+    
+    // Audio must not be playing
+    const audioNotPlaying = audioPlaying === 'false';
+    
+    // All three conditions must be met for idle timeout to start
+    return agentState === 'idle' && userIdle && audioNotPlaying;
+  }, { timeout });
+  
+  return await getIdleState(page);
+}
+

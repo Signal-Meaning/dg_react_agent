@@ -310,7 +310,8 @@ function DeepgramVoiceInteraction(
   const { handleMeaningfulActivity, handleUtteranceEnd } = useIdleTimeoutManager(
     state,
     agentManagerRef,
-    props.debug
+    props.debug,
+    props.onIdleTimeoutActiveChange
   );
 
   // Initialize agent state service
