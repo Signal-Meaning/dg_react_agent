@@ -22,6 +22,17 @@ interface DeepgramVoiceInteractionProps {
    * Issue: #243 - Enhanced Echo Cancellation Support
    */
   audioConstraints?: AudioConstraints;
+  
+  // NEW: Idle timeout active state change callback
+  /**
+   * Called when idle timeout active state changes (for testing/debugging)
+   * Indicates whether the idle timeout timer is currently running
+   * 
+   * @param isActive - true if timeout timer is active, false otherwise
+   * 
+   * Issue: #244 - Idle Timeout State Tracking
+   */
+  onIdleTimeoutActiveChange?: (isActive: boolean) => void;
 }
 ```
 
@@ -75,6 +86,8 @@ The `AudioConstraints` interface is now exported from the main package:
 import { AudioConstraints } from '@signal-meaning/deepgram-voice-interaction-react';
 ```
 
+**Note**: The `onIdleTimeoutActiveChange` callback type is part of `DeepgramVoiceInteractionProps` and doesn't require a separate import.
+
 ## Utility Classes
 
 ### New Utility: EchoCancellationDetector
@@ -109,7 +122,7 @@ The component automatically validates constraints before applying them, ensuring
 ### ✅ All Existing Props Remain Unchanged
 
 - ✅ All existing component props remain unchanged
-- ✅ All existing callbacks remain unchanged
+- ✅ All existing callbacks remain unchanged (new optional callback added)
 - ✅ All existing state properties remain unchanged
 - ✅ All existing methods remain unchanged
 
@@ -235,12 +248,14 @@ The component automatically:
 - [New Features](NEW-FEATURES.md) - Detailed echo cancellation feature documentation
 - [Changelog](CHANGELOG.md) - Complete list of changes
 - [Echo Cancellation Plan](../issues/ISSUE-243-ECHO-CANCELLATION-PLAN.md) - Implementation details
+- [Issue #244](https://github.com/Signal-Meaning/dg_react_agent/issues/244) - Idle timeout state tracking fix
 
 ## Summary
 
 | Change Type | Description | Breaking? |
 |------------|-------------|-----------|
 | **Added** | `audioConstraints` prop | ❌ No |
+| **Added** | `onIdleTimeoutActiveChange` callback | ❌ No |
 | **Added** | `AudioConstraints` type export | ❌ No |
 | **Added** | Internal echo cancellation detection | ❌ No |
 | **Added** | Internal constraint validation | ❌ No |

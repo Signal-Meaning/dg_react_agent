@@ -154,5 +154,6 @@ function MyVoiceApp() {
 
 - [Issue #243](https://github.com/Signal-Meaning/dg_react_agent/issues/243) - Echo cancellation implementation
 - [Issue #239](https://github.com/Signal-Meaning/dg_react_agent/issues/239) - Audio track cleanup improvements
+- [Issue #244](https://github.com/Signal-Meaning/dg_react_agent/issues/244) - Idle timeout state tracking and fixes
 - [Issue #246](https://github.com/Signal-Meaning/dg_react_agent/issues/246) - MediaStream track cleanup
 

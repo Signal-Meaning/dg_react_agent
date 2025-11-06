@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 🎉 Added
 
+### Idle Timeout State Tracking (Issue #244)
+- **New Callback**: `onIdleTimeoutActiveChange` - Called when idle timeout active state changes
+  - Provides visibility into whether the idle timeout timer is currently running
+  - Useful for debugging and testing idle timeout behavior
+  - Type: `(isActive: boolean) => void`
+- **New Method**: `isTimeoutActive()` on `IdleTimeoutService`
+  - Returns whether the idle timeout timer is currently active
+  - Used internally to track timeout state changes
+
 ### Echo Cancellation Support (Issue #243)
 
 #### Phase 1 - Echo Cancellation Detection
@@ -74,11 +83,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added comprehensive test validation to prevent duplicate greetings
   - Improved context handling logic
 
+### Agent State Callbacks
+- **Issue #251**: Fixed `onAgentStateChange('speaking')` not being called when TTS playback starts
+  - Ensures callback fires when audio playback starts, even if state is already 'speaking'
+  - Handles race conditions between `AgentStartedSpeaking` message and playback start
+  - Applications can now reliably detect speaking state via `onAgentStateChange` callback
+  - Improved state machine completeness for agent state transitions
+
 ### Timeout Management
 - **Issue #235**: Fixed multiple idle timeout handlers being registered per session
   - Prevents multiple timeout handlers from running simultaneously
   - Added unified timeout coordination tests
   - Improved cleanup of timeout handlers
+
+- **Issue #244**: Fixed idle timeout not working - connection stays open after user stops speaking
+  - Idle timeout now correctly tracks and reports when timer is active
+  - Added `onIdleTimeoutActiveChange` callback to expose idle timeout timer state
+  - Fixed E2E test logic to check all idle conditions (agent idle, user idle, and audio not playing)
+  - Fixed `userIdle` logic to correctly identify when user has stopped speaking
+  - Connection now properly closes after 10 seconds of inactivity when all conditions are met
+  - Added comprehensive test helpers for idle state checking in E2E tests
 
 ## 📚 Documentation
 
@@ -109,7 +133,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#238](https://github.com/Signal-Meaning/dg_react_agent/issues/238) - Duplicate greeting with context
 - [#239](https://github.com/Signal-Meaning/dg_react_agent/issues/239) - Audio tracks hanging after connection close
 - [#243](https://github.com/Signal-Meaning/dg_react_agent/issues/243) - Echo cancellation support (Phase 1 & 2)
+- [#244](https://github.com/Signal-Meaning/dg_react_agent/issues/244) - Idle timeout not working - connection stays open after user stops speaking
 - [#246](https://github.com/Signal-Meaning/dg_react_agent/issues/246) - MediaStream tracks not stopped when stopRecording() is called
+- [#251](https://github.com/Signal-Meaning/dg_react_agent/issues/251) - onAgentStateChange('speaking') not called when TTS playback starts
 
 ## 📦 Migration Notes
 
