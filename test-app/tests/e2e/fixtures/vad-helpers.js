@@ -3,6 +3,9 @@
  * 
  * Provides reusable utilities for VAD event detection, state checking, and assertions.
  * These fixtures simplify VAD testing by encapsulating common patterns.
+ * 
+ * This is the DRY, canonical implementation for VAD testing.
+ * All tests should use these fixtures instead of duplicate implementations.
  */
 
 import { test } from '@playwright/test';

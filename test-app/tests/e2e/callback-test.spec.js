@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
-import SimpleVADHelpers from '../utils/simple-vad-helpers';
-import { VADTestUtilities } from '../utils/vad-test-utilities';
-import VADAudioSimulator from '../utils/vad-audio-simulator';
+import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
+import { getVADState } from './fixtures/vad-helpers.js';
 
 /**
  * Callback Test Suite
@@ -50,9 +49,6 @@ test.describe('Callback Test Suite', () => {
   test('should test onTranscriptUpdate callback with existing audio sample', async ({ page, context }) => {
     console.log('🧪 Testing onTranscriptUpdate callback with existing audio sample...');
     
-    // Setup VAD utilities (permissions already granted in beforeEach for 80% case)
-    const vadUtils = new VADTestUtilities(page, context);
-    
     // Enable microphone to start WebSocket connection
     await page.click('[data-testid="microphone-button"]');
     
@@ -61,8 +57,8 @@ test.describe('Callback Test Suite', () => {
     
     console.log('✅ Connection established');
     
-    // Use VADTestUtilities to load and send existing audio sample
-    await vadUtils.loadAndSendAudioSample('hello'); // Use existing 'hello' sample
+    // Use DRY fixture to load and send existing audio sample
+    await loadAndSendAudioSample(page, 'hello'); // Use existing 'hello' sample
     
     // Wait for transcript element to be visible first
     await page.waitForSelector('[data-testid="transcription"]', { timeout: 5000 });
@@ -88,9 +84,6 @@ test.describe('Callback Test Suite', () => {
 
   test('should test onUserStartedSpeaking callback with existing audio sample', async ({ page, context }) => {
     console.log('🧪 Testing onUserStartedSpeaking callback with existing audio sample...');
-    
-    // Setup VAD utilities (permissions already granted in beforeEach for 80% case)
-    const vadUtils = new VADTestUtilities(page, context);
     
     // Enable microphone to start WebSocket connection
     await page.click('[data-testid="microphone-button"]');
@@ -119,46 +112,25 @@ test.describe('Callback Test Suite', () => {
     // Use TTS-generated audio to trigger VAD events (only TTS audio triggers server-side VAD)
     // The pre-generated audio samples in /audio-samples/ are TTS-generated and should trigger VAD
     console.log('🎤 Using TTS-generated audio sample to trigger VAD events...');
-    await vadUtils.loadAndSendAudioSample('hello'); // This loads TTS-generated audio from /audio-samples/sample_hello.json
+    await loadAndSendAudioSample(page, 'hello'); // This loads TTS-generated audio from /audio-samples/sample_hello.json
     
-    // Wait for VAD events to be processed (pattern from passing tests)
-    console.log('⏳ Waiting for VAD events to be processed...');
-    await page.waitForTimeout(2000); // Give time for audio to be processed and events to fire
-    
-    // Use SimpleVADHelpers to detect VAD events (same pattern as vad-transcript-analysis.spec.js)
-    // This polls the UI element for changes, which is more reliable than waitForFunction
-    const detectedVADEvents = await SimpleVADHelpers.waitForVADEvents(page, [
+    // Wait for VAD events using DRY fixture
+    const eventsDetected = await waitForVADEvents(page, [
       'UserStartedSpeaking'  // From Agent Service or Transcription Service
     ], 10000);
     
-    // Check if UserStartedSpeaking was detected via UI element change
-    const hasUserStartedSpeaking = detectedVADEvents.some(event => event.type === 'UserStartedSpeaking');
+    // Verify using getVADState (more reliable)
+    const vadState = await getVADState(page, ['UserStartedSpeaking']);
     
-    // Also verify the UI element was updated (the callback sets a timestamp)
-    const userStartedSpeaking = await page.locator('[data-testid="user-started-speaking"]').textContent();
-    
-    if (hasUserStartedSpeaking || (userStartedSpeaking && userStartedSpeaking !== 'Not detected')) {
-      expect(userStartedSpeaking).toBeTruthy();
-      expect(userStartedSpeaking).not.toBe('Not detected');
-      expect(userStartedSpeaking).toMatch(/^\d{2}:\d{2}:\d{2}/); // Should be timestamp format
-      console.log('✅ onUserStartedSpeaking callback working - UserStartedSpeaking detected:', userStartedSpeaking);
-    } else {
-      // If VAD events weren't detected, the callback may still have been called
-      // Check the UI element one more time after a longer wait
-      await page.waitForTimeout(3000);
-      const finalCheck = await page.locator('[data-testid="user-started-speaking"]').textContent();
-      expect(finalCheck).toBeTruthy();
-      expect(finalCheck).not.toBe('Not detected');
-      expect(finalCheck).toMatch(/^\d{2}:\d{2}:\d{2}/);
-      console.log('✅ onUserStartedSpeaking callback working - detected on final check:', finalCheck);
-    }
+    // Verify the UI element was updated (the callback sets a timestamp)
+    expect(vadState.UserStartedSpeaking).toBeTruthy();
+    expect(vadState.UserStartedSpeaking).toMatch(/^\d{2}:\d{2}:\d{2}/); // Should be timestamp format
+    console.log('✅ onUserStartedSpeaking callback working - UserStartedSpeaking detected:', vadState.UserStartedSpeaking);
+    console.log('📊 Events detected count:', eventsDetected);
   });
 
   test('should test onUserStoppedSpeaking callback with existing audio sample', async ({ page, context }) => {
     console.log('🧪 Testing onUserStoppedSpeaking callback with existing audio sample...');
-    
-    // Setup VAD utilities (permissions already granted in beforeEach for 80% case)
-    const vadUtils = new VADTestUtilities(page, context);
     
     // Enable microphone to start WebSocket connection
     await page.click('[data-testid="microphone-button"]');
@@ -173,21 +145,25 @@ test.describe('Callback Test Suite', () => {
     await expect(page.locator('[data-testid="has-sent-settings"]')).toHaveText('true', { timeout: 10000 });
     console.log('✅ Settings applied (SettingsApplied received)');
     
-    // Use VADTestUtilities to load and send existing audio sample with proper silence duration (>2 seconds for UtteranceEnd)
-    await vadUtils.loadAndSendAudioSample('hello'); // Use existing 'hello' sample
+    // Use DRY fixture to load and send existing audio sample with proper silence duration (>2 seconds for UtteranceEnd)
+    await loadAndSendAudioSample(page, 'hello'); // Use existing 'hello' sample
     
-    // Wait for VAD events to be detected using the proper utility
-    const detectedVADEvents = await SimpleVADHelpers.waitForVADEvents(page, [
+    // Wait for VAD events to be detected using DRY fixture (returns count)
+    const eventsDetected = await waitForVADEvents(page, [
       'UserStartedSpeaking',    // From transcription service
-      'UtteranceEnd'      // From transcription service
+      'UtteranceEnd'            // From transcription service
     ], 15000);
     
-    // Check if UtteranceEnd was detected (this should trigger onUserStoppedSpeaking)
-    const hasUtteranceEnd = detectedVADEvents.some(event => event.type === 'UtteranceEnd');
-    expect(hasUtteranceEnd).toBe(true);
+    // Verify using getVADState (more reliable than checking array)
+    const vadState = await getVADState(page, ['UserStartedSpeaking', 'UtteranceEnd', 'UserStoppedSpeaking']);
     
-    console.log('✅ onUserStoppedSpeaking callback working - UtteranceEnd detected:', hasUtteranceEnd);
-    console.log('📊 Detected VAD events:', detectedVADEvents.map(e => e.type));
+    // Check if UtteranceEnd was detected (this should trigger onUserStoppedSpeaking)
+    expect(vadState.UtteranceEnd).toBeTruthy();
+    expect(vadState.UserStoppedSpeaking).toBeTruthy();
+    
+    console.log('✅ onUserStoppedSpeaking callback working - UtteranceEnd detected:', vadState.UtteranceEnd);
+    console.log('✅ User stopped speaking detected:', vadState.UserStoppedSpeaking);
+    console.log('📊 Events detected count:', eventsDetected);
   });
 
   test('should test onPlaybackStateChange callback with agent response', async ({ page }) => {

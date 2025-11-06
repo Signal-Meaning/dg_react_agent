@@ -117,57 +117,9 @@ class VADTestUtilities {
   }
 
   /**
-   * Load and send pre-recorded audio sample
-   * Extracted from working user-stopped-speaking-demonstration.spec.js
+   * NOTE: loadAndSendAudioSample has been removed - use the DRY fixture instead:
+   * import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
    */
-  async loadAndSendAudioSample(sampleName = VAD_TEST_CONSTANTS.DEFAULT_AUDIO_SAMPLE) {
-    await this.page.evaluate(async (sampleName) => {
-      const deepgramComponent = window.deepgramRef?.current;
-      if (!deepgramComponent || !deepgramComponent.sendAudioData) {
-        throw new Error('Deepgram component not available');
-      }
-
-      try {
-        // Load pre-recorded audio sample (working pattern from successful tests)
-        // Note: /tests/fixtures/audio-samples/ is served as /audio-samples/ by Vite
-        const response = await fetch(`/audio-samples/sample_${sampleName}.json`);
-        if (!response.ok) {
-          throw new Error(`Failed to load audio sample: ${response.statusText}`);
-        }
-        
-        const sampleData = await response.json();
-        console.log('📊 Sample metadata:', {
-          phrase: sampleData.phrase,
-          sampleRate: sampleData.metadata.sampleRate,
-          totalDuration: sampleData.metadata.totalDuration,
-          speechDuration: sampleData.metadata.speechDuration
-        });
-        
-        // Convert base64 to ArrayBuffer (working pattern)
-        const binaryString = atob(sampleData.audioData);
-        const audioBuffer = new ArrayBuffer(binaryString.length);
-        const audioView = new Uint8Array(audioBuffer);
-        
-        for (let i = 0; i < binaryString.length; i++) {
-          audioView[i] = binaryString.charCodeAt(i);
-        }
-        
-        console.log('🎤 Sending pre-recorded audio to Deepgram...');
-        deepgramComponent.sendAudioData(audioBuffer);
-        
-        return {
-          phrase: sampleData.phrase,
-          sampleRate: sampleData.metadata.sampleRate,
-          totalDuration: sampleData.metadata.totalDuration,
-          speechDuration: sampleData.metadata.speechDuration
-        };
-        
-      } catch (error) {
-        console.error('❌ Error loading/sending audio sample:', error);
-        throw error;
-      }
-    }, sampleName);
-  }
 
   /**
    * Analyze VAD events with consistent patterns

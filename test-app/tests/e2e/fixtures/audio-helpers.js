@@ -3,6 +3,9 @@
  * 
  * Provides reusable utilities for loading and sending audio samples in tests.
  * These fixtures simplify audio testing by encapsulating common patterns.
+ * 
+ * This is the DRY, canonical implementation for audio testing.
+ * All tests should use these fixtures instead of duplicate implementations.
  */
 
 /**
@@ -41,8 +44,12 @@ export async function loadAndSendAudioSample(page, sampleName) {
 
 /**
  * Wait for VAD events to be detected by checking data-testid elements
+ * 
+ * This is the DRY, canonical implementation for VAD event detection.
+ * All tests should use this instead of duplicate implementations.
+ * 
  * @param {import('@playwright/test').Page} page - Playwright page object
- * @param {Array<string>} eventTypes - Event types to check (e.g., ['UserStartedSpeaking', 'UtteranceEnd'])
+ * @param {Array<string>} eventTypes - Event types to check (e.g., ['UserStartedSpeaking', 'UtteranceEnd', 'UserStoppedSpeaking'])
  * @param {number} timeout - Timeout in ms (default: 5000)
  * @returns {Promise<number>} Number of events detected
  */
@@ -50,6 +57,7 @@ export async function waitForVADEvents(page, eventTypes = ['UserStartedSpeaking'
   const vadSelectors = {
     'UserStartedSpeaking': '[data-testid="user-started-speaking"]',
     'UtteranceEnd': '[data-testid="utterance-end"]',
+    'UserStoppedSpeaking': '[data-testid="user-stopped-speaking"]',
   };
 
   const startTime = Date.now();
