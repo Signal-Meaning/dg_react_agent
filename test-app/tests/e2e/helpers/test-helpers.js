@@ -489,9 +489,24 @@ async function waitForAgentResponse(page, expectedText, timeout = 10000) {
  * Verify agent response is valid (non-empty, not waiting)
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {import('@playwright/test').Expect} expect - Playwright expect instance
+ * @param {number} timeout - Timeout in ms (default: 10000)
  * @returns {Promise<string>} Agent response text
  */
-async function verifyAgentResponse(page, expect) {
+async function verifyAgentResponse(page, expect, timeout = 10000) {
+  // Wait for response element to exist and have valid content
+  // Pass selector as argument to make it available in browser context
+  const selector = SELECTORS.agentResponse;
+  await page.waitForFunction(
+    ({ selector }) => {
+      const responseEl = document.querySelector(selector);
+      if (!responseEl) return false;
+      const text = responseEl.textContent?.trim();
+      return text && text !== '(Waiting for agent response...)';
+    },
+    { selector },
+    { timeout }
+  );
+  
   const response = await page.locator(SELECTORS.agentResponse).textContent();
   expect(response).toBeTruthy();
   expect(response).not.toBe('(Waiting for agent response...)');
@@ -509,11 +524,17 @@ async function verifyAgentResponse(page, expect) {
 async function waitForAgentResponseEnhanced(page, options = {}) {
   const { expectedText, timeout = 10000 } = options;
   
-  await page.waitForFunction(() => {
-    const response = document.querySelector(SELECTORS.agentResponse);
-    return response && response.textContent && 
-           response.textContent !== '(Waiting for agent response...)';
-  }, { timeout });
+  // Pass selector as argument to make it available in browser context
+  const selector = SELECTORS.agentResponse;
+  await page.waitForFunction(
+    ({ selector }) => {
+      const response = document.querySelector(selector);
+      return response && response.textContent && 
+             response.textContent !== '(Waiting for agent response...)';
+    },
+    { selector },
+    { timeout }
+  );
   
   const responseText = await page.locator(SELECTORS.agentResponse).textContent();
   

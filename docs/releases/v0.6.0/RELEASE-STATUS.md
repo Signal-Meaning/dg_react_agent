@@ -19,14 +19,14 @@
 - [x] **Unit Tests Passing**: All unit tests passing
   - Status: ✅ 476 passed, 6 skipped
   - Command: `npm test`
-- [x] **E2E Tests Status**: Most E2E tests passing, known issues documented
-  - Status: ✅ 128 passed, ❌ 2 failed, ⏭️ 15 skipped
-  - Passing: Core functionality tests all passing (idle timeout, VAD events, callbacks, etc.)
-  - Failed: 2 tests with timing issues (callback-test.spec.js and deepgram-ux-protocol.spec.js - now fixed ✅)
-  - Fixed: Refactored tests to use proven test helpers (MicrophoneHelpers, sendTextMessage, waitForAudioPlaybackStart, verifyAgentResponse)
+- [x] **E2E Tests Status**: All E2E tests passing ✅
+  - Status: ✅ 130 passed, ⏭️ 15 skipped, ❌ 0 failed
+  - Passing: All core functionality tests passing (idle timeout, VAD events, callbacks, protocol, etc.)
+  - Fixed: All previously failing tests now passing after refactoring to use proven test helpers
+  - Helpers used: `MicrophoneHelpers.waitForMicrophoneReady()`, `sendTextMessage()`, `waitForAudioPlaybackStart()`, `waitForAgentGreeting()`, `verifyAgentResponse()`, `setupAudioSendingPrerequisites()`, `waitForIdleConditions()`
   - Command: `npx playwright test tests/e2e/`
   - Details: See `docs/issues/E2E-TEST-RESULTS.md`
-  - Last Updated: 2025-01-09 (after test helper refactoring)
+  - Last Updated: 2025-01-09 (all tests passing after final fixes)
 - [x] **Linting Clean**: No linting errors (only pre-existing warnings)
   - Status: ✅ 0 errors, 45 warnings (pre-existing `any` types)
   - Command: `npm run lint`
@@ -142,10 +142,10 @@
 
 ## 📊 Summary
 
-### Completed: ~90%
+### Completed: ~95%
 - ✅ All code changes complete
 - ✅ All unit tests passing (476 passed, 6 skipped)
-- ✅ All E2E tests passing (128 passed, 2 failed - now fixed ✅)
+- ✅ All E2E tests passing (130 passed, 15 skipped, 0 failed) ✅
 - ✅ All documentation complete
 - ✅ Version bumped
 - ✅ Build successful
@@ -153,6 +153,8 @@
 - ✅ UtteranceEnd test fixed
 - ✅ URL navigation tests fixed (26 tests)
 - ✅ Callback and protocol tests fixed (2 tests)
+- ✅ Idle timeout test fixed (waitForIdleConditions helper)
+- ✅ All test helper improvements (SELECTORS passed to browser context)
 
 ### Remaining: ~10%
 - ⏳ Create release branch
@@ -177,11 +179,13 @@
 - Issue #244 is included in the release (merged to main, then merged into issue248)
 - Build is successful and ready for publishing
 - Unit tests: 476 passed, 6 skipped ✅
-- E2E tests: 128 passed, 2 failed (both now fixed ✅ - callback and protocol tests refactored to use proven helpers)
+- E2E tests: 130 passed, 15 skipped, 0 failed ✅
 - Linting shows only pre-existing warnings (no errors)
 - DRY helper consolidation complete - all tests now use canonical fixtures
 - UtteranceEnd callback test fixed and passing ✅
 - URL navigation tests fixed (26 tests) ✅
 - Callback and protocol tests fixed (2 tests) ✅ - Refactored to use proven test helpers
+- Idle timeout test fixed ✅ - Added waitForIdleConditions helper usage
+- Test helper improvements ✅ - SELECTORS now properly passed to browser context
 - All E2E test failures resolved ✅
 

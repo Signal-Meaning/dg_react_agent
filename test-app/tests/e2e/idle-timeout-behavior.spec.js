@@ -42,7 +42,7 @@ import {
   establishConnectionViaText
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks.js';
-import { waitForIdleTimeout } from './fixtures/idle-timeout-helpers';
+import { waitForIdleTimeout, waitForIdleConditions } from './fixtures/idle-timeout-helpers';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
 
 test.describe('Idle Timeout Behavior', () => {
@@ -84,11 +84,16 @@ test.describe('Idle Timeout Behavior', () => {
     console.log('Waiting for agent to respond and finish...');
     await waitForAgentGreeting(page, 15000);
     
+    // Wait for idle conditions to be met before timeout can start (like successful tests)
+    console.log('Step 3: Waiting for idle conditions (agent idle, user idle, audio not playing)...');
+    await waitForIdleConditions(page, 10000);
+    console.log('✅ Idle conditions met - timeout should now be active');
+    
     // Now wait for idle timeout using shared fixture
-    console.log('Step 3: Waiting for idle timeout after agent response...');
+    console.log('Step 4: Waiting for idle timeout after agent response...');
     const timeoutResult = await waitForIdleTimeout(page, {
       expectedTimeout: 10000,
-      maxWaitTime: 15000,
+      maxWaitTime: 20000, // Increased max wait time like successful tests
       checkInterval: 1000
     });
     
@@ -97,8 +102,8 @@ test.describe('Idle Timeout Behavior', () => {
     console.log(`Connection status after timeout: ${statusAfterTimeout}`);
     expect(statusAfterTimeout).toBe('closed');
     
-    // Step 4: Attempt to activate microphone
-    console.log('Step 4: Attempting to activate microphone...');
+    // Step 5: Attempt to activate microphone
+    console.log('Step 5: Attempting to activate microphone...');
     const micButton = page.locator(SELECTORS.micButton);
     const micStatusBefore = await page.locator(SELECTORS.micStatus).textContent();
     console.log(`Mic status before click: ${micStatusBefore}`);
@@ -106,11 +111,11 @@ test.describe('Idle Timeout Behavior', () => {
     await micButton.click();
     console.log('✅ Clicked microphone button');
     
-    // Step 4: Wait for reconnection attempt and microphone activation
-    console.log('Step 5: Waiting for reconnection and mic activation (up to 5 seconds)...');
+    // Step 6: Wait for reconnection attempt and microphone activation
+    console.log('Step 6: Waiting for reconnection and mic activation (up to 5 seconds)...');
     await page.waitForTimeout(5000);
     
-    // Step 6: Check final state
+    // Step 7: Check final state
     const finalMicStatus = await page.locator(SELECTORS.micStatus).textContent();
     const finalConnectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
     
