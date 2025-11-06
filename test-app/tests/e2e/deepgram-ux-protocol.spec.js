@@ -18,11 +18,11 @@ import { test, expect } from '@playwright/test';
 import {
   SELECTORS,
   setupTestPage,
-  waitForConnectionAndSettings,
   waitForAgentGreeting,
   sendTextMessage,
   assertConnectionHealthy,
   MicrophoneHelpers,
+  verifyAgentResponse,
 } from './helpers/test-helpers.js';
 
 // Run only in chromium for focused testing
@@ -59,9 +59,9 @@ test.describe('Deepgram Protocol UX Validation', () => {
     await waitForAgentGreeting(page);
     console.log('✅ Agent greeting received and played');
     
+    // Use verifyAgentResponse helper to ensure response text is updated
     const agentResponse = page.locator(SELECTORS.agentResponse);
-    const greetingText = await agentResponse.textContent();
-    expect(greetingText).not.toBe('(Waiting for agent response...)');
+    const greetingText = await verifyAgentResponse(page, expect);
     expect(greetingText?.length).toBeGreaterThan(0);
     console.log(`✅ Agent greeting displayed: "${greetingText?.substring(0, 50)}..."`);
     
