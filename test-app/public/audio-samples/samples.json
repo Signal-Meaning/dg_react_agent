@@ -4,6 +4,7 @@
     "speechDuration": 1000,
     "onsetSilenceDuration": 300,
     "offsetSilenceDuration": 2000,
+    "source": "synthetic",
     "description": "Simple greeting"
   },
   "wait-one-moment": {
@@ -11,6 +12,7 @@
     "speechDuration": 2000,
     "onsetSilenceDuration": 300,
     "offsetSilenceDuration": 2000,
+    "source": "synthetic",
     "description": "Pause request"
   },
   "thank-you": {
@@ -18,6 +20,7 @@
     "speechDuration": 1000,
     "onsetSilenceDuration": 300,
     "offsetSilenceDuration": 2000,
+    "source": "synthetic",
     "description": "Polite acknowledgment"
   },
   "what-can-you-do": {
@@ -25,6 +28,7 @@
     "speechDuration": 2000,
     "onsetSilenceDuration": 300,
     "offsetSilenceDuration": 2000,
+    "source": "synthetic",
     "description": "Capability inquiry"
   },
   "greeting": {
@@ -32,6 +36,7 @@
     "speechDuration": 3000,
     "onsetSilenceDuration": 300,
     "offsetSilenceDuration": 2000,
+    "source": "synthetic",
     "description": "Agent greeting message"
   },
   "user-response": {
@@ -39,6 +44,7 @@
     "speechDuration": 2500,
     "onsetSilenceDuration": 300,
     "offsetSilenceDuration": 2000,
+    "source": "synthetic",
     "description": "Typical user response"
   },
   "barge-in": {
@@ -46,6 +52,7 @@
     "speechDuration": 2000,
     "onsetSilenceDuration": 300,
     "offsetSilenceDuration": 2000,
+    "source": "synthetic",
     "description": "User interrupting agent speech"
   },
   "short-response": {
@@ -53,6 +60,7 @@
     "speechDuration": 500,
     "onsetSilenceDuration": 300,
     "offsetSilenceDuration": 2000,
+    "source": "synthetic",
     "description": "Short affirmative response"
   },
   "long-response": {
@@ -60,6 +68,7 @@
     "speechDuration": 4000,
     "onsetSilenceDuration": 300,
     "offsetSilenceDuration": 2000,
+    "source": "synthetic",
     "description": "Longer user inquiry"
   },
   "confirmation": {
@@ -67,6 +76,7 @@
     "speechDuration": 2000,
     "onsetSilenceDuration": 300,
     "offsetSilenceDuration": 2000,
+    "source": "synthetic",
     "description": "User confirmation"
   },
   "cat-activity-question": {
@@ -74,6 +84,15 @@
     "speechDuration": 4000,
     "onsetSilenceDuration": 300,
     "offsetSilenceDuration": 2000,
+    "source": "synthetic",
     "description": "Complex question requiring agent thinking and detailed response"
+  },
+  "shopping-concierge-question": {
+    "text": "Hello, can you help me find a gift for my friend's birthday?",
+    "speechDuration": 3500,
+    "onsetSilenceDuration": 300,
+    "offsetSilenceDuration": 2000,
+    "source": "human",
+    "description": "Shopping concierge question - pre-recorded human speech (WAV file) for realistic interim transcript testing"
   }
 }

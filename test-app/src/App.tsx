@@ -14,6 +14,23 @@ import {
 } from '../../src/types';
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 
+// Type declaration for E2E test support
+// Only used in test-app for E2E testing, not part of the component's public API
+declare global {
+  interface Window {
+    deepgramRef?: React.RefObject<DeepgramVoiceInteractionHandle>;
+    onConnectionStateChange?: (service: ServiceType, state: ConnectionState) => void;
+  }
+}
+
+// Type for transcript history entries
+type TranscriptHistoryEntry = {
+  text: string;
+  is_final: boolean;
+  speech_final: boolean;
+  timestamp: number;
+};
+
 function App() {
   // Fail-fast check for required API key
   const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
@@ -30,14 +47,10 @@ function App() {
 
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
   
-  // Expose deepgramRef to window for testing
-  useEffect(() => {
-    (window as any).deepgramRef = deepgramRef;
-  }, []);
-  
   // State for UI
   const [isReady, setIsReady] = useState(false);
   const [lastTranscript, setLastTranscript] = useState('');
+  const [transcriptHistory, setTranscriptHistory] = useState<TranscriptHistoryEntry[]>([]);
   const [agentResponse, setAgentResponse] = useState('');
   const [userMessage, setUserMessage] = useState('');
   const [agentState, setAgentState] = useState<AgentState>('idle');
@@ -45,7 +58,8 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSleeping, setIsSleeping] = useState(false);
   const [connectionStates, setConnectionStates] = useState<Partial<Record<ServiceType, ConnectionState>>>({
-    agent: 'closed'
+    agent: 'closed',
+    transcription: 'closed' // Initialize transcription state to track it properly
   });
   const [hasSentSettingsDom, setHasSentSettingsDom] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
@@ -129,19 +143,15 @@ function App() {
   
   // Memoize options objects to prevent unnecessary re-renders/effect loops
 
-  // Monitor deepgramRef changes - only log once when it becomes available
-  const hasLoggedRef = useRef(false);
+  // Expose test utilities to window for E2E testing
+  // This is only for the test-app, not part of the component's public API
+  // NOTE: This is necessary for Playwright E2E tests to access component methods
+  // from the browser context. In production apps, you would not expose refs to window.
   useEffect(() => {
-    if (deepgramRef.current && !hasLoggedRef.current) {
-      console.log('🔗 [APP] DeepgramVoiceInteraction ref is now available');
-      addLog('🔗 [APP] DeepgramVoiceInteraction ref is now available');
-      hasLoggedRef.current = true;
-      
-      // Expose ref globally for E2E tests
-      (window as Window & { deepgramRef?: typeof deepgramRef }).deepgramRef = deepgramRef;
-      console.log('🔗 [APP] Exposed deepgramRef globally for E2E tests');
-    }
-  }, [addLog]); // Include addLog in dependencies
+    // Expose ref globally for E2E tests (only in test-app)
+    // Type assertion is safe here because we know this is test-only code
+    window.deepgramRef = deepgramRef as React.RefObject<DeepgramVoiceInteractionHandle>;
+  }, []); // Only run once on mount
 
   // Load instructions using the instructions-loader utility
   const hasLoadedInstructions = useRef(false);
@@ -188,19 +198,23 @@ function App() {
     loadInstructions();
   }, [addLog]); // Include addLog in dependencies
 
-  const memoizedTranscriptionOptions = useMemo(() => ({
-    // Use environment variables with sensible defaults
-    model: import.meta.env.VITE_TRANSCRIPTION_MODEL || 'nova-3',
-    language: import.meta.env.VITE_TRANSCRIPTION_LANGUAGE || 'en-US',
-    smart_format: import.meta.env.VITE_TRANSCRIPTION_SMART_FORMAT !== 'false',
-    interim_results: import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS !== 'false',
-    diarize: import.meta.env.VITE_TRANSCRIPTION_DIARIZE !== 'false',
-    channels: parseInt(import.meta.env.VITE_TRANSCRIPTION_CHANNELS || '1'),
-    vad_events: true, // Enable VAD events
-    utterance_end_ms: parseInt(import.meta.env.VITE_TRANSCRIPTION_UTTERANCE_END_MS || '1000'),
-    sample_rate: 16000,
-    encoding: 'linear16'
-  }), []);
+  const memoizedTranscriptionOptions = useMemo(() => {
+    const interimResults = import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS !== 'false';
+    console.log(`[TEST-APP] Transcription options - interim_results: ${interimResults} (env var: ${import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS || 'not set'})`);
+    return {
+      // Use environment variables with sensible defaults
+      model: import.meta.env.VITE_TRANSCRIPTION_MODEL || 'nova-3',
+      language: import.meta.env.VITE_TRANSCRIPTION_LANGUAGE || 'en-US',
+      smart_format: import.meta.env.VITE_TRANSCRIPTION_SMART_FORMAT !== 'false',
+      interim_results: interimResults,
+      diarize: import.meta.env.VITE_TRANSCRIPTION_DIARIZE !== 'false',
+      channels: parseInt(import.meta.env.VITE_TRANSCRIPTION_CHANNELS || '1'),
+      vad_events: true, // Enable VAD events
+      utterance_end_ms: parseInt(import.meta.env.VITE_TRANSCRIPTION_UTTERANCE_END_MS || '1000'),
+      sample_rate: 16000,
+      encoding: 'linear16'
+    };
+  }, []);
 
   const memoizedAgentOptions = useMemo(() => ({
     // Use environment variables with sensible defaults
@@ -256,31 +270,80 @@ function App() {
   }, [addLog]);
   
   const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
-    // Use type assertion to handle the actual structure from Deepgram
-    // which differs from our TranscriptResponse type
-    const deepgramResponse = transcript as unknown as {
-      type: string;
-      channel: {
-        alternatives: Array<{
-          transcript: string;
-          confidence: number;
-          words: Array<{
-            word: string;
-            start: number;
-            end: number;
-            confidence: number;
-            speaker?: number;
-            punctuated_word?: string;
-          }>;
-        }>;
-      };
-      is_final: boolean;
-    };
-
-    if (deepgramResponse.channel?.alternatives?.[0]?.transcript) {
-      const text = deepgramResponse.channel.alternatives[0].transcript;
-      // Get speaker ID if available
-      const speakerId = deepgramResponse.channel.alternatives[0].words?.[0]?.speaker;
+    // Debug: Log every transcript received to understand structure
+    const isFinal = (transcript as any).is_final;
+    const channel = (transcript as any).channel;
+    
+    // CRITICAL: Check top-level alternatives FIRST (this is what the component uses at line 911)
+    const topLevelTranscript = transcript.alternatives?.[0]?.transcript;
+    const channelTranscript = channel?.alternatives?.[0]?.transcript;
+    
+    // Log the raw transcript object to see exactly what Deepgram sent
+    console.log(`[TRANSCRIPT-CALLBACK] Raw transcript object from Deepgram:`, JSON.stringify(transcript, null, 2));
+    
+    console.log(`[TRANSCRIPT-CALLBACK] Received ${isFinal ? 'final' : 'interim'} transcript:`, {
+      type: transcript.type,
+      is_final: isFinal,
+      is_final_type: typeof isFinal,
+      is_final_value: isFinal === true ? 'TRUE' : isFinal === false ? 'FALSE' : `OTHER: ${isFinal}`,
+      // Top-level alternatives (what component checks at line 911)
+      topLevelAlternatives: transcript.alternatives ? `array[${transcript.alternatives.length}]` : 'missing',
+      topLevelTranscript: topLevelTranscript || '(empty)',
+      topLevelTranscriptLength: topLevelTranscript?.length || 0,
+      // Nested channel.alternatives (fallback)
+      hasChannel: 'channel' in transcript,
+      channelAlternatives: channel?.alternatives ? `array[${channel.alternatives.length}]` : 'missing',
+      channelTranscript: channelTranscript || '(empty)',
+      channelTranscriptLength: channelTranscript?.length || 0,
+      // Full structure for debugging
+      keys: Object.keys(transcript),
+      channelKeys: channel ? Object.keys(channel) : []
+    });
+    
+    // Handle both possible structures:
+    // 1. Top-level alternatives (correct structure per TranscriptResponse type) - CHECK THIS FIRST
+    //    This is what the component uses at line 911: transcriptData.alternatives?.[0]?.transcript
+    // 2. Nested channel.alternatives (legacy/alternative structure)
+    let text: string | undefined;
+    let speakerId: number | undefined;
+    
+    // CRITICAL: Check top-level alternatives FIRST (same as component at line 911)
+    // This is the correct structure per TranscriptResponse type
+    if (transcript.alternatives?.[0]?.transcript && transcript.alternatives[0].transcript.trim().length > 0) {
+      // Correct structure: alternatives at top level
+      text = transcript.alternatives[0].transcript;
+      speakerId = transcript.alternatives[0].words?.[0]?.speaker;
+      console.log(`[TRANSCRIPT-CALLBACK] Extracted text from top-level alternatives: "${text.substring(0, 50)}..."`);
+    } else if (channel?.alternatives?.[0]) {
+      // Fallback: nested structure (shouldn't happen but handle gracefully)
+      const firstAlt = channel.alternatives[0];
+      // Check if transcript exists and has content (not empty string)
+      // For interim transcripts, transcript might be empty initially
+      if (firstAlt.transcript && firstAlt.transcript.trim().length > 0) {
+        console.warn('[TRANSCRIPT] Using nested channel.alternatives structure (unexpected)');
+        text = firstAlt.transcript;
+        speakerId = firstAlt.words?.[0]?.speaker;
+        console.log(`[TRANSCRIPT-CALLBACK] Extracted text from nested channel.alternatives: "${text.substring(0, 50)}..."`);
+      } else {
+        // Transcript property exists but is empty - this is normal for early interim results
+        // Skip capturing empty transcripts
+        console.log(`[TRANSCRIPT-CALLBACK] Skipping empty transcript (interim result with no text yet)`);
+      }
+    } else {
+      console.warn('[TRANSCRIPT-CALLBACK] Could not extract text from either structure', {
+        hasTopLevelAlternatives: !!transcript.alternatives,
+        topLevelAlternativesLength: transcript.alternatives?.length || 0,
+        hasChannel: !!channel,
+        hasChannelAlternatives: !!channel?.alternatives,
+        channelAlternativesLength: channel?.alternatives?.length || 0,
+        channelAlternativesFirst: channel?.alternatives?.[0] ? Object.keys(channel.alternatives[0]) : []
+      });
+      // No text extracted, skip processing
+      return;
+    }
+    
+    // At this point, text is guaranteed to be defined and non-empty
+    if (text && text.trim().length > 0) {
       const displayText = speakerId !== undefined 
         ? `Speaker ${speakerId}: ${text}` 
         : text;
@@ -288,8 +351,33 @@ function App() {
       setLastTranscript(displayText);
       
       // Log transcript to event log (and console via addLog)
-      const transcriptType = deepgramResponse.is_final ? 'final' : 'interim';
+      const transcriptType = transcript.is_final ? 'final' : 'interim';
       addLog(`[TRANSCRIPT] "${text}" (${transcriptType})`);
+      
+      // Store transcript in history for E2E testing (displayed in DOM)
+      // This replaces window.__testTranscripts with a proper React state + DOM display
+      const transcriptEntry: TranscriptHistoryEntry = {
+        text: text,
+        is_final: transcript.is_final || false,
+        speech_final: 'speech_final' in transcript ? (transcript as { speech_final?: boolean }).speech_final || false : false,
+        timestamp: Date.now()
+      };
+      
+      setTranscriptHistory(prev => [...prev, transcriptEntry]);
+      
+      // Debug logging
+      const transcriptTypeLabel = transcriptEntry.is_final 
+        ? (transcriptEntry.speech_final ? 'final (speech_final)' : 'final')
+        : 'interim';
+      console.log(`[TRANSCRIPT-CAPTURE] Stored ${transcriptTypeLabel} transcript: "${text.substring(0, 50)}..." (is_final: ${transcriptEntry.is_final}, speech_final: ${transcriptEntry.speech_final})`);
+    } else {
+      // Log warning if we can't extract text from transcript
+      console.warn('[TRANSCRIPT] Could not extract text from transcript:', {
+        hasAlternatives: 'alternatives' in transcript,
+        hasChannel: 'channel' in transcript,
+        channelType: typeof (transcript as any).channel,
+        keys: Object.keys(transcript)
+      });
     }
   }, [addLog]); // Include addLog in dependencies
   
@@ -378,6 +466,15 @@ function App() {
     // Reset hasSentSettings mirror on agent disconnect/stop for clean reconnect assertions
     if (service === 'agent' && state === 'closed') {
       setHasSentSettingsDom(false);
+    }
+    
+    // Expose connection state changes to window for E2E testing
+    // This allows tests to track connection state via setupConnectionStateTracking
+    if (typeof window !== 'undefined') {
+      const windowWithCallback = window as unknown as Window & { onConnectionStateChange?: (service: ServiceType, state: ConnectionState) => void };
+      if (windowWithCallback.onConnectionStateChange) {
+        windowWithCallback.onConnectionStateChange(service, state);
+      }
     }
   }, [addLog]); // Depends on addLog
   
@@ -567,14 +664,38 @@ function App() {
           console.log('🎤 [APP] deepgramRef.current exists, calling startAudioCapture()');
           console.log('🎤 [APP] deepgramRef.current methods:', Object.keys(deepgramRef.current));
           
-          // Check if connection is closed and needs to be re-established (using tracked state)
+          // Check if connections need to be established (using tracked state)
           // Per issue #206: microphone button should start both services if configured
-          if (connectionStates.agent !== 'connected') {
-            console.log('🎤 [APP] Agent connection closed, re-establishing connection...');
-            addLog('Re-establishing agent connection...');
-            // Start both services when microphone is activated
-            await deepgramRef.current.start({ agent: true, transcription: true });
-            console.log('🎤 [APP] Connection re-established');
+          // CRITICAL: Always start transcription service when microphone is activated
+          // (VAD events and transcripts require transcription service)
+          const needsAgent = connectionStates.agent !== 'connected';
+          // Handle undefined (not initialized) as needing connection
+          const needsTranscription = connectionStates.transcription !== 'connected';
+          
+          console.log('🎤 [APP] Connection state check:', {
+            agent: connectionStates.agent,
+            transcription: connectionStates.transcription,
+            needsAgent,
+            needsTranscription
+          });
+          
+          if (needsAgent || needsTranscription) {
+            if (needsAgent && needsTranscription) {
+              console.log('🎤 [APP] Both services closed, starting both...');
+              addLog('Starting agent and transcription services...');
+              await deepgramRef.current.start({ agent: true, transcription: true });
+            } else if (needsTranscription) {
+              console.log('🎤 [APP] Transcription service not connected, starting it...');
+              addLog('Starting transcription service...');
+              await deepgramRef.current.start({ agent: true, transcription: true });
+            } else {
+              console.log('🎤 [APP] Agent connection closed, re-establishing connection...');
+              addLog('Re-establishing agent connection...');
+              await deepgramRef.current.start({ agent: true, transcription: true });
+            }
+            console.log('🎤 [APP] Services started');
+          } else {
+            console.log('🎤 [APP] Both services already connected, skipping start()');
           }
           
           if (typeof deepgramRef.current.startAudioCapture === 'function') {
@@ -874,6 +995,45 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <div style={{ flex: 1, border: '1px solid #ccc', padding: '10px' }}>
           <h3>Agent Response</h3>
           <pre data-testid="agent-response">{agentResponse || '(Waiting for agent response...)'}</pre>
+        </div>
+      </div>
+      
+      {/* Transcript History - displayed in DOM for E2E testing */}
+      <div data-testid="transcript-history" style={{ marginTop: '20px', border: '1px solid #ccc', padding: '10px' }}>
+        <h3>Transcript History (for E2E testing)</h3>
+        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+          {transcriptHistory.length === 0 ? (
+            <p>(No transcripts yet)</p>
+          ) : (
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {transcriptHistory.map((entry, index) => (
+                <li 
+                  key={index}
+                  data-testid={`transcript-entry-${index}`}
+                  data-is-final={entry.is_final}
+                  data-speech-final={entry.speech_final}
+                  data-timestamp={entry.timestamp}
+                  style={{
+                    padding: '8px',
+                    marginBottom: '4px',
+                    backgroundColor: entry.is_final ? (entry.speech_final ? '#1a4d1a' : '#4a3a00') : '#1a3a5c',
+                    border: `1px solid ${entry.is_final ? (entry.speech_final ? '#48bb78' : '#f6ad55') : '#4299e1'}`,
+                    borderRadius: '4px',
+                    fontSize: '0.9em',
+                    color: '#ffffff'
+                  }}
+                >
+                  <span style={{ fontWeight: 'bold', marginRight: '8px', color: entry.is_final ? (entry.speech_final ? '#9ae6b4' : '#fbd38d') : '#90cdf4' }}>
+                    [{entry.is_final ? (entry.speech_final ? 'FINAL' : 'final') : 'interim'}]
+                  </span>
+                  <span data-testid={`transcript-text-${index}`} style={{ color: '#ffffff' }}>{entry.text}</span>
+                  <span style={{ color: '#cbd5e0', fontSize: '0.85em', marginLeft: '8px' }}>
+                    ({new Date(entry.timestamp).toLocaleTimeString()})
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
       
