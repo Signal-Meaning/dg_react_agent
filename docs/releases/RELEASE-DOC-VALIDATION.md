@@ -114,18 +114,25 @@ All required documents should pass validation before proceeding with packaging.
 
 ## Publishing Strategy
 
-**Preferred Approach**: Use CI build for publishing (validated CI build)
+**This is the standard publishing approach for all releases.**
+
+### Preferred Approach: CI Build Publishing
+
+Use CI build for publishing (validated CI build) - **this is the standard process for all releases**:
 - Create GitHub release to trigger `.github/workflows/publish.yml`
 - CI workflow automatically: builds, tests, validates, and publishes
 - Provides validated, reproducible build process
+- Ensures package is built and tested in a clean CI environment
 - See `.github/workflows/publish.yml` for workflow details
 
-**Fallback Approach**: Dev publish (only if CI fails)
-- Run `npm publish` locally as last resort
-- Use when CI workflow fails or is unavailable
-- Still publishes to GitHub Package Registry (configured in `package.json`)
+### Fallback Approach: Dev Publish
 
-**Note**: The CI publish workflow runs automatically when a GitHub release is created. This ensures the package is built and tested in a clean CI environment before publishing.
+Dev publish (only if CI fails) - **use only as last resort**:
+- Run `npm publish` locally when CI workflow fails or is unavailable
+- Still publishes to GitHub Package Registry (configured in `package.json`)
+- Should be avoided in favor of fixing CI issues when possible
+
+**Note**: The CI publish workflow runs automatically when a GitHub release is created. This is the preferred method for all releases going forward.
 
 ## Validation Tool
 

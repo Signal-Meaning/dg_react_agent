@@ -88,6 +88,9 @@ The release process is **manual** and follows these steps:
 7. **Review**: Review documentation for completeness and accuracy
 8. **Testing**: Test all examples and migration guides
 9. **Release**: Publish release with documentation
+   - **Preferred**: Use CI build (create GitHub release to trigger CI publish workflow)
+   - **Fallback**: Dev publish (`npm publish`) only if CI fails
+   - See [Publishing Strategy](RELEASE-DOC-VALIDATION.md#publishing-strategy) for details
 10. **Announcement**: Announce release with migration guidance
 
 For detailed step-by-step instructions, see [RELEASE-DOC-VALIDATION.md](RELEASE-DOC-VALIDATION.md#manual-release-documentation-setup-process).
