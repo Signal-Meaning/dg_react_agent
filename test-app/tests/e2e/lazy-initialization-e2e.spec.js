@@ -147,11 +147,15 @@ test.describe('Lazy Initialization E2E Tests', () => {
     const stateTracker = await setupConnectionStateTracking(page);
     
     // Wait for stop to complete - verify managers are cleared
-    // Wait for both services to be closed
+    // Wait for both services to be closed (read from DOM)
     await page.waitForFunction(
       () => {
-        return window.testConnectionStates?.agent === 'closed' &&
-               window.testConnectionStates?.transcription === 'closed';
+        const agentEl = document.querySelector('[data-testid="connection-status"]');
+        const transcriptionEl = document.querySelector('[data-testid="transcription-connection-status"]');
+        const agentState = agentEl?.textContent?.toLowerCase() || '';
+        const transcriptionState = transcriptionEl?.textContent?.toLowerCase() || '';
+        return (agentState.includes('closed') || agentState.includes('disconnected')) &&
+               (transcriptionState.includes('closed') || transcriptionState.includes('disconnected'));
       },
       { timeout: 5000 }
     );
@@ -290,13 +294,9 @@ test.describe('Lazy Initialization E2E Tests', () => {
     
     // Call injectUserMessage - should create agent manager lazily
     // Capture state at multiple points to track manager lifecycle
+    const beforeStates = await stateTracker.getStates();
+    
     const injectResult = await page.evaluate(async () => {
-      // Get current states from tracking (set up before this call)
-      const beforeStates = {
-        agent: window.testConnectionStates?.agent || 'closed',
-        transcription: window.testConnectionStates?.transcription || 'closed'
-      };
-      
       const deepgramComponent = window.deepgramRef?.current;
       if (!deepgramComponent) return { error: 'No component found' };
       
@@ -304,40 +304,34 @@ test.describe('Lazy Initialization E2E Tests', () => {
         // Call injectUserMessage - this should create manager and connect
         await deepgramComponent.injectUserMessage('Hello, this is a test message');
         
-        // Wait a bit for state to update via callback, then get states
+        // Wait a bit for state to update in DOM
         await new Promise(resolve => setTimeout(resolve, 100));
-        const afterStates = {
-          agent: window.testConnectionStates?.agent || 'closed',
-          transcription: window.testConnectionStates?.transcription || 'closed'
-        };
         
-        return { 
-          success: true,
-          before: beforeStates,
-          after: afterStates
-        };
+        return { success: true };
       } catch (error) {
-        // Even if it fails, check if manager was created
-        await new Promise(resolve => setTimeout(resolve, 100));
-        const errorStates = {
-          agent: window.testConnectionStates?.agent || 'closed',
-          transcription: window.testConnectionStates?.transcription || 'closed'
-        };
         return { 
-          error: error.message,
-          before: beforeStates,
-          after: errorStates
+          error: error.message
         };
       }
     });
     
-    console.log('🔍 injectUserMessage() result:', JSON.stringify(injectResult, null, 2));
+    // Get states after injectUserMessage (read from DOM)
+    await page.waitForTimeout(200); // Give DOM time to update
+    const afterStates = await stateTracker.getStates();
+    
+    const injectResultWithStates = {
+      ...injectResult,
+      before: beforeStates,
+      after: afterStates
+    };
+    
+    console.log('🔍 injectUserMessage() result:', JSON.stringify(injectResultWithStates, null, 2));
     console.log('🔍 Relevant console logs:', consoleLogs.slice(-20)); // Last 20 relevant logs
     
     // Verify manager was created (lazy initialization test)
     // Even if connection fails later, manager should exist
-    if (injectResult.after) {
-      connectionStates = injectResult.after;
+    if (injectResultWithStates.after) {
+      connectionStates = injectResultWithStates.after;
       console.log('🔍 Connection states from injectUserMessage() result:', JSON.stringify(connectionStates, null, 2));
       
       // Manager should have been created (even if connection later closed)
@@ -346,7 +340,7 @@ test.describe('Lazy Initialization E2E Tests', () => {
       
       // If injectUserMessage got far enough to create manager, verify it exists
       // Note: Manager might be cleared by React StrictMode cleanup, but that's a separate issue
-      if (injectResult.success || (injectResult.error && !injectResult.error.includes('not configured'))) {
+      if (injectResultWithStates.success || (injectResultWithStates.error && !injectResultWithStates.error.includes('not configured'))) {
         // Manager should exist (or should have existed before being cleared)
         // The test validates that lazy creation logic ran
         console.log('✅ injectUserMessage() attempted lazy manager creation');
@@ -422,30 +416,27 @@ test.describe('Lazy Initialization E2E Tests', () => {
       try {
         await deepgramComponent.startAudioCapture();
         
-        // Wait a bit for state to update via callback
+        // Wait a bit for state to update in DOM
         await new Promise(resolve => setTimeout(resolve, 100));
-        const afterStates = {
-          agent: window.testConnectionStates?.agent || 'closed',
-          transcription: window.testConnectionStates?.transcription || 'closed'
-        };
-        return { 
-          success: true,
-          after: afterStates
-        };
+        return { success: true };
       } catch (error) {
         await new Promise(resolve => setTimeout(resolve, 100));
-        const errorStates = {
-          agent: window.testConnectionStates?.agent || 'closed',
-          transcription: window.testConnectionStates?.transcription || 'closed'
-        };
         return { 
-          error: error.message,
-          after: errorStates
+          error: error.message
         };
       }
     });
     
-    console.log('🔍 startAudioCapture() result:', JSON.stringify(captureResult, null, 2));
+    // Get states after startAudioCapture (read from DOM)
+    await page.waitForTimeout(200); // Give DOM time to update
+    const afterStates = await stateTracker.getStates();
+    
+    const captureResultWithStates = {
+      ...captureResult,
+      after: afterStates
+    };
+    
+    console.log('🔍 startAudioCapture() result:', JSON.stringify(captureResultWithStates, null, 2));
     
     // Wait for connection to be established using helper function
     await waitForConnection(page, 15000);
@@ -457,14 +448,14 @@ test.describe('Lazy Initialization E2E Tests', () => {
     console.log('🔍 Connection states after wait:', JSON.stringify(connectionStates, null, 2));
     
     // Should have at least agent manager (and transcription if configured)
-    if (captureResult.success || (captureResult.after && captureResult.after.agent !== 'not-found')) {
+    if (captureResultWithStates.success || (captureResultWithStates.after && captureResultWithStates.after.agent !== 'not-found')) {
       // Manager was created (even if connection later closed)
       expect(connectionStates.agent).not.toBe('not-found');
       // Connection might not be stable, but manager exists
       console.log('✅ Managers created lazily via startAudioCapture() - state:', connectionStates.agent);
     } else {
       // If it failed, log but still check if manager exists
-      console.log('⚠️ startAudioCapture() had issues, but checking manager creation:', captureResult.error);
+      console.log('⚠️ startAudioCapture() had issues, but checking manager creation:', captureResultWithStates.error);
       // Still verify manager was attempted to be created
       expect(connectionStates).toBeTruthy();
     }
@@ -516,24 +507,25 @@ test.describe('Lazy Initialization E2E Tests', () => {
       
       try {
         await deepgramComponent.startAudioCapture();
-        // Wait a bit for state to update via callback
+        // Wait a bit for state to update in DOM
         await new Promise(resolve => setTimeout(resolve, 100));
-        const states = {
-          agent: window.testConnectionStates?.agent || 'closed',
-          transcription: window.testConnectionStates?.transcription || 'closed'
-        };
-        return { success: true, states };
+        return { success: true };
       } catch (error) {
         await new Promise(resolve => setTimeout(resolve, 100));
-        const states = {
-          agent: window.testConnectionStates?.agent || 'closed',
-          transcription: window.testConnectionStates?.transcription || 'closed'
-        };
-        return { error: error.message, states };
+        return { error: error.message };
       }
     });
     
-    console.log('🔍 startAudioCapture() result:', JSON.stringify(captureResult, null, 2));
+    // Get states after startAudioCapture (read from DOM)
+    await page.waitForTimeout(200); // Give DOM time to update
+    const captureStates = await stateTracker.getStates();
+    
+    const captureResultWithStates = {
+      ...captureResult,
+      states: captureStates
+    };
+    
+    console.log('🔍 startAudioCapture() result:', JSON.stringify(captureResultWithStates, null, 2));
     
     // Verify connection is still established (microphone activation should work with existing agent)
     await waitForConnection(page, 15000);
@@ -544,20 +536,11 @@ test.describe('Lazy Initialization E2E Tests', () => {
     
     console.log('🔍 Connection states after startAudioCapture():', JSON.stringify(connectionStates, null, 2));
     
-    // Verify lazy creation behavior was tested
-    // Note: Managers may be cleared by React StrictMode, but we verify the logic ran
-    if (connectionStates.agent !== 'not-found') {
-      // Managers still exist - full validation
-      expect(connectionStates.agent).not.toBe('not-found');
-      // With transcription: false, transcription service should remain closed
-      expect(connectionStates.transcription).toBe('closed');
-      console.log('✅ Verified: Agent reused when microphone activated (transcription not created with transcription: false)');
-    } else {
-      // Managers cleared by StrictMode, but we verified the logic executed
-      // The agent was connected before startAudioCapture() was called (verified above)
-      console.log('✅ Verified: Lazy creation logic executed (agent was connected before startAudioCapture)');
-      console.log('   Note: Managers cleared by React StrictMode cleanup, but logic verified');
-      expect(connectionStates).toBeTruthy(); // Just verify states object exists
-    }
+    // Verify lazy creation behavior: agent reused, transcription created
+    // Agent should remain connected (reused from initial start() call)
+    expect(connectionStates.agent).toBe('connected');
+    // Transcription should be connected (created by startAudioCapture())
+    expect(connectionStates.transcription).toBe('connected');
+    console.log('✅ Verified: Agent reused when microphone activated (transcription created by startAudioCapture)');
   });
 });

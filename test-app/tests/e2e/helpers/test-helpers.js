@@ -923,7 +923,7 @@ export {
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   waitForConnection, // Wait for connection to be established
   waitForSettingsApplied, // Wait for agent settings to be applied (SettingsApplied received from server)
-  setupConnectionStateTracking, // Setup connection state tracking via onConnectionStateChange callback
+  setupConnectionStateTracking, // Setup connection state tracking via DOM elements (data-testid attributes)
   waitForConnectionAndSettings, // Wait for both connection and settings to be applied
   waitForAgentGreeting, // Wait for agent to finish speaking its greeting message
   waitForGreetingIfPresent, // Safely wait for greeting if it plays, otherwise continue (doesn't fail if no greeting)
