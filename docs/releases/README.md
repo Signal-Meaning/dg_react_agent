@@ -74,12 +74,23 @@ Every release must validate:
 
 ## Release Process
 
-1. **Planning**: Create release issue with documentation requirements
-2. **Documentation**: Write comprehensive release documentation
-3. **Review**: Review documentation for completeness and accuracy
-4. **Testing**: Test all examples and migration guides
-5. **Release**: Publish release with documentation
-6. **Announcement**: Announce release with migration guidance
+The release process is **manual** and follows these steps:
+
+1. **Create Release Issue**: Use `npm run release:issue <version> <type>` to create GitHub issue and working branch
+2. **Create Release Directory**: Manually create `docs/releases/vX.X.X/` directory
+3. **Create Initial Documents**: Manually create required template documents:
+   - Copy `PACKAGE-STRUCTURE.md` from template and replace version placeholders
+   - Create `CHANGELOG.md` with Keep a Changelog format
+   - Create other required documents based on release type
+4. **Validate Documents**: Run `npm run validate:release-docs <version>` to check required documents
+5. **Complete Documentation**: Fill in all documents with actual release content
+6. **Re-validate**: Run validation again before packaging to ensure completeness
+7. **Review**: Review documentation for completeness and accuracy
+8. **Testing**: Test all examples and migration guides
+9. **Release**: Publish release with documentation
+10. **Announcement**: Announce release with migration guidance
+
+For detailed step-by-step instructions, see [RELEASE-DOC-VALIDATION.md](RELEASE-DOC-VALIDATION.md#manual-release-documentation-setup-process).
 
 ## Creating Release Issues
 

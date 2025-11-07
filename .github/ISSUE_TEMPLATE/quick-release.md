@@ -33,7 +33,14 @@ This is a patch release for version vX.X.X of the Deepgram Voice Interaction Rea
   - [ ] Run: `npm run package:local`
 
 #### Documentation
-- [ ] **Update CHANGELOG**: Add changes to CHANGELOG.md
+- [ ] **Create Release Documentation**: Follow the established structure
+  - [ ] Create: `docs/releases/vX.X.X/` directory
+  - [ ] Create: `CHANGELOG.md` with all changes (Keep a Changelog format)
+  - [ ] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
+    - Replace `vX.X.X` and `X.X.X` placeholders with actual version
+  - [ ] Create: `RELEASE-NOTES.md` (optional but standard)
+- [ ] **Validate Documentation**: Run validation to ensure all required documents are present
+  - [ ] Run: `npm run validate:release-docs vX.X.X`
 - [ ] **Update Version**: Update version references in docs
 
 #### Release

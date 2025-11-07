@@ -56,6 +56,9 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
   - [ ] Create: `API-CHANGES.md` for API changes
   - [ ] Create: `EXAMPLES.md` with usage examples
   - [ ] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
+    - Replace `vX.X.X` and `X.X.X` placeholders with actual version
+- [ ] **Validate Documentation**: Run validation to ensure all required documents are present
+  - [ ] Run: `npm run validate:release-docs vX.X.X`
 - [ ] **Review Documentation**: Review documentation for completeness and accuracy
   - [ ] Check all examples work correctly
   - [ ] Verify migration guides are accurate
