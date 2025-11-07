@@ -75,78 +75,64 @@ async function waitForSettingsApplied(page, timeout = 10000) {
 }
 
 /**
- * Setup connection state tracking via onConnectionStateChange callback
- * Returns tracked state that can be queried later
- * Checks initial connection state from DOM to handle connections established before tracking
+ * Setup connection state tracking by reading from DOM elements
+ * Connection states are displayed in the DOM via data-testid attributes
+ * This is more reliable than callback-based tracking and avoids timing issues
  * @param {import('@playwright/test').Page} page
  * @returns {Promise<Object>} Object with methods to get tracked state
  */
 async function setupConnectionStateTracking(page) {
-  // Check initial connection state from DOM (test-app updates this via onConnectionStateChange)
-  const initialAgentState = await page.evaluate(() => {
-    const connectionStatusEl = document.querySelector('[data-testid="connection-status"]');
-    const statusText = connectionStatusEl?.textContent?.toLowerCase() || '';
-    
-    // Map DOM text to connection state
-    if (statusText.includes('connected')) {
-      return 'connected';
-    } else if (statusText.includes('connecting')) {
-      return 'connecting';
-    } else if (statusText.includes('closed') || statusText.includes('disconnected')) {
-      return 'closed';
-    }
+  // Helper function to extract connection state from DOM element
+  const getStateFromDOM = (testId) => {
+    const el = document.querySelector(`[data-testid="${testId}"]`);
+    const text = el?.textContent?.toLowerCase() || '';
+    if (text.includes('connected')) return 'connected';
+    if (text.includes('connecting')) return 'connecting';
+    if (text.includes('closed') || text.includes('disconnected')) return 'closed';
     return 'closed'; // Default
-  });
+  };
   
-  await page.evaluate((initialAgent) => {
-    // Initialize connection state tracking with current state from DOM
-    window.testConnectionStates = {
-      agent: initialAgent || 'closed',
-      transcription: 'closed' // Transcription state not shown in DOM, default to closed
-    };
-    
-    // Store original callback if it exists (test-app now exposes this to window)
-    const originalCallback = window.onConnectionStateChange;
-    
-    // Override onConnectionStateChange to track state
-    // The test-app's handleConnectionStateChange now calls window.onConnectionStateChange if it exists
-    window.onConnectionStateChange = (service, state) => {
-      console.log(`🔔 [CONNECTION_TRACKER] onConnectionStateChange called: ${service} -> ${state}`);
-      // Track state changes
-      if (service === 'agent') {
-        window.testConnectionStates.agent = state;
-      } else if (service === 'transcription') {
-        window.testConnectionStates.transcription = state;
-      }
-      console.log(`🔔 [CONNECTION_TRACKER] Updated states:`, window.testConnectionStates);
-      // Also call original callback if it exists (for chaining)
-      if (originalCallback) {
-        originalCallback(service, state);
-      }
-    };
-    
-    console.log('🔔 [CONNECTION_TRACKER] Callback installed, initial states:', window.testConnectionStates);
-  }, initialAgentState);
-  
-  // Return helper functions to query state
+  // Return helper functions to query state from DOM
   return {
     getStates: async () => {
-      return await page.evaluate(() => ({
-        agent: window.testConnectionStates?.agent || 'closed',
-        transcription: window.testConnectionStates?.transcription || 'closed',
-        agentConnected: window.testConnectionStates?.agent === 'connected',
-        transcriptionConnected: window.testConnectionStates?.transcription === 'connected'
-      }));
+      return await page.evaluate(() => {
+        const getStateFromDOM = (testId) => {
+          const el = document.querySelector(`[data-testid="${testId}"]`);
+          const text = el?.textContent?.toLowerCase() || '';
+          if (text.includes('connected')) return 'connected';
+          if (text.includes('connecting')) return 'connecting';
+          if (text.includes('closed') || text.includes('disconnected')) return 'closed';
+          return 'closed';
+        };
+        
+        const agent = getStateFromDOM('connection-status');
+        const transcription = getStateFromDOM('transcription-connection-status');
+        
+        return {
+          agent,
+          transcription,
+          agentConnected: agent === 'connected',
+          transcriptionConnected: transcription === 'connected'
+        };
+      });
     },
     waitForAgentConnected: async (timeout = 5000) => {
       await page.waitForFunction(
-        () => window.testConnectionStates?.agent === 'connected',
+        () => {
+          const el = document.querySelector('[data-testid="connection-status"]');
+          const text = el?.textContent?.toLowerCase() || '';
+          return text.includes('connected');
+        },
         { timeout }
       );
     },
     waitForTranscriptionConnected: async (timeout = 5000) => {
       await page.waitForFunction(
-        () => window.testConnectionStates?.transcription === 'connected',
+        () => {
+          const el = document.querySelector('[data-testid="transcription-connection-status"]');
+          const text = el?.textContent?.toLowerCase() || '';
+          return text.includes('connected');
+        },
         { timeout }
       );
     }

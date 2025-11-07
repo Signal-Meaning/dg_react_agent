@@ -19,7 +19,6 @@ import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 declare global {
   interface Window {
     deepgramRef?: React.RefObject<DeepgramVoiceInteractionHandle>;
-    onConnectionStateChange?: (service: ServiceType, state: ConnectionState) => void;
   }
 }
 
@@ -467,15 +466,8 @@ function App() {
     if (service === 'agent' && state === 'closed') {
       setHasSentSettingsDom(false);
     }
-    
-    // Expose connection state changes to window for E2E testing
-    // This allows tests to track connection state via setupConnectionStateTracking
-    if (typeof window !== 'undefined') {
-      const windowWithCallback = window as unknown as Window & { onConnectionStateChange?: (service: ServiceType, state: ConnectionState) => void };
-      if (windowWithCallback.onConnectionStateChange) {
-        windowWithCallback.onConnectionStateChange(service, state);
-      }
-    }
+    // Connection states are now tracked via DOM elements (data-testid attributes)
+    // Tests can read connection state directly from the DOM without callbacks
   }, [addLog]); // Depends on addLog
   
   const handleError = useCallback((error: DeepgramError) => {
@@ -664,39 +656,14 @@ function App() {
           console.log('🎤 [APP] deepgramRef.current exists, calling startAudioCapture()');
           console.log('🎤 [APP] deepgramRef.current methods:', Object.keys(deepgramRef.current));
           
-          // Check if connections need to be established (using tracked state)
-          // Per issue #206: microphone button should start both services if configured
-          // CRITICAL: Always start transcription service when microphone is activated
+          // Always attempt to start both agent and transcription services
+          // start() is safe for redundant calls - it will reuse existing connections
+          // This ensures both services are available when microphone is activated
           // (VAD events and transcripts require transcription service)
-          const needsAgent = connectionStates.agent !== 'connected';
-          // Handle undefined (not initialized) as needing connection
-          const needsTranscription = connectionStates.transcription !== 'connected';
-          
-          console.log('🎤 [APP] Connection state check:', {
-            agent: connectionStates.agent,
-            transcription: connectionStates.transcription,
-            needsAgent,
-            needsTranscription
-          });
-          
-          if (needsAgent || needsTranscription) {
-            if (needsAgent && needsTranscription) {
-              console.log('🎤 [APP] Both services closed, starting both...');
-              addLog('Starting agent and transcription services...');
-              await deepgramRef.current.start({ agent: true, transcription: true });
-            } else if (needsTranscription) {
-              console.log('🎤 [APP] Transcription service not connected, starting it...');
-              addLog('Starting transcription service...');
-              await deepgramRef.current.start({ agent: true, transcription: true });
-            } else {
-              console.log('🎤 [APP] Agent connection closed, re-establishing connection...');
-              addLog('Re-establishing agent connection...');
-              await deepgramRef.current.start({ agent: true, transcription: true });
-            }
-            console.log('🎤 [APP] Services started');
-          } else {
-            console.log('🎤 [APP] Both services already connected, skipping start()');
-          }
+          console.log('🎤 [APP] Starting both agent and transcription services...');
+          addLog('Starting agent and transcription services...');
+          await deepgramRef.current.start({ agent: true, transcription: true });
+          console.log('🎤 [APP] Services started (or already connected)');
           
           if (typeof deepgramRef.current.startAudioCapture === 'function') {
             console.log('🎤 [APP] startAudioCapture method exists, calling it');
@@ -891,6 +858,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         {/* Agent connection status moved here for quick visibility during tests */}
         <div style={{ fontSize: '14px' }}>
           Agent Connection: <strong data-testid="connection-status">{connectionStates.agent}</strong>
+        </div>
+        <div style={{ fontSize: '14px' }}>
+          Transcription Connection: <strong data-testid="transcription-connection-status">{connectionStates.transcription}</strong>
         </div>
         <div style={{ fontSize: '14px' }}>
           Settings Applied: <strong data-testid="has-sent-settings">{String(hasSentSettingsDom)}</strong>

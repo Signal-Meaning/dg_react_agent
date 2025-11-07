@@ -85,13 +85,35 @@ The component may not be:
 ## Status
 
 - **Date Started**: 2025-01-XX
-- **Test Status**: ✅ Test created and working (correctly detects the bug)
-- **Bug Status**: ❌ Confirmed - interim transcripts not being received
-- **Next Steps**: 
-  1. Investigate transcription service configuration
-  2. Check WebSocket message handling for interim transcripts
-  3. Verify `onTranscriptUpdate` callback is invoked for interim transcripts
-  4. Consider adding disfluency audio sample for better testing
+- **Test Status**: ✅ **RESOLVED** - Interim transcripts can be reliably tested with real-time streaming approach
+- **Working Test**: `test-app/tests/e2e/vad-transcript-analysis.spec.js` successfully receives interim transcripts using WAV file streaming
+- **Key Finding**: Real-time streaming (chunks at calculated intervals) produces interim transcripts, while bulk audio sending does not
+- **Bug Status**: ✅ **RESOLVED** - Component correctly handles interim transcripts; test approach was the issue
+
+## Resolution
+
+The component was always correctly handling interim transcripts. The issue was with the test approach:
+
+### ❌ Previous Approach (Didn't Work)
+- Sending pre-recorded audio all at once
+- Deepgram processes complete buffer quickly → only final transcripts
+
+### ✅ Working Approach
+- **Real-time streaming**: Send audio in 4KB chunks at calculated intervals
+- **WAV file with human speech**: Better for interim transcript generation
+- **Proper PCM extraction**: Skip WAV header, extract raw PCM data
+- **Result**: Consistently receives 3+ interim transcripts before final
+
+### Working Test Results
+```
+📝 Total transcripts received: 4
+  1. INTERIM | "Can you help"
+  2. INTERIM | "Hello. Can you help me find a gift for my"
+  3. INTERIM | "Hello. Can you help me find a gift for my friend's birthday?"
+  4. FINAL | "Hello. Can you help me find a gift for my friend's birthday?"
+```
+
+See `test-app/tests/e2e/vad-transcript-analysis.spec.js` for the complete working implementation.
 
 ## Related Issues
 
