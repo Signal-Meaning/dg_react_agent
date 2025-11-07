@@ -112,6 +112,21 @@ npm run validate:release-docs 0.6.1
 
 All required documents should pass validation before proceeding with packaging.
 
+## Publishing Strategy
+
+**Preferred Approach**: Use CI build for publishing (validated CI build)
+- Create GitHub release to trigger `.github/workflows/publish.yml`
+- CI workflow automatically: builds, tests, validates, and publishes
+- Provides validated, reproducible build process
+- See `.github/workflows/publish.yml` for workflow details
+
+**Fallback Approach**: Dev publish (only if CI fails)
+- Run `npm publish` locally as last resort
+- Use when CI workflow fails or is unavailable
+- Still publishes to GitHub Package Registry (configured in `package.json`)
+
+**Note**: The CI publish workflow runs automatically when a GitHub release is created. This ensures the package is built and tested in a clean CI environment before publishing.
+
 ## Validation Tool
 
 Run the validation script to check release documentation:
