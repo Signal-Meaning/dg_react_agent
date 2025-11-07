@@ -6,7 +6,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { setupConnectionStateTracking, MicrophoneHelpers } from './helpers/test-helpers.js';
+import { setupConnectionStateTracking, MicrophoneHelpers, waitForTranscript } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
 import { getVADState } from './fixtures/vad-helpers.js';
 
@@ -29,10 +29,55 @@ test.describe('VAD Transcript Analysis', () => {
     });
   });
 
-  test('should analyze transcript responses and VAD events with recorded audio', async ({ page }) => {
-    console.log('🧪 Testing VAD events and transcript analysis with recorded audio...');
+  /**
+   * Validation test for interim and final transcript receipt
+   * 
+   * This test validates that:
+   * 1. Interim transcripts (is_final: false) are received
+   * 2. Final transcripts (is_final: true) are received
+   * 3. Interim transcripts arrive before final transcripts (sequence validation)
+   * 4. All transcripts contain valid text
+   * 
+   * Unlike the analysis test, this test uses proper assertions that will fail
+   * if interim transcripts are not received, making it a true validation test.
+   */
+  test('should validate interim and final transcript receipt with recorded audio', async ({ page }) => {
+    console.log('🧪 Testing interim and final transcript validation with recorded audio...');
+    
+    // Set up transcript data capture by intercepting onTranscriptUpdate callback
+    // This gives us access to the actual is_final property from the transcript response
+    const transcriptData = [];
+    
+    // Expose function to capture transcript data from the callback
+    await page.exposeFunction('captureTranscriptData', (transcript) => {
+      // Extract the actual transcript structure from Deepgram response
+      const deepgramResponse = transcript || {};
+      
+      const channel = deepgramResponse.channel || {};
+      const alternatives = channel.alternatives || [];
+      const firstAlternative = alternatives[0] || {};
+      
+      const text = firstAlternative.transcript || '';
+      const isFinal = deepgramResponse.is_final === true;
+      const speechFinal = deepgramResponse.speech_final === true;
+      
+      if (text && text.trim()) {
+        transcriptData.push({
+          text: text.trim(),
+          timestamp: Date.now(),
+          is_final: isFinal,
+          speech_final: speechFinal
+        });
+        console.log(`📝 [Transcript] Captured: "${text}" (is_final: ${isFinal}, speech_final: ${speechFinal})`);
+      }
+    });
+    
+    // CRITICAL: Set up connection state tracking BEFORE clicking microphone button
+    // This prevents race condition where connection events fire before tracking is set up
+    const stateTracker = await setupConnectionStateTracking(page);
     
     // Use proper microphone setup with fixtures (same pattern as passing tests)
+    // This should start both agent and transcription services
     const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
       skipGreetingWait: true,
       connectionTimeout: 15000,
@@ -45,46 +90,73 @@ test.describe('VAD Transcript Analysis', () => {
     
     console.log('✅ Connection established and microphone enabled');
     
-    // Set up transcript data capture by monitoring DOM changes
-    const transcriptData = [];
-    let lastTranscriptText = '';
+    // CRITICAL: Wait for transcription service to connect (required for VAD and transcripts)
+    // The microphone button should start both services automatically - just wait for it
     
-    // Monitor the transcript element for changes
-    const transcriptElement = page.locator('[data-testid="transcription"]');
+    // Check initial connection states before waiting
+    let connectionStates = await stateTracker.getStates();
+    console.log('📊 Connection states immediately after microphone activation:', JSON.stringify(connectionStates, null, 2));
     
-    // Set up a polling mechanism to capture transcript changes
-    const startTranscriptMonitoring = () => {
-      return setInterval(async () => {
-        try {
-          const currentText = await transcriptElement.textContent();
-          if (currentText && currentText !== lastTranscriptText && currentText !== '(Waiting for transcript...)') {
-            lastTranscriptText = currentText;
-            transcriptData.push({
-              text: currentText,
-              timestamp: Date.now(),
-              isInterim: currentText.includes('(interim)') || currentText.includes('(partial)'),
-              isFinal: currentText.includes('(final)') || (!currentText.includes('(interim)') && !currentText.includes('(partial)'))
-            });
-            console.log('📝 [Transcript] Captured from DOM:', {
-              text: currentText,
-              isInterim: currentText.includes('(interim)') || currentText.includes('(partial)'),
-              isFinal: currentText.includes('(final)') || (!currentText.includes('(interim)') && !currentText.includes('(partial)'))
-            });
+    // Wait for transcription service to connect (microphone button should start it)
+    console.log('⏳ Waiting for transcription service to connect (started by microphone button)...');
+    try {
+      await stateTracker.waitForTranscriptionConnected(10000);
+      connectionStates = await stateTracker.getStates();
+      console.log('📊 Connection states after wait:', JSON.stringify(connectionStates, null, 2));
+      
+      // Verify transcription service is connected
+      expect(connectionStates.transcriptionConnected || connectionStates.transcription === 'connected').toBe(true);
+      console.log('✅ Transcription service is connected');
+    } catch (error) {
+      connectionStates = await stateTracker.getStates();
+      console.log('📊 Connection states (timeout):', JSON.stringify(connectionStates, null, 2));
+      
+      // Debug: Check if start() was actually called and if callback is set up
+      const debugInfo = await page.evaluate(() => {
+        return {
+          deepgramRefExists: !!window.deepgramRef?.current,
+          connectionStates: window.testConnectionStates,
+          onConnectionStateChangeExists: typeof window.onConnectionStateChange === 'function',
+          appConnectionStates: window.deepgramRef?.current ? 'checking...' : 'no ref'
+        };
+      });
+      console.log('🔍 Debug info:', JSON.stringify(debugInfo, null, 2));
+      
+      throw new Error(`Transcription service did not connect after microphone activation: ${error.message}`);
+    }
+    
+    // Intercept the onTranscriptUpdate callback to capture actual transcript data
+    // Do this after microphone is activated so component is fully initialized
+    await page.evaluate(() => {
+      if (window.deepgramRef?.current?.props?.onTranscriptUpdate) {
+        const originalCallback = window.deepgramRef.current.props.onTranscriptUpdate;
+        
+        window.deepgramRef.current.props.onTranscriptUpdate = (transcript) => {
+          // Call original callback to maintain app functionality
+          originalCallback(transcript);
+          // Capture transcript data for validation
+          if (window.captureTranscriptData) {
+            window.captureTranscriptData(transcript);
           }
-        } catch (error) {
-          // Element might not be ready yet
-        }
-      }, 100); // Check every 100ms
-    };
-    
-    const transcriptMonitor = startTranscriptMonitoring();
+        };
+        console.log('✅ Transcript callback intercepted');
+      } else {
+        console.log('⚠️ Could not intercept transcript callback - deepgramRef or props not available');
+      }
+    });
     
     // Use working fixture to send audio (same pattern as passing VAD tests)
     console.log('🎤 Loading recorded audio sample...');
     await loadAndSendAudioSample(page, 'hello');
     
+    // Wait for transcripts to be received using helper function
+    console.log('⏳ Waiting for transcripts...');
+    await waitForTranscript(page, { timeout: 15000 });
+    
+    // Wait a bit more to ensure we capture both interim and final transcripts
+    await page.waitForTimeout(2000);
+    
     // Wait for VAD events using working fixture (returns count of detected events)
-    console.log('⏳ Waiting for VAD events and transcripts...');
     const eventsDetected = await waitForVADEvents(page, [
       'UserStartedSpeaking',
       'UtteranceEnd'
@@ -97,58 +169,70 @@ test.describe('VAD Transcript Analysis', () => {
     if (vadState.UserStartedSpeaking) detectedVADEvents.push({ type: 'UserStartedSpeaking' });
     if (vadState.UtteranceEnd) detectedVADEvents.push({ type: 'UtteranceEnd' });
     
-    // Stop monitoring
-    clearInterval(transcriptMonitor);
-    
-    // Analyze the results
-    console.log('\n📊 === TRANSCRIPT ANALYSIS ===');
+    // VALIDATION: Analyze and assert transcript receipt
+    console.log('\n📊 === TRANSCRIPT VALIDATION ===');
     console.log('📝 Total transcripts received:', transcriptData.length);
+    
+    // CRITICAL ASSERTION: Must have received at least one transcript
+    expect(transcriptData.length).toBeGreaterThan(0);
     
     if (transcriptData.length > 0) {
       console.log('📝 Transcript breakdown:');
       transcriptData.forEach((transcript, index) => {
-        console.log(`  ${index + 1}. ${transcript.isFinal ? 'FINAL' : 'INTERIM'} | "${transcript.text}"`);
+        console.log(`  ${index + 1}. ${transcript.is_final ? 'FINAL' : 'INTERIM'} | "${transcript.text}"`);
       });
       
-      // Check for final vs interim transcripts
-      const finalTranscripts = transcriptData.filter(t => t.isFinal);
-      const interimTranscripts = transcriptData.filter(t => t.isInterim);
+      // Separate interim and final transcripts
+      const finalTranscripts = transcriptData.filter(t => t.is_final === true);
+      const interimTranscripts = transcriptData.filter(t => t.is_final === false);
       
       console.log('📝 Final transcripts:', finalTranscripts.length);
       console.log('📝 Interim transcripts:', interimTranscripts.length);
       
-      if (finalTranscripts.length > 0) {
-        console.log('✅ Final transcripts detected - these should trigger UtteranceEnd');
-      } else {
-        console.log('⚠️ No final transcripts detected - only interim results received');
+      // CRITICAL ASSERTION: Must have received at least one interim transcript
+      expect(interimTranscripts.length).toBeGreaterThan(0);
+      console.log('✅ Interim transcripts validated:', interimTranscripts.length);
+      
+      // CRITICAL ASSERTION: Must have received at least one final transcript
+      expect(finalTranscripts.length).toBeGreaterThan(0);
+      console.log('✅ Final transcripts validated:', finalTranscripts.length);
+      
+      // VALIDATION: Interim transcripts should arrive before final transcripts
+      if (interimTranscripts.length > 0 && finalTranscripts.length > 0) {
+        const firstInterimTime = Math.min(...interimTranscripts.map(t => t.timestamp));
+        const firstFinalTime = Math.min(...finalTranscripts.map(t => t.timestamp));
+        
+        // CRITICAL ASSERTION: Interim transcripts must arrive before final transcripts
+        expect(firstInterimTime).toBeLessThan(firstFinalTime);
+        console.log('✅ Sequence validated: Interim transcripts arrived before final transcripts');
       }
-    } else {
-      console.log('⚠️ No transcripts received - check transcription service connection');
+      
+      // Validate that transcripts contain actual text
+      transcriptData.forEach((transcript, index) => {
+        expect(transcript.text.length).toBeGreaterThan(0);
+        expect(transcript.text.trim()).not.toBe('');
+      });
+      console.log('✅ All transcripts contain valid text');
     }
     
-    console.log('\n📊 === VAD EVENT ANALYSIS ===');
+    console.log('\n📊 === VAD EVENT VALIDATION ===');
     console.log('🎯 Total VAD events:', detectedVADEvents.length);
     console.log('🎯 VAD events by type:', detectedVADEvents.reduce((acc, event) => {
       acc[event.type] = (acc[event.type] || 0) + 1;
       return acc;
     }, {}));
     
-    // Verify we got at least one VAD event (be lenient like other passing tests)
+    // Verify we got at least one VAD event
     const hasUserStartedSpeaking = detectedVADEvents.some(event => event.type === 'UserStartedSpeaking');
     const hasUtteranceEnd = detectedVADEvents.some(event => event.type === 'UtteranceEnd');
     
-    // Be lenient - at least one event should be detected (not requiring both)
+    // Assert at least one VAD event was detected
     const hasAnyVADEvent = detectedVADEvents.length > 0;
     expect(hasAnyVADEvent).toBe(true);
     console.log('✅ UserStartedSpeaking detected:', hasUserStartedSpeaking);
     console.log('✅ UtteranceEnd detected:', hasUtteranceEnd);
     
-    if (!hasUtteranceEnd) {
-      console.log('💡 Analysis: UtteranceEnd not detected - likely because:');
-      console.log('   1. No speech_final transcripts received');
-      console.log('   2. Audio sample lacks sufficient silence at the end');
-      console.log('   3. utterance_end_ms setting too high for the audio pattern');
-    }
+    console.log('\n✅ All transcript validations passed!');
   });
 
   test('should analyze different audio samples for transcript patterns', async ({ page }) => {

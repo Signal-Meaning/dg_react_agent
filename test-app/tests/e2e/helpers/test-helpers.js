@@ -23,6 +23,9 @@ const SELECTORS = {
   greetingSent: '[data-testid="greeting-sent"]',
   agentSpeaking: '[data-testid="agent-speaking"]',
   agentSilent: '[data-testid="agent-silent"]',
+  userStartedSpeaking: '[data-testid="user-started-speaking"]',
+  utteranceEnd: '[data-testid="utterance-end"]',
+  userStoppedSpeaking: '[data-testid="user-stopped-speaking"]',
 };
 
 /**
@@ -102,21 +105,27 @@ async function setupConnectionStateTracking(page) {
       transcription: 'closed' // Transcription state not shown in DOM, default to closed
     };
     
-    // Store original callback if it exists
+    // Store original callback if it exists (test-app now exposes this to window)
     const originalCallback = window.onConnectionStateChange;
     
     // Override onConnectionStateChange to track state
+    // The test-app's handleConnectionStateChange now calls window.onConnectionStateChange if it exists
     window.onConnectionStateChange = (service, state) => {
+      console.log(`🔔 [CONNECTION_TRACKER] onConnectionStateChange called: ${service} -> ${state}`);
+      // Track state changes
       if (service === 'agent') {
         window.testConnectionStates.agent = state;
       } else if (service === 'transcription') {
         window.testConnectionStates.transcription = state;
       }
-      // Also call original callback if it exists (test-app has one)
+      console.log(`🔔 [CONNECTION_TRACKER] Updated states:`, window.testConnectionStates);
+      // Also call original callback if it exists (for chaining)
       if (originalCallback) {
         originalCallback(service, state);
       }
     };
+    
+    console.log('🔔 [CONNECTION_TRACKER] Callback installed, initial states:', window.testConnectionStates);
   }, initialAgentState);
   
   // Return helper functions to query state
@@ -552,6 +561,32 @@ async function waitForAgentResponseEnhanced(page, options = {}) {
 }
 
 /**
+ * Wait for transcript to appear in the UI
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {Object} options - Configuration options
+ * @param {number} options.timeout - Timeout in ms (default: 15000)
+ * @returns {Promise<string>} Transcript text
+ */
+async function waitForTranscript(page, options = {}) {
+  const { timeout = 15000 } = options;
+  const selector = SELECTORS.transcription;
+  
+  await page.waitForFunction(
+    ({ selector }) => {
+      const transcriptEl = document.querySelector(selector);
+      if (!transcriptEl) return false;
+      const text = transcriptEl.textContent?.trim() || '';
+      return text.length > 0 && text !== '(Waiting for transcript...)';
+    },
+    { selector },
+    { timeout }
+  );
+  
+  const transcriptText = await page.locator(selector).textContent();
+  return transcriptText || '';
+}
+
+/**
  * Assert connection is in expected state
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {import('@playwright/test').Expect} expect - Playwright expect instance
@@ -915,6 +950,7 @@ export {
   waitForAgentResponse, // Wait for agent response with optional text verification
   verifyAgentResponse, // Verify agent response is valid (non-empty, not waiting)
   waitForAgentResponseEnhanced, // Enhanced version with options object
+  waitForTranscript, // Wait for transcript to appear in the UI
   assertConnectionState, // Assert connection is in expected state (with automatic waiting)
   disconnectComponent, // Disconnect the component (stop button or simulate network issue)
   getAgentState, // Get current agent state from UI
