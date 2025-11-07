@@ -65,6 +65,46 @@ test.describe('Microphone Control', () => {
     await expect(page.locator('[data-testid="mic-status"]')).toContainText('Disabled');
   });
 
+  test('should start transcription service when microphone button clicked with agent already connected (Issue #255)', async ({ page }) => {
+    // This test validates Issue #255: Microphone button should start transcription service
+    // even when agent service is already connected
+    
+    const { setupConnectionStateTracking } = await import('./helpers/test-helpers.js');
+    const stateTracker = await setupConnectionStateTracking(page);
+    
+    // Step 1: Start agent service first (simulating agent already connected scenario)
+    await page.evaluate(async () => {
+      const deepgramComponent = window.deepgramRef?.current;
+      if (!deepgramComponent) {
+        throw new Error('DeepgramVoiceInteraction component not available');
+      }
+      // Start only agent service (transcription: false)
+      await deepgramComponent.start({ agent: true, transcription: false });
+    });
+    
+    // Wait for agent connection to be established
+    await stateTracker.waitForAgentConnected(15000);
+    let connectionStates = await stateTracker.getStates();
+    
+    // Verify agent is connected and transcription is NOT connected
+    expect(connectionStates.agent).toBe('connected');
+    expect(connectionStates.transcription).toBe('closed');
+    
+    // Step 2: Click microphone button - should start BOTH services (Issue #255 fix)
+    await page.click('[data-testid="microphone-button"]');
+    
+    // Wait for transcription service to connect (this is what Issue #255 fixes)
+    await stateTracker.waitForTranscriptionConnected(15000);
+    
+    connectionStates = await stateTracker.getStates();
+    
+    // CRITICAL VALIDATION: Both services should now be connected
+    expect(connectionStates.agent).toBe('connected');
+    expect(connectionStates.transcription).toBe('connected');
+    expect(connectionStates.agentConnected).toBe(true);
+    expect(connectionStates.transcriptionConnected).toBe(true);
+  });
+
   // TODO: Fix permission mocking - see https://github.com/Signal-Meaning/dg_react_agent/issues/178
   test.skip('should handle microphone permission denied', async ({ page }) => {
     // Wait for component to be ready
