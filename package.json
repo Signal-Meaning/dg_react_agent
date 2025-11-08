@@ -1,6 +1,6 @@
 {
   "name": "@signal-meaning/deepgram-voice-interaction-react",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "A React component for real-time transcription and voice agent interactions using Deepgram APIs",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
@@ -40,6 +40,7 @@
     "status": "./scripts/dev-workflow.sh status",
     "release:issue": "./scripts/create-release-issue.sh",
     "validate:publish": "node scripts/validate-publish-auth.js",
+    "validate:release-docs": "node scripts/validate-release-docs.js",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

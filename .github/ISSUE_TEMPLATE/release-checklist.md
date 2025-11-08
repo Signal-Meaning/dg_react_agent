@@ -56,6 +56,9 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
   - [ ] Create: `API-CHANGES.md` for API changes
   - [ ] Create: `EXAMPLES.md` with usage examples
   - [ ] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
+    - Replace `vX.X.X` and `X.X.X` placeholders with actual version
+- [ ] **Validate Documentation**: Run validation to ensure all required documents are present
+  - [ ] Run: `npm run validate:release-docs vX.X.X`
 - [ ] **Review Documentation**: Review documentation for completeness and accuracy
   - [ ] Check all examples work correctly
   - [ ] Verify migration guides are accurate
@@ -82,8 +85,14 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
 
 #### Package Publishing
 - [ ] **Publish to GitHub Registry**: Publish package to GitHub Package Registry
-  - [ ] Run: `npm publish` (automatically publishes to GitHub Registry)
-  - [ ] Verify: Package appears in GitHub Packages
+  - [ ] **Preferred**: Use CI build (validated CI build)
+    - Create GitHub release to trigger `.github/workflows/publish.yml`
+    - CI workflow will: build, test, validate, and publish
+    - Verify CI build completes successfully
+    - Verify package appears in GitHub Packages
+  - [ ] **Fallback**: Dev publish (only if CI fails)
+    - Run: `npm publish` (automatically publishes to GitHub Registry)
+    - Verify: Package appears in GitHub Packages
 - [ ] **Verify Installation**: Test package installation from registry
   - [ ] Test: Install from `@signal-meaning/deepgram-voice-interaction-react@vX.X.X`
   - [ ] Verify: Package works correctly in test environment
