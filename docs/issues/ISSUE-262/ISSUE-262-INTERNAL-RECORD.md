@@ -2,13 +2,15 @@
 
 **Issue**: [#262](https://github.com/Signal-Meaning/dg_react_agent/issues/262) / [#430 (voice-commerce)](https://github.com/Signal-Meaning/voice-commerce/issues/430)  
 **Date Reported**: 2025-11-08  
-**Date Fixed**: 2025-11-09  
+**Date Fixed**: 2025-11-09 (v0.6.3)  
+**Follow-up Fix**: 2025-11-09 (additional fix)  
 **Package Versions**: 
 - v0.6.1 (initial report)
 - v0.6.2 (attempted fix - incomplete)
-- v0.6.3 (fixed)
+- v0.6.3 (fixed - USER_STOPPED_SPEAKING issue)
+- v0.6.4+ (follow-up fix - ConversationText redundancy)
 
-**Status**: ✅ **RESOLVED**
+**Status**: ✅ **RESOLVED** (with follow-up fix)
 
 ---
 
@@ -128,6 +130,8 @@ Created E2E test: `should restart timeout after USER_STOPPED_SPEAKING when agent
 
 ## Files Changed
 
+### v0.6.3 Fix
+
 1. **`src/utils/IdleTimeoutService.ts`**
    - Added `updateTimeoutBehavior()` call in `USER_STOPPED_SPEAKING` case handler
    - Extracted `enableResetsAndUpdateBehavior()` helper method (DRY refactoring)
@@ -138,6 +142,15 @@ Created E2E test: `should restart timeout after USER_STOPPED_SPEAKING when agent
 
 3. **`test-app/tests/e2e/idle-timeout-behavior.spec.js`**
    - Added E2E test for USER_STOPPED_SPEAKING scenario
+
+### v0.6.4+ Follow-up Fix
+
+4. **`src/utils/websocket/WebSocketManager.ts`**
+   - Removed `ConversationText` handling from `isMeaningfulUserActivity()`
+   - Added documentation explaining ConversationText redundancy
+
+5. **`src/components/DeepgramVoiceInteraction/index.tsx`**
+   - Added comment explaining ConversationText redundancy and proper handling
 
 ---
 
@@ -247,10 +260,46 @@ docs/troubleshooting/
 
 ---
 
+## Follow-up Fix (2025-11-09)
+
+### Additional Root Cause Discovered
+
+After v0.6.3 was released, further investigation revealed that `ConversationText` messages (both user and assistant) were also preventing idle timeout from working correctly:
+
+- **Assistant ConversationText**: Messages with `role: "assistant"` were resetting the timeout even when agent/user were idle, preventing the timeout from ever completing
+- **User ConversationText**: Messages with `role: "user"` were redundant - user text activity should be handled via `injectUserMessage()` or `onUserMessage` callback
+
+### Follow-up Fix
+
+**Removed ConversationText handling from `isMeaningfulUserActivity()`**:
+
+- `ConversationText` messages (both user and assistant) no longer reset the idle timeout
+- These messages are transcripts, not activity indicators
+- User text activity is handled via `InjectUserMessage` (from `injectUserMessage()` method)
+- Agent activity is already tracked via `AgentThinking`, `AgentStartedSpeaking`, `AgentAudioDone` messages and state changes
+
+**Files Changed**:
+1. **`src/utils/websocket/WebSocketManager.ts`**
+   - Removed `ConversationText` handling from `isMeaningfulUserActivity()`
+   - Added documentation explaining why ConversationText is redundant
+
+2. **`src/components/DeepgramVoiceInteraction/index.tsx`**
+   - Added comment explaining ConversationText redundancy
+   - Clarified that user text activity should be handled via `injectUserMessage()` or `onUserMessage` callback
+
+**Impact**: Idle timeout now works correctly even when `ConversationText` messages arrive, as they no longer interfere with timeout management.
+
+---
+
 ## Release Notes
 
-**v0.6.3** (upcoming):
+**v0.6.3**:
 - **Fix**: Idle timeout now correctly restarts after `USER_STOPPED_SPEAKING` when all conditions are idle
 - **Impact**: Connections will now close after 10 seconds of inactivity as configured, instead of waiting for Deepgram's internal timeout
 - **Code Quality**: DRY refactoring - extracted `enableResetsAndUpdateBehavior()` helper method
+
+**v0.6.4+** (follow-up):
+- **Fix**: Removed `ConversationText` messages from idle timeout reset logic (redundant signals)
+- **Impact**: Idle timeout works correctly even when ConversationText messages arrive
+- **Rationale**: ConversationText messages are transcripts, not activity indicators. User text activity handled via `injectUserMessage()`, agent activity via state changes and activity messages
 

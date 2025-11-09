@@ -477,22 +477,39 @@ export class WebSocketManager {
 
   /**
    * Determines if a message represents meaningful user activity (not just protocol messages)
+   * 
+   * Note: ConversationText messages (both user and assistant) are redundant for idle timeout
+   * management because:
+   * - User text activity should be handled via onUserMessage callback/state updates
+   * - Agent activity is already tracked via AgentThinking/AgentStartedSpeaking messages and state changes
    */
   private isMeaningfulUserActivity(data: any): boolean {
-    // Only reset idle timeout on ACTUAL user activity, not on every message
+    // Only reset idle timeout on ACTUAL activity indicators, not transcript messages
     
-    // For agent service, reset on both user messages and agent responses
+    // For agent service, reset on activity indicators
     if (this.options.service === 'agent') {
-      // User messages
-      const userActivityMessages = ['ConversationText', 'InjectUserMessage']; // User sending text
+      // User text injection (explicit user activity)
+      if (data.type === 'InjectUserMessage') {
+        this.options.onMeaningfulActivity?.(data.type);
+        return true;
+      }
+      
       // Agent activity that should keep connection alive
+      // Note: These are handled by agent state changes, but we keep them here
+      // as a fallback in case state hasn't updated yet
       const agentActivityMessages = ['AgentThinking', 'AgentStartedSpeaking', 'AgentAudioDone']; // Agent responding
       
-      const isMeaningful = userActivityMessages.includes(data.type) || agentActivityMessages.includes(data.type);
-      if (isMeaningful) {
+      if (agentActivityMessages.includes(data.type)) {
         this.options.onMeaningfulActivity?.(data.type);
+        return true;
       }
-      return isMeaningful;
+      
+      // ConversationText messages (both user and assistant) are redundant:
+      // - User text: Should be handled via onUserMessage callback/state updates
+      // - Assistant text: Agent activity already tracked via state changes and activity messages
+      // So we don't reset timeout on ConversationText messages
+      
+      return false;
     }
     
     // For transcription service, only reset on actual speech activity
