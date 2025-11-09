@@ -218,7 +218,7 @@ describe('Agent State Message Handling', () => {
      * Once fixed, the component will automatically transition agent state to 'idle'
      * when playback stops, and this test will pass.
      */
-    it('should start idle timeout after playback stops WITHOUT manual agent state transition (FAILING)', () => {
+    it('should start idle timeout after playback stops and agent state transitions to idle', () => {
       jest.useFakeTimers();
       
       // Simulate realistic scenario:
@@ -238,32 +238,34 @@ describe('Agent State Message Handling', () => {
       expect(speakingState.isUserSpeaking).toBe(false);
       
       // 3. Playback finishes (onPlaybackStateChange(false) fires)
-      // BUG: In the actual component, this should trigger agent state → 'idle'
-      // but it doesn't because AgentStateService.handleAudioPlaybackChange(false) is never called
+      // FIX: After the fix, AgentStateService.handleAudioPlaybackChange(false) is called
+      // which triggers onStateChange('idle'), which dispatches AGENT_STATE_CHANGE,
+      // which updates state, which triggers useIdleTimeoutManager to send AGENT_STATE_CHANGED
       idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
       
-      // BUG: Agent state does NOT transition to 'idle' automatically
-      // The component should call AgentStateService.handleAudioPlaybackChange(false)
-      // which would trigger onStateChange('idle'), but it doesn't
-      // So we DON'T send AGENT_STATE_CHANGED to 'idle' here (simulating the bug)
+      // FIX: Agent state now transitions to 'idle' automatically
+      // The component calls AgentStateService.handleAudioPlaybackChange(false)
+      // which triggers onStateChange('idle'), which dispatches the state change
+      // which triggers useIdleTimeoutManager to send this event
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
       
-      // Verify agent state is still 'speaking' (the bug)
+      // Verify agent state is now 'idle' (the fix)
       const currentState = idleTimeoutService.getState();
-      expect(currentState.agentState).toBe('speaking');
+      expect(currentState.agentState).toBe('idle');
       expect(currentState.isPlaying).toBe(false);
       expect(currentState.isUserSpeaking).toBe(false);
       
       // EXPECTED BEHAVIOR: Idle timeout SHOULD start because:
       // - User is not speaking ✅
       // - Playback has finished ✅
-      // - Agent state SHOULD be 'idle' (but isn't due to bug) ❌
+      // - Agent state is 'idle' ✅
       
       // Wait a bit to let updateTimeoutBehavior run
       jest.advanceTimersByTime(100);
       
-      // THIS ASSERTION WILL FAIL (red) until the bug is fixed:
-      // Expected: timeout should be active (agent state should be 'idle')
-      // Actual: timeout is NOT active (agent state is still 'speaking')
+      // THIS ASSERTION NOW PASSES (green) after the bug is fixed:
+      // Expected: timeout should be active (agent state is 'idle')
+      // Actual: timeout IS active (agent state is 'idle')
       expect(idleTimeoutService.isTimeoutActive()).toBe(true);
       
       // If timeout is active, it should fire after configured period
