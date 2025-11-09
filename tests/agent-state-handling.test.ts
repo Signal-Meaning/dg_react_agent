@@ -714,6 +714,60 @@ describe('Agent State Message Handling', () => {
       jest.useRealTimers();
     });
   });
+
+  describe('Issue #262/#430: Assistant ConversationText should not reset timeout', () => {
+    /**
+     * BUG FIX: Assistant ConversationText messages were resetting the idle timeout,
+     * preventing it from ever completing when agent/user are idle.
+     * 
+     * The fix is in WebSocketManager.isMeaningfulUserActivity() which now checks
+     * the role field and only considers ConversationText messages with role: "user"
+     * as meaningful activity. Assistant messages (role: "assistant") no longer
+     * trigger MEANINGFUL_USER_ACTIVITY events, preventing timeout resets.
+     * 
+     * Note: This test file tests IdleTimeoutService in isolation, so we can't
+     * directly test the WebSocketManager fix here. The fix is verified by:
+     * 1. The WebSocketManager code change (checking role field)
+     * 2. E2E tests that verify timeout completes when assistant messages arrive
+     * 3. This test verifies that user messages DO reset timeout (expected behavior)
+     */
+    it('should reset timeout when user ConversationText message arrives', () => {
+      jest.useFakeTimers();
+      
+      // Setup: All conditions idle, timeout should start
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      idleTimeoutService.handleEvent({ type: 'UTTERANCE_END' });
+      
+      // Verify timeout is active
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      
+      // Fast-forward 5 seconds
+      jest.advanceTimersByTime(5000);
+      expect(timeoutCallback).not.toHaveBeenCalled();
+      
+      // Simulate user ConversationText message arriving
+      // This SHOULD reset the timeout (user activity)
+      idleTimeoutService.handleEvent({ 
+        type: 'MEANINGFUL_USER_ACTIVITY', 
+        activity: 'ConversationText (user)' 
+      });
+      
+      // Timeout should be reset (stopped and restarted)
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      
+      // Fast-forward 5 seconds - callback should NOT fire yet (timeout was reset)
+      jest.advanceTimersByTime(5000);
+      expect(timeoutCallback).not.toHaveBeenCalled();
+      
+      // Fast-forward 5 more seconds (total 10 seconds from reset)
+      // Callback should fire now
+      jest.advanceTimersByTime(5000);
+      expect(timeoutCallback).toHaveBeenCalledTimes(1);
+      
+      jest.useRealTimers();
+    });
+  });
 });
 
 describe('AgentStateService', () => {

@@ -1394,6 +1394,12 @@ function DeepgramVoiceInteraction(
           metadata: data,
         };
         
+        // Note: ConversationText messages are redundant for idle timeout management.
+        // User text activity should be handled via:
+        // 1. injectUserMessage() - triggers InjectUserMessage which resets timeout
+        // 2. onUserMessage callback - application can call handleMeaningfulActivity if needed
+        // We don't reset timeout here because ConversationText is a transcript, not an activity indicator.
+        
         onUserMessage?.(response);
         return;
       }
