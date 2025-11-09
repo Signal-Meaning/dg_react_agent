@@ -544,6 +544,176 @@ describe('Agent State Message Handling', () => {
       expect(idleState.agentState).toBe('idle');
     });
   });
+
+  describe('Issue #262/#430: USER_STOPPED_SPEAKING should start timeout after re-enabling', () => {
+    /**
+     * BUG: When USER_STOPPED_SPEAKING is received, the timeout re-enables
+     * but doesn't call updateTimeoutBehavior() to start a new timeout.
+     * 
+     * Expected: After USER_STOPPED_SPEAKING re-enables resets, updateTimeoutBehavior()
+     * should be called to check if conditions are met and start timeout if needed.
+     * 
+     * Actual: enableResets() is called but updateTimeoutBehavior() is not,
+     * so timeout never starts even though all conditions are idle.
+     */
+    it('should start timeout after USER_STOPPED_SPEAKING re-enables when all conditions are idle', () => {
+      jest.useFakeTimers();
+      
+      // Setup: Agent finishes speaking, becomes idle (timeout starts via AGENT_STATE_CHANGED)
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      idleTimeoutService.handleEvent({ type: 'UTTERANCE_END' });
+      
+      // Verify timeout is active (agent is idle)
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      
+      // User starts speaking (timeout stops)
+      idleTimeoutService.handleEvent({ type: 'USER_STARTED_SPEAKING' });
+      expect(idleTimeoutService.isTimeoutActive()).toBe(false);
+      
+      // User stops speaking (timeout should restart, but BUG: it doesn't)
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      
+      // At this point:
+      // - agentState: 'idle' (still idle from before)
+      // - isUserSpeaking: false (just set by USER_STOPPED_SPEAKING)
+      // - isPlaying: false (still false from before)
+      // - isDisabled: false (just re-enabled by USER_STOPPED_SPEAKING)
+      // 
+      // BUG: updateTimeoutBehavior() is NOT called after USER_STOPPED_SPEAKING,
+      // so timeout never starts even though all conditions are met
+      
+      // Verify timeout should be active (all conditions are idle)
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      
+      // Fast-forward time to verify timeout fires
+      jest.advanceTimersByTime(10000);
+      
+      // Verify callback was called
+      expect(timeoutCallback).toHaveBeenCalledTimes(1);
+      
+      jest.useRealTimers();
+    });
+
+    it('should start timeout after USER_STOPPED_SPEAKING when agent is already idle', () => {
+      jest.useFakeTimers();
+      
+      // Setup: Agent is idle, timeout was started
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      idleTimeoutService.handleEvent({ type: 'UTTERANCE_END' });
+      
+      // Verify timeout is active
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      
+      // User starts speaking (timeout stops)
+      idleTimeoutService.handleEvent({ type: 'USER_STARTED_SPEAKING' });
+      expect(idleTimeoutService.isTimeoutActive()).toBe(false);
+      
+      // User stops speaking
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      
+      // BUG: After USER_STOPPED_SPEAKING, updateTimeoutBehavior() should be called
+      // to check if timeout should start. Currently it's not called, so timeout
+      // never starts even though:
+      // - agentState: 'idle' (still idle)
+      // - isUserSpeaking: false (just set)
+      // - isPlaying: false (still false)
+      
+      // Verify timeout should be active now
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      
+      // Fast-forward time
+      jest.advanceTimersByTime(10000);
+      
+      // Verify callback was called
+      expect(timeoutCallback).toHaveBeenCalledTimes(1);
+      
+      jest.useRealTimers();
+    });
+
+    it('should NOT start timeout after USER_STOPPED_SPEAKING if agent is still speaking', () => {
+      jest.useFakeTimers();
+      
+      // Setup: Agent is speaking, user stops speaking
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'speaking' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: true });
+      idleTimeoutService.handleEvent({ type: 'USER_STARTED_SPEAKING' });
+      
+      // User stops speaking
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      
+      // Timeout should NOT start because agent is still speaking
+      expect(idleTimeoutService.isTimeoutActive()).toBe(false);
+      
+      // Fast-forward time - callback should not fire
+      jest.advanceTimersByTime(10000);
+      expect(timeoutCallback).not.toHaveBeenCalled();
+      
+      jest.useRealTimers();
+    });
+  });
+
+  describe('Issue #262/#430: Timeout callback should fire when timeout reaches', () => {
+    /**
+     * BUG: Timeout starts but callback never fires.
+     * 
+     * This test verifies that when timeout is active and time passes,
+     * the callback is actually called.
+     */
+    it('should fire callback when timeout reaches 10 seconds', () => {
+      jest.useFakeTimers();
+      
+      // Setup: All conditions idle, timeout should start
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      idleTimeoutService.handleEvent({ type: 'UTTERANCE_END' });
+      
+      // Verify timeout is active
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      
+      // Fast-forward 9 seconds - callback should not fire yet
+      jest.advanceTimersByTime(9000);
+      expect(timeoutCallback).not.toHaveBeenCalled();
+      
+      // Fast-forward 1 more second (total 10 seconds) - callback should fire
+      jest.advanceTimersByTime(1000);
+      expect(timeoutCallback).toHaveBeenCalledTimes(1);
+      
+      jest.useRealTimers();
+    });
+
+    it('should fire callback even if timeout was stopped and restarted', () => {
+      jest.useFakeTimers();
+      
+      // Start timeout
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      idleTimeoutService.handleEvent({ type: 'UTTERANCE_END' });
+      
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      
+      // Stop timeout (agent starts speaking)
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'speaking' });
+      expect(idleTimeoutService.isTimeoutActive()).toBe(false);
+      
+      // Fast-forward - callback should not fire (timeout was stopped)
+      jest.advanceTimersByTime(10000);
+      expect(timeoutCallback).not.toHaveBeenCalled();
+      
+      // Restart timeout (agent finishes)
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      
+      // Fast-forward 10 seconds - callback should fire for the new timeout
+      jest.advanceTimersByTime(10000);
+      expect(timeoutCallback).toHaveBeenCalledTimes(1);
+      
+      jest.useRealTimers();
+    });
+  });
 });
 
 describe('AgentStateService', () => {
