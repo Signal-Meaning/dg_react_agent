@@ -207,16 +207,14 @@ describe('Agent State Message Handling', () => {
     });
 
     /**
-     * FAILING TEST - This test FAILS due to the bug
+     * Test that idle timeout starts after playback stops and agent state transitions to idle
      * 
-     * This test EXPECTS idle timeout to start after playback stops, but it FAILS because:
-     * - Playback stops (onPlaybackStateChange(false) fires)
-     * - BUT agent state does NOT transition to 'idle' automatically (remains 'speaking')
-     * - Idle timeout cannot start because agent state is 'speaking'
-     * 
-     * This test will FAIL (red) until the bug is fixed.
-     * Once fixed, the component will automatically transition agent state to 'idle'
-     * when playback stops, and this test will pass.
+     * After the fix, when playback stops:
+     * - Component calls AgentStateService.handleAudioPlaybackChange(false)
+     * - AgentStateService transitions agent state to 'idle'
+     * - onStateChange('idle') callback fires, dispatching AGENT_STATE_CHANGE
+     * - useIdleTimeoutManager detects state change and sends AGENT_STATE_CHANGED to IdleTimeoutService
+     * - IdleTimeoutService starts the timeout when all conditions are idle
      */
     it('should start idle timeout after playback stops and agent state transitions to idle', () => {
       jest.useFakeTimers();

@@ -557,21 +557,17 @@ test.describe('Idle Timeout Behavior', () => {
   });
 
   /**
-   * FAILING E2E TEST - Agent state not transitioning to idle after playback
+   * E2E TEST - Agent state transitions to idle after playback, enabling idle timeout
    * 
-   * This test reproduces the bug where:
+   * This test verifies the fix where:
    * 1. User sends message → agent responds → playback starts → agent state = 'speaking'
    * 2. Playback finishes → onPlaybackStateChange(false) fires
-   * 3. BUT onAgentStateChange('idle') is NOT called
-   * 4. Agent state remains 'speaking', blocking idle timeout from starting
-   * 
-   * This test will FAIL (red) until the bug is fixed.
-   * Once fixed, the component will automatically transition agent state to 'idle'
-   * when playback stops, and idle timeout will start correctly.
+   * 3. Component calls AgentStateService.handleAudioPlaybackChange(false)
+   * 4. Agent state transitions to 'idle' automatically
+   * 5. Idle timeout starts correctly when all conditions are idle
    */
-  test('should start idle timeout after agent finishes speaking - agent state must transition to idle (FAILING)', async ({ page }) => {
+  test('should start idle timeout after agent finishes speaking - agent state transitions to idle', async ({ page }) => {
     console.log('🧪 Testing idle timeout after agent finishes speaking...');
-    console.log('⚠️  This test is EXPECTED TO FAIL until the bug is fixed');
     
     // Track agent state changes and playback state changes
     const agentStateChanges = [];
@@ -634,50 +630,41 @@ test.describe('Idle Timeout Behavior', () => {
     const agentStateAfterPlayback = await page.locator('[data-testid="agent-state"]').textContent();
     console.log(`📊 Agent state after playback: "${agentStateAfterPlayback}"`);
     
-    // BUG: Agent state should be 'idle' but it's still 'speaking'
-    // This is the root cause - component doesn't call AgentStateService.handleAudioPlaybackChange(false)
-    // which would trigger onAgentStateChange('idle')
-    
-    // Step 5: Verify all idle conditions
-    console.log('Step 5: Checking idle conditions...');
-    const idleState = await getIdleState(page);
-    console.log('📊 Idle state:', idleState);
-    
-    // EXPECTED: Agent state should be 'idle' after playback finishes
-    // ACTUAL (BUG): Agent state remains 'speaking'
-    console.log(`\n🔍 AGENT STATE ANALYSIS:`);
-    console.log(`  Expected: 'idle'`);
-    console.log(`  Actual: '${agentStateAfterPlayback}'`);
-    console.log(`  Status: ${agentStateAfterPlayback === 'idle' ? '✅ CORRECT' : '❌ BUG - State not transitioning'}`);
-    
-    if (agentStateAfterPlayback !== 'idle') {
-      console.log(`\n⚠️  BUG DETECTED: Agent state is "${agentStateAfterPlayback}" but should be "idle"`);
-      console.log(`   This prevents idle timeout from starting.`);
-      console.log(`   Root cause: Component doesn't call AgentStateService.handleAudioPlaybackChange(false)`);
-    }
-    
-    // Step 6: Wait for idle timeout (this will fail because agent state is not 'idle')
-    console.log('\nStep 6: Waiting for idle timeout (this will fail due to bug)...');
+        // FIX: Agent state should now be 'idle' after playback finishes
+        // Component calls AgentStateService.handleAudioPlaybackChange(false)
+        // which triggers onAgentStateChange('idle')
+        
+        // Step 5: Verify all idle conditions
+        console.log('Step 5: Checking idle conditions...');
+        const idleState = await getIdleState(page);
+        console.log('📊 Idle state:', idleState);
+        
+        // EXPECTED: Agent state should be 'idle' after playback finishes
+        // ACTUAL (AFTER FIX): Agent state transitions to 'idle'
+        console.log(`\n🔍 AGENT STATE ANALYSIS:`);
+        console.log(`  Expected: 'idle'`);
+        console.log(`  Actual: '${agentStateAfterPlayback}'`);
+        console.log(`  Status: ${agentStateAfterPlayback === 'idle' ? '✅ CORRECT' : '❌ State not transitioning'}`);
+        
+        // Step 6: Wait for idle timeout (should now work because agent state transitions to 'idle')
+        console.log('\nStep 6: Waiting for idle timeout...');
     const timeoutResult = await waitForIdleTimeout(page, {
       expectedTimeout: 10000,
       maxWaitTime: 25000, // Extended wait to see if timeout ever fires
       checkInterval: 2000
     });
     
-    // THIS ASSERTION WILL FAIL (red) until the bug is fixed:
-    // Expected: Connection should close via idle timeout after ~10 seconds
-    // Actual: Connection stays open because agent state is 'speaking', preventing timeout from starting
-    console.log(`\n📊 TIMEOUT RESULT:`);
-    console.log(`  Connection closed: ${timeoutResult.closed}`);
-    console.log(`  Actual timeout: ${timeoutResult.actualTimeout}ms`);
-    console.log(`  Expected timeout: ${timeoutResult.expectedTimeout}ms`);
-    
-    if (!timeoutResult.closed) {
-      console.log(`\n❌ BUG CONFIRMED: Connection did NOT close via idle timeout`);
-      console.log(`   Reason: Agent state is "${agentStateAfterPlayback}" (not 'idle')`);
-      console.log(`   Idle timeout cannot start when agent state is 'speaking'`);
-      console.log(`   Connection will stay open until websocket timeout (~60 seconds)`);
-    }
+        // EXPECTED: Connection should close via idle timeout after ~10 seconds
+        // ACTUAL (AFTER FIX): Connection closes via idle timeout when agent state is 'idle'
+        console.log(`\n📊 TIMEOUT RESULT:`);
+        console.log(`  Connection closed: ${timeoutResult.closed}`);
+        console.log(`  Actual timeout: ${timeoutResult.actualTimeout}ms`);
+        console.log(`  Expected timeout: ${timeoutResult.expectedTimeout}ms`);
+        
+        if (!timeoutResult.closed) {
+          console.log(`\n❌ Connection did NOT close via idle timeout`);
+          console.log(`   Reason: Agent state is "${agentStateAfterPlayback}"`);
+        }
     
     // Log all state changes for debugging
     console.log(`\n📊 STATE CHANGE LOG:`);
@@ -696,23 +683,23 @@ test.describe('Idle Timeout Behavior', () => {
       console.log(`    ${i + 1}. ${event.text}`);
     });
     
-    // THE FAILING ASSERTIONS:
-    // 1. Agent state should be 'idle' after playback finishes
-    expect(agentStateAfterPlayback).toBe('idle');
-    
-    // 2. Idle timeout should start when all conditions are idle
-    expect(idleState.agentIdle).toBe(true);
-    expect(idleState.timeoutActive).toBe(true);
-    
-    // 3. Connection should close via idle timeout
-    expect(timeoutResult.closed).toBe(true);
-    expect(timeoutResult.actualTimeout).toBeGreaterThanOrEqual(9000); // At least 9 seconds
-    expect(timeoutResult.actualTimeout).toBeLessThanOrEqual(15000); // But not more than 15 seconds
-    
-    // 4. Idle timeout events should be fired
-    expect(idleTimeoutEvents.length).toBeGreaterThan(0);
-    
-    console.log('\n✅ Test passed: Idle timeout works correctly after agent finishes speaking!');
+        // THE ASSERTIONS:
+        // 1. Agent state should be 'idle' after playback finishes
+        expect(agentStateAfterPlayback).toBe('idle');
+        
+        // 2. Idle timeout should start when all conditions are idle
+        expect(idleState.agentIdle).toBe(true);
+        expect(idleState.timeoutActive).toBe(true);
+        
+        // 3. Connection should close via idle timeout
+        expect(timeoutResult.closed).toBe(true);
+        expect(timeoutResult.actualTimeout).toBeGreaterThanOrEqual(9000); // At least 9 seconds
+        expect(timeoutResult.actualTimeout).toBeLessThanOrEqual(15000); // But not more than 15 seconds
+        
+        // 4. Idle timeout events should be fired
+        expect(idleTimeoutEvents.length).toBeGreaterThan(0);
+        
+        console.log('\n✅ Test passed: Idle timeout works correctly after agent finishes speaking!');
   });
 });
 
