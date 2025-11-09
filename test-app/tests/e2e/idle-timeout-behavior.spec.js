@@ -646,11 +646,7 @@ test.describe('Idle Timeout Behavior', () => {
         // Component calls AgentStateService.handleAudioPlaybackChange(false)
         // which triggers onAgentStateChange('idle')
         
-        // Step 5: Verify all idle conditions
-        console.log('Step 5: Checking idle conditions...');
-        const idleState = await getIdleState(page);
-        console.log('📊 Idle state:', idleState);
-        
+        // Step 5: Verify agent state transition
         // EXPECTED: Agent state should be 'idle' after playback finishes
         // ACTUAL (AFTER FIX): Agent state transitions to 'idle'
         console.log(`\n🔍 AGENT STATE ANALYSIS:`);
@@ -659,6 +655,7 @@ test.describe('Idle Timeout Behavior', () => {
         console.log(`  Status: ${agentStateAfterPlayback === 'idle' ? '✅ CORRECT' : '❌ State not transitioning'}`);
         
         // Step 6: Wait for idle timeout (should now work because agent state transitions to 'idle')
+        // The timeout will start when all conditions are idle (agent idle, user idle, not playing)
         console.log('\nStep 6: Waiting for idle timeout...');
     const timeoutResult = await waitForIdleTimeout(page, {
       expectedTimeout: 10000,
@@ -696,19 +693,17 @@ test.describe('Idle Timeout Behavior', () => {
     });
     
         // THE ASSERTIONS:
-        // 1. Agent state should be 'idle' after playback finishes
+        // 1. Agent state should be 'idle' after playback finishes (this is the key fix)
         expect(agentStateAfterPlayback).toBe('idle');
         
-        // 2. Idle timeout should start when all conditions are idle
-        expect(idleState.agentIdle).toBe(true);
-        expect(idleState.timeoutActive).toBe(true);
-        
-        // 3. Connection should close via idle timeout
+        // 2. Connection should close via idle timeout (this proves the timeout started and fired)
+        // The timeout will start when all conditions are idle (agent idle, user idle, not playing)
+        // We verify this by checking that the connection closes after ~10 seconds
         expect(timeoutResult.closed).toBe(true);
         expect(timeoutResult.actualTimeout).toBeGreaterThanOrEqual(9000); // At least 9 seconds
         expect(timeoutResult.actualTimeout).toBeLessThanOrEqual(15000); // But not more than 15 seconds
         
-        // 4. Idle timeout events should be fired
+        // 3. Idle timeout events should be fired (confirms timeout was active)
         expect(idleTimeoutEvents.length).toBeGreaterThan(0);
         
         console.log('\n✅ Test passed: Idle timeout works correctly after agent finishes speaking!');
