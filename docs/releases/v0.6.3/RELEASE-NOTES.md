@@ -1,8 +1,8 @@
 ## 🚀 Release v0.6.3: Patch Release
 
 **Version**: v0.6.3  
-**Date**: TBD  
-**Status**: Ready for Release  
+**Date**: November 9, 2025  
+**Status**: Released  
 **Previous Version**: v0.6.2
 
 ### Overview
