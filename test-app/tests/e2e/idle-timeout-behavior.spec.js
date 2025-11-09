@@ -623,9 +623,21 @@ test.describe('Idle Timeout Behavior', () => {
     }, { timeout: 10000 });
     console.log('✅ Playback finished (onPlaybackStateChange(false) fired)');
     
-    // Step 4: Check agent state - THIS IS WHERE THE BUG MANIFESTS
-    console.log('Step 4: Checking agent state after playback finishes...');
-    await page.waitForTimeout(1000); // Give component time to process playback completion
+    // Step 4: Wait for agent state to transition to idle after playback finishes
+    console.log('Step 4: Waiting for agent state to transition to idle after playback finishes...');
+    
+    // Wait for agent state to be 'idle' (with timeout)
+    // The fix ensures AgentStateService.handleAudioPlaybackChange(false) is called,
+    // which transitions the state to 'idle'
+    try {
+      await page.waitForFunction(() => {
+        const agentState = document.querySelector('[data-testid="agent-state"]')?.textContent;
+        return agentState === 'idle';
+      }, { timeout: 5000 });
+      console.log('✅ Agent state transitioned to idle');
+    } catch (error) {
+      console.log('⚠️  Agent state did not transition to idle within timeout');
+    }
     
     const agentStateAfterPlayback = await page.locator('[data-testid="agent-state"]').textContent();
     console.log(`📊 Agent state after playback: "${agentStateAfterPlayback}"`);
