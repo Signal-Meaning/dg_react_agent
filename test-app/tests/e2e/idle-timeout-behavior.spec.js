@@ -41,7 +41,7 @@ import {
   setupAudioSendingPrerequisites,
   establishConnectionViaText
 } from './helpers/test-helpers.js';
-import { setupTestPage } from './helpers/audio-mocks.js';
+import { setupTestPage, simulateSpeech } from './helpers/audio-mocks.js';
 import { waitForIdleTimeout, waitForIdleConditions, getIdleState } from './fixtures/idle-timeout-helpers';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
 
@@ -707,6 +707,309 @@ test.describe('Idle Timeout Behavior', () => {
         expect(idleTimeoutEvents.length).toBeGreaterThan(0);
         
         console.log('\n✅ Test passed: Idle timeout works correctly after agent finishes speaking!');
+  });
+
+  test('should start idle timeout countdown after agent finishes - reproduces voice-commerce issue', async ({ page }) => {
+    console.log('🧪 Testing Issue #262: IdleTimeoutService should start timeout countdown after agent finishes...');
+    
+    // Track all IdleTimeoutService logs to verify timeout actually starts
+    const idleTimeoutServiceLogs = [];
+    const agentStateLogs = [];
+    const playbackStateLogs = [];
+    const connectionStatusLogs = [];
+    
+    page.on('console', msg => {
+      const text = msg.text();
+      
+      // Capture IdleTimeoutService logs - these are critical
+      if (text.includes('[IDLE_TIMEOUT_SERVICE]') || 
+          text.includes('Started idle timeout') ||
+          text.includes('updateTimeoutBehavior') ||
+          text.includes('startTimeout') ||
+          text.includes('handleEvent')) {
+        idleTimeoutServiceLogs.push({ text, timestamp: Date.now() });
+        console.log(`[IDLE_TIMEOUT_SERVICE] ${text}`);
+      }
+      
+      // Track agent state changes
+      if (text.includes('onAgentStateChange') || text.includes('Agent state changed')) {
+        agentStateLogs.push({ text, timestamp: Date.now() });
+      }
+      
+      // Track playback state changes
+      if (text.includes('onPlaybackStateChange') || text.includes('Playback state changed')) {
+        playbackStateLogs.push({ text, timestamp: Date.now() });
+      }
+      
+      // Track connection status
+      if (text.includes('Connection status') || text.includes('connection') && text.includes('closed')) {
+        connectionStatusLogs.push({ text, timestamp: Date.now() });
+      }
+    });
+    
+    // Setup test page (debug mode is already enabled by default in setupTestPage)
+    await setupTestPage(page);
+    
+    // Establish connection via text input (auto-connect) - simulates browser reload scenario
+    await establishConnectionViaText(page);
+    
+    const initialStatus = await page.locator(SELECTORS.connectionStatus).textContent();
+    expect(initialStatus).toBe('connected');
+    console.log('✅ Connection established');
+    
+    // Wait for agent greeting to play (if any)
+    console.log('Step 1: Waiting for agent greeting (if any)...');
+    try {
+      await waitForAgentGreeting(page, 5000);
+      console.log('✅ Agent greeting completed');
+    } catch (error) {
+      console.log('ℹ️  No agent greeting (this is OK)');
+    }
+    
+    // Wait for agent to be idle
+    console.log('Step 2: Waiting for agent state to be idle...');
+    await page.waitForFunction(() => {
+      const agentState = document.querySelector('[data-testid="agent-state"]')?.textContent;
+      return agentState === 'idle';
+    }, { timeout: 10000 });
+    console.log('✅ Agent state is idle');
+    
+    // Wait for playback to finish
+    console.log('Step 3: Verifying playback has finished...');
+    await page.waitForFunction(() => {
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]')?.textContent;
+      return audioPlaying === 'false';
+    }, { timeout: 5000 });
+    console.log('✅ Playback finished');
+    
+    // Wait for idle conditions
+    console.log('Step 4: Waiting for all idle conditions to be met...');
+    const idleState = await waitForIdleConditions(page, 10000);
+    console.log(`📊 Idle state:`, idleState);
+    
+    // Give a moment for events to propagate and timeout to potentially start
+    await page.waitForTimeout(500);
+    
+    // Now wait for connection to close (or not) - this will capture logs during the wait
+    console.log('\nStep 5: Waiting for connection to close via idle timeout...');
+    const timeoutResult = await waitForIdleTimeout(page, {
+      expectedTimeout: 10000,
+      maxWaitTime: 30000, // Extended wait to see if it ever closes
+      checkInterval: 2000
+    });
+    
+    console.log(`\n📊 TIMEOUT RESULT:`);
+    console.log(`  Connection closed: ${timeoutResult.closed}`);
+    console.log(`  Actual timeout: ${timeoutResult.actualTimeout || 'N/A'}ms`);
+    console.log(`  Elapsed time: ${timeoutResult.elapsed}ms`);
+    
+    // CRITICAL: Check if IdleTimeoutService logged "Started idle timeout"
+    // Check AFTER waiting, as logs are captured throughout the test
+    console.log('\n🔍 ANALYZING IDLE_TIMEOUT_SERVICE LOGS:');
+    console.log(`  Total logs captured: ${idleTimeoutServiceLogs.length}`);
+    
+    const startedTimeoutLog = idleTimeoutServiceLogs.find(log => 
+      log.text.includes('Started idle timeout') || 
+      log.text.includes('startTimeout')
+    );
+    
+    const timeoutReachedLog = idleTimeoutServiceLogs.find(log =>
+      log.text.includes('Idle timeout reached')
+    );
+    
+    const updateTimeoutBehaviorLogs = idleTimeoutServiceLogs.filter(log =>
+      log.text.includes('updateTimeoutBehavior')
+    );
+    
+    const handleEventLogs = idleTimeoutServiceLogs.filter(log =>
+      log.text.includes('handleEvent')
+    );
+    
+    console.log(`  "Started idle timeout" log: ${startedTimeoutLog ? '✅ FOUND' : '❌ MISSING'}`);
+    console.log(`  "Idle timeout reached" log: ${timeoutReachedLog ? '✅ FOUND' : '❌ MISSING'}`);
+    console.log(`  updateTimeoutBehavior calls: ${updateTimeoutBehaviorLogs.length}`);
+    console.log(`  handleEvent calls: ${handleEventLogs.length}`);
+    
+    // Print all IdleTimeoutService logs for debugging
+    if (idleTimeoutServiceLogs.length > 0) {
+      console.log('\n📋 ALL IDLE_TIMEOUT_SERVICE LOGS (chronological):');
+      idleTimeoutServiceLogs.forEach((log, i) => {
+        console.log(`  ${i + 1}. ${log.text}`);
+      });
+    } else {
+      console.log('  ⚠️  No IdleTimeoutService logs captured! This suggests debug mode might not be enabled.');
+    }
+    
+    // THE KEY ASSERTIONS:
+    // 1. IdleTimeoutService should have logged "Started idle timeout"
+    if (!startedTimeoutLog) {
+      console.log('\n❌ BUG REPRODUCED: IdleTimeoutService never started the timeout!');
+      console.log('   This matches the voice-commerce team\'s issue.');
+      console.log('   Expected log: "Started idle timeout (10000ms)"');
+      console.log('   Actual: Log not found');
+      
+      // Print what events were received
+      if (handleEventLogs.length > 0) {
+        console.log('\n   Events received by IdleTimeoutService:');
+        handleEventLogs.forEach((log, i) => {
+          console.log(`     ${i + 1}. ${log.text}`);
+        });
+      }
+      
+      // Print updateTimeoutBehavior calls
+      if (updateTimeoutBehaviorLogs.length > 0) {
+        console.log('\n   updateTimeoutBehavior() calls:');
+        updateTimeoutBehaviorLogs.forEach((log, i) => {
+          console.log(`     ${i + 1}. ${log.text}`);
+        });
+      }
+    } else {
+      console.log('\n✅ IdleTimeoutService started the timeout correctly');
+      console.log(`   Log found: "${startedTimeoutLog.text}"`);
+    }
+    
+    // 2. Connection should close if timeout started
+    if (startedTimeoutLog && !timeoutResult.closed) {
+      console.log('\n⚠️  Timeout started but connection didn\'t close');
+      console.log('   This suggests timeout callback isn\'t firing');
+    }
+    
+    // Assertions
+    expect(startedTimeoutLog).toBeTruthy();
+    expect(timeoutReachedLog).toBeTruthy();
+    expect(timeoutResult.closed).toBe(true);
+    expect(timeoutResult.actualTimeout).toBeGreaterThanOrEqual(9000);
+    expect(timeoutResult.actualTimeout).toBeLessThanOrEqual(15000);
+    
+    console.log('\n✅ Test passed: IdleTimeoutService correctly starts timeout countdown!');
+  });
+
+  test('should restart timeout after USER_STOPPED_SPEAKING when agent is idle - reproduces Issue #262/#430', async ({ page }) => {
+    console.log('🧪 Testing Issue #262/#430: Timeout should restart after USER_STOPPED_SPEAKING when agent is idle...');
+    
+    // Track all IdleTimeoutService logs
+    const idleTimeoutServiceLogs = [];
+    
+    page.on('console', msg => {
+      const text = msg.text();
+      
+      // Capture IdleTimeoutService logs
+      if (text.includes('[IDLE_TIMEOUT_SERVICE]') || 
+          text.includes('Started idle timeout') ||
+          text.includes('Stopped idle timeout') ||
+          text.includes('Enabled idle timeout resets') ||
+          text.includes('Disabled idle timeout resets') ||
+          text.includes('Idle timeout reached') ||
+          text.includes('USER_STOPPED_SPEAKING')) {
+        idleTimeoutServiceLogs.push({ text, timestamp: Date.now() });
+        console.log(`[IDLE_TIMEOUT_SERVICE] ${text}`);
+      }
+    });
+    
+    // Setup test page
+    await setupTestPage(page);
+    
+    // Establish connection via text input
+    await establishConnectionViaText(page);
+    
+    const initialStatus = await page.locator(SELECTORS.connectionStatus).textContent();
+    expect(initialStatus).toBe('connected');
+    console.log('✅ Connection established');
+    
+    // Wait for agent greeting to finish (if any)
+    console.log('Step 1: Waiting for agent greeting to finish...');
+    try {
+      await waitForAgentGreeting(page, 5000);
+      console.log('✅ Agent greeting completed');
+    } catch (error) {
+      console.log('ℹ️  No agent greeting (this is OK)');
+    }
+    
+    // Wait for agent to be idle and timeout to start
+    console.log('Step 2: Waiting for agent to be idle and timeout to start...');
+    await page.waitForFunction(() => {
+      const agentState = document.querySelector('[data-testid="agent-state"]')?.textContent;
+      return agentState === 'idle';
+    }, { timeout: 10000 });
+    
+    await page.waitForFunction(() => {
+      const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]')?.textContent;
+      return audioPlaying === 'false';
+    }, { timeout: 5000 });
+    
+    // Give time for timeout to start
+    await page.waitForTimeout(1000);
+    
+    // Verify timeout started (should have "Started idle timeout" log)
+    const initialTimeoutLog = idleTimeoutServiceLogs.find(log => 
+      log.text.includes('Started idle timeout')
+    );
+    expect(initialTimeoutLog).toBeTruthy();
+    console.log('✅ Initial timeout started');
+    
+    // Step 3: Simulate user starting to speak (this should stop the timeout)
+    console.log('Step 3: Simulating user starting to speak...');
+    await simulateSpeech(page, 'test message');
+    
+    // Wait a moment for events to propagate
+    await page.waitForTimeout(500);
+    
+    // Verify timeout was stopped (should have "Stopped idle timeout" log)
+    const stoppedTimeoutLog = idleTimeoutServiceLogs.find(log => 
+      log.text.includes('Stopped idle timeout') && 
+      log.timestamp > (initialTimeoutLog?.timestamp || 0)
+    );
+    expect(stoppedTimeoutLog).toBeTruthy();
+    console.log('✅ Timeout stopped when user started speaking');
+    
+    // Step 4: Wait for user to stop speaking (UtteranceEnd/UserStoppedSpeaking)
+    console.log('Step 4: Waiting for user to stop speaking...');
+    await waitForVADEvents(page, ['UserStoppedSpeaking', 'UtteranceEnd'], 10000);
+    
+    // Wait a moment for USER_STOPPED_SPEAKING event to be processed
+    await page.waitForTimeout(1000);
+    
+    // Step 5: Verify timeout should restart after USER_STOPPED_SPEAKING
+    // BUG: After USER_STOPPED_SPEAKING, updateTimeoutBehavior() is NOT called,
+    // so timeout never restarts even though all conditions are idle
+    console.log('Step 5: Checking if timeout restarted after USER_STOPPED_SPEAKING...');
+    
+    const restartedTimeoutLog = idleTimeoutServiceLogs.find(log => 
+      log.text.includes('Started idle timeout') && 
+      log.timestamp > (stoppedTimeoutLog?.timestamp || 0)
+    );
+    
+    if (!restartedTimeoutLog) {
+      console.log('\n❌ BUG REPRODUCED: Timeout did NOT restart after USER_STOPPED_SPEAKING!');
+      console.log('   This matches Issue #262/#430');
+      console.log('   Expected: "Started idle timeout (10000ms)" log after USER_STOPPED_SPEAKING');
+      console.log('   Actual: Log not found');
+      
+      // Print relevant logs
+      console.log('\n📋 Relevant IdleTimeoutService logs:');
+      idleTimeoutServiceLogs.forEach((log, i) => {
+        console.log(`  ${i + 1}. ${log.text}`);
+      });
+    } else {
+      console.log('✅ Timeout restarted after USER_STOPPED_SPEAKING');
+    }
+    
+    // Assertion: Timeout should have restarted
+    expect(restartedTimeoutLog).toBeTruthy();
+    
+    // Step 6: Verify timeout fires
+    console.log('Step 6: Waiting for timeout to fire...');
+    const timeoutResult = await waitForIdleTimeout(page, {
+      expectedTimeout: 10000,
+      maxWaitTime: 20000,
+      checkInterval: 1000
+    });
+    
+    expect(timeoutResult.closed).toBe(true);
+    expect(timeoutResult.actualTimeout).toBeGreaterThanOrEqual(9000);
+    expect(timeoutResult.actualTimeout).toBeLessThanOrEqual(15000);
+    
+    console.log('\n✅ Test passed: Timeout correctly restarts after USER_STOPPED_SPEAKING!');
   });
 });
 
