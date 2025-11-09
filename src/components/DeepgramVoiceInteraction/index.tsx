@@ -2160,6 +2160,13 @@ function DeepgramVoiceInteraction(
           if (currentState === 'speaking') {
             console.log('🎯 [AGENT] Audio playback finished - transitioning agent from speaking to idle');
             sleepLog('Audio playback finished - transitioning agent to idle');
+            
+            // FIX: Call AgentStateService to ensure state transition is properly synchronized
+            // This ensures onStateChange callback fires, which dispatches the state change
+            // and triggers the useEffect that calls onAgentStateChange('idle')
+            agentStateServiceRef.current?.handleAudioPlaybackChange(false);
+            
+            // Also dispatch directly as fallback (redundant but safe)
             dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
           } else {
             console.log(`🎯 [AGENT] Audio playback stopped but agent state is ${currentState} (not speaking) - skipping transition to idle`);
