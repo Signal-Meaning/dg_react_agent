@@ -75,26 +75,12 @@ export class IdleTimeoutService {
         break;
         
       case 'USER_STOPPED_SPEAKING':
-        this.currentState.isUserSpeaking = false;
-        this.enableResets();
-        break;
-        
       case 'UTTERANCE_END':
-        // UtteranceEnd indicates user has finished speaking
+        // Both events indicate user has finished speaking
         // Enable resets and let updateTimeoutBehavior decide if timeout should start
         // based on agent state (timeout should start if agent is idle/listening, not if speaking/thinking)
-        if (this.config.debug) {
-          console.log('🎯 [DEBUG] UTTERANCE_END case reached - processing event');
-        }
-        this.log('🎯 [DEBUG] UTTERANCE_END case reached - processing event');
         this.currentState.isUserSpeaking = false;
-        // Enable resets so timeout can work - updateTimeoutBehavior will determine
-        // if timeout should start based on agent state
-        this.enableResets();
-        // Update timeout behavior - this will start timeout if agent is idle/listening
-        // and not playing, or keep it disabled if agent is speaking/thinking/playing
-        this.updateTimeoutBehavior();
-        this.log('UtteranceEnd received - enabled resets, timeout behavior updated based on agent state');
+        this.enableResetsAndUpdateBehavior();
         break;
         
       case 'AGENT_STATE_CHANGED':
@@ -163,6 +149,16 @@ export class IdleTimeoutService {
       this.isDisabled = false;
       this.log('Enabled idle timeout resets - returning to idle');
     }
+  }
+
+  /**
+   * Enables resets and updates timeout behavior based on current state.
+   * This will start timeout if agent is idle/listening and not playing,
+   * or keep it disabled if agent is speaking/thinking/playing.
+   */
+  private enableResetsAndUpdateBehavior(): void {
+    this.enableResets();
+    this.updateTimeoutBehavior();
   }
 
   /**
