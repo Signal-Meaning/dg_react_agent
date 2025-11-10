@@ -9,6 +9,10 @@ This documentation directory contains comprehensive guides and examples for inte
 
 ## 📁 Documentation Structure
 
+### Core Documentation
+
+- **[Transcript DOM Structure](./TRANSCRIPT-DOM-STRUCTURE.md)** - How the test-app displays transcribed speech in the DOM for E2E testing
+
 ### Current Release
 
 - **[v0.5.0 Documentation](./releases/v0.5.0/)** - Latest release documentation
@@ -226,6 +230,7 @@ When contributing to test app documentation:
 - **Source Code**: Review `App.tsx` for implementation details
 
 ### Common Questions
+- "How do transcripts appear in the DOM?" → [Transcript DOM Structure](./TRANSCRIPT-DOM-STRUCTURE.md)
 - "How do I manage sessions?" → [Session Management Guide](./releases/v0.5.0/SESSION-MANAGEMENT.md)
 - "How do I preserve context?" → [Context Handling Guide](./releases/v0.5.0/CONTEXT-HANDLING.md)
 - "How do I integrate the component?" → [Integration Examples](./releases/v0.5.0/INTEGRATION-EXAMPLES.md)
