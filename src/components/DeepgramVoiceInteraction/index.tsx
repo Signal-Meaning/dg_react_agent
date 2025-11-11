@@ -6,6 +6,7 @@ import {
   DeepgramVoiceInteractionProps,
   LLMResponse,
   TranscriptResponse,
+  TranscriptAlternative,
   UpdateInstructionsPayload,
 
   ConnectionState
@@ -902,13 +903,11 @@ function DeepgramVoiceInteraction(
     }
     
     // Add simplified transcript log for better readability - always show with [TRANSCRIPT] prefix
-    if (typeof data === 'object' && data !== null && 'alternatives' in data) {
-      const transcriptData = data as { 
-        alternatives?: Array<{ transcript?: string }>; 
-        is_final?: boolean;
-        speech_final?: boolean;
-      };
-      const transcript = transcriptData.alternatives?.[0]?.transcript;
+    if (typeof data === 'object' && data !== null && ('alternatives' in data || (data as any).channel?.alternatives)) {
+      const transcriptData = data as any;
+      // Extract transcript from actual API structure (channel.alternatives[0].transcript)
+      const transcript = transcriptData.channel?.alternatives?.[0]?.transcript || 
+                         transcriptData.alternatives?.[0]?.transcript;
       if (transcript && transcript.trim()) {
         if (props.debug) {
           lazyLog(`[TRANSCRIPT] "${transcript}" ${transcriptData.is_final ? '(final)' : '(interim)'}${transcriptData.speech_final ? ' [SPEECH_FINAL]' : ''}`);
@@ -1043,8 +1042,47 @@ function DeepgramVoiceInteraction(
       
       // Don't re-enable idle timeout resets here
       // Let WebSocketManager handle it based on message content
-      const transcript = data as unknown as TranscriptResponse;
-      onTranscriptUpdate?.(transcript);
+      const rawTranscript = data as {
+        type: string;
+        channel?: number | { alternatives?: Array<{ transcript?: string }>; channel_index?: number[] };
+        alternatives?: Array<{ transcript?: string }>;
+        is_final?: boolean;
+        speech_final?: boolean;
+        channel_index?: number[];
+        start?: number;
+        duration?: number;
+        metadata?: unknown;
+      };
+      
+      // Extract transcript text from the actual API structure (channel.alternatives[0].transcript)
+      // and add it as a top-level field for easier consumer access
+      const channelObj = typeof rawTranscript.channel === 'object' ? rawTranscript.channel : null;
+      const transcriptText = channelObj?.alternatives?.[0]?.transcript || 
+                             rawTranscript.alternatives?.[0]?.transcript || 
+                             '';
+      
+      // Normalize the response with a top-level transcript field
+      // Preserve the nested structure for advanced use cases (cast to proper type)
+      const alternatives = (channelObj?.alternatives || rawTranscript.alternatives || []) as TranscriptAlternative[];
+      
+      const normalizedTranscript: TranscriptResponse = {
+        ...rawTranscript,
+        type: 'transcript',
+        transcript: transcriptText,
+        // Ensure channel is properly typed (could be number or object)
+        channel: typeof rawTranscript.channel === 'object' 
+          ? (channelObj?.channel_index?.[0] ?? 0)
+          : (rawTranscript.channel ?? 0),
+        // Preserve the nested structure for advanced use cases
+        alternatives,
+        is_final: rawTranscript.is_final ?? false,
+        speech_final: rawTranscript.speech_final ?? false,
+        channel_index: rawTranscript.channel_index ?? [],
+        start: rawTranscript.start ?? 0,
+        duration: rawTranscript.duration ?? 0
+      };
+      
+      onTranscriptUpdate?.(normalizedTranscript);
       return;
     }
 

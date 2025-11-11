@@ -166,7 +166,16 @@ export interface TranscriptResponse {
   duration: number;
   
   /**
+   * The transcript text (normalized from channel.alternatives[0].transcript)
+   * This is the most commonly needed value, provided at the top level for convenience.
+   * For advanced use cases (multiple alternatives, word-level data, etc.), use the alternatives array.
+   */
+  transcript: string;
+  
+  /**
    * Alternative transcriptions, ordered by confidence
+   * Contains the full transcript data including words, confidence scores, etc.
+   * The transcript text is also available at the top-level `transcript` field for convenience.
    */
   alternatives: TranscriptAlternative[];
   

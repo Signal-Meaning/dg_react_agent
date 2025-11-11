@@ -1,7 +1,7 @@
 # Transcript DOM Structure
 
-**Version**: 0.6.4+  
-**Last Updated**: November 2025
+**Version**: 0.6.5+  
+**Last Updated**: January 2025
 
 ## Overview
 
@@ -58,8 +58,10 @@ Each transcript received triggers `handleTranscriptUpdate`:
 
 ```tsx
 const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
-  // Extract text from transcript structure
-  const text = transcript.alternatives?.[0]?.transcript;
+  // Use the simplified top-level transcript field (normalized by component)
+  // The component extracts transcript text from the API structure and provides
+  // it at transcript.transcript for convenience
+  const text = transcript.transcript;
   const speakerId = transcript.alternatives?.[0]?.words?.[0]?.speaker;
   
   if (text && text.trim().length > 0) {
@@ -73,6 +75,8 @@ const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
   }
 }, []);
 ```
+
+**Note**: The component normalizes the Deepgram API response structure. The transcript text is available at the top-level `transcript` field, eliminating the need to access `channel.alternatives[0].transcript` or `alternatives[0].transcript`. The full `alternatives` array is still available for advanced use cases (word-level data, confidence scores, etc.).
 
 #### 3. **Update Behavior**
 
@@ -331,7 +335,8 @@ Transcripts are received via the `onTranscriptUpdate` callback:
 const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
   const isFinal = transcript.is_final;
   const speechFinal = transcript.speech_final || false;
-  const text = transcript.alternatives?.[0]?.transcript || '';
+  // Use the simplified top-level transcript field (normalized by component)
+  const text = transcript.transcript || '';
   
   // Update last transcript (for live display)
   setLastTranscript(text);
@@ -345,6 +350,8 @@ const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
   }]);
 }, []);
 ```
+
+**API Simplification**: The component normalizes the Deepgram API response, providing the transcript text at `transcript.transcript` instead of requiring access to `channel.alternatives[0].transcript`. This makes the API more ergonomic for the common case while preserving the full `alternatives` array for advanced use cases.
 
 ### 2. State Management
 
@@ -486,19 +493,60 @@ test('should receive both interim and final transcripts', async ({ page, context
 });
 ```
 
+## API Testing
+
+### Testing the Simplified Transcript API
+
+The component normalizes the Deepgram API response to provide a simplified interface. Tests should verify:
+
+1. **Top-level `transcript` field is available**:
+```javascript
+// ✅ Correct - use the simplified API
+const text = transcript.transcript;
+
+// ❌ Avoid - don't dig into nested structures
+const text = transcript.channel?.alternatives?.[0]?.transcript;
+```
+
+2. **Backward compatibility**: The `alternatives` array is still available for advanced use cases:
+```javascript
+// Access word-level data, confidence scores, etc.
+const words = transcript.alternatives?.[0]?.words;
+const confidence = transcript.alternatives?.[0]?.confidence;
+```
+
+3. **Common properties are easily accessible**:
+```javascript
+const text = transcript.transcript;        // ✅ Simplified
+const isFinal = transcript.is_final;      // ✅ Direct access
+const speechFinal = transcript.speech_final; // ✅ Direct access
+```
+
+### Existing Tests
+
+The following tests verify transcript functionality:
+
+- **`test-app/tests/e2e/callback-test.spec.js`**: Tests `onTranscriptUpdate` callback and verifies transcripts appear in the UI
+- **`test-app/tests/e2e/vad-transcript-analysis.spec.js`**: Analyzes transcript patterns with different audio samples
+- **`test-app/tests/e2e/interim-transcript-validation.spec.js`**: Validates interim and final transcript handling
+
+All existing tests continue to work with the simplified API since they verify UI output rather than the raw API structure.
+
 ## Key Points for Developers
 
-1. **Index-Based IDs**: Transcript entries use 0-based indices (`transcript-entry-0`, `transcript-entry-1`, etc.)
+1. **Simplified API**: Use `transcript.transcript` instead of `channel.alternatives[0].transcript` or `alternatives[0].transcript`
 
-2. **String Attributes**: All data attributes are stored as strings, so boolean values are `"true"` or `"false"` (not actual booleans)
+2. **Index-Based IDs**: Transcript entries use 0-based indices (`transcript-entry-0`, `transcript-entry-1`, etc.)
 
-3. **Timestamp Format**: Timestamps are stored as Unix milliseconds (number as string)
+3. **String Attributes**: All data attributes are stored as strings, so boolean values are `"true"` or `"false"` (not actual booleans)
 
-4. **Text Extraction**: Always use `textContent` (not `innerText`) to get the transcript text, as it's more reliable for test automation
+4. **Timestamp Format**: Timestamps are stored as Unix milliseconds (number as string)
 
-5. **Stabilization**: When testing, wait for the transcript count to stabilize before extracting data, as transcripts may arrive incrementally
+5. **Text Extraction**: Always use `textContent` (not `innerText`) to get the transcript text, as it's more reliable for test automation
 
-6. **Color Coding**: Visual styling helps distinguish transcript types, but tests should rely on data attributes, not colors
+6. **Stabilization**: When testing, wait for the transcript count to stabilize before extracting data, as transcripts may arrive incrementally
+
+7. **Color Coding**: Visual styling helps distinguish transcript types, but tests should rely on data attributes, not colors
 
 ## Related Documentation
 
@@ -512,10 +560,11 @@ test('should receive both interim and final transcripts', async ({ page, context
 - **Transcript History Rendering**: Lines 972-1008
 - **Live Transcript Display**: Line 963
 - **State Management**: Lines 51-52, 271-300
+- **Transcript Processing**: Lines 271-300 (uses simplified `transcript.transcript` API)
 
 ---
 
-**Last Updated**: November 2025  
-**Component Version**: 0.6.4+  
+**Last Updated**: January 2025  
+**Component Version**: 0.6.5+  
 **Test App Version**: 0.5.0+
 

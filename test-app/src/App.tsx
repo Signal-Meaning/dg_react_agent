@@ -269,77 +269,32 @@ function App() {
   }, [addLog]);
   
   const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
-    // Debug: Log every transcript received to understand structure
-    const isFinal = (transcript as any).is_final;
-    const channel = (transcript as any).channel;
+    // Use the simplified top-level transcript field (normalized by component)
+    // The component extracts transcript text from channel.alternatives[0].transcript
+    // and provides it at transcript.transcript for convenience
+    const text = transcript.transcript;
+    const isFinal = transcript.is_final;
+    const speechFinal = transcript.speech_final || false;
     
-    // CRITICAL: Check top-level alternatives FIRST (this is what the component uses at line 911)
-    const topLevelTranscript = transcript.alternatives?.[0]?.transcript;
-    const channelTranscript = channel?.alternatives?.[0]?.transcript;
+    // Extract speaker ID from alternatives if available (for speaker diarization)
+    const speakerId = transcript.alternatives?.[0]?.words?.[0]?.speaker;
     
-    // Log the raw transcript object to see exactly what Deepgram sent
-    console.log(`[TRANSCRIPT-CALLBACK] Raw transcript object from Deepgram:`, JSON.stringify(transcript, null, 2));
+    // Skip empty transcripts (can happen with early interim results)
+    if (!text || text.trim().length === 0) {
+      console.log(`[TRANSCRIPT-CALLBACK] Skipping empty transcript (interim result with no text yet)`);
+      return;
+    }
     
     console.log(`[TRANSCRIPT-CALLBACK] Received ${isFinal ? 'final' : 'interim'} transcript:`, {
       type: transcript.type,
       is_final: isFinal,
-      is_final_type: typeof isFinal,
-      is_final_value: isFinal === true ? 'TRUE' : isFinal === false ? 'FALSE' : `OTHER: ${isFinal}`,
-      // Top-level alternatives (what component checks at line 911)
-      topLevelAlternatives: transcript.alternatives ? `array[${transcript.alternatives.length}]` : 'missing',
-      topLevelTranscript: topLevelTranscript || '(empty)',
-      topLevelTranscriptLength: topLevelTranscript?.length || 0,
-      // Nested channel.alternatives (fallback)
-      hasChannel: 'channel' in transcript,
-      channelAlternatives: channel?.alternatives ? `array[${channel.alternatives.length}]` : 'missing',
-      channelTranscript: channelTranscript || '(empty)',
-      channelTranscriptLength: channelTranscript?.length || 0,
-      // Full structure for debugging
-      keys: Object.keys(transcript),
-      channelKeys: channel ? Object.keys(channel) : []
+      speech_final: speechFinal,
+      transcript: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
+      transcriptLength: text.length,
+      hasAlternatives: !!transcript.alternatives,
+      alternativesLength: transcript.alternatives?.length || 0,
+      speakerId: speakerId !== undefined ? speakerId : 'none'
     });
-    
-    // Handle both possible structures:
-    // 1. Top-level alternatives (correct structure per TranscriptResponse type) - CHECK THIS FIRST
-    //    This is what the component uses at line 911: transcriptData.alternatives?.[0]?.transcript
-    // 2. Nested channel.alternatives (legacy/alternative structure)
-    let text: string | undefined;
-    let speakerId: number | undefined;
-    
-    // CRITICAL: Check top-level alternatives FIRST (same as component at line 911)
-    // This is the correct structure per TranscriptResponse type
-    if (transcript.alternatives?.[0]?.transcript && transcript.alternatives[0].transcript.trim().length > 0) {
-      // Correct structure: alternatives at top level
-      text = transcript.alternatives[0].transcript;
-      speakerId = transcript.alternatives[0].words?.[0]?.speaker;
-      console.log(`[TRANSCRIPT-CALLBACK] Extracted text from top-level alternatives: "${text.substring(0, 50)}..."`);
-    } else if (channel?.alternatives?.[0]) {
-      // Fallback: nested structure (shouldn't happen but handle gracefully)
-      const firstAlt = channel.alternatives[0];
-      // Check if transcript exists and has content (not empty string)
-      // For interim transcripts, transcript might be empty initially
-      if (firstAlt.transcript && firstAlt.transcript.trim().length > 0) {
-        console.warn('[TRANSCRIPT] Using nested channel.alternatives structure (unexpected)');
-        text = firstAlt.transcript;
-        speakerId = firstAlt.words?.[0]?.speaker;
-        console.log(`[TRANSCRIPT-CALLBACK] Extracted text from nested channel.alternatives: "${text.substring(0, 50)}..."`);
-      } else {
-        // Transcript property exists but is empty - this is normal for early interim results
-        // Skip capturing empty transcripts
-        console.log(`[TRANSCRIPT-CALLBACK] Skipping empty transcript (interim result with no text yet)`);
-      }
-    } else {
-      console.warn('[TRANSCRIPT-CALLBACK] Could not extract text from either structure', {
-        hasTopLevelAlternatives: !!transcript.alternatives,
-        topLevelAlternativesLength: transcript.alternatives?.length || 0,
-        hasChannel: !!channel,
-        hasChannelAlternatives: !!channel?.alternatives,
-        channelAlternativesLength: channel?.alternatives?.length || 0,
-        channelAlternativesFirst: channel?.alternatives?.[0] ? Object.keys(channel.alternatives[0]) : []
-      });
-      // No text extracted, skip processing
-      return;
-    }
     
     // At this point, text is guaranteed to be defined and non-empty
     if (text && text.trim().length > 0) {
