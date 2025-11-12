@@ -950,8 +950,7 @@ async function getComponentAudioContextState(page) {
 import MicrophoneHelpers from './microphone-helpers.js';
 
 export {
-  hasRealAPIKey, // Check if real Deepgram API key is available
-  skipIfNoRealAPI, // Skip test if real API key is not available
+  // hasRealAPIKey and skipIfNoRealAPI are already exported inline above
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   waitForConnection, // Wait for connection to be established
