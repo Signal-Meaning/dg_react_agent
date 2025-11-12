@@ -78,10 +78,14 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: 'npm run dev',
-    cwd: '..', // Go up one level from tests/ to test-app/ directory
+    // When running from test-app directory, cwd should be '.' (current directory)
+    // The config is at test-app/tests/playwright.config.mjs, so from test-app/ we need '.'
+    cwd: '.', // Run from test-app directory (where package.json is)
     url: 'http://localhost:5173', // Vite default port
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
+    stdout: 'pipe',
+    stderr: 'pipe',
   },
 
   /* 

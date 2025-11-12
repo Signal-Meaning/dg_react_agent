@@ -119,7 +119,8 @@ jobs:
         run: |
           cd test-app
           # Run only CI-safe E2E tests (core functionality without audio/microphone dependencies)
-          npx playwright test \
+          # Use --config to ensure webServer config is loaded
+          npx playwright test --config=tests/playwright.config.mjs \
             tests/e2e/api-key-validation.spec.js \
             tests/e2e/text-only-conversation.spec.js \
             tests/e2e/lazy-initialization-e2e.spec.js \
