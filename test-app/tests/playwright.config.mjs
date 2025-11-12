@@ -61,27 +61,18 @@ export default defineConfig({
   },
 
   /* Configure projects for major browsers */
-  projects: [
+  /* In CI, only Chromium is used to reduce setup time and dependencies */
+  projects: process.env.CI ? [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    }
+  ] : [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-
-    /* Mobile Chrome tests disabled due to pointer events issues */
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-
-    /* Test against branded browsers. */
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
+    /* Add more browsers locally if needed */
   ],
 
   /* Run your local dev server before starting the tests */

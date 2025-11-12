@@ -110,10 +110,10 @@ jobs:
           cd test-app
           npm ci
         
-      - name: Install Playwright browsers
+      - name: Install Playwright browsers (Chromium only)
         run: |
           cd test-app
-          npx playwright install --with-deps chromium
+          npx playwright install chromium --with-deps
         
       - name: Run Playwright E2E tests (CI-safe only)
         run: |
