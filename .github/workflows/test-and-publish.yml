@@ -109,10 +109,14 @@ jobs:
           npm ci
         
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: |
+          cd test-app
+          npx playwright install --with-deps chromium
         
       - name: Run Playwright E2E tests
-        run: npm run test:e2e
+        run: |
+          cd test-app
+          npm run test:e2e
         env:
           CI: true
           VITE_DEEPGRAM_API_KEY: ${{ secrets.VITE_DEEPGRAM_API_KEY }}
