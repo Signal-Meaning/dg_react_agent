@@ -48,7 +48,7 @@ This is a patch release for version vX.X.X of the Deepgram Voice Interaction Rea
   - [ ] Commit: `git add . && git commit -m "chore: prepare release vX.X.X"`
   - [ ] Tag: `git tag vX.X.X && git push origin vX.X.X`
 - [ ] **Publish**: Publish to GitHub Registry
-  - [ ] **Preferred**: Use CI build (create GitHub release to trigger `.github/workflows/publish.yml`)
+  - [ ] **Preferred**: Use CI build (create GitHub release to trigger `.github/workflows/test-and-publish.yml`)
     - Create GitHub release (this triggers CI publish workflow)
     - Verify CI build completes successfully
     - Verify package appears in GitHub Packages

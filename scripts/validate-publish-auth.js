@@ -2,7 +2,7 @@
 
 /**
  * Local validation script for publish workflow authentication
- * Simulates the exact validation steps from .github/workflows/publish.yml
+ * Simulates the exact validation steps from .github/workflows/test-and-publish.yml
  * 
  * Usage:
  *   node scripts/validate-publish-auth.js
