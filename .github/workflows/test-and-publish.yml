@@ -126,9 +126,7 @@ jobs:
             tests/e2e/lazy-initialization-e2e.spec.js \
             tests/e2e/page-content.spec.js \
             tests/e2e/deepgram-ux-protocol.spec.js \
-            tests/e2e/protocol-validation-modes.spec.js \
-            || echo "⚠️ Some E2E tests failed - this is non-blocking"
-        continue-on-error: true
+            tests/e2e/protocol-validation-modes.spec.js
         env:
           CI: true
           VITE_DEEPGRAM_API_KEY: ${{ secrets.VITE_DEEPGRAM_API_KEY }}
