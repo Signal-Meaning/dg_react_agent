@@ -23,6 +23,7 @@ import {
 // } from '../../utils/conversation-context';
 import { useIdleTimeoutManager } from '../../hooks/useIdleTimeoutManager';
 import { AgentStateService } from '../../services/AgentStateService';
+import { deepEqual } from '../../utils/deep-equal';
 
 // Default endpoints
 const DEFAULT_ENDPOINTS = {
@@ -164,6 +165,16 @@ function DeepgramVoiceInteraction(
   // We use this to avoid closing connections during StrictMode cleanup
   const isMountedRef = useRef(true);
   const mountIdRef = useRef<string>('0');
+  
+  // Refs to store previous values of object dependencies for deep comparison
+  // This prevents unnecessary re-initialization when parent re-renders with new object references
+  // but same content (Issue #276)
+  // Initialize with undefined to detect first mount
+  const prevTranscriptionOptionsRef = useRef<typeof transcriptionOptions | undefined>(undefined);
+  const prevAgentOptionsRef = useRef<typeof agentOptions | undefined>(undefined);
+  const prevEndpointConfigRef = useRef<typeof endpointConfig | undefined>(undefined);
+  const prevApiKeyRef = useRef<string | undefined>(undefined);
+  const prevDebugRef = useRef<boolean | undefined>(undefined);
   
   // Managers - these may be null if the service is not required
   const transcriptionManagerRef = useRef<WebSocketManager | null>(null);
@@ -661,23 +672,114 @@ function DeepgramVoiceInteraction(
 
   // Initialize the component based on provided options
   useEffect(() => {
+    // Check if this is the first mount (refs are undefined)
+    // This is the most reliable indicator - refs are only undefined on true first mount
+    const isFirstMount = prevTranscriptionOptionsRef.current === undefined;
+    
+    // Check current ready state - if component is not ready, we need to initialize
+    // This handles StrictMode re-invocation where cleanup may have reset state
+    const currentState = stateRef.current;
+    const needsInitialization = isFirstMount || !currentState.isReady;
+    
+    // Debug: Log initialization decision
+    if (props.debug || !currentState.isReady) {
+      console.log('🔧 [Component] Initialization check', {
+        isFirstMount,
+        isReady: currentState.isReady,
+        needsInitialization,
+        isMounted: isMountedRef.current,
+        mountId: mountIdRef.current
+      });
+    }
+    
+    // Deep comparison check: Only re-initialize if dependencies actually changed
+    // This prevents unnecessary re-initialization when parent re-renders with
+    // new object references but same content (Issue #276)
+    // On first mount or if not ready, always initialize
+    
+    // Helper to compare agentOptions while ignoring 'context' changes
+    // Context is meant to be updated dynamically (e.g., conversation history)
+    // and shouldn't trigger component re-initialization
+    const compareAgentOptionsIgnoringContext = (a: typeof agentOptions, b: typeof agentOptions): boolean => {
+      if (a === b) return true;
+      if (!a || !b) return a === b;
+      
+      // Compare all properties except 'context'
+      const aKeys = Object.keys(a).filter(k => k !== 'context');
+      const bKeys = Object.keys(b).filter(k => k !== 'context');
+      
+      if (aKeys.length !== bKeys.length) return false;
+      
+      for (const key of aKeys) {
+        if (!(key in b)) return false;
+        if (!deepEqual(a[key as keyof typeof a], b[key as keyof typeof b])) {
+          return false;
+        }
+      }
+      
+      return true;
+    };
+    
+    const transcriptionOptionsChanged = needsInitialization || !deepEqual(
+      prevTranscriptionOptionsRef.current,
+      transcriptionOptions
+    );
+    const agentOptionsChanged = needsInitialization || !compareAgentOptionsIgnoringContext(
+      prevAgentOptionsRef.current,
+      agentOptions
+    );
+    const endpointConfigChanged = needsInitialization || !deepEqual(
+      prevEndpointConfigRef.current,
+      endpointConfig
+    );
+    const apiKeyChanged = needsInitialization || prevApiKeyRef.current !== apiKey;
+    const debugChanged = needsInitialization || prevDebugRef.current !== props.debug;
+    
+    // If nothing actually changed (and not first mount and component is ready), skip re-initialization
+    if (!needsInitialization && 
+        !transcriptionOptionsChanged && 
+        !agentOptionsChanged && 
+        !endpointConfigChanged && 
+        !apiKeyChanged && 
+        !debugChanged) {
+      // Update refs to current values (in case they're new references with same content)
+      prevTranscriptionOptionsRef.current = transcriptionOptions;
+      prevAgentOptionsRef.current = agentOptions;
+      prevEndpointConfigRef.current = endpointConfig;
+      prevApiKeyRef.current = apiKey;
+      prevDebugRef.current = props.debug;
+      if (props.debug) {
+        console.log('🔧 [Component] Skipping re-initialization - dependencies unchanged and component is ready');
+      }
+      return; // Skip re-initialization
+    }
+    
+    if (props.debug) {
+      console.log('🔧 [Component] Proceeding with initialization', {
+        isFirstMount,
+        needsInitialization,
+        isReady: currentState.isReady,
+        transcriptionOptionsChanged,
+        agentOptionsChanged,
+        endpointConfigChanged,
+        apiKeyChanged,
+        debugChanged
+      });
+    }
+    
+    // Update refs with new values before proceeding with initialization
+    prevTranscriptionOptionsRef.current = transcriptionOptions;
+    prevAgentOptionsRef.current = agentOptions;
+    prevEndpointConfigRef.current = endpointConfig;
+    prevApiKeyRef.current = apiKey;
+    prevDebugRef.current = props.debug;
+    
     // Mark as mounted and generate new mount ID for this effect run
     // This helps us detect StrictMode double-invocation
     const currentMountId = `${Date.now()}-${Math.random()}`;
     const previousMountId = mountIdRef.current;
     mountIdRef.current = currentMountId;
     isMountedRef.current = true;
-    
-    // Debug: Log component initialization (but limit frequency to avoid spam)
-    const initTime = Date.now();
-    if (!(window as any).lastComponentInitTime || initTime - (window as any).lastComponentInitTime > 1000) {
-      console.log('🔧 [Component] DeepgramVoiceInteraction component initialized', {
-        mountId: currentMountId,
-        previousMountId,
-        isStrictModeReInvoke: previousMountId !== '0' && previousMountId !== currentMountId
-      });
-      (window as any).lastComponentInitTime = initTime;
-    }
     
     // Initialize connection type ref for first connection
     isNewConnectionRef.current = true;
@@ -686,11 +788,17 @@ function DeepgramVoiceInteraction(
     const isCIEnvironment = typeof process !== 'undefined' && (process.env.CI === 'true' || process.env.NODE_ENV === 'test');
     const isPackageImport = typeof window === 'undefined' || !window.document;
     
+    // Determine which services are being configured
+    const isTranscriptionConfigured = !!transcriptionOptions;
+    const isAgentConfigured = !!agentOptions;
+    
     // Validate API key
     if (!apiKey) {
       // In CI or package import context, just log a warning instead of erroring
       if (isCIEnvironment || isPackageImport) {
-        console.log('⚠️ [DeepgramVoiceInteraction] No API key provided in CI/import context - component will not initialize');
+        if (props.debug) {
+          console.log('⚠️ [DeepgramVoiceInteraction] No API key provided in CI/import context - component will not initialize');
+        }
         return;
       }
       
@@ -707,28 +815,44 @@ function DeepgramVoiceInteraction(
       warnAboutNonMemoizedOptions('agentOptions', agentOptions);
       warnAboutNonMemoizedOptions('transcriptionOptions', transcriptionOptions);
     }
-
-    // Determine which services are being configured
-    const isTranscriptionConfigured = !!transcriptionOptions;
-    const isAgentConfigured = !!agentOptions;
     
-    // Enhanced logging for debugging initialization issues
-    console.log('🔧 [INIT] Service configuration check:');
-    console.log('  - transcriptionOptions:', transcriptionOptions);
-    console.log('  - agentOptions:', agentOptions);
-    console.log('  - isTranscriptionConfigured:', isTranscriptionConfigured);
-    console.log('  - isAgentConfigured:', isAgentConfigured);
-    console.log('  - apiKey present:', !!apiKey);
-    console.log('  - apiKey length:', apiKey ? apiKey.length : 0);
+    // Consolidated initialization log - single entry point
+    const services = [];
+    if (isTranscriptionConfigured) services.push('transcription');
+    if (isAgentConfigured) services.push('agent');
+    const servicesStr = services.length > 0 ? services.join(' + ') : 'none';
+    
+    console.log('🔧 [Component] DeepgramVoiceInteraction initialized', {
+      services: servicesStr,
+      mountId: currentMountId,
+      isStrictModeReInvoke: previousMountId !== '0' && previousMountId !== currentMountId
+    });
+    
+    // Detailed debug logging (only when debug prop is true)
+    if (props.debug) {
+      console.log('🔧 [INIT] Service configuration details:', {
+        transcriptionOptions,
+        agentOptions,
+        isTranscriptionConfigured,
+        isAgentConfigured,
+        apiKeyPresent: !!apiKey,
+        apiKeyLength: apiKey ? apiKey.length : 0,
+        endpointConfig
+      });
+    }
     
     if (!isTranscriptionConfigured && !isAgentConfigured) {
       // In CI or package import context, just log a warning instead of erroring
       if (isCIEnvironment || isPackageImport) {
-        console.log('⚠️ [DeepgramVoiceInteraction] No services configured in CI/import context - component will not initialize');
+        if (props.debug) {
+          console.log('⚠️ [DeepgramVoiceInteraction] No services configured in CI/import context - component will not initialize');
+        }
         return;
       }
       
-      log('No services configured! Either transcriptionOptions or agentOptions must be provided.');
+      if (props.debug) {
+        log('No services configured! Either transcriptionOptions or agentOptions must be provided.');
+      }
       handleError({
         service: 'transcription',
         code: 'invalid_configuration',
@@ -737,37 +861,28 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    // Log which services are available for configuration (informational only)
-    // Managers will be created lazily when start() is called
-    if (isTranscriptionConfigured && isAgentConfigured) {
-      log('Transcription and agent services are configured (managers will be created on demand)');
-    } else if (isTranscriptionConfigured) {
-      log('Transcription service is configured (manager will be created on demand)');
-    } else {
-      console.log('🔧 [TRANSCRIPTION] Transcription service NOT configured, skipping setup');
-      log('Transcription service not configured, skipping setup');
-    }
+    // Detailed service configuration logs (debug only)
+    if (props.debug) {
+      if (isTranscriptionConfigured && isAgentConfigured) {
+        log('Transcription and agent services are configured (managers will be created on demand)');
+      } else if (isTranscriptionConfigured) {
+        log('Transcription service is configured (manager will be created on demand)');
+      } else {
+        log('Transcription service not configured, skipping setup');
+      }
 
-    // --- AGENT SETUP (CONDITIONAL) ---
-    // Note: With lazy initialization, managers are created on-demand via start() or startAudioCapture()
-    // We don't create managers here during initialization anymore
-    if (isAgentConfigured) {
-      log('Agent service is configured (manager will be created on demand)');
-    } else {
-      log('Agent service not configured, skipping setup');
-    }
+      if (isAgentConfigured) {
+        log('Agent service is configured (manager will be created on demand)');
+      } else {
+        log('Agent service not configured, skipping setup');
+      }
 
-    // --- AUDIO SETUP (LAZY INITIALIZATION) ---
-    // For Agent-Only mode, we use lazy audio initialization to prevent premature browser security prompts
-    // AudioManager will only be created when user explicitly requests microphone access
-    const needsAudioManager = isTranscriptionConfigured || (isAgentConfigured && agentOptions?.voice);
-    
-    if (needsAudioManager) {
-      // Don't create AudioManager during initialization - use lazy initialization
-      // AudioManager will be created when startAudioCapture() is called
-      log('Audio manager will be created lazily when audio access is requested');
-    } else {
-      log('AudioManager not needed for this configuration, skipping setup');
+      const needsAudioManager = isTranscriptionConfigured || (isAgentConfigured && agentOptions?.voice);
+      if (needsAudioManager) {
+        log('Audio manager will be created lazily when audio access is requested');
+      } else {
+        log('AudioManager not needed for this configuration, skipping setup');
+      }
     }
     
     // Component is ready immediately when configured - AudioManager is not a prerequisite
@@ -779,36 +894,38 @@ function DeepgramVoiceInteraction(
       // Capture the mount ID at cleanup time
       const cleanupMountId = mountIdRef.current;
       
-      // Mark as unmounted
-      isMountedRef.current = false;
-      
       // Debug: Log cleanup to understand when it runs
       if (props.debug) {
         const stack = new Error().stack;
         console.log('🔧 [Component] useEffect cleanup running', {
           mountId: cleanupMountId,
           transcriptionManagerExists: !!transcriptionManagerRef.current,
-          agentManagerExists: !!agentManagerRef.current
+          agentManagerExists: !!agentManagerRef.current,
+          isMounted: isMountedRef.current
         });
         console.log('🔧 [Component] Cleanup stack trace:', stack?.split('\n').slice(2, 6).join('\n'));
       }
       
       // Check if this is a StrictMode cleanup (component will immediately re-mount)
       // We delay checking re-mount to see if StrictMode re-invokes the effect
+      // IMPORTANT: Don't set isMountedRef.current = false here - let the setTimeout check first
       setTimeout(() => {
         // If component re-mounted quickly (within 100ms), this was likely StrictMode
         // In that case, don't close connections as they'll be needed for the re-mounted component
         if (isMountedRef.current) {
           if (props.debug) {
-            console.log('🔧 [Component] Cleanup detected StrictMode re-invocation - preserving connections');
+            console.log('🔧 [Component] Cleanup detected StrictMode re-invocation - preserving connections and state');
           }
-          return; // Component re-mounted, don't close connections
+          return; // Component re-mounted, don't close connections or reset state
         }
         
         // Component is truly unmounting - close connections
         if (props.debug) {
           console.log('🔧 [Component] Component truly unmounting - closing connections');
         }
+        
+        // Mark as unmounted only after confirming it's a true unmount
+        isMountedRef.current = false;
         
         // Close managers if they were created (they handle their own event listener cleanup)
         if (transcriptionManagerRef.current) {
@@ -832,7 +949,7 @@ function DeepgramVoiceInteraction(
           audioManagerRef.current = null;
         }
         
-        // Ensure state is reset on unmount
+        // Reset state only on true unmount
         dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
         dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: 'closed' });
         dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'agent', state: 'closed' });
