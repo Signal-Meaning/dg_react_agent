@@ -17,8 +17,8 @@ on:
         default: ''
 
 jobs:
-  test:
-    name: Test and Validate
+  test-jest:
+    name: Jest Unit Tests
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -40,7 +40,7 @@ jobs:
       - name: Run linting
         run: npm run lint
         
-      - name: Run tests (mock only)
+      - name: Run Jest tests (mock only)
         run: npm run test:mock
         env:
           CI: true
@@ -80,10 +80,41 @@ jobs:
           cd ..
           rm -rf test-install
 
+  test-e2e:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        
+      - name: Run Playwright E2E tests
+        run: npm run test:e2e
+        env:
+          CI: true
+          VITE_DEEPGRAM_API_KEY: ${{ secrets.VITE_DEEPGRAM_API_KEY }}
+          VITE_DEEPGRAM_PROJECT_ID: ${{ secrets.VITE_DEEPGRAM_PROJECT_ID }}
+          VITE_BASE_URL: 'http://localhost:5173'
+
   publish:
     name: Publish Package
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test-jest, test-e2e]
     if: success()
     permissions:
       contents: read
