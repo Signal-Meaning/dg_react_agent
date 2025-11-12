@@ -17,6 +17,11 @@ on:
         required: false
         type: string
         default: ''
+      force:
+        description: 'Force publish even if version already exists (use with caution)'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   test-jest:
@@ -272,6 +277,19 @@ jobs:
           set -e
           # Use version from earlier step
           PUBLISH_VERSION="${{ steps.version.outputs.version }}"
+          FORCE_PUBLISH="${{ inputs.force }}"
+          
+          # Check if version already exists and force is not enabled
+          if [ "${{ steps.check_version.outputs.version_exists }}" == "true" ] && [ "$FORCE_PUBLISH" != "true" ]; then
+            echo "❌ Version $PUBLISH_VERSION already exists in registry"
+            echo "❌ Publishing blocked to prevent overwriting existing version"
+            echo "💡 To force publish, set 'force' input to 'true' (use with caution)"
+            exit 1
+          fi
+          
+          if [ "${{ steps.check_version.outputs.version_exists }}" == "true" ] && [ "$FORCE_PUBLISH" == "true" ]; then
+            echo "⚠️ Version $PUBLISH_VERSION already exists, but force=true - proceeding with publish"
+          fi
           
           # Show npm configuration before publish
           echo "📦 Package name: $(node -p "require('./package.json').name")"
