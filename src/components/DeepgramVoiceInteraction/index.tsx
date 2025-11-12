@@ -23,7 +23,7 @@ import {
 // } from '../../utils/conversation-context';
 import { useIdleTimeoutManager } from '../../hooks/useIdleTimeoutManager';
 import { AgentStateService } from '../../services/AgentStateService';
-import { deepEqual } from '../../utils/deep-equal';
+import { compareAgentOptionsIgnoringContext, hasDependencyChanged } from '../../utils/option-comparison';
 
 // Default endpoints
 const DEFAULT_ENDPOINTS = {
@@ -165,6 +165,12 @@ function DeepgramVoiceInteraction(
   // We use this to avoid closing connections during StrictMode cleanup
   const isMountedRef = useRef(true);
   const mountIdRef = useRef<string>('0');
+  
+  // Ref to store cleanup timeout ID for proper cleanup
+  const cleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Constant for StrictMode remount detection delay
+  const STRICT_MODE_REMOUNT_DETECTION_DELAY_MS = 100;
   
   // Refs to store previous values of object dependencies for deep comparison
   // This prevents unnecessary re-initialization when parent re-renders with new object references
@@ -697,40 +703,21 @@ function DeepgramVoiceInteraction(
     // new object references but same content (Issue #276)
     // On first mount or if not ready, always initialize
     
-    // Helper to compare agentOptions while ignoring 'context' changes
-    // Context is meant to be updated dynamically (e.g., conversation history)
-    // and shouldn't trigger component re-initialization
-    const compareAgentOptionsIgnoringContext = (a: typeof agentOptions, b: typeof agentOptions): boolean => {
-      if (a === b) return true;
-      if (!a || !b) return a === b;
-      
-      // Compare all properties except 'context'
-      const aKeys = Object.keys(a).filter(k => k !== 'context');
-      const bKeys = Object.keys(b).filter(k => k !== 'context');
-      
-      if (aKeys.length !== bKeys.length) return false;
-      
-      for (const key of aKeys) {
-        if (!(key in b)) return false;
-        if (!deepEqual(a[key as keyof typeof a], b[key as keyof typeof b])) {
-          return false;
-        }
-      }
-      
-      return true;
-    };
-    
-    const transcriptionOptionsChanged = needsInitialization || !deepEqual(
+    const transcriptionOptionsChanged = hasDependencyChanged(
       prevTranscriptionOptionsRef.current,
-      transcriptionOptions
+      transcriptionOptions,
+      needsInitialization
     );
-    const agentOptionsChanged = needsInitialization || !compareAgentOptionsIgnoringContext(
-      prevAgentOptionsRef.current,
-      agentOptions
+    const agentOptionsChanged = hasDependencyChanged(
+      prevAgentOptionsRef.current as Record<string, unknown> | undefined,
+      agentOptions as Record<string, unknown>,
+      needsInitialization,
+      compareAgentOptionsIgnoringContext
     );
-    const endpointConfigChanged = needsInitialization || !deepEqual(
+    const endpointConfigChanged = hasDependencyChanged(
       prevEndpointConfigRef.current,
-      endpointConfig
+      endpointConfig,
+      needsInitialization
     );
     const apiKeyChanged = needsInitialization || prevApiKeyRef.current !== apiKey;
     const debugChanged = needsInitialization || prevDebugRef.current !== props.debug;
@@ -909,8 +896,18 @@ function DeepgramVoiceInteraction(
       // Check if this is a StrictMode cleanup (component will immediately re-mount)
       // We delay checking re-mount to see if StrictMode re-invokes the effect
       // IMPORTANT: Don't set isMountedRef.current = false here - let the setTimeout check first
-      setTimeout(() => {
-        // If component re-mounted quickly (within 100ms), this was likely StrictMode
+      
+      // Clear any existing cleanup timeout to prevent multiple timeouts
+      if (cleanupTimeoutRef.current) {
+        clearTimeout(cleanupTimeoutRef.current);
+        cleanupTimeoutRef.current = null;
+      }
+      
+      cleanupTimeoutRef.current = setTimeout(() => {
+        // Clear the ref since timeout completed
+        cleanupTimeoutRef.current = null;
+        
+        // If component re-mounted quickly (within delay), this was likely StrictMode
         // In that case, don't close connections as they'll be needed for the re-mounted component
         if (isMountedRef.current) {
           if (props.debug) {
@@ -956,7 +953,10 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
         dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: false });
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
-      }, 100); // Small delay to detect StrictMode re-mount
+      }, STRICT_MODE_REMOUNT_DETECTION_DELAY_MS);
+      
+      // Note: The timeout is cleared when this cleanup function runs again
+      // (on next effect run or component unmount) via the check at line 920-923
     };
   }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, props.debug]); 
 
