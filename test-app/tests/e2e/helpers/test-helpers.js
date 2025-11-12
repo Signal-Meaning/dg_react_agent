@@ -4,7 +4,38 @@
  * Shared utilities for Playwright E2E tests to promote DRY principles
  * and consistent testing patterns across the test suite.
  */
-import { expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+
+/**
+ * Check if real Deepgram API key is available for testing
+ * @returns {boolean} True if a valid API key is available
+ */
+export function hasRealAPIKey() {
+  const apiKey = process.env.VITE_DEEPGRAM_API_KEY;
+  if (!apiKey) return false;
+  if (apiKey === 'mock') return false;
+  if (apiKey === 'your-deepgram-api-key-here') return false;
+  if (apiKey === 'your_actual_deepgram_api_key_here') return false;
+  if (apiKey.startsWith('test-')) return false;
+  if (apiKey.length < 20) return false;
+  return true;
+}
+
+/**
+ * Skip test if real API key is not available
+ * Use this at the test definition level, not inside the test function
+ * @param {string} reason - Optional reason for skipping
+ * @example
+ * test('my test', async ({ page }) => {
+ *   skipIfNoRealAPI('Requires real Deepgram API key');
+ *   // ... test code
+ * });
+ */
+export function skipIfNoRealAPI(reason = 'Requires real Deepgram API key') {
+  if (!hasRealAPIKey()) {
+    test.skip(true, reason);
+  }
+}
 
 /**
  * Common test selectors
@@ -919,6 +950,7 @@ async function getComponentAudioContextState(page) {
 import MicrophoneHelpers from './microphone-helpers.js';
 
 export {
+  // hasRealAPIKey and skipIfNoRealAPI are already exported inline above
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   waitForConnection, // Wait for connection to be established

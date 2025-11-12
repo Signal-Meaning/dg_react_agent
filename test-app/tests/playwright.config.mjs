@@ -61,36 +61,38 @@ export default defineConfig({
   },
 
   /* Configure projects for major browsers */
-  projects: [
+  /* In CI, only Chromium is used to reduce setup time and dependencies */
+  projects: process.env.CI ? [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    }
+  ] : [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-
-    /* Mobile Chrome tests disabled due to pointer events issues */
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-
-    /* Test against branded browsers. */
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
+    /* Add more browsers locally if needed */
   ],
 
   /* Run your local dev server before starting the tests */
   webServer: {
     command: 'npm run dev',
-    cwd: '..', // Go up one level from tests/ to test-app/ directory
+    // When running from test-app directory, cwd should be '.' (current directory)
+    // The config is at test-app/tests/playwright.config.mjs, so from test-app/ we need '.'
+    cwd: '.', // Run from test-app directory (where package.json is)
     url: 'http://localhost:5173', // Vite default port
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
+    // Output server logs for debugging in CI
+    stdout: process.env.CI ? 'pipe' : 'ignore',
+    stderr: process.env.CI ? 'pipe' : 'ignore',
+    // Pass environment variables to the dev server (Vite needs VITE_* vars)
+    env: {
+      VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
+      VITE_DEEPGRAM_PROJECT_ID: process.env.VITE_DEEPGRAM_PROJECT_ID || '',
+      VITE_BASE_URL: process.env.VITE_BASE_URL || 'http://localhost:5173',
+    },
   },
 
   /* 
