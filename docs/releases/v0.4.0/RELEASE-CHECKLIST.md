@@ -108,7 +108,7 @@ The following GitHub Actions workflows will be triggered automatically:
    - Runs linting, tests, and package validation
    - Tests package installation from tarball
 
-2. **Publish Workflow** (`.github/workflows/publish.yml`):
+2. **Test and Publish Workflow** (`.github/workflows/test-and-publish.yml`):
    - Runs on GitHub release creation
    - Builds and publishes to GitHub Package Registry
    - Verifies package installation
