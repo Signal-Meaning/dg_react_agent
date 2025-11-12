@@ -24,7 +24,8 @@
 import { test, expect } from '@playwright/test';
 import {
   SELECTORS, waitForConnection, sendTextMessage,
-  establishConnectionViaText
+  establishConnectionViaText,
+  skipIfNoRealAPI
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks';
 import { monitorConnectionStatus } from './fixtures/idle-timeout-helpers';
@@ -35,16 +36,7 @@ test.describe('Idle Timeout During Agent Speech', () => {
     // Skip test if real APIs are not available
     // This test requires real Deepgram APIs because the idle timeout fix
     // only triggers with real agent messages, not mock responses
-    const hasRealAPI = process.env.VITE_DEEPGRAM_API_KEY && 
-                      process.env.VITE_DEEPGRAM_API_KEY !== 'your-deepgram-api-key-here' &&
-                      process.env.VITE_DEEPGRAM_API_KEY !== 'your_actual_deepgram_api_key_here' &&
-                      !process.env.VITE_DEEPGRAM_API_KEY.startsWith('test-') &&
-                      process.env.VITE_DEEPGRAM_API_KEY.length >= 20;
-    
-    if (!hasRealAPI) {
-      test.skip('Skipping test - requires real Deepgram API key. See issue #99 for details.');
-      return;
-    }
+    skipIfNoRealAPI('Skipping test - requires real Deepgram API key. See issue #99 for details.');
     
     console.log('🧪 Testing idle timeout during agent speech...');
     

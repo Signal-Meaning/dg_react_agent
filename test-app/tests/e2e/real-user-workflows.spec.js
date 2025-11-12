@@ -2,7 +2,9 @@ import { test, expect } from '@playwright/test';
 import {
   setupTestPage,
   establishConnectionViaMicrophone,
-  MicrophoneHelpers
+  MicrophoneHelpers,
+  hasRealAPIKey,
+  skipIfNoRealAPI
 } from './helpers/test-helpers.js';
 
 // Load environment variables from test-app/.env
@@ -22,10 +24,6 @@ import {
  * These tests use real Deepgram API when VITE_DEEPGRAM_API_KEY is available,
  * otherwise they skip with appropriate messaging.
  */
-
-// Simple API key detection
-const isRealAPITesting = !!process.env.VITE_DEEPGRAM_API_KEY && 
-                        process.env.VITE_DEEPGRAM_API_KEY !== 'mock';
 
 /**
  * Simulate real user speech (placeholder for actual microphone simulation)
@@ -92,11 +90,7 @@ test.describe('Real User Workflow Tests', () => {
 
   test.describe('Real API Integration Tests', () => {
     test('should handle complete user workflow: speak → detect → respond', async ({ page }) => {
-      // Skip if no real API key
-      if (!isRealAPITesting) {
-        test.skip(true, 'VITE_DEEPGRAM_API_KEY required for real API tests');
-        return;
-      }
+      skipIfNoRealAPI('VITE_DEEPGRAM_API_KEY required for real API tests');
 
       // Setup component with real Deepgram API key using fixtures
       await setupTestPage(page);
@@ -122,11 +116,7 @@ test.describe('Real User Workflow Tests', () => {
     });
 
     test('should handle real speech-to-text processing', async ({ page }) => {
-      // Skip if no real API key
-      if (!isRealAPITesting) {
-        test.skip(true, 'VITE_DEEPGRAM_API_KEY required for real API tests');
-        return;
-      }
+      skipIfNoRealAPI('VITE_DEEPGRAM_API_KEY required for real API tests');
 
       await setupTestPage(page);
       
@@ -147,11 +137,7 @@ test.describe('Real User Workflow Tests', () => {
     });
 
     test('should handle VAD event processing with real API', async ({ page }) => {
-      // Skip if no real API key
-      if (!isRealAPITesting) {
-        test.skip(true, 'VITE_DEEPGRAM_API_KEY required for real API tests');
-        return;
-      }
+      skipIfNoRealAPI('VITE_DEEPGRAM_API_KEY required for real API tests');
 
       await setupTestPage(page);
       
