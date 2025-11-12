@@ -84,8 +84,9 @@ export default defineConfig({
     url: 'http://localhost:5173', // Vite default port
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
-    stdout: 'pipe',
-    stderr: 'pipe',
+    // Output server logs for debugging in CI
+    stdout: process.env.CI ? 'pipe' : 'ignore',
+    stderr: process.env.CI ? 'pipe' : 'ignore',
   },
 
   /* 

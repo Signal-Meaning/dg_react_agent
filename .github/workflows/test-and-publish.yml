@@ -114,6 +114,15 @@ jobs:
         run: |
           cd test-app
           npx playwright install chromium --with-deps
+      
+      - name: Verify test-app can start dev server
+        run: |
+          cd test-app
+          timeout 30 npm run dev &
+          sleep 10
+          curl -f http://localhost:5173 || (echo "❌ Dev server failed to start" && exit 1)
+          pkill -f "vite" || true
+          echo "✅ Dev server starts successfully"
         
       - name: Run Playwright E2E tests (CI-safe only)
         run: |
