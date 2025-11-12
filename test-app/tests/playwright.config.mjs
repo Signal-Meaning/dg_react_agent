@@ -87,6 +87,12 @@ export default defineConfig({
     // Output server logs for debugging in CI
     stdout: process.env.CI ? 'pipe' : 'ignore',
     stderr: process.env.CI ? 'pipe' : 'ignore',
+    // Pass environment variables to the dev server (Vite needs VITE_* vars)
+    env: {
+      VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
+      VITE_DEEPGRAM_PROJECT_ID: process.env.VITE_DEEPGRAM_PROJECT_ID || '',
+      VITE_BASE_URL: process.env.VITE_BASE_URL || 'http://localhost:5173',
+    },
   },
 
   /* 
