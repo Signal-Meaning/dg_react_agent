@@ -120,9 +120,18 @@ All required documents should pass validation before proceeding with packaging.
 
 Use CI build for publishing (validated CI build) - **this is the standard process for all releases**:
 - Create GitHub release to trigger `.github/workflows/publish.yml`
-- CI workflow automatically: builds, tests, validates, and publishes
+- CI workflow automatically: tests (mock APIs only), builds, validates, and publishes
+- **Test Job**: Runs first and includes:
+  - Linting (`npm run lint`)
+  - Tests with mock APIs only (`npm run test:mock` - no real API calls)
+  - Build (`npm run build`)
+  - Package validation (`npm run package:local`)
+- **Publish Job**: Only runs if test job succeeds
+  - Publishes to GitHub Package Registry
+  - Verifies package installation
 - Provides validated, reproducible build process
 - Ensures package is built and tested in a clean CI environment
+- **All non-skipped tests must pass** before publishing
 - See `.github/workflows/publish.yml` for workflow details
 
 ### Fallback Approach: Dev Publish

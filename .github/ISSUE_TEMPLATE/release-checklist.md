@@ -87,7 +87,10 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
 - [ ] **Publish to GitHub Registry**: Publish package to GitHub Package Registry
   - [ ] **Preferred**: Use CI build (validated CI build)
     - Create GitHub release to trigger `.github/workflows/publish.yml`
-    - CI workflow will: build, test, validate, and publish
+    - CI workflow will: test (mock APIs only), build, validate, and publish
+    - Test job runs first: linting, mock tests, build, package validation
+    - Publish job only runs if test job succeeds
+    - **All non-skipped tests must pass** before publishing
     - Verify CI build completes successfully
     - Verify package appears in GitHub Packages
   - [ ] **Fallback**: Dev publish (only if CI fails)
@@ -132,8 +135,15 @@ The following GitHub Actions workflows will be triggered automatically:
 
 2. **Publish Workflow** (`.github/workflows/publish.yml`):
    - Runs on GitHub release creation
-   - Builds and publishes to GitHub Package Registry
-   - Verifies package installation
+   - **Test Job**: Runs first and includes:
+     - Linting (`npm run lint`)
+     - Tests with mock APIs only (`npm run test:mock` - no real API calls)
+     - Build (`npm run build`)
+     - Package validation (`npm run package:local`)
+   - **Publish Job**: Only runs if test job succeeds
+     - Publishes to GitHub Package Registry
+     - Verifies package installation
+   - **All non-skipped tests must pass** before publishing
 
 ### 📚 Documentation Standards
 
