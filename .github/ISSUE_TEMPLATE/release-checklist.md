@@ -142,7 +142,7 @@ The following GitHub Actions workflows will be triggered automatically:
      - Package validation (`npm run package:local`)
    - **Publish Job**: Only runs if test job succeeds
      - Publishes to GitHub Package Registry
-     - Verifies package installation
+   - Verifies package installation
    - **All non-skipped tests must pass** before publishing
 
 ### 📚 Documentation Standards
