@@ -73,6 +73,7 @@ interface DeepgramVoiceInteractionProps {
   onAgentUtterance?: (utterance: LLMResponse) => void;
   onUserMessage?: (message: UserMessageResponse) => void;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
+  onSettingsApplied?: () => void;
   
   // Voice Activity Detection
   onUserStartedSpeaking?: () => void;
@@ -129,6 +130,7 @@ interface DeepgramVoiceInteractionProps {
 | `onAgentUtterance` | `(utterance: LLMResponse) => void` | Called when agent produces text |
 | `onUserMessage` | `(message: UserMessageResponse) => void` | Called when user message is received |
 | `onPlaybackStateChange` | `(isPlaying: boolean) => void` | Called when audio playback state changes |
+| `onSettingsApplied` | `() => void` | Called when agent settings have been successfully applied and the connection is ready for audio data processing. This is fired when the `SettingsApplied` event is received from Deepgram, indicating that the settings sent to the agent service have been confirmed and are now active. |
 
 #### Voice Activity Detection Events
 | Prop | Type | Description |
