@@ -278,6 +278,70 @@ describe('Client-Side Function SettingsApplied Tests', () => {
       // Other properties should be preserved (if they're valid)
       // Note: someOtherProperty might also be filtered, but client_side definitely should be
     });
+
+    it('should filter out client_side even when set to false', async () => {
+      // Deepgram API spec: client_side is NOT part of Settings message regardless of value
+      // The presence of the property (even if false) may cause Deepgram to reject the Settings
+      const functionsWithClientSideFalse: AgentFunction[] = [
+        {
+          name: 'test_function_false',
+          description: 'Test function with client_side=false',
+          parameters: { type: 'object', properties: {} },
+        } as any
+      ];
+      
+      // Customer incorrectly includes client_side=false
+      (functionsWithClientSideFalse[0] as any).client_side = false;
+
+      const agentOptions = {
+        language: 'en',
+        listenModel: 'nova-2',
+        thinkProviderType: 'open_ai',
+        thinkModel: 'gpt-4o-mini',
+        voice: 'aura-asteria-en',
+        instructions: 'You are a helpful assistant.',
+        functions: functionsWithClientSideFalse
+      };
+
+      const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+
+      await act(async () => {
+        render(
+          <DeepgramVoiceInteraction
+            ref={ref}
+            apiKey={MOCK_API_KEY}
+            agentOptions={agentOptions}
+          />
+        );
+      });
+
+      await waitFor(() => {
+        expect(ref.current).toBeTruthy();
+      });
+
+      await act(async () => {
+        await ref.current?.start({ agent: true, transcription: false });
+      });
+
+      const eventListener = await waitForEventListener(mockWebSocketManager);
+
+      if (eventListener) {
+        await act(async () => {
+          eventListener({ type: 'state', state: 'connected' });
+        });
+      }
+
+      await waitFor(() => {
+        expect(mockWebSocketManager.sendJSON).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const settingsMessage = settingsMessagesSent.find(msg => msg.type === 'Settings');
+      
+      // CRITICAL: client_side should be filtered out even when false
+      // Deepgram may reject Settings messages with unknown properties, regardless of value
+      expect(settingsMessage).toBeDefined();
+      expect(settingsMessage.agent.think.functions[0].client_side).toBeUndefined();
+    });
   });
 });
 
