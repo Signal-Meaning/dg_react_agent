@@ -1324,6 +1324,9 @@ function DeepgramVoiceInteraction(
                 authorization: `bearer ${agentOptions.thinkApiKey}`,
               },
             }
+          } : {}),
+          ...(agentOptions.functions && agentOptions.functions.length > 0 ? {
+            functions: agentOptions.functions
           } : {})
         },
         // Include speak provider for TTS
