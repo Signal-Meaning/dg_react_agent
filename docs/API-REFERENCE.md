@@ -1243,6 +1243,7 @@ function FunctionCallingApp() {
 - **Function Definition**: Functions are defined in `agentOptions.functions` as an array of `AgentFunction` objects
 - **Client-Side Functions**: Functions without an `endpoint` property are executed client-side
 - **Server-Side Functions**: Functions with an `endpoint` property are executed server-side (not handled by the component)
+- **Important**: Do NOT include `client_side` property in function definitions. This property only appears in `FunctionCallRequest` responses from Deepgram, not in Settings messages. The component automatically filters it out if included.
 - **Function Call Flow**: 
   1. Agent decides to call a function based on user input
   2. Deepgram sends `FunctionCallRequest` via WebSocket
