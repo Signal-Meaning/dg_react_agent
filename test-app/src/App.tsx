@@ -140,6 +140,13 @@ function App() {
   // Get debug state from URL or environment
   const isDebugMode = import.meta.env.VITE_DEBUG === 'true' || new URLSearchParams(window.location.search).get('debug') === 'true' || false;
   
+  // Enable test mode for E2E tests (exposes Settings message to window)
+  useEffect(() => {
+    if (isTestMode || new URLSearchParams(window.location.search).get('test-mode') === 'true') {
+      (window as any).__DEEPGRAM_TEST_MODE__ = true;
+    }
+  }, [isTestMode]);
+  
   // Memoize options objects to prevent unnecessary re-renders/effect loops
 
   // Expose test utilities to window for E2E testing
@@ -215,30 +222,99 @@ function App() {
     };
   }, []);
 
-  const memoizedAgentOptions = useMemo(() => ({
-    // Use environment variables with sensible defaults
-    language: import.meta.env.VITE_AGENT_LANGUAGE || 'en',
-    // Agent can use a different model for listening if desired, 
-    // keyterms only affect the transcription service input.
-    listenModel: import.meta.env.VITE_AGENT_MODEL || 'nova-3', 
-    thinkProviderType: 'open_ai',
-    // Default model is `gpt-4o-mini` but other models can be provided such as `gpt-4.1-mini`
-    thinkModel: import.meta.env.VITE_AGENT_THINK_MODEL || 'gpt-4o-mini',
-    // Uncomment the following lines to use custom endpoint URL and API key values for the Voice Agent `think` message
-    //thinkEndpointUrl: 'https://api.openai.com/v1/chat/completions',
-    //thinkApiKey: import.meta.env.VITE_THINK_API_KEY || '',
-    voice: import.meta.env.VITE_AGENT_VOICE || 'aura-asteria-en',
-    instructions: loadedInstructions || 'You are a helpful voice assistant. Keep your responses concise and informative.',
-    greeting: import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?',
-    // Pass conversation history as context in Deepgram API format
-    context: conversationHistory.length > 0 ? {
-      messages: conversationHistory.map(message => ({
-        type: "History",
-        role: message.role,
-        content: message.content
-      }))
-    } : undefined
-  }), [loadedInstructions, conversationHistory]); // Include conversationHistory dependency
+  // Track URL parameters to ensure useMemo recomputes when they change
+  const urlParamsString = typeof window !== 'undefined' ? window.location.search : '';
+  
+  const memoizedAgentOptions = useMemo(() => {
+    // Check for function calling test mode via URL parameter
+    const urlParams = new URLSearchParams(urlParamsString);
+    const enableFunctionCalling = urlParams.get('enable-function-calling') === 'true';
+    const functionType = urlParams.get('function-type') || 'standard'; // 'standard', 'minimal', 'minimal-with-required'
+    
+    // Log for debugging E2E tests
+    if (enableFunctionCalling) {
+      console.log(`[APP] memoizedAgentOptions: enableFunctionCalling=true, functionType=${functionType}`);
+    }
+    
+    // Define functions for function calling tests
+    // Per Deepgram docs: if endpoint is not provided, function is called client-side
+    // client_side property is NOT part of Settings message - it only appears in FunctionCallRequest responses
+    let functions = undefined;
+    
+    if (enableFunctionCalling) {
+      if (functionType === 'minimal') {
+        // Absolute minimal function definition
+        functions = [
+          {
+            name: 'test',
+            description: 'test',
+            parameters: {
+              type: 'object',
+              properties: {}
+            }
+          }
+        ];
+      } else if (functionType === 'minimal-with-required') {
+        // Minimal function with explicit required array
+        functions = [
+          {
+            name: 'test',
+            description: 'test',
+            parameters: {
+              type: 'object',
+              properties: {},
+              required: []
+            }
+          }
+        ];
+      } else {
+        // Standard function (default)
+        functions = [
+          {
+            name: 'get_current_time',
+            description: 'Get the current time in a specific timezone. Use this when users ask about the time, what time it is, or current time.',
+            parameters: {
+              type: 'object',
+              properties: {
+                timezone: {
+                  type: 'string',
+                  description: 'Timezone (e.g., "America/New_York", "UTC", "Europe/London"). Defaults to UTC if not specified.'
+                }
+              }
+            }
+            // No endpoint = client-side function (per Deepgram API spec)
+          }
+        ];
+      }
+    }
+    
+    return {
+      // Use environment variables with sensible defaults
+      language: import.meta.env.VITE_AGENT_LANGUAGE || 'en',
+      // Agent can use a different model for listening if desired, 
+      // keyterms only affect the transcription service input.
+      listenModel: import.meta.env.VITE_AGENT_MODEL || 'nova-3', 
+      thinkProviderType: 'open_ai',
+      // Default model is `gpt-4o-mini` but other models can be provided such as `gpt-4.1-mini`
+      thinkModel: import.meta.env.VITE_AGENT_THINK_MODEL || 'gpt-4o-mini',
+      // Uncomment the following lines to use custom endpoint URL and API key values for the Voice Agent `think` message
+      //thinkEndpointUrl: 'https://api.openai.com/v1/chat/completions',
+      //thinkApiKey: import.meta.env.VITE_THINK_API_KEY || '',
+      voice: import.meta.env.VITE_AGENT_VOICE || 'aura-asteria-en',
+      instructions: loadedInstructions || 'You are a helpful voice assistant. Keep your responses concise and informative.',
+      greeting: import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?',
+      // Include functions if function calling is enabled
+      functions: functions,
+      // Pass conversation history as context in Deepgram API format
+      context: conversationHistory.length > 0 ? {
+        messages: conversationHistory.map(message => ({
+          type: "History",
+          role: message.role,
+          content: message.content
+        }))
+      } : undefined
+    };
+  }, [loadedInstructions, conversationHistory, urlParamsString]); // Include urlParamsString to recompute when URL params change
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
@@ -715,6 +791,13 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
         onSettingsApplied={handleSettingsApplied}
+        onFunctionCallRequest={useCallback((request) => {
+          // Handle function call requests from Deepgram
+          console.log('[APP] FunctionCallRequest received:', request);
+          if (window.handleFunctionCall) {
+            window.handleFunctionCall(request);
+          }
+        }, [])}
         // VAD event handlers
         onUserStartedSpeaking={handleUserStartedSpeaking}
         onUserStoppedSpeaking={handleUserStoppedSpeaking}

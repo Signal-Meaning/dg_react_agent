@@ -1,0 +1,47 @@
+{
+  "type": "Settings",
+  "audio": {
+    "input": {
+      "encoding": "linear16",
+      "sample_rate": 16000
+    },
+    "output": {
+      "encoding": "linear16",
+      "sample_rate": 24000
+    }
+  },
+  "agent": {
+    "language": "en",
+    "listen": {
+      "provider": {
+        "type": "deepgram",
+        "model": "nova-3"
+      }
+    },
+    "think": {
+      "provider": {
+        "type": "open_ai",
+        "model": "gpt-4o-mini"
+      },
+      "prompt": "You are a helpful voice assistant. Keep your responses concise and informative.",
+      "functions": [
+        {
+          "name": "test",
+          "description": "test",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      ]
+    },
+    "speak": {
+      "provider": {
+        "type": "deepgram",
+        "model": "aura-asteria-en"
+      }
+    },
+    "greeting": "Hello! How can I assist you today?"
+  }
+}
+
