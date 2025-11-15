@@ -48,6 +48,15 @@ export const APPROVED_COMPONENT_METHOD_ADDITIONS = {
     usage: 'tests/utils/audio-simulator.js, tests/utils/vad-audio-simulator.js',
     note: 'This method is exposed via useImperativeHandle but is NOT documented in DeepgramVoiceInteractionHandle interface, indicating it is internal/testing-only.',
   },
+  'sendFunctionCallResponse': {
+    addedIn: 'v0.6.7',
+    issue: 'Issue #284',
+    rationale: 'Sends the result of a client-side function execution back to Deepgram. Required for function calling feature - when the agent requests a function call via onFunctionCallRequest callback, the application executes the function and sends the result back using this method. The id must match the function call ID from the request.',
+    breaking: false,
+    confirmed: true,
+    usage: 'test-app/tests/e2e/function-calling-e2e.spec.js',
+    note: 'Part of function calling feature. Documented in API-REFERENCE.md and used in E2E tests.',
+  },
 
 } as const;
 
