@@ -1,6 +1,6 @@
 {
   "name": "@signal-meaning/deepgram-voice-interaction-react",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "A React component for real-time transcription and voice agent interactions using Deepgram APIs",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
