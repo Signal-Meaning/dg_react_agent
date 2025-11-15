@@ -20,10 +20,21 @@
  */
 
 import React from 'react';
-import { render, act, waitFor } from '@testing-library/react';
-import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
+import { render } from '@testing-library/react';
 import { DeepgramVoiceInteractionHandle, AgentFunction } from '../src/types';
-import { createMockWebSocketManager, createMockAudioManager, MOCK_API_KEY } from './fixtures/mocks';
+import { createMockWebSocketManager, createMockAudioManager } from './fixtures/mocks';
+import {
+  resetTestState,
+  createAgentOptions,
+  createAgentOptionsWithFunctions,
+  setupComponentAndConnect,
+  createSettingsCapture,
+  verifySettingsStructure,
+  verifySettingsHasFunctions,
+  verifySettingsNoFunctions,
+  MOCK_API_KEY,
+} from './utils/component-test-helpers';
+import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
 // Mock the WebSocketManager and AudioManager classes
 jest.mock('../src/utils/websocket/WebSocketManager');
@@ -36,14 +47,17 @@ describe('Function Calling in Settings Message Tests', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
 
+  let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
+
   beforeEach(() => {
     jest.clearAllMocks();
-    
-    // Reset global settings sent flag (component uses this to prevent duplicate settings)
-    (window as any).globalSettingsSent = false;
+    resetTestState();
     
     mockWebSocketManager = createMockWebSocketManager();
     mockAudioManager = createMockAudioManager();
+    
+    // Capture Settings messages
+    capturedSettings = createSettingsCapture(mockWebSocketManager);
     
     WebSocketManager.mockImplementation(() => mockWebSocketManager);
     AudioManager.mockImplementation(() => mockAudioManager);
@@ -68,76 +82,27 @@ describe('Function Calling in Settings Message Tests', () => {
         }
       ];
 
-      const agentOptions = {
-        language: 'en',
-        listenModel: 'nova-2',
-        thinkProviderType: 'open_ai',
-        thinkModel: 'gpt-4o-mini',
-        voice: 'aura-asteria-en',
-        instructions: 'You are a helpful assistant.',
-        functions: functions
-      };
+      const agentOptions = createAgentOptions({ functions });
 
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-      let capturedSettings: any = null;
 
-      // Capture Settings message
-      mockWebSocketManager.sendJSON.mockImplementation((message) => {
-        if (message.type === 'Settings') {
-          capturedSettings = JSON.parse(JSON.stringify(message)); // Deep clone
-        }
-      });
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={agentOptions}
+        />
+      );
 
-      await act(async () => {
-        render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={agentOptions}
-          />
-        );
-      });
-
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      // Wait for event listener to be set up
-      await waitFor(() => {
-        expect(mockWebSocketManager.addEventListener).toHaveBeenCalled();
-      });
-
-      // Find the event listener
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
-
-      expect(eventListener).toBeDefined();
-
-      // Simulate connection state change to 'connected' to trigger settings send
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
-
-      // Wait for settings to be sent
-      await waitFor(() => {
-        expect(mockWebSocketManager.sendJSON).toHaveBeenCalled();
-        expect(capturedSettings).not.toBeNull();
-      }, { timeout: 3000 });
+      await setupComponentAndConnect(ref, mockWebSocketManager);
 
       // Verify functions are included in the correct location
-      expect(capturedSettings).toBeDefined();
-      expect(capturedSettings.type).toBe('Settings');
-      expect(capturedSettings.agent).toBeDefined();
-      expect(capturedSettings.agent.think).toBeDefined();
-      expect(capturedSettings.agent.think.functions).toBeDefined();
-      expect(Array.isArray(capturedSettings.agent.think.functions)).toBe(true);
-      expect(capturedSettings.agent.think.functions.length).toBe(1);
+      const settings = capturedSettings[0];
+      verifySettingsStructure(settings);
+      verifySettingsHasFunctions(settings, 1);
       
       // Verify function structure
-      const functionDef = capturedSettings.agent.think.functions[0];
+      const functionDef = settings.agent.think.functions[0];
       expect(functionDef.name).toBe('search_products');
       expect(functionDef.description).toBe('Search for products across multiple retailers');
       expect(functionDef.parameters).toBeDefined();
@@ -171,57 +136,23 @@ describe('Function Calling in Settings Message Tests', () => {
         }
       ];
 
-      const agentOptions = {
-        language: 'en',
-        listenModel: 'nova-2',
-        thinkProviderType: 'open_ai',
-        thinkModel: 'gpt-4o-mini',
-        voice: 'aura-asteria-en',
-        instructions: 'You are a helpful assistant.',
-        functions: functions
-      };
-
+      const agentOptions = createAgentOptions({ functions });
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-      let capturedSettings: any = null;
 
-      mockWebSocketManager.sendJSON.mockImplementation((message) => {
-        if (message.type === 'Settings') {
-          capturedSettings = JSON.parse(JSON.stringify(message));
-        }
-      });
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={agentOptions}
+        />
+      );
 
-      await act(async () => {
-        render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={agentOptions}
-          />
-        );
-      });
+      await setupComponentAndConnect(ref, mockWebSocketManager);
 
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
-
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
-
-      await waitFor(() => {
-        expect(capturedSettings).not.toBeNull();
-      }, { timeout: 3000 });
-
-      expect(capturedSettings.agent.think.functions).toBeDefined();
-      expect(capturedSettings.agent.think.functions.length).toBe(2);
-      expect(capturedSettings.agent.think.functions[0].name).toBe('get_weather');
-      expect(capturedSettings.agent.think.functions[1].name).toBe('search_products');
+      const settings = capturedSettings[0];
+      verifySettingsHasFunctions(settings, 2);
+      expect(settings.agent.think.functions[0].name).toBe('get_weather');
+      expect(settings.agent.think.functions[1].name).toBe('search_products');
     });
 
     it('should include server-side functions with endpoint in agent.think.functions', async () => {
@@ -245,57 +176,23 @@ describe('Function Calling in Settings Message Tests', () => {
         }
       ];
 
-      const agentOptions = {
-        language: 'en',
-        listenModel: 'nova-2',
-        thinkProviderType: 'open_ai',
-        thinkModel: 'gpt-4o-mini',
-        voice: 'aura-asteria-en',
-        instructions: 'You are a helpful assistant.',
-        functions: functions
-      };
-
+      const agentOptions = createAgentOptions({ functions });
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-      let capturedSettings: any = null;
 
-      mockWebSocketManager.sendJSON.mockImplementation((message) => {
-        if (message.type === 'Settings') {
-          capturedSettings = JSON.parse(JSON.stringify(message));
-        }
-      });
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={agentOptions}
+        />
+      );
 
-      await act(async () => {
-        render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={agentOptions}
-          />
-        );
-      });
+      await setupComponentAndConnect(ref, mockWebSocketManager);
 
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
-
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
-
-      await waitFor(() => {
-        expect(capturedSettings).not.toBeNull();
-      }, { timeout: 3000 });
-
-      expect(capturedSettings.agent.think.functions).toBeDefined();
-      expect(capturedSettings.agent.think.functions.length).toBe(1);
+      const settings = capturedSettings[0];
+      verifySettingsHasFunctions(settings, 1);
       
-      const functionDef = capturedSettings.agent.think.functions[0];
+      const functionDef = settings.agent.think.functions[0];
       expect(functionDef.name).toBe('server_function');
       expect(functionDef.endpoint).toBeDefined();
       expect(functionDef.endpoint.url).toBe('https://api.example.com/function');
@@ -305,109 +202,43 @@ describe('Function Calling in Settings Message Tests', () => {
     });
 
     it('should NOT include functions in Settings when agentOptions.functions is not provided', async () => {
-      const agentOptions = {
-        language: 'en',
-        listenModel: 'nova-2',
-        thinkProviderType: 'open_ai',
-        thinkModel: 'gpt-4o-mini',
-        voice: 'aura-asteria-en',
-        instructions: 'You are a helpful assistant.'
-        // No functions property
-      };
-
+      const agentOptions = createAgentOptions(); // No functions
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-      let capturedSettings: any = null;
 
-      mockWebSocketManager.sendJSON.mockImplementation((message) => {
-        if (message.type === 'Settings') {
-          capturedSettings = JSON.parse(JSON.stringify(message));
-        }
-      });
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={agentOptions}
+        />
+      );
 
-      await act(async () => {
-        render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={agentOptions}
-          />
-        );
-      });
+      await setupComponentAndConnect(ref, mockWebSocketManager);
 
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
-
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
-
-      await waitFor(() => {
-        expect(capturedSettings).not.toBeNull();
-      }, { timeout: 3000 });
-
-      expect(capturedSettings.agent.think).toBeDefined();
+      const settings = capturedSettings[0];
+      verifySettingsStructure(settings);
       // Functions should not be present when not provided
-      expect(capturedSettings.agent.think.functions).toBeUndefined();
+      expect(settings.agent.think.functions).toBeUndefined();
     });
 
     it('should NOT include functions in Settings when agentOptions.functions is empty array', async () => {
-      const agentOptions = {
-        language: 'en',
-        listenModel: 'nova-2',
-        thinkProviderType: 'open_ai',
-        thinkModel: 'gpt-4o-mini',
-        voice: 'aura-asteria-en',
-        instructions: 'You are a helpful assistant.',
-        functions: [] // Empty array
-      };
-
+      const agentOptions = createAgentOptions({ functions: [] }); // Empty array
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-      let capturedSettings: any = null;
 
-      mockWebSocketManager.sendJSON.mockImplementation((message) => {
-        if (message.type === 'Settings') {
-          capturedSettings = JSON.parse(JSON.stringify(message));
-        }
-      });
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={agentOptions}
+        />
+      );
 
-      await act(async () => {
-        render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={agentOptions}
-          />
-        );
-      });
+      await setupComponentAndConnect(ref, mockWebSocketManager);
 
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
-
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
-
-      await waitFor(() => {
-        expect(capturedSettings).not.toBeNull();
-      }, { timeout: 3000 });
-
-      expect(capturedSettings.agent.think).toBeDefined();
+      const settings = capturedSettings[0];
+      verifySettingsStructure(settings);
       // Functions should not be present when empty array
-      expect(capturedSettings.agent.think.functions).toBeUndefined();
+      expect(settings.agent.think.functions).toBeUndefined();
     });
 
     it('should preserve extra properties in functions (like client_side, functionInstructions)', async () => {
@@ -429,57 +260,23 @@ describe('Function Calling in Settings Message Tests', () => {
         } as any
       ];
 
-      const agentOptions = {
-        language: 'en',
-        listenModel: 'nova-2',
-        thinkProviderType: 'open_ai',
-        thinkModel: 'gpt-4o-mini',
-        voice: 'aura-asteria-en',
-        instructions: 'You are a helpful assistant.',
-        functions: functions
-      };
-
+      const agentOptions = createAgentOptions({ functions });
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-      let capturedSettings: any = null;
 
-      mockWebSocketManager.sendJSON.mockImplementation((message) => {
-        if (message.type === 'Settings') {
-          capturedSettings = JSON.parse(JSON.stringify(message));
-        }
-      });
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={agentOptions}
+        />
+      );
 
-      await act(async () => {
-        render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={agentOptions}
-          />
-        );
-      });
+      await setupComponentAndConnect(ref, mockWebSocketManager);
 
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
-
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
-
-      await waitFor(() => {
-        expect(capturedSettings).not.toBeNull();
-      }, { timeout: 3000 });
-
-      expect(capturedSettings.agent.think.functions).toBeDefined();
-      expect(capturedSettings.agent.think.functions.length).toBe(1);
+      const settings = capturedSettings[0];
+      verifySettingsHasFunctions(settings, 1);
       
-      const functionDef = capturedSettings.agent.think.functions[0];
+      const functionDef = settings.agent.think.functions[0];
       expect(functionDef.name).toBe('search_products');
       // Extra properties should be preserved (Deepgram will ignore unknown properties)
       expect(functionDef.client_side).toBe(true);

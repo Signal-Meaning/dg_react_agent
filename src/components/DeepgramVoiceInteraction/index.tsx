@@ -1461,7 +1461,7 @@ function DeepgramVoiceInteraction(
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
     
     // Special logging for Error messages when functions are configured (to debug SettingsApplied issue)
-    if (messageType === 'Error' && agentOptions.functions && agentOptions.functions.length > 0) {
+    if (messageType === 'Error' && agentOptions?.functions && agentOptions.functions.length > 0) {
       console.error('❌ [FUNCTION DEBUG] Error received after sending Settings with functions:', JSON.stringify(data, null, 2));
     }
     
