@@ -145,6 +145,20 @@ export interface DeepgramVoiceInteractionProps {
   onSettingsApplied?: () => void;
   
   /**
+   * Called when a FunctionCallRequest is received from Deepgram
+   * This indicates the agent wants to execute a client-side function.
+   * The application should execute the function and call sendFunctionCallResponse() with the result.
+   * 
+   * @param request - The function call request containing function name, arguments, and ID
+   */
+  onFunctionCallRequest?: (request: {
+    id: string;
+    name: string;
+    arguments: string;
+    client_side: boolean;
+  }) => void;
+  
+  /**
    * Called when an error occurs
    */
   onError?: (error: DeepgramError) => void;
@@ -314,4 +328,13 @@ export interface DeepgramVoiceInteractionHandle {
    * @returns the AudioContext instance or undefined if not available
    */
   getAudioContext: () => AudioContext | undefined;
+
+  /**
+   * Send a FunctionCallResponse back to Deepgram after executing a client-side function
+   * 
+   * @param id - The function call ID from the FunctionCallRequest
+   * @param name - The function name
+   * @param content - The function result as a JSON string
+   */
+  sendFunctionCallResponse: (id: string, name: string, content: string) => void;
 }

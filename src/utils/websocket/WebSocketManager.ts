@@ -574,14 +574,57 @@ export class WebSocketManager {
    * Sends a JSON message over the WebSocket
    */
   public sendJSON(data: any): boolean {
+    // Always log when sendJSON is called (for debugging)
+    console.log('📤 [WEBSOCKET.sendJSON] Called with type:', data?.type || 'unknown');
+    
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.log('Cannot send message, WebSocket not open');
       return false;
     }
     
     try {
+      const jsonString = JSON.stringify(data);
+      
+      // Always log Settings messages with full JSON for debugging (even without debug mode)
+      // This helps capture the exact payload being sent for support tickets
+      // FORCE LOG TO VERIFY CODE PATH - use string concatenation for better Playwright capture
+      const dataType = data?.type || 'undefined';
+      const isSettings = data?.type === 'Settings';
+      console.log('📤 [WEBSOCKET.sendJSON] DEBUG: data.type=' + dataType + ', isSettings=' + isSettings);
+      
+      if (data && data.type === 'Settings') {
+        console.log('📤 [WEBSOCKET.sendJSON] ✅ ENTERED Settings block!');
+        
+        // Always expose Settings payload to window for automated testing
+        // This is the exact JSON string that will be sent over WebSocket
+        if (typeof window !== 'undefined') {
+          console.log('📤 [WEBSOCKET.sendJSON] Setting window variables...');
+          (window as any).__DEEPGRAM_WS_SETTINGS_PAYLOAD__ = jsonString;
+          try {
+            (window as any).__DEEPGRAM_WS_SETTINGS_PARSED__ = JSON.parse(jsonString);
+            console.log('📤 [WEBSOCKET.sendJSON] ✅ Window variables set successfully');
+          } catch (e) {
+            console.error('📤 [WEBSOCKET.sendJSON] Error parsing JSON for window exposure:', e);
+          }
+        } else {
+          console.log('📤 [WEBSOCKET.sendJSON] Window is undefined');
+        }
+        
+        // Always log Settings messages (even without debug mode) for support tickets
+        console.log('📤 [WEBSOCKET.sendJSON] ✅ Settings message detected!');
+        console.log('📤 [WEBSOCKET.sendJSON] Settings message payload (exact JSON string):', jsonString);
+        try {
+          const parsed = JSON.parse(jsonString);
+          console.log('📤 [WEBSOCKET.sendJSON] Settings message payload (parsed):', parsed);
+        } catch (e) {
+          console.error('📤 [WEBSOCKET.sendJSON] Error parsing JSON:', e);
+        }
+      } else {
+        console.log('📤 [WEBSOCKET.sendJSON] NOT a Settings message, skipping');
+      }
+      
       this.log('Sending JSON:', data);
-      this.ws.send(JSON.stringify(data));
+      this.ws.send(jsonString);
       // Only reset idle timeout when sending meaningful user messages, not protocol messages
       if (this.isMeaningfulUserActivity(data)) {
         this.resetIdleTimeout(data);

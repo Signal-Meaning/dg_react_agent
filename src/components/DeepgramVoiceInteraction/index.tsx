@@ -150,6 +150,7 @@ function DeepgramVoiceInteraction(
     onError,
     onAgentSpeaking,
     onSettingsApplied,
+    onFunctionCallRequest,
   } = props;
 
   // Internal state
@@ -961,6 +962,53 @@ function DeepgramVoiceInteraction(
     };
   }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, props.debug]); 
 
+  // Re-send Settings when agentOptions changes and connection is already established
+  // This fixes the issue where agentOptions.functions are added after initial connection
+  // Use a ref to track previous agentOptions to detect actual changes
+  const prevAgentOptionsForResendRef = useRef<typeof agentOptions>(undefined);
+  
+  useEffect(() => {
+    // Skip on first render (prevAgentOptionsForResendRef is undefined)
+    if (prevAgentOptionsForResendRef.current === undefined) {
+      prevAgentOptionsForResendRef.current = agentOptions;
+      return;
+    }
+    
+    // Check if agentOptions actually changed using deep comparison
+    const agentOptionsChanged = hasDependencyChanged(
+      prevAgentOptionsForResendRef.current as Record<string, unknown> | undefined,
+      agentOptions as Record<string, unknown>,
+      false, // not first mount
+      compareAgentOptionsIgnoringContext
+    );
+    
+    // Update ref for next comparison
+    prevAgentOptionsForResendRef.current = agentOptions;
+    
+    // Only re-send if:
+    // 1. agentOptions actually changed
+    // 2. agentOptions exists (agent is configured)
+    // 3. Connection is already established
+    // 4. Settings have been sent before (so we know we need to update)
+    if (agentOptionsChanged && agentOptions && agentManagerRef.current) {
+      const connectionState = agentManagerRef.current.getState();
+      const isConnected = connectionState === 'connected';
+      const hasSentSettingsBefore = hasSentSettingsRef.current || (window as any).globalSettingsSent;
+      
+      if (isConnected && hasSentSettingsBefore) {
+        // Reset the flags to allow re-sending Settings
+        hasSentSettingsRef.current = false;
+        (window as any).globalSettingsSent = false;
+        
+        // Re-send Settings with updated agentOptions
+        if (props.debug) {
+          log('agentOptions changed while connected - re-sending Settings with updated options');
+        }
+        sendAgentSettings();
+      }
+    }
+  }, [agentOptions, props.debug]); // Only depend on agentOptions and debug
+
   // Notify ready state changes ONLY when the value actually changes
   useEffect(() => {
     if (onReady && state.isReady !== prevIsReadyRef.current) {
@@ -1269,6 +1317,8 @@ function DeepgramVoiceInteraction(
     console.log('🔧 [sendAgentSettings] Called');
     console.log(`🔧 [sendAgentSettings] agentManagerRef.current: ${!!agentManagerRef.current}`);
     console.log(`🔧 [sendAgentSettings] agentOptions: ${!!agentOptions}`);
+    console.log(`🔧 [sendAgentSettings] agentOptions.functions: ${agentOptions?.functions ? `[${agentOptions.functions.length} functions]` : 'undefined'}`);
+    console.log(`🔧 [sendAgentSettings] agentOptions.functions?.length: ${agentOptions?.functions?.length || 0}`);
     console.log(`🔧 [sendAgentSettings] hasSentSettings: ${state.hasSentSettings}`);
     console.log(`🔧 [sendAgentSettings] hasSentSettingsRef.current: ${hasSentSettingsRef.current}`);
     
@@ -1324,6 +1374,12 @@ function DeepgramVoiceInteraction(
                 authorization: `bearer ${agentOptions.thinkApiKey}`,
               },
             }
+          } : {}),
+          // Include functions if provided in agentOptions
+          // Functions without endpoint are client-side (executed by the client)
+          // Functions with endpoint are server-side (executed by the server)
+          ...(agentOptions.functions && agentOptions.functions.length > 0 ? {
+            functions: agentOptions.functions
           } : {})
         },
         // Include speak provider for TTS
@@ -1349,8 +1405,40 @@ function DeepgramVoiceInteraction(
       hasSpeakProvider: 'speak' in settingsMessage.agent,
       speakModel: settingsMessage.agent.speak?.provider?.model,
       greetingIncluded: 'greeting' in settingsMessage.agent,
-      greetingPreview: (settingsMessage.agent.greeting || '').slice(0, 60)
+      greetingPreview: (settingsMessage.agent.greeting || '').slice(0, 60),
+      functionsCount: agentOptions.functions?.length || 0,
+      functionsIncluded: !!(agentOptions.functions && agentOptions.functions.length > 0),
+      functionsStructure: agentOptions.functions?.map(f => ({
+        name: f.name,
+        hasDescription: !!f.description,
+        hasParameters: !!f.parameters,
+        hasEndpoint: !!f.endpoint
+      }))
     });
+    
+    // Log full Settings message structure for debugging (especially functions)
+    // Always log when functions are present (not just in debug mode) to help diagnose SettingsApplied issues
+    if (agentOptions.functions && agentOptions.functions.length > 0) {
+      const settingsJson = JSON.stringify(settingsMessage, null, 2);
+      const functionsJson = JSON.stringify(settingsMessage.agent.think.functions, null, 2);
+      
+      console.log('🔍 [SETTINGS DEBUG] Full Settings message with functions:', settingsJson);
+      console.log('🔍 [SETTINGS DEBUG] Functions array structure:', functionsJson);
+      
+      // Also expose to window for E2E testing (only in test environments)
+      if (typeof window !== 'undefined' && (window as any).__DEEPGRAM_TEST_MODE__) {
+        (window as any).__DEEPGRAM_LAST_SETTINGS__ = settingsMessage;
+        (window as any).__DEEPGRAM_LAST_FUNCTIONS__ = settingsMessage.agent.think.functions;
+      }
+    } else if (props.debug) {
+      console.log('🔍 [DEBUG] Full Settings message structure:', JSON.stringify(settingsMessage, null, 2));
+    }
+    
+    // Log before sending to verify code path
+    console.log('📤 [Component] About to call agentManagerRef.current.sendJSON with Settings message');
+    console.log('📤 [Component] Settings message type:', settingsMessage.type);
+    console.log('📤 [Component] Has functions?', !!(settingsMessage.agent?.think?.functions));
+    
     agentManagerRef.current.sendJSON(settingsMessage);
     console.log('📤 [Protocol] Settings message sent successfully');
     
@@ -1371,6 +1459,11 @@ function DeepgramVoiceInteraction(
     // Debug: Log all agent messages with type
     const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as any).type : 'unknown';
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
+    
+    // Special logging for Error messages when functions are configured (to debug SettingsApplied issue)
+    if (messageType === 'Error' && agentOptions?.functions && agentOptions.functions.length > 0) {
+      console.error('❌ [FUNCTION DEBUG] Error received after sending Settings with functions:', JSON.stringify(data, null, 2));
+    }
     
     // Don't re-enable idle timeout resets here
     // Let WebSocketManager handle meaningful message detection
@@ -1558,6 +1651,34 @@ function DeepgramVoiceInteraction(
         onUserMessage?.(response);
         return;
       }
+    }
+    
+    // Handle FunctionCallRequest from Deepgram
+    if (data.type === 'FunctionCallRequest') {
+      console.log('🔧 [FUNCTION] FunctionCallRequest received from Deepgram');
+      log('FunctionCallRequest received from Deepgram');
+      
+      // Extract function call information
+      const functions = Array.isArray((data as any).functions) ? (data as any).functions : [];
+      
+      if (functions.length > 0) {
+        // For each function call request, invoke the callback
+        functions.forEach((funcCall: { id: string; name: string; arguments: string; client_side: boolean }) => {
+          if (funcCall.client_side) {
+            // Only invoke callback for client-side functions
+            onFunctionCallRequest?.({
+              id: funcCall.id,
+              name: funcCall.name,
+              arguments: funcCall.arguments,
+              client_side: funcCall.client_side
+            });
+          } else {
+            log('Server-side function call received (not handled by component):', funcCall.name);
+          }
+        });
+      }
+      
+      return;
     }
     
     // Handle errors
@@ -2267,6 +2388,26 @@ function DeepgramVoiceInteraction(
     console.log('📝 [TEXT_MESSAGE] Message sent successfully');
     log('User message sent successfully');
   };
+
+  // Send FunctionCallResponse back to Deepgram
+  const sendFunctionCallResponse = (id: string, name: string, content: string): void => {
+    if (!agentManagerRef.current) {
+      log('Cannot send FunctionCallResponse: agent manager not available');
+      throw new Error('Agent manager not available');
+    }
+
+    const responseMessage = {
+      type: 'FunctionCallResponse',
+      id: id,
+      name: name,
+      content: content
+    };
+
+    console.log('🔧 [FUNCTION] Sending FunctionCallResponse to Deepgram:', responseMessage);
+    log('Sending FunctionCallResponse to Deepgram');
+    agentManagerRef.current.sendJSON(responseMessage);
+  };
+
   // Helper function to create and initialize AudioManager
   const createAudioManager = async (): Promise<void> => {
     if (audioManagerRef.current) {
@@ -2471,6 +2612,9 @@ function DeepgramVoiceInteraction(
     
     // Microphone control
     startAudioCapture,
+    
+    // Function calling
+    sendFunctionCallResponse,
     
     // Audio data handling
     sendAudioData, // Expose sendAudioData for testing and external use

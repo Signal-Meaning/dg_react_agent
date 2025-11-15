@@ -18,10 +18,22 @@
  */
 
 import React from 'react';
-import { render, act, waitFor } from '@testing-library/react';
-import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
+import { render } from '@testing-library/react';
 import { DeepgramVoiceInteractionHandle } from '../src/types';
-import { createMockWebSocketManager, createMockAudioManager, createMockAgentOptions, MOCK_API_KEY } from './fixtures/mocks';
+import { createMockWebSocketManager, createMockAudioManager, createMockAgentOptions } from './fixtures/mocks';
+import {
+  resetTestState,
+  createAgentOptions,
+  setupComponentAndConnect,
+  simulateSettingsApplied,
+  simulateConnection,
+  setupConnectAndReceiveSettingsApplied,
+  waitForEventListener,
+  MOCK_API_KEY,
+  waitFor,
+} from './utils/component-test-helpers';
+import { act } from '@testing-library/react';
+import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
 // Mock the WebSocketManager and AudioManager classes
 jest.mock('../src/utils/websocket/WebSocketManager');
@@ -36,9 +48,7 @@ describe('onSettingsApplied Callback Tests', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
-    // Reset global settings sent flag (component uses this to prevent duplicate settings)
-    (window as any).globalSettingsSent = false;
+    resetTestState();
     
     mockWebSocketManager = createMockWebSocketManager();
     mockAudioManager = createMockAudioManager();
@@ -52,57 +62,17 @@ describe('onSettingsApplied Callback Tests', () => {
       const onSettingsApplied = jest.fn();
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
 
-      await act(async () => {
-        render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={createMockAgentOptions()}
-            onSettingsApplied={onSettingsApplied}
-          />
-        );
-      });
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+          onSettingsApplied={onSettingsApplied}
+        />
+      );
 
-      // Start the component to establish connection
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      // Wait for event listener to be set up
-      await waitFor(() => {
-        expect(mockWebSocketManager.addEventListener).toHaveBeenCalled();
-      });
-
-      // Find the event listener
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
-
-      expect(eventListener).toBeDefined();
-
-      // Simulate connection state change to 'connected' to trigger settings send
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
-
-      // Wait for settings to be sent
-      await waitFor(() => {
-        expect(mockWebSocketManager.sendJSON).toHaveBeenCalled();
-      }, { timeout: 3000 });
-
-      // Simulate receiving SettingsApplied message
-      // The WebSocket manager parses JSON before passing to event listener
-      const settingsAppliedMessage = {
-        type: 'SettingsApplied'
-      };
-
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'message', data: settingsAppliedMessage });
-        });
-      }
+      // Setup, connect, send Settings, and receive SettingsApplied
+      await setupConnectAndReceiveSettingsApplied(ref, mockWebSocketManager);
 
       // Verify callback was called
       await waitFor(() => {
@@ -114,53 +84,17 @@ describe('onSettingsApplied Callback Tests', () => {
       // This test verifies the callback is optional
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
 
-      await act(async () => {
-        render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={createMockAgentOptions()}
-            // onSettingsApplied is not provided
-          />
-        );
-      });
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+          // onSettingsApplied is not provided
+        />
+      );
 
-      // Start the component
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      // Wait for event listener to be set up
-      await waitFor(() => {
-        expect(mockWebSocketManager.addEventListener).toHaveBeenCalled();
-      });
-
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
-
-      // Simulate connection and settings send
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
-
-      await waitFor(() => {
-        expect(mockWebSocketManager.sendJSON).toHaveBeenCalled();
-      }, { timeout: 3000 });
-
-      // Simulate receiving SettingsApplied - should not throw error
-      const settingsAppliedMessage = {
-        type: 'SettingsApplied'
-      };
-
-      if (eventListener) {
-        await act(async () => {
-          // This should not throw even though callback is not provided
-          eventListener({ type: 'message', data: settingsAppliedMessage });
-        });
-      }
+      // Setup, connect, and receive SettingsApplied - should not throw error
+      await setupConnectAndReceiveSettingsApplied(ref, mockWebSocketManager);
 
       // Component should still function normally
       expect(ref.current).toBeTruthy();
@@ -170,57 +104,24 @@ describe('onSettingsApplied Callback Tests', () => {
       const onSettingsApplied = jest.fn();
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
 
-      await act(async () => {
-        render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={createMockAgentOptions()}
-            onSettingsApplied={onSettingsApplied}
-          />
-        );
-      });
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+          onSettingsApplied={onSettingsApplied}
+        />
+      );
 
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      await waitFor(() => {
-        expect(mockWebSocketManager.addEventListener).toHaveBeenCalled();
-      });
-
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
-
-      // Simulate connection
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
-
-      await waitFor(() => {
-        expect(mockWebSocketManager.sendJSON).toHaveBeenCalled();
-      }, { timeout: 3000 });
-
-      // Simulate first SettingsApplied
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'message', data: { type: 'SettingsApplied' } });
-        });
-      }
+      // Setup, connect, and receive first SettingsApplied
+      const eventListener = await setupConnectAndReceiveSettingsApplied(ref, mockWebSocketManager);
 
       await waitFor(() => {
         expect(onSettingsApplied).toHaveBeenCalledTimes(1);
       });
 
       // Simulate second SettingsApplied (e.g., after reconnection)
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'message', data: { type: 'SettingsApplied' } });
-        });
-      }
+      await simulateSettingsApplied(eventListener);
 
       // Should be called again
       await waitFor(() => {
@@ -358,52 +259,23 @@ describe('onSettingsApplied Callback Tests', () => {
       const onSettingsApplied = jest.fn();
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
 
-      const { unmount } = await act(async () => {
-        return render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={createMockAgentOptions()}
-            onSettingsApplied={onSettingsApplied}
-          />
-        );
-      });
+      const { unmount } = render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+          onSettingsApplied={onSettingsApplied}
+        />
+      );
 
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      await waitFor(() => {
-        expect(mockWebSocketManager.addEventListener).toHaveBeenCalled();
-      });
-
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
-
-      // Simulate connection
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
-
-      await waitFor(() => {
-        expect(mockWebSocketManager.sendJSON).toHaveBeenCalled();
-      }, { timeout: 3000 });
+      // Setup and connect
+      const eventListener = await setupComponentAndConnect(ref, mockWebSocketManager);
 
       // Unmount component
-      await act(async () => {
-        unmount();
-      });
+      unmount();
 
       // Simulate SettingsApplied after unmount - should not throw
-      if (eventListener) {
-        await act(async () => {
-          // This should not cause errors even though component is unmounted
-          eventListener({ type: 'message', data: { type: 'SettingsApplied' } });
-        });
-      }
+      await simulateSettingsApplied(eventListener);
 
       // Callback may or may not be called depending on timing, but should not throw
       // The important thing is that it doesn't crash
@@ -413,46 +285,17 @@ describe('onSettingsApplied Callback Tests', () => {
       const onSettingsApplied = jest.fn();
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
 
-      await act(async () => {
-        render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={createMockAgentOptions()}
-            onSettingsApplied={onSettingsApplied}
-          />
-        );
-      });
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+          onSettingsApplied={onSettingsApplied}
+        />
+      );
 
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      await waitFor(() => {
-        expect(mockWebSocketManager.addEventListener).toHaveBeenCalled();
-      });
-
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
-
-      // First connection
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
-
-      await waitFor(() => {
-        expect(mockWebSocketManager.sendJSON).toHaveBeenCalled();
-      }, { timeout: 3000 });
-
-      // First SettingsApplied
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'message', data: { type: 'SettingsApplied' } });
-        });
-      }
+      // First connection and SettingsApplied
+      const eventListener = await setupConnectAndReceiveSettingsApplied(ref, mockWebSocketManager);
 
       await waitFor(() => {
         expect(onSettingsApplied).toHaveBeenCalledTimes(1);
@@ -466,11 +309,7 @@ describe('onSettingsApplied Callback Tests', () => {
       }
 
       // Simulate reconnection
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
+      await simulateConnection(eventListener, mockWebSocketManager);
 
       // Settings should be sent again
       await waitFor(() => {
@@ -478,11 +317,7 @@ describe('onSettingsApplied Callback Tests', () => {
       }, { timeout: 3000 });
 
       // Second SettingsApplied after reconnection
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'message', data: { type: 'SettingsApplied' } });
-        });
-      }
+      await simulateSettingsApplied(eventListener);
 
       // Should be called again
       await waitFor(() => {
@@ -494,28 +329,17 @@ describe('onSettingsApplied Callback Tests', () => {
       const onSettingsApplied = jest.fn();
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
 
-      await act(async () => {
-        render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={createMockAgentOptions()}
-            onSettingsApplied={onSettingsApplied}
-          />
-        );
-      });
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+          onSettingsApplied={onSettingsApplied}
+        />
+      );
 
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      await waitFor(() => {
-        expect(mockWebSocketManager.addEventListener).toHaveBeenCalled();
-      });
-
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
+      // Setup connection (but don't send SettingsApplied)
+      const eventListener = await setupComponentAndConnect(ref, mockWebSocketManager);
 
       // Simulate other event types
       if (eventListener) {
@@ -543,49 +367,20 @@ describe('onSettingsApplied Callback Tests', () => {
       const onAgentStateChange = jest.fn();
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
 
-      await act(async () => {
-        render(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={createMockAgentOptions()}
-            onSettingsApplied={onSettingsApplied}
-            onReady={onReady}
-            onConnectionStateChange={onConnectionStateChange}
-            onAgentStateChange={onAgentStateChange}
-          />
-        );
-      });
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+          onSettingsApplied={onSettingsApplied}
+          onReady={onReady}
+          onConnectionStateChange={onConnectionStateChange}
+          onAgentStateChange={onAgentStateChange}
+        />
+      );
 
-      await act(async () => {
-        await ref.current?.start();
-      });
-
-      await waitFor(() => {
-        expect(mockWebSocketManager.addEventListener).toHaveBeenCalled();
-      });
-
-      const eventListener = mockWebSocketManager.addEventListener.mock.calls.find(
-        call => typeof call[0] === 'function'
-      )?.[0];
-
-      // Simulate connection
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'state', state: 'connected' });
-        });
-      }
-
-      await waitFor(() => {
-        expect(mockWebSocketManager.sendJSON).toHaveBeenCalled();
-      }, { timeout: 3000 });
-
-      // Simulate SettingsApplied
-      if (eventListener) {
-        await act(async () => {
-          eventListener({ type: 'message', data: { type: 'SettingsApplied' } });
-        });
-      }
+      // Setup, connect, and receive SettingsApplied
+      await setupConnectAndReceiveSettingsApplied(ref, mockWebSocketManager);
 
       // All callbacks should work independently
       await waitFor(() => {
