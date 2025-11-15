@@ -241,9 +241,11 @@ describe('Function Calling in Settings Message Tests', () => {
       expect(settings.agent.think.functions).toBeUndefined();
     });
 
-    it('should preserve extra properties in functions (like client_side, functionInstructions)', async () => {
-      // Customer's test file includes client_side and functionInstructions
-      // These should be passed through even though they're not in the type definition
+    it('should filter out client_side from functions in Settings message', async () => {
+      // According to Deepgram API spec:
+      // - client_side is NOT part of the Settings message
+      // - client_side only appears in FunctionCallRequest responses from Deepgram
+      // - Functions without endpoint are client-side by default (no flag needed)
       const functions = [
         {
           name: 'search_products',
@@ -254,8 +256,9 @@ describe('Function Calling in Settings Message Tests', () => {
               query: { type: 'string', description: 'Search query' }
             }
           },
-          // Extra properties not in AgentFunction type
+          // client_side should NOT be included in Settings message
           client_side: true,
+          // Other extra properties may be preserved (but client_side must be filtered)
           functionInstructions: 'Example function call usage...'
         } as any
       ];
@@ -278,8 +281,9 @@ describe('Function Calling in Settings Message Tests', () => {
       
       const functionDef = settings.agent.think.functions[0];
       expect(functionDef.name).toBe('search_products');
-      // Extra properties should be preserved (Deepgram will ignore unknown properties)
-      expect(functionDef.client_side).toBe(true);
+      // CRITICAL: client_side must be filtered out (not part of Settings message per Deepgram spec)
+      expect(functionDef.client_side).toBeUndefined();
+      // Other properties may be preserved (though not officially part of spec)
       expect(functionDef.functionInstructions).toBe('Example function call usage...');
     });
   });

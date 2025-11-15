@@ -25,6 +25,7 @@ import {
 import { useIdleTimeoutManager } from '../../hooks/useIdleTimeoutManager';
 import { AgentStateService } from '../../services/AgentStateService';
 import { compareAgentOptionsIgnoringContext, hasDependencyChanged } from '../../utils/option-comparison';
+import { filterFunctionsForSettings } from '../../utils/function-utils';
 
 // Default endpoints
 const DEFAULT_ENDPOINTS = {
@@ -1378,8 +1379,9 @@ function DeepgramVoiceInteraction(
           // Include functions if provided in agentOptions
           // Functions without endpoint are client-side (executed by the client)
           // Functions with endpoint are server-side (executed by the server)
+          // Filter out client_side property - it's not part of Settings message per Deepgram API spec
           ...(agentOptions.functions && agentOptions.functions.length > 0 ? {
-            functions: agentOptions.functions
+            functions: filterFunctionsForSettings(agentOptions.functions)
           } : {})
         },
         // Include speak provider for TTS
