@@ -1681,6 +1681,28 @@ function DeepgramVoiceInteraction(
       const functions = Array.isArray((data as any).functions) ? (data as any).functions : [];
       
       if (functions.length > 0) {
+        // Check if any client-side functions are present
+        const hasClientSideFunctions = functions.some((funcCall: { client_side: boolean }) => funcCall.client_side);
+        
+        // Transition to 'thinking' state when client-side function call is received
+        // This provides immediate feedback that the agent is processing a function call
+        // Issue #294: onAgentStateChange('thinking') Not Emitted for Client-Side Function Calls
+        if (hasClientSideFunctions) {
+          const currentState = stateRef.current.agentState;
+          if (currentState !== 'thinking') {
+            console.log('🧠 [FUNCTION] FunctionCallRequest received - transitioning to thinking state');
+            log('FunctionCallRequest received - transitioning to thinking state');
+            sleepLog('Dispatching AGENT_STATE_CHANGE to thinking (from FunctionCallRequest)');
+            dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
+            
+            // Disable keepalives when agent starts thinking (user stopped speaking)
+            updateKeepaliveState(false);
+            
+            // Also update AgentStateService if available
+            agentStateServiceRef.current?.handleAgentThinking();
+          }
+        }
+        
         // For each function call request, invoke the callback
         functions.forEach((funcCall: { id: string; name: string; arguments: string; client_side: boolean }) => {
           if (funcCall.client_side) {
