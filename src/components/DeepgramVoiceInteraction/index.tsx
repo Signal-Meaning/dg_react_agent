@@ -8,7 +8,8 @@ import {
   TranscriptResponse,
   TranscriptAlternative,
   UpdateInstructionsPayload,
-
+  FunctionCallRequest,
+  FunctionCallResponse,
   ConnectionState
 } from '../../types';
 import { WebSocketManager, WebSocketEvent } from '../../utils/websocket/WebSocketManager';
@@ -1473,6 +1474,29 @@ function DeepgramVoiceInteraction(
     return typeof data === 'object' && data !== null && 'type' in data;
   };
 
+  /**
+   * Helper function to transition agent state to 'thinking'
+   * Ensures consistent behavior across all thinking state transitions
+   * Issue #294: Centralized thinking state transition logic
+   * 
+   * @param reason - Description of why the transition is happening (for logging)
+   */
+  const transitionToThinkingState = (reason: string): void => {
+    const currentState = stateRef.current.agentState;
+    if (currentState !== 'thinking') {
+      console.log(`🧠 [AGENT] ${reason} - transitioning to thinking state`);
+      log(`${reason} - transitioning to thinking state`);
+      sleepLog(`Dispatching AGENT_STATE_CHANGE to thinking (${reason})`);
+      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
+      
+      // Disable keepalives when agent starts thinking (user stopped speaking)
+      updateKeepaliveState(false);
+      
+      // Update AgentStateService for consistency
+      agentStateServiceRef.current?.handleAgentThinking();
+    }
+  };
+
   // Handle agent messages - only relevant if agent is configured
   const handleAgentMessage = (data: unknown) => {
     // Debug: Log all agent messages with type
@@ -1589,13 +1613,7 @@ function DeepgramVoiceInteraction(
     
     if (data.type === 'AgentThinking') {
       console.log('🧠 [AGENT EVENT] AgentThinking received');
-      console.log('🎯 [AGENT] AgentThinking received - transitioning to thinking state');
-      sleepLog('Dispatching AGENT_STATE_CHANGE to thinking');
-      dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
-      
-      // Disable keepalives when agent starts thinking (user stopped speaking)
-      updateKeepaliveState(false);
-      
+      transitionToThinkingState('AgentThinking message received');
       return;
     }
     
@@ -1677,15 +1695,36 @@ function DeepgramVoiceInteraction(
       console.log('🔧 [FUNCTION] FunctionCallRequest received from Deepgram');
       log('FunctionCallRequest received from Deepgram');
       
-      // Extract function call information
-      const functions = Array.isArray((data as any).functions) ? (data as any).functions : [];
+      // Type-safe extraction of function call information
+      interface FunctionCallRequestMessage {
+        type: 'FunctionCallRequest';
+        functions?: Array<{
+          id: string;
+          name: string;
+          arguments: string;
+          client_side: boolean;
+        }>;
+      }
+      
+      const requestData = data as FunctionCallRequestMessage;
+      const functions = Array.isArray(requestData.functions) ? requestData.functions : [];
       
       if (functions.length > 0) {
+        // Check if any client-side functions are present
+        const hasClientSideFunctions = functions.some((funcCall) => funcCall.client_side);
+        
+        // Transition to 'thinking' state when client-side function call is received
+        // This provides immediate feedback that the agent is processing a function call
+        // Issue #294: onAgentStateChange('thinking') Not Emitted for Client-Side Function Calls
+        if (hasClientSideFunctions) {
+          transitionToThinkingState('FunctionCallRequest received');
+        }
+        
         // For each function call request, invoke the callback
-        functions.forEach((funcCall: { id: string; name: string; arguments: string; client_side: boolean }) => {
+        functions.forEach((funcCall) => {
           if (funcCall.client_side) {
             // Only invoke callback for client-side functions
-            const functionCall = {
+            const functionCall: FunctionCallRequest = {
               id: funcCall.id,
               name: funcCall.name,
               arguments: funcCall.arguments,
@@ -1693,7 +1732,7 @@ function DeepgramVoiceInteraction(
             };
             
             // Create sendResponse callback that wraps sendFunctionCallResponse
-            const sendResponse = (response: { id: string; result?: any; error?: string }): void => {
+            const sendResponse = (response: FunctionCallResponse): void => {
               // Convert result or error to JSON string for content
               let content: string;
               if (response.error) {
