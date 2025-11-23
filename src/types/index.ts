@@ -73,6 +73,25 @@ export interface UserMessageResponse {
 }
 
 /**
+ * Function call request from Deepgram agent
+ */
+export interface FunctionCallRequest {
+  id: string;
+  name: string;
+  arguments: string; // JSON string of function arguments
+  client_side?: boolean;
+}
+
+/**
+ * Function call response to send back to Deepgram
+ */
+export interface FunctionCallResponse {
+  id: string;
+  result?: any; // Function execution result
+  error?: string; // Error message if function failed
+}
+
+/**
  * Props for the DeepgramVoiceInteraction component
  * This interface uses AgentState, AgentOptions, etc.
  */
@@ -145,18 +164,16 @@ export interface DeepgramVoiceInteractionProps {
   onSettingsApplied?: () => void;
   
   /**
-   * Called when a FunctionCallRequest is received from Deepgram
-   * This indicates the agent wants to execute a client-side function.
-   * The application should execute the function and call sendFunctionCallResponse() with the result.
+   * Called when a client-side function call is requested by the agent.
+   * Client-side functions are those without an `endpoint` property in the function definition.
    * 
-   * @param request - The function call request containing function name, arguments, and ID
+   * @param functionCall - The function call request from Deepgram
+   * @param sendResponse - Callback to send the function call response back to Deepgram
    */
-  onFunctionCallRequest?: (request: {
-    id: string;
-    name: string;
-    arguments: string;
-    client_side: boolean;
-  }) => void;
+  onFunctionCallRequest?: (
+    functionCall: FunctionCallRequest,
+    sendResponse: (response: FunctionCallResponse) => void
+  ) => void;
   
   /**
    * Called when an error occurs

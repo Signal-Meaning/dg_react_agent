@@ -1449,7 +1449,24 @@ function DeepgramVoiceInteraction(
     console.log('📤 [Protocol] Settings sent state updated to true');
   };
 
+  // Send FunctionCallResponse back to Deepgram
+  const sendFunctionCallResponse = (id: string, name: string, content: string): void => {
+    if (!agentManagerRef.current) {
+      log('Cannot send FunctionCallResponse: agent manager not available');
+      throw new Error('Agent manager not available');
+    }
 
+    const responseMessage = {
+      type: 'FunctionCallResponse',
+      id: id,
+      name: name,
+      content: content
+    };
+
+    console.log('🔧 [FUNCTION] Sending FunctionCallResponse to Deepgram:', responseMessage);
+    log('Sending FunctionCallResponse to Deepgram');
+    agentManagerRef.current.sendJSON(responseMessage);
+  };
 
   // Type guard for agent messages
   const isAgentMessage = (data: unknown): data is { type: string; [key: string]: unknown } => {
@@ -1668,12 +1685,29 @@ function DeepgramVoiceInteraction(
         functions.forEach((funcCall: { id: string; name: string; arguments: string; client_side: boolean }) => {
           if (funcCall.client_side) {
             // Only invoke callback for client-side functions
-            onFunctionCallRequest?.({
+            const functionCall = {
               id: funcCall.id,
               name: funcCall.name,
               arguments: funcCall.arguments,
               client_side: funcCall.client_side
-            });
+            };
+            
+            // Create sendResponse callback that wraps sendFunctionCallResponse
+            const sendResponse = (response: { id: string; result?: any; error?: string }): void => {
+              // Convert result or error to JSON string for content
+              let content: string;
+              if (response.error) {
+                content = JSON.stringify({ error: response.error });
+              } else {
+                content = JSON.stringify(response.result);
+              }
+              
+              // Call the internal sendFunctionCallResponse method
+              sendFunctionCallResponse(functionCall.id, functionCall.name, content);
+            };
+            
+            // Invoke callback with both functionCall and sendResponse
+            onFunctionCallRequest?.(functionCall, sendResponse);
           } else {
             log('Server-side function call received (not handled by component):', funcCall.name);
           }
@@ -2389,25 +2423,6 @@ function DeepgramVoiceInteraction(
     
     console.log('📝 [TEXT_MESSAGE] Message sent successfully');
     log('User message sent successfully');
-  };
-
-  // Send FunctionCallResponse back to Deepgram
-  const sendFunctionCallResponse = (id: string, name: string, content: string): void => {
-    if (!agentManagerRef.current) {
-      log('Cannot send FunctionCallResponse: agent manager not available');
-      throw new Error('Agent manager not available');
-    }
-
-    const responseMessage = {
-      type: 'FunctionCallResponse',
-      id: id,
-      name: name,
-      content: content
-    };
-
-    console.log('🔧 [FUNCTION] Sending FunctionCallResponse to Deepgram:', responseMessage);
-    log('Sending FunctionCallResponse to Deepgram');
-    agentManagerRef.current.sendJSON(responseMessage);
   };
 
   // Helper function to create and initialize AudioManager
