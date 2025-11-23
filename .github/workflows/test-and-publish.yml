@@ -196,7 +196,7 @@ jobs:
           node-version: '20'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@signal-meaning'
-          token: ${{ secrets.NPM_PACKAGES_TOKEN }}
+          token: ${{ secrets.NPM_TOKEN }}
           always-auth: true
           
       - name: Install dependencies
@@ -222,13 +222,13 @@ jobs:
             else
               echo "⚠️ npmrc file not found at expected location: $NPM_CONFIG_USERCONFIG"
               echo "🔧 Attempting to create .npmrc manually as fallback..."
-              echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
+              echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
               echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
               echo "✅ Created ~/.npmrc as fallback"
             fi
           else
             echo "⚠️ NPM_CONFIG_USERCONFIG not set, creating .npmrc manually..."
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" > ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
             echo "✅ Created ~/.npmrc"
           fi
@@ -236,7 +236,7 @@ jobs:
           # Also ensure project-level .npmrc exists (for compatibility)
           if [ ! -f .npmrc ]; then
             echo "@signal-meaning:registry=https://npm.pkg.github.com" > .npmrc
-            echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
             echo "✅ Created project-level .npmrc"
           fi
         
@@ -247,13 +247,13 @@ jobs:
             echo "❌ Authentication verification failed"
             echo ""
             echo "Common causes:"
-            echo "  1. NPM_PACKAGES_TOKEN secret missing or invalid"
+            echo "  1. NPM_TOKEN secret missing or invalid"
             echo "  2. Token lacks 'write:packages' permission"
             echo "  3. Token lacks access to @signal-meaning organization"
             echo "  4. Token expired"
             echo ""
             echo "Check repository settings:"
-            echo "  - Secrets > NPM_PACKAGES_TOKEN exists"
+            echo "  - Secrets > NPM_TOKEN exists"
             echo "  - Token has write:packages scope"
             echo "  - Token has organization access"
             exit 1
@@ -348,7 +348,7 @@ jobs:
           
           # Configure npm for GitHub Package Registry
           echo "@signal-meaning:registry=https://npm.pkg.github.com" > .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_PACKAGES_TOKEN }}" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
           
           # Install the package
           npm install @signal-meaning/deepgram-voice-interaction-react
