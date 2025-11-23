@@ -40,13 +40,18 @@ This is a patch release for version vX.X.X of the Deepgram Voice Interaction Rea
     - Replace `vX.X.X` and `X.X.X` placeholders with actual version
   - [ ] Create: `RELEASE-NOTES.md` (optional but standard)
 - [ ] **Validate Documentation**: Run validation to ensure all required documents are present
-  - [ ] Run: `npm run validate:release-docs vX.X.X`
+  - [ ] Run: `npm run validate:release-docs X.X.X` (version without "v" prefix)
 - [ ] **Update Version**: Update version references in docs
 
 #### Release
-- [ ] **Commit & Tag**: Commit changes and create tag
+- [ ] **Commit Changes**: Commit all release-related changes
   - [ ] Commit: `git add . && git commit -m "chore: prepare release vX.X.X"`
-  - [ ] Tag: `git tag vX.X.X && git push origin vX.X.X`
+- [ ] **Create Release Branch**: Create a release branch for the version
+  - [ ] Create: `git checkout -b release/vX.X.X` (from current working branch or main)
+  - [ ] Push: `git push origin release/vX.X.X`
+- [ ] **Tag Release**: Create git tag for the release
+  - [ ] Tag: `git tag vX.X.X`
+  - [ ] Push: `git push origin vX.X.X`
 - [ ] **Publish**: Publish to GitHub Registry
   - [ ] **Preferred**: Use CI build (create GitHub release to trigger `.github/workflows/test-and-publish.yml`)
     - Create GitHub release (this triggers CI publish workflow)
@@ -58,6 +63,10 @@ This is a patch release for version vX.X.X of the Deepgram Voice Interaction Rea
 - [ ] **GitHub Release**: Create GitHub release (if not already created for CI publish)
   - [ ] Title: `vX.X.X`
   - [ ] Description: Copy from CHANGELOG.md
+  - [ ] Target: `release/vX.X.X` branch (or `main` if release branch merged)
+- [ ] **Post-Release**: Merge release branch to main (if not already merged)
+  - [ ] Merge: `release/vX.X.X` → `main`
+  - [ ] Push: `git push origin main`
 
 ### 🚨 Important Notes
 - This is a patch release - no breaking changes
