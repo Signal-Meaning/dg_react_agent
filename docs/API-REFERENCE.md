@@ -74,12 +74,10 @@ interface DeepgramVoiceInteractionProps {
   onUserMessage?: (message: UserMessageResponse) => void;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
   onSettingsApplied?: () => void;
-  onFunctionCallRequest?: (request: {
-    id: string;
-    name: string;
-    arguments: string;
-    client_side: boolean;
-  }) => void;
+  onFunctionCallRequest?: (
+    functionCall: FunctionCallRequest,
+    sendResponse: (response: FunctionCallResponse) => void
+  ) => void;
   
   // Voice Activity Detection
   onUserStartedSpeaking?: () => void;
@@ -137,7 +135,7 @@ interface DeepgramVoiceInteractionProps {
 | `onUserMessage` | `(message: UserMessageResponse) => void` | Called when user message is received |
 | `onPlaybackStateChange` | `(isPlaying: boolean) => void` | Called when audio playback state changes |
 | `onSettingsApplied` | `() => void` | Called when agent settings have been successfully applied and the connection is ready for audio data processing. This is fired when the `SettingsApplied` event is received from Deepgram, indicating that the settings sent to the agent service have been confirmed and are now active. |
-| `onFunctionCallRequest` | `(request: { id: string; name: string; arguments: string; client_side: boolean }) => void` | Called when a FunctionCallRequest is received from Deepgram. This indicates the agent wants to execute a client-side function. The application should execute the function and call `sendFunctionCallResponse()` with the result. |
+| `onFunctionCallRequest` | `(functionCall: FunctionCallRequest, sendResponse: (response: FunctionCallResponse) => void) => void` | Called when a FunctionCallRequest is received from Deepgram. This indicates the agent wants to execute a client-side function. The application should execute the function and call `sendResponse()` with the result. The `sendResponse` callback eliminates the need for component refs. |
 
 #### Voice Activity Detection Events
 | Prop | Type | Description |
@@ -440,15 +438,14 @@ onPlaybackStateChange={(isPlaying) => {
 }}
 
 // Function calling
-onFunctionCallRequest={(request) => {
-  console.log('Function call requested:', request.name);
-  // Execute the function and send response
-  const result = executeFunction(request.name, JSON.parse(request.arguments));
-  voiceRef.current?.sendFunctionCallResponse(
-    request.id,
-    request.name,
-    JSON.stringify(result)
-  );
+onFunctionCallRequest={(functionCall, sendResponse) => {
+  console.log('Function call requested:', functionCall.name);
+  // Execute the function and send response using sendResponse callback
+  const result = executeFunction(functionCall.name, JSON.parse(functionCall.arguments));
+  sendResponse({
+    id: functionCall.id,
+    result: result
+  });
 }}
 ```
 
@@ -943,7 +940,7 @@ This section documents changes made to the API since the original fork (commit `
   - *Why added*: Provides a dedicated callback for user messages received from the server, enabling applications to track and display the complete conversation history including user inputs.
 
 - **`onFunctionCallRequest`** - Function calling callback
-  - *Why added*: Enables the agent to execute client-side functions during conversations. When the agent wants to call a function, it sends a `FunctionCallRequest` which triggers this callback. The application executes the function and sends the result back via `sendFunctionCallResponse()`.
+  - *Why added*: Enables the agent to execute client-side functions during conversations. When the agent wants to call a function, it sends a `FunctionCallRequest` which triggers this callback. The callback receives both the `functionCall` request and a `sendResponse` callback, eliminating the need for component refs. The application executes the function and sends the result back via `sendResponse()`. The ref-based `sendFunctionCallResponse()` method is still available for backward compatibility.
 
 ### Methods Added Since Fork
 
@@ -1146,7 +1143,7 @@ function VoiceApp() {
 
 **Purpose**: This section demonstrates how to use function calling to enable the agent to execute client-side functions during conversations.
 
-**Context**: Function calling allows the agent to trigger custom functions in your application. Functions are defined in `agentOptions.functions` and sent to Deepgram in the Settings message. When the agent wants to call a function, it sends a `FunctionCallRequest` which triggers the `onFunctionCallRequest` callback. Your application executes the function and sends the result back via `sendFunctionCallResponse()`.
+**Context**: Function calling allows the agent to trigger custom functions in your application. Functions are defined in `agentOptions.functions` and sent to Deepgram in the Settings message. When the agent wants to call a function, it sends a `FunctionCallRequest` which triggers the `onFunctionCallRequest` callback with both the `functionCall` request and a `sendResponse` callback. Your application executes the function and sends the result back via `sendResponse()`. The ref-based `sendFunctionCallResponse()` method is still available for backward compatibility.
 
 **Example**:
 ```tsx
@@ -1182,18 +1179,16 @@ function FunctionCallingApp() {
     functions: functions  // Include functions in agent options
   }), []);
 
-  // Handle function call requests
-  const handleFunctionCall = useCallback((request: {
-    id: string;
-    name: string;
-    arguments: string;
-    client_side: boolean;
-  }) => {
-    console.log('Function call requested:', request.name);
+  // Handle function call requests (using sendResponse callback - recommended)
+  const handleFunctionCall = useCallback((
+    functionCall: FunctionCallRequest,
+    sendResponse: (response: FunctionCallResponse) => void
+  ) => {
+    console.log('Function call requested:', functionCall.name);
     
-    if (request.name === 'get_current_time') {
+    if (functionCall.name === 'get_current_time') {
       try {
-        const args = JSON.parse(request.arguments);
+        const args = JSON.parse(functionCall.arguments);
         const timezone = args.timezone || 'UTC';
         const now = new Date();
         const timeString = now.toLocaleString('en-US', { 
@@ -1211,19 +1206,18 @@ function FunctionCallingApp() {
           timestamp: now.toISOString()
         };
         
-        // Send the result back to Deepgram
-        voiceRef.current?.sendFunctionCallResponse(
-          request.id,
-          request.name,
-          JSON.stringify(result)
-        );
+        // Send the result back using sendResponse callback (no ref needed!)
+        sendResponse({
+          id: functionCall.id,
+          result: result
+        });
       } catch (error) {
         console.error('Error executing function:', error);
-        voiceRef.current?.sendFunctionCallResponse(
-          request.id,
-          request.name,
-          JSON.stringify({ success: false, error: 'Failed to get time' })
-        );
+        // Send error response
+        sendResponse({
+          id: functionCall.id,
+          error: 'Failed to get time'
+        });
       }
     }
   }, []);
@@ -1247,12 +1241,14 @@ function FunctionCallingApp() {
 - **Function Call Flow**: 
   1. Agent decides to call a function based on user input
   2. Deepgram sends `FunctionCallRequest` via WebSocket
-  3. Component invokes `onFunctionCallRequest` callback
+  3. Component invokes `onFunctionCallRequest` callback with `functionCall` and `sendResponse` parameters
   4. Application executes the function
-  5. Application calls `sendFunctionCallResponse()` with the result
+  5. Application calls `sendResponse()` with the result (or error)
   6. Agent receives the result and continues the conversation
+- **sendResponse Callback** (Recommended): The `sendResponse` callback is provided as the second parameter to `onFunctionCallRequest`. It accepts a `FunctionCallResponse` object with `id`, `result?`, and `error?` properties. This eliminates the need for component refs and null checks.
+- **Backward Compatibility**: The ref-based `sendFunctionCallResponse(id, name, content)` method is still available for existing code, but the `sendResponse` callback is preferred for new code.
 - **Parameters**: Function parameters use JSON Schema format with `type: 'object'`, `properties`, and optional `required` array
-- **Response Format**: Function results must be sent as JSON strings
+- **Response Format**: Function results can be sent as objects via `sendResponse({ id, result })` or as JSON strings via the ref-based method
 
 **For more information on function calling, see [Deepgram's Function Calling Documentation](https://developers.deepgram.com/docs/voice-agents-function-calling).**
 
