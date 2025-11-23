@@ -1357,12 +1357,17 @@ function DeepgramVoiceInteraction(
       },
       agent: {
         language: agentOptions.language || 'en',
-        listen: {
-          provider: {
-            type: 'deepgram',
-            model: agentOptions.listenModel || 'nova-2'
+        // Issue #299: Only include listen provider when listenModel is explicitly provided
+        // This allows text-only interactions (via injectUserMessage) without triggering
+        // CLIENT_MESSAGE_TIMEOUT errors
+        ...(agentOptions.listenModel ? {
+          listen: {
+            provider: {
+              type: 'deepgram',
+              model: agentOptions.listenModel
+            }
           }
-        },
+        } : {}),
         think: {
           provider: {
             type: agentOptions.thinkProviderType || 'open_ai',
