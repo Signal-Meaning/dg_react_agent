@@ -18,7 +18,8 @@ export function filterFunctionsForSettings(functions: AgentFunction[]): AgentFun
   return functions.map(func => {
     // Filter out client_side property (not part of Settings message per Deepgram API spec)
     // Preserve all other properties (Deepgram may ignore unknown properties, but we don't filter them)
-    const { client_side, ...filteredFunction } = func as any;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+    const { client_side: _client_side, ...filteredFunction } = func as any;
     
     // Return the function without client_side
     return filteredFunction as AgentFunction;
