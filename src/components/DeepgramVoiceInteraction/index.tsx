@@ -1098,7 +1098,8 @@ function DeepgramVoiceInteraction(
           updateKeepaliveState(false);
           
           if (stateRef.current.agentState === 'listening') {
-            dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
+            // Use centralized helper for consistency (Issue #294, #302)
+            transitionToThinkingState('User stopped speaking (speech_final=true)');
           }
         } else if (transcriptData.is_final && !transcriptData.speech_final) {
           // Final transcript without speech_final - user finished speaking (fallback)
@@ -1114,7 +1115,8 @@ function DeepgramVoiceInteraction(
           updateKeepaliveState(false);
           
           if (stateRef.current.agentState === 'listening') {
-            dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
+            // Use centralized helper for consistency (Issue #294, #302)
+            transitionToThinkingState('User stopped speaking (final transcript fallback)');
           }
         } else if (!transcriptData.is_final) {
           // Interim transcript - user is actively speaking
@@ -1483,10 +1485,14 @@ function DeepgramVoiceInteraction(
    * Helper function to transition agent state to 'thinking'
    * Ensures consistent behavior across all thinking state transitions
    * Issue #294: Centralized thinking state transition logic
+   * Issue #302: Maintain keepalive during thinking state for function calls
    * 
    * @param reason - Description of why the transition is happening (for logging)
+   * @param maintainKeepalive - If true, keepalive is maintained during thinking state (for function calls).
+   *                           If false, keepalive is disabled (for user stopped speaking).
+   *                           Default: false (backward compatible)
    */
-  const transitionToThinkingState = (reason: string): void => {
+  const transitionToThinkingState = (reason: string, maintainKeepalive: boolean = false): void => {
     const currentState = stateRef.current.agentState;
     if (currentState !== 'thinking') {
       console.log(`🧠 [AGENT] ${reason} - transitioning to thinking state`);
@@ -1494,8 +1500,16 @@ function DeepgramVoiceInteraction(
       sleepLog(`Dispatching AGENT_STATE_CHANGE to thinking (${reason})`);
       dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
       
-      // Disable keepalives when agent starts thinking (user stopped speaking)
-      updateKeepaliveState(false);
+      // Issue #302: Maintain keepalive during thinking state for function calls to prevent CLIENT_MESSAGE_TIMEOUT
+      // Disable keepalives when agent starts thinking (user stopped speaking) - default behavior
+      // Enable keepalives when agent is thinking during function call processing
+      if (maintainKeepalive) {
+        updateKeepaliveState(true);
+        log('Keepalive maintained during thinking state (function call processing)');
+      } else {
+        updateKeepaliveState(false);
+        log('Keepalive disabled during thinking state (user stopped speaking)');
+      }
       
       // Update AgentStateService for consistency
       agentStateServiceRef.current?.handleAgentThinking();
@@ -1721,8 +1735,9 @@ function DeepgramVoiceInteraction(
         // Transition to 'thinking' state when client-side function call is received
         // This provides immediate feedback that the agent is processing a function call
         // Issue #294: onAgentStateChange('thinking') Not Emitted for Client-Side Function Calls
+        // Issue #302: Maintain keepalive during thinking state to prevent CLIENT_MESSAGE_TIMEOUT
         if (hasClientSideFunctions) {
-          transitionToThinkingState('FunctionCallRequest received');
+          transitionToThinkingState('FunctionCallRequest received', true); // Maintain keepalive during function call processing
         }
         
         // For each function call request, invoke the callback
