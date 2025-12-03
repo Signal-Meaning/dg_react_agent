@@ -5,7 +5,7 @@ import { ConnectionState, DeepgramError, ServiceType } from '../../types';
  */
 export type WebSocketEvent = 
   | { type: 'state'; state: ConnectionState; isReconnection?: boolean }
-  | { type: 'message'; data: any }
+  | { type: 'message'; data: unknown }
   | { type: 'binary'; data: ArrayBuffer }
   | { type: 'keepalive'; data: { type: string; timestamp: number; service: ServiceType } }
   | { type: 'error'; error: DeepgramError };
@@ -98,6 +98,7 @@ export class WebSocketManager {
   /**
    * Logs a message if debug is enabled
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private log(...args: any[]): void {
     if (this.options.debug) {
       console.log(`[WebSocketManager:${this.options.service}]`, ...args);
@@ -445,7 +446,7 @@ export class WebSocketManager {
   /**
    * Determines if a message should reset the idle timeout
    */
-  private shouldResetIdleTimeout(data: any): boolean {
+  private shouldResetIdleTimeout(data: unknown): boolean {
     // Always reset on agent service messages (they're meaningful)
     if (this.options.service === 'agent') {
       return true;
@@ -483,7 +484,7 @@ export class WebSocketManager {
    * - User text activity should be handled via onUserMessage callback/state updates
    * - Agent activity is already tracked via AgentThinking/AgentStartedSpeaking messages and state changes
    */
-  private isMeaningfulUserActivity(data: any): boolean {
+  private isMeaningfulUserActivity(data: unknown): boolean {
     // Only reset idle timeout on ACTUAL activity indicators, not transcript messages
     
     // For agent service, reset on activity indicators
@@ -539,7 +540,7 @@ export class WebSocketManager {
    * the centralized IdleTimeoutService to prevent conflicts and ensure
    * coordinated timeout behavior across all services.
    */
-  public resetIdleTimeout(triggerMessage?: any): void {
+  public resetIdleTimeout(triggerMessage?: unknown): void {
     const triggerInfo = triggerMessage ? ` (triggered by: ${triggerMessage.type || 'unknown'})` : '';
     this.log(`🎯 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for ${this.options.service}${triggerInfo}`);
     // Individual WebSocket timeout resets are disabled - IdleTimeoutService handles all timeout logic
@@ -573,7 +574,7 @@ export class WebSocketManager {
   /**
    * Sends a JSON message over the WebSocket
    */
-  public sendJSON(data: any): boolean {
+  public sendJSON(data: unknown): boolean {
     // Always log when sendJSON is called (for debugging)
     console.log('📤 [WEBSOCKET.sendJSON] Called with type:', data?.type || 'unknown');
     
@@ -599,8 +600,10 @@ export class WebSocketManager {
         // This is the exact JSON string that will be sent over WebSocket
         if (typeof window !== 'undefined') {
           console.log('📤 [WEBSOCKET.sendJSON] Setting window variables...');
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (window as any).__DEEPGRAM_WS_SETTINGS_PAYLOAD__ = jsonString;
           try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (window as any).__DEEPGRAM_WS_SETTINGS_PARSED__ = JSON.parse(jsonString);
             console.log('📤 [WEBSOCKET.sendJSON] ✅ Window variables set successfully');
           } catch (e) {

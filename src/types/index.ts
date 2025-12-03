@@ -87,7 +87,7 @@ export interface FunctionCallRequest {
  */
 export interface FunctionCallResponse {
   id: string;
-  result?: any; // Function execution result
+  result?: unknown; // Function execution result
   error?: string; // Error message if function failed
 }
 

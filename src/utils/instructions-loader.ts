@@ -6,7 +6,8 @@
  */
 
 // Only import Node.js modules in Node.js environment
-let fs: any, path: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let fs: any, path: any; // Node.js types not available in browser environment
 if (typeof window === 'undefined') {
   // Node.js environment
   fs = require('fs');
@@ -73,8 +74,8 @@ function getEnvironmentInstructions(): string | null {
   }
 
   // Check Vite environment (for frontend builds)
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env?.DEEPGRAM_INSTRUCTIONS) {
-    return (import.meta as any).env.DEEPGRAM_INSTRUCTIONS.trim();
+  if (typeof import.meta !== 'undefined' && (import.meta as { env?: { DEEPGRAM_INSTRUCTIONS?: string } }).env?.DEEPGRAM_INSTRUCTIONS) {
+    return (import.meta as { env: { DEEPGRAM_INSTRUCTIONS: string } }).env.DEEPGRAM_INSTRUCTIONS.trim();
   }
 
   return null;
@@ -108,7 +109,8 @@ async function readInstructionsFile(filePath: string): Promise<string> {
   }
   
   return new Promise((resolve, reject) => {
-    fs.readFile(filePath, 'utf8', (err: any, data: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fs.readFile(filePath, 'utf8', (err: any, data: string) => {
       if (err) {
         reject(err);
       } else {

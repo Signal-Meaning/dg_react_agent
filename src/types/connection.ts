@@ -51,7 +51,7 @@ export interface DeepgramError {
   /**
    * Additional error details (original error, etc.)
    */
-  details?: any;
+  details?: unknown;
 }
 
 /**

@@ -79,9 +79,6 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
 - [ ] **Create Release Branch**: Create a release branch for the version
   - [ ] Create: `release/vX.X.X` branch
   - [ ] Push: `git push origin release/vX.X.X`
-- [ ] **Tag Release**: Create git tag for the release
-  - [ ] Tag: `git tag vX.X.X`
-  - [ ] Push: `git push origin vX.X.X`
 
 #### Package Publishing
 - [ ] **Publish to GitHub Registry**: Publish package to GitHub Package Registry
@@ -91,11 +88,19 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
     - Test job runs first: linting, mock tests, build, package validation
     - Publish job only runs if test job succeeds
     - **All non-skipped tests must pass** before publishing
-    - Verify CI build completes successfully
-    - Verify package appears in GitHub Packages
+    - **Monitor CI workflow**: Wait for CI build to complete successfully
+      - Check GitHub Actions workflow status
+      - Verify all CI checks pass
+      - Verify package appears in GitHub Packages
+    - **Only proceed to tagging if publish succeeds**
   - [ ] **Fallback**: Dev publish (only if CI fails)
     - Run: `npm publish` (automatically publishes to GitHub Registry)
     - Verify: Package appears in GitHub Packages
+    - **Only proceed to tagging if publish succeeds**
+- [ ] **Tag Release**: Create git tag for the release (AFTER publish succeeds)
+  - [ ] Verify: Package is successfully published to GitHub Packages
+  - [ ] Tag: `git tag vX.X.X`
+  - [ ] Push: `git push origin vX.X.X`
 - [ ] **Verify Installation**: Test package installation from registry
   - [ ] Test: Install from `@signal-meaning/deepgram-voice-interaction-react@vX.X.X`
   - [ ] Verify: Package works correctly in test environment

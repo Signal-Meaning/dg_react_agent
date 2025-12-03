@@ -185,7 +185,7 @@ export interface KeepAliveMessage {
 export interface AgentFunction {
   name: string;
   description: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
   endpoint?: {
     url: string;
     method: string;
@@ -406,5 +406,5 @@ export interface AgentOptions {
 export interface UpdateInstructionsPayload {
   context?: string;
   instructions?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 } 

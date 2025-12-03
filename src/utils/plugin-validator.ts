@@ -26,7 +26,7 @@ export class PluginValidator {
   /**
    * Validates the plugin package.json for proper peer dependencies
    */
-  static validatePackageJson(packageJson: any): Partial<PluginValidationResult> {
+  static validatePackageJson(packageJson: Record<string, unknown>): Partial<PluginValidationResult> {
     const errors: string[] = [];
     const warnings: string[] = [];
     const requirements = {
@@ -141,7 +141,7 @@ export class PluginValidator {
   /**
    * Validates the rollup configuration for proper externalization
    */
-  static validateRollupConfig(rollupConfig: any): Partial<PluginValidationResult> {
+  static validateRollupConfig(rollupConfig: Record<string, unknown>): Partial<PluginValidationResult> {
     const errors: string[] = [];
     const warnings: string[] = [];
     const requirements = {
@@ -182,7 +182,7 @@ export class PluginValidator {
   /**
    * Comprehensive validation of the entire plugin
    */
-  static validatePlugin(packageJson: any, bundleContent: string, rollupConfig: any): PluginValidationResult {
+  static validatePlugin(packageJson: Record<string, unknown>, bundleContent: string, rollupConfig: Record<string, unknown>): PluginValidationResult {
     const packageResult = this.validatePackageJson(packageJson);
     const bundleResult = this.validateBuiltBundle(bundleContent);
     const rollupResult = this.validateRollupConfig(rollupConfig);
