@@ -177,6 +177,10 @@ function DeepgramVoiceInteraction(
   // Ref to store cleanup timeout ID for proper cleanup
   const cleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
+  // Ref to store agentOptions re-send timeout ID for cleanup
+  // Issue #311: Prevents memory leaks when agentOptions changes rapidly or component unmounts
+  const agentOptionsResendTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   // Constant for StrictMode remount detection delay
   const STRICT_MODE_REMOUNT_DETECTION_DELAY_MS = 100;
   
@@ -1061,8 +1065,17 @@ function DeepgramVoiceInteraction(
             console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] agentManager is null, waiting for re-initialization...');
           }
           
+          // Clear any existing timeout before creating a new one
+          if (agentOptionsResendTimeoutRef.current) {
+            clearTimeout(agentOptionsResendTimeoutRef.current);
+            agentOptionsResendTimeoutRef.current = null;
+          }
+          
           // Use setTimeout to defer the re-send, allowing main useEffect to recreate manager
-          setTimeout(() => {
+          agentOptionsResendTimeoutRef.current = setTimeout(() => {
+            // Clear the ref since timeout executed
+            agentOptionsResendTimeoutRef.current = null;
+            
             // Check again after delay
             if (agentManagerRef.current && agentOptions) {
               const connectionState = agentManagerRef.current.getState();
@@ -1093,9 +1106,17 @@ function DeepgramVoiceInteraction(
           }, 100); // Small delay to allow main useEffect to recreate manager
           
           // Return early - we'll retry after the delay
+          // Cleanup function will clear the timeout if effect re-runs or component unmounts
           return;
         }
       }
+    }
+    
+    // Clear any pending timeout if agentOptions didn't change or manager exists
+    // This handles the case where agentOptions changes again before the timeout fires
+    if (agentOptionsResendTimeoutRef.current) {
+      clearTimeout(agentOptionsResendTimeoutRef.current);
+      agentOptionsResendTimeoutRef.current = null;
     }
     
     if (agentOptionsChanged && agentOptions && agentManagerRef.current) {
@@ -1132,6 +1153,14 @@ function DeepgramVoiceInteraction(
         agentManagerExists: !!agentManagerRef.current
       });
     }
+    
+    // Cleanup function: Clear any pending timeout when effect re-runs or component unmounts
+    return () => {
+      if (agentOptionsResendTimeoutRef.current) {
+        clearTimeout(agentOptionsResendTimeoutRef.current);
+        agentOptionsResendTimeoutRef.current = null;
+      }
+    };
   }, [agentOptions, props.debug]); // Only depend on agentOptions and debug
 
   // Update agentOptionsRef when agentOptions changes
