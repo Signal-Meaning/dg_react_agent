@@ -161,6 +161,10 @@ function DeepgramVoiceInteraction(
   // Ref to hold the latest state value, avoiding stale closures in callbacks
   const stateRef = useRef<VoiceInteractionState>(state);
   
+  // Ref to hold the latest agentOptions value, avoiding stale closures in callbacks
+  // Issue #307: Fix closure issue where sendAgentSettings captures stale agentOptions
+  const agentOptionsRef = useRef<typeof agentOptions>(agentOptions);
+  
   // Ref to track connection type immediately and synchronously
   const isNewConnectionRef = useRef<boolean>(true);
 
@@ -993,6 +997,9 @@ function DeepgramVoiceInteraction(
     // 3. Connection is already established
     // 4. Settings have been sent before (so we know we need to update)
     if (agentOptionsChanged && agentOptions && agentManagerRef.current) {
+      // Issue #307: Update ref before re-sending to ensure latest value is used
+      agentOptionsRef.current = agentOptions;
+      
       const connectionState = agentManagerRef.current.getState();
       const isConnected = connectionState === 'connected';
       const hasSentSettingsBefore = hasSentSettingsRef.current || (window as any).globalSettingsSent;
@@ -1010,6 +1017,12 @@ function DeepgramVoiceInteraction(
       }
     }
   }, [agentOptions, props.debug]); // Only depend on agentOptions and debug
+
+  // Update agentOptionsRef when agentOptions changes
+  // Issue #307: Fix closure issue - ensure ref always has latest value
+  useEffect(() => {
+    agentOptionsRef.current = agentOptions;
+  }, [agentOptions]);
 
   // Notify ready state changes ONLY when the value actually changes
   useEffect(() => {
@@ -1318,15 +1331,18 @@ function DeepgramVoiceInteraction(
 
   // Send agent settings after connection is established - only if agent is configured
   const sendAgentSettings = () => {
+    // Issue #307: Use ref to access latest agentOptions value (fixes closure issue)
+    const currentAgentOptions = agentOptionsRef.current;
+    
     console.log('🔧 [sendAgentSettings] Called');
     console.log(`🔧 [sendAgentSettings] agentManagerRef.current: ${!!agentManagerRef.current}`);
-    console.log(`🔧 [sendAgentSettings] agentOptions: ${!!agentOptions}`);
-    console.log(`🔧 [sendAgentSettings] agentOptions.functions: ${agentOptions?.functions ? `[${agentOptions.functions.length} functions]` : 'undefined'}`);
-    console.log(`🔧 [sendAgentSettings] agentOptions.functions?.length: ${agentOptions?.functions?.length || 0}`);
+    console.log(`🔧 [sendAgentSettings] agentOptions: ${!!currentAgentOptions}`);
+    console.log(`🔧 [sendAgentSettings] agentOptions.functions: ${currentAgentOptions?.functions ? `[${currentAgentOptions.functions.length} functions]` : 'undefined'}`);
+    console.log(`🔧 [sendAgentSettings] agentOptions.functions?.length: ${currentAgentOptions?.functions?.length || 0}`);
     console.log(`🔧 [sendAgentSettings] hasSentSettings: ${state.hasSentSettings}`);
     console.log(`🔧 [sendAgentSettings] hasSentSettingsRef.current: ${hasSentSettingsRef.current}`);
     
-    if (!agentManagerRef.current || !agentOptions) {
+    if (!agentManagerRef.current || !currentAgentOptions) {
       console.log('🔧 [sendAgentSettings] Cannot send agent settings: agent manager not initialized or agentOptions not provided');
       return;
     }
@@ -1358,29 +1374,29 @@ function DeepgramVoiceInteraction(
         }
       },
       agent: {
-        language: agentOptions.language || 'en',
+        language: currentAgentOptions.language || 'en',
         // Issue #299: Only include listen provider when listenModel is explicitly provided
         // This allows text-only interactions (via injectUserMessage) without triggering
         // CLIENT_MESSAGE_TIMEOUT errors
-        ...(agentOptions.listenModel ? {
+        ...(currentAgentOptions.listenModel ? {
           listen: {
             provider: {
               type: 'deepgram',
-              model: agentOptions.listenModel
+              model: currentAgentOptions.listenModel
             }
           }
         } : {}),
         think: {
           provider: {
-            type: agentOptions.thinkProviderType || 'open_ai',
-            model: agentOptions.thinkModel || 'gpt-4o-mini'
+            type: currentAgentOptions.thinkProviderType || 'open_ai',
+            model: currentAgentOptions.thinkModel || 'gpt-4o-mini'
           },
-          prompt: agentOptions.instructions || 'You are a helpful voice assistant.',
-          ...(agentOptions.thinkEndpointUrl && agentOptions.thinkApiKey ? {
+          prompt: currentAgentOptions.instructions || 'You are a helpful voice assistant.',
+          ...(currentAgentOptions.thinkEndpointUrl && currentAgentOptions.thinkApiKey ? {
             endpoint: {
-              url: agentOptions.thinkEndpointUrl,
+              url: currentAgentOptions.thinkEndpointUrl,
               headers: {
-                authorization: `bearer ${agentOptions.thinkApiKey}`,
+                authorization: `bearer ${currentAgentOptions.thinkApiKey}`,
               },
             }
           } : {}),
@@ -1388,37 +1404,38 @@ function DeepgramVoiceInteraction(
           // Functions without endpoint are client-side (executed by the client)
           // Functions with endpoint are server-side (executed by the server)
           // Filter out client_side property - it's not part of Settings message per Deepgram API spec
-          ...(agentOptions.functions && agentOptions.functions.length > 0 ? {
-            functions: filterFunctionsForSettings(agentOptions.functions)
+          // Issue #307: Use currentAgentOptions from ref to avoid closure issue
+          ...(currentAgentOptions.functions && currentAgentOptions.functions.length > 0 ? {
+            functions: filterFunctionsForSettings(currentAgentOptions.functions)
           } : {})
         },
         // Include speak provider for TTS
         speak: {
           provider: {
             type: 'deepgram',
-            model: agentOptions.voice || 'aura-asteria-en'
+            model: currentAgentOptions.voice || 'aura-asteria-en'
           }
         },
         // Issue #234: Only include greeting if context is not provided or context.messages is empty
         // When context with existing messages is provided, this is a reconnection and greeting should be omitted
         // to avoid duplicate greeting on reconnection
-        ...(agentOptions.context?.messages && agentOptions.context.messages.length > 0 
+        ...(currentAgentOptions.context?.messages && currentAgentOptions.context.messages.length > 0 
           ? {} 
-          : { greeting: agentOptions.greeting }),
-        context: agentOptions.context // Context is already in Deepgram API format
+          : { greeting: currentAgentOptions.greeting }),
+        context: currentAgentOptions.context // Context is already in Deepgram API format
       }
     };
     
     console.log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
-      conversationHistoryLength: agentOptions.context?.messages?.length || 0,
-      contextMessages: agentOptions.context?.messages || [],
+      conversationHistoryLength: currentAgentOptions.context?.messages?.length || 0,
+      contextMessages: currentAgentOptions.context?.messages || [],
       hasSpeakProvider: 'speak' in settingsMessage.agent,
       speakModel: settingsMessage.agent.speak?.provider?.model,
       greetingIncluded: 'greeting' in settingsMessage.agent,
       greetingPreview: (settingsMessage.agent.greeting || '').slice(0, 60),
-      functionsCount: agentOptions.functions?.length || 0,
-      functionsIncluded: !!(agentOptions.functions && agentOptions.functions.length > 0),
-      functionsStructure: agentOptions.functions?.map(f => ({
+      functionsCount: currentAgentOptions.functions?.length || 0,
+      functionsIncluded: !!(currentAgentOptions.functions && currentAgentOptions.functions.length > 0),
+      functionsStructure: currentAgentOptions.functions?.map(f => ({
         name: f.name,
         hasDescription: !!f.description,
         hasParameters: !!f.parameters,
@@ -1428,7 +1445,8 @@ function DeepgramVoiceInteraction(
     
     // Log full Settings message structure for debugging (especially functions)
     // Always log when functions are present (not just in debug mode) to help diagnose SettingsApplied issues
-    if (agentOptions.functions && agentOptions.functions.length > 0) {
+    // Issue #307: Use currentAgentOptions from ref to avoid closure issue
+    if (currentAgentOptions.functions && currentAgentOptions.functions.length > 0) {
       const settingsJson = JSON.stringify(settingsMessage, null, 2);
       const functionsJson = JSON.stringify(settingsMessage.agent.think.functions, null, 2);
       
@@ -1523,7 +1541,8 @@ function DeepgramVoiceInteraction(
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
     
     // Special logging for Error messages when functions are configured (to debug SettingsApplied issue)
-    if (messageType === 'Error' && agentOptions?.functions && agentOptions.functions.length > 0) {
+    // Issue #307: Use ref to access latest agentOptions value
+    if (messageType === 'Error' && agentOptionsRef.current?.functions && agentOptionsRef.current.functions.length > 0) {
       console.error('❌ [FUNCTION DEBUG] Error received after sending Settings with functions:', JSON.stringify(data, null, 2));
     }
     
