@@ -40,15 +40,20 @@ When `agentOptions` changes, the `agentOptions` `useEffect` (line 976) runs to d
      - Settings IS re-sent
    - This confirms the timing issue
 
-### The Fix
+### The Fix ✅ IMPLEMENTED
 
-The `agentOptions` `useEffect` should:
-1. Check if `agentManagerRef.current` exists
-2. If not, wait for it to be created OR trigger its creation
-3. Then proceed with re-sending Settings
+The `agentOptions` `useEffect` now:
+1. Checks if `agentManagerRef.current` exists
+2. If not, uses `setTimeout(100ms)` to wait for main `useEffect` to recreate it
+3. Retries the re-send logic after the delay
 
-**Proposed Solution**:
-- If `agentManagerRef.current` is null but connection should exist, trigger lazy creation
-- Or use a retry mechanism with a small delay to allow the main useEffect to recreate the manager
-- Or check if the component is in a "re-initializing" state and wait for that to complete
+**Solution Implemented** (v0.6.14):
+- When `agentManagerRef.current` is null and component is ready, defer re-send check with `setTimeout`
+- After 100ms delay, check again if manager exists and connection is ready
+- If conditions are met, proceed with re-sending Settings
+- Maintains immediate re-send path when manager already exists
+
+**Code Location**: `src/components/DeepgramVoiceInteraction/index.tsx` lines 1050-1099
+
+**Test Verification**: `tests/agent-options-resend-after-connection.test.tsx` ✅ PASSING
 
