@@ -24,6 +24,7 @@ export function triggerTimeoutForTesting(webSocketManager: WebSocketManager): vo
 /**
  * Test-only utility to create a WebSocketManager for testing
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createTestWebSocketManager(options: any): WebSocketManager {
   return new WebSocketManager(options);
 }

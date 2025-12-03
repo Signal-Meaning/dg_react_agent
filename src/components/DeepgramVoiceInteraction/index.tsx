@@ -1,6 +1,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useReducer, useRef } from 'react';
 import {
   AgentState,
+  AgentOptions,
   DeepgramError,
   DeepgramVoiceInteractionHandle,
   DeepgramVoiceInteractionProps,
@@ -33,6 +34,17 @@ const DEFAULT_ENDPOINTS = {
   transcriptionUrl: 'wss://api.deepgram.com/v1/listen',
   agentUrl: 'wss://agent.deepgram.com/v1/agent/converse',
 };
+
+// Extended Window interface for global properties used by the component
+interface WindowWithDeepgramGlobals extends Window {
+  globalSettingsSent?: boolean;
+  componentInitializationCount?: number;
+  audioCaptureInProgress?: boolean;
+  __DEEPGRAM_DEBUG_AGENT_OPTIONS__?: boolean;
+  __DEEPGRAM_TEST_MODE__?: boolean;
+  __DEEPGRAM_LAST_SETTINGS__?: unknown;
+  __DEEPGRAM_LAST_FUNCTIONS__?: unknown;
+}
 
 /**
  * Helper function to warn about non-memoized options in development mode
@@ -224,21 +236,22 @@ function DeepgramVoiceInteraction(
   const SETTINGS_SEND_DELAY_MS = 500;
   
   // Global flag to prevent settings from being sent multiple times across component instances
-  if (!(window as any).globalSettingsSent) {
-    (window as any).globalSettingsSent = false;
+  const windowWithGlobals = window as WindowWithDeepgramGlobals;
+  if (!windowWithGlobals.globalSettingsSent) {
+    windowWithGlobals.globalSettingsSent = false;
   }
   
   // Global flag to prevent multiple component initializations during HMR
-  if (!(window as any).componentInitializationCount) {
-    (window as any).componentInitializationCount = 0;
+  if (!windowWithGlobals.componentInitializationCount) {
+    windowWithGlobals.componentInitializationCount = 0;
   }
-  (window as any).componentInitializationCount++;
+  windowWithGlobals.componentInitializationCount++;
   
   // Remove HMR prevention logic - it's causing React hook errors
   
   // Global flag to track if audio is currently being captured
-  if (!(window as any).audioCaptureInProgress) {
-    (window as any).audioCaptureInProgress = false;
+  if (!windowWithGlobals.audioCaptureInProgress) {
+    windowWithGlobals.audioCaptureInProgress = false;
   }
   
   // Debug: Log component initialization (but limit frequency to avoid spam)
@@ -616,7 +629,7 @@ function DeepgramVoiceInteraction(
             
             dispatch({ type: 'SETTINGS_SENT', sent: false });
             hasSentSettingsRef.current = false; // Reset ref when connection closes
-            (window as any).globalSettingsSent = false; // Reset global flag when connection closes
+            windowWithGlobals.globalSettingsSent = false; // Reset global flag when connection closes
             settingsSentTimeRef.current = null; // Reset settings time
             if (config.debug) {
               console.log('🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
@@ -661,7 +674,7 @@ function DeepgramVoiceInteraction(
           }
           
           // Send settings message when connection is established
-          if (event.state === 'connected' && !hasSentSettingsRef.current && !(window as any).globalSettingsSent) {
+          if (event.state === 'connected' && !hasSentSettingsRef.current && !windowWithGlobals.globalSettingsSent) {
             log('Connection established, sending settings via connection state handler');
             sendAgentSettings();
           } else if (event.state === 'connected' && state.hasSentSettings) {
@@ -979,7 +992,7 @@ function DeepgramVoiceInteraction(
   
   useEffect(() => {
     // Issue #311: Entry point logging to verify useEffect is running
-    const shouldLogDiagnostics = props.debug || (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
+    const shouldLogDiagnostics = props.debug || windowWithGlobals.__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
     if (shouldLogDiagnostics) {
       console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Entry point - useEffect triggered', {
         agentOptionsRef: agentOptions !== undefined ? 'exists' : 'undefined',
@@ -999,17 +1012,19 @@ function DeepgramVoiceInteraction(
     
     // Issue #311: Log the actual values being compared for debugging
     if (shouldLogDiagnostics) {
+      const prevOptions = prevAgentOptionsForResendRef.current as AgentOptions | undefined;
+      const currentOptions = agentOptions as AgentOptions | undefined;
       console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Comparing values:', {
-        prevHasFunctions: !!(prevAgentOptionsForResendRef.current as any)?.functions,
-        prevFunctionsCount: Array.isArray((prevAgentOptionsForResendRef.current as any)?.functions) 
-          ? (prevAgentOptionsForResendRef.current as any).functions.length 
+        prevHasFunctions: !!(prevOptions?.functions),
+        prevFunctionsCount: Array.isArray(prevOptions?.functions) 
+          ? prevOptions.functions.length 
           : 0,
-        currentHasFunctions: !!(agentOptions as any)?.functions,
-        currentFunctionsCount: Array.isArray((agentOptions as any)?.functions) 
-          ? (agentOptions as any).functions.length 
+        currentHasFunctions: !!(currentOptions?.functions),
+        currentFunctionsCount: Array.isArray(currentOptions?.functions) 
+          ? currentOptions.functions.length 
           : 0,
-        prevKeys: prevAgentOptionsForResendRef.current ? Object.keys(prevAgentOptionsForResendRef.current).filter(k => k !== 'context') : [],
-        currentKeys: agentOptions ? Object.keys(agentOptions).filter(k => k !== 'context') : [],
+        prevKeys: prevOptions ? Object.keys(prevOptions).filter(k => k !== 'context') : [],
+        currentKeys: currentOptions ? Object.keys(currentOptions).filter(k => k !== 'context') : [],
       });
     }
     
@@ -1029,7 +1044,7 @@ function DeepgramVoiceInteraction(
     if (shouldLogDiagnostics) {
       const connectionState = agentManagerRef.current?.getState();
       const isConnected = connectionState === 'connected';
-      const hasSentSettingsBefore = hasSentSettingsRef.current || (window as any).globalSettingsSent;
+      const hasSentSettingsBefore = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
       
       // Use console.log directly for diagnostic logs (not log() which requires props.debug)
       console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions Change] Diagnostic:', {
@@ -1040,7 +1055,7 @@ function DeepgramVoiceInteraction(
         isConnected,
         hasSentSettingsBefore,
         hasSentSettingsRef: hasSentSettingsRef.current,
-        globalSettingsSent: (window as any).globalSettingsSent,
+        globalSettingsSent: windowWithGlobals.globalSettingsSent,
         willReSend: agentOptionsChanged && agentOptions && agentManagerRef.current && isConnected && hasSentSettingsBefore
       });
     }
@@ -1084,12 +1099,12 @@ function DeepgramVoiceInteraction(
             if (agentManagerRef.current && agentOptionsRef.current) {
               const connectionState = agentManagerRef.current.getState();
               const isConnected = connectionState === 'connected';
-              const hasSentSettingsBefore = hasSentSettingsRef.current || (window as any).globalSettingsSent;
+              const hasSentSettingsBefore = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
               
               if (isConnected && hasSentSettingsBefore) {
                 // Reset the flags to allow re-sending Settings
                 hasSentSettingsRef.current = false;
-                (window as any).globalSettingsSent = false;
+                windowWithGlobals.globalSettingsSent = false;
                 
                 // Re-send Settings with updated agentOptions
                 // agentOptionsRef.current is already up-to-date (maintained by separate useEffect)
@@ -1135,12 +1150,12 @@ function DeepgramVoiceInteraction(
       
       const connectionState = agentManagerRef.current.getState();
       const isConnected = connectionState === 'connected';
-      const hasSentSettingsBefore = hasSentSettingsRef.current || (window as any).globalSettingsSent;
+      const hasSentSettingsBefore = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
       
       if (isConnected && hasSentSettingsBefore) {
         // Reset the flags to allow re-sending Settings
         hasSentSettingsRef.current = false;
-        (window as any).globalSettingsSent = false;
+        windowWithGlobals.globalSettingsSent = false;
         
         // Re-send Settings with updated agentOptions
         if (props.debug) {
@@ -1238,8 +1253,8 @@ function DeepgramVoiceInteraction(
     }
     
     // Add simplified transcript log for better readability - always show with [TRANSCRIPT] prefix
-    if (typeof data === 'object' && data !== null && ('alternatives' in data || (data as any).channel?.alternatives)) {
-      const transcriptData = data as any;
+    if (typeof data === 'object' && data !== null && ('alternatives' in data || ('channel' in data && typeof (data as { channel?: { alternatives?: unknown } }).channel?.alternatives !== 'undefined'))) {
+      const transcriptData = data as TranscriptResponse | { channel?: { alternatives?: Array<{ transcript?: string }> } };
       // Extract transcript from actual API structure (channel.alternatives[0].transcript)
       const transcript = transcriptData.channel?.alternatives?.[0]?.transcript || 
                          transcriptData.alternatives?.[0]?.transcript;
@@ -1304,7 +1319,7 @@ function DeepgramVoiceInteraction(
     }
     
     // Always log VAD events for debugging
-    if (typeof data === 'object' && data !== null && 'type' in data && (data as any).type === 'vad') {
+    if (typeof data === 'object' && data !== null && 'type' in data && (data as { type?: string }).type === 'vad') {
       if (props.debug) {
         lazyLog('🎯 [VAD] VADEvent received in handleTranscriptionMessage:', data);
       }
@@ -1314,8 +1329,8 @@ function DeepgramVoiceInteraction(
     if (props.debug) {
       // Only log if there's meaningful content or it's a VAD event
       const hasContent = typeof data === 'object' && data !== null && (
-        ('alternatives' in data && (data as any).alternatives?.length > 0) ||
-        ('type' in data && ['UtteranceEnd', 'vad'].includes((data as any).type))
+        ('alternatives' in data && Array.isArray((data as { alternatives?: unknown[] }).alternatives) && (data as { alternatives: unknown[] }).alternatives.length > 0) ||
+        ('type' in data && ['UtteranceEnd', 'vad'].includes((data as { type?: string }).type || ''))
       );
       
       if (hasContent) {
@@ -1339,7 +1354,7 @@ function DeepgramVoiceInteraction(
     // Debug: Log message type for VAD debugging
     if (typeof data === 'object' && data !== null && 'type' in data) {
       if (props.debug) {
-        lazyLog('🔍 [DEBUG] Processing message type:', (data as any).type);
+        lazyLog('🔍 [DEBUG] Processing message type:', (data as { type?: string }).type);
       }
     }
 
@@ -1504,10 +1519,10 @@ function DeepgramVoiceInteraction(
     
     // Check if settings have already been sent (welcome-first behavior)
     // Use both ref and global flag to avoid stale closure issues and cross-component duplicates
-    if (hasSentSettingsRef.current || (window as any).globalSettingsSent) {
+    if (hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent) {
       console.log('🔧 [sendAgentSettings] Settings already sent (via ref or global), skipping');
       console.log('🔧 [sendAgentSettings] hasSentSettingsRef.current:', hasSentSettingsRef.current);
-      console.log('🔧 [sendAgentSettings] globalSettingsSent:', (window as any).globalSettingsSent);
+        console.log('🔧 [sendAgentSettings] globalSettingsSent:', windowWithGlobals.globalSettingsSent);
       return;
     }
     
@@ -1609,9 +1624,9 @@ function DeepgramVoiceInteraction(
       console.log('🔍 [SETTINGS DEBUG] Functions array structure:', functionsJson);
       
       // Also expose to window for E2E testing (only in test environments)
-      if (typeof window !== 'undefined' && (window as any).__DEEPGRAM_TEST_MODE__) {
-        (window as any).__DEEPGRAM_LAST_SETTINGS__ = settingsMessage;
-        (window as any).__DEEPGRAM_LAST_FUNCTIONS__ = settingsMessage.agent.think.functions;
+      if (typeof window !== 'undefined' && windowWithGlobals.__DEEPGRAM_TEST_MODE__) {
+        windowWithGlobals.__DEEPGRAM_LAST_SETTINGS__ = settingsMessage;
+        windowWithGlobals.__DEEPGRAM_LAST_FUNCTIONS__ = settingsMessage.agent.think.functions;
       }
     } else if (props.debug) {
       console.log('🔍 [DEBUG] Full Settings message structure:', JSON.stringify(settingsMessage, null, 2));
@@ -1692,7 +1707,7 @@ function DeepgramVoiceInteraction(
   // Handle agent messages - only relevant if agent is configured
   const handleAgentMessage = (data: unknown) => {
     // Debug: Log all agent messages with type
-    const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as any).type : 'unknown';
+    const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as { type?: string }).type || 'unknown' : 'unknown';
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
     
     // Special logging for Error messages when functions are configured (to debug SettingsApplied issue)
@@ -1794,7 +1809,7 @@ function DeepgramVoiceInteraction(
       log('SettingsApplied received - settings are now active');
       // Only mark as sent when we get confirmation from Deepgram
       hasSentSettingsRef.current = true;
-      (window as any).globalSettingsSent = true;
+      windowWithGlobals.globalSettingsSent = true;
       dispatch({ type: 'SETTINGS_SENT', sent: true });
       console.log('🎯 [SettingsApplied] Settings confirmed by Deepgram, audio data can now be processed');
       
@@ -1960,7 +1975,7 @@ function DeepgramVoiceInteraction(
         log('⚠️ [Agent] Settings already applied - this is normal during reconnection:', errorMessage);
         // Mark settings as sent to prevent further attempts
         hasSentSettingsRef.current = true;
-        (window as any).globalSettingsSent = true;
+        windowWithGlobals.globalSettingsSent = true;
         dispatch({ type: 'SETTINGS_SENT', sent: true });
         return;
       }

@@ -59,14 +59,14 @@ export const VAD_EVENT_STATUS = {
  * Helper function to check if an event is real
  */
 export function isRealVADEvent(eventType: string): boolean {
-  return Object.values(REAL_DEEPGRAM_VAD_EVENTS).includes(eventType as any);
+  return Object.values(REAL_DEEPGRAM_VAD_EVENTS).includes(eventType as (typeof REAL_DEEPGRAM_VAD_EVENTS)[keyof typeof REAL_DEEPGRAM_VAD_EVENTS]);
 }
 
 /**
  * Helper function to check if an event is fictional
  */
 export function isFictionalVADEvent(eventType: string): boolean {
-  return Object.values(FICTIONAL_VAD_EVENTS).includes(eventType as any);
+  return Object.values(FICTIONAL_VAD_EVENTS).includes(eventType as (typeof FICTIONAL_VAD_EVENTS)[keyof typeof FICTIONAL_VAD_EVENTS]);
 }
 
 /**

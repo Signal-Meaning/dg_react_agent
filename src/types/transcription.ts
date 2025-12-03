@@ -73,7 +73,7 @@ export interface TranscriptionOptions {
   /**
    * Any other parameters supported by Deepgram API
    */
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
