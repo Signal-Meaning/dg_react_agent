@@ -101,8 +101,8 @@ export function ClosureIssueTestPage() {
         apiKey={apiKey}
         agentOptions={agentOptions}
         debug={true}
-        onConnectionStateChange={(state) => {
-          setConnectionState(state.agent || 'closed');
+        onConnectionStateChange={(states) => {
+          setConnectionState(states.agent || 'closed');
         }}
       />
     </div>
