@@ -991,6 +991,26 @@ function DeepgramVoiceInteraction(
     // Update ref for next comparison
     prevAgentOptionsForResendRef.current = agentOptions;
     
+    // Issue #311: Diagnostic logging to help identify why re-send might not trigger
+    const shouldLogDiagnostics = props.debug || (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
+    if (shouldLogDiagnostics) {
+      const connectionState = agentManagerRef.current?.getState();
+      const isConnected = connectionState === 'connected';
+      const hasSentSettingsBefore = hasSentSettingsRef.current || (window as any).globalSettingsSent;
+      
+      log('🔍 [agentOptions Change] Diagnostic:', {
+        agentOptionsChanged,
+        agentOptionsExists: !!agentOptions,
+        agentManagerExists: !!agentManagerRef.current,
+        connectionState,
+        isConnected,
+        hasSentSettingsBefore,
+        hasSentSettingsRef: hasSentSettingsRef.current,
+        globalSettingsSent: (window as any).globalSettingsSent,
+        willReSend: agentOptionsChanged && agentOptions && agentManagerRef.current && isConnected && hasSentSettingsBefore
+      });
+    }
+    
     // Only re-send if:
     // 1. agentOptions actually changed
     // 2. agentOptions exists (agent is configured)
@@ -1014,7 +1034,21 @@ function DeepgramVoiceInteraction(
           log('agentOptions changed while connected - re-sending Settings with updated options');
         }
         sendAgentSettings();
+      } else if (shouldLogDiagnostics) {
+        // Issue #311: Log why re-send was blocked
+        log('⚠️ [agentOptions Change] Re-send blocked:', {
+          isConnected,
+          hasSentSettingsBefore,
+          reason: !isConnected ? 'connection not established' : 'settings not sent before'
+        });
       }
+    } else if (shouldLogDiagnostics) {
+      // Issue #311: Log why change detection didn't trigger re-send
+      log('🔍 [agentOptions Change] Change detection:', {
+        agentOptionsChanged,
+        agentOptionsExists: !!agentOptions,
+        agentManagerExists: !!agentManagerRef.current
+      });
     }
   }, [agentOptions, props.debug]); // Only depend on agentOptions and debug
 
