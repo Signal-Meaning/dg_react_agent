@@ -78,9 +78,11 @@ echo "🔗 Issue URL: $ISSUE_URL"
 ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -o '[0-9]*$')
 
 # Create and switch to new release branch
-RELEASE_BRANCH="issue$ISSUE_NUMBER"
+# For patch releases, use release/vX.X.X format as per checklist
+RELEASE_BRANCH="release/v$VERSION"
 echo "🌿 Creating release branch: $RELEASE_BRANCH"
 git checkout -b "$RELEASE_BRANCH"
+git push -u origin "$RELEASE_BRANCH"
 
 echo "✅ Ready to work on release v$VERSION!"
 echo "📍 You are now on branch: $RELEASE_BRANCH"
