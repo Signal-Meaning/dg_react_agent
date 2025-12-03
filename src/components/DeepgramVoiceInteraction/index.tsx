@@ -1077,7 +1077,11 @@ function DeepgramVoiceInteraction(
             agentOptionsResendTimeoutRef.current = null;
             
             // Check again after delay
-            if (agentManagerRef.current && agentOptions) {
+            // Issue #311: Use agentOptionsRef.current instead of closure variable agentOptions
+            // to ensure we always use the latest value, even if agentOptions changed again
+            // before the timeout fired. The separate useEffect (lines 1168-1170) keeps
+            // agentOptionsRef.current up-to-date whenever agentOptions changes.
+            if (agentManagerRef.current && agentOptionsRef.current) {
               const connectionState = agentManagerRef.current.getState();
               const isConnected = connectionState === 'connected';
               const hasSentSettingsBefore = hasSentSettingsRef.current || (window as any).globalSettingsSent;
@@ -1088,10 +1092,10 @@ function DeepgramVoiceInteraction(
                 (window as any).globalSettingsSent = false;
                 
                 // Re-send Settings with updated agentOptions
+                // agentOptionsRef.current is already up-to-date (maintained by separate useEffect)
                 if (props.debug) {
                   log('agentOptions changed while connected - re-sending Settings with updated options (after manager recreation)');
                 }
-                agentOptionsRef.current = agentOptions;
                 sendAgentSettings();
               } else if (shouldLogDiagnostics) {
                 console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] Re-send still blocked after delay:', {
