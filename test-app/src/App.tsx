@@ -20,7 +20,7 @@ import { ClosureIssueTestPage } from './closure-issue-test-page';
 declare global {
   interface Window {
     deepgramRef?: React.RefObject<DeepgramVoiceInteractionHandle>;
-    handleFunctionCall?: (request: any) => void;
+    handleFunctionCall?: (request: any, sendResponse: (response: any) => void) => void;
   }
 }
 
@@ -801,11 +801,11 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
         onSettingsApplied={handleSettingsApplied}
-        onFunctionCallRequest={useCallback((request: any) => {
+        onFunctionCallRequest={useCallback((request: any, sendResponse: (response: any) => void) => {
           // Handle function call requests from Deepgram
           console.log('[APP] FunctionCallRequest received:', request);
           if (window.handleFunctionCall) {
-            window.handleFunctionCall(request);
+            window.handleFunctionCall(request, sendResponse);
           }
         }, [])}
         // VAD event handlers
