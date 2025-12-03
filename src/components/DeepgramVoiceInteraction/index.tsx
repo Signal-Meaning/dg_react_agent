@@ -1186,7 +1186,7 @@ function DeepgramVoiceInteraction(
         agentOptionsResendTimeoutRef.current = null;
       }
     };
-  }, [agentOptions, props.debug]); // Only depend on agentOptions and debug
+  }, [props.agentOptions, props.debug]); // Use direct prop access for reliable dependency tracking (Issue #318: destructured variables may not work correctly in minified builds)
 
   // Update agentOptionsRef when agentOptions changes
   // Issue #307: Fix closure issue - ensure ref always has latest value
