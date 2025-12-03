@@ -251,11 +251,71 @@ Create a test that reproduces the customer's scenario:
 ## Next Steps
 
 1. ✅ **Create GitHub issue** (Issue #311)
-2. ⏳ **Add diagnostic logging** to component
-3. ⏳ **Reproduce customer's scenario** in test
-4. ⏳ **Identify root cause** (which condition is failing)
-5. ⏳ **Fix or document** the issue
-6. ⏳ **Update customer** with findings
+2. ✅ **Add diagnostic logging** to component
+3. ⏳ **Provide customer with diagnostic instructions**
+4. ⏳ **Reproduce customer's scenario** in test (if needed)
+5. ⏳ **Identify root cause** (which condition is failing)
+6. ⏳ **Fix or document** the issue
+7. ⏳ **Update customer** with findings
+
+## Diagnostic Logging Added
+
+**Status**: ✅ **IMPLEMENTED**
+
+Added comprehensive diagnostic logging to help identify which condition is preventing re-send:
+
+### How to Enable
+
+1. **Via debug prop**:
+   ```tsx
+   <DeepgramVoiceInteraction debug={true} agentOptions={agentOptions} />
+   ```
+
+2. **Via window flag** (for testing):
+   ```javascript
+   window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true;
+   ```
+
+### What Gets Logged
+
+When `agentOptions` changes, the component logs:
+
+1. **Change Detection Diagnostic**:
+   - `agentOptionsChanged`: Whether deep comparison detected a change
+   - `agentOptionsExists`: Whether agentOptions is defined
+   - `agentManagerExists`: Whether agent manager is initialized
+   - `connectionState`: Current connection state
+   - `isConnected`: Whether connection is 'connected'
+   - `hasSentSettingsBefore`: Whether Settings were sent before
+   - `willReSend`: Whether all conditions are met for re-send
+
+2. **Re-send Blocked Warning** (if conditions not met):
+   - Which condition failed
+   - Reason for blocking
+
+3. **Change Detection Info** (if change not detected):
+   - Why change detection didn't trigger
+
+### Customer Instructions
+
+**To diagnose why re-send isn't happening:**
+
+1. Enable diagnostic logging:
+   ```tsx
+   <DeepgramVoiceInteraction debug={true} agentOptions={agentOptions} />
+   ```
+
+2. Update `agentOptions` after connection is established
+
+3. Check console for diagnostic logs:
+   - Look for `🔍 [agentOptions Change] Diagnostic:` log
+   - Check which conditions are `false`
+   - Look for `⚠️ [agentOptions Change] Re-send blocked:` if re-send was blocked
+
+4. Common issues to check:
+   - `agentOptionsChanged: false` → Object reference didn't change (mutation vs new object)
+   - `isConnected: false` → Connection not in 'connected' state
+   - `hasSentSettingsBefore: false` → Settings weren't sent before (connection issue)
 
 ## Acceptance Criteria
 
