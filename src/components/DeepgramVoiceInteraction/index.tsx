@@ -1102,7 +1102,7 @@ function DeepgramVoiceInteraction(
       // Issue #307: Update ref before re-sending to ensure latest value is used
       agentOptionsRef.current = agentOptions;
       
-      const connectionState = agentManager.getState();
+      const connectionState = agentManagerRef.current.getState();
       const isConnected = connectionState === 'connected';
       const hasSentSettingsBefore = hasSentSettingsRef.current || (window as any).globalSettingsSent;
       
