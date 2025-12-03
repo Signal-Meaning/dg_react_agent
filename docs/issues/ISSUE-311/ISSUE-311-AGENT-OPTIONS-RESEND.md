@@ -3,8 +3,8 @@
 **GitHub Issue**: https://github.com/Signal-Meaning/dg_react_agent/issues/311
 
 **Date**: December 3, 2025  
-**Status**: 🔍 **INVESTIGATION**  
-**Component Version**: `0.6.11`  
+**Status**: 🔍 **INVESTIGATION** - Active investigation in progress  
+**Component Version**: `0.6.13` (diagnostic logging added, but logs still not appearing in customer's test)  
 **Severity**: Medium  
 **Type**: Bug / Behavior Investigation
 
@@ -140,6 +140,31 @@ agentOptions = { ...agentOptions, functions: [...agentOptions.functions, newFunc
 **Issue**: Customer mentions `onAgentOptionsChange` callback - this prop doesn't exist.
 
 **Investigation**: This might be a misunderstanding. The component doesn't have this callback. The re-send happens automatically via `useEffect`, not via a callback.
+
+## Latest Update (December 3, 2025)
+
+### Customer Test Results After v0.6.13
+
+Customer upgraded to v0.6.13 and enabled diagnostic logging via `window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true`, but diagnostic logs are still not appearing.
+
+**Customer Findings**:
+1. ✅ Component detects prop change (memoization warning appears)
+2. ❌ `onAgentOptionsChange` callback is not triggered (this prop doesn't exist - customer confusion)
+3. ❌ No v0.6.13 diagnostic logs appear
+4. ❌ Component does not re-send Settings when `agentOptions` changes
+
+**Key Insight**: The memoization warning appears in the **main initialization useEffect** (line 809-811), which runs when the component initializes or when dependencies change. But the **diagnostic logging is in a separate useEffect** (line 976) that watches `agentOptions`.
+
+**Hypothesis**: The diagnostic `useEffect` might not be running because:
+- The `agentOptions` prop reference isn't changing (customer might be mutating instead of creating new reference)
+- OR the `useEffect` dependency array isn't triggering properly
+- OR there's a timing issue where the window flag isn't set before component mounts
+
+### Our Investigation Actions
+
+1. ✅ **Fixed diagnostic logging bug** (v0.6.13): Changed from `log()` to `console.log` so logs appear when window flag is set
+2. ✅ **Added entry point logging** (investigation branch): Added logging at the very start of the `useEffect` to verify it's running
+3. 🔄 **Next**: Reproduce customer scenario to identify root cause
 
 ## Investigation Plan
 

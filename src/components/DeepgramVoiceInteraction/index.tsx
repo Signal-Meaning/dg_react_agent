@@ -974,9 +974,22 @@ function DeepgramVoiceInteraction(
   const prevAgentOptionsForResendRef = useRef<typeof agentOptions>(undefined);
   
   useEffect(() => {
+    // Issue #311: Entry point logging to verify useEffect is running
+    const shouldLogDiagnostics = props.debug || (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
+    if (shouldLogDiagnostics) {
+      console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Entry point - useEffect triggered', {
+        agentOptionsRef: agentOptions !== undefined ? 'exists' : 'undefined',
+        prevAgentOptionsRef: prevAgentOptionsForResendRef.current !== undefined ? 'exists' : 'undefined',
+        isFirstRender: prevAgentOptionsForResendRef.current === undefined
+      });
+    }
+    
     // Skip on first render (prevAgentOptionsForResendRef is undefined)
     if (prevAgentOptionsForResendRef.current === undefined) {
       prevAgentOptionsForResendRef.current = agentOptions;
+      if (shouldLogDiagnostics) {
+        console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] First render - skipping change detection');
+      }
       return;
     }
     
@@ -992,7 +1005,7 @@ function DeepgramVoiceInteraction(
     prevAgentOptionsForResendRef.current = agentOptions;
     
     // Issue #311: Diagnostic logging to help identify why re-send might not trigger
-    const shouldLogDiagnostics = props.debug || (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
+    // shouldLogDiagnostics already computed above at entry point
     if (shouldLogDiagnostics) {
       const connectionState = agentManagerRef.current?.getState();
       const isConnected = connectionState === 'connected';
