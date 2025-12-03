@@ -6,7 +6,10 @@ We've investigated why the `useEffect` for `agentOptions` appears not to be runn
 
 1. **The dependency array works correctly** - React properly tracks `agentOptions` changes
 2. **The `useEffect` runs in our tests** - All tests pass, confirming the effect runs when `agentOptions` changes
-3. **Most likely cause: Component remounting** - If your component is remounting (not just re-rendering), this explains the behavior
+3. **Most likely causes** (since remounting is ruled out):
+   - `agentOptions` reference not actually changing (object mutation)
+   - Diagnostic logging not enabled (can't see entry point logs)
+   - `useMemo` dependencies incorrect (same reference returned)
 
 ## Why Tests Pass
 
@@ -20,141 +23,260 @@ We created comprehensive tests to verify the behavior:
 
 ## Why You Might See Different Behavior
 
-If the component is **remounting** (not just re-rendering), two things happen:
+Since remounting is ruled out, here are the most likely causes:
 
-### 1. `prevAgentOptionsForResendRef` Resets
+### 1. Object Mutation (Most Likely)
 
-On remount, all refs reset to their initial values. The effect sees `prevAgentOptionsForResendRef.current === undefined` and treats this as "first render", skipping change detection:
+**Issue**: If you're **mutating** the `agentOptions` object instead of creating a new reference, React won't detect the change:
 
 ```typescript
-// Skip on first render (prevAgentOptionsForResendRef is undefined)
-if (prevAgentOptionsForResendRef.current === undefined) {
-  prevAgentOptionsForResendRef.current = agentOptions;
-  return; // Skips change detection
-}
+// ❌ WRONG - Mutation (same reference)
+const agentOptions = { functions: [...] };
+agentOptions.functions.push(newFunction); // Mutation!
+// React sees same reference, useEffect doesn't run
+
+// ✅ CORRECT - New reference
+const agentOptions = { 
+  functions: [...existingFunctions, newFunction] 
+}; // New object!
+// React sees new reference, useEffect runs
 ```
 
-**Code Reference**: `src/components/DeepgramVoiceInteraction/index.tsx:1004-1006`
-
-### 2. WebSocket Connections May Be Severed
-
-The component has different behavior for WebSocket connections depending on remount type:
-
-- **StrictMode remounts (<100ms)**: ✅ Connections are **preserved**
-- **Normal remounts (>100ms)**: ❌ Connections are **closed**
-- **True unmounts**: ❌ Connections are **closed**
-
-**Code Reference**: `src/components/DeepgramVoiceInteraction/index.tsx:931-981`
-
-The component uses a 100ms delay to detect StrictMode remounts. If the component remounts after 100ms, connections are closed before the remount completes, requiring new connections to be established.
-
-## How to Diagnose
-
-### Check for Component Remounting
-
-Look for these signs in your console logs:
-
-1. **Multiple "Component initialized" logs**:
-   ```
-   🔧 [Component] DeepgramVoiceInteraction component initialized
-   ```
-   If you see this log multiple times when `agentOptions` changes, the component is remounting.
-
-2. **Enable diagnostic logging**:
-   ```typescript
-   window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true;
-   ```
-
-3. **Check for "First render" logs**:
-   ```
-   [agentOptions useEffect] First render - skipping change detection
-   ```
-   If you see this when `agentOptions` changes, the ref was reset (indicating remount).
-
-### Verify Component Stability
-
-Add this to your component or test to track mounts:
-
+**How to verify**:
 ```typescript
+const prevRef = useRef(agentOptions);
 useEffect(() => {
-  console.log('🔍 Component mounted/remounted');
-  return () => {
-    console.log('🔍 Component unmounting');
+  if (prevRef.current !== agentOptions) {
+    console.log('✅ Reference changed!');
+    prevRef.current = agentOptions;
+  } else {
+    console.log('❌ Same reference - mutation detected!');
+  }
+}, [agentOptions]);
+```
+
+### 2. useMemo Not Creating New References
+
+**Issue**: If your `useMemo` dependencies aren't set up correctly, it might return the same reference even when content changes:
+
+```typescript
+// ❌ WRONG - missing dependency
+const agentOptions = useMemo(() => {
+  return {
+    functions: hasFunctions ? [myFunction] : undefined
   };
-}, []);
+}, []); // Missing [hasFunctions] dependency!
+
+// ✅ CORRECT
+const agentOptions = useMemo(() => {
+  return {
+    functions: hasFunctions ? [myFunction] : undefined
+  };
+}, [hasFunctions]); // Has all dependencies
 ```
 
-## Common Causes of Remounting
+**How to verify**:
+```typescript
+const agentOptions = useMemo(() => {
+  console.log('[CUSTOMER] useMemo running, hasFunctions:', hasFunctions);
+  return {
+    functions: hasFunctions ? [myFunction] : undefined
+  };
+}, [hasFunctions]); // ← Verify this includes ALL dependencies
 
-### 1. Parent Component Remounts
-
-```tsx
-// ❌ Bad - remounts on every state change
-{condition && <DeepgramVoiceInteraction ... />}
-
-// ✅ Good - stable rendering
-<DeepgramVoiceInteraction ... />
+// Log reference changes
+const prevRef = useRef(agentOptions);
+useEffect(() => {
+  console.log('[CUSTOMER] Reference same?', prevRef.current === agentOptions);
+  prevRef.current = agentOptions;
+}, [agentOptions]);
 ```
 
-### 2. React Key Prop Changes
+### 3. Diagnostic Logging Not Enabled
 
-```tsx
-// ❌ Bad - remounts when key changes
-<DeepgramVoiceInteraction key={someValue} ... />
+**Issue**: If diagnostic logging isn't enabled, you won't see the entry point logs, making it appear the `useEffect` isn't running:
 
-// ✅ Good - stable key
-<DeepgramVoiceInteraction ... />
-```
-
-### 3. Parent Component Creates New Component Instance
-
-```tsx
-// ❌ Bad - new component on every render
-function Parent() {
-  return <DeepgramVoiceInteraction ... />;
+```typescript:995:996:src/components/DeepgramVoiceInteraction/index.tsx
+const shouldLogDiagnostics = props.debug || window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
+if (shouldLogDiagnostics) {
+  // Entry point log only appears if this is true
 }
-
-// ✅ Good - memoized or stable
-const Component = useMemo(() => <DeepgramVoiceInteraction ... />, [deps]);
 ```
 
-### 4. Callback Props Creating New References
+**How to fix**:
+```typescript
+// BEFORE rendering component (e.g., in your app's entry point)
+window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true;
 
-```tsx
-// ❌ Bad - new function on every render
-<DeepgramVoiceInteraction onTranscriptUpdate={(text) => {...}} />
-
-// ✅ Good - stable callback
-const handleTranscript = useCallback((text) => {...}, []);
-<DeepgramVoiceInteraction onTranscriptUpdate={handleTranscript} />
+// OR use the debug prop
+<DeepgramVoiceInteraction
+  debug={true}
+  agentOptions={agentOptions}
+  // ...
+/>
 ```
 
-## Recommended Actions
+**What to look for**:
+```
+[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Entry point - useEffect triggered
+```
 
-### Step 1: Verify Component Stability
+If you don't see this log when `agentOptions` changes, either:
+- Diagnostic logging isn't enabled, OR
+- The `useEffect` truly isn't running (reference didn't change)
 
-Check if your component is remounting by looking for multiple initialization logs or using the mount tracking code above.
+### 4. Effect Runs But Change Detection Fails
 
-### Step 2: Prevent Remounting (If Confirmed)
+**Issue**: The `useEffect` might be running, but the deep comparison doesn't detect a change:
 
-If remounting is the issue, fix the root cause:
+```typescript:1015:1040:src/components/DeepgramVoiceInteraction/index.tsx
+const agentOptionsChanged = hasDependencyChanged(
+  prevAgentOptionsForResendRef.current as Record<string, unknown> | undefined,
+  agentOptions as Record<string, unknown>,
+  false, // not first mount
+  compareAgentOptionsIgnoringContext
+);
+```
 
-- Use stable React keys
-- Memoize callbacks and options
-- Avoid conditional rendering that unmounts component
-- Ensure parent component doesn't remount unnecessarily
-- Use `useCallback` for callback props
-- Use `useMemo` for options objects
+**How to verify**: Enable diagnostic logging and look for:
+```
+[agentOptions Change] Diagnostic: agentOptionsChanged: true/false
+```
 
-### Step 3: If Remounting is Necessary
+If `agentOptionsChanged: false`, the deep comparison didn't detect a change (even though reference changed).
 
-If you must remount the component:
+## Diagnostic Steps
 
-- Connections will be severed (expected behavior)
-- Component will need to re-establish connections
-- `prevAgentOptionsForResendRef` will reset (causing the "first render" skip)
-- First `agentOptions` change after remount will be skipped
-- Second `agentOptions` change after remount will work correctly
+### Step 1: Verify Reference Changes
+
+Add this to your component to verify `agentOptions` reference is actually changing:
+
+```typescript
+const prevAgentOptionsRef = useRef(agentOptions);
+
+useEffect(() => {
+  const referenceChanged = prevAgentOptionsRef.current !== agentOptions;
+  console.log('[CUSTOMER] agentOptions reference changed?', referenceChanged);
+  console.log('[CUSTOMER] Previous:', prevAgentOptionsRef.current);
+  console.log('[CUSTOMER] Current:', agentOptions);
+  
+  if (!referenceChanged) {
+    console.warn('[CUSTOMER] ⚠️ Same reference detected - mutation or useMemo issue!');
+  }
+  
+  prevAgentOptionsRef.current = agentOptions;
+}, [agentOptions]);
+```
+
+### Step 2: Enable Diagnostic Logging
+
+**Critical**: Enable diagnostic logging **BEFORE** rendering the component:
+
+```typescript
+// In your app entry point or before component render
+window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true;
+
+// Then render component
+<DeepgramVoiceInteraction
+  agentOptions={agentOptions}
+  // ...
+/>
+```
+
+### Step 3: Check for Entry Point Logs
+
+When `agentOptions` changes, you should see:
+
+```
+[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Entry point - useEffect triggered
+```
+
+**If you see this log**: The `useEffect` IS running. The issue is likely:
+- Change detection failing (deep comparison)
+- Conditions not met for re-send (connection state, etc.)
+
+**If you DON'T see this log**: The `useEffect` is NOT running. This means:
+- Reference didn't change (mutation or useMemo issue)
+- Diagnostic logging not enabled
+
+### Step 4: Verify useMemo Dependencies
+
+If using `useMemo`, verify all dependencies are included:
+
+```typescript
+const agentOptions = useMemo(() => {
+  // Log when useMemo runs
+  console.log('[CUSTOMER] useMemo executing with:', { hasFunctions, otherDeps });
+  
+  return {
+    functions: hasFunctions ? [myFunction] : undefined,
+    // ... other options
+  };
+}, [hasFunctions, /* ALL other values used inside */]);
+```
+
+**Common mistake**: Forgetting to include dependencies used inside `useMemo`.
+
+### Step 5: Check Connection State
+
+Even if the `useEffect` runs and detects a change, Settings won't be re-sent unless:
+
+1. ✅ Connection is established (`connectionState === 'connected'`)
+2. ✅ Settings were sent before (`hasSentSettingsRef.current || window.globalSettingsSent`)
+3. ✅ `agentManagerRef.current` exists
+
+**Code Reference**: `src/components/DeepgramVoiceInteraction/index.tsx:1042-1125`
+
+## Common Patterns That Cause Issues
+
+### Pattern 1: Mutating Functions Array
+
+```typescript
+// ❌ WRONG
+const [functions, setFunctions] = useState([]);
+functions.push(newFunction); // Mutation!
+const agentOptions = useMemo(() => ({ functions }), [functions]);
+// Same reference returned, useEffect doesn't run
+
+// ✅ CORRECT
+const [functions, setFunctions] = useState([]);
+const agentOptions = useMemo(() => ({ 
+  functions: [...functions, newFunction] 
+}), [functions, newFunction]);
+// New reference created, useEffect runs
+```
+
+### Pattern 2: useMemo Missing Dependencies
+
+```typescript
+// ❌ WRONG
+const agentOptions = useMemo(() => {
+  return {
+    functions: hasFunctions ? [myFunction] : undefined,
+    model: 'nova-2'
+  };
+}, []); // Missing dependencies!
+
+// ✅ CORRECT
+const agentOptions = useMemo(() => {
+  return {
+    functions: hasFunctions ? [myFunction] : undefined,
+    model: 'nova-2'
+  };
+}, [hasFunctions, myFunction]); // All dependencies included
+```
+
+### Pattern 3: Diagnostic Logging Too Late
+
+```typescript
+// ❌ WRONG - Too late
+<DeepgramVoiceInteraction agentOptions={agentOptions} />
+window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true; // Already rendered!
+
+// ✅ CORRECT - Before render
+window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true;
+<DeepgramVoiceInteraction agentOptions={agentOptions} />
+```
 
 ## Technical Details
 
@@ -180,7 +302,21 @@ useEffect(() => {
     return;
   }
   
-  // ... rest of effect
+  // Deep comparison to detect actual changes
+  const agentOptionsChanged = hasDependencyChanged(
+    prevAgentOptionsForResendRef.current as Record<string, unknown> | undefined,
+    agentOptions as Record<string, unknown>,
+    false, // not first mount
+    compareAgentOptionsIgnoringContext
+  );
+  
+  // Update ref for next comparison
+  prevAgentOptionsForResendRef.current = agentOptions;
+  
+  // Re-send Settings if conditions are met
+  if (agentOptionsChanged && agentOptions && agentManagerRef.current) {
+    // ... re-send logic
+  }
 }, [agentOptions, props.debug]);
 ```
 
@@ -197,29 +333,21 @@ const {
 
 **Important**: React's dependency array correctly tracks destructured variables. The dependency `[agentOptions, props.debug]` will trigger when `props.agentOptions` changes, even though `agentOptions` is destructured.
 
-### Connection Preservation Logic
+### Conditions Required for Re-send
 
-The component preserves connections during StrictMode remounts:
+Even if the `useEffect` runs and detects a change, Settings won't be re-sent unless **ALL** conditions are met:
 
-```typescript:931:942:src/components/DeepgramVoiceInteraction/index.tsx
-cleanupTimeoutRef.current = setTimeout(() => {
-  // If component re-mounted quickly (within delay), this was likely StrictMode
-  // In that case, don't close connections as they'll be needed for the re-mounted component
-  if (isMountedRef.current) {
-    if (props.debug) {
-      console.log('🔧 [Component] Cleanup detected StrictMode re-invocation - preserving connections and state');
-    }
-    return; // Component re-mounted, don't close connections or reset state
-  }
-  // ... close connections only if truly unmounting
-}, STRICT_MODE_REMOUNT_DETECTION_DELAY_MS); // 100ms delay
-```
+1. ✅ **`agentOptionsChanged`** - Deep comparison detects change
+2. ✅ **`agentOptions` exists** - Not undefined/null
+3. ✅ **`agentManagerRef.current` exists** - Manager is initialized
+4. ✅ **Connection state is 'connected'** - `connectionState === 'connected'`
+5. ✅ **`hasSentSettingsBefore` is true** - Settings were sent before
 
-**Limitation**: This only works for remounts within 100ms (StrictMode). Normal remounts after 100ms will close connections.
+**Code Reference**: `src/components/DeepgramVoiceInteraction/index.tsx:1042-1125`
 
 ## Test Results
 
-We created two comprehensive test suites:
+We created comprehensive tests to verify the behavior:
 
 1. **`tests/agent-options-useeffect-must-run.test.tsx`**:
    - Verifies `useEffect` runs when `agentOptions` changes
@@ -229,30 +357,27 @@ We created two comprehensive test suites:
 2. **`tests/agent-options-remount-behavior.test.tsx`**:
    - Verifies what happens when component remounts
    - Tests `prevAgentOptionsForResendRef` reset behavior
-   - Tests Settings re-send after remount
    - All tests passing ✅
 
 ## Next Steps
 
-1. **Verify if your component is remounting** using the diagnostic steps above
-2. **If remounting is confirmed**: Fix the root cause in your code (likely parent component or key prop)
-3. **If remounting is not the issue**: Please share:
-   - Your component usage code
-   - Console logs with diagnostic logging enabled
-   - Any error messages
-   - React version
+1. **Enable diagnostic logging** (`window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true`) **before** rendering
+2. **Verify `agentOptions` reference is changing** using the diagnostic code above
+3. **Check `useMemo` dependencies** if using `useMemo`
+4. **Look for entry point logs** when `agentOptions` changes
+5. **Share results**:
+   - Do you see entry point logs? (Yes = effect running, No = reference not changing)
+   - Does reference change? (Yes = effect should run, No = mutation/useMemo issue)
+   - What does the diagnostic code show?
 
 ## Code References
 
 - `src/components/DeepgramVoiceInteraction/index.tsx:993-1189` - `agentOptions` useEffect
-- `src/components/DeepgramVoiceInteraction/index.tsx:931-981` - Cleanup and connection handling
 - `src/components/DeepgramVoiceInteraction/index.tsx:1004-1006` - First render skip logic
+- `src/components/DeepgramVoiceInteraction/index.tsx:1015-1040` - Change detection logic
+- `src/components/DeepgramVoiceInteraction/index.tsx:1042-1125` - Re-send conditions
 - `tests/agent-options-useeffect-must-run.test.tsx` - Tests verifying useEffect behavior
-- `tests/agent-options-remount-behavior.test.tsx` - Tests verifying remount behavior
 
 ## Related Issues
 
-- Issue #206 - StrictMode connection closure (✅ Fixed)
-- Issue #276 - Component remounting bug (🔍 Investigating)
 - Issue #311 - Component not re-sending Settings when agentOptions changes (✅ Fixed in v0.6.15)
-
