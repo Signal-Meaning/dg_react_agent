@@ -2,7 +2,7 @@
 
 **Component**: `DeepgramVoiceInteraction`  
 **Package**: `@signal-meaning/deepgram-voice-interaction-react`  
-**Release Date**: December 2024  
+**Release Date**: December 2, 2025  
 **Previous Version**: v0.6.10
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),

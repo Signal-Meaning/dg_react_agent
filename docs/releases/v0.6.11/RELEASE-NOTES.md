@@ -1,7 +1,7 @@
 ## 🚀 Release v0.6.11: Patch Release - Functions Not Included in Settings Message Fix
 
 **Version**: v0.6.11  
-**Date**: December 2024  
+**Date**: December 2, 2025  
 **Status**: Released  
 **Previous Version**: v0.6.10
 
