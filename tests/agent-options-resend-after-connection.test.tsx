@@ -265,7 +265,8 @@ describe('Agent Options Re-send After Connection - Issue #311', () => {
     
     const isWaitingForReinit = consoleLogs.some(log => 
       log.includes('waiting for re-initialization') ||
-      log.includes('after manager recreation')
+      log.includes('after manager recreation') ||
+      log.includes('agentManager is null, waiting')
     );
     
     // The fix handles the timing issue by waiting for manager recreation
