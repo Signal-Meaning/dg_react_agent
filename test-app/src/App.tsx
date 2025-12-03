@@ -13,12 +13,14 @@ import {
   AudioConstraints
 } from '../../src/types';
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
+import { ClosureIssueTestPage } from './closure-issue-test-page';
 
 // Type declaration for E2E test support
 // Only used in test-app for E2E testing, not part of the component's public API
 declare global {
   interface Window {
     deepgramRef?: React.RefObject<DeepgramVoiceInteractionHandle>;
+    handleFunctionCall?: (request: any) => void;
   }
 }
 
@@ -31,6 +33,14 @@ type TranscriptHistoryEntry = {
 };
 
 function App() {
+  // Check if we should render the closure issue test page
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const testPage = urlParams?.get('test-page');
+  
+  if (testPage === 'closure-issue') {
+    return <ClosureIssueTestPage />;
+  }
+  
   // Fail-fast check for required API key
   const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
   const projectId = import.meta.env.VITE_DEEPGRAM_PROJECT_ID;
@@ -791,7 +801,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
         onSettingsApplied={handleSettingsApplied}
-        onFunctionCallRequest={useCallback((request) => {
+        onFunctionCallRequest={useCallback((request: any) => {
           // Handle function call requests from Deepgram
           console.log('[APP] FunctionCallRequest received:', request);
           if (window.handleFunctionCall) {
