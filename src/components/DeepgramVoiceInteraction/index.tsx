@@ -1046,11 +1046,63 @@ function DeepgramVoiceInteraction(
     // 2. agentOptions exists (agent is configured)
     // 3. Connection is already established
     // 4. Settings have been sent before (so we know we need to update)
+    
+    // Issue #311: Fix timing issue - agentManagerRef.current might be null if main useEffect
+    // cleanup ran first. If agentOptions changed and we should have a manager, wait briefly
+    // for it to be recreated by the main useEffect, then retry.
+    if (agentOptionsChanged && agentOptions) {
+      // If manager doesn't exist, this might be a timing issue where cleanup ran first.
+      // Wait briefly for main useEffect to recreate the manager, then retry.
+      if (!agentManagerRef.current) {
+        const currentState = stateRef.current;
+        // Only retry if component is ready (manager should exist)
+        if (currentState.isReady) {
+          if (shouldLogDiagnostics) {
+            console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] agentManager is null, waiting for re-initialization...');
+          }
+          
+          // Use setTimeout to defer the re-send, allowing main useEffect to recreate manager
+          setTimeout(() => {
+            // Check again after delay
+            if (agentManagerRef.current && agentOptions) {
+              const connectionState = agentManagerRef.current.getState();
+              const isConnected = connectionState === 'connected';
+              const hasSentSettingsBefore = hasSentSettingsRef.current || (window as any).globalSettingsSent;
+              
+              if (isConnected && hasSentSettingsBefore) {
+                // Reset the flags to allow re-sending Settings
+                hasSentSettingsRef.current = false;
+                (window as any).globalSettingsSent = false;
+                
+                // Re-send Settings with updated agentOptions
+                if (props.debug) {
+                  log('agentOptions changed while connected - re-sending Settings with updated options (after manager recreation)');
+                }
+                agentOptionsRef.current = agentOptions;
+                sendAgentSettings();
+              } else if (shouldLogDiagnostics) {
+                console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] Re-send still blocked after delay:', {
+                  isConnected,
+                  hasSentSettingsBefore,
+                  agentManagerExists: !!agentManagerRef.current
+                });
+              }
+            } else if (shouldLogDiagnostics) {
+              console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] agentManager still null after delay');
+            }
+          }, 100); // Small delay to allow main useEffect to recreate manager
+          
+          // Return early - we'll retry after the delay
+          return;
+        }
+      }
+    }
+    
     if (agentOptionsChanged && agentOptions && agentManagerRef.current) {
       // Issue #307: Update ref before re-sending to ensure latest value is used
       agentOptionsRef.current = agentOptions;
       
-      const connectionState = agentManagerRef.current.getState();
+      const connectionState = agentManager.getState();
       const isConnected = connectionState === 'connected';
       const hasSentSettingsBefore = hasSentSettingsRef.current || (window as any).globalSettingsSent;
       
