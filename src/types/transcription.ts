@@ -182,7 +182,7 @@ export interface TranscriptResponse {
   /**
    * Additional metadata
    */
-  metadata?: any;
+  metadata?: unknown;
 }
 
 /**
