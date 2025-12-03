@@ -1,5 +1,17 @@
 # Issue #318 Investigation: useEffect Not Running - Complete Analysis
 
+## ✅ FIX IMPLEMENTED
+
+**Fix Applied**: Changed dependency array from `[agentOptions, props.debug]` to `[props.agentOptions, props.debug]`
+
+**Reason**: Destructured variables in dependency arrays may not work correctly in minified builds. React's dependency tracking works more reliably with direct property access.
+
+**Status**: Fix committed, tests passing. Will be included in v0.6.16 release.
+
+**See**: `docs/ISSUE-318-FIX-IMPLEMENTED.md` for details.
+
+---
+
 ## Executive Summary
 
 **CRITICAL UPDATE**: The `useEffect` with dependency array `[agentOptions, props.debug]` is **NOT running at all**, even on initial mount:
