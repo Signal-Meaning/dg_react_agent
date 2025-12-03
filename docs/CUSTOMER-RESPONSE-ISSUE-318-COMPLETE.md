@@ -2,14 +2,21 @@
 
 ## Executive Summary
 
-We've investigated why the `useEffect` for `agentOptions` appears not to be running. Our analysis shows:
+**CRITICAL UPDATE**: The `useEffect` with dependency array `[agentOptions, props.debug]` is **NOT running at all**, even on initial mount:
 
-1. **The dependency array works correctly** - React properly tracks `agentOptions` changes
-2. **The `useEffect` runs in our tests** - All tests pass, confirming the effect runs when `agentOptions` changes
-3. **Most likely causes** (since remounting is ruled out):
-   - `agentOptions` reference not actually changing (object mutation)
-   - Diagnostic logging not enabled (can't see entry point logs)
-   - `useMemo` dependencies incorrect (same reference returned)
+- ❌ No "Entry point - useEffect triggered" logs
+- ❌ No "First render" logs  
+- ❌ No "Comparing values" logs
+- ❌ No diagnostic logs of any kind
+
+**What IS working**:
+- ✅ Component mounts once (no remounting - customer confirmed)
+- ✅ `useMemo` creates new object references when `hasFunctions` changes
+- ✅ React detects prop change (`isNewReference: true`)
+- ✅ Component sees the change (memoization warning appears)
+- ✅ Diagnostic logging is enabled (`window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true`)
+
+**Conclusion**: React detects the prop change, but the component's `useEffect` is not executing. This points to a **dependency tracking issue** or a **build/bundler issue** preventing the effect from running.
 
 ## Why Tests Pass
 
@@ -19,137 +26,154 @@ We created comprehensive tests to verify the behavior:
 - ✅ `useEffect` runs with `useMemo` pattern (your pattern)
 - ✅ Dependency array correctly tracks `props.agentOptions`
 
-**Conclusion**: The dependency array and `useEffect` logic are working correctly. React's dependency array correctly handles destructured variables like `agentOptions` from `props`.
+**Conclusion**: The dependency array and `useEffect` logic are working correctly in our test environment. React's dependency array correctly handles destructured variables like `agentOptions` from `props`.
 
-## Why You Might See Different Behavior
+## Possible Root Causes
 
-Since remounting is ruled out, here are the most likely causes:
+Since remounting is ruled out and the effect isn't running even on initial mount, the most likely causes are:
 
-### 1. Object Mutation (Most Likely)
+### 1. Build/Bundler Issue (Most Likely)
 
-**Issue**: If you're **mutating** the `agentOptions` object instead of creating a new reference, React won't detect the change:
+**Hypothesis**: The minified/built code might have an issue with how the dependency array is handled.
 
-```typescript
-// ❌ WRONG - Mutation (same reference)
-const agentOptions = { functions: [...] };
-agentOptions.functions.push(newFunction); // Mutation!
-// React sees same reference, useEffect doesn't run
+**Evidence**: Customer mentions minified code shows `[S, t.debug]` where `S = props.agentOptions` (destructured at top level).
 
-// ✅ CORRECT - New reference
-const agentOptions = { 
-  functions: [...existingFunctions, newFunction] 
-}; // New object!
-// React sees new reference, useEffect runs
-```
+**Possible Issues**:
+- Build tool might be optimizing away the effect
+- Dependency array might not be correctly preserved in minified code
+- React's dependency tracking might not work correctly with minified variable names
+- Source maps might not be correctly mapping to source code
 
 **How to verify**:
 ```typescript
-const prevRef = useRef(agentOptions);
+// Add this test effect to verify React hooks work at all
 useEffect(() => {
-  if (prevRef.current !== agentOptions) {
-    console.log('✅ Reference changed!');
-    prevRef.current = agentOptions;
-  } else {
-    console.log('❌ Same reference - mutation detected!');
-  }
+  console.log('[CUSTOMER-TEST] Basic useEffect works - React hooks functional');
+}, []);
+
+// Add this to verify dependency tracking works
+useEffect(() => {
+  console.log('[CUSTOMER-TEST] agentOptions dependency tracking works', agentOptions);
 }, [agentOptions]);
 ```
 
-### 2. useMemo Not Creating New References
+### 2. React Version Compatibility Issue
 
-**Issue**: If your `useMemo` dependencies aren't set up correctly, it might return the same reference even when content changes:
-
-```typescript
-// ❌ WRONG - missing dependency
-const agentOptions = useMemo(() => {
-  return {
-    functions: hasFunctions ? [myFunction] : undefined
-  };
-}, []); // Missing [hasFunctions] dependency!
-
-// ✅ CORRECT
-const agentOptions = useMemo(() => {
-  return {
-    functions: hasFunctions ? [myFunction] : undefined
-  };
-}, [hasFunctions]); // Has all dependencies
-```
+**Hypothesis**: The customer's React version might have a bug or incompatibility with how dependency arrays track destructured variables.
 
 **How to verify**:
 ```typescript
-const agentOptions = useMemo(() => {
-  console.log('[CUSTOMER] useMemo running, hasFunctions:', hasFunctions);
-  return {
-    functions: hasFunctions ? [myFunction] : undefined
-  };
-}, [hasFunctions]); // ← Verify this includes ALL dependencies
-
-// Log reference changes
-const prevRef = useRef(agentOptions);
-useEffect(() => {
-  console.log('[CUSTOMER] Reference same?', prevRef.current === agentOptions);
-  prevRef.current = agentOptions;
-}, [agentOptions]);
+console.log('React version:', React.version);
+console.log('React DOM version:', ReactDOM.version);
 ```
 
-### 3. Diagnostic Logging Not Enabled
+**Check**: Compare with our tested versions. We test with React 18+.
 
-**Issue**: If diagnostic logging isn't enabled, you won't see the entry point logs, making it appear the `useEffect` isn't running:
+### 3. Effect Conditionally Defined
 
-```typescript:995:996:src/components/DeepgramVoiceInteraction/index.tsx
-const shouldLogDiagnostics = props.debug || window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
-if (shouldLogDiagnostics) {
-  // Entry point log only appears if this is true
-}
-```
+**Hypothesis**: The effect might be conditionally defined or wrapped in a condition that prevents it from being registered (though our source code shows it's always defined).
 
-**How to fix**:
+**Code Check**: Verify the effect is always defined (not inside an `if` statement or conditional).
+
+**Current Code** (lines 993-1189):
 ```typescript
-// BEFORE rendering component (e.g., in your app's entry point)
-window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true;
-
-// OR use the debug prop
-<DeepgramVoiceInteraction
-  debug={true}
-  agentOptions={agentOptions}
-  // ...
-/>
+useEffect(() => {
+  // ... effect body
+}, [agentOptions, props.debug]);
 ```
 
-**What to look for**:
-```
-[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Entry point - useEffect triggered
-```
+This should always be registered. But if there's a build issue, it might be getting optimized away.
 
-If you don't see this log when `agentOptions` changes, either:
-- Diagnostic logging isn't enabled, OR
-- The `useEffect` truly isn't running (reference didn't change)
+### 4. Source vs Built Version Mismatch
 
-### 4. Effect Runs But Change Detection Fails
+**Hypothesis**: The customer might be using a built/minified version that doesn't match the source code.
 
-**Issue**: The `useEffect` might be running, but the deep comparison doesn't detect a change:
-
-```typescript:1015:1040:src/components/DeepgramVoiceInteraction/index.tsx
-const agentOptionsChanged = hasDependencyChanged(
-  prevAgentOptionsForResendRef.current as Record<string, unknown> | undefined,
-  agentOptions as Record<string, unknown>,
-  false, // not first mount
-  compareAgentOptionsIgnoringContext
-);
-```
-
-**How to verify**: Enable diagnostic logging and look for:
-```
-[agentOptions Change] Diagnostic: agentOptionsChanged: true/false
-```
-
-If `agentOptionsChanged: false`, the deep comparison didn't detect a change (even though reference changed).
+**How to verify**:
+- Check which version they're using (npm package vs local build)
+- Verify the built code matches the source
+- Check if there are any build-time transformations that might affect the effect
 
 ## Diagnostic Steps
 
-### Step 1: Verify Reference Changes
+### Step 1: Verify React Hooks Work at All
 
-Add this to your component to verify `agentOptions` reference is actually changing:
+Add this test to verify basic React hooks functionality:
+
+```typescript
+// In customer's component or test
+useEffect(() => {
+  console.log('[CUSTOMER-TEST] Basic useEffect works - React hooks functional');
+}, []);
+
+useEffect(() => {
+  console.log('[CUSTOMER-TEST] agentOptions changed:', agentOptions);
+}, [agentOptions]);
+```
+
+**Expected**: Should see both logs. If not, React hooks aren't working in their environment.
+
+**If these don't work**: This indicates a fundamental React hooks issue, not a component-specific problem.
+
+### Step 2: Test Direct Prop Access
+
+Try using `props.agentOptions` directly instead of destructured variable:
+
+```typescript
+// Instead of:
+const { agentOptions } = props;
+useEffect(() => {
+  // ...
+}, [agentOptions, props.debug]);
+
+// Try:
+useEffect(() => {
+  const agentOptions = props.agentOptions;
+  // ...
+}, [props.agentOptions, props.debug]);
+```
+
+**Expected**: If this works, it's a destructuring issue. If not, it's something else.
+
+**Note**: This would require a code change in the component, which we can provide as a patch if needed.
+
+### Step 3: Check React Version
+
+```typescript
+console.log('React version:', React.version);
+console.log('React DOM version:', ReactDOM.version);
+```
+
+**Check**: Compare with our tested versions. We test with React 18+.
+
+**If different version**: Test with React 18.x to rule out version compatibility issues.
+
+### Step 4: Verify Build Process
+
+If using a built version:
+- Check if source maps are available
+- Verify the built code includes the effect
+- Check for any build warnings or errors
+- Compare built code with source code
+
+**How to check built code**:
+```typescript
+// If using npm package, check node_modules
+// If using local build, check dist/ folder
+// Look for the useEffect call in the built code
+```
+
+### Step 5: Test with Source Code Directly
+
+If possible, test with the source code directly (not built/minified) to rule out build issues:
+
+```typescript
+// Import from source instead of built package (if possible)
+// This would require access to the source code
+```
+
+### Step 6: Verify Reference Changes
+
+Add this to verify `agentOptions` reference is actually changing:
 
 ```typescript
 const prevAgentOptionsRef = useRef(agentOptions);
@@ -168,64 +192,7 @@ useEffect(() => {
 }, [agentOptions]);
 ```
 
-### Step 2: Enable Diagnostic Logging
-
-**Critical**: Enable diagnostic logging **BEFORE** rendering the component:
-
-```typescript
-// In your app entry point or before component render
-window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true;
-
-// Then render component
-<DeepgramVoiceInteraction
-  agentOptions={agentOptions}
-  // ...
-/>
-```
-
-### Step 3: Check for Entry Point Logs
-
-When `agentOptions` changes, you should see:
-
-```
-[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Entry point - useEffect triggered
-```
-
-**If you see this log**: The `useEffect` IS running. The issue is likely:
-- Change detection failing (deep comparison)
-- Conditions not met for re-send (connection state, etc.)
-
-**If you DON'T see this log**: The `useEffect` is NOT running. This means:
-- Reference didn't change (mutation or useMemo issue)
-- Diagnostic logging not enabled
-
-### Step 4: Verify useMemo Dependencies
-
-If using `useMemo`, verify all dependencies are included:
-
-```typescript
-const agentOptions = useMemo(() => {
-  // Log when useMemo runs
-  console.log('[CUSTOMER] useMemo executing with:', { hasFunctions, otherDeps });
-  
-  return {
-    functions: hasFunctions ? [myFunction] : undefined,
-    // ... other options
-  };
-}, [hasFunctions, /* ALL other values used inside */]);
-```
-
-**Common mistake**: Forgetting to include dependencies used inside `useMemo`.
-
-### Step 5: Check Connection State
-
-Even if the `useEffect` runs and detects a change, Settings won't be re-sent unless:
-
-1. ✅ Connection is established (`connectionState === 'connected'`)
-2. ✅ Settings were sent before (`hasSentSettingsRef.current || window.globalSettingsSent`)
-3. ✅ `agentManagerRef.current` exists
-
-**Code Reference**: `src/components/DeepgramVoiceInteraction/index.tsx:1042-1125`
+**Expected**: Should see logs when `agentOptions` changes. If reference isn't changing, that's the issue.
 
 ## Common Patterns That Cause Issues
 
@@ -287,10 +254,10 @@ The `useEffect` uses `[agentOptions, props.debug]` as dependencies:
 ```typescript:993:1189:src/components/DeepgramVoiceInteraction/index.tsx
 useEffect(() => {
   // Entry point logging
-  const shouldLogDiagnostics = props.debug || window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
+  const shouldLogDiagnostics = props.debug || windowWithGlobals.__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
   if (shouldLogDiagnostics) {
     console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Entry point - useEffect triggered', {
-      agentOptions,
+      agentOptionsRef: agentOptions !== undefined ? 'exists' : 'undefined',
       prevAgentOptionsRef: prevAgentOptionsForResendRef.current !== undefined ? 'exists' : 'undefined',
       isFirstRender: prevAgentOptionsForResendRef.current === undefined
     });
@@ -299,6 +266,9 @@ useEffect(() => {
   // Skip on first render (prevAgentOptionsForResendRef is undefined)
   if (prevAgentOptionsForResendRef.current === undefined) {
     prevAgentOptionsForResendRef.current = agentOptions;
+    if (shouldLogDiagnostics) {
+      console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] First render - skipping change detection');
+    }
     return;
   }
   
@@ -345,6 +315,65 @@ Even if the `useEffect` runs and detects a change, Settings won't be re-sent unl
 
 **Code Reference**: `src/components/DeepgramVoiceInteraction/index.tsx:1042-1125`
 
+## Immediate Action Items
+
+1. **Verify React hooks work at all**
+   - Add test effects (Step 1 above)
+   - If test effects don't run, React hooks aren't working
+
+2. **Check React version**
+   - Verify customer's React version
+   - Test with React 18.x if different
+
+3. **Test with direct prop access**
+   - Try `[props.agentOptions, props.debug]` instead of `[agentOptions, props.debug]`
+   - This would require a component patch
+
+4. **Verify build process**
+   - Check if using built/minified code
+   - Verify source maps
+   - Check for build warnings
+
+5. **Verify reference changes**
+   - Use diagnostic code (Step 6 above)
+   - Confirm `agentOptions` reference is actually changing
+
+## Potential Fixes
+
+### Fix 1: Use Direct Prop Access (If Destructuring Issue)
+
+If testing shows destructuring is the issue, we can modify the component to use direct prop access:
+
+```typescript
+// Change from:
+}, [agentOptions, props.debug]);
+
+// To:
+}, [props.agentOptions, props.debug]);
+```
+
+This would require a component code change and release.
+
+### Fix 2: Add Explicit Dependency Tracking
+
+If build/bundler is the issue, we might need to add explicit dependency tracking:
+
+```typescript
+const agentOptionsDep = props.agentOptions;
+const debugDep = props.debug;
+
+useEffect(() => {
+  // ... effect body
+}, [agentOptionsDep, debugDep]);
+```
+
+### Fix 3: Build Configuration Update
+
+If build is optimizing away the effect, we may need to:
+- Update Rollup configuration
+- Ensure dependency arrays are preserved
+- Check for any tree-shaking issues
+
 ## Test Results
 
 We created comprehensive tests to verify the behavior:
@@ -359,16 +388,22 @@ We created comprehensive tests to verify the behavior:
    - Tests `prevAgentOptionsForResendRef` reset behavior
    - All tests passing ✅
 
+**Note**: All tests pass in our environment, confirming the logic works correctly when the effect runs.
+
 ## Next Steps
 
-1. **Enable diagnostic logging** (`window.__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true`) **before** rendering
-2. **Verify `agentOptions` reference is changing** using the diagnostic code above
-3. **Check `useMemo` dependencies** if using `useMemo`
-4. **Look for entry point logs** when `agentOptions` changes
-5. **Share results**:
-   - Do you see entry point logs? (Yes = effect running, No = reference not changing)
-   - Does reference change? (Yes = effect should run, No = mutation/useMemo issue)
-   - What does the diagnostic code show?
+1. **Customer should run diagnostic tests** (Steps 1-6 above)
+2. **Share results**:
+   - Do test effects run? (Yes = React hooks work, No = React issue)
+   - Does reference change? (Yes = should trigger effect, No = mutation issue)
+   - What React version? (Compare with our tested versions)
+   - Using built or source code? (Built might have issues)
+
+3. **Based on results**:
+   - If React hooks don't work: React version/compatibility issue
+   - If reference doesn't change: Mutation/useMemo issue
+   - If reference changes but effect doesn't run: Build/bundler issue
+   - If all checks pass: Need to investigate further
 
 ## Code References
 
@@ -381,3 +416,4 @@ We created comprehensive tests to verify the behavior:
 ## Related Issues
 
 - Issue #311 - Component not re-sending Settings when agentOptions changes (✅ Fixed in v0.6.15)
+- Issue #318 - useEffect not running (🔍 Investigating - build/bundler issue suspected)
