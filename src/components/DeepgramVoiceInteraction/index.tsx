@@ -1109,9 +1109,15 @@ function DeepgramVoiceInteraction(
             }
           }, 100); // Small delay to allow main useEffect to recreate manager
           
-          // Return early - we'll retry after the delay
-          // Cleanup function will clear the timeout if effect re-runs or component unmounts
-          return;
+          // Return early with cleanup function - we'll retry after the delay
+          // CRITICAL: Return cleanup function BEFORE early return to ensure it's always registered
+          // This prevents memory leaks if effect re-runs or component unmounts before timeout fires
+          return () => {
+            if (agentOptionsResendTimeoutRef.current) {
+              clearTimeout(agentOptionsResendTimeoutRef.current);
+              agentOptionsResendTimeoutRef.current = null;
+            }
+          };
         }
       }
     }
