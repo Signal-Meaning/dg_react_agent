@@ -177,6 +177,10 @@ function DeepgramVoiceInteraction(
   // Ref to store cleanup timeout ID for proper cleanup
   const cleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
+  // Ref to store agentOptions re-send timeout ID for cleanup
+  // Issue #311: Prevents memory leaks when agentOptions changes rapidly or component unmounts
+  const agentOptionsResendTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   // Constant for StrictMode remount detection delay
   const STRICT_MODE_REMOUNT_DETECTION_DELAY_MS = 100;
   
@@ -993,6 +997,22 @@ function DeepgramVoiceInteraction(
       return;
     }
     
+    // Issue #311: Log the actual values being compared for debugging
+    if (shouldLogDiagnostics) {
+      console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Comparing values:', {
+        prevHasFunctions: !!(prevAgentOptionsForResendRef.current as any)?.functions,
+        prevFunctionsCount: Array.isArray((prevAgentOptionsForResendRef.current as any)?.functions) 
+          ? (prevAgentOptionsForResendRef.current as any).functions.length 
+          : 0,
+        currentHasFunctions: !!(agentOptions as any)?.functions,
+        currentFunctionsCount: Array.isArray((agentOptions as any)?.functions) 
+          ? (agentOptions as any).functions.length 
+          : 0,
+        prevKeys: prevAgentOptionsForResendRef.current ? Object.keys(prevAgentOptionsForResendRef.current).filter(k => k !== 'context') : [],
+        currentKeys: agentOptions ? Object.keys(agentOptions).filter(k => k !== 'context') : [],
+      });
+    }
+    
     // Check if agentOptions actually changed using deep comparison
     const agentOptionsChanged = hasDependencyChanged(
       prevAgentOptionsForResendRef.current as Record<string, unknown> | undefined,
@@ -1030,6 +1050,85 @@ function DeepgramVoiceInteraction(
     // 2. agentOptions exists (agent is configured)
     // 3. Connection is already established
     // 4. Settings have been sent before (so we know we need to update)
+    
+    // Issue #311: Fix timing issue - agentManagerRef.current might be null if main useEffect
+    // cleanup ran first. If agentOptions changed and we should have a manager, wait briefly
+    // for it to be recreated by the main useEffect, then retry.
+    if (agentOptionsChanged && agentOptions) {
+      // If manager doesn't exist, this might be a timing issue where cleanup ran first.
+      // Wait briefly for main useEffect to recreate the manager, then retry.
+      if (!agentManagerRef.current) {
+        const currentState = stateRef.current;
+        // Only retry if component is ready (manager should exist)
+        if (currentState.isReady) {
+          if (shouldLogDiagnostics) {
+            console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] agentManager is null, waiting for re-initialization...');
+          }
+          
+          // Clear any existing timeout before creating a new one
+          if (agentOptionsResendTimeoutRef.current) {
+            clearTimeout(agentOptionsResendTimeoutRef.current);
+            agentOptionsResendTimeoutRef.current = null;
+          }
+          
+          // Use setTimeout to defer the re-send, allowing main useEffect to recreate manager
+          agentOptionsResendTimeoutRef.current = setTimeout(() => {
+            // Clear the ref since timeout executed
+            agentOptionsResendTimeoutRef.current = null;
+            
+            // Check again after delay
+            // Issue #311: Use agentOptionsRef.current instead of closure variable agentOptions
+            // to ensure we always use the latest value, even if agentOptions changed again
+            // before the timeout fired. The separate useEffect (lines 1168-1170) keeps
+            // agentOptionsRef.current up-to-date whenever agentOptions changes.
+            if (agentManagerRef.current && agentOptionsRef.current) {
+              const connectionState = agentManagerRef.current.getState();
+              const isConnected = connectionState === 'connected';
+              const hasSentSettingsBefore = hasSentSettingsRef.current || (window as any).globalSettingsSent;
+              
+              if (isConnected && hasSentSettingsBefore) {
+                // Reset the flags to allow re-sending Settings
+                hasSentSettingsRef.current = false;
+                (window as any).globalSettingsSent = false;
+                
+                // Re-send Settings with updated agentOptions
+                // agentOptionsRef.current is already up-to-date (maintained by separate useEffect)
+                if (props.debug) {
+                  log('agentOptions changed while connected - re-sending Settings with updated options (after manager recreation)');
+                }
+                sendAgentSettings();
+              } else if (shouldLogDiagnostics) {
+                console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] Re-send still blocked after delay:', {
+                  isConnected,
+                  hasSentSettingsBefore,
+                  agentManagerExists: !!agentManagerRef.current
+                });
+              }
+            } else if (shouldLogDiagnostics) {
+              console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] agentManager still null after delay');
+            }
+          }, 100); // Small delay to allow main useEffect to recreate manager
+          
+          // Return early with cleanup function - we'll retry after the delay
+          // CRITICAL: Return cleanup function BEFORE early return to ensure it's always registered
+          // This prevents memory leaks if effect re-runs or component unmounts before timeout fires
+          return () => {
+            if (agentOptionsResendTimeoutRef.current) {
+              clearTimeout(agentOptionsResendTimeoutRef.current);
+              agentOptionsResendTimeoutRef.current = null;
+            }
+          };
+        }
+      }
+    }
+    
+    // Clear any pending timeout if agentOptions didn't change or manager exists
+    // This handles the case where agentOptions changes again before the timeout fires
+    if (agentOptionsResendTimeoutRef.current) {
+      clearTimeout(agentOptionsResendTimeoutRef.current);
+      agentOptionsResendTimeoutRef.current = null;
+    }
+    
     if (agentOptionsChanged && agentOptions && agentManagerRef.current) {
       // Issue #307: Update ref before re-sending to ensure latest value is used
       agentOptionsRef.current = agentOptions;
@@ -1064,6 +1163,14 @@ function DeepgramVoiceInteraction(
         agentManagerExists: !!agentManagerRef.current
       });
     }
+    
+    // Cleanup function: Clear any pending timeout when effect re-runs or component unmounts
+    return () => {
+      if (agentOptionsResendTimeoutRef.current) {
+        clearTimeout(agentOptionsResendTimeoutRef.current);
+        agentOptionsResendTimeoutRef.current = null;
+      }
+    };
   }, [agentOptions, props.debug]); // Only depend on agentOptions and debug
 
   // Update agentOptionsRef when agentOptions changes

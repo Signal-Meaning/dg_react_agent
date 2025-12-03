@@ -13,12 +13,14 @@ import {
   AudioConstraints
 } from '../../src/types';
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
+import { ClosureIssueTestPage } from './closure-issue-test-page';
 
 // Type declaration for E2E test support
 // Only used in test-app for E2E testing, not part of the component's public API
 declare global {
   interface Window {
     deepgramRef?: React.RefObject<DeepgramVoiceInteractionHandle>;
+    handleFunctionCall?: (request: any, sendResponse: (response: any) => void) => void;
   }
 }
 
@@ -728,6 +730,16 @@ function App() {
     }
   };
   
+  // Check if we should render the closure issue test page
+  // NOTE: Must check this AFTER all hooks are called to avoid Rules of Hooks violation
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const testPage = urlParams?.get('test-page');
+  
+  // Render closure issue test page if requested (after all hooks are called)
+  if (testPage === 'closure-issue') {
+    return <ClosureIssueTestPage />;
+  }
+  
   // Show error if API key or project ID is missing
   if (shouldShowError) {
     return (
@@ -791,11 +803,11 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
         onSettingsApplied={handleSettingsApplied}
-        onFunctionCallRequest={useCallback((request) => {
+        onFunctionCallRequest={useCallback((request: any, sendResponse: (response: any) => void) => {
           // Handle function call requests from Deepgram
           console.log('[APP] FunctionCallRequest received:', request);
           if (window.handleFunctionCall) {
-            window.handleFunctionCall(request);
+            window.handleFunctionCall(request, sendResponse);
           }
         }, [])}
         // VAD event handlers

@@ -3,10 +3,10 @@
 **GitHub Issue**: https://github.com/Signal-Meaning/dg_react_agent/issues/311
 
 **Date**: December 3, 2025  
-**Status**: 🔍 **INVESTIGATION** - Active investigation in progress  
-**Component Version**: `0.6.13` (diagnostic logging added, but logs still not appearing in customer's test)  
+**Status**: ✅ **FIXED** - Fix implemented and tested  
+**Component Version**: `0.6.14` (fix implemented)  
 **Severity**: Medium  
-**Type**: Bug / Behavior Investigation
+**Type**: Bug - Timing Race Condition
 
 ## Problem Statement
 
@@ -344,11 +344,35 @@ When `agentOptions` changes, the component logs:
 
 ## Acceptance Criteria
 
-- [ ] Root cause identified (which condition is failing)
-- [ ] Diagnostic logging added to help diagnose future issues
-- [ ] Customer's scenario reproduced in test
-- [ ] Fix implemented OR documented as expected behavior
-- [ ] Customer updated with findings
+- [x] Root cause identified (which condition is failing) - **agentManagerRef.current is null due to timing race condition**
+- [x] Diagnostic logging added to help diagnose future issues
+- [x] Customer's scenario reproduced in test - **test/agent-options-resend-after-connection.test.tsx**
+- [x] Fix implemented - **setTimeout retry mechanism when agentManager is null**
+- [ ] Customer updated with findings - **Pending patch release**
+
+## Resolution
+
+### Root Cause
+When `agentOptions` changes, React re-runs the main initialization `useEffect` cleanup first, which nullifies `agentManagerRef.current` before the `agentOptions` `useEffect` can use it. This creates a timing race condition where Settings cannot be re-sent.
+
+### Fix Implemented (v0.6.14)
+The `agentOptions` `useEffect` now detects when `agentManagerRef.current` is null and uses a `setTimeout` to defer the re-send check, allowing the main `useEffect` to recreate the manager first. This ensures Settings is re-sent even when there's a timing race condition.
+
+**Code Changes** (lines 1050-1099 in `index.tsx`):
+- Check if `agentManagerRef.current` is null when `agentOptions` changes
+- If null and component is ready, use `setTimeout(100ms)` to wait for manager recreation
+- Retry the re-send logic after the delay
+- Maintains existing immediate re-send path when manager exists
+
+### Test Results
+✅ **Test Passing**: `tests/agent-options-resend-after-connection.test.tsx`
+- "should re-send Settings when agentOptions changes AFTER connection is established" ✅ PASSING
+- Confirms Settings IS re-sent with the fix
+
+### Next Steps
+1. Release v0.6.14 with this fix
+2. Update customer with fix details
+3. Request customer to test and confirm resolution
 
 ## Notes
 
