@@ -33,14 +33,6 @@ type TranscriptHistoryEntry = {
 };
 
 function App() {
-  // Check if we should render the closure issue test page
-  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const testPage = urlParams?.get('test-page');
-  
-  if (testPage === 'closure-issue') {
-    return <ClosureIssueTestPage />;
-  }
-  
   // Fail-fast check for required API key
   const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
   const projectId = import.meta.env.VITE_DEEPGRAM_PROJECT_ID;
@@ -737,6 +729,16 @@ function App() {
       setMicLoading(false);
     }
   };
+  
+  // Check if we should render the closure issue test page
+  // NOTE: Must check this AFTER all hooks are called to avoid Rules of Hooks violation
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const testPage = urlParams?.get('test-page');
+  
+  // Render closure issue test page if requested (after all hooks are called)
+  if (testPage === 'closure-issue') {
+    return <ClosureIssueTestPage />;
+  }
   
   // Show error if API key or project ID is missing
   if (shouldShowError) {
