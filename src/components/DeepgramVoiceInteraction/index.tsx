@@ -998,7 +998,8 @@ function DeepgramVoiceInteraction(
       const isConnected = connectionState === 'connected';
       const hasSentSettingsBefore = hasSentSettingsRef.current || (window as any).globalSettingsSent;
       
-      log('🔍 [agentOptions Change] Diagnostic:', {
+      // Use console.log directly for diagnostic logs (not log() which requires props.debug)
+      console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions Change] Diagnostic:', {
         agentOptionsChanged,
         agentOptionsExists: !!agentOptions,
         agentManagerExists: !!agentManagerRef.current,
@@ -1035,16 +1036,16 @@ function DeepgramVoiceInteraction(
         }
         sendAgentSettings();
       } else if (shouldLogDiagnostics) {
-        // Issue #311: Log why re-send was blocked
-        log('⚠️ [agentOptions Change] Re-send blocked:', {
+        // Issue #311: Log why re-send was blocked (use console.log directly for diagnostics)
+        console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] Re-send blocked:', {
           isConnected,
           hasSentSettingsBefore,
           reason: !isConnected ? 'connection not established' : 'settings not sent before'
         });
       }
     } else if (shouldLogDiagnostics) {
-      // Issue #311: Log why change detection didn't trigger re-send
-      log('🔍 [agentOptions Change] Change detection:', {
+      // Issue #311: Log why change detection didn't trigger re-send (use console.log directly for diagnostics)
+      console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions Change] Change detection:', {
         agentOptionsChanged,
         agentOptionsExists: !!agentOptions,
         agentManagerExists: !!agentManagerRef.current
