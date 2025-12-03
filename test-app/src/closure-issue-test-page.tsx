@@ -80,11 +80,15 @@ export function ClosureIssueTestPage() {
     };
   }, [updateAgentOptions]);
   
+  // Track connection state for E2E tests
+  const [connectionState, setConnectionState] = useState<string>('closed');
+  
   return (
     <div data-testid="closure-issue-test-page">
       <h1>Closure Issue Test - Issue #311</h1>
       <div>
         <p>Functions enabled: {hasFunctions ? 'Yes' : 'No'}</p>
+        <p data-testid="connection-status">{connectionState}</p>
         <button 
           onClick={() => setHasFunctions(!hasFunctions)}
           data-testid="toggle-functions-button"
@@ -97,6 +101,9 @@ export function ClosureIssueTestPage() {
         apiKey={apiKey}
         agentOptions={agentOptions}
         debug={true}
+        onConnectionStateChange={(state) => {
+          setConnectionState(state.agent || 'closed');
+        }}
       />
     </div>
   );
