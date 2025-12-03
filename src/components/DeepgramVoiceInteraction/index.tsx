@@ -993,6 +993,22 @@ function DeepgramVoiceInteraction(
       return;
     }
     
+    // Issue #311: Log the actual values being compared for debugging
+    if (shouldLogDiagnostics) {
+      console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Comparing values:', {
+        prevHasFunctions: !!(prevAgentOptionsForResendRef.current as any)?.functions,
+        prevFunctionsCount: Array.isArray((prevAgentOptionsForResendRef.current as any)?.functions) 
+          ? (prevAgentOptionsForResendRef.current as any).functions.length 
+          : 0,
+        currentHasFunctions: !!(agentOptions as any)?.functions,
+        currentFunctionsCount: Array.isArray((agentOptions as any)?.functions) 
+          ? (agentOptions as any).functions.length 
+          : 0,
+        prevKeys: prevAgentOptionsForResendRef.current ? Object.keys(prevAgentOptionsForResendRef.current).filter(k => k !== 'context') : [],
+        currentKeys: agentOptions ? Object.keys(agentOptions).filter(k => k !== 'context') : [],
+      });
+    }
+    
     // Check if agentOptions actually changed using deep comparison
     const agentOptionsChanged = hasDependencyChanged(
       prevAgentOptionsForResendRef.current as Record<string, unknown> | undefined,
