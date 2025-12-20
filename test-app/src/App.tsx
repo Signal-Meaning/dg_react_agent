@@ -97,11 +97,47 @@ function App() {
   const [idleTimeoutActive, setIdleTimeoutActive] = useState<boolean>(false);
   
   // Backend proxy mode state (Issue #242)
-  const [connectionMode, setConnectionMode] = useState<'direct' | 'proxy'>('direct');
-  const [proxyEndpoint, setProxyEndpoint] = useState<string>(
-    import.meta.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy'
-  );
-  const [proxyAuthToken, setProxyAuthToken] = useState<string>('');
+  // Allow override via window for E2E testing
+  const [connectionMode, setConnectionMode] = useState<'direct' | 'proxy'>(() => {
+    if (typeof window !== 'undefined' && (window as Window & { testConnectionMode?: string }).testConnectionMode) {
+      return (window as Window & { testConnectionMode?: string }).testConnectionMode as 'direct' | 'proxy';
+    }
+    return 'direct';
+  });
+  const [proxyEndpoint, setProxyEndpoint] = useState<string>(() => {
+    if (typeof window !== 'undefined' && (window as Window & { testProxyEndpoint?: string }).testProxyEndpoint) {
+      return (window as Window & { testProxyEndpoint?: string }).testProxyEndpoint || '';
+    }
+    return import.meta.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
+  });
+  const [proxyAuthToken, setProxyAuthToken] = useState<string>(() => {
+    if (typeof window !== 'undefined' && (window as Window & { testProxyAuthToken?: string }).testProxyAuthToken) {
+      return (window as Window & { testProxyAuthToken?: string }).testProxyAuthToken || '';
+    }
+    return '';
+  });
+
+  // Update connection mode if test mode changes it
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as Window & { testConnectionMode?: string }).testConnectionMode) {
+      const testMode = (window as Window & { testConnectionMode?: string }).testConnectionMode;
+      if (testMode && testMode !== connectionMode) {
+        setConnectionMode(testMode as 'direct' | 'proxy');
+      }
+    }
+    if (typeof window !== 'undefined' && (window as Window & { testProxyEndpoint?: string }).testProxyEndpoint) {
+      const testEndpoint = (window as Window & { testProxyEndpoint?: string }).testProxyEndpoint;
+      if (testEndpoint && testEndpoint !== proxyEndpoint) {
+        setProxyEndpoint(testEndpoint);
+      }
+    }
+    if (typeof window !== 'undefined' && (window as Window & { testProxyAuthToken?: string }).testProxyAuthToken) {
+      const testToken = (window as Window & { testProxyAuthToken?: string }).testProxyAuthToken;
+      if (testToken && testToken !== proxyAuthToken) {
+        setProxyAuthToken(testToken);
+      }
+    }
+  }, [connectionMode, proxyEndpoint, proxyAuthToken]);
   
   // Audio constraints for echo cancellation testing (Issue #243)
   // Allow override via URL query params for E2E testing

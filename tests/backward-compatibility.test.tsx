@@ -57,7 +57,12 @@ describe('Backward Compatibility - apiKey Prop', () => {
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
       render(<DeepgramVoiceInteraction {...props} ref={ref} />);
 
-      // Wait for component to initialize
+      // Call start() to trigger manager creation
+      await act(async () => {
+        await ref.current?.start({ agent: true });
+      });
+
+      // Wait for managers to be created
       await act(async () => {
         await new Promise(resolve => setTimeout(resolve, 100));
       });
@@ -109,8 +114,9 @@ describe('Backward Compatibility - apiKey Prop', () => {
     // Verify component methods are available
     expect(ref.current).toBeTruthy();
     expect(typeof ref.current?.startAudioCapture).toBe('function');
-    expect(typeof ref.current?.stopAudioCapture).toBe('function');
-    expect(typeof ref.current?.sendTextMessage).toBe('function');
+    expect(typeof ref.current?.start).toBe('function');
+    expect(typeof ref.current?.stop).toBe('function');
+    expect(typeof ref.current?.injectUserMessage).toBe('function');
   });
 
   it('should connect to Deepgram directly when using apiKey', async () => {
@@ -122,9 +128,15 @@ describe('Backward Compatibility - apiKey Prop', () => {
         },
       };
 
-      render(<DeepgramVoiceInteraction {...props} />);
+      const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+      render(<DeepgramVoiceInteraction {...props} ref={ref} />);
 
-      // Wait for component to initialize
+      // Call start() to trigger manager creation
+      await act(async () => {
+        await ref.current?.start({ agent: true });
+      });
+
+      // Wait for managers to be created
       await act(async () => {
         await new Promise(resolve => setTimeout(resolve, 100));
       });
@@ -167,7 +179,12 @@ describe('Backward Compatibility - apiKey Prop', () => {
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
       render(<DeepgramVoiceInteraction {...props} ref={ref} />);
 
-      // Wait for component to initialize
+      // Call start() to trigger manager creation for both services
+      await act(async () => {
+        await ref.current?.start({ agent: true, transcription: true });
+      });
+
+      // Wait for managers to be created
       await act(async () => {
         await new Promise(resolve => setTimeout(resolve, 100));
       });
