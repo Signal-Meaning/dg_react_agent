@@ -52,7 +52,10 @@ test.describe('Backend Proxy Authentication', () => {
 
   test('should work without auth token (optional authentication)', async ({ page }) => {
     // Configure component via URL query parameters (no auth token)
-    const testUrl = `http://localhost:5173/?connectionMode=proxy&proxyEndpoint=${encodeURIComponent(PROXY_ENDPOINT)}`;
+    const testUrl = buildUrlWithParams(BASE_URL, {
+      connectionMode: 'proxy',
+      proxyEndpoint: PROXY_ENDPOINT
+    });
     await page.goto(testUrl);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });

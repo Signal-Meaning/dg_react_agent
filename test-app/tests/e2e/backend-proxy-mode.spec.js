@@ -126,7 +126,10 @@ test.describe('Backend Proxy Mode', () => {
   test('should handle proxy server unavailable gracefully', async ({ page }) => {
     // Configure component via URL query parameters with invalid endpoint
     const invalidEndpoint = 'ws://localhost:9999/invalid-proxy';
-    const testUrl = `http://localhost:5173/?connectionMode=proxy&proxyEndpoint=${encodeURIComponent(invalidEndpoint)}`;
+    const testUrl = buildUrlWithParams(BASE_URL, {
+      connectionMode: 'proxy',
+      proxyEndpoint: invalidEndpoint
+    });
     await page.goto(testUrl);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });

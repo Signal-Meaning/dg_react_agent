@@ -67,7 +67,7 @@ interface DeepgramVoiceInteractionProps {
    * When provided, component connects through backend proxy instead of directly to Deepgram
    * Format: ws:// or wss:// URL (e.g., "wss://api.example.com/deepgram-proxy")
    * 
-   * @see Issue #242 for backend proxy implementation details
+   * @see docs/BACKEND-PROXY/ for backend proxy implementation details
    */
   proxyEndpoint?: string;
   
