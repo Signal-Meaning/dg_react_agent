@@ -96,6 +96,13 @@ function App() {
   // Idle timeout state
   const [idleTimeoutActive, setIdleTimeoutActive] = useState<boolean>(false);
   
+  // Backend proxy mode state (Issue #242)
+  const [connectionMode, setConnectionMode] = useState<'direct' | 'proxy'>('direct');
+  const [proxyEndpoint, setProxyEndpoint] = useState<string>(
+    import.meta.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy'
+  );
+  const [proxyAuthToken, setProxyAuthToken] = useState<string>('');
+  
   // Audio constraints for echo cancellation testing (Issue #243)
   // Allow override via URL query params for E2E testing
   const memoizedAudioConstraints = useMemo(() => {
@@ -790,7 +797,13 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       
       <DeepgramVoiceInteraction
         ref={deepgramRef}
-        apiKey={import.meta.env.VITE_DEEPGRAM_API_KEY || ''}
+        {...(connectionMode === 'direct' 
+          ? { apiKey: import.meta.env.VITE_DEEPGRAM_API_KEY || '' }
+          : { 
+              proxyEndpoint: proxyEndpoint || import.meta.env.VITE_PROXY_ENDPOINT,
+              ...(proxyAuthToken ? { proxyAuthToken } : {})
+            }
+        )}
         transcriptionOptions={memoizedTranscriptionOptions}
         agentOptions={memoizedAgentOptions}
         endpointConfig={memoizedEndpointConfig}
@@ -857,6 +870,90 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             </div>
           );
         })()}
+        
+        {/* Connection Mode Toggle (Issue #242) */}
+        <div style={{ 
+          margin: '15px 0', 
+          padding: '10px', 
+          border: '1px solid #4299e1', 
+          borderRadius: '4px',
+          backgroundColor: '#ebf8ff'
+        }}>
+          <h4 style={{ margin: '0 0 10px 0' }}>Connection Mode (Issue #242)</h4>
+          <div style={{ marginBottom: '10px' }}>
+            <label style={{ marginRight: '15px' }}>
+              <input
+                type="radio"
+                name="connectionMode"
+                value="direct"
+                checked={connectionMode === 'direct'}
+                onChange={(e) => setConnectionMode(e.target.value as 'direct' | 'proxy')}
+              />
+              Direct (apiKey)
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="connectionMode"
+                value="proxy"
+                checked={connectionMode === 'proxy'}
+                onChange={(e) => setConnectionMode(e.target.value as 'direct' | 'proxy')}
+              />
+              Proxy (proxyEndpoint)
+            </label>
+          </div>
+          
+          {connectionMode === 'proxy' && (
+            <div style={{ marginTop: '10px' }}>
+              <div style={{ marginBottom: '10px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  Proxy Endpoint:
+                </label>
+                <input
+                  type="text"
+                  value={proxyEndpoint}
+                  onChange={(e) => setProxyEndpoint(e.target.value)}
+                  placeholder="ws://localhost:8080/deepgram-proxy"
+                  style={{ 
+                    width: '100%', 
+                    padding: '5px',
+                    fontFamily: 'monospace',
+                    fontSize: '0.9em'
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  Auth Token (optional):
+                </label>
+                <input
+                  type="text"
+                  value={proxyAuthToken}
+                  onChange={(e) => setProxyAuthToken(e.target.value)}
+                  placeholder="JWT or session token"
+                  style={{ 
+                    width: '100%', 
+                    padding: '5px',
+                    fontFamily: 'monospace',
+                    fontSize: '0.9em'
+                  }}
+                />
+              </div>
+              <p style={{ 
+                marginTop: '10px', 
+                fontSize: '0.85em', 
+                color: '#2d3748',
+                fontStyle: 'italic'
+              }}>
+                Current mode: <strong data-testid="connection-mode">{connectionMode}</strong>
+                {connectionMode === 'proxy' && (
+                  <span> → {proxyEndpoint || 'Not set'}</span>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+        
         <p>Audio Recording: <strong>{isRecording.toString()}</strong></p>
         <p>Audio Playing: <strong data-testid="audio-playing-status">{isPlaying.toString()}</strong></p>
         <p>Component Ready: <strong data-testid="component-ready-status">{isReady.toString()}</strong></p>
