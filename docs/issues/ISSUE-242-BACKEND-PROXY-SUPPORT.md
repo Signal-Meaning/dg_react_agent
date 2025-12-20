@@ -554,11 +554,14 @@ npm run test:e2e:proxy
    - [ ] Add code comments and JSDoc
 
 2. **Documentation**
-   - [ ] `docs/BACKEND-PROXY-SETUP.md` - Backend implementation guide
-   - [ ] `test-app/docs/releases/v0.X.X/BACKEND-PROXY-INTEGRATION.md` - Integration examples
-   - [ ] `docs/SECURITY-BEST-PRACTICES.md` - Security guide
-   - [ ] Update main README with proxy mode examples
-   - [ ] Add migration guide for existing implementations
+   - [x] `docs/BACKEND-PROXY/` - Backend proxy documentation directory
+   - [x] `docs/BACKEND-PROXY/INTERFACE-CONTRACT.md` - Interface contract specification
+   - [x] `docs/BACKEND-PROXY/IMPLEMENTATION-NODEJS.md` - Node.js/Express implementation guide
+   - [x] `docs/BACKEND-PROXY/IMPLEMENTATION-FASTAPI.md` - Python/FastAPI implementation guide
+   - [x] `docs/BACKEND-PROXY/IMPLEMENTATION-DJANGO.md` - Python/Django implementation guide
+   - [x] `docs/BACKEND-PROXY/SECURITY-BEST-PRACTICES.md` - Security guide
+   - [x] `docs/BACKEND-PROXY/MIGRATION-GUIDE.md` - Migration guide
+   - [x] Update API reference with proxy mode examples
 
 3. **Test App Documentation**
    - [ ] Document mock proxy server usage
@@ -634,14 +637,14 @@ npm run test:e2e:proxy
 
 ### Documentation Requirements
 
-- [x] Backend proxy interface contract specification (`docs/BACKEND-PROXY-INTERFACE-CONTRACT.md`)
+- [x] Backend proxy interface contract specification (`docs/BACKEND-PROXY/INTERFACE-CONTRACT.md`)
 - [x] Implementation guide with examples for common frameworks:
-  - [x] Node.js/Express example (`docs/BACKEND-PROXY-IMPLEMENTATION-NODEJS.md`)
-  - [x] Python/FastAPI example (`docs/BACKEND-PROXY-IMPLEMENTATION-FASTAPI.md`)
-  - [x] Python/Django example (`docs/BACKEND-PROXY-IMPLEMENTATION-DJANGO.md`)
+  - [x] Node.js/Express example (`docs/BACKEND-PROXY/IMPLEMENTATION-NODEJS.md`)
+  - [x] Python/FastAPI example (`docs/BACKEND-PROXY/IMPLEMENTATION-FASTAPI.md`)
+  - [x] Python/Django example (`docs/BACKEND-PROXY/IMPLEMENTATION-DJANGO.md`)
 - [x] Integration examples in test-app (test-app/src/App.tsx demonstrates both modes)
-- [x] Security best practices guide (`docs/BACKEND-PROXY-SECURITY-BEST-PRACTICES.md`)
-- [x] Migration guide for existing implementations (`docs/BACKEND-PROXY-MIGRATION-GUIDE.md`)
+- [x] Security best practices guide (`docs/BACKEND-PROXY/SECURITY-BEST-PRACTICES.md`)
+- [x] Migration guide for existing implementations (`docs/BACKEND-PROXY/MIGRATION-GUIDE.md`)
 - [x] API reference updated with new props (`docs/API-REFERENCE.md`)
 
 ## Implementation Considerations

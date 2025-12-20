@@ -9,7 +9,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { setupTestPage } from '../utils/test-helpers';
+import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
 
 const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
 
@@ -20,23 +20,20 @@ test.describe('Backend Proxy Authentication', () => {
       test.skip(true, 'Proxy server not available in CI');
       return;
     }
-
-    await setupTestPage(page);
-    await page.waitForLoadState('networkidle');
-    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    // Note: Each test configures the page via URL query params, so no common setup needed
   });
 
   test('should include auth token in proxy connection when provided', async ({ page }) => {
     const authToken = 'test-jwt-token-123';
     
-    // Configure proxy mode with auth token
-    await page.addInitScript((endpoint, token) => {
-      window.testProxyEndpoint = endpoint;
-      window.testConnectionMode = 'proxy';
-      window.testProxyAuthToken = token;
-    }, PROXY_ENDPOINT, authToken);
-
-    await setupTestPage(page);
+    // Configure component via URL query parameters
+    const testUrl = buildUrlWithParams(BASE_URL, {
+      connectionMode: 'proxy',
+      proxyEndpoint: PROXY_ENDPOINT,
+      proxyAuthToken: authToken
+    });
+    await page.goto(testUrl);
+    await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 
     // Wait for connection mode to be proxy
@@ -54,13 +51,10 @@ test.describe('Backend Proxy Authentication', () => {
   });
 
   test('should work without auth token (optional authentication)', async ({ page }) => {
-    // Configure proxy mode without auth token
-    await page.addInitScript((endpoint) => {
-      window.testProxyEndpoint = endpoint;
-      window.testConnectionMode = 'proxy';
-    }, PROXY_ENDPOINT);
-
-    await setupTestPage(page);
+    // Configure component via URL query parameters (no auth token)
+    const testUrl = `http://localhost:5173/?connectionMode=proxy&proxyEndpoint=${encodeURIComponent(PROXY_ENDPOINT)}`;
+    await page.goto(testUrl);
+    await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 
     // Wait for connection mode to be proxy

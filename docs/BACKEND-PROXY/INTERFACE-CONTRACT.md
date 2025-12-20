@@ -145,6 +145,6 @@ This provides a working example of the interface contract.
 ## Next Steps
 
 See implementation guides for specific frameworks:
-- [Node.js/Express Implementation Guide](./BACKEND-PROXY-IMPLEMENTATION-NODEJS.md)
-- [Python/FastAPI Implementation Guide](./BACKEND-PROXY-IMPLEMENTATION-FASTAPI.md)
-- [Python/Django Implementation Guide](./BACKEND-PROXY-IMPLEMENTATION-DJANGO.md)
+- [Node.js/Express Implementation Guide](./IMPLEMENTATION-NODEJS.md)
+- [Python/FastAPI Implementation Guide](./IMPLEMENTATION-FASTAPI.md)
+- [Python/Django Implementation Guide](./IMPLEMENTATION-DJANGO.md)

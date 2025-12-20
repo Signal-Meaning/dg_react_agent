@@ -25,10 +25,10 @@ This guide helps you migrate from direct connection mode (using `apiKey`) to bac
 First, implement the backend proxy endpoint in your existing backend infrastructure.
 
 **See Implementation Guides:**
-- [Node.js/Express Guide](./BACKEND-PROXY-IMPLEMENTATION-NODEJS.md)
-- [Python/FastAPI Guide](./BACKEND-PROXY-IMPLEMENTATION-FASTAPI.md)
-- [Python/Django Guide](./BACKEND-PROXY-IMPLEMENTATION-DJANGO.md)
-- [Interface Contract Specification](./BACKEND-PROXY-INTERFACE-CONTRACT.md)
+- [Node.js/Express Guide](./IMPLEMENTATION-NODEJS.md)
+- [Python/FastAPI Guide](./IMPLEMENTATION-FASTAPI.md)
+- [Python/Django Guide](./IMPLEMENTATION-DJANGO.md)
+- [Interface Contract Specification](./INTERFACE-CONTRACT.md)
 
 ### Step 2: Update Frontend Code
 
@@ -299,7 +299,7 @@ After successful migration:
 
 If you encounter issues during migration:
 
-1. Check the [Interface Contract Specification](./BACKEND-PROXY-INTERFACE-CONTRACT.md)
+1. Check the [Interface Contract Specification](./INTERFACE-CONTRACT.md)
 2. Review implementation guides for your framework
 3. Test with the mock proxy server: `test-app/scripts/mock-proxy-server.js`
 4. Enable debug mode: `<DeepgramVoiceInteraction debug={true} />`

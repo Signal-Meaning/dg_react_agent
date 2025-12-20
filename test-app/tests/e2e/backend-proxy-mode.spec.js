@@ -17,7 +17,8 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { setupTestPage, sendTextMessage, waitForConnection } from '../utils/test-helpers';
+import { sendTextMessage, waitForConnection } from '../utils/test-helpers';
+import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
 
 const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
 
@@ -28,20 +29,17 @@ test.describe('Backend Proxy Mode', () => {
       test.skip(true, 'Proxy server not available in CI');
       return;
     }
-
-    await setupTestPage(page);
-    await page.waitForLoadState('networkidle');
-    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    // Note: Each test configures the page via URL query params, so no common setup needed
   });
 
   test('should connect through proxy endpoint when proxyEndpoint prop is provided', async ({ page }) => {
-    // Configure component to use proxy mode BEFORE navigation
-    await page.addInitScript((endpoint) => {
-      window.testProxyEndpoint = endpoint;
-      window.testConnectionMode = 'proxy';
-    }, PROXY_ENDPOINT);
-
-    await setupTestPage(page);
+    // Configure component via URL query parameters (no App.tsx modifications needed)
+    const testUrl = buildUrlWithParams(BASE_URL, {
+      connectionMode: 'proxy',
+      proxyEndpoint: PROXY_ENDPOINT
+    });
+    await page.goto(testUrl);
+    await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
     // Wait for connection mode to be set to proxy
@@ -61,13 +59,13 @@ test.describe('Backend Proxy Mode', () => {
   });
 
   test('should work with agent responses through proxy', async ({ page }) => {
-    // Configure proxy mode BEFORE navigation
-    await page.addInitScript((endpoint) => {
-      window.testProxyEndpoint = endpoint;
-      window.testConnectionMode = 'proxy';
-    }, PROXY_ENDPOINT);
-
-    await setupTestPage(page);
+    // Configure component via URL query parameters
+    const testUrl = buildUrlWithParams(BASE_URL, {
+      connectionMode: 'proxy',
+      proxyEndpoint: PROXY_ENDPOINT
+    });
+    await page.goto(testUrl);
+    await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
     // Wait for connection mode to be set
@@ -101,13 +99,13 @@ test.describe('Backend Proxy Mode', () => {
   });
 
   test('should handle reconnection through proxy', async ({ page }) => {
-    // Configure proxy mode BEFORE navigation
-    await page.addInitScript((endpoint) => {
-      window.testProxyEndpoint = endpoint;
-      window.testConnectionMode = 'proxy';
-    }, PROXY_ENDPOINT);
-
-    await setupTestPage(page);
+    // Configure component via URL query parameters
+    const testUrl = buildUrlWithParams(BASE_URL, {
+      connectionMode: 'proxy',
+      proxyEndpoint: PROXY_ENDPOINT
+    });
+    await page.goto(testUrl);
+    await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 
     // Wait for connection mode to be proxy
@@ -126,13 +124,11 @@ test.describe('Backend Proxy Mode', () => {
   });
 
   test('should handle proxy server unavailable gracefully', async ({ page }) => {
-    // Configure invalid proxy endpoint BEFORE navigation
-    await page.addInitScript(() => {
-      window.testProxyEndpoint = 'ws://localhost:9999/invalid-proxy';
-      window.testConnectionMode = 'proxy';
-    });
-
-    await setupTestPage(page);
+    // Configure component via URL query parameters with invalid endpoint
+    const invalidEndpoint = 'ws://localhost:9999/invalid-proxy';
+    const testUrl = `http://localhost:5173/?connectionMode=proxy&proxyEndpoint=${encodeURIComponent(invalidEndpoint)}`;
+    await page.goto(testUrl);
+    await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 
     // Wait for connection mode to be set
