@@ -162,10 +162,10 @@ await waitFor(() => {
 ### ✅ Completed
 
 1. **API Tests Created** (`test-app/tests/e2e/declarative-props-api.spec.js`)
-   - Comprehensive test suite covering all 5 declarative props
+   - Comprehensive E2E test suite covering all 5 declarative props
    - Tests use selector-based waits (no `waitForTimeout` antipatterns)
    - Tests include backward compatibility verification
-   - All tests structured to work once implementation is complete
+   - All 15 tests passing
 
 2. **API Documentation Updated** (`docs/API-REFERENCE.md`)
    - Added complete "Declarative Props (Issue #305)" section
@@ -173,11 +173,8 @@ await waitFor(() => {
    - Updated "API Evolution Since Fork" section
    - Includes migration guidance and backward compatibility notes
 
-### ⏳ In Progress
-
 3. **Type Definitions** (`src/types/index.ts`)
-   - Need to add new prop types to `DeepgramVoiceInteractionProps` interface
-   - Props to add:
+   - Added all new prop types to `DeepgramVoiceInteractionProps` interface:
      - `userMessage?: string | null`
      - `onUserMessageSent?: () => void`
      - `autoStartAgent?: boolean`
@@ -186,20 +183,24 @@ await waitFor(() => {
      - `interruptAgent?: boolean`
      - `onAgentInterrupted?: () => void`
      - `startAudioCapture?: boolean`
-
-### ❌ Not Started
+   - Enhanced `onFunctionCallRequest` to support return values (`void`, `FunctionCallResponse`, or `Promise<FunctionCallResponse>`)
 
 4. **Component Implementation** (`src/components/DeepgramVoiceInteraction/index.tsx`)
-   - Implement `userMessage` prop with `useEffect` to watch for changes
-   - Implement `autoStartAgent` / `autoStartTranscription` / `connectionState` props
-   - Enhance `onFunctionCallRequest` to support return value
-   - Implement `interruptAgent` prop with `onAgentInterrupted` callback
-   - Implement `startAudioCapture` prop
-   - Ensure backward compatibility with all imperative methods
+   - Implemented `userMessage` prop with `useEffect` to watch for changes and trigger `injectUserMessage`
+   - Implemented `autoStartAgent` / `autoStartTranscription` / `connectionState` props with connection management
+   - Enhanced `onFunctionCallRequest` to support declarative return value pattern
+   - Implemented `interruptAgent` prop with `onAgentInterrupted` callback
+   - Implemented `startAudioCapture` prop with audio capture management
+   - Maintained backward compatibility with all imperative methods
+   - Fixed TypeScript linting errors (proper type assertions, optional chaining)
 
 5. **Test App Updates** (`test-app/src/App.tsx`)
-   - Add UI controls for declarative props (optional, for manual testing)
-   - Expose state setters for E2E tests (if needed)
+   - Added declarative state management for all props
+   - Exposed state setters/getters for E2E tests via `window` variables
+   - Implemented polling mechanism for test-driven prop updates
+   - Added proper TypeScript types for test window properties
+   - Fixed all linting errors (moved `useCallback` hooks before early returns, replaced `any` types)
+   - Synced `micEnabled` state with `declarativeStartAudioCapture` prop for accurate DOM status
 
 ## Impact
 
@@ -213,13 +214,62 @@ await waitFor(() => {
 
 This issue was identified while working on the voice-commerce project, where we need to expose refs to `window` for testing, which is a code smell indicating the API could be improved.
 
-## Next Steps
+## Future Work / TODOs
 
-1. Update type definitions in `src/types/index.ts`
-2. Implement declarative props in component
-3. Update test app if needed
-4. Run tests to verify implementation
-5. Update any remaining documentation
+### 1. Unit Tests for Declarative Prop Logic
+
+**Status**: ❌ Not Started
+
+**Description**: Add comprehensive unit tests for the declarative prop logic in the component implementation. Current E2E tests verify end-to-end behavior, but unit tests would provide:
+
+- **Edge Case Coverage**:
+  - Rapid prop changes (e.g., `userMessage` changing multiple times quickly)
+  - Prop changes during connection state transitions
+  - Prop changes when component is unmounting
+  - Invalid prop combinations (e.g., `connectionState="connected"` with `autoStartAgent={false}`)
+  - Prop changes when services are not ready (e.g., `startAudioCapture={true}` before agent connection)
+  
+- **Error Handling**:
+  - Behavior when `injectUserMessage` fails
+  - Behavior when `start()` fails
+  - Behavior when `interruptAgent()` fails
+  - Behavior when `startAudioCapture()` fails
+  - Error propagation and callback invocation on failures
+
+- **State Synchronization**:
+  - Verification that prop changes trigger correct imperative method calls
+  - Verification that callbacks (`onUserMessageSent`, `onAgentInterrupted`) are called at correct times
+  - Verification that prop state is properly reset after actions complete
+
+**Suggested Location**: `tests/unit/DeepgramVoiceInteraction.declarative-props.test.tsx` or similar
+
+**Testing Framework**: Jest + React Testing Library
+
+### 2. Refactoring Consideration
+
+**Status**: ❌ Not Started
+
+**Description**: Review the implementation to determine if any further refactoring would improve:
+
+- **Code Organization**:
+  - Whether the `useEffect` hooks for declarative props could be consolidated
+  - Whether prop change detection logic could be extracted into custom hooks
+  - Whether the imperative/declarative bridge logic could be simplified
+
+- **Performance**:
+  - Whether prop change detection could be optimized (e.g., debouncing rapid changes)
+  - Whether unnecessary re-renders are triggered by prop changes
+  - Whether memoization could be improved
+
+- **Maintainability**:
+  - Whether the code structure makes it easy to add new declarative props in the future
+  - Whether the test app's prop management could be simplified
+  - Whether documentation could be clearer about when to use declarative vs. imperative APIs
+
+**Action Items**:
+- Code review session focused on refactoring opportunities
+- Performance profiling of prop change handling
+- Documentation review for clarity and completeness
 
 ## References
 
