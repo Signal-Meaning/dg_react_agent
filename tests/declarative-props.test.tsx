@@ -536,6 +536,11 @@ describe('Declarative Props - Issue #305', () => {
         getByText('Interrupt').click();
       });
 
+      // Wait a bit for React to process the state update and run useEffect
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
       // Wait for callback (this is the main behavior we're testing)
       // The callback should be called when interruptAgent prop changes to true
       await waitFor(() => {

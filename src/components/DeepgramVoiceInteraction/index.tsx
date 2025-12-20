@@ -2981,6 +2981,12 @@ function DeepgramVoiceInteraction(
         }
       }
       
+      // Check if already recording before starting
+      if (audioManagerRef.current.isRecordingActive()) {
+        log('Audio capture already active, skipping startRecording');
+        return;
+      }
+      
       // Start recording
       await audioManagerRef.current.startRecording();
       
@@ -3004,6 +3010,7 @@ function DeepgramVoiceInteraction(
   // Refs to track previous prop values to prevent duplicate actions
   const prevUserMessageRef = useRef<string | null | undefined>(undefined);
   const prevInterruptAgentPropRef = useRef<boolean | undefined>(undefined);
+  const isFirstInterruptAgentRenderRef = useRef<boolean>(true);
   const prevStartAudioCaptureRef = useRef<boolean | undefined>(undefined);
   const prevConnectionStateRef = useRef<'connected' | 'disconnected' | 'auto' | undefined>(undefined);
   const prevAutoStartAgentRef = useRef<boolean | undefined>(undefined);
@@ -3104,30 +3111,48 @@ function DeepgramVoiceInteraction(
     prevAutoStartTranscriptionRef.current = autoStartTranscription;
   }, [connectionState, autoStartAgent, autoStartTranscription, agentOptions, transcriptionOptions, start, stop, handleError]);
 
+  // Store callback in ref to avoid dependency issues
+  const onAgentInterruptedRef = useRef(onAgentInterrupted);
+  useEffect(() => {
+    onAgentInterruptedRef.current = onAgentInterrupted;
+  }, [onAgentInterrupted]);
+
   // interruptAgent prop - declarative TTS interruption
   useEffect(() => {
-    // Skip on first render
-    if (prevInterruptAgentPropRef.current === undefined) {
+    const prevValue = prevInterruptAgentPropRef.current;
+    const isFirstRender = isFirstInterruptAgentRenderRef.current;
+    
+    // Skip on first render (prevents action on initial mount, even if prop is true)
+    if (isFirstRender) {
+      isFirstInterruptAgentRenderRef.current = false;
       prevInterruptAgentPropRef.current = interruptAgentProp;
       return;
     }
 
     // Only act when interruptAgent prop changes to true
-    if (interruptAgentProp === true && prevInterruptAgentPropRef.current !== true) {
+    if (interruptAgentProp === true && prevValue !== true) {
       log('[Declarative] interruptAgent prop set to true, interrupting TTS');
       // Call the interruptAgent function (defined above, before this useEffect)
+      // Note: interruptAgent() may return early if agentManager doesn't exist,
+      // but we still call the callback to indicate the prop change was processed
       interruptAgent();
       // Call callback to allow parent to clear the flag
-      onAgentInterrupted?.();
+      // This callback should be called regardless of whether interruptAgent() succeeded
+      // because it indicates the declarative prop change was processed
+      // Use ref to avoid stale closure issues
+      onAgentInterruptedRef.current?.();
     }
 
     prevInterruptAgentPropRef.current = interruptAgentProp;
-  }, [interruptAgentProp, onAgentInterrupted, interruptAgent, clearAudio, dispatch, handleError]);
+  }, [interruptAgentProp]);
 
   // startAudioCapture prop - declarative microphone control
   useEffect(() => {
-    // Skip on first render
-    if (prevStartAudioCaptureRef.current === undefined) {
+    const prevValue = prevStartAudioCaptureRef.current;
+    
+    // Skip on first render (when prevValue is undefined and current is also undefined/false)
+    // But allow action if prevValue is undefined and current is true (prop changed from undefined to true)
+    if (prevValue === undefined && startAudioCaptureProp !== true) {
       prevStartAudioCaptureRef.current = startAudioCaptureProp;
       return;
     }
@@ -3135,7 +3160,7 @@ function DeepgramVoiceInteraction(
     const isCurrentlyRecording = audioManagerRef.current?.isRecordingActive() || false;
 
     // Start audio capture when prop changes to true
-    if (startAudioCaptureProp === true && prevStartAudioCaptureRef.current !== true && !isCurrentlyRecording) {
+    if (startAudioCaptureProp === true && prevValue !== true && !isCurrentlyRecording) {
       log('[Declarative] startAudioCapture prop set to true, starting audio capture');
       startAudioCapture().catch((error) => {
         log('[Declarative] Failed to start audio capture:', error);
@@ -3147,7 +3172,7 @@ function DeepgramVoiceInteraction(
       });
     }
     // Stop audio capture when prop changes to false
-    else if (startAudioCaptureProp === false && prevStartAudioCaptureRef.current !== false && isCurrentlyRecording) {
+    else if (startAudioCaptureProp === false && prevValue !== false && isCurrentlyRecording) {
       log('[Declarative] startAudioCapture prop set to false, stopping audio capture');
       if (audioManagerRef.current) {
         try {
