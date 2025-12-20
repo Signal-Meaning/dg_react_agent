@@ -168,6 +168,15 @@ function DeepgramVoiceInteraction(
     onSettingsApplied,
     onFunctionCallRequest,
     debug,
+    // Declarative props (Issue #305)
+    userMessage,
+    onUserMessageSent,
+    autoStartAgent,
+    autoStartTranscription,
+    connectionState,
+    interruptAgent: interruptAgentProp,
+    onAgentInterrupted,
+    startAudioCapture: startAudioCaptureProp,
   } = props;
 
   // Internal state
@@ -2038,7 +2047,34 @@ function DeepgramVoiceInteraction(
             };
             
             // Invoke callback with both functionCall and sendResponse
-            onFunctionCallRequest?.(functionCall, sendResponse);
+            // Issue #305: Support declarative return value pattern
+            const result = onFunctionCallRequest?.(functionCall, sendResponse);
+            
+            // If callback returns a value (or Promise), use that instead of sendResponse
+            if (result !== undefined && result !== null) {
+              // Handle both sync and async returns
+              Promise.resolve(result).then((response) => {
+                if (response && typeof response === 'object' && 'id' in response) {
+                  // Convert result or error to JSON string for content
+                  let content: string;
+                  if ('error' in response && response.error) {
+                    content = JSON.stringify({ error: response.error });
+                  } else if ('result' in response) {
+                    content = JSON.stringify(response.result);
+                  } else {
+                    // If response is the result itself, stringify it
+                    content = JSON.stringify(response);
+                  }
+                  
+                  // Call the internal sendFunctionCallResponse method
+                  sendFunctionCallResponse(functionCall.id, functionCall.name, content);
+                }
+              }).catch((error) => {
+                log('Error handling function call response:', error);
+                // Fallback: send error response
+                sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: error.message || 'Unknown error' }));
+              });
+            }
           } else {
             log('Server-side function call received (not handled by component):', funcCall.name);
           }
@@ -2941,6 +2977,173 @@ function DeepgramVoiceInteraction(
       throw error;
     }
   };
+
+  // Declarative Props Implementation (Issue #305)
+  // Refs to track previous prop values to prevent duplicate actions
+  const prevUserMessageRef = useRef<string | null | undefined>(undefined);
+  const prevInterruptAgentPropRef = useRef<boolean | undefined>(undefined);
+  const prevStartAudioCaptureRef = useRef<boolean | undefined>(undefined);
+  const prevConnectionStateRef = useRef<'connected' | 'disconnected' | 'auto' | undefined>(undefined);
+  const prevAutoStartAgentRef = useRef<boolean | undefined>(undefined);
+  const prevAutoStartTranscriptionRef = useRef<boolean | undefined>(undefined);
+
+  // userMessage prop - declarative text message input
+  useEffect(() => {
+    // Skip on first render
+    if (prevUserMessageRef.current === undefined) {
+      prevUserMessageRef.current = userMessage;
+      return;
+    }
+
+    // Only act when userMessage changes to a non-null string
+    if (userMessage !== null && userMessage !== undefined && userMessage !== prevUserMessageRef.current) {
+      log('[Declarative] userMessage prop changed, sending message:', userMessage);
+      injectUserMessage(userMessage)
+        .then(() => {
+          log('[Declarative] userMessage sent successfully');
+          // Call callback to allow parent to clear the prop
+          onUserMessageSent?.();
+        })
+        .catch((error) => {
+          log('[Declarative] Failed to send userMessage:', error);
+          handleError({
+            service: 'agent',
+            code: 'user_message_failed',
+            message: `Failed to send user message: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          });
+        });
+    }
+
+    prevUserMessageRef.current = userMessage;
+  }, [userMessage, onUserMessageSent, injectUserMessage, handleError]);
+
+  // connectionState / autoStart props - declarative connection control
+  useEffect(() => {
+    const config = configRef.current;
+    const isAgentConfigured = !!config.agentOptions;
+    const isTranscriptionConfigured = !!config.transcriptionOptions;
+
+    // Determine desired connection state
+    let desiredState: 'connected' | 'disconnected' | null = null;
+
+    if (connectionState !== undefined && connectionState !== 'auto') {
+      // connectionState prop takes precedence
+      desiredState = connectionState === 'connected' ? 'connected' : 'disconnected';
+    } else if (connectionState === 'auto' || connectionState === undefined) {
+      // Use autoStart props
+      const shouldConnectAgent = autoStartAgent === true && isAgentConfigured;
+      const shouldConnectTranscription = autoStartTranscription === true && isTranscriptionConfigured;
+      
+      if (shouldConnectAgent || shouldConnectTranscription) {
+        desiredState = 'connected';
+      } else {
+        // Only disconnect if we explicitly set autoStart to false
+        if (autoStartAgent === false && autoStartTranscription === false) {
+          desiredState = 'disconnected';
+        }
+      }
+    }
+
+    // Check if state actually changed
+    const currentAgentState = agentManagerRef.current?.getState();
+    const currentTranscriptionState = transcriptionManagerRef.current?.getState();
+    const isCurrentlyConnected = 
+      (isAgentConfigured && currentAgentState === 'connected') ||
+      (isTranscriptionConfigured && currentTranscriptionState === 'connected');
+
+    // Only act if desired state differs from current state
+    if (desiredState === 'connected' && !isCurrentlyConnected) {
+      log('[Declarative] connectionState/autoStart prop indicates connection needed');
+      start({
+        agent: autoStartAgent !== false && isAgentConfigured,
+        transcription: autoStartTranscription !== false && isTranscriptionConfigured,
+      }).catch((error) => {
+        log('[Declarative] Failed to start connection:', error);
+        handleError({
+          service: 'agent',
+          code: 'connection_start_failed',
+          message: `Failed to start connection: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      });
+    } else if (desiredState === 'disconnected' && isCurrentlyConnected) {
+      log('[Declarative] connectionState prop indicates disconnection needed');
+      stop().catch((error) => {
+        log('[Declarative] Failed to stop connection:', error);
+        handleError({
+          service: 'agent',
+          code: 'connection_stop_failed',
+          message: `Failed to stop connection: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      });
+    }
+
+    prevConnectionStateRef.current = connectionState;
+    prevAutoStartAgentRef.current = autoStartAgent;
+    prevAutoStartTranscriptionRef.current = autoStartTranscription;
+  }, [connectionState, autoStartAgent, autoStartTranscription, agentOptions, transcriptionOptions, start, stop, handleError]);
+
+  // interruptAgent prop - declarative TTS interruption
+  useEffect(() => {
+    // Skip on first render
+    if (prevInterruptAgentPropRef.current === undefined) {
+      prevInterruptAgentPropRef.current = interruptAgentProp;
+      return;
+    }
+
+    // Only act when interruptAgent prop changes to true
+    if (interruptAgentProp === true && prevInterruptAgentPropRef.current !== true) {
+      log('[Declarative] interruptAgent prop set to true, interrupting TTS');
+      // Call the interruptAgent function (defined above, before this useEffect)
+      interruptAgent();
+      // Call callback to allow parent to clear the flag
+      onAgentInterrupted?.();
+    }
+
+    prevInterruptAgentPropRef.current = interruptAgentProp;
+  }, [interruptAgentProp, onAgentInterrupted, interruptAgent, clearAudio, dispatch, handleError]);
+
+  // startAudioCapture prop - declarative microphone control
+  useEffect(() => {
+    // Skip on first render
+    if (prevStartAudioCaptureRef.current === undefined) {
+      prevStartAudioCaptureRef.current = startAudioCaptureProp;
+      return;
+    }
+
+    const isCurrentlyRecording = audioManagerRef.current?.isRecordingActive() || false;
+
+    // Start audio capture when prop changes to true
+    if (startAudioCaptureProp === true && prevStartAudioCaptureRef.current !== true && !isCurrentlyRecording) {
+      log('[Declarative] startAudioCapture prop set to true, starting audio capture');
+      startAudioCapture().catch((error) => {
+        log('[Declarative] Failed to start audio capture:', error);
+        handleError({
+          service: 'transcription',
+          code: 'audio_capture_start_failed',
+          message: `Failed to start audio capture: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      });
+    }
+    // Stop audio capture when prop changes to false
+    else if (startAudioCaptureProp === false && prevStartAudioCaptureRef.current !== false && isCurrentlyRecording) {
+      log('[Declarative] startAudioCapture prop set to false, stopping audio capture');
+      if (audioManagerRef.current) {
+        try {
+          audioManagerRef.current.stopRecording();
+          log('[Declarative] Audio capture stopped successfully');
+        } catch (error) {
+          log('[Declarative] Failed to stop audio capture:', error);
+          handleError({
+            service: 'transcription',
+            code: 'audio_capture_stop_failed',
+            message: `Failed to stop audio capture: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          });
+        }
+      }
+    }
+
+    prevStartAudioCaptureRef.current = startAudioCaptureProp;
+  }, [startAudioCaptureProp, startAudioCapture, handleError]);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
