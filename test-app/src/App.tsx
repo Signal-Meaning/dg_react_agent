@@ -266,6 +266,12 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Sync micEnabled with declarativeStartAudioCapture prop (Issue #305)
+  // This ensures the DOM indicator updates when the declarative prop changes
+  useEffect(() => {
+    setMicEnabled(declarativeStartAudioCapture);
+  }, [declarativeStartAudioCapture]);
+
   // Load instructions using the instructions-loader utility
   const hasLoadedInstructions = useRef(false);
   useEffect(() => {

@@ -625,7 +625,34 @@ test.describe('Declarative Props API - Issue #305', () => {
       
       await page.waitForSelector('[data-testid="deepgram-component"]', { timeout: 5000 }).catch(() => {});
       
-      // Set startAudioCapture prop
+      // First, connect the agent (required for startAudioCapture)
+      await page.evaluate(() => {
+        window.__testAutoStartAgent = true;
+        window.__testAutoStartAgentSet = true;
+      });
+      
+      // Wait for connection to be established
+      await page.waitForFunction(
+        () => {
+          const connectionStatus = document.querySelector('[data-testid="connection-status"]');
+          return connectionStatus && connectionStatus.textContent && 
+                 connectionStatus.textContent.toLowerCase().includes('connected');
+        },
+        { timeout: 10000 }
+      );
+      
+      // Wait for settings to be applied
+      await page.waitForFunction(
+        () => {
+          const settingsApplied = document.querySelector('[data-testid="has-sent-settings"]');
+          return settingsApplied && settingsApplied.textContent === 'true';
+        },
+        { timeout: 10000 }
+      ).catch(() => {
+        // Settings applied indicator may not appear immediately - continue anyway
+      });
+      
+      // Now set startAudioCapture prop
       await page.evaluate(() => {
         window.__testStartAudioCapture = true;
         window.__testStartAudioCaptureSet = true;
@@ -638,24 +665,16 @@ test.describe('Declarative Props API - Issue #305', () => {
           return micStatus && micStatus.textContent && 
                  micStatus.textContent.toLowerCase().includes('enabled');
         },
-        { timeout: 10000 }
-      ).catch(() => {
-        // Fallback: check window variable if DOM not updated yet
-        return page.waitForFunction(
-          () => window.__testStartAudioCaptureStarted === true,
-          { timeout: 5000 }
-        );
-      });
+        { timeout: 30000 }
+      );
       
       // Verify audio capture was started
       const audioCaptureStarted = await page.evaluate(() => {
         const micStatus = document.querySelector('[data-testid="mic-status"]');
-        const domStarted = micStatus?.textContent?.toLowerCase().includes('enabled');
-        return domStarted || window.__testStartAudioCaptureStarted || false;
+        return micStatus?.textContent?.toLowerCase().includes('enabled') || false;
       });
       
-      // Note: This test will need to be updated once the implementation is complete
-      expect(audioCaptureStarted).toBeDefined();
+      expect(audioCaptureStarted).toBe(true);
     });
     
     test('should stop audio capture when startAudioCapture prop is false', async ({ page }) => {
@@ -665,7 +684,34 @@ test.describe('Declarative Props API - Issue #305', () => {
       
       await page.waitForSelector('[data-testid="deepgram-component"]', { timeout: 5000 }).catch(() => {});
       
-      // First start audio capture
+      // First, connect the agent (required for startAudioCapture)
+      await page.evaluate(() => {
+        window.__testAutoStartAgent = true;
+        window.__testAutoStartAgentSet = true;
+      });
+      
+      // Wait for connection to be established
+      await page.waitForFunction(
+        () => {
+          const connectionStatus = document.querySelector('[data-testid="connection-status"]');
+          return connectionStatus && connectionStatus.textContent && 
+                 connectionStatus.textContent.toLowerCase().includes('connected');
+        },
+        { timeout: 10000 }
+      );
+      
+      // Wait for settings to be applied
+      await page.waitForFunction(
+        () => {
+          const settingsApplied = document.querySelector('[data-testid="has-sent-settings"]');
+          return settingsApplied && settingsApplied.textContent === 'true';
+        },
+        { timeout: 10000 }
+      ).catch(() => {
+        // Settings applied indicator may not appear immediately - continue anyway
+      });
+      
+      // Now start audio capture
       await page.evaluate(() => {
         window.__testStartAudioCapture = true;
         window.__testStartAudioCaptureSet = true;
@@ -678,7 +724,7 @@ test.describe('Declarative Props API - Issue #305', () => {
           return micStatus && micStatus.textContent && 
                  micStatus.textContent.toLowerCase().includes('enabled');
         },
-        { timeout: 10000 }
+        { timeout: 30000 }
       );
       
       // Then stop audio capture
@@ -694,18 +740,16 @@ test.describe('Declarative Props API - Issue #305', () => {
           return micStatus && micStatus.textContent && 
                  micStatus.textContent.toLowerCase().includes('disabled');
         },
-        { timeout: 10000 }
+        { timeout: 30000 }
       );
       
       // Verify audio capture was stopped
       const audioCaptureStopped = await page.evaluate(() => {
         const micStatus = document.querySelector('[data-testid="mic-status"]');
-        const domStopped = micStatus?.textContent?.toLowerCase().includes('disabled');
-        return domStopped || window.__testStartAudioCaptureStopped || false;
+        return micStatus?.textContent?.toLowerCase().includes('disabled') || false;
       });
       
-      // Note: This test will need to be updated once the implementation is complete
-      expect(audioCaptureStopped).toBeDefined();
+      expect(audioCaptureStopped).toBe(true);
     });
   });
   
