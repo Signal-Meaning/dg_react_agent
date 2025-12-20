@@ -575,9 +575,6 @@ export class WebSocketManager {
    * Sends a JSON message over the WebSocket
    */
   public sendJSON(data: unknown): boolean {
-    // Always log when sendJSON is called (for debugging)
-    console.log('📤 [WEBSOCKET.sendJSON] Called with type:', data?.type || 'unknown');
-    
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.log('Cannot send message, WebSocket not open');
       return false;
@@ -586,44 +583,56 @@ export class WebSocketManager {
     try {
       const jsonString = JSON.stringify(data);
       
-      // Always log Settings messages with full JSON for debugging (even without debug mode)
-      // This helps capture the exact payload being sent for support tickets
-      // FORCE LOG TO VERIFY CODE PATH - use string concatenation for better Playwright capture
-      const dataType = data?.type || 'undefined';
-      const isSettings = data?.type === 'Settings';
-      console.log('📤 [WEBSOCKET.sendJSON] DEBUG: data.type=' + dataType + ', isSettings=' + isSettings);
-      
-      if (data && data.type === 'Settings') {
-        console.log('📤 [WEBSOCKET.sendJSON] ✅ ENTERED Settings block!');
+      // Debug logging for sendJSON calls
+      if (this.options.debug) {
+        const dataType = data?.type || 'unknown';
+        console.log('📤 [WEBSOCKET.sendJSON] Called with type:', dataType);
+        console.log('📤 [WEBSOCKET.sendJSON] DEBUG: data.type=' + dataType + ', isSettings=' + (data?.type === 'Settings'));
         
-        // Always expose Settings payload to window for automated testing
-        // This is the exact JSON string that will be sent over WebSocket
-        if (typeof window !== 'undefined') {
-          console.log('📤 [WEBSOCKET.sendJSON] Setting window variables...');
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (window as any).__DEEPGRAM_WS_SETTINGS_PAYLOAD__ = jsonString;
-          try {
+        if (data && data.type === 'Settings') {
+          console.log('📤 [WEBSOCKET.sendJSON] ✅ ENTERED Settings block!');
+          
+          // Expose Settings payload to window for automated testing (only in debug mode)
+          // This is the exact JSON string that will be sent over WebSocket
+          if (typeof window !== 'undefined') {
+            console.log('📤 [WEBSOCKET.sendJSON] Setting window variables...');
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (window as any).__DEEPGRAM_WS_SETTINGS_PARSED__ = JSON.parse(jsonString);
-            console.log('📤 [WEBSOCKET.sendJSON] ✅ Window variables set successfully');
+            (window as any).__DEEPGRAM_WS_SETTINGS_PAYLOAD__ = jsonString;
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (window as any).__DEEPGRAM_WS_SETTINGS_PARSED__ = JSON.parse(jsonString);
+              console.log('📤 [WEBSOCKET.sendJSON] ✅ Window variables set successfully');
+            } catch (e) {
+              console.error('📤 [WEBSOCKET.sendJSON] Error parsing JSON for window exposure:', e);
+            }
+          } else {
+            console.log('📤 [WEBSOCKET.sendJSON] Window is undefined');
+          }
+          
+          console.log('📤 [WEBSOCKET.sendJSON] ✅ Settings message detected!');
+          console.log('📤 [WEBSOCKET.sendJSON] Settings message payload (exact JSON string):', jsonString);
+          try {
+            const parsed = JSON.parse(jsonString);
+            console.log('📤 [WEBSOCKET.sendJSON] Settings message payload (parsed):', parsed);
           } catch (e) {
-            console.error('📤 [WEBSOCKET.sendJSON] Error parsing JSON for window exposure:', e);
+            console.error('📤 [WEBSOCKET.sendJSON] Error parsing JSON:', e);
           }
         } else {
-          console.log('📤 [WEBSOCKET.sendJSON] Window is undefined');
+          console.log('📤 [WEBSOCKET.sendJSON] NOT a Settings message, skipping');
         }
-        
-        // Always log Settings messages (even without debug mode) for support tickets
-        console.log('📤 [WEBSOCKET.sendJSON] ✅ Settings message detected!');
-        console.log('📤 [WEBSOCKET.sendJSON] Settings message payload (exact JSON string):', jsonString);
+      }
+      
+      // Always expose Settings payload to window for automated testing (even without debug mode)
+      // This is needed for E2E tests that check window variables
+      if (data && data.type === 'Settings' && typeof window !== 'undefined') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).__DEEPGRAM_WS_SETTINGS_PAYLOAD__ = jsonString;
         try {
-          const parsed = JSON.parse(jsonString);
-          console.log('📤 [WEBSOCKET.sendJSON] Settings message payload (parsed):', parsed);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (window as any).__DEEPGRAM_WS_SETTINGS_PARSED__ = JSON.parse(jsonString);
         } catch (e) {
-          console.error('📤 [WEBSOCKET.sendJSON] Error parsing JSON:', e);
+          // Silently fail - window exposure is for testing only
         }
-      } else {
-        console.log('📤 [WEBSOCKET.sendJSON] NOT a Settings message, skipping');
       }
       
       this.log('Sending JSON:', data);

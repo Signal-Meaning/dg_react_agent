@@ -165,6 +165,7 @@ function DeepgramVoiceInteraction(
     onAgentSpeaking,
     onSettingsApplied,
     onFunctionCallRequest,
+    debug,
   } = props;
 
   // Internal state
@@ -834,11 +835,13 @@ function DeepgramVoiceInteraction(
     if (isAgentConfigured) services.push('agent');
     const servicesStr = services.length > 0 ? services.join(' + ') : 'none';
     
-    console.log('🔧 [Component] DeepgramVoiceInteraction initialized', {
-      services: servicesStr,
-      mountId: currentMountId,
-      isStrictModeReInvoke: previousMountId !== '0' && previousMountId !== currentMountId
-    });
+    if (debug) {
+      console.log('🔧 [Component] DeepgramVoiceInteraction initialized', {
+        services: servicesStr,
+        mountId: currentMountId,
+        isStrictModeReInvoke: previousMountId !== '0' && previousMountId !== currentMountId
+      });
+    }
     
     // Detailed debug logging (only when debug prop is true)
     if (props.debug) {
@@ -1504,31 +1507,39 @@ function DeepgramVoiceInteraction(
     // Issue #307: Use ref to access latest agentOptions value (fixes closure issue)
     const currentAgentOptions = agentOptionsRef.current;
     
-    console.log('🔧 [sendAgentSettings] Called');
-    console.log(`🔧 [sendAgentSettings] agentManagerRef.current: ${!!agentManagerRef.current}`);
-    console.log(`🔧 [sendAgentSettings] agentOptions: ${!!currentAgentOptions}`);
-    console.log(`🔧 [sendAgentSettings] agentOptions.functions: ${currentAgentOptions?.functions ? `[${currentAgentOptions.functions.length} functions]` : 'undefined'}`);
-    console.log(`🔧 [sendAgentSettings] agentOptions.functions?.length: ${currentAgentOptions?.functions?.length || 0}`);
-    console.log(`🔧 [sendAgentSettings] hasSentSettings: ${state.hasSentSettings}`);
-    console.log(`🔧 [sendAgentSettings] hasSentSettingsRef.current: ${hasSentSettingsRef.current}`);
+    if (debug) {
+      console.log('🔧 [sendAgentSettings] Called');
+      console.log(`🔧 [sendAgentSettings] agentManagerRef.current: ${!!agentManagerRef.current}`);
+      console.log(`🔧 [sendAgentSettings] agentOptions: ${!!currentAgentOptions}`);
+      console.log(`🔧 [sendAgentSettings] agentOptions.functions: ${currentAgentOptions?.functions ? `[${currentAgentOptions.functions.length} functions]` : 'undefined'}`);
+      console.log(`🔧 [sendAgentSettings] agentOptions.functions?.length: ${currentAgentOptions?.functions?.length || 0}`);
+      console.log(`🔧 [sendAgentSettings] hasSentSettings: ${state.hasSentSettings}`);
+      console.log(`🔧 [sendAgentSettings] hasSentSettingsRef.current: ${hasSentSettingsRef.current}`);
+    }
     
     if (!agentManagerRef.current || !currentAgentOptions) {
-      console.log('🔧 [sendAgentSettings] Cannot send agent settings: agent manager not initialized or agentOptions not provided');
+      if (debug) {
+        console.log('🔧 [sendAgentSettings] Cannot send agent settings: agent manager not initialized or agentOptions not provided');
+      }
       return;
     }
     
     // Check if settings have already been sent (welcome-first behavior)
     // Use both ref and global flag to avoid stale closure issues and cross-component duplicates
     if (hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent) {
-      console.log('🔧 [sendAgentSettings] Settings already sent (via ref or global), skipping');
-      console.log('🔧 [sendAgentSettings] hasSentSettingsRef.current:', hasSentSettingsRef.current);
+      if (debug) {
+        console.log('🔧 [sendAgentSettings] Settings already sent (via ref or global), skipping');
+        console.log('🔧 [sendAgentSettings] hasSentSettingsRef.current:', hasSentSettingsRef.current);
         console.log('🔧 [sendAgentSettings] globalSettingsSent:', windowWithGlobals.globalSettingsSent);
+      }
       return;
     }
     
     // Record when settings were sent (but don't mark as applied until SettingsApplied is received)
     settingsSentTimeRef.current = Date.now();
-    console.log('🔧 [sendAgentSettings] Settings message sent, waiting for SettingsApplied confirmation');
+    if (debug) {
+      console.log('🔧 [sendAgentSettings] Settings message sent, waiting for SettingsApplied confirmation');
+    }
     
     // Build the Settings message based on agentOptions
     const settingsMessage = {
@@ -1620,8 +1631,10 @@ function DeepgramVoiceInteraction(
       const settingsJson = JSON.stringify(settingsMessage, null, 2);
       const functionsJson = JSON.stringify(settingsMessage.agent.think.functions, null, 2);
       
-      console.log('🔍 [SETTINGS DEBUG] Full Settings message with functions:', settingsJson);
-      console.log('🔍 [SETTINGS DEBUG] Functions array structure:', functionsJson);
+      if (debug) {
+        console.log('🔍 [SETTINGS DEBUG] Full Settings message with functions:', settingsJson);
+        console.log('🔍 [SETTINGS DEBUG] Functions array structure:', functionsJson);
+      }
       
       // Also expose to window for E2E testing (only in test environments)
       if (typeof window !== 'undefined' && windowWithGlobals.__DEEPGRAM_TEST_MODE__) {
@@ -1865,7 +1878,9 @@ function DeepgramVoiceInteraction(
     
     // Handle conversation text
     if (data.type === 'ConversationText') {
-      console.log('💬 [AGENT EVENT] ConversationText received role=', data.role);
+      if (debug) {
+        console.log('💬 [AGENT EVENT] ConversationText received role=', data.role);
+      }
       const content = typeof data.content === 'string' ? data.content : '';
       
       // If we receive ConversationText, this means the agent is actively responding
