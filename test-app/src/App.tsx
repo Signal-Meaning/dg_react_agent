@@ -924,13 +924,17 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           const win = window as any;
           const handler = win.__testFunctionCallHandler || window.handleFunctionCall;
           
+          // Mark that function call request was received (for tests)
+          if (win.__testFunctionCallHandler) {
+            win.__testFunctionCallRequestReceived = true;
+          }
+          
           if (handler) {
             // Call handler - it may return a value (declarative) or call sendResponse (imperative)
             const result = handler(request, sendResponse);
             // If it returns a value, that will be handled by the component
+            // The component will mark __testFunctionCallResponseSent after processing
             if (result !== undefined && result !== null) {
-              // Mark response sent for tests
-              win.__testFunctionCallResponseSent = true;
               return result;
             } else {
               // Imperative pattern - handler called sendResponse

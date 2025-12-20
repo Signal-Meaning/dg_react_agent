@@ -1097,11 +1097,11 @@ function DeepgramVoiceInteraction(
       console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Comparing values:', {
         prevHasFunctions: !!(prevOptions?.functions),
         prevFunctionsCount: Array.isArray(prevOptions?.functions) 
-          ? prevOptions.functions.length 
+          ? prevOptions?.functions.length 
           : 0,
         currentHasFunctions: !!(currentOptions?.functions),
         currentFunctionsCount: Array.isArray(currentOptions?.functions) 
-          ? currentOptions.functions.length 
+          ? currentOptions?.functions.length 
           : 0,
         prevKeys: prevOptions ? Object.keys(prevOptions).filter(k => k !== 'context') : [],
         currentKeys: currentOptions ? Object.keys(currentOptions).filter(k => k !== 'context') : [],
@@ -1334,17 +1334,29 @@ function DeepgramVoiceInteraction(
     
     // Add simplified transcript log for better readability - always show with [TRANSCRIPT] prefix
     if (typeof data === 'object' && data !== null && ('alternatives' in data || ('channel' in data && typeof (data as { channel?: { alternatives?: unknown } }).channel?.alternatives !== 'undefined'))) {
-      const transcriptData = data as TranscriptResponse | { channel?: { alternatives?: Array<{ transcript?: string }> } };
+      // Type guard: check if this is a transcript-like object
+      const rawData = data as { 
+        channel?: number | { alternatives?: Array<{ transcript?: string }> };
+        alternatives?: Array<{ transcript?: string }>;
+        is_final?: boolean;
+        speech_final?: boolean;
+      };
+      
       // Extract transcript from actual API structure (channel.alternatives[0].transcript)
-      const transcript = transcriptData.channel?.alternatives?.[0]?.transcript || 
-                         transcriptData.alternatives?.[0]?.transcript;
+      const channelObj = typeof rawData.channel === 'object' ? rawData.channel : null;
+      const transcript = channelObj?.alternatives?.[0]?.transcript || 
+                         rawData.alternatives?.[0]?.transcript;
+      
       if (transcript && transcript.trim()) {
+        const isFinal = rawData.is_final ?? false;
+        const speechFinal = rawData.speech_final ?? false;
+        
         if (props.debug) {
-          lazyLog(`[TRANSCRIPT] "${transcript}" ${transcriptData.is_final ? '(final)' : '(interim)'}${transcriptData.speech_final ? ' [SPEECH_FINAL]' : ''}`);
+          lazyLog(`[TRANSCRIPT] "${transcript}" ${isFinal ? '(final)' : '(interim)'}${speechFinal ? ' [SPEECH_FINAL]' : ''}`);
         }
         
         // CRITICAL FIX: Use Deepgram's recommended end-of-speech signals
-        if (transcriptData.speech_final === true) {
+        if (speechFinal === true) {
           // speech_final=true - Deepgram's endpointing detected speech has ended
           if (props.debug) {
             console.log('🎯 [SPEECH] speech_final=true received - user finished speaking (endpointing)');
@@ -1364,7 +1376,7 @@ function DeepgramVoiceInteraction(
             // Use centralized helper for consistency (Issue #294, #302)
             transitionToThinkingState('User stopped speaking (speech_final=true)');
           }
-        } else if (transcriptData.is_final && !transcriptData.speech_final) {
+        } else if (isFinal && !speechFinal) {
           // Final transcript without speech_final - user finished speaking (fallback)
           if (props.debug) {
             console.log('🎯 [SPEECH] Final transcript received - user finished speaking (fallback)');
@@ -1381,7 +1393,7 @@ function DeepgramVoiceInteraction(
             // Use centralized helper for consistency (Issue #294, #302)
             transitionToThinkingState('User stopped speaking (final transcript fallback)');
           }
-        } else if (!transcriptData.is_final) {
+        } else if (!isFinal) {
           // Interim transcript - user is actively speaking
           if (props.debug) {
             console.log('🎯 [SPEECH] Interim transcript received - user is speaking');
@@ -2068,11 +2080,21 @@ function DeepgramVoiceInteraction(
                   
                   // Call the internal sendFunctionCallResponse method
                   sendFunctionCallResponse(functionCall.id, functionCall.name, content);
+                  
+                  // Mark response sent for E2E tests (Issue #305)
+                  if (typeof window !== 'undefined') {
+                    (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
+                  }
                 }
               }).catch((error) => {
                 log('Error handling function call response:', error);
                 // Fallback: send error response
                 sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: error.message || 'Unknown error' }));
+                
+                // Mark response sent even on error (for tests)
+                if (typeof window !== 'undefined') {
+                  (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
+                }
               });
             }
           } else {
