@@ -16,8 +16,8 @@
  */
 
 import React from 'react';
-import { render } from '@testing-library/react';
-import { DeepgramVoiceInteractionProps } from '../src/types';
+import { render, act } from '@testing-library/react';
+import { DeepgramVoiceInteractionProps, DeepgramVoiceInteractionHandle } from '../src/types';
 import { createMockWebSocketManager, createMockAudioManager } from './fixtures/mocks';
 import {
   resetTestState,
@@ -43,7 +43,7 @@ describe('Connection Mode Selection Logic', () => {
   });
 
   describe('Mode Detection', () => {
-    it('should detect proxy mode when proxyEndpoint is provided', () => {
+    it('should detect proxy mode when proxyEndpoint is provided', async () => {
       const props: DeepgramVoiceInteractionProps = {
         proxyEndpoint: 'wss://api.example.com/deepgram-proxy',
         agentOptions: {
@@ -52,7 +52,18 @@ describe('Connection Mode Selection Logic', () => {
         },
       };
 
-      render(<DeepgramVoiceInteraction {...props} />);
+      const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+      render(<DeepgramVoiceInteraction {...props} ref={ref} />);
+
+      // Call start() to trigger manager creation
+      await act(async () => {
+        await ref.current?.start({ agent: true });
+      });
+
+      // Wait for managers to be created
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
 
       // Verify that proxy endpoint was used (not Deepgram's direct endpoint)
       const agentManagerCall = WebSocketManager.mock.calls.find(
@@ -70,7 +81,7 @@ describe('Connection Mode Selection Logic', () => {
       }
     });
 
-    it('should detect direct mode when apiKey is provided', () => {
+    it('should detect direct mode when apiKey is provided', async () => {
       const props: DeepgramVoiceInteractionProps = {
         apiKey: MOCK_API_KEY,
         agentOptions: {
@@ -79,7 +90,18 @@ describe('Connection Mode Selection Logic', () => {
         },
       };
 
-      render(<DeepgramVoiceInteraction {...props} />);
+      const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+      render(<DeepgramVoiceInteraction {...props} ref={ref} />);
+
+      // Call start() to trigger manager creation
+      await act(async () => {
+        await ref.current?.start({ agent: true });
+      });
+
+      // Wait for managers to be created
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
 
       // Verify that Deepgram's direct endpoint was used
       const agentManagerCall = WebSocketManager.mock.calls.find(
@@ -97,7 +119,7 @@ describe('Connection Mode Selection Logic', () => {
       }
     });
 
-    it('should handle empty string proxyEndpoint as invalid', () => {
+    it('should handle empty string proxyEndpoint as invalid', async () => {
       const props = {
         proxyEndpoint: '',
         agentOptions: {
@@ -106,13 +128,31 @@ describe('Connection Mode Selection Logic', () => {
         },
       } as unknown as DeepgramVoiceInteractionProps;
 
-      // Should either throw error or fall back to requiring apiKey
-      expect(() => {
-        render(<DeepgramVoiceInteraction {...props} />);
-      }).toThrow();
+      const onError = jest.fn();
+      const propsWithErrorHandler = { ...props, onError } as DeepgramVoiceInteractionProps;
+
+      const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+      render(<DeepgramVoiceInteraction {...propsWithErrorHandler} ref={ref} />);
+
+      // Try to start - this should trigger the error
+      await act(async () => {
+        try {
+          await ref.current?.start({ agent: true });
+        } catch (error) {
+          // Expected to fail
+        }
+      });
+
+      // Wait for error to be handled
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      // Should call onError with configuration error
+      expect(onError).toHaveBeenCalled();
     });
 
-    it('should handle undefined proxyEndpoint correctly', () => {
+    it('should handle undefined proxyEndpoint correctly', async () => {
       const props: DeepgramVoiceInteractionProps = {
         apiKey: MOCK_API_KEY,
         agentOptions: {
@@ -121,7 +161,18 @@ describe('Connection Mode Selection Logic', () => {
         },
       };
 
-      render(<DeepgramVoiceInteraction {...props} />);
+      const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+      render(<DeepgramVoiceInteraction {...props} ref={ref} />);
+
+      // Call start() to trigger manager creation
+      await act(async () => {
+        await ref.current?.start({ agent: true });
+      });
+
+      // Wait for managers to be created
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
 
       // Should use direct mode when proxyEndpoint is undefined
       const agentManagerCall = WebSocketManager.mock.calls.find(
@@ -140,7 +191,7 @@ describe('Connection Mode Selection Logic', () => {
   });
 
   describe('URL Construction', () => {
-    it('should use proxy endpoint URL directly in proxy mode', () => {
+    it('should use proxy endpoint URL directly in proxy mode', async () => {
       const proxyEndpoint = 'wss://api.example.com/deepgram-proxy';
       const props: DeepgramVoiceInteractionProps = {
         proxyEndpoint,
@@ -150,7 +201,18 @@ describe('Connection Mode Selection Logic', () => {
         },
       };
 
-      render(<DeepgramVoiceInteraction {...props} />);
+      const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+      render(<DeepgramVoiceInteraction {...props} ref={ref} />);
+
+      // Call start() to trigger manager creation
+      await act(async () => {
+        await ref.current?.start({ agent: true });
+      });
+
+      // Wait for managers to be created
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
 
       const agentManagerCall = WebSocketManager.mock.calls.find(
         (call: unknown[]) => {
@@ -167,7 +229,7 @@ describe('Connection Mode Selection Logic', () => {
       }
     });
 
-    it('should construct Deepgram URL correctly in direct mode', () => {
+    it('should construct Deepgram URL correctly in direct mode', async () => {
       const props: DeepgramVoiceInteractionProps = {
         apiKey: MOCK_API_KEY,
         agentOptions: {
@@ -176,7 +238,18 @@ describe('Connection Mode Selection Logic', () => {
         },
       };
 
-      render(<DeepgramVoiceInteraction {...props} />);
+      const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+      render(<DeepgramVoiceInteraction {...props} ref={ref} />);
+
+      // Call start() to trigger manager creation
+      await act(async () => {
+        await ref.current?.start({ agent: true });
+      });
+
+      // Wait for managers to be created
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
 
       const agentManagerCall = WebSocketManager.mock.calls.find(
         (call: unknown[]) => {

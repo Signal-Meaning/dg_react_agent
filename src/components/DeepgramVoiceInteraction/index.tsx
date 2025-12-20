@@ -146,6 +146,8 @@ function DeepgramVoiceInteraction(
 ) {
   const {
     apiKey,
+    proxyEndpoint,
+    proxyAuthToken,
     // Change defaults from {} to undefined for stability
     transcriptionOptions, // = {}, - remove default
     agentOptions, // = {}, - remove default
@@ -415,9 +417,20 @@ function DeepgramVoiceInteraction(
     onError?.(error);
   };
 
+  // Validate connection mode - must have either apiKey or proxyEndpoint
+  // This validation runs when component tries to connect, not on mount
+  // We'll check this in the manager creation functions
+
+  // Determine connection mode
+  const isProxyMode = !!proxyEndpoint;
+  const connectionMode = isProxyMode ? 'proxy' : 'direct';
+
   // Store configuration for lazy manager creation
   const configRef = useRef({
     apiKey,
+    proxyEndpoint,
+    proxyAuthToken,
+    connectionMode,
     transcriptionOptions,
     agentOptions,
     endpointConfig: endpointConfig || {},
@@ -432,6 +445,9 @@ function DeepgramVoiceInteraction(
   useEffect(() => {
     configRef.current = {
       apiKey,
+      proxyEndpoint,
+      proxyAuthToken,
+      connectionMode,
       transcriptionOptions,
       agentOptions,
       endpointConfig: endpointConfig || {},
@@ -441,12 +457,23 @@ function DeepgramVoiceInteraction(
       },
       debug: props.debug,
     };
-  }, [apiKey, transcriptionOptions, agentOptions, endpointConfig, props.debug]);
+  }, [apiKey, proxyEndpoint, proxyAuthToken, connectionMode, transcriptionOptions, agentOptions, endpointConfig, props.debug]);
 
   // Factory function to create transcription manager
   const createTranscriptionManager = (): WebSocketManager | null => {
     const config = configRef.current;
     if (!config.transcriptionOptions) {
+      return null;
+    }
+
+    // Validate connection configuration
+    if (!config.apiKey && !config.proxyEndpoint) {
+      const error: DeepgramError = {
+        service: 'transcription',
+        code: 'configuration_error',
+        message: 'Either apiKey or proxyEndpoint must be provided. apiKey for direct connection, proxyEndpoint for backend proxy mode.',
+      };
+      handleError(error);
       return null;
     }
 
@@ -522,10 +549,16 @@ function DeepgramVoiceInteraction(
         transcriptionQueryParams = filteredParams;
       }
       
+      // Determine URL and API key based on connection mode
+      const finalTranscriptionUrl = config.connectionMode === 'proxy' && config.proxyEndpoint
+        ? config.proxyEndpoint
+        : transcriptionUrl;
+      
       // Create Transcription WebSocket manager
       const manager = new WebSocketManager({
-        url: transcriptionUrl,
-        apiKey: config.apiKey,
+        url: finalTranscriptionUrl,
+        apiKey: config.connectionMode === 'proxy' ? '' : (config.apiKey || ''),
+        authToken: config.connectionMode === 'proxy' ? config.proxyAuthToken : undefined,
         service: 'transcription',
         queryParams: useKeytermPrompting ? undefined : transcriptionQueryParams, 
         debug: config.debug,
@@ -576,13 +609,30 @@ function DeepgramVoiceInteraction(
       return null;
     }
 
+    // Validate connection configuration
+    if (!config.apiKey && !config.proxyEndpoint) {
+      const error: DeepgramError = {
+        service: 'agent',
+        code: 'configuration_error',
+        message: 'Either apiKey or proxyEndpoint must be provided. apiKey for direct connection, proxyEndpoint for backend proxy mode.',
+      };
+      handleError(error);
+      return null;
+    }
+
     try {
       log('🔧 [AGENT] Creating agent manager lazily');
       
+      // Determine URL and API key based on connection mode
+      const finalAgentUrl = config.connectionMode === 'proxy' && config.proxyEndpoint
+        ? config.proxyEndpoint
+        : config.endpoints.agentUrl;
+      
       // Create Agent WebSocket manager
       const manager = new WebSocketManager({
-        url: config.endpoints.agentUrl,
-        apiKey: config.apiKey,
+        url: finalAgentUrl,
+        apiKey: config.connectionMode === 'proxy' ? '' : (config.apiKey || ''),
+        authToken: config.connectionMode === 'proxy' ? config.proxyAuthToken : undefined,
         service: 'agent',
         debug: config.debug,
         onMeaningfulActivity: handleMeaningfulActivity,
@@ -804,20 +854,20 @@ function DeepgramVoiceInteraction(
     const isTranscriptionConfigured = !!transcriptionOptions;
     const isAgentConfigured = !!agentOptions;
     
-    // Validate API key
-    if (!apiKey) {
+    // Validate connection configuration - must have either apiKey or proxyEndpoint
+    if (!apiKey && !proxyEndpoint) {
       // In CI or package import context, just log a warning instead of erroring
       if (isCIEnvironment || isPackageImport) {
         if (props.debug) {
-          console.log('⚠️ [DeepgramVoiceInteraction] No API key provided in CI/import context - component will not initialize');
+          console.log('⚠️ [DeepgramVoiceInteraction] No API key or proxy endpoint provided in CI/import context - component will not initialize');
         }
         return;
       }
       
       handleError({
-        service: 'transcription',
-        code: 'invalid_api_key',
-        message: 'API key is required',
+        service: 'agent',
+        code: 'configuration_error',
+        message: 'Either apiKey or proxyEndpoint must be provided. apiKey for direct connection, proxyEndpoint for backend proxy mode.',
       });
       return;
     }
@@ -849,6 +899,8 @@ function DeepgramVoiceInteraction(
         isAgentConfigured,
         apiKeyPresent: !!apiKey,
         apiKeyLength: apiKey ? apiKey.length : 0,
+        proxyEndpointPresent: !!proxyEndpoint,
+        connectionMode: connectionMode,
         endpointConfig
       });
     }

@@ -44,21 +44,26 @@ describe('Backward Compatibility - apiKey Prop', () => {
     AudioManager.mockImplementation(createMockAudioManager);
   });
 
-  it('should still work with existing apiKey prop (direct connection)', () => {
-    const props: DeepgramVoiceInteractionProps = {
-      apiKey: MOCK_API_KEY,
-      agentOptions: {
-        language: 'en',
-        listenModel: 'nova-3',
-        instructions: 'Test instructions',
-      },
-    };
+  it('should still work with existing apiKey prop (direct connection)', async () => {
+      const props: DeepgramVoiceInteractionProps = {
+        apiKey: MOCK_API_KEY,
+        agentOptions: {
+          language: 'en',
+          listenModel: 'nova-3',
+          instructions: 'Test instructions',
+        },
+      };
 
-    const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-    render(<DeepgramVoiceInteraction {...props} ref={ref} />);
+      const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+      render(<DeepgramVoiceInteraction {...props} ref={ref} />);
 
-    // Verify WebSocketManager was called with apiKey
-    expect(WebSocketManager).toHaveBeenCalled();
+      // Wait for component to initialize
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      // Verify WebSocketManager was called with apiKey
+      expect(WebSocketManager).toHaveBeenCalled();
     
     const agentManagerCall = WebSocketManager.mock.calls.find(
       (call: unknown[]) => {
@@ -108,16 +113,21 @@ describe('Backward Compatibility - apiKey Prop', () => {
     expect(typeof ref.current?.sendTextMessage).toBe('function');
   });
 
-  it('should connect to Deepgram directly when using apiKey', () => {
-    const props: DeepgramVoiceInteractionProps = {
-      apiKey: MOCK_API_KEY,
-      agentOptions: {
-        language: 'en',
-        listenModel: 'nova-3',
-      },
-    };
+  it('should connect to Deepgram directly when using apiKey', async () => {
+      const props: DeepgramVoiceInteractionProps = {
+        apiKey: MOCK_API_KEY,
+        agentOptions: {
+          language: 'en',
+          listenModel: 'nova-3',
+        },
+      };
 
-    render(<DeepgramVoiceInteraction {...props} />);
+      render(<DeepgramVoiceInteraction {...props} />);
+
+      // Wait for component to initialize
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
 
     // Verify connection is made to Deepgram, not a proxy
     const agentManagerCall = WebSocketManager.mock.calls.find(
@@ -138,24 +148,29 @@ describe('Backward Compatibility - apiKey Prop', () => {
     }
   });
 
-  it('should handle apiKey prop exactly as before (no breaking changes)', () => {
-    // This test ensures that the component's behavior with apiKey
-    // is identical to how it worked before proxy support was added
-    
-    const props: DeepgramVoiceInteractionProps = {
-      apiKey: MOCK_API_KEY,
-      transcriptionOptions: {
-        language: 'en',
-        model: 'nova-2',
-      },
-      agentOptions: {
-        language: 'en',
-        listenModel: 'nova-3',
-      },
-    };
+  it('should handle apiKey prop exactly as before (no breaking changes)', async () => {
+      // This test ensures that the component's behavior with apiKey
+      // is identical to how it worked before proxy support was added
+      
+      const props: DeepgramVoiceInteractionProps = {
+        apiKey: MOCK_API_KEY,
+        transcriptionOptions: {
+          language: 'en',
+          model: 'nova-2',
+        },
+        agentOptions: {
+          language: 'en',
+          listenModel: 'nova-3',
+        },
+      };
 
-    const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-    render(<DeepgramVoiceInteraction {...props} ref={ref} />);
+      const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+      render(<DeepgramVoiceInteraction {...props} ref={ref} />);
+
+      // Wait for component to initialize
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
 
     // Should create both transcription and agent managers
     const transcriptionCalls = WebSocketManager.mock.calls.filter(

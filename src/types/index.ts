@@ -97,9 +97,26 @@ export interface FunctionCallResponse {
  */
 export interface DeepgramVoiceInteractionProps {
   /**
-   * Deepgram API key
+   * Deepgram API key (required for direct connection mode)
+   * If proxyEndpoint is provided, apiKey is not required
    */
-  apiKey: string;
+  apiKey?: string;
+  
+  /**
+   * Backend proxy endpoint URL (for proxy mode)
+   * When provided, component connects through backend proxy instead of directly to Deepgram
+   * Format: ws:// or wss:// URL (e.g., "wss://api.example.com/deepgram-proxy")
+   * 
+   * @see Issue #242 for backend proxy implementation details
+   */
+  proxyEndpoint?: string;
+  
+  /**
+   * Authentication token for backend proxy (optional)
+   * Used for JWT or session token authentication with backend proxy
+   * Only used when proxyEndpoint is provided
+   */
+  proxyAuthToken?: string;
   
   /**
    * Options for the transcription service
