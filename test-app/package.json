@@ -16,13 +16,16 @@
     "test:e2e:debug": "playwright test tests/e2e/ --debug",
     "test:e2e:headed": "playwright test tests/e2e/ --headed",
     "test:e2e:report": "playwright show-report",
-    "test:dev": "vite & playwright test tests/e2e/ --headed"
+    "test:dev": "vite & playwright test tests/e2e/ --headed",
+    "test:proxy:server": "node scripts/mock-proxy-server.js",
+    "test:e2e:proxy": "playwright test tests/e2e/backend-proxy-mode.spec.js --config=tests/playwright.config.mjs"
   },
   "dependencies": {
     "deepgram-voice-interaction-react": "file:../",
     "dotenv": "^17.2.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",

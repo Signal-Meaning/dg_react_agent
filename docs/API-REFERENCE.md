@@ -57,8 +57,26 @@ The `DeepgramVoiceInteraction` component provides a **headless, imperative API**
 
 ```tsx
 interface DeepgramVoiceInteractionProps {
-  // Required
-  apiKey: string;
+  // Connection Configuration
+  // Option 1: Direct connection (requires apiKey)
+  apiKey?: string;
+  
+  // Option 2: Backend proxy mode (requires proxyEndpoint, apiKey not needed)
+  /**
+   * Backend proxy endpoint URL (for proxy mode)
+   * When provided, component connects through backend proxy instead of directly to Deepgram
+   * Format: ws:// or wss:// URL (e.g., "wss://api.example.com/deepgram-proxy")
+   * 
+   * @see docs/BACKEND-PROXY/ for backend proxy implementation details
+   */
+  proxyEndpoint?: string;
+  
+  /**
+   * Authentication token for backend proxy (optional)
+   * Used for JWT or session token authentication with backend proxy
+   * Only used when proxyEndpoint is provided
+   */
+  proxyAuthToken?: string;
   
   // Service Configuration
   transcriptionOptions?: TranscriptionOptions;
@@ -100,11 +118,15 @@ interface DeepgramVoiceInteractionProps {
 }
 ```
 
-### Required Props
+### Connection Configuration Props
+
+The component supports two connection modes: **Direct** (using `apiKey`) or **Proxy** (using `proxyEndpoint`). You must provide either `apiKey` OR `proxyEndpoint`, but not both.
 
 | Prop | Type | Description |
 |------|------|-------------|
-| `apiKey` | `string` | Deepgram API key for authentication |
+| `apiKey` | `string?` | Deepgram API key for direct connection mode. Required if `proxyEndpoint` is not provided. |
+| `proxyEndpoint` | `string?` | Backend proxy endpoint URL for proxy mode. Format: `ws://` or `wss://` URL (e.g., `"wss://api.example.com/deepgram-proxy"`). Required if `apiKey` is not provided. |
+| `proxyAuthToken` | `string?` | Authentication token for backend proxy (optional). Used for JWT or session token authentication. Only used when `proxyEndpoint` is provided. |
 
 ### Service Configuration
 
@@ -499,7 +521,7 @@ The component manages internal state that you can monitor through callbacks. For
 
 ## Integration Examples
 
-### Basic Usage
+### Basic Usage - Direct Connection Mode
 
 ```tsx
 import React, { useRef, useMemo } from 'react';
@@ -528,6 +550,43 @@ function BasicApp() {
   );
 }
 ```
+
+### Basic Usage - Backend Proxy Mode
+
+```tsx
+import React, { useRef, useMemo } from 'react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+
+function BasicAppWithProxy() {
+  const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
+
+  const agentOptions = useMemo(() => ({
+    language: 'en',
+    listenModel: 'nova-3',
+    thinkProviderType: 'open_ai',
+    thinkModel: 'gpt-4o-mini',
+    voice: 'aura-asteria-en',
+    instructions: 'You are a helpful assistant.'
+  }), []);
+
+  // Backend proxy mode - API key stays server-side
+  return (
+    <DeepgramVoiceInteraction
+      ref={voiceRef}
+      proxyEndpoint="wss://api.example.com/deepgram-proxy"
+      proxyAuthToken={userJwtToken} // Optional: JWT or session token
+      agentOptions={agentOptions}
+      onReady={() => console.log('Ready')}
+      onError={(error) => console.error('Error:', error)}
+    />
+  );
+}
+```
+
+**Connection Mode Selection:**
+- **Direct Mode**: Provide `apiKey` prop → Component connects directly to Deepgram
+- **Proxy Mode**: Provide `proxyEndpoint` prop → Component connects through your backend proxy
+- **Authentication**: Optionally provide `proxyAuthToken` when using proxy mode for JWT/session authentication
 
 ### Dual Mode (Transcription + Agent)
 

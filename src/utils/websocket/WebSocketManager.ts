@@ -20,9 +20,15 @@ export interface WebSocketManagerOptions {
   url: string;
   
   /** 
-   * API key for authentication 
+   * API key for authentication (required for direct connection, empty for proxy mode)
    */
-  apiKey: string;
+  apiKey?: string;
+  
+  /**
+   * Authentication token for backend proxy (optional)
+   * Used when connecting through backend proxy instead of directly to Deepgram
+   */
+  authToken?: string;
   
   /** 
    * Service type (for error reporting)
@@ -111,6 +117,13 @@ export class WebSocketManager {
   private buildUrl(): string {
     const url = new URL(this.options.url);
     
+    // In proxy mode, add auth token as query parameter if provided
+    // In direct mode, apiKey is handled via WebSocket protocol
+    const isProxyMode = !this.options.apiKey || this.options.apiKey === '';
+    if (isProxyMode && this.options.authToken) {
+      url.searchParams.append('token', this.options.authToken);
+    }
+    
     // Add query parameters if provided
     if (this.options.queryParams) {
       // Format Deepgram specific parameters
@@ -130,6 +143,10 @@ export class WebSocketManager {
         }
       });
     }
+    
+    // Note: In direct mode, apiKey is passed via WebSocket protocol array ['token', apiKey]
+    // We don't add it to query params here as it's handled in the WebSocket constructor
+    // In proxy mode, no apiKey is used - backend proxy handles authentication
     
     this.log('Built URL with params:', url.toString());
     return url.toString();
@@ -183,8 +200,17 @@ export class WebSocketManager {
         const url = this.buildUrl();
         this.log(`Connecting to ${url}`);
         
-        // Create WebSocket with token protocol
-        this.ws = new WebSocket(url, ['token', this.options.apiKey]);
+        // Determine if we're in proxy mode (no API key)
+        const isProxyMode = !this.options.apiKey || this.options.apiKey === '';
+        
+        // Create WebSocket
+        // In direct mode: use token protocol with API key
+        // In proxy mode: connect without token protocol (backend handles auth)
+        if (isProxyMode) {
+          this.ws = new WebSocket(url);
+        } else {
+          this.ws = new WebSocket(url, ['token', this.options.apiKey || '']);
+        }
         
         // Log socket readyState
         this.log('Initial readyState:', this.ws.readyState);
