@@ -167,6 +167,7 @@ describe('Error Handling Tests', () => {
     render(
       <DeepgramVoiceInteraction
         ref={ref}
+        apiKey="test-api-key"
         agentOptions={agentOptions}
         onError={mockOnError}
         debug={true}
@@ -198,6 +199,7 @@ describe('Error Handling Tests', () => {
     render(
       <DeepgramVoiceInteraction
         ref={ref}
+        apiKey="test-api-key"
         transcriptionOptions={transcriptionOptions}
         onError={mockOnError}
         debug={true}
@@ -237,6 +239,7 @@ describe('Error Handling Tests', () => {
     render(
       <DeepgramVoiceInteraction
         ref={ref}
+        apiKey="test-api-key"
         agentOptions={agentOptions}
         transcriptionOptions={transcriptionOptions}
         onError={mockOnError}
@@ -263,6 +266,7 @@ describe('Error Handling Tests', () => {
     render(
       <DeepgramVoiceInteraction
         ref={ref}
+        apiKey="test-api-key"
         agentOptions={{}}
         transcriptionOptions={{}}
         onError={mockOnError}

@@ -92,7 +92,7 @@ describe('WebSocket Direct Connection', () => {
 
   afterEach(() => {
     if (manager) {
-      manager.disconnect();
+      manager.close();
     }
   });
 

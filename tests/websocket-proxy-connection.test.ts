@@ -109,7 +109,7 @@ describe('WebSocket Proxy Connection', () => {
 
   afterEach(() => {
     if (manager) {
-      manager.disconnect();
+      manager.close();
     }
   });
 

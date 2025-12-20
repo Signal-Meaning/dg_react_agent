@@ -98,7 +98,7 @@ describe('Module Export Validation', () => {
 
     test('should include all required props in DeepgramVoiceInteractionProps', () => {
       const requiredProps = [
-        'apiKey: string',
+        'apiKey?: string',
         'transcriptionOptions?: TranscriptionOptions',
         'agentOptions?: AgentOptions',
         'endpointConfig?: EndpointConfig',
