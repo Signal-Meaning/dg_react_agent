@@ -184,13 +184,22 @@ export interface DeepgramVoiceInteractionProps {
    * Called when a client-side function call is requested by the agent.
    * Client-side functions are those without an `endpoint` property in the function definition.
    * 
+   * The callback can either:
+   * 1. Call `sendResponse()` and return void (imperative style, backward compatible)
+   * 2. Return a `FunctionCallResponse` or `Promise<FunctionCallResponse>` (declarative style)
+   * 
+   * If the callback returns a value (or Promise), that value is used instead of calling `sendResponse()`.
+   * 
    * @param functionCall - The function call request from Deepgram
-   * @param sendResponse - Callback to send the function call response back to Deepgram
+   * @param sendResponse - Callback to send the function call response back to Deepgram (for backward compatibility)
+   * @returns void, FunctionCallResponse, or Promise<FunctionCallResponse>
+   * 
+   * @see Issue #305 for declarative prop support
    */
   onFunctionCallRequest?: (
     functionCall: FunctionCallRequest,
     sendResponse: (response: FunctionCallResponse) => void
-  ) => void;
+  ) => void | FunctionCallResponse | Promise<FunctionCallResponse>;
   
   /**
    * Called when an error occurs
@@ -281,6 +290,80 @@ export interface DeepgramVoiceInteractionProps {
    * Issue: #243 - Enhanced Echo Cancellation Support
    */
   audioConstraints?: AudioConstraints;
+
+  /**
+   * Declarative Props (Issue #305)
+   * These props reduce the need for imperative ref methods
+   */
+
+  /**
+   * Declarative text message input (replaces injectUserMessage() method)
+   * When this prop changes to a non-null string, the component automatically sends the message to the agent.
+   * After sending, the component calls `onUserMessageSent` to allow the parent to clear the prop.
+   * 
+   * @see Issue #305
+   */
+  userMessage?: string | null;
+
+  /**
+   * Called after the user message has been sent via the `userMessage` prop.
+   * Use this callback to clear the `userMessage` prop (set to `null`).
+   * 
+   * @see Issue #305
+   */
+  onUserMessageSent?: () => void;
+
+  /**
+   * When `true`, automatically starts the agent service connection when the component mounts
+   * or when `agentOptions` is provided.
+   * 
+   * @see Issue #305
+   */
+  autoStartAgent?: boolean;
+
+  /**
+   * When `true`, automatically starts the transcription service connection when the component mounts
+   * or when `transcriptionOptions` is provided.
+   * 
+   * @see Issue #305
+   */
+  autoStartTranscription?: boolean;
+
+  /**
+   * Controls the connection state declaratively.
+   * - `'connected'`: Starts connections for configured services
+   * - `'disconnected'`: Stops all connections
+   * - `'auto'`: Uses `autoStartAgent`/`autoStartTranscription` behavior
+   * 
+   * @see Issue #305
+   */
+  connectionState?: 'connected' | 'disconnected' | 'auto';
+
+  /**
+   * Declarative TTS interruption (replaces interruptAgent() method)
+   * When set to `true`, immediately interrupts any ongoing TTS playback.
+   * After interruption, the component calls `onAgentInterrupted` to allow the parent to clear the flag.
+   * 
+   * @see Issue #305
+   */
+  interruptAgent?: boolean;
+
+  /**
+   * Called after TTS has been interrupted via the `interruptAgent` prop.
+   * Use this callback to clear the `interruptAgent` prop (set to `false`).
+   * 
+   * @see Issue #305
+   */
+  onAgentInterrupted?: () => void;
+
+  /**
+   * Declarative microphone control (replaces startAudioCapture() method)
+   * When `true`, starts audio capture (triggers microphone permission prompt).
+   * When `false`, stops audio capture.
+   * 
+   * @see Issue #305
+   */
+  startAudioCapture?: boolean;
 }
 
 /**

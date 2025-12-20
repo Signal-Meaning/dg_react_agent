@@ -175,6 +175,218 @@ The component supports two connection modes: **Direct** (using `apiKey`) or **Pr
 
 ---
 
+## Declarative Props (Issue #305)
+
+The component now supports declarative props that reduce the need for imperative ref methods. These props follow React's declarative patterns and make the component easier to test and reason about.
+
+### Text Message Input
+
+**Replaces**: `injectUserMessage()` ref method
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `userMessage` | `string \| null` | When this prop changes to a non-null string, the component automatically sends the message to the agent. After sending, the component calls `onUserMessageSent` to allow the parent to clear the prop. |
+| `onUserMessageSent` | `() => void` | Called after the user message has been sent. Use this callback to clear the `userMessage` prop (set to `null`). |
+
+**Example**:
+```tsx
+function DeclarativeMessageApp() {
+  const [userMessage, setUserMessage] = useState<string | null>(null);
+
+  return (
+    <div>
+      <input 
+        value={userMessage || ''} 
+        onChange={(e) => setUserMessage(e.target.value)}
+      />
+      <button onClick={() => setUserMessage('Hello, agent!')}>
+        Send Message
+      </button>
+      
+      <DeepgramVoiceInteraction
+        apiKey={apiKey}
+        agentOptions={agentOptions}
+        userMessage={userMessage}
+        onUserMessageSent={() => setUserMessage(null)} // Clear after sent
+      />
+    </div>
+  );
+}
+```
+
+**Benefits**:
+- More React-idiomatic
+- Easier to test (just change props)
+- Type-safe
+- No ref needed
+
+### Connection Control
+
+**Replaces**: `start()` and `stop()` ref methods
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `autoStartAgent` | `boolean` | When `true`, automatically starts the agent service connection when the component mounts or when `agentOptions` is provided. |
+| `autoStartTranscription` | `boolean` | When `true`, automatically starts the transcription service connection when the component mounts or when `transcriptionOptions` is provided. |
+| `connectionState` | `'connected' \| 'disconnected' \| 'auto'` | Controls the connection state declaratively. `'connected'` starts connections, `'disconnected'` stops them, `'auto'` uses `autoStartAgent`/`autoStartTranscription` behavior. |
+
+**Example**:
+```tsx
+function DeclarativeConnectionApp() {
+  const [isConnected, setIsConnected] = useState(false);
+
+  return (
+    <div>
+      <button onClick={() => setIsConnected(!isConnected)}>
+        {isConnected ? 'Disconnect' : 'Connect'}
+      </button>
+      
+      <DeepgramVoiceInteraction
+        apiKey={apiKey}
+        agentOptions={agentOptions}
+        connectionState={isConnected ? 'connected' : 'disconnected'}
+      />
+    </div>
+  );
+}
+```
+
+**Alternative with autoStart**:
+```tsx
+<DeepgramVoiceInteraction
+  apiKey={apiKey}
+  agentOptions={agentOptions}
+  autoStartAgent={true}
+  autoStartTranscription={false}
+/>
+```
+
+**Benefits**:
+- Controlled component pattern
+- Easier to reason about
+- No ref needed
+
+### Function Call Response
+
+**Enhancement**: `onFunctionCallRequest` callback can now return a value instead of calling `sendResponse()`
+
+**Current (Imperative)**:
+```tsx
+onFunctionCallRequest={(functionCall, sendResponse) => {
+  const result = executeFunction(functionCall);
+  sendResponse({ id: functionCall.id, result });
+}}
+```
+
+**New (Declarative)**:
+```tsx
+onFunctionCallRequest={async (functionCall) => {
+  const result = await executeFunction(functionCall);
+  return { id: functionCall.id, result }; // Component handles sending
+}}
+```
+
+**Benefits**:
+- More functional/declarative
+- Component handles response sending automatically
+- No ref needed
+- Supports both sync and async functions (return Promise for async)
+
+**Note**: The `sendResponse` callback parameter is still available for backward compatibility. If the callback returns a value (or Promise), that value is used instead of calling `sendResponse()`.
+
+### TTS Interruption
+
+**Replaces**: `interruptAgent()` ref method
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `interruptAgent` | `boolean` | When set to `true`, immediately interrupts any ongoing TTS playback. After interruption, the component calls `onAgentInterrupted` to allow the parent to clear the flag. |
+| `onAgentInterrupted` | `() => void` | Called after TTS has been interrupted. Use this callback to clear the `interruptAgent` prop (set to `false`). |
+
+**Example**:
+```tsx
+function DeclarativeInterruptApp() {
+  const [shouldInterrupt, setShouldInterrupt] = useState(false);
+
+  return (
+    <div>
+      <button onClick={() => setShouldInterrupt(true)}>
+        Interrupt Agent
+      </button>
+      
+      <DeepgramVoiceInteraction
+        apiKey={apiKey}
+        agentOptions={agentOptions}
+        interruptAgent={shouldInterrupt}
+        onAgentInterrupted={() => setShouldInterrupt(false)} // Clear flag
+      />
+    </div>
+  );
+}
+```
+
+**Benefits**:
+- Controlled by parent state
+- Easier to test
+- No ref needed
+
+### Audio Capture Control
+
+**Replaces**: `startAudioCapture()` ref method
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `startAudioCapture` | `boolean` | When `true`, starts audio capture (triggers microphone permission prompt). When `false`, stops audio capture. |
+
+**Example**:
+```tsx
+function DeclarativeAudioApp() {
+  const [isMicrophoneActive, setIsMicrophoneActive] = useState(false);
+
+  return (
+    <div>
+      <button onClick={() => setIsMicrophoneActive(!isMicrophoneActive)}>
+        {isMicrophoneActive ? 'Stop Microphone' : 'Start Microphone'}
+      </button>
+      
+      <DeepgramVoiceInteraction
+        apiKey={apiKey}
+        agentOptions={agentOptions}
+        startAudioCapture={isMicrophoneActive}
+      />
+    </div>
+  );
+}
+```
+
+**Benefits**:
+- Controlled by parent state
+- Easier to test
+- No ref needed
+
+### Backward Compatibility
+
+All imperative ref methods remain available for backward compatibility. You can mix declarative props with imperative methods if needed:
+
+```tsx
+// Use declarative props for connection
+<DeepgramVoiceInteraction
+  ref={voiceRef}
+  apiKey={apiKey}
+  agentOptions={agentOptions}
+  autoStartAgent={true}
+  // But still use imperative method for edge cases
+  // voiceRef.current?.updateAgentInstructions(...)
+/>
+```
+
+**Migration Path**:
+- Existing code using ref methods continues to work
+- New code can use declarative props
+- Gradual migration is supported
+
+---
+
 ## Component Methods
 
 ### `DeepgramVoiceInteractionHandle`
@@ -1000,6 +1212,14 @@ This section documents changes made to the API since the original fork (commit `
 
 - **`onFunctionCallRequest`** - Function calling callback
   - *Why added*: Enables the agent to execute client-side functions during conversations. When the agent wants to call a function, it sends a `FunctionCallRequest` which triggers this callback. The callback receives both the `functionCall` request and a `sendResponse` callback, eliminating the need for component refs. The application executes the function and sends the result back via `sendResponse()`. The ref-based `sendFunctionCallResponse()` method is still available for backward compatibility.
+
+- **Declarative Props (Issue #305)** - Props that replace imperative ref methods
+  - **`userMessage`** / **`onUserMessageSent`** - Declarative text message input (replaces `injectUserMessage()`)
+  - **`autoStartAgent`** / **`autoStartTranscription`** / **`connectionState`** - Declarative connection control (replaces `start()`/`stop()`)
+  - **`interruptAgent`** / **`onAgentInterrupted`** - Declarative TTS interruption (replaces `interruptAgent()`)
+  - **`startAudioCapture`** - Declarative microphone control (replaces `startAudioCapture()`)
+  - *Why added*: Reduces imperative ref usage, makes the component more React-idiomatic, improves testability, and provides better type safety. All imperative methods remain available for backward compatibility.
+  - *Enhancement*: `onFunctionCallRequest` callback can now return a value (or Promise) instead of calling `sendResponse()`, making function call handling more declarative.
 
 ### Methods Added Since Fork
 

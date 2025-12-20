@@ -10,7 +10,9 @@ import {
   ServiceType,
   DeepgramError,
   ConversationRole,
-  AudioConstraints
+  AudioConstraints,
+  FunctionCallRequest,
+  FunctionCallResponse
 } from '../../src/types';
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 import { ClosureIssueTestPage } from './closure-issue-test-page';
@@ -20,9 +22,42 @@ import { ClosureIssueTestPage } from './closure-issue-test-page';
 declare global {
   interface Window {
     deepgramRef?: React.RefObject<DeepgramVoiceInteractionHandle>;
-    handleFunctionCall?: (request: any, sendResponse: (response: any) => void) => void;
+    handleFunctionCall?: (request: FunctionCallRequest, sendResponse: (response: FunctionCallResponse) => void) => void | FunctionCallResponse | Promise<FunctionCallResponse>;
+    // Test-specific window properties for E2E tests (Issue #305)
+    __testUserMessage?: string | null;
+    __testUserMessageSet?: boolean;
+    __testConnectionState?: 'connected' | 'disconnected' | 'auto';
+    __testConnectionStateSet?: boolean;
+    __testAutoStartAgent?: boolean;
+    __testAutoStartAgentSet?: boolean;
+    __testAutoStartTranscription?: boolean;
+    __testAutoStartTranscriptionSet?: boolean;
+    __testInterruptAgent?: boolean;
+    __testInterruptAgentSet?: boolean;
+    __testStartAudioCapture?: boolean;
+    __testStartAudioCaptureSet?: boolean;
+    __testOnUserMessageSent?: () => void;
+    __testOnAgentInterrupted?: () => void;
+    __testAgentResponseReceived?: boolean;
+    __testFunctionCallHandler?: (request: FunctionCallRequest, sendResponse: (response: FunctionCallResponse) => void) => void | FunctionCallResponse | Promise<FunctionCallResponse>;
+    __testFunctionCallRequestReceived?: boolean;
+    __testFunctionCallResponseSent?: boolean;
+    __DEEPGRAM_TEST_MODE__?: boolean;
+    __testSetUserMessage?: (message: string | null) => void;
+    __testSetConnectionState?: (state: 'connected' | 'disconnected' | 'auto') => void;
+    __testSetAutoStartAgent?: (value: boolean) => void;
+    __testSetAutoStartTranscription?: (value: boolean) => void;
+    __testSetInterruptAgent?: (value: boolean) => void;
+    __testSetStartAudioCapture?: (value: boolean) => void;
+    __testGetUserMessage?: () => string | null;
+    __testGetConnectionState?: () => 'connected' | 'disconnected' | 'auto' | undefined;
+    __testGetInterruptAgent?: () => boolean;
+    __testGetStartAudioCapture?: () => boolean;
   }
 }
+
+// Type alias for convenience
+type TestWindow = Window;
 
 // Type for transcript history entries
 type TranscriptHistoryEntry = {
@@ -149,6 +184,14 @@ function App() {
   // Text input state
   const [textInput, setTextInput] = useState('');
   
+  // Declarative Props State (Issue #305)
+  const [declarativeUserMessage, setDeclarativeUserMessage] = useState<string | null>(null);
+  const [declarativeConnectionState, setDeclarativeConnectionState] = useState<'connected' | 'disconnected' | 'auto' | undefined>(undefined);
+  const [declarativeAutoStartAgent, setDeclarativeAutoStartAgent] = useState<boolean | undefined>(undefined);
+  const [declarativeAutoStartTranscription, setDeclarativeAutoStartTranscription] = useState<boolean | undefined>(undefined);
+  const [declarativeInterruptAgent, setDeclarativeInterruptAgent] = useState<boolean>(false);
+  const [declarativeStartAudioCapture, setDeclarativeStartAudioCapture] = useState<boolean>(false);
+  
   // Helper to add logs - memoized
   const addLog = useCallback((message: string) => {
     const timestampedMessage = `${new Date().toISOString().substring(11, 19)} - ${message}`;
@@ -164,7 +207,8 @@ function App() {
   // Enable test mode for E2E tests (exposes Settings message to window)
   useEffect(() => {
     if (isTestMode || new URLSearchParams(window.location.search).get('test-mode') === 'true') {
-      (window as any).__DEEPGRAM_TEST_MODE__ = true;
+      const testWindow = window as TestWindow;
+      testWindow.__DEEPGRAM_TEST_MODE__ = true;
     }
   }, [isTestMode]);
   
@@ -178,7 +222,92 @@ function App() {
     // Expose ref globally for E2E tests (only in test-app)
     // Type assertion is safe here because we know this is test-only code
     window.deepgramRef = deepgramRef as React.RefObject<DeepgramVoiceInteractionHandle>;
-  }, []); // Only run once on mount
+    
+    // Expose declarative props setters for E2E tests (Issue #305)
+    const testWindow = window as TestWindow;
+    testWindow.__testSetUserMessage = (message: string | null) => {
+      setDeclarativeUserMessage(message);
+    };
+    testWindow.__testSetConnectionState = (state: 'connected' | 'disconnected' | 'auto') => {
+      setDeclarativeConnectionState(state);
+    };
+    testWindow.__testSetAutoStartAgent = (value: boolean) => {
+      setDeclarativeAutoStartAgent(value);
+    };
+    testWindow.__testSetAutoStartTranscription = (value: boolean) => {
+      setDeclarativeAutoStartTranscription(value);
+    };
+    testWindow.__testSetInterruptAgent = (value: boolean) => {
+      setDeclarativeInterruptAgent(value);
+    };
+    testWindow.__testSetStartAudioCapture = (value: boolean) => {
+      setDeclarativeStartAudioCapture(value);
+    };
+    
+    // Expose getters for E2E tests
+    testWindow.__testGetUserMessage = () => declarativeUserMessage;
+    testWindow.__testGetConnectionState = () => declarativeConnectionState;
+    testWindow.__testGetInterruptAgent = () => declarativeInterruptAgent;
+    testWindow.__testGetStartAudioCapture = () => declarativeStartAudioCapture;
+  }, [declarativeUserMessage, declarativeConnectionState, declarativeInterruptAgent, declarativeStartAudioCapture]); // Include state in deps to keep getters updated
+
+  // Watch window.__test* variables for declarative props (Issue #305)
+  // This allows E2E tests to set props via window variables
+  useEffect(() => {
+    const checkWindowVars = () => {
+      const testWindow = window as TestWindow;
+      
+      // userMessage prop
+      if (testWindow.__testUserMessageSet && testWindow.__testUserMessage !== undefined) {
+        setDeclarativeUserMessage(testWindow.__testUserMessage);
+        testWindow.__testUserMessageSet = false; // Reset flag
+      }
+      
+      // connectionState prop
+      if (testWindow.__testConnectionStateSet && testWindow.__testConnectionState !== undefined) {
+        setDeclarativeConnectionState(testWindow.__testConnectionState);
+        testWindow.__testConnectionStateSet = false;
+      }
+      
+      // autoStartAgent prop
+      if (testWindow.__testAutoStartAgentSet && testWindow.__testAutoStartAgent !== undefined) {
+        setDeclarativeAutoStartAgent(testWindow.__testAutoStartAgent);
+        testWindow.__testAutoStartAgentSet = false;
+      }
+      
+      // autoStartTranscription prop
+      if (testWindow.__testAutoStartTranscriptionSet && testWindow.__testAutoStartTranscription !== undefined) {
+        setDeclarativeAutoStartTranscription(testWindow.__testAutoStartTranscription);
+        testWindow.__testAutoStartTranscriptionSet = false;
+      }
+      
+      // interruptAgent prop
+      if (testWindow.__testInterruptAgentSet && testWindow.__testInterruptAgent !== undefined) {
+        setDeclarativeInterruptAgent(testWindow.__testInterruptAgent);
+        testWindow.__testInterruptAgentSet = false;
+      }
+      
+      // startAudioCapture prop
+      if (testWindow.__testStartAudioCaptureSet && testWindow.__testStartAudioCapture !== undefined) {
+        setDeclarativeStartAudioCapture(testWindow.__testStartAudioCapture);
+        testWindow.__testStartAudioCaptureSet = false;
+      }
+    };
+    
+    // Check immediately
+    checkWindowVars();
+    
+    // Poll for changes (tests set these asynchronously)
+    const interval = setInterval(checkWindowVars, 100);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // Sync micEnabled with declarativeStartAudioCapture prop (Issue #305)
+  // This ensures the DOM indicator updates when the declarative prop changes
+  useEffect(() => {
+    setMicEnabled(declarativeStartAudioCapture);
+  }, [declarativeStartAudioCapture]);
 
   // Load instructions using the instructions-loader utility
   const hasLoadedInstructions = useRef(false);
@@ -426,7 +555,7 @@ function App() {
       console.warn('[TRANSCRIPT] Could not extract text from transcript:', {
         hasAlternatives: 'alternatives' in transcript,
         hasChannel: 'channel' in transcript,
-        channelType: typeof (transcript as any).channel,
+        channelType: typeof (transcript as { channel?: unknown }).channel,
         keys: Object.keys(transcript)
       });
     }
@@ -566,6 +695,61 @@ function App() {
       addLog(`🎯 [IDLE_TIMEOUT] Timeout active: ${isActive}`);
     }
   }, [addLog, isDebugMode]);
+
+  // Declarative props callbacks (Issue #305) - must be defined before early returns
+  const handleUserMessageSent = useCallback(() => {
+    setDeclarativeUserMessage(null);
+    // Update window variable for tests
+    const testWindow = window as TestWindow;
+    testWindow.__testUserMessage = null;
+    // Call test callback if provided
+    if (testWindow.__testOnUserMessageSent) {
+      testWindow.__testOnUserMessageSent();
+    }
+    // Mark response received for tests
+    testWindow.__testAgentResponseReceived = true;
+  }, []);
+
+  const handleAgentInterrupted = useCallback(() => {
+    setDeclarativeInterruptAgent(false);
+    // Update window variable for tests
+    const testWindow = window as TestWindow;
+    testWindow.__testInterruptAgent = false;
+    // Call test callback if provided
+    if (testWindow.__testOnAgentInterrupted) {
+      testWindow.__testOnAgentInterrupted();
+    }
+  }, []);
+
+  // Function call request handler (Issue #305) - must be defined before early returns
+  const handleFunctionCallRequest = useCallback((request: FunctionCallRequest, sendResponse: (response: FunctionCallResponse) => void) => {
+    // Handle function call requests from Deepgram
+    console.log('[APP] FunctionCallRequest received:', request);
+    
+    // Issue #305: Support declarative return value pattern
+    // Check for test handler first (for E2E tests), then fallback to window.handleFunctionCall
+    const testWindow = window as TestWindow;
+    const handler = testWindow.__testFunctionCallHandler || testWindow.handleFunctionCall;
+    
+    // Mark that function call request was received (for tests)
+    if (testWindow.__testFunctionCallHandler) {
+      testWindow.__testFunctionCallRequestReceived = true;
+    }
+    
+    if (handler) {
+      // Call handler - it may return a value (declarative) or call sendResponse (imperative)
+      const result = handler(request, sendResponse);
+      // If it returns a value, that will be handled by the component
+      // The component will mark __testFunctionCallResponseSent after processing
+      if (result !== undefined && result !== null) {
+        return result;
+      } else {
+        // Imperative pattern - handler called sendResponse
+        // Mark response sent for tests
+        testWindow.__testFunctionCallResponseSent = true;
+      }
+    }
+  }, []);
 
   // Auto-connect dual mode event handlers
 
@@ -807,7 +991,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
     }} data-testid="voice-agent">
       <h1>Deepgram Voice Interaction Test</h1>
       
-      <DeepgramVoiceInteraction
+      <div data-testid="deepgram-component">
+        <DeepgramVoiceInteraction
         ref={deepgramRef}
         {...(connectionMode === 'direct' 
           ? { apiKey: import.meta.env.VITE_DEEPGRAM_API_KEY || '' }
@@ -828,13 +1013,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onError={handleError}
         onPlaybackStateChange={handlePlaybackStateChange}
         onSettingsApplied={handleSettingsApplied}
-        onFunctionCallRequest={useCallback((request: any, sendResponse: (response: any) => void) => {
-          // Handle function call requests from Deepgram
-          console.log('[APP] FunctionCallRequest received:', request);
-          if (window.handleFunctionCall) {
-            window.handleFunctionCall(request, sendResponse);
-          }
-        }, [])}
+        onFunctionCallRequest={handleFunctionCallRequest}
         // VAD event handlers
         onUserStartedSpeaking={handleUserStartedSpeaking}
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
@@ -843,7 +1022,17 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onIdleTimeoutActiveChange={handleIdleTimeoutActiveChange}
         audioConstraints={memoizedAudioConstraints} // Issue #243: Echo cancellation configuration
         debug={isDebugMode} // Enable debug only when debug mode is explicitly enabled
-      />
+        // Declarative Props (Issue #305)
+        userMessage={declarativeUserMessage}
+        onUserMessageSent={handleUserMessageSent}
+        connectionState={declarativeConnectionState}
+        autoStartAgent={declarativeAutoStartAgent}
+        autoStartTranscription={declarativeAutoStartTranscription}
+        interruptAgent={declarativeInterruptAgent}
+        onAgentInterrupted={handleAgentInterrupted}
+        startAudioCapture={declarativeStartAudioCapture}
+        />
+      </div>
       
       <div style={{ border: '1px solid blue', padding: '10px', margin: '15px 0' }}>
         <h4>Component States:</h4>
