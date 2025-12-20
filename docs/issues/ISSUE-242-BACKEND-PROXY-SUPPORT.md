@@ -634,16 +634,15 @@ npm run test:e2e:proxy
 
 ### Documentation Requirements
 
-- [ ] Backend proxy interface contract specification
-- [ ] Implementation guide with examples for common frameworks:
-  - [ ] Node.js/Express example
-  - [ ] Python/FastAPI example
-  - [ ] Python/Django example
-  - [ ] Other frameworks (as needed)
+- [x] Backend proxy interface contract specification (`docs/BACKEND-PROXY-INTERFACE-CONTRACT.md`)
+- [x] Implementation guide with examples for common frameworks:
+  - [x] Node.js/Express example (`docs/BACKEND-PROXY-IMPLEMENTATION-NODEJS.md`)
+  - [x] Python/FastAPI example (`docs/BACKEND-PROXY-IMPLEMENTATION-FASTAPI.md`)
+  - [x] Python/Django example (`docs/BACKEND-PROXY-IMPLEMENTATION-DJANGO.md`)
 - [x] Integration examples in test-app (test-app/src/App.tsx demonstrates both modes)
-- [ ] Security best practices guide
-- [ ] Migration guide for existing implementations
-- [ ] API reference updated with new props
+- [x] Security best practices guide (`docs/BACKEND-PROXY-SECURITY-BEST-PRACTICES.md`)
+- [x] Migration guide for existing implementations (`docs/BACKEND-PROXY-MIGRATION-GUIDE.md`)
+- [x] API reference updated with new props (`docs/API-REFERENCE.md`)
 
 ## Implementation Considerations
 
