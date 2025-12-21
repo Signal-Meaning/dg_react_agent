@@ -45,6 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Updated API Reference documentation** (Issue #327):
+  - Updated `docs/API-REFERENCE.md` to v0.7.0+ with declarative props API
+  - Added comprehensive documentation for all new declarative props
+  - Updated API Design Summary to reflect both imperative and declarative patterns
+  - Documented backend proxy support in connection configuration section
+  - **Related PRs**: #327 (Release v0.7.0)
+
 - **Removed `lazyLog` feature** (Issue #185):
   - Replaced all 32 `lazyLog()` calls with standard `if (props.debug) console.log()` statements
   - Removed unnecessary abstraction layer for logging
