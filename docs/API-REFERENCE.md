@@ -2,7 +2,7 @@
 
 **Component**: `DeepgramVoiceInteraction`  
 **Package**: `@signal-meaning/deepgram-voice-interaction-react`  
-**Version**: 0.6.5+
+**Version**: 0.7.0+
 
 ## 🎯 Document Audience
 
@@ -13,13 +13,14 @@ This document serves **two audiences**:
 
 ## 🎯 API Design Summary
 
-The `DeepgramVoiceInteraction` component provides a **headless, imperative API** for real-time voice interactions with Deepgram's transcription and AI agent services. The API is designed around three core principles:
+The `DeepgramVoiceInteraction` component provides a **headless API** supporting both **imperative** and **declarative** patterns for real-time voice interactions with Deepgram's transcription and AI agent services. The API is designed around three core principles:
 
-### **1. Explicit Control**
-- **No automatic connections** - You must explicitly call `start()`, `startTranscription()`, or `startAgent()`
+### **1. Flexible Control Patterns**
+- **Imperative API** - Control behavior through method calls via component refs (original API, fully supported)
+- **Declarative API** - Control behavior through React props (v0.7.0+, Issue #305)
+- **Automatic connections** - Optional `autoStartAgent`/`autoStartTranscription` props for automatic connection on mount
 - **Configuration required** - You must provide `transcriptionOptions` and/or `agentOptions` for the services you want to start
 - **Service-specific control** - Start/stop transcription and agent services independently
-- **Imperative methods** - Control behavior through method calls rather than prop changes
 
 ### **2. Event-Driven Architecture**
 - **Comprehensive callbacks** - Monitor all aspects of voice interaction through dedicated event handlers
@@ -115,6 +116,76 @@ interface DeepgramVoiceInteractionProps {
   
   // Debug
   debug?: boolean;
+  
+  // Declarative Props (Issue #305, v0.7.0+)
+  /**
+   * Declaratively send user messages to the agent.
+   * When this prop changes from undefined/null to a string, the component automatically sends the message.
+   * After sending, the component calls `onUserMessageSent` to allow the parent to clear the prop.
+   * 
+   * @see Issue #305
+   */
+  userMessage?: string | null;
+  
+  /**
+   * Called after the user message has been sent via the `userMessage` prop.
+   * Use this callback to clear the `userMessage` prop (set to `null`).
+   * 
+   * @see Issue #305
+   */
+  onUserMessageSent?: () => void;
+  
+  /**
+   * When `true`, automatically starts the agent service connection when the component mounts
+   * or when `agentOptions` is provided.
+   * 
+   * @see Issue #305
+   */
+  autoStartAgent?: boolean;
+  
+  /**
+   * When `true`, automatically starts the transcription service connection when the component mounts
+   * or when `transcriptionOptions` is provided.
+   * 
+   * @see Issue #305
+   */
+  autoStartTranscription?: boolean;
+  
+  /**
+   * Controls the connection state declaratively.
+   * - `'connected'`: Starts connections for configured services
+   * - `'disconnected'`: Stops all connections
+   * - `'auto'`: Uses `autoStartAgent`/`autoStartTranscription` behavior
+   * 
+   * @see Issue #305
+   */
+  connectionState?: 'connected' | 'disconnected' | 'auto';
+  
+  /**
+   * Declarative TTS interruption (replaces interruptAgent() method).
+   * When set to `true`, immediately interrupts any ongoing TTS playback.
+   * After interruption, the component calls `onAgentInterrupted` to allow the parent to clear the flag.
+   * 
+   * @see Issue #305
+   */
+  interruptAgent?: boolean;
+  
+  /**
+   * Called after TTS has been interrupted via the `interruptAgent` prop.
+   * Use this callback to clear the `interruptAgent` prop (set to `false`).
+   * 
+   * @see Issue #305
+   */
+  onAgentInterrupted?: () => void;
+  
+  /**
+   * Declarative microphone control (replaces startAudioCapture() method).
+   * When `true`, starts audio capture (triggers microphone permission prompt).
+   * When `false`, stops audio capture.
+   * 
+   * @see Issue #305
+   */
+  startAudioCapture?: boolean;
 }
 ```
 
