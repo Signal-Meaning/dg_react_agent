@@ -108,11 +108,13 @@ See [EXAMPLES.md](./EXAMPLES.md) for more examples.
 
 ## 📚 Documentation
 
+- [API Reference](../../API-REFERENCE.md) - Complete API documentation (updated for v0.7.0)
 - [CHANGELOG.md](./CHANGELOG.md) - Complete list of all 22 commits
 - [NEW-FEATURES.md](./NEW-FEATURES.md) - Detailed feature documentation
 - [API-CHANGES.md](./API-CHANGES.md) - Complete API reference
 - [EXAMPLES.md](./EXAMPLES.md) - Usage examples and best practices
 - [PACKAGE-STRUCTURE.md](./PACKAGE-STRUCTURE.md) - Package contents
+- [MIGRATION.md](./MIGRATION.md) - Migration guide (no migration required)
 
 ## 🔗 Related Issues and PRs
 
