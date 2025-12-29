@@ -68,33 +68,52 @@ test.describe('Backend Proxy Mode', () => {
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
-    // Wait for connection mode to be set
+    // Wait for connection mode to be set to proxy
     await page.waitForFunction(() => {
       const modeEl = document.querySelector('[data-testid="connection-mode"]');
       return modeEl && modeEl.textContent?.includes('proxy');
     }, { timeout: 5000 });
 
-    // Wait for connection (component auto-connects in dual mode)
-    try {
-      await waitForConnection(page, 15000);
-    } catch (error) {
-      // Connection might not auto-connect, that's okay - we'll test when message is sent
-    }
+    // Verify connection mode is proxy
+    const connectionMode = await page.locator('[data-testid="connection-mode"]').textContent();
+    expect(connectionMode).toContain('proxy');
+
+    // Wait for connection to be established (component auto-connects in dual mode)
+    // In proxy mode, connection should still auto-connect when text input is focused
+    await page.click('[data-testid="text-input"]');
+    await page.waitForTimeout(500); // Give time for auto-connect to trigger
+    
+    // Wait for connection with longer timeout for proxy mode
+    await waitForConnection(page, 20000);
+
+    // Verify connection is established
+    const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
+    expect(connectionStatus).toContain('connected');
+
+    // Wait for settings to be applied (SettingsApplied received)
+    // This ensures the agent is ready to respond
+    await page.waitForFunction(() => {
+      const settingsEl = document.querySelector('[data-testid="has-sent-settings"]');
+      return settingsEl && settingsEl.textContent === 'true';
+    }, { timeout: 15000 });
 
     // Send a text message to trigger agent response through proxy
     const testMessage = 'Hello, this is a proxy mode test';
     await sendTextMessage(page, testMessage);
 
     // Wait for agent response (through proxy)
+    // Use a longer timeout since proxy may add some latency
     await page.waitForFunction(() => {
       const responseEl = document.querySelector('[data-testid="agent-response"]');
       return responseEl && 
              responseEl.textContent && 
+             responseEl.textContent.trim() !== '' &&
              responseEl.textContent !== '(Waiting for agent response...)';
-    }, { timeout: 15000 });
+    }, { timeout: 20000 });
 
     const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
     expect(agentResponse).toBeTruthy();
+    expect(agentResponse.trim()).not.toBe('');
     expect(agentResponse).not.toBe('(Waiting for agent response...)');
   });
 
