@@ -82,7 +82,7 @@ export default defineConfig({
     // The config is at test-app/tests/playwright.config.mjs, so from test-app/ we need '.'
     cwd: '.', // Run from test-app directory (where package.json is)
     url: 'http://localhost:5173', // Vite default port
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true, // Always reuse existing server
     timeout: 120 * 1000,
     // Output server logs for debugging in CI
     stdout: process.env.CI ? 'pipe' : 'ignore',
