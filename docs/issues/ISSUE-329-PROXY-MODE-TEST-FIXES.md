@@ -81,18 +81,26 @@
      - Check if Deepgram is sending FunctionCallRequest (may need to verify function definitions are valid)
 8. ❌ `function-calling-e2e.spec.js:501:3` - "should test minimal function definition for SettingsApplied issue"
    - **Status**: In Progress - Page closure issue
-   - **Root Cause**: Test page/browser context closing unexpectedly during execution
-   - **Next Steps**: Investigate why page is closing - may be timing issue or connection closure
+   - **Root Cause**: Test page/browser context closing unexpectedly during execution (error: "Target page, context or browser has been closed")
+   - **Observations**: Error occurs at `page.waitForTimeout(1000)` after updating agentOptions
+   - **Next Steps**: 
+     - Investigate why page is closing - may be connection closure or error causing browser to close
+     - Check if there's an error in the component that's causing the page to close
+     - May need to add error handling or check connection state before waiting
 
 #### Category 7: Idle Timeout Behavior (1 test)
 9. ❌ `idle-timeout-behavior.spec.js:887:3` - "should restart timeout after USER_STOPPED_SPEAKING when agent is idle - reproduces Issue #262/#430"
    - **Status**: In Progress - Timeout not starting
    - **Root Cause**: IdleTimeoutService disables resets when `AGENT_STATE_CHANGED` arrives with 'idle' while `isPlaying` is still true. When `PLAYBACK_STATE_CHANGED` arrives with `isPlaying: false`, `updateTimeoutBehavior()` should enable resets and start timeout, but it's not happening.
-   - **Fix Attempted**: Modified `MEANINGFUL_USER_ACTIVITY` handler to call `updateTimeoutBehavior()` instead of `resetTimeout()` when agent is idle
+   - **Fix Attempted**: 
+     - Modified `MEANINGFUL_USER_ACTIVITY` handler to check if agent is idle and enable resets/start timeout
+     - Modified `PLAYBACK_STATE_CHANGED` handler to check if playback stopped and agent is idle, then enable resets/start timeout
+     - Added detailed logging to track state transitions
+   - **Current Issue**: Logs show events only up to `MEANINGFUL_USER_ACTIVITY` while agent is still speaking. Test waits for agent to be idle and audio to stop, but timeout isn't starting when those conditions are met.
    - **Next Steps**: 
-     - Verify `updateTimeoutBehavior()` is being called after `PLAYBACK_STATE_CHANGED`
-     - Check if conditions are met when `updateTimeoutBehavior()` is called
-     - May need to ensure timeout starts even if `MEANINGFUL_USER_ACTIVITY` events arrive after agent becomes idle
+     - Investigate why timeout isn't starting when `AGENT_STATE_CHANGED` with 'idle' and `PLAYBACK_STATE_CHANGED` with `isPlaying=false` both occur
+     - May need to add a delayed check or ensure timeout starts in all code paths when conditions are met
+     - Check if there's a race condition or timing issue preventing timeout from starting
 
 #### Category 8: Interim Transcript Validation (1 test)
 10. ✅ `interim-transcript-validation.spec.js:32:3` - "should receive both interim and final transcripts with fake audio"
@@ -156,9 +164,12 @@
 #### Category 14: VAD Redundancy (1 test)
 21. ❌ `vad-redundancy-and-agent-timeout.spec.js:380:3` - "should maintain consistent idle timeout state machine"
    - **Status**: In Progress - Validation failure
-   - **Root Cause**: Test expects enable/disable actions to be logged, but they're not being found in validation results
+   - **Root Cause**: Test expects enable/disable actions to be logged (`hasEnableActions || hasDisableActions`), but neither is found in validation results
    - **Related**: Same idle timeout issue as test #9 - timeout not starting prevents action logging
-   - **Next Steps**: Fix idle timeout issue (test #9) first, then verify this test
+   - **Next Steps**: 
+     - Fix idle timeout issue (test #9) first, then verify this test
+     - May need to check if actions are being logged but not captured by the validation utility
+     - Verify that idle timeout state machine is actually transitioning states
 
 ## 🔧 Fixes Applied
 
