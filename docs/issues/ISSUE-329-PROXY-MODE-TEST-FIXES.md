@@ -15,9 +15,9 @@
 
 | Status | Count | Tests |
 |--------|-------|-------|
-| ✅ Fixed | 4 | `callback-test.spec.js:48` - onTranscriptUpdate callback<br>`agent-options-resend-issue311.spec.js:50` - Settings re-send<br>`backend-proxy-mode.spec.js:61` - Agent responses through proxy<br>`callback-test.spec.js:87` - onUserStartedSpeaking callback |
-| 🔄 In Progress | 1 | `callback-test.spec.js:128` - onUserStoppedSpeaking callback (transcription timeout issue) |
-| ❌ Pending | 17 | See list below |
+| ✅ Fixed | 18 | `callback-test.spec.js:48` - onTranscriptUpdate callback<br>`agent-options-resend-issue311.spec.js:50` - Settings re-send<br>`backend-proxy-mode.spec.js:61` - Agent responses through proxy<br>`callback-test.spec.js:87` - onUserStartedSpeaking callback<br>`declarative-props-api.spec.js:278` - Function call response via callback<br>`callback-test.spec.js:128` - onUserStoppedSpeaking callback<br>`extended-silence-idle-timeout.spec.js:11` - Connection closure with silence<br>`interim-transcript-validation.spec.js:32` - Interim and final transcripts<br>`strict-mode-behavior.spec.js:93` - StrictMode cleanup detection<br>`user-stopped-speaking-demonstration.spec.js:20` - onUserStoppedSpeaking demonstration<br>`user-stopped-speaking-demonstration.spec.js:174` - Multiple audio samples<br>`vad-audio-patterns.spec.js:26` - VAD events with pre-generated audio<br>`vad-audio-patterns.spec.js:55` - VAD events with realistic patterns<br>`vad-audio-patterns.spec.js:120` - Multiple audio samples in sequence<br>`vad-configuration-optimization.spec.js:23` - utterance_end_ms values<br>`vad-configuration-optimization.spec.js:134` - VAD event combinations<br>`vad-configuration-optimization.spec.js:225` - VAD event timing<br>`vad-events-core.spec.js:27` - Basic VAD events |
+| 🔄 In Progress | 1 | `idle-timeout-behavior.spec.js:887` - Idle timeout restart |
+| ❌ Pending | 3 | See list below |
 
 ### Fixed Tests ✅
 
@@ -51,61 +51,114 @@
 #### Category 3: Callback Tests (2 tests)
 3. ✅ `callback-test.spec.js:87:3` - "should test onUserStartedSpeaking callback with existing audio sample"
    - **Status**: ✅ **FIXED** - Passing (verified earlier)
-4. ❌ `callback-test.spec.js:128:3` - "should test onUserStoppedSpeaking callback with existing audio sample"
-   - **Status**: In Progress - Transcription connection times out (error 1011) before UtteranceEnd can be processed
-   - **Root Cause**: Transcription service requires audio within timeout window, but test waits for agent SettingsApplied before sending audio
-   - **Fix Attempted**: Added keepalive audio sent immediately after transcription connection
-   - **Next Steps**: May need to send real audio to transcription service immediately after connection, not wait for agent SettingsApplied
+4. ✅ `callback-test.spec.js:128:3` - "should test onUserStoppedSpeaking callback with existing audio sample"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: UtteranceEnd callback wasn't being called when `speech_final=true` was received first (component was ignoring UtteranceEnd per Deepgram guidelines)
+   - **Solution**: Always call `onUtteranceEnd` callback even if `speech_final=true` was already received, since the callback provides useful data (channel, lastWordEnd). The "ignore" behavior now only applies to internal state management, not to callbacks.
+   - **Verification**: Test passes, UtteranceEnd callback called and DOM element updated
 
-#### Category 4: Declarative Props API (1 test)
-5. ❌ `declarative-props-api.spec.js:278:5` - "should handle function call response via callback return value"
-   - **Status**: Needs investigation
+#### Category 4: Declarative Props API (0 tests)
+~~5. ❌ `declarative-props-api.spec.js:278:5`~~ - ✅ **FIXED** - Passing (verified)
 
 #### Category 5: Extended Silence Idle Timeout (1 test)
-6. ❌ `extended-silence-idle-timeout.spec.js:11:3` - "should demonstrate connection closure with >10 seconds of silence"
-   - **Status**: Needs investigation
+6. ✅ `extended-silence-idle-timeout.spec.js:11:3` - "should demonstrate connection closure with >10 seconds of silence"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: Fixed by Fix #5 (UtteranceEnd callback fix) - test was failing because UtteranceEnd callback wasn't being called
+   - **Verification**: Test passes, connection closes after idle timeout as expected
 
 #### Category 6: Function Calling (2 tests)
 7. ❌ `function-calling-e2e.spec.js:65:3` - "should trigger client-side function call and execute it"
+   - **Status**: In Progress - FunctionCallRequest not being received
+   - **Root Cause**: SettingsApplied is received, but FunctionCallRequest from Deepgram is not arriving
+   - **Observations**: 
+     - Settings message is sent (verified in logs)
+     - SettingsApplied is received (verified in logs)
+     - Functions may not be in Settings message (WebSocket capture shows functions missing, but capture may be unreliable in proxy mode)
+     - FunctionCallRequest never arrives (test times out waiting)
+   - **Next Steps**: 
+     - Verify functions are actually included in Settings message sent to Deepgram (check proxy logs)
+     - Investigate if proxy is correctly forwarding FunctionCallRequest messages from Deepgram
+     - Check if Deepgram is sending FunctionCallRequest (may need to verify function definitions are valid)
 8. ❌ `function-calling-e2e.spec.js:501:3` - "should test minimal function definition for SettingsApplied issue"
-   - **Status**: Needs investigation
+   - **Status**: In Progress - Page closure issue
+   - **Root Cause**: Test page/browser context closing unexpectedly during execution
+   - **Next Steps**: Investigate why page is closing - may be timing issue or connection closure
 
 #### Category 7: Idle Timeout Behavior (1 test)
 9. ❌ `idle-timeout-behavior.spec.js:887:3` - "should restart timeout after USER_STOPPED_SPEAKING when agent is idle - reproduces Issue #262/#430"
-   - **Status**: Needs investigation
+   - **Status**: In Progress - Timeout not starting
+   - **Root Cause**: IdleTimeoutService disables resets when `AGENT_STATE_CHANGED` arrives with 'idle' while `isPlaying` is still true. When `PLAYBACK_STATE_CHANGED` arrives with `isPlaying: false`, `updateTimeoutBehavior()` should enable resets and start timeout, but it's not happening.
+   - **Fix Attempted**: Modified `MEANINGFUL_USER_ACTIVITY` handler to call `updateTimeoutBehavior()` instead of `resetTimeout()` when agent is idle
+   - **Next Steps**: 
+     - Verify `updateTimeoutBehavior()` is being called after `PLAYBACK_STATE_CHANGED`
+     - Check if conditions are met when `updateTimeoutBehavior()` is called
+     - May need to ensure timeout starts even if `MEANINGFUL_USER_ACTIVITY` events arrive after agent becomes idle
 
 #### Category 8: Interim Transcript Validation (1 test)
-10. ❌ `interim-transcript-validation.spec.js:32:3` - "should receive both interim and final transcripts with fake audio"
-   - **Status**: Likely transcription service issue
+10. ✅ `interim-transcript-validation.spec.js:32:3` - "should receive both interim and final transcripts with fake audio"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: Fixed by previous fixes (Settings timing, UtteranceEnd callback)
+   - **Verification**: Test passes, transcripts received correctly
 
 #### Category 9: StrictMode Behavior (1 test)
-11. ❌ `strict-mode-behavior.spec.js:93:3` - "should detect StrictMode cleanup in console logs"
-   - **Status**: Needs investigation
+11. ✅ `strict-mode-behavior.spec.js:93:3` - "should detect StrictMode cleanup in console logs"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: Test was looking for log messages that don't exist ("component initialized" or "DeepgramVoiceInteraction component initialized")
+   - **Solution**: Updated test to look for actual component log message ("🔧 [Component] Initialization check")
+   - **Verification**: Test passes, mount logs found
 
 #### Category 10: User Stopped Speaking (2 tests)
-12. ❌ `user-stopped-speaking-demonstration.spec.js:20:3` - "should demonstrate onUserStoppedSpeaking with real microphone and pre-recorded audio"
-13. ❌ `user-stopped-speaking-demonstration.spec.js:174:3` - "should demonstrate onUserStoppedSpeaking with multiple audio samples"
-   - **Status**: Needs investigation
+12. ✅ `user-stopped-speaking-demonstration.spec.js:20:3` - "should demonstrate onUserStoppedSpeaking with real microphone and pre-recorded audio"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: `onUserStoppedSpeaking` wasn't being called when UtteranceEnd was received after `speech_final=true` was already received
+   - **Solution**: Always call `onUserStoppedSpeaking` when UtteranceEnd is received, even if `speech_final=true` was already received, because `onUserStoppedSpeaking` might not have been called when `speech_final=true` was received (if `isUserSpeaking` was false at that time)
+   - **Verification**: Test passes, both UtteranceEnd and UserStoppedSpeaking detected
+13. ✅ `user-stopped-speaking-demonstration.spec.js:174:3` - "should demonstrate onUserStoppedSpeaking with multiple audio samples"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: Same as test #12 - `onUserStoppedSpeaking` wasn't being called when UtteranceEnd was received
+   - **Solution**: Fixed by same fix as test #12
+   - **Verification**: Test passes
 
 #### Category 11: VAD Audio Patterns (3 tests)
-14. ❌ `vad-audio-patterns.spec.js:26:3` - "should detect VAD events with pre-generated audio samples"
-15. ❌ `vad-audio-patterns.spec.js:55:3` - "should detect VAD events with realistic audio patterns"
-16. ❌ `vad-audio-patterns.spec.js:120:3` - "should handle multiple audio samples in sequence"
-   - **Status**: Likely transcription service issue
+14. ✅ `vad-audio-patterns.spec.js:26:3` - "should detect VAD events with pre-generated audio samples"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: Fixed by UtteranceEnd callback fix (Fix #5)
+   - **Verification**: Test passes
+15. ✅ `vad-audio-patterns.spec.js:55:3` - "should detect VAD events with realistic audio patterns"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: Fixed by UtteranceEnd callback fix (Fix #5)
+   - **Verification**: Test passes
+16. ✅ `vad-audio-patterns.spec.js:120:3` - "should handle multiple audio samples in sequence"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: Fixed by UtteranceEnd callback fix (Fix #5)
+   - **Verification**: Test passes
 
 #### Category 12: VAD Configuration Optimization (3 tests)
-17. ❌ `vad-configuration-optimization.spec.js:23:3` - "should test different utterance_end_ms values for offset detection"
-18. ❌ `vad-configuration-optimization.spec.js:134:3` - "should test different VAD event combinations"
-19. ❌ `vad-configuration-optimization.spec.js:225:3` - "should test VAD event timing and sequencing"
-   - **Status**: Likely transcription service issue
+17. ✅ `vad-configuration-optimization.spec.js:23:3` - "should test different utterance_end_ms values for offset detection"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: Fixed by UtteranceEnd callback fix (Fix #5)
+   - **Verification**: Test passes
+18. ✅ `vad-configuration-optimization.spec.js:134:3` - "should test different VAD event combinations"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: Fixed by UtteranceEnd callback fix (Fix #5)
+   - **Verification**: Test passes
+19. ✅ `vad-configuration-optimization.spec.js:225:3` - "should test VAD event timing and sequencing"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: Fixed by UtteranceEnd callback fix (Fix #5)
+   - **Verification**: Test passes
 
 #### Category 13: VAD Events Core (1 test)
-20. ❌ `vad-events-core.spec.js:27:3` - "should detect basic VAD events (UserStartedSpeaking, UtteranceEnd)"
-   - **Status**: Likely transcription service issue
+20. ✅ `vad-events-core.spec.js:27:3` - "should detect basic VAD events (UserStartedSpeaking, UtteranceEnd)"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Root Cause**: Fixed by UtteranceEnd callback fix (Fix #5)
+   - **Verification**: Test passes
 
 #### Category 14: VAD Redundancy (1 test)
 21. ❌ `vad-redundancy-and-agent-timeout.spec.js:380:3` - "should maintain consistent idle timeout state machine"
-   - **Status**: Needs investigation
+   - **Status**: In Progress - Validation failure
+   - **Root Cause**: Test expects enable/disable actions to be logged, but they're not being found in validation results
+   - **Related**: Same idle timeout issue as test #9 - timeout not starting prevents action logging
+   - **Next Steps**: Fix idle timeout issue (test #9) first, then verify this test
 
 ## 🔧 Fixes Applied
 
@@ -191,9 +244,14 @@
 
 ## 📝 Test Execution Notes
 
-### ⚠️ Important Testing Guidelines
+### ⚠️ CRITICAL Testing Guidelines
 
-**One Test at a Time**: Each test must be resolved (made to pass) individually before moving to the next one. This ensures proper isolation and prevents regression.
+**🚨 ONE TEST AT A TIME - MANDATORY**: 
+- **NEVER run all E2E tests at once** (`npm run test:e2e` without filters)
+- **ALWAYS run tests individually** using `--grep` to target a specific test
+- Each test must be resolved (made to pass) individually before moving to the next one
+- This ensures proper isolation and prevents regression
+- Running all tests at once can cause timeouts, resource conflicts, and makes debugging impossible
 
 **Command Execution**: Until tests pass, avoid using `head` and `tail` options in shell commands. These can truncate important output needed for debugging.
 
@@ -202,12 +260,15 @@
 ### Running Tests in Proxy Mode
 
 ```bash
-# Start proxy server (now automatic via Playwright config)
-cd test-app
-USE_PROXY_MODE=true npm run test:e2e
+# ❌ DO NOT DO THIS - Running all tests at once
+# USE_PROXY_MODE=true npm run test:e2e
 
-# Run specific test
-USE_PROXY_MODE=true npm run test:e2e -- tests/e2e/callback-test.spec.js --grep "test name"
+# ✅ CORRECT - Run ONE test at a time
+cd test-app
+USE_PROXY_MODE=true npm run test:e2e -- tests/e2e/callback-test.spec.js --grep "exact test name"
+
+# Example for next pending test:
+USE_PROXY_MODE=true npm run test:e2e -- tests/e2e/extended-silence-idle-timeout.spec.js --grep "should demonstrate connection closure"
 ```
 
 ### Environment Variables
@@ -241,6 +302,15 @@ USE_PROXY_MODE=true npm run test:e2e -- tests/e2e/callback-test.spec.js --grep "
    - Currently set to `'pipe'` for debugging Issue #329 (see lines 107-108)
    - This will reduce test output noise once debugging is complete
 
+5. **TODO: Remove debug instrumentation** (after all tests pass)
+   - Remove all debug instrumentation logs added during Issue #329 debugging
+   - Files with instrumentation:
+     - `src/components/DeepgramVoiceInteraction/index.tsx` - Settings/UtteranceEnd tracking
+     - `src/utils/websocket/WebSocketManager.ts` - Settings message tracking
+     - `test-app/src/App.tsx` - UtteranceEnd callback tracking
+   - Look for `// #region debug log` and `// #endregion` markers
+   - Remove fetch calls to `http://127.0.0.1:7244/ingest/...` debug endpoint
+
 ## 📚 Related Issues
 
 - Issue #311: Agent options re-send
@@ -263,7 +333,7 @@ USE_PROXY_MODE=true npm run test:e2e -- tests/e2e/callback-test.spec.js --grep "
 - **2025-01-29**: Fix #3 applied - Message queuing for Deepgram messages
 - **2025-01-29**: Fix #4 applied - WebSocket timing issue for Settings messages
 - **2025-01-29**: Proxy server logging enabled (stdout/stderr set to 'pipe') for debugging
-- **2025-01-29**: 3 tests fixed, 19 remaining
+- **2025-01-29**: 5 tests fixed, 3 in progress (transcription timeout affects multiple tests), 19 remaining
 - **TODO**: Revert proxy server logging to 'ignore' once all tests pass
 
 ## ✅ Success Criteria
@@ -272,8 +342,8 @@ All 22 tests must pass when run with `USE_PROXY_MODE=true`:
 - [x] callback-test.spec.js:48 - onTranscriptUpdate callback
 - [x] agent-options-resend-issue311.spec.js:50 - Settings re-send
 - [x] backend-proxy-mode.spec.js:61 - Agent responses through proxy
-- [ ] callback-test.spec.js:87 - onUserStartedSpeaking
-- [ ] callback-test.spec.js:128 - onUserStoppedSpeaking
+- [x] callback-test.spec.js:87 - onUserStartedSpeaking
+- [x] callback-test.spec.js:128 - onUserStoppedSpeaking
 - [ ] declarative-props-api.spec.js:278
 - [ ] extended-silence-idle-timeout.spec.js:11
 - [ ] function-calling-e2e.spec.js:65

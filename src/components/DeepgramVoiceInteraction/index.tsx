@@ -632,34 +632,69 @@ function DeepgramVoiceInteraction(
             console.log('🔧 [DEBUG] Transcription state event:', event.state, 'Previous:', lastConnectionStates.current.transcription);
           }
           if (lastConnectionStates.current.transcription !== event.state) {
+            // #region debug log
+            fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:634',message:'Transcription state changed',data:{oldState:lastConnectionStates.current.transcription,newState:event.state},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             log('Transcription state:', event.state);
             dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: event.state });
             onConnectionStateChange?.('transcription', event.state);
             lastConnectionStates.current.transcription = event.state;
             
-            // Issue #329: Send small keepalive audio to transcription service immediately after connection
-            // to prevent timeout (Deepgram requires audio within timeout window)
+            // Issue #329: Send periodic keepalive audio to transcription service to prevent timeout
+            // Deepgram requires audio data within timeout window (~26 seconds), but tests may wait
+            // for SettingsApplied before sending real audio. Send keepalive every 5 seconds until
+            // real audio starts flowing.
             if (event.state === 'connected' && transcriptionManagerRef.current) {
+              // #region debug log
+              fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:642',message:'Transcription connected, starting periodic keepalive',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+              // #endregion
               // Create a small silent audio buffer (160 samples = 10ms at 16kHz) to keep connection alive
-              // This prevents "Deepgram did not receive audio data" timeout error
               const keepaliveBuffer = new ArrayBuffer(320); // 160 samples * 2 bytes (16-bit PCM)
               const view = new Int16Array(keepaliveBuffer);
-              // Fill with silence (zero samples)
               view.fill(0);
               
               if (config.debug) {
-                console.log('🔧 [TRANSCRIPTION] Sending keepalive audio to prevent timeout');
+                console.log('🔧 [TRANSCRIPTION] Starting periodic keepalive audio to prevent timeout');
               }
               
               // Send keepalive immediately after connection
-              setTimeout(() => {
-                if (transcriptionManagerRef.current?.getState() === 'connected') {
-                  transcriptionManagerRef.current.sendBinary(keepaliveBuffer);
+              const sendKeepalive = () => {
+                const currentState = transcriptionManagerRef.current?.getState();
+                // #region debug log
+                fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:656',message:'Keepalive interval fired',data:{currentState:currentState,isConnected:currentState==='connected'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
+                if (currentState === 'connected') {
+                  // #region debug log
+                  fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:658',message:'Sending periodic keepalive audio',data:{bufferSize:keepaliveBuffer.byteLength},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                  // #endregion
+                  const keepaliveResult = transcriptionManagerRef.current.sendBinary(keepaliveBuffer);
+                  // #region debug log
+                  fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:660',message:'Keepalive sendBinary result',data:{result:keepaliveResult},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                  // #endregion
                   if (config.debug) {
-                    console.log('🔧 [TRANSCRIPTION] Keepalive audio sent');
+                    console.log('🔧 [TRANSCRIPTION] Periodic keepalive audio sent');
                   }
+                  // Schedule next keepalive (every 5 seconds to stay well under 26s timeout)
+                  // Store timeout ID so we can clear it when connection closes
+                  const timeoutId = window.setTimeout(sendKeepalive, 5000);
+                  // Store timeout ID on manager for cleanup
+                  (transcriptionManagerRef.current as any).__keepaliveTimeoutId = timeoutId;
+                } else {
+                  // #region debug log
+                  fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:664',message:'Keepalive stopped - connection closed',data:{currentState:currentState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                  // #endregion
                 }
-              }, 100); // Small delay to ensure connection is fully ready
+              };
+              
+              // Start keepalive after small delay, then continue every 5 seconds
+              setTimeout(sendKeepalive, 100);
+            } else if (event.state === 'closed' && transcriptionManagerRef.current) {
+              // Clear keepalive interval when connection closes
+              const timeoutId = (transcriptionManagerRef.current as any).__keepaliveTimeoutId;
+              if (timeoutId) {
+                window.clearTimeout(timeoutId);
+                (transcriptionManagerRef.current as any).__keepaliveTimeoutId = null;
+              }
             }
           } else {
             if (config.debug) {
@@ -822,6 +857,9 @@ function DeepgramVoiceInteraction(
               });
             }
             if (!hasSentSettingsRef.current && !windowWithGlobals.globalSettingsSent) {
+              // #region debug log
+              fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:799',message:'Connection state handler: will send Settings',data:{agentState:agentManagerRef.current?.getState()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+              // #endregion
               log('Connection established, sending settings via connection state handler');
               if (config.debug) {
                 console.log('🔧 [Connection State] ✅ Will send Settings after WebSocket is fully open');
@@ -836,11 +874,18 @@ function DeepgramVoiceInteraction(
                                     wsState === 2 ? 'CLOSING' : 
                                     wsState === 3 ? 'CLOSED' : 'UNKNOWN';
                 
+                // #region debug log
+                fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:810',message:'checkAndSend: WebSocket state check',data:{wsState:wsState,wsStateName:wsStateName},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                // #endregion
+                
                 if (config.debug) {
                   console.log('🔧 [Connection State] Checking WebSocket state:', wsState, `(${wsStateName})`);
                 }
                 
                 if (wsState === 1) { // OPEN
+                  // #region debug log
+                  fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:818',message:'checkAndSend: WebSocket OPEN, calling sendAgentSettings',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                  // #endregion
                   if (config.debug) {
                     console.log('🔧 [Connection State] WebSocket is OPEN, sending Settings');
                   }
@@ -853,6 +898,9 @@ function DeepgramVoiceInteraction(
                   setTimeout(checkAndSend, 50);
                 } else {
                   // CLOSING or CLOSED - connection is gone, can't send Settings
+                  // #region debug log
+                  fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:828',message:'checkAndSend: WebSocket not ready, cannot send Settings',data:{wsState:wsState,wsStateName:wsStateName},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                  // #endregion
                   if (config.debug) {
                     console.error('🔧 [Connection State] WebSocket is', wsStateName, '- cannot send Settings');
                   }
@@ -1647,16 +1695,41 @@ function DeepgramVoiceInteraction(
     }
 
     if (data.type === 'UtteranceEnd') {
+      // #region debug log
+      fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:1697',message:'UtteranceEnd message received',data:{speechFinalReceived:speechFinalReceivedRef.current,isSleepingOrEntering:isSleepingOrEntering},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+      // #endregion
       if (props.debug) {
         console.log('🎯 [SPEECH] UtteranceEnd message received - checking if should process');
       }
       
+      // Always call onUtteranceEnd callback to provide channel and lastWordEnd data
+      // even if speech_final was already received (Issue #329: test expects callback)
+      const channel = Array.isArray(data.channel) ? data.channel : [0, 1];
+      const lastWordEnd = typeof data.last_word_end === 'number' ? data.last_word_end : 0;
+      // #region debug log
+      fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:1705',message:'Calling onUtteranceEnd callback (always called)',data:{channel:channel,lastWordEnd:lastWordEnd,hasCallback:!!onUtteranceEnd,speechFinalReceived:speechFinalReceivedRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+      onUtteranceEnd?.({ channel, lastWordEnd });
+      
+      // Always call onUserStoppedSpeaking when UtteranceEnd is received
+      // even if speech_final=true was already received, because onUserStoppedSpeaking
+      // might not have been called when speech_final=true was received (if isUserSpeaking was false)
+      // Issue #329: Tests expect onUserStoppedSpeaking to be called when UtteranceEnd is received
+      // #region debug log
+      fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:1714',message:'Calling onUserStoppedSpeaking callback (always called with UtteranceEnd)',data:{hasCallback:!!onUserStoppedSpeaking,speechFinalReceived:speechFinalReceivedRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+      // #endregion
+      onUserStoppedSpeaking?.();
+      
       // Check if speech_final was already received (per Deepgram guidelines)
+      // If so, skip internal state management but still call callbacks above
       if (speechFinalReceivedRef.current) {
+        // #region debug log
+        fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:1720',message:'UtteranceEnd: skipping internal state (speech_final already received)',data:{speechFinalReceived:speechFinalReceivedRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         if (props.debug) {
-          console.log('🎯 [SPEECH] UtteranceEnd ignored - speech_final=true already received');
+          console.log('🎯 [SPEECH] UtteranceEnd callbacks called, but skipping internal state (speech_final=true already received)');
         }
-        return; // Ignore UtteranceEnd after speech_final
+        return; // Skip internal state management, but callbacks were already called above
       }
       
       if (props.debug) {
@@ -1673,14 +1746,10 @@ function DeepgramVoiceInteraction(
         console.log('🎯 [SPEECH] UtteranceEnd detected - re-enabling idle timeout resets');
       }
       
-      // Call the callback with channel and lastWordEnd data
-      const channel = Array.isArray(data.channel) ? data.channel : [0, 1];
-      const lastWordEnd = typeof data.last_word_end === 'number' ? data.last_word_end : 0;
-      onUtteranceEnd?.({ channel, lastWordEnd });
-      
-      // User stopped speaking - UtteranceEnd indicates speech has ended
-      // Always call the callback when UtteranceEnd is received
-      onUserStoppedSpeaking?.();
+      // Note: onUserStoppedSpeaking was already called above (before the speech_final check)
+      // This ensures it's always called when UtteranceEnd is received, even if speech_final=true
+      // was already received (because onUserStoppedSpeaking might not have been called when
+      // speech_final=true was received if isUserSpeaking was false)
       
       // Don't update isUserSpeaking state here - let UtteranceEnd handle idle timeout differently
       // than USER_STOPPED_SPEAKING events
@@ -1733,6 +1802,11 @@ function DeepgramVoiceInteraction(
     
     // Record when settings were sent (but don't mark as applied until SettingsApplied is received)
     settingsSentTimeRef.current = Date.now();
+    
+    // #region debug log
+    fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:1770',message:'sendAgentSettings called, about to send Settings',data:{agentState:agentManagerRef.current?.getState(),wsReadyState:agentManagerRef.current ? (agentManagerRef.current as any).ws?.readyState : null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+    // #endregion
+    
     if (debug) {
       console.log('🔧 [sendAgentSettings] Settings message sent, waiting for SettingsApplied confirmation');
     }
@@ -1948,6 +2022,11 @@ function DeepgramVoiceInteraction(
   const handleAgentMessage = (data: unknown) => {
     // Debug: Log all agent messages with type
     const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as { type?: string }).type || 'unknown' : 'unknown';
+    // #region debug log
+    if (messageType === 'SettingsApplied') {
+      fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:2001',message:'handleAgentMessage: SettingsApplied received',data:{timeSinceSettingsSent:settingsSentTimeRef.current ? Date.now() - settingsSentTimeRef.current : null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+    }
+    // #endregion
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
     
     // Special logging for Error messages when functions are configured (to debug SettingsApplied issue)
@@ -2045,6 +2124,9 @@ function DeepgramVoiceInteraction(
     
     // Handle SettingsApplied message - settings are now active
     if (data.type === 'SettingsApplied') {
+      // #region debug log
+      fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:2082',message:'SettingsApplied received',data:{timeSinceSettingsSent:settingsSentTimeRef.current ? Date.now() - settingsSentTimeRef.current : null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
       console.info('✅ [Protocol] SettingsApplied received - settings are now active');
       log('SettingsApplied received - settings are now active');
       // Only mark as sent when we get confirmation from Deepgram
@@ -2413,6 +2495,9 @@ function DeepgramVoiceInteraction(
 
   // Send audio data to WebSockets - conditionally route based on configuration
   const sendAudioData = (data: ArrayBuffer) => {
+    // #region debug log
+    fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:2415',message:'sendAudioData called',data:{dataSize:data.byteLength,hasSentSettings:hasSentSettingsRef.current,agentState:agentManagerRef.current?.getState(),transcriptionState:transcriptionManagerRef.current?.getState()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     // Debug logging only (reduce console spam)
     if (props.debug) {
       console.log('🎵 [sendAudioData] Called with data size:', data.byteLength);
@@ -2423,11 +2508,24 @@ function DeepgramVoiceInteraction(
     }
     
     // Send to transcription service if configured and connected
-      if (transcriptionManagerRef.current?.getState() === 'connected') {
+    const transcriptionState = transcriptionManagerRef.current?.getState();
+    // #region debug log
+    fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:2426',message:'Checking transcription state before send',data:{transcriptionState:transcriptionState,isConnected:transcriptionState==='connected'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+      if (transcriptionState === 'connected') {
+        // #region debug log
+        fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:2428',message:'Sending audio to transcription service',data:{dataSize:data.byteLength},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         if (props.debug) console.log('🎵 [TRANSCRIPTION] Sending audio data to transcription service for VAD events');
-        transcriptionManagerRef.current.sendBinary(data);
+        const sendResult = transcriptionManagerRef.current.sendBinary(data);
+        // #region debug log
+        fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:2430',message:'sendBinary result for transcription',data:{sendResult:sendResult},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
       } else {
-        if (props.debug) console.log('🎵 [TRANSCRIPTION] Transcription service not connected, state:', transcriptionManagerRef.current?.getState());
+        // #region debug log
+        fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:2432',message:'Transcription not connected, skipping',data:{transcriptionState:transcriptionState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+        if (props.debug) console.log('🎵 [TRANSCRIPTION] Transcription service not connected, state:', transcriptionState);
       }
     
     // Send to agent service if configured, connected, and not in sleep mode
@@ -3025,6 +3123,9 @@ function DeepgramVoiceInteraction(
       } else if (event.type === 'error') {
         handleError(event.error);
       } else if (event.type === 'data') {
+        // #region debug log
+        fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:3063',message:'AudioManager data event received',data:{dataSize:event.data?.byteLength,hasSentSettings:hasSentSettingsRef.current,transcriptionState:transcriptionManagerRef.current?.getState()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         sendAudioData(event.data);
       }
     });
@@ -3126,6 +3227,9 @@ function DeepgramVoiceInteraction(
       }
       
       // Start recording
+      // #region debug log
+      fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeepgramVoiceInteraction/index.tsx:3168',message:'Calling startRecording',data:{hasSentSettings:hasSentSettingsRef.current,transcriptionState:transcriptionManagerRef.current?.getState()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       await audioManagerRef.current.startRecording();
       
       // Reset idle timeout - starting recording is meaningful user activity
