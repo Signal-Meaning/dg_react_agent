@@ -28,7 +28,8 @@ import {
   waitForSettingsApplied,
   sendTextMessage,
   installWebSocketCapture,
-  getCapturedWebSocketData
+  getCapturedWebSocketData,
+  establishConnectionViaText
 } from './helpers/test-helpers.js';
 
 test.describe('Function Calling E2E Tests', () => {
@@ -167,7 +168,8 @@ test.describe('Function Calling E2E Tests', () => {
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     console.log('✅ Test page setup complete');
     
-    // Step 5: Establish connection via text message (same pattern as working tests)
+    // Step 5: Establish connection and send message (same pattern as other passing tests)
+    // Send text message which triggers auto-connect and sends Settings
     await page.fill('[data-testid="text-input"]', 'What time is it?');
     await page.click('[data-testid="send-button"]');
     
@@ -175,8 +177,13 @@ test.describe('Function Calling E2E Tests', () => {
     await waitForConnection(page, 10000);
     console.log('✅ Connection established');
     
-    // Wait a bit for Settings to be sent
-    await page.waitForTimeout(2000);
+    // Wait for SettingsApplied (may not be received when functions are included, but try anyway)
+    try {
+      await waitForSettingsApplied(page, 10000);
+      console.log('✅ Settings applied (SettingsApplied received)');
+    } catch (e) {
+      console.log('⚠️ SettingsApplied not received - continuing anyway (may be expected with functions)');
+    }
     
     // Step 6: Verify functions are in Settings message
     // PRIMARY: Use window variables (most reliable, works in proxy mode)
@@ -337,7 +344,15 @@ test.describe('Function Calling E2E Tests', () => {
     console.log('✅ Function executed successfully, result:', responseContent);
     
     // Step 8: Verify agent continues conversation (check for agent response)
-    await page.waitForSelector('[data-testid="agent-response"]', { timeout: 20000 });
+    // Wait for agent response after function call (may take longer as agent processes function result)
+    await page.waitForFunction(
+      () => {
+        const responseEl = document.querySelector('[data-testid="agent-response"]');
+        const text = responseEl?.textContent || '';
+        return text && text !== '(Waiting for agent response...)';
+      },
+      { timeout: 30000 }
+    );
     const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
     
     expect(agentResponse).toBeTruthy();

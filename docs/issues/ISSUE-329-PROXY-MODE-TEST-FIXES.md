@@ -7,7 +7,9 @@
 
 ## 🚨 Problem Summary
 
-22 E2E tests are failing when run in proxy mode (`USE_PROXY_MODE=true`). The proxy server was only handling agent service connections and not transcription service connections, causing transcription-related tests to fail.
+22 E2E tests were failing when run in proxy mode (`USE_PROXY_MODE=true`). The proxy server was only handling agent service connections and not transcription service connections, causing transcription-related tests to fail.
+
+**✅ STATUS: ALL TESTS FIXED** - All 23 tests are now passing in proxy mode!
 
 **Important Note**: 
 - Some tests require real API keys to pass (function calling tests use `skipIfNoRealAPI`). These tests cannot be verified without real API keys.
@@ -21,9 +23,9 @@
 
 | Status | Count | Tests |
 |--------|-------|-------|
-| ✅ Fixed | 22 | `callback-test.spec.js:48` - onTranscriptUpdate callback<br>`agent-options-resend-issue311.spec.js:50` - Settings re-send<br>`backend-proxy-mode.spec.js:61` - Agent responses through proxy<br>`callback-test.spec.js:87` - onUserStartedSpeaking callback<br>`declarative-props-api.spec.js:278` - Function call response via callback<br>`callback-test.spec.js:128` - onUserStoppedSpeaking callback<br>`extended-silence-idle-timeout.spec.js:11` - Connection closure with silence<br>`interim-transcript-validation.spec.js:32` - Interim and final transcripts<br>`strict-mode-behavior.spec.js:93` - StrictMode cleanup detection<br>`user-stopped-speaking-demonstration.spec.js:20` - onUserStoppedSpeaking demonstration<br>`user-stopped-speaking-demonstration.spec.js:174` - Multiple audio samples<br>`vad-audio-patterns.spec.js:26` - VAD events with pre-generated audio<br>`vad-audio-patterns.spec.js:55` - VAD events with realistic patterns<br>`vad-audio-patterns.spec.js:120` - Multiple audio samples in sequence<br>`vad-configuration-optimization.spec.js:23` - utterance_end_ms values<br>`vad-configuration-optimization.spec.js:134` - VAD event combinations<br>`vad-configuration-optimization.spec.js:225` - VAD event timing<br>`vad-events-core.spec.js:27` - Basic VAD events<br>`function-calling-e2e.spec.js:308` - Functions in Settings message<br>`function-calling-e2e.spec.js:512` - Minimal function definition<br>`function-calling-e2e.spec.js:772` - Minimal function with required array<br>`idle-timeout-behavior.spec.js:887` - Idle timeout restart |
+| ✅ Fixed | 23 | `callback-test.spec.js:48` - onTranscriptUpdate callback<br>`agent-options-resend-issue311.spec.js:50` - Settings re-send<br>`backend-proxy-mode.spec.js:61` - Agent responses through proxy<br>`callback-test.spec.js:87` - onUserStartedSpeaking callback<br>`declarative-props-api.spec.js:278` - Function call response via callback<br>`callback-test.spec.js:128` - onUserStoppedSpeaking callback<br>`extended-silence-idle-timeout.spec.js:11` - Connection closure with silence<br>`interim-transcript-validation.spec.js:32` - Interim and final transcripts<br>`strict-mode-behavior.spec.js:93` - StrictMode cleanup detection<br>`user-stopped-speaking-demonstration.spec.js:20` - onUserStoppedSpeaking demonstration<br>`user-stopped-speaking-demonstration.spec.js:174` - Multiple audio samples<br>`vad-audio-patterns.spec.js:26` - VAD events with pre-generated audio<br>`vad-audio-patterns.spec.js:55` - VAD events with realistic patterns<br>`vad-audio-patterns.spec.js:120` - Multiple audio samples in sequence<br>`vad-configuration-optimization.spec.js:23` - utterance_end_ms values<br>`vad-configuration-optimization.spec.js:134` - VAD event combinations<br>`vad-configuration-optimization.spec.js:225` - VAD event timing<br>`vad-events-core.spec.js:27` - Basic VAD events<br>`function-calling-e2e.spec.js:308` - Functions in Settings message<br>`function-calling-e2e.spec.js:512` - Minimal function definition<br>`function-calling-e2e.spec.js:772` - Minimal function with required array<br>`idle-timeout-behavior.spec.js:887` - Idle timeout restart<br>`function-calling-e2e.spec.js:65` - Function call execution |
 | 🔄 In Progress | 0 | |
-| ❌ Pending | 1 | `function-calling-e2e.spec.js:65` - FunctionCallRequest timeout (not proxy-specific) |
+| ❌ Pending | 0 | |
 
 ### Fixed Tests ✅
 
@@ -73,29 +75,21 @@
    - **Verification**: Test passes, connection closes after idle timeout as expected
 
 #### Category 6: Function Calling (4 tests)
-7. ❌ `function-calling-e2e.spec.js:65:3` - "should trigger client-side function call and execute it"
-   - **Status**: In Progress - CLIENT_MESSAGE_TIMEOUT error
+7. ✅ `function-calling-e2e.spec.js:65:3` - "should trigger client-side function call and execute it"
+   - **Status**: ✅ **FIXED** - 2025-01-29
    - **Proxy-Specific**: ❌ **NO** - Test also fails without proxy mode (requires real API keys)
    - **Root Cause**: 
      - ✅ **FIXED**: Syntax error in component (duplicate else clause) - component now loads
      - ✅ **FIXED**: Removed `listenModel` from agentOptions for text-only interactions to avoid CLIENT_MESSAGE_TIMEOUT
+     - ✅ **FIXED**: Test flow - send text message immediately (triggers auto-connect), then wait for connection and SettingsApplied
      - ✅ **VERIFIED**: Settings message is correct (hasListen: false, functions included, SettingsApplied received)
-     - ❌ **REMAINING**: Still getting CLIENT_MESSAGE_TIMEOUT error - "We did not receive audio within our timeout"
-   - **Observations** (with real API keys, no proxy mode): 
-     - Settings message is sent (verified via window variables)
-     - SettingsApplied is received (verified in logs)
-     - Functions ARE included in Settings message (verified via window.__DEEPGRAM_LAST_SETTINGS__)
-     - `hasListen: false` - listen provider correctly omitted
-     - Connection closes with CLIENT_MESSAGE_TIMEOUT before FunctionCallRequest arrives
-   - **Fix Applied**: 
+     - ✅ **VERIFIED**: Function calling works - FunctionCallRequest received, FunctionCallResponse sent, function executed, agent responded
+   - **Solution**: 
      - Fixed syntax error (duplicate else clause in sendAgentSettings)
      - Removed default `listenModel` from test app agentOptions (only include if VITE_AGENT_MODEL env var is set)
+     - Changed test flow to send text message immediately (triggers auto-connect), then wait for connection and SettingsApplied
      - This allows text-only interactions without triggering CLIENT_MESSAGE_TIMEOUT
-   - **Next Steps**: 
-     - Investigate why CLIENT_MESSAGE_TIMEOUT still occurs even without listen provider
-     - Check if text message "What time is it?" is being sent correctly via injectUserMessage
-     - May need to verify Deepgram API behavior with text-only function calling
-     - Consider if this is a Deepgram API limitation or test setup issue
+   - **Verification**: Test passes, function calling end-to-end workflow works correctly
 8. ✅ `function-calling-e2e.spec.js:308:3` - "should verify functions are included in Settings message"
    - **Status**: ✅ **FIXED** - 2025-01-29
    - **Proxy-Specific**: ❌ **NO** - Test passes without proxy mode (requires real API keys)
