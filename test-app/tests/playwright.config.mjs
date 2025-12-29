@@ -25,7 +25,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: [
-    ['html', { outputFolder: '../playwright-report' }],
+    ['html', { outputFolder: '../playwright-report', open: 'never' }],
     ['json', { outputFile: '../test-results/results.json' }],
     ['junit', { outputFile: '../test-results/results.xml' }]
   ],
@@ -76,24 +76,42 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'npm run dev',
-    // When running from test-app directory, cwd should be '.' (current directory)
-    // The config is at test-app/tests/playwright.config.mjs, so from test-app/ we need '.'
-    cwd: '.', // Run from test-app directory (where package.json is)
-    url: 'http://localhost:5173', // Vite default port
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-    // Output server logs for debugging in CI
-    stdout: process.env.CI ? 'pipe' : 'ignore',
-    stderr: process.env.CI ? 'pipe' : 'ignore',
-    // Pass environment variables to the dev server (Vite needs VITE_* vars)
-    env: {
-      VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
-      VITE_DEEPGRAM_PROJECT_ID: process.env.VITE_DEEPGRAM_PROJECT_ID || '',
-      VITE_BASE_URL: process.env.VITE_BASE_URL || 'http://localhost:5173',
+  webServer: [
+    {
+      command: 'npm run dev',
+      // When running from test-app directory, cwd should be '.' (current directory)
+      // The config is at test-app/tests/playwright.config.mjs, so from test-app/ we need '.'
+      cwd: '.', // Run from test-app directory (where package.json is)
+      url: 'http://localhost:5173', // Vite default port
+      reuseExistingServer: true, // Always reuse existing server
+      timeout: 120 * 1000,
+      // Output server logs for debugging in CI
+      stdout: process.env.CI ? 'pipe' : 'ignore',
+      stderr: process.env.CI ? 'pipe' : 'ignore',
+      // Pass environment variables to the dev server (Vite needs VITE_* vars)
+      env: {
+        VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
+        VITE_DEEPGRAM_PROJECT_ID: process.env.VITE_DEEPGRAM_PROJECT_ID || '',
+        VITE_BASE_URL: process.env.VITE_BASE_URL || 'http://localhost:5173',
+      },
     },
-  },
+    // Start proxy server when USE_PROXY_MODE is enabled
+    ...(process.env.USE_PROXY_MODE === 'true' ? [{
+      command: 'npm run test:proxy:server',
+      cwd: '.', // Run from test-app directory
+      port: 8080, // Proxy server port
+      reuseExistingServer: true,
+      timeout: 10000,
+      // Proxy server logging reverted to 'ignore' after Issue #329 debugging completed
+      stdout: 'ignore',
+      stderr: 'ignore',
+      env: {
+        DEEPGRAM_API_KEY: process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY || '',
+        PROXY_PORT: '8080',
+        PROXY_PATH: '/deepgram-proxy',
+      },
+    }] : []),
+  ],
 
   /* 
    * IMPORTANT: E2E Tests Require Real Deepgram API Key

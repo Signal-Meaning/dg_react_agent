@@ -20,6 +20,8 @@ export function useIdleTimeoutManager(
   // Store callback in ref to avoid stale closures and allow it to change without recreating service
   const callbackRef = useRef(onIdleTimeoutActiveChange);
   const prevTimeoutActiveRef = useRef<boolean>(false);
+  // Store current state in ref so stateGetter can always read latest state
+  const currentStateRef = useRef<VoiceInteractionState>(state);
 
   // Update callback ref when it changes
   useEffect(() => {
@@ -82,6 +84,21 @@ export function useIdleTimeoutManager(
     };
   }, [debug]);
 
+  // Set up state getter once (reads from ref to always get latest state)
+  useEffect(() => {
+    if (serviceRef.current) {
+      // Set up state getter for polling to read state directly from component
+      // Use ref to ensure we always read the latest state, not a captured value
+      serviceRef.current.setStateGetter(() => {
+        return {
+          agentState: currentStateRef.current.agentState,
+          isPlaying: currentStateRef.current.isPlaying,
+          isUserSpeaking: currentStateRef.current.isUserSpeaking,
+        };
+      });
+    }
+  }, []); // Only set once - reads from ref which is always current
+
   // Handle state changes
   useEffect(() => {
     if (!serviceRef.current) return;
@@ -98,15 +115,32 @@ export function useIdleTimeoutManager(
       isPlaying: prevStateRef.current.isPlaying,
     };
 
+    // Debug logging to track state changes
+    if (debug) {
+      console.log('[useIdleTimeoutManager] State change detected:', {
+        prev: prevState,
+        current: currentState,
+        agentStateChanged: currentState.agentState !== prevState.agentState,
+        isPlayingChanged: currentState.isPlaying !== prevState.isPlaying,
+        isUserSpeakingChanged: currentState.isUserSpeaking !== prevState.isUserSpeaking
+      });
+    }
+
     // Emit events for state changes
     if (currentState.isUserSpeaking !== prevState.isUserSpeaking) {
       const event: IdleTimeoutEvent = currentState.isUserSpeaking 
         ? { type: 'USER_STARTED_SPEAKING' }
         : { type: 'USER_STOPPED_SPEAKING' };
+      if (debug) {
+        console.log('[useIdleTimeoutManager] Emitting USER_STARTED/STOPPED_SPEAKING event');
+      }
       serviceRef.current.handleEvent(event);
     }
 
     if (currentState.agentState !== prevState.agentState) {
+      if (debug) {
+        console.log(`[useIdleTimeoutManager] Emitting AGENT_STATE_CHANGED: ${prevState.agentState} -> ${currentState.agentState}`);
+      }
       serviceRef.current.handleEvent({ 
         type: 'AGENT_STATE_CHANGED', 
         state: currentState.agentState 
@@ -114,6 +148,9 @@ export function useIdleTimeoutManager(
     }
 
     if (currentState.isPlaying !== prevState.isPlaying) {
+      if (debug) {
+        console.log(`[useIdleTimeoutManager] Emitting PLAYBACK_STATE_CHANGED: ${prevState.isPlaying} -> ${currentState.isPlaying}`);
+      }
       serviceRef.current.handleEvent({ 
         type: 'PLAYBACK_STATE_CHANGED', 
         isPlaying: currentState.isPlaying 
@@ -121,7 +158,27 @@ export function useIdleTimeoutManager(
     }
 
     prevStateRef.current = state;
-  }, [state.isUserSpeaking, state.agentState, state.isPlaying]);
+    
+    // CRITICAL FIX: If state changed but events weren't emitted (React batching issue),
+    // directly update IdleTimeoutService state as fallback
+    // This ensures state is always in sync even if useEffect doesn't fire for all changes
+    if (serviceRef.current) {
+      const stateChanged = 
+        currentState.agentState !== prevState.agentState ||
+        currentState.isPlaying !== prevState.isPlaying ||
+        currentState.isUserSpeaking !== prevState.isUserSpeaking;
+      
+      if (stateChanged) {
+        // Directly sync state to IdleTimeoutService as fallback
+        // This handles cases where React batches updates and events aren't emitted
+        serviceRef.current.updateStateDirectly({
+          agentState: currentState.agentState,
+          isPlaying: currentState.isPlaying,
+          isUserSpeaking: currentState.isUserSpeaking
+        });
+      }
+    }
+  }, [state.isUserSpeaking, state.agentState, state.isPlaying, debug]);
 
   // Handle meaningful user activity from WebSocket managers
   const handleMeaningfulActivity = useCallback((activity: string) => {

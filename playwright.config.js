@@ -83,7 +83,7 @@ module.exports = defineConfig({
     command: 'npm run dev',
     cwd: './test-app',
     url: 'http://localhost:5173', // Vite default port
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true, // Always reuse existing server
     timeout: 120 * 1000,
   },
 

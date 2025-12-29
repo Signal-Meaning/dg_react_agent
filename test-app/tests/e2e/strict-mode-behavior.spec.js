@@ -103,7 +103,11 @@ test.describe('StrictMode Behavior Validation', () => {
         cleanupLogs.push(text);
       }
       
-      if (text.includes('component initialized') || text.includes('DeepgramVoiceInteraction component initialized')) {
+      // Look for actual component initialization logs
+      if (text.includes('🔧 [Component] Initialization check') || 
+          text.includes('Component] Initialization check') ||
+          text.includes('component initialized') || 
+          text.includes('DeepgramVoiceInteraction component initialized')) {
         mountLogs.push(text);
       }
     });

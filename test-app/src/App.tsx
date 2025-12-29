@@ -443,7 +443,9 @@ function App() {
       language: import.meta.env.VITE_AGENT_LANGUAGE || 'en',
       // Agent can use a different model for listening if desired, 
       // keyterms only affect the transcription service input.
-      listenModel: import.meta.env.VITE_AGENT_MODEL || 'nova-3', 
+      // For text-only interactions (function calling tests), omit listenModel to avoid CLIENT_MESSAGE_TIMEOUT
+      // Only include listenModel if explicitly provided via env var (for voice interactions)
+      ...(import.meta.env.VITE_AGENT_MODEL ? { listenModel: import.meta.env.VITE_AGENT_MODEL } : {}), 
       thinkProviderType: 'open_ai',
       // Default model is `gpt-4o-mini` but other models can be provided such as `gpt-4.1-mini`
       thinkModel: import.meta.env.VITE_AGENT_THINK_MODEL || 'gpt-4o-mini',
@@ -680,7 +682,8 @@ function App() {
 
   const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
     const channelStr = data.channel.join(',');
-    setUtteranceEnd(`Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`);
+    const utteranceEndText = `Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`;
+    setUtteranceEnd(utteranceEndText);
     utteranceEndDetected.current = true;
     
     // Only log UtteranceEnd events in debug mode to reduce console spam

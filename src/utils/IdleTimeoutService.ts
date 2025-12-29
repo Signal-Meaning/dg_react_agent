@@ -31,6 +31,8 @@ export class IdleTimeoutService {
   private currentState: IdleTimeoutState;
   private onTimeoutCallback?: () => void;
   private onStateChangeCallback?: (state: IdleTimeoutState) => void;
+  private pollingIntervalId: ReturnType<typeof setInterval> | null = null;
+  private stateGetter?: () => IdleTimeoutState | null; // Callback to get current state from component
 
   constructor(config: IdleTimeoutConfig) {
     this.config = config;
@@ -59,6 +61,50 @@ export class IdleTimeoutService {
   }
 
   /**
+   * Set callback to get current state from component
+   * This allows polling to read state directly even if events don't arrive
+   */
+  public setStateGetter(getter: () => IdleTimeoutState | null): void {
+    this.stateGetter = getter;
+  }
+
+  /**
+   * Directly update state (bypasses event system)
+   * This is used when events aren't arriving but we know the state has changed
+   * (e.g., DOM shows state has changed but useEffect didn't fire)
+   */
+  public updateStateDirectly(state: Partial<IdleTimeoutState>): void {
+    const prevState = { ...this.currentState };
+    
+    if (state.agentState !== undefined) {
+      this.currentState.agentState = state.agentState;
+    }
+    if (state.isPlaying !== undefined) {
+      this.currentState.isPlaying = state.isPlaying;
+    }
+    if (state.isUserSpeaking !== undefined) {
+      this.currentState.isUserSpeaking = state.isUserSpeaking;
+    }
+    
+    this.log(`updateStateDirectly() called: agentState=${this.currentState.agentState}, isPlaying=${this.currentState.isPlaying}, isUserSpeaking=${this.currentState.isUserSpeaking}`);
+    
+    // Update behavior based on new state
+    this.updateTimeoutBehavior();
+    
+    // Always start polling when state is updated directly (ensures we catch future changes)
+    // Polling will check conditions every 500ms and start timeout if conditions are met
+    if (this.pollingIntervalId === null && this.timeoutId === null) {
+      this.startPolling();
+      this.log('Started polling for idle timeout conditions (fallback mechanism)');
+    }
+    
+    // Notify listeners of state change
+    if (this.onStateChangeCallback && this.hasStateChanged(prevState, this.currentState)) {
+      this.onStateChangeCallback(this.currentState);
+    }
+  }
+
+  /**
    * Handle events that affect idle timeout behavior
    */
   public handleEvent(event: IdleTimeoutEvent): void {
@@ -67,6 +113,13 @@ export class IdleTimeoutService {
       console.log(`🎯 [DEBUG] handleEvent called with event type: ${event.type}`);
     }
     const prevState = { ...this.currentState };
+    
+    // Start polling if we're not already polling and timeout isn't active
+    // This ensures we catch state changes even if events don't arrive in expected order
+    if (this.pollingIntervalId === null && this.timeoutId === null) {
+      // Start polling when we receive any event (indicates service is active)
+      this.startPolling();
+    }
     
     switch (event.type) {
       case 'USER_STARTED_SPEAKING':
@@ -85,16 +138,54 @@ export class IdleTimeoutService {
         
       case 'AGENT_STATE_CHANGED':
         this.currentState.agentState = event.state;
-        this.updateTimeoutBehavior();
+        // Log state to debug timeout not starting
+        this.log(`AGENT_STATE_CHANGED: state=${event.state}, isPlaying=${this.currentState.isPlaying}, isUserSpeaking=${this.currentState.isUserSpeaking}`);
+        // CRITICAL: If agent becomes idle and playback has stopped, ensure timeout starts
+        // This handles the case where AGENT_STATE_CHANGED with 'idle' arrives
+        // after PLAYBACK_STATE_CHANGED with isPlaying=false
+        if ((event.state === 'idle' || event.state === 'listening') && 
+            !this.currentState.isPlaying && 
+            !this.currentState.isUserSpeaking) {
+          // Agent is idle and playback stopped, so enable resets and start timeout
+          this.enableResetsAndUpdateBehavior();
+        } else {
+          // Normal update behavior
+          this.updateTimeoutBehavior();
+        }
         break;
         
       case 'PLAYBACK_STATE_CHANGED':
         this.currentState.isPlaying = event.isPlaying;
-        this.updateTimeoutBehavior();
+        // Log state before updating behavior to debug timeout not starting
+        this.log(`PLAYBACK_STATE_CHANGED: isPlaying=${event.isPlaying}, agentState=${this.currentState.agentState}, isUserSpeaking=${this.currentState.isUserSpeaking}`);
+        // CRITICAL: If playback stops and agent is idle, ensure timeout starts
+        // This handles the case where PLAYBACK_STATE_CHANGED with isPlaying=false arrives
+        // after agent becomes idle
+        if (!event.isPlaying && (this.currentState.agentState === 'idle' || this.currentState.agentState === 'listening') && !this.currentState.isUserSpeaking) {
+          // Agent is idle and playback stopped, so enable resets and start timeout
+          this.enableResetsAndUpdateBehavior();
+        } else {
+          // Normal update behavior
+          this.updateTimeoutBehavior();
+        }
         break;
         
       case 'MEANINGFUL_USER_ACTIVITY':
-        this.resetTimeout(event.activity);
+        // MEANINGFUL_USER_ACTIVITY events (like AgentAudioDone) can arrive after agent becomes idle
+        // Log state to debug why timeout isn't starting
+        this.log(`MEANINGFUL_USER_ACTIVITY: activity=${event.activity}, agentState=${this.currentState.agentState}, isPlaying=${this.currentState.isPlaying}, isUserSpeaking=${this.currentState.isUserSpeaking}, isDisabled=${this.isDisabled}`);
+        // CRITICAL FIX: If agent is idle and not playing, enable resets and start timeout
+        // This handles the case where MEANINGFUL_USER_ACTIVITY arrives after agent becomes idle
+        // but before PLAYBACK_STATE_CHANGED with isPlaying=false
+        if ((this.currentState.agentState === 'idle' || this.currentState.agentState === 'listening') && 
+            !this.currentState.isUserSpeaking && 
+            !this.currentState.isPlaying) {
+          // Agent is idle, so enable resets and start timeout
+          this.enableResetsAndUpdateBehavior();
+        } else {
+          // Agent is still active, so just update behavior (may disable resets if needed)
+          this.updateTimeoutBehavior();
+        }
         break;
     }
 
@@ -108,6 +199,14 @@ export class IdleTimeoutService {
    * Update timeout behavior based on current state
    */
   private updateTimeoutBehavior(): void {
+    if (this.config.debug) {
+      console.log('🎯 [DEBUG] updateTimeoutBehavior() called with state:', {
+        isUserSpeaking: this.currentState.isUserSpeaking,
+        agentState: this.currentState.agentState,
+        isPlaying: this.currentState.isPlaying,
+        isDisabled: this.isDisabled
+      });
+    }
     const shouldDisableResets = 
       this.currentState.isUserSpeaking || 
       this.currentState.agentState === 'thinking' || 
@@ -119,10 +218,108 @@ export class IdleTimeoutService {
     } else {
       this.enableResets();
       // Start timeout when all conditions are idle
-      if ((this.currentState.agentState === 'idle' || this.currentState.agentState === 'listening') && 
+      // CRITICAL: Check conditions again after enabling resets to ensure state is consistent
+      const canStartTimeout = (this.currentState.agentState === 'idle' || this.currentState.agentState === 'listening') && 
           !this.currentState.isUserSpeaking && 
-          !this.currentState.isPlaying) {
+          !this.currentState.isPlaying;
+      
+      if (canStartTimeout) {
+        if (this.config.debug) {
+          console.log('🎯 [DEBUG] updateTimeoutBehavior() - conditions met, starting timeout');
+        }
         this.startTimeout();
+      } else {
+        // Log why timeout isn't starting (even if debug is off, log this important case)
+        this.log(`updateTimeoutBehavior() - conditions not met for starting timeout: agentState=${this.currentState.agentState}, isUserSpeaking=${this.currentState.isUserSpeaking}, isPlaying=${this.currentState.isPlaying}`);
+        if (this.config.debug) {
+          console.log('🎯 [DEBUG] updateTimeoutBehavior() - conditions not met for starting timeout:', {
+            agentState: this.currentState.agentState,
+            isUserSpeaking: this.currentState.isUserSpeaking,
+            isPlaying: this.currentState.isPlaying
+          });
+        }
+      }
+    }
+    
+    // CRITICAL FIX: After any state update, check if we should start timeout
+    // This handles cases where events arrive in wrong order or React batches updates
+    // Use setTimeout to ensure this check happens after all state updates are processed
+    setTimeout(() => {
+      this.checkAndStartTimeoutIfNeeded();
+    }, 0);
+  }
+
+  /**
+   * Check if conditions are met to start timeout and start it if needed
+   * This is called after state updates to handle cases where events arrive in wrong order
+   */
+  private checkAndStartTimeoutIfNeeded(): void {
+    // CRITICAL: If stateGetter is available, use it to get current state from component
+    // This ensures we have the latest state even if events didn't arrive
+    let stateToCheck = this.currentState;
+    if (this.stateGetter) {
+      const componentState = this.stateGetter();
+      if (componentState) {
+        // Update our state from component state
+        this.currentState = componentState;
+        stateToCheck = componentState;
+        this.log(`checkAndStartTimeoutIfNeeded() - synced state from component: agentState=${componentState.agentState}, isPlaying=${componentState.isPlaying}, isUserSpeaking=${componentState.isUserSpeaking}`);
+      }
+    }
+    
+    const shouldStartTimeout = (stateToCheck.agentState === 'idle' || stateToCheck.agentState === 'listening') && 
+        !stateToCheck.isUserSpeaking && 
+        !stateToCheck.isPlaying &&
+        !this.isDisabled;
+    
+    // CRITICAL: If user is speaking, stop timeout immediately (don't wait for events)
+    if (stateToCheck.isUserSpeaking && this.timeoutId !== null) {
+      this.log('checkAndStartTimeoutIfNeeded() - user is speaking, stopping timeout');
+      this.stopTimeout(); // Stop the timeout
+      this.disableResets(); // Disable resets
+      return; // Don't start timeout if user is speaking
+    }
+    
+    if (shouldStartTimeout) {
+      if (this.timeoutId === null) {
+        // Timeout not running, start it
+        this.log('checkAndStartTimeoutIfNeeded() - conditions met, starting timeout');
+        this.enableResets();
+        this.startTimeout();
+      } else {
+        // Timeout already running, don't restart it (prevents unnecessary restarts)
+        if (this.config.debug) {
+          console.log('🎯 [DEBUG] checkAndStartTimeoutIfNeeded() - conditions met but timeout already running, skipping restart');
+        }
+      }
+    }
+  }
+
+  /**
+   * Start polling to check if timeout should start
+   * This is a fallback mechanism in case events don't arrive
+   */
+  private startPolling(): void {
+    if (this.pollingIntervalId !== null) return; // Already polling
+    
+    this.pollingIntervalId = window.setInterval(() => {
+      this.checkAndStartTimeoutIfNeeded();
+    }, 200); // Check every 200ms (increased frequency for better responsiveness)
+    
+    if (this.config.debug) {
+      console.log('🎯 [DEBUG] Started polling for idle timeout conditions');
+    }
+  }
+
+  /**
+   * Stop polling
+   */
+  private stopPolling(): void {
+    if (this.pollingIntervalId !== null) {
+      window.clearInterval(this.pollingIntervalId);
+      this.pollingIntervalId = null;
+      if (this.config.debug) {
+        console.log('🎯 [DEBUG] Stopped polling for idle timeout conditions');
       }
     }
   }
@@ -165,7 +362,14 @@ export class IdleTimeoutService {
    * Start the idle timeout
    */
   private startTimeout(): void {
-    this.stopTimeout(); // Clear any existing timeout
+    // Only start if timeout is not already running (prevents unnecessary restarts)
+    if (this.timeoutId !== null) {
+      // Timeout already running, don't restart it
+      if (this.config.debug) {
+        console.log('🎯 [DEBUG] startTimeout() called but timeout already running, skipping');
+      }
+      return;
+    }
     
     if (this.config.debug) {
       console.log('🎯 [DEBUG] Starting timeout with timeoutId:', this.timeoutId);
@@ -178,6 +382,9 @@ export class IdleTimeoutService {
       console.log('🎯 [DEBUG] Timeout started with timeoutId:', this.timeoutId);
     }
     this.log(`Started idle timeout (${this.config.timeoutMs}ms)`);
+    // Keep polling active even after timeout starts - we need it to detect when user starts speaking
+    // and stop the timeout. Polling will be stopped when timeout fires or is manually stopped.
+    // Don't call stopPolling() here - let it continue to monitor state changes
   }
 
   /**

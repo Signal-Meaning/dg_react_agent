@@ -14,8 +14,33 @@
 export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || process.env.VITE_BASE_URL || 'http://localhost:5173';
 
 /**
+ * Get proxy configuration from environment variables
+ * @returns {Record<string, string>} Proxy configuration params or empty object
+ */
+function getProxyConfig() {
+  // Check if proxy mode is enabled via environment variable
+  if (process.env.USE_PROXY_MODE === 'true' || process.env.USE_BACKEND_PROXY === 'true') {
+    const proxyEndpoint = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
+    const proxyAuthToken = process.env.VITE_PROXY_AUTH_TOKEN || '';
+    
+    const config = {
+      connectionMode: 'proxy',
+      proxyEndpoint: proxyEndpoint
+    };
+    
+    if (proxyAuthToken) {
+      config.proxyAuthToken = proxyAuthToken;
+    }
+    
+    return config;
+  }
+  return {};
+}
+
+/**
  * Safely build a URL with query parameters
  * Prevents URL injection by properly constructing URLs
+ * Automatically adds proxy configuration if USE_PROXY_MODE or USE_BACKEND_PROXY env var is set
  * @param {string} baseUrl - Base URL (should be BASE_URL constant)
  * @param {Record<string, string>} params - Query parameters as key-value pairs
  * @returns {string} Safe URL with query parameters
@@ -23,8 +48,15 @@ export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || process.env.VITE_BASE
 export function buildUrlWithParams(baseUrl, params = {}) {
   try {
     const url = new URL(baseUrl);
+    
+    // Get proxy config if enabled
+    const proxyConfig = getProxyConfig();
+    
+    // Merge proxy config with provided params (provided params take precedence)
+    const allParams = { ...proxyConfig, ...params };
+    
     // Add query parameters safely
-    Object.entries(params).forEach(([key, value]) => {
+    Object.entries(allParams).forEach(([key, value]) => {
       url.searchParams.set(key, value);
     });
     return url.toString();
@@ -56,11 +88,13 @@ const SELECTORS = {
 
 /**
  * Navigate to the test app and wait for it to load
+ * Automatically uses proxy mode if USE_PROXY_MODE or USE_BACKEND_PROXY env var is set
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
 async function setupTestPage(page, timeout = 10000) {
-  await page.goto(BASE_URL);
+  const url = buildUrlWithParams(BASE_URL);
+  await page.goto(url);
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
 }
 

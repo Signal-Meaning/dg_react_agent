@@ -608,12 +608,17 @@ function DeepgramVoiceInteraction(
       const connectionOptions = getConnectionOptions();
       
       // Create Transcription WebSocket manager
+      // Add service type to query params for proxy routing
+      const transcriptionQueryParamsWithService = useKeytermPrompting 
+        ? { service: 'transcription' }
+        : { ...transcriptionQueryParams, service: 'transcription' };
+      
       const manager = new WebSocketManager({
         url: finalTranscriptionUrl,
         apiKey: connectionOptions.apiKey,
         authToken: connectionOptions.authToken,
         service: 'transcription',
-        queryParams: useKeytermPrompting ? undefined : transcriptionQueryParams, 
+        queryParams: transcriptionQueryParamsWithService, 
         debug: config.debug,
         keepaliveInterval: 0, // Disable keepalives for transcription service
         onMeaningfulActivity: handleMeaningfulActivity,
@@ -675,11 +680,23 @@ function DeepgramVoiceInteraction(
       const connectionOptions = getConnectionOptions();
       
       // Create Agent WebSocket manager
+      // Add service type to query params for proxy routing
+      const agentQueryParams = { service: 'agent' };
+      
+      if (config.debug) {
+        console.log('🔧 [AGENT] Creating WebSocketManager with URL:', finalAgentUrl);
+        console.log('🔧 [AGENT] Connection mode:', config.connectionMode);
+        console.log('🔧 [AGENT] Proxy endpoint:', config.proxyEndpoint);
+        console.log('🔧 [AGENT] API key present:', !!connectionOptions.apiKey);
+        console.log('🔧 [AGENT] Auth token present:', !!connectionOptions.authToken);
+      }
+      
       const manager = new WebSocketManager({
         url: finalAgentUrl,
         apiKey: connectionOptions.apiKey,
         authToken: connectionOptions.authToken,
         service: 'agent',
+        queryParams: agentQueryParams,
         debug: config.debug,
         onMeaningfulActivity: handleMeaningfulActivity,
       });
@@ -770,11 +787,68 @@ function DeepgramVoiceInteraction(
           }
           
           // Send settings message when connection is established
-          if (event.state === 'connected' && !hasSentSettingsRef.current && !windowWithGlobals.globalSettingsSent) {
-            log('Connection established, sending settings via connection state handler');
-            sendAgentSettings();
-          } else if (event.state === 'connected' && state.hasSentSettings) {
-            log('Connection established but settings already sent, skipping');
+          if (event.state === 'connected') {
+            if (config.debug) {
+              console.log('🔧 [Connection State] Agent connected, checking if Settings should be sent:', {
+                hasSentSettingsRef: hasSentSettingsRef.current,
+                globalSettingsSent: windowWithGlobals.globalSettingsSent,
+                stateHasSentSettings: state.hasSentSettings,
+                shouldSend: !hasSentSettingsRef.current && !windowWithGlobals.globalSettingsSent
+              });
+            }
+            if (!hasSentSettingsRef.current && !windowWithGlobals.globalSettingsSent) {
+              log('Connection established, sending settings via connection state handler');
+              if (config.debug) {
+                console.log('🔧 [Connection State] ✅ Will send Settings after WebSocket is fully open');
+              }
+              // Wait for WebSocket to be fully OPEN before sending Settings (Issue #329)
+              // React StrictMode can cause timing issues where state is 'connected' but WebSocket isn't fully OPEN yet
+              const checkAndSend = () => {
+                const wsManager = agentManagerRef.current as any;
+                const wsState = wsManager?.ws?.readyState;
+                const wsStateName = wsState === 0 ? 'CONNECTING' : 
+                                    wsState === 1 ? 'OPEN' : 
+                                    wsState === 2 ? 'CLOSING' : 
+                                    wsState === 3 ? 'CLOSED' : 'UNKNOWN';
+                
+                if (config.debug) {
+                  console.log('🔧 [Connection State] Checking WebSocket state:', wsState, `(${wsStateName})`);
+                }
+                
+                if (wsState === 1) { // OPEN
+                  if (config.debug) {
+                    console.log('🔧 [Connection State] WebSocket is OPEN, sending Settings');
+                  }
+                  sendAgentSettings();
+                } else if (wsState === 0) { // CONNECTING
+                  // Still connecting, wait a bit more
+                  if (config.debug) {
+                    console.log('🔧 [Connection State] WebSocket still CONNECTING, will retry');
+                  }
+                  setTimeout(checkAndSend, 50);
+                } else {
+                  // CLOSING or CLOSED - connection is gone, can't send Settings
+                  if (config.debug) {
+                    console.error('🔧 [Connection State] WebSocket is', wsStateName, '- cannot send Settings');
+                  }
+                }
+              };
+              
+              // Start checking after a small delay to allow WebSocket to transition to OPEN
+              setTimeout(checkAndSend, 50);
+            } else if (state.hasSentSettings) {
+              log('Connection established but settings already sent, skipping');
+              if (config.debug) {
+                console.log('🔧 [Connection State] ⚠️ Settings already sent, skipping');
+              }
+            } else {
+              if (config.debug) {
+                console.log('🔧 [Connection State] ⚠️ Settings not sent - blocked by flags:', {
+                  hasSentSettingsRef: hasSentSettingsRef.current,
+                  globalSettingsSent: windowWithGlobals.globalSettingsSent
+                });
+              }
+            }
           }
         } else if (event.type === 'message') {
           handleAgentMessage(event.data);
@@ -1552,12 +1626,25 @@ function DeepgramVoiceInteraction(
         console.log('🎯 [SPEECH] UtteranceEnd message received - checking if should process');
       }
       
+      // Always call onUtteranceEnd callback to provide channel and lastWordEnd data
+      // even if speech_final was already received (Issue #329: test expects callback)
+      const channel = Array.isArray(data.channel) ? data.channel : [0, 1];
+      const lastWordEnd = typeof data.last_word_end === 'number' ? data.last_word_end : 0;
+      onUtteranceEnd?.({ channel, lastWordEnd });
+      
+      // Always call onUserStoppedSpeaking when UtteranceEnd is received
+      // even if speech_final=true was already received, because onUserStoppedSpeaking
+      // might not have been called when speech_final=true was received (if isUserSpeaking was false)
+      // Issue #329: Tests expect onUserStoppedSpeaking to be called when UtteranceEnd is received
+      onUserStoppedSpeaking?.();
+      
       // Check if speech_final was already received (per Deepgram guidelines)
+      // If so, skip internal state management but still call callbacks above
       if (speechFinalReceivedRef.current) {
         if (props.debug) {
-          console.log('🎯 [SPEECH] UtteranceEnd ignored - speech_final=true already received');
+          console.log('🎯 [SPEECH] UtteranceEnd callbacks called, but skipping internal state (speech_final=true already received)');
         }
-        return; // Ignore UtteranceEnd after speech_final
+        return; // Skip internal state management, but callbacks were already called above
       }
       
       if (props.debug) {
@@ -1574,14 +1661,10 @@ function DeepgramVoiceInteraction(
         console.log('🎯 [SPEECH] UtteranceEnd detected - re-enabling idle timeout resets');
       }
       
-      // Call the callback with channel and lastWordEnd data
-      const channel = Array.isArray(data.channel) ? data.channel : [0, 1];
-      const lastWordEnd = typeof data.last_word_end === 'number' ? data.last_word_end : 0;
-      onUtteranceEnd?.({ channel, lastWordEnd });
-      
-      // User stopped speaking - UtteranceEnd indicates speech has ended
-      // Always call the callback when UtteranceEnd is received
-      onUserStoppedSpeaking?.();
+      // Note: onUserStoppedSpeaking was already called above (before the speech_final check)
+      // This ensures it's always called when UtteranceEnd is received, even if speech_final=true
+      // was already received (because onUserStoppedSpeaking might not have been called when
+      // speech_final=true was received if isUserSpeaking was false)
       
       // Don't update isUserSpeaking state here - let UtteranceEnd handle idle timeout differently
       // than USER_STOPPED_SPEAKING events
@@ -1634,6 +1717,7 @@ function DeepgramVoiceInteraction(
     
     // Record when settings were sent (but don't mark as applied until SettingsApplied is received)
     settingsSentTimeRef.current = Date.now();
+    
     if (debug) {
       console.log('🔧 [sendAgentSettings] Settings message sent, waiting for SettingsApplied confirmation');
     }
@@ -1704,13 +1788,14 @@ function DeepgramVoiceInteraction(
       }
     };
     
-    console.log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
-      conversationHistoryLength: currentAgentOptions.context?.messages?.length || 0,
-      contextMessages: currentAgentOptions.context?.messages || [],
-      hasSpeakProvider: 'speak' in settingsMessage.agent,
-      speakModel: settingsMessage.agent.speak?.provider?.model,
-      greetingIncluded: 'greeting' in settingsMessage.agent,
-      greetingPreview: (settingsMessage.agent.greeting || '').slice(0, 60),
+    if (debug) {
+      console.log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
+        conversationHistoryLength: currentAgentOptions.context?.messages?.length || 0,
+        contextMessages: currentAgentOptions.context?.messages || [],
+        hasSpeakProvider: 'speak' in settingsMessage.agent,
+        speakModel: settingsMessage.agent.speak?.provider?.model,
+        greetingIncluded: 'greeting' in settingsMessage.agent,
+        greetingPreview: (settingsMessage.agent.greeting || '').slice(0, 60),
       functionsCount: currentAgentOptions.functions?.length || 0,
       functionsIncluded: !!(currentAgentOptions.functions && currentAgentOptions.functions.length > 0),
       functionsStructure: currentAgentOptions.functions?.map(f => ({
@@ -1719,7 +1804,8 @@ function DeepgramVoiceInteraction(
         hasParameters: !!f.parameters,
         hasEndpoint: !!f.endpoint
       }))
-    });
+      });
+    }
     
     // Log full Settings message structure for debugging (especially functions)
     // Always log when functions are present (not just in debug mode) to help diagnose SettingsApplied issues
@@ -1738,21 +1824,60 @@ function DeepgramVoiceInteraction(
         windowWithGlobals.__DEEPGRAM_LAST_SETTINGS__ = settingsMessage;
         windowWithGlobals.__DEEPGRAM_LAST_FUNCTIONS__ = settingsMessage.agent.think.functions;
       }
-    } else if (props.debug) {
-      console.log('🔍 [DEBUG] Full Settings message structure:', JSON.stringify(settingsMessage, null, 2));
+    } else {
+      // Expose Settings to window even when functions are not present (for E2E testing)
+      if (typeof window !== 'undefined' && windowWithGlobals.__DEEPGRAM_TEST_MODE__) {
+        windowWithGlobals.__DEEPGRAM_LAST_SETTINGS__ = settingsMessage;
+        windowWithGlobals.__DEEPGRAM_LAST_FUNCTIONS__ = undefined;
+      }
+      
+      if (props.debug) {
+        console.log('🔍 [DEBUG] Full Settings message structure:', JSON.stringify(settingsMessage, null, 2));
+      }
     }
     
-    // Log before sending to verify code path
-    console.log('📤 [Component] About to call agentManagerRef.current.sendJSON with Settings message');
-    console.log('📤 [Component] Settings message type:', settingsMessage.type);
-    console.log('📤 [Component] Has functions?', !!(settingsMessage.agent?.think?.functions));
+    // Check WebSocket state directly from manager before sending
+    const wsManager = agentManagerRef.current as any;
+    const ws = wsManager?.ws;
+    const wsState = ws?.readyState;
     
-    agentManagerRef.current.sendJSON(settingsMessage);
-    console.log('📤 [Protocol] Settings message sent successfully');
+    // Only send if WebSocket is actually OPEN
+    if (!ws || wsState !== 1) {
+      if (debug) {
+        const wsStateName = wsState === 0 ? 'CONNECTING' : 
+                            wsState === 1 ? 'OPEN' : 
+                            wsState === 2 ? 'CLOSING' : 
+                            wsState === 3 ? 'CLOSED' : 'UNKNOWN';
+        console.error('❌ [Protocol] Cannot send Settings - WebSocket not OPEN');
+        console.error('❌ [Protocol] WebSocket state:', wsState, `(${wsStateName})`);
+      }
+      return; // Don't mark as sent if we can't actually send
+    }
+    
+    const sendResult = agentManagerRef.current.sendJSON(settingsMessage);
+    if (sendResult) {
+      // CRITICAL FIX: Set flags immediately when Settings is sent (not wait for SettingsApplied)
+      // This prevents React StrictMode from sending Settings twice when component remounts
+      // before SettingsApplied is received
+      hasSentSettingsRef.current = true;
+      windowWithGlobals.globalSettingsSent = true;
+      if (debug) {
+        console.log('🔧 [sendAgentSettings] Flags set immediately after successful send (StrictMode protection)');
+      }
+    } else {
+      if (debug) {
+        const wsStateName = wsState === 0 ? 'CONNECTING' : 
+                            wsState === 1 ? 'OPEN' : 
+                            wsState === 2 ? 'CLOSING' : 
+                            wsState === 3 ? 'CLOSED' : 'UNKNOWN';
+        console.error('❌ [Protocol] Settings message send FAILED (sendJSON returned false)');
+        console.error('❌ [Protocol] WebSocket state at send time:', wsState, `(${wsStateName})`);
+      }
+      return; // Don't mark as sent if send failed
+    }
     
     // Mark settings as sent for welcome-first behavior
     dispatch({ type: 'SETTINGS_SENT', sent: true });
-    console.log('📤 [Protocol] Settings sent state updated to true');
   };
 
   // Send FunctionCallResponse back to Deepgram
@@ -2293,11 +2418,12 @@ function DeepgramVoiceInteraction(
     }
     
     // Send to transcription service if configured and connected
-      if (transcriptionManagerRef.current?.getState() === 'connected') {
+    const transcriptionState = transcriptionManagerRef.current?.getState();
+      if (transcriptionState === 'connected') {
         if (props.debug) console.log('🎵 [TRANSCRIPTION] Sending audio data to transcription service for VAD events');
         transcriptionManagerRef.current.sendBinary(data);
       } else {
-        if (props.debug) console.log('🎵 [TRANSCRIPTION] Transcription service not connected, state:', transcriptionManagerRef.current?.getState());
+        if (props.debug) console.log('🎵 [TRANSCRIPTION] Transcription service not connected, state:', transcriptionState);
       }
     
     // Send to agent service if configured, connected, and not in sleep mode
