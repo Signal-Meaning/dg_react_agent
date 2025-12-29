@@ -272,6 +272,14 @@ export class IdleTimeoutService {
         !stateToCheck.isPlaying &&
         !this.isDisabled;
     
+    // CRITICAL: If user is speaking, stop timeout immediately (don't wait for events)
+    if (stateToCheck.isUserSpeaking && this.timeoutId !== null) {
+      this.log('checkAndStartTimeoutIfNeeded() - user is speaking, stopping timeout');
+      this.stopTimeout(); // Stop the timeout
+      this.disableResets(); // Disable resets
+      return; // Don't start timeout if user is speaking
+    }
+    
     if (shouldStartTimeout && this.timeoutId === null) {
       this.log('checkAndStartTimeoutIfNeeded() - conditions met, starting timeout');
       this.enableResets();
@@ -359,8 +367,9 @@ export class IdleTimeoutService {
       console.log('🎯 [DEBUG] Timeout started with timeoutId:', this.timeoutId);
     }
     this.log(`Started idle timeout (${this.config.timeoutMs}ms)`);
-    // Stop polling once timeout is started (we're now actively monitoring)
-    this.stopPolling();
+    // Keep polling active even after timeout starts - we need it to detect when user starts speaking
+    // and stop the timeout. Polling will be stopped when timeout fires or is manually stopped.
+    // Don't call stopPolling() here - let it continue to monitor state changes
   }
 
   /**

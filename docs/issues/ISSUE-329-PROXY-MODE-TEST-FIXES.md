@@ -126,7 +126,11 @@
    - **Fix Attempted (Latest)**: 
      - Added delayed check in `updateTimeoutBehavior()` using `setTimeout` to ensure timeout starts after all state updates are processed
      - Added debug logging to `useIdleTimeoutManager` to track state changes
-     - Still investigating why events aren't reaching IdleTimeoutService when DOM shows state has changed
+     - Added polling mechanism that checks conditions every 500ms
+     - Added `setStateGetter()` method to read state directly from component (bypasses event system)
+     - Polling syncs state from component using stateGetter callback
+     - Polling is working and syncing state, but still seeing `agentState=speaking, isPlaying=true` even after test waits for DOM to show idle
+     - **Next Steps**: Investigate why component state isn't changing to idle when DOM shows it, or if there's a timing issue with polling
    - **Next Steps**: 
      - Investigate why timeout isn't starting when `AGENT_STATE_CHANGED` with 'idle' and `PLAYBACK_STATE_CHANGED` with `isPlaying=false` both occur
      - May need to add a delayed check or ensure timeout starts in all code paths when conditions are met

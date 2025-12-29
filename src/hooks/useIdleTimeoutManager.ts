@@ -20,6 +20,8 @@ export function useIdleTimeoutManager(
   // Store callback in ref to avoid stale closures and allow it to change without recreating service
   const callbackRef = useRef(onIdleTimeoutActiveChange);
   const prevTimeoutActiveRef = useRef<boolean>(false);
+  // Store current state in ref so stateGetter can always read latest state
+  const currentStateRef = useRef<VoiceInteractionState>(state);
 
   // Update callback ref when it changes
   useEffect(() => {
@@ -82,20 +84,20 @@ export function useIdleTimeoutManager(
     };
   }, [debug]);
 
-  // Update state getter when state changes (separate useEffect to avoid recreating service)
+  // Set up state getter once (reads from ref to always get latest state)
   useEffect(() => {
     if (serviceRef.current) {
       // Set up state getter for polling to read state directly from component
-      // This ensures polling can check current state even if events don't arrive
+      // Use ref to ensure we always read the latest state, not a captured value
       serviceRef.current.setStateGetter(() => {
         return {
-          agentState: state.agentState,
-          isPlaying: state.isPlaying,
-          isUserSpeaking: state.isUserSpeaking,
+          agentState: currentStateRef.current.agentState,
+          isPlaying: currentStateRef.current.isPlaying,
+          isUserSpeaking: currentStateRef.current.isUserSpeaking,
         };
       });
     }
-  }, [state.agentState, state.isPlaying, state.isUserSpeaking]);
+  }, []); // Only set once - reads from ref which is always current
 
   // Handle state changes
   useEffect(() => {
