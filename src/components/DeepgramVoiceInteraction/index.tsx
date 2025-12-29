@@ -636,47 +636,6 @@ function DeepgramVoiceInteraction(
             dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: event.state });
             onConnectionStateChange?.('transcription', event.state);
             lastConnectionStates.current.transcription = event.state;
-            
-            // Issue #329: Send periodic keepalive audio to transcription service to prevent timeout
-            // Deepgram requires audio data within timeout window (~26 seconds), but tests may wait
-            // for SettingsApplied before sending real audio. Send keepalive every 5 seconds until
-            // real audio starts flowing.
-            if (event.state === 'connected' && transcriptionManagerRef.current) {
-              // Create a small silent audio buffer (160 samples = 10ms at 16kHz) to keep connection alive
-              const keepaliveBuffer = new ArrayBuffer(320); // 160 samples * 2 bytes (16-bit PCM)
-              const view = new Int16Array(keepaliveBuffer);
-              view.fill(0);
-              
-              if (config.debug) {
-                console.log('🔧 [TRANSCRIPTION] Starting periodic keepalive audio to prevent timeout');
-              }
-              
-              // Send keepalive immediately after connection
-              const sendKeepalive = () => {
-                const currentState = transcriptionManagerRef.current?.getState();
-                if (currentState === 'connected') {
-                  transcriptionManagerRef.current.sendBinary(keepaliveBuffer);
-                  if (config.debug) {
-                    console.log('🔧 [TRANSCRIPTION] Periodic keepalive audio sent');
-                  }
-                  // Schedule next keepalive (every 5 seconds to stay well under 26s timeout)
-                  // Store timeout ID so we can clear it when connection closes
-                  const timeoutId = window.setTimeout(sendKeepalive, 5000);
-                  // Store timeout ID on manager for cleanup
-                  (transcriptionManagerRef.current as any).__keepaliveTimeoutId = timeoutId;
-                }
-              };
-              
-              // Start keepalive after small delay, then continue every 5 seconds
-              setTimeout(sendKeepalive, 100);
-            } else if (event.state === 'closed' && transcriptionManagerRef.current) {
-              // Clear keepalive interval when connection closes
-              const timeoutId = (transcriptionManagerRef.current as any).__keepaliveTimeoutId;
-              if (timeoutId) {
-                window.clearTimeout(timeoutId);
-                (transcriptionManagerRef.current as any).__keepaliveTimeoutId = null;
-              }
-            }
           } else {
             if (config.debug) {
               console.log('🔧 [DEBUG] Transcription state unchanged, skipping:', event.state);
@@ -1829,13 +1788,14 @@ function DeepgramVoiceInteraction(
       }
     };
     
-    console.log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
-      conversationHistoryLength: currentAgentOptions.context?.messages?.length || 0,
-      contextMessages: currentAgentOptions.context?.messages || [],
-      hasSpeakProvider: 'speak' in settingsMessage.agent,
-      speakModel: settingsMessage.agent.speak?.provider?.model,
-      greetingIncluded: 'greeting' in settingsMessage.agent,
-      greetingPreview: (settingsMessage.agent.greeting || '').slice(0, 60),
+    if (debug) {
+      console.log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
+        conversationHistoryLength: currentAgentOptions.context?.messages?.length || 0,
+        contextMessages: currentAgentOptions.context?.messages || [],
+        hasSpeakProvider: 'speak' in settingsMessage.agent,
+        speakModel: settingsMessage.agent.speak?.provider?.model,
+        greetingIncluded: 'greeting' in settingsMessage.agent,
+        greetingPreview: (settingsMessage.agent.greeting || '').slice(0, 60),
       functionsCount: currentAgentOptions.functions?.length || 0,
       functionsIncluded: !!(currentAgentOptions.functions && currentAgentOptions.functions.length > 0),
       functionsStructure: currentAgentOptions.functions?.map(f => ({
@@ -1844,7 +1804,8 @@ function DeepgramVoiceInteraction(
         hasParameters: !!f.parameters,
         hasEndpoint: !!f.endpoint
       }))
-    });
+      });
+    }
     
     // Log full Settings message structure for debugging (especially functions)
     // Always log when functions are present (not just in debug mode) to help diagnose SettingsApplied issues
@@ -1875,32 +1836,21 @@ function DeepgramVoiceInteraction(
       }
     }
     
-    // Log before sending to verify code path
-    console.log('📤 [Component] About to call agentManagerRef.current.sendJSON with Settings message');
-    console.log('📤 [Component] Settings message type:', settingsMessage.type);
-    console.log('📤 [Component] Has functions?', !!(settingsMessage.agent?.think?.functions));
-    console.log('📤 [Component] WebSocketManager exists?', !!agentManagerRef.current);
-    console.log('📤 [Component] WebSocket URL:', agentManagerRef.current ? (agentManagerRef.current as any).options?.url : 'N/A');
-    
     // Check WebSocket state directly from manager before sending
     const wsManager = agentManagerRef.current as any;
     const ws = wsManager?.ws;
     const wsState = ws?.readyState;
-    // WebSocket readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
-    const wsStateName = wsState === 0 ? 'CONNECTING' : 
-                        wsState === 1 ? 'OPEN' : 
-                        wsState === 2 ? 'CLOSING' : 
-                        wsState === 3 ? 'CLOSED' : 'UNKNOWN';
-    console.log('📤 [Component] Before sendJSON call:');
-    console.log('📤 [Component] - agentManagerRef.current exists?', !!agentManagerRef.current);
-    console.log('📤 [Component] - WebSocket exists?', !!ws);
-    console.log('📤 [Component] - WebSocket readyState:', wsState, `(${wsStateName})`);
-    console.log('📤 [Component] - WebSocket URL:', ws?.url || 'N/A');
     
     // Only send if WebSocket is actually OPEN
     if (!ws || wsState !== 1) {
-      console.error('❌ [Protocol] Cannot send Settings - WebSocket not OPEN');
-      console.error('❌ [Protocol] WebSocket state:', wsState, `(${wsStateName})`);
+      if (debug) {
+        const wsStateName = wsState === 0 ? 'CONNECTING' : 
+                            wsState === 1 ? 'OPEN' : 
+                            wsState === 2 ? 'CLOSING' : 
+                            wsState === 3 ? 'CLOSED' : 'UNKNOWN';
+        console.error('❌ [Protocol] Cannot send Settings - WebSocket not OPEN');
+        console.error('❌ [Protocol] WebSocket state:', wsState, `(${wsStateName})`);
+      }
       return; // Don't mark as sent if we can't actually send
     }
     
@@ -1914,17 +1864,20 @@ function DeepgramVoiceInteraction(
       if (debug) {
         console.log('🔧 [sendAgentSettings] Flags set immediately after successful send (StrictMode protection)');
       }
-      console.log('📤 [Protocol] Settings message sent successfully (sendJSON returned true)');
     } else {
-      console.error('❌ [Protocol] Settings message send FAILED (sendJSON returned false)');
-      console.error('❌ [Protocol] WebSocket state at send time:', wsState, `(${wsStateName})`);
-      console.error('❌ [Protocol] This means the WebSocket is not open or not available');
+      if (debug) {
+        const wsStateName = wsState === 0 ? 'CONNECTING' : 
+                            wsState === 1 ? 'OPEN' : 
+                            wsState === 2 ? 'CLOSING' : 
+                            wsState === 3 ? 'CLOSED' : 'UNKNOWN';
+        console.error('❌ [Protocol] Settings message send FAILED (sendJSON returned false)');
+        console.error('❌ [Protocol] WebSocket state at send time:', wsState, `(${wsStateName})`);
+      }
       return; // Don't mark as sent if send failed
     }
     
     // Mark settings as sent for welcome-first behavior
     dispatch({ type: 'SETTINGS_SENT', sent: true });
-    console.log('📤 [Protocol] Settings sent state updated to true');
   };
 
   // Send FunctionCallResponse back to Deepgram
