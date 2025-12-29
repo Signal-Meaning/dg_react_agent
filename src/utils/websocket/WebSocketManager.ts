@@ -756,13 +756,7 @@ export class WebSocketManager {
    * Sends binary data over the WebSocket
    */
   public sendBinary(data: ArrayBuffer | Blob): boolean {
-    // #region debug log
-    fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WebSocketManager.ts:758',message:'sendBinary called',data:{service:this.options.service,hasWs:!!this.ws,readyState:this.ws?.readyState,dataSize:data instanceof ArrayBuffer ? data.byteLength : data.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      // #region debug log
-      fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WebSocketManager.ts:760',message:'sendBinary failed - WebSocket not open',data:{service:this.options.service,readyState:this.ws?.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       this.log('Cannot send binary data, WebSocket not open');
       return false;
     }
@@ -770,17 +764,11 @@ export class WebSocketManager {
     try {
       this.log(`Sending binary data: ${data instanceof ArrayBuffer ? data.byteLength : data.size} bytes`);
       this.ws.send(data);
-      // #region debug log
-      fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WebSocketManager.ts:767',message:'sendBinary success',data:{service:this.options.service,dataSize:data instanceof ArrayBuffer ? data.byteLength : data.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       // Audio data being sent is just a technical signal - not user activity
       // Don't reset idle timeout based on audio data transmission
       // Idle timeout should be based on actual speech detection, not mic being open
       return true;
     } catch (error) {
-      // #region debug log
-      fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WebSocketManager.ts:772',message:'sendBinary error',data:{service:this.options.service,error:error instanceof Error ? error.message : String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       this.log('Error sending binary data:', error);
       return false;
     }

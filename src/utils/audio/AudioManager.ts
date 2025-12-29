@@ -368,9 +368,6 @@ export class AudioManager {
         
         if (message.type === 'audio') {
           this.log('Received audio data from worklet');
-          // #region debug log
-          fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AudioManager.ts:369',message:'AudioWorklet emitting data',data:{dataSize:message.data?.byteLength},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
           this.emit({ type: 'data', data: message.data });
         } else if (message.type === 'started') {
           this.log('Recording started');

@@ -681,14 +681,8 @@ function App() {
   }, [addLog, isDebugMode]);
 
   const handleUtteranceEnd = useCallback((data: { channel: number[]; lastWordEnd: number }) => {
-    // #region debug log
-    fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:681',message:'handleUtteranceEnd callback called',data:{channel:data.channel,lastWordEnd:data.lastWordEnd},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     const channelStr = data.channel.join(',');
     const utteranceEndText = `Channel: [${channelStr}], Last word end: ${data.lastWordEnd}s`;
-    // #region debug log
-    fetch('http://127.0.0.1:7244/ingest/1ac8ac92-902e-45db-8e4f-262b6d84a922',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:683',message:'Setting utteranceEnd state',data:{utteranceEndText:utteranceEndText},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
     setUtteranceEnd(utteranceEndText);
     utteranceEndDetected.current = true;
     
