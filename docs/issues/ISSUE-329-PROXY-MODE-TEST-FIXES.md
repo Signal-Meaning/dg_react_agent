@@ -21,8 +21,8 @@
 
 | Status | Count | Tests |
 |--------|-------|-------|
-| ✅ Fixed | 21 | `callback-test.spec.js:48` - onTranscriptUpdate callback<br>`agent-options-resend-issue311.spec.js:50` - Settings re-send<br>`backend-proxy-mode.spec.js:61` - Agent responses through proxy<br>`callback-test.spec.js:87` - onUserStartedSpeaking callback<br>`declarative-props-api.spec.js:278` - Function call response via callback<br>`callback-test.spec.js:128` - onUserStoppedSpeaking callback<br>`extended-silence-idle-timeout.spec.js:11` - Connection closure with silence<br>`interim-transcript-validation.spec.js:32` - Interim and final transcripts<br>`strict-mode-behavior.spec.js:93` - StrictMode cleanup detection<br>`user-stopped-speaking-demonstration.spec.js:20` - onUserStoppedSpeaking demonstration<br>`user-stopped-speaking-demonstration.spec.js:174` - Multiple audio samples<br>`vad-audio-patterns.spec.js:26` - VAD events with pre-generated audio<br>`vad-audio-patterns.spec.js:55` - VAD events with realistic patterns<br>`vad-audio-patterns.spec.js:120` - Multiple audio samples in sequence<br>`vad-configuration-optimization.spec.js:23` - utterance_end_ms values<br>`vad-configuration-optimization.spec.js:134` - VAD event combinations<br>`vad-configuration-optimization.spec.js:225` - VAD event timing<br>`vad-events-core.spec.js:27` - Basic VAD events<br>`function-calling-e2e.spec.js:308` - Functions in Settings message<br>`function-calling-e2e.spec.js:512` - Minimal function definition<br>`function-calling-e2e.spec.js:772` - Minimal function with required array |
-| 🔄 In Progress | 1 | `idle-timeout-behavior.spec.js:887` - Idle timeout restart |
+| ✅ Fixed | 22 | `callback-test.spec.js:48` - onTranscriptUpdate callback<br>`agent-options-resend-issue311.spec.js:50` - Settings re-send<br>`backend-proxy-mode.spec.js:61` - Agent responses through proxy<br>`callback-test.spec.js:87` - onUserStartedSpeaking callback<br>`declarative-props-api.spec.js:278` - Function call response via callback<br>`callback-test.spec.js:128` - onUserStoppedSpeaking callback<br>`extended-silence-idle-timeout.spec.js:11` - Connection closure with silence<br>`interim-transcript-validation.spec.js:32` - Interim and final transcripts<br>`strict-mode-behavior.spec.js:93` - StrictMode cleanup detection<br>`user-stopped-speaking-demonstration.spec.js:20` - onUserStoppedSpeaking demonstration<br>`user-stopped-speaking-demonstration.spec.js:174` - Multiple audio samples<br>`vad-audio-patterns.spec.js:26` - VAD events with pre-generated audio<br>`vad-audio-patterns.spec.js:55` - VAD events with realistic patterns<br>`vad-audio-patterns.spec.js:120` - Multiple audio samples in sequence<br>`vad-configuration-optimization.spec.js:23` - utterance_end_ms values<br>`vad-configuration-optimization.spec.js:134` - VAD event combinations<br>`vad-configuration-optimization.spec.js:225` - VAD event timing<br>`vad-events-core.spec.js:27` - Basic VAD events<br>`function-calling-e2e.spec.js:308` - Functions in Settings message<br>`function-calling-e2e.spec.js:512` - Minimal function definition<br>`function-calling-e2e.spec.js:772` - Minimal function with required array<br>`idle-timeout-behavior.spec.js:887` - Idle timeout restart |
+| 🔄 In Progress | 0 | |
 | ❌ Pending | 1 | `function-calling-e2e.spec.js:65` - FunctionCallRequest timeout (not proxy-specific) |
 
 ### Fixed Tests ✅
@@ -113,8 +113,8 @@
    - **Verification**: Test passes, SettingsApplied received with minimal-with-required function
 
 #### Category 7: Idle Timeout Behavior (1 test)
-9. ❌ `idle-timeout-behavior.spec.js:887:3` - "should restart timeout after USER_STOPPED_SPEAKING when agent is idle - reproduces Issue #262/#430"
-   - **Status**: In Progress - Timeout not starting
+9. ✅ `idle-timeout-behavior.spec.js:887:3` - "should restart timeout after USER_STOPPED_SPEAKING when agent is idle - reproduces Issue #262/#430"
+   - **Status**: ✅ **FIXED** - 2025-01-29
    - **Proxy-Specific**: ❌ **NO** - Test also fails without proxy mode (real bug, not proxy-specific)
    - **Root Cause**: IdleTimeoutService disables resets when `AGENT_STATE_CHANGED` arrives with 'idle' while `isPlaying` is still true. When `PLAYBACK_STATE_CHANGED` arrives with `isPlaying: false`, `updateTimeoutBehavior()` should enable resets and start timeout, but it's not happening.
    - **Fix Attempted**: 
@@ -131,19 +131,14 @@
      - **FIXED**: Changed stateGetter to use `currentStateRef` instead of capturing state in closure - ensures polling always reads latest state
      - **FIXED**: Keep polling active even after timeout starts to detect when user starts speaking
      - **FIXED**: Added check in `checkAndStartTimeoutIfNeeded()` to stop timeout when user is speaking
-     - **Status**: Timeout now starts correctly! ✅ But test still failing because `isUserSpeaking` isn't being detected when user starts speaking
-     - **Root Cause**: `simulateSpeech` sends audio data, but Deepgram needs to process it and send back `UserStartedSpeaking` message. In proxy mode or with test audio, this message may not arrive, or there's a delay. Polling checks every 200ms but `isUserSpeaking` remains `false` even after audio is sent.
-     - **Investigation Findings**:
-       - Polling is working correctly and checking state every 200ms
-       - `checkAndStartTimeoutIfNeeded()` correctly checks `isUserSpeaking` and stops timeout when true
-       - `UserStartedSpeaking` message from Deepgram isn't being received after `simulateSpeech`
-       - Component state (`isUserSpeaking`) isn't updating because it depends on Deepgram's `UserStartedSpeaking` message
-     - **Next Steps**: 
-       - Investigate why `UserStartedSpeaking` message isn't being received from Deepgram after `simulateSpeech`
-       - Check if proxy mode affects message forwarding
-       - Consider if test audio format is causing Deepgram to not detect speech
-       - May need to wait longer for Deepgram to process audio and send message
-       - Or may need to update component to set `isUserSpeaking=true` immediately when audio is sent (if that's acceptable behavior)
+     - **Status**: ✅ **FIXED** - Test now passes!
+     - **Root Cause**: Test was using `simulateSpeech()` with realistic audio, but other passing tests use `loadAndSendAudioSample()` fixture which loads TTS-generated audio from `/audio-samples/`. This fixture properly triggers `UserStartedSpeaking` from Deepgram.
+     - **Solution**: 
+       - Changed test to use `loadAndSendAudioSample(page, 'hello')` instead of `simulateSpeech()`
+       - Used `waitForVADEvents()` fixture to wait for `UserStartedSpeaking` (same pattern as other passing tests)
+       - This ensures Deepgram receives proper audio format and sends `UserStartedSpeaking` message
+       - Polling then detects `isUserSpeaking=true` and stops the timeout correctly
+     - **Verification**: Test passes, timeout stops when user starts speaking, and restarts after user stops speaking
    - **Next Steps**: 
      - Investigate why timeout isn't starting when `AGENT_STATE_CHANGED` with 'idle' and `PLAYBACK_STATE_CHANGED` with `isPlaying=false` both occur
      - May need to add a delayed check or ensure timeout starts in all code paths when conditions are met
