@@ -9,6 +9,12 @@
 
 22 E2E tests are failing when run in proxy mode (`USE_PROXY_MODE=true`). The proxy server was only handling agent service connections and not transcription service connections, causing transcription-related tests to fail.
 
+**Important Note**: 
+- Some tests require real API keys to pass (function calling tests use `skipIfNoRealAPI`). These tests cannot be verified without real API keys.
+- Some failing tests are **not proxy-specific** - they also fail without proxy mode, indicating real bugs that need to be fixed regardless of proxy mode:
+  - `idle-timeout-behavior.spec.js:887` - Timeout not starting (real bug)
+  - `vad-redundancy-and-agent-timeout.spec.js:380` - Validation failure (real bug, related to idle timeout)
+
 ## 📊 Test Failure Tracking
 
 ### Test Status Overview
