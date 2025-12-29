@@ -128,9 +128,22 @@
      - Added debug logging to `useIdleTimeoutManager` to track state changes
      - Added polling mechanism that checks conditions every 500ms
      - Added `setStateGetter()` method to read state directly from component (bypasses event system)
-     - Polling syncs state from component using stateGetter callback
-     - Polling is working and syncing state, but still seeing `agentState=speaking, isPlaying=true` even after test waits for DOM to show idle
-     - **Next Steps**: Investigate why component state isn't changing to idle when DOM shows it, or if there's a timing issue with polling
+     - **FIXED**: Changed stateGetter to use `currentStateRef` instead of capturing state in closure - ensures polling always reads latest state
+     - **FIXED**: Keep polling active even after timeout starts to detect when user starts speaking
+     - **FIXED**: Added check in `checkAndStartTimeoutIfNeeded()` to stop timeout when user is speaking
+     - **Status**: Timeout now starts correctly! ✅ But test still failing because `isUserSpeaking` isn't being detected when user starts speaking
+     - **Root Cause**: `simulateSpeech` sends audio data, but Deepgram needs to process it and send back `UserStartedSpeaking` message. In proxy mode or with test audio, this message may not arrive, or there's a delay. Polling checks every 200ms but `isUserSpeaking` remains `false` even after audio is sent.
+     - **Investigation Findings**:
+       - Polling is working correctly and checking state every 200ms
+       - `checkAndStartTimeoutIfNeeded()` correctly checks `isUserSpeaking` and stops timeout when true
+       - `UserStartedSpeaking` message from Deepgram isn't being received after `simulateSpeech`
+       - Component state (`isUserSpeaking`) isn't updating because it depends on Deepgram's `UserStartedSpeaking` message
+     - **Next Steps**: 
+       - Investigate why `UserStartedSpeaking` message isn't being received from Deepgram after `simulateSpeech`
+       - Check if proxy mode affects message forwarding
+       - Consider if test audio format is causing Deepgram to not detect speech
+       - May need to wait longer for Deepgram to process audio and send message
+       - Or may need to update component to set `isUserSpeaking=true` immediately when audio is sent (if that's acceptable behavior)
    - **Next Steps**: 
      - Investigate why timeout isn't starting when `AGENT_STATE_CHANGED` with 'idle' and `PLAYBACK_STATE_CHANGED` with `isPlaying=false` both occur
      - May need to add a delayed check or ensure timeout starts in all code paths when conditions are met

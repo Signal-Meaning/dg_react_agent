@@ -280,10 +280,18 @@ export class IdleTimeoutService {
       return; // Don't start timeout if user is speaking
     }
     
-    if (shouldStartTimeout && this.timeoutId === null) {
-      this.log('checkAndStartTimeoutIfNeeded() - conditions met, starting timeout');
-      this.enableResets();
-      this.startTimeout();
+    if (shouldStartTimeout) {
+      if (this.timeoutId === null) {
+        // Timeout not running, start it
+        this.log('checkAndStartTimeoutIfNeeded() - conditions met, starting timeout');
+        this.enableResets();
+        this.startTimeout();
+      } else {
+        // Timeout already running, don't restart it (prevents unnecessary restarts)
+        if (this.config.debug) {
+          console.log('🎯 [DEBUG] checkAndStartTimeoutIfNeeded() - conditions met but timeout already running, skipping restart');
+        }
+      }
     }
   }
 
@@ -296,7 +304,7 @@ export class IdleTimeoutService {
     
     this.pollingIntervalId = window.setInterval(() => {
       this.checkAndStartTimeoutIfNeeded();
-    }, 500); // Check every 500ms
+    }, 200); // Check every 200ms (increased frequency for better responsiveness)
     
     if (this.config.debug) {
       console.log('🎯 [DEBUG] Started polling for idle timeout conditions');
@@ -354,7 +362,14 @@ export class IdleTimeoutService {
    * Start the idle timeout
    */
   private startTimeout(): void {
-    this.stopTimeout(); // Clear any existing timeout
+    // Only start if timeout is not already running (prevents unnecessary restarts)
+    if (this.timeoutId !== null) {
+      // Timeout already running, don't restart it
+      if (this.config.debug) {
+        console.log('🎯 [DEBUG] startTimeout() called but timeout already running, skipping');
+      }
+      return;
+    }
     
     if (this.config.debug) {
       console.log('🎯 [DEBUG] Starting timeout with timeoutId:', this.timeoutId);

@@ -951,14 +951,22 @@ test.describe('Idle Timeout Behavior', () => {
     console.log('Step 3: Simulating user starting to speak...');
     await simulateSpeech(page, 'test message');
     
-    // Wait a moment for events to propagate
-    await page.waitForTimeout(500);
+    // Wait for timeout to be stopped (polling should detect isUserSpeaking=true and stop timeout)
+    // Polling checks every 200ms, so wait a bit longer to ensure it catches the state change
+    console.log('Waiting for timeout to be stopped by polling...');
+    let stoppedTimeoutLog = null;
+    for (let i = 0; i < 10; i++) {
+      await page.waitForTimeout(300); // Wait 300ms between checks
+      stoppedTimeoutLog = idleTimeoutServiceLogs.find(log => 
+        log.text.includes('Stopped idle timeout') && 
+        log.timestamp > (initialTimeoutLog?.timestamp || 0)
+      );
+      if (stoppedTimeoutLog) {
+        break;
+      }
+    }
     
     // Verify timeout was stopped (should have "Stopped idle timeout" log)
-    const stoppedTimeoutLog = idleTimeoutServiceLogs.find(log => 
-      log.text.includes('Stopped idle timeout') && 
-      log.timestamp > (initialTimeoutLog?.timestamp || 0)
-    );
     expect(stoppedTimeoutLog).toBeTruthy();
     console.log('✅ Timeout stopped when user started speaking');
     
