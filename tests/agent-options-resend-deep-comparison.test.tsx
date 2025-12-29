@@ -6,30 +6,27 @@
 /**
  * Agent Options Re-send Deep Comparison Tests - Issue #311
  * 
- * These tests verify the deep comparison logic used to detect agentOptions changes
- * in the actual component context, not just in isolation.
+ * Behavior-based tests: Verify deep comparison logic by checking actual Settings messages sent,
+ * not log messages.
  * 
  * Test scenarios:
- * 1. Verify useEffect runs when agentOptions reference changes
- * 2. Verify deep comparison correctly detects when functions are added
- * 3. Verify deep comparison correctly detects when functions are removed
- * 4. Verify deep comparison correctly detects when functions array changes
- * 5. Test edge cases: same reference but different content (mutation - should NOT trigger)
- * 6. Test timing: what happens if comparison runs before React finishes update
+ * 1. Verify Settings re-sent when functions are added (new reference)
+ * 2. Verify Settings NOT re-sent when object is mutated (same reference)
+ * 3. Verify Settings re-sent when functions array changes
+ * 4. Verify Settings re-sent when agentOptions reference changes
  * 
  * Issue #311: Component not re-sending Settings when agentOptions changes after connection
  */
 
 import React from 'react';
-import { render, act } from '@testing-library/react';
-import { DeepgramVoiceInteractionHandle, AgentFunction } from '../src/types';
+import { render, act, waitFor } from '@testing-library/react';
+import { DeepgramVoiceInteractionHandle } from '../src/types';
 import { createMockWebSocketManager, createMockAudioManager } from './fixtures/mocks';
 import {
   resetTestState,
   createAgentOptions,
   setupComponentAndConnect,
   createSettingsCapture,
-  verifySettingsStructure,
   verifySettingsHasFunctions,
   MOCK_API_KEY,
 } from './utils/component-test-helpers';
@@ -46,42 +43,26 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
   let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
-  let consoleLogs: string[];
 
   beforeEach(() => {
     jest.clearAllMocks();
     resetTestState();
-    consoleLogs = [];
-    
-    // Capture console logs
-    const originalLog = console.log;
-    console.log = (...args: unknown[]) => {
-      const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
-      consoleLogs.push(message);
-      originalLog(...args);
-    };
     
     mockWebSocketManager = createMockWebSocketManager();
     mockAudioManager = createMockAudioManager();
     
-    // Capture Settings messages
     capturedSettings = createSettingsCapture(mockWebSocketManager);
     
     WebSocketManager.mockImplementation(() => mockWebSocketManager);
     AudioManager.mockImplementation(() => mockAudioManager);
-    
-    // Enable diagnostic logging
-    (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true;
   });
 
   afterEach(() => {
     jest.clearAllMocks();
-    delete (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
   });
 
   test('should detect change when functions are added (new reference)', async () => {
-    // This test verifies that when agentOptions reference changes and functions are added,
-    // the deep comparison correctly detects the change
+    // Behavior-based test: Verify Settings re-sent when functions are added
     
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
@@ -104,7 +85,6 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     
     // Clear captured settings
     capturedSettings.length = 0;
-    consoleLogs.length = 0;
     
     // Update agentOptions with functions (new reference)
     const updatedOptions = createAgentOptions({
@@ -126,47 +106,27 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
       );
     });
     
-    // Wait for useEffect to run and check diagnostic logs
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 200));
-    });
-    
-    // Check diagnostic logs for comparison result
-    const comparisonLogs = consoleLogs.filter(log => 
-      log.includes('Comparing values') || 
-      log.includes('agentOptionsChanged')
-    );
-    
-    console.log('Comparison logs:', comparisonLogs);
-    
-    // Find the diagnostic log that shows agentOptionsChanged
-    const diagnosticLog = consoleLogs.find(log => 
-      log.includes('agentOptions Change] Diagnostic')
-    );
-    
-    if (diagnosticLog) {
-      console.log('Diagnostic log found:', diagnosticLog);
-      // The log should show agentOptionsChanged: true
-      expect(diagnosticLog).toContain('agentOptionsChanged');
-    }
+    // Wait for Settings to be re-sent
+    await waitFor(() => {
+      expect(capturedSettings.length).toBeGreaterThan(0);
+    }, { timeout: 2000 });
     
     // Verify Settings was re-sent with functions
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 300));
-    });
-    
     const settingsWithFunctions = capturedSettings.find(s => 
-      s.agent?.think?.functions && s.agent.think.functions.length > 0
+      s.type === 'Settings' &&
+      s.agent?.think?.functions && 
+      s.agent.think.functions.length > 0
     );
     
     expect(settingsWithFunctions).toBeDefined();
     if (settingsWithFunctions) {
       verifySettingsHasFunctions(settingsWithFunctions, 1);
+      expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test_function');
     }
   });
 
   test('should NOT detect change when object is mutated (same reference)', async () => {
-    // This test verifies that mutation (same reference) does NOT trigger re-send
+    // Behavior-based test: Verify Settings NOT re-sent when object is mutated
     // This is expected behavior - we want new references, not mutations
     
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
@@ -186,7 +146,6 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     
     // Clear captured settings
     capturedSettings.length = 0;
-    consoleLogs.length = 0;
     
     // Mutate the same object (BAD practice, but test that we don't trigger on this)
     (agentOptions as any).functions = [{
@@ -196,9 +155,12 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     }];
     
     // Re-render with same reference (mutation)
+    // Note: In real usage, this wouldn't happen, but we're testing edge case
     await act(async () => {
       // Force re-render by updating a different prop
-      // In real usage, this wouldn't happen, but we're testing edge case
+      // Actually, we can't force re-render without changing props
+      // So this test verifies that mutation alone doesn't trigger re-send
+      // The useEffect won't run because dependency array watches reference
     });
     
     // Wait a bit
@@ -212,8 +174,7 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
   });
 
   test('should detect change when functions array changes', async () => {
-    // This test verifies that when functions array content changes,
-    // the deep comparison correctly detects it
+    // Behavior-based test: Verify Settings re-sent when functions array content changes
     
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
@@ -238,7 +199,6 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     
     // Clear captured settings
     capturedSettings.length = 0;
-    consoleLogs.length = 0;
     
     // Update with different function (new reference)
     const updatedOptions = createAgentOptions({
@@ -259,23 +219,26 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
       );
     });
     
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 200));
-    });
+    // Wait for Settings to be re-sent
+    await waitFor(() => {
+      expect(capturedSettings.length).toBeGreaterThan(0);
+    }, { timeout: 2000 });
     
     // Settings should be re-sent with new function
     const settingsWithNewFunction = capturedSettings.find(s => 
+      s.type === 'Settings' &&
       s.agent?.think?.functions && 
       s.agent.think.functions.length > 0 &&
       s.agent.think.functions[0].name === 'function2'
     );
     
     expect(settingsWithNewFunction).toBeDefined();
+    expect(settingsWithNewFunction!.agent.think.functions[0].name).toBe('function2');
   });
 
-  test('should verify useEffect dependency array triggers on reference change', async () => {
-    // This test verifies that the useEffect actually runs when agentOptions reference changes
-    // by checking entry point logs
+  test('should verify Settings re-sent when agentOptions reference changes', async () => {
+    // Behavior-based test: Verify Settings re-sent when reference changes
+    // This proves useEffect runs when dependency changes
     
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
@@ -290,13 +253,8 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
 
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
-    // Clear logs
-    consoleLogs.length = 0;
-    
-    // Count entry point logs before update
-    const entryPointLogsBefore = consoleLogs.filter(log => 
-      log.includes('[agentOptions useEffect] Entry point')
-    ).length;
+    // Clear captured settings
+    capturedSettings.length = 0;
     
     // Update with new reference
     const updatedOptions = createAgentOptions({
@@ -317,17 +275,20 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
       );
     });
     
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 200));
-    });
+    // Wait for Settings to be re-sent
+    await waitFor(() => {
+      expect(capturedSettings.length).toBeGreaterThan(0);
+    }, { timeout: 2000 });
     
-    // Count entry point logs after update
-    const entryPointLogsAfter = consoleLogs.filter(log => 
-      log.includes('[agentOptions useEffect] Entry point')
-    ).length;
+    // Verify Settings was re-sent with functions
+    // This proves useEffect ran and detected the change
+    const settingsWithFunctions = capturedSettings.find(s => 
+      s.type === 'Settings' &&
+      s.agent?.think?.functions && 
+      s.agent.think.functions.length > 0
+    );
     
-    // Should have more entry point logs after update (useEffect should have run)
-    expect(entryPointLogsAfter).toBeGreaterThan(entryPointLogsBefore);
+    expect(settingsWithFunctions).toBeDefined();
+    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test');
   });
 });
-

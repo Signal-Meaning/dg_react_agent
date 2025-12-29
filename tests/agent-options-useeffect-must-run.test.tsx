@@ -6,23 +6,20 @@
 /**
  * Agent Options useEffect Must Run Test - Issue #318
  * 
- * This test verifies that the useEffect with dependency [agentOptions, props.debug]
- * MUST run when agentOptions changes. This test would catch the bug where the
- * useEffect doesn't run even though the prop changes.
- * 
- * This test uses the customer's exact pattern (useMemo with hasFunctions) to
- * reproduce the issue they're experiencing.
+ * Behavior-based tests: Verify that useEffect runs when agentOptions changes
+ * by checking that Settings are re-sent, not by checking logs.
  * 
  * Test scenarios:
- * 1. Verify useEffect runs when useMemo creates new reference (customer pattern)
- * 2. Verify useEffect runs even if diagnostic logging is disabled
- * 3. Verify useEffect runs when props.agentOptions changes (not just destructured variable)
+ * 1. Verify Settings re-sent when useMemo creates new reference (customer pattern)
+ * 2. Verify Settings re-sent with customer useMemo pattern component
+ * 3. Verify Settings re-sent even without diagnostic logging enabled
+ * 4. Verify Settings re-sent when props.agentOptions changes
  * 
  * Issue #318: useEffect not running when agentOptions changes - dependency array issue
  */
 
 import React, { useMemo, useState } from 'react';
-import { render, act } from '@testing-library/react';
+import { render, act, waitFor } from '@testing-library/react';
 import { DeepgramVoiceInteractionHandle, AgentOptions } from '../src/types';
 import { createMockWebSocketManager, createMockAudioManager } from './fixtures/mocks';
 import {
@@ -41,78 +38,14 @@ jest.mock('../src/utils/audio/AudioManager');
 const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
 const { AudioManager } = require('../src/utils/audio/AudioManager');
 
-/**
- * Test component that matches customer's exact pattern
- * Uses useMemo with hasFunctions dependency
- */
-function TestComponentWithUseMemoPattern({ 
-  initialHasFunctions = false 
-}: { 
-  initialHasFunctions?: boolean 
-}) {
-  const [hasFunctions, setHasFunctions] = useState(initialHasFunctions);
-  
-  const agentOptions = useMemo<AgentOptions>(() => {
-    const base: AgentOptions = {
-      language: 'en',
-      listenModel: 'nova-3',
-      thinkProviderType: 'open_ai',
-      thinkModel: 'gpt-4o-mini',
-      voice: 'aura-asteria-en',
-      instructions: 'Test',
-      greeting: 'Hello',
-    };
-    
-    if (hasFunctions) {
-      base.functions = [{
-        name: 'test_function',
-        description: 'Test function',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: 'Test query' }
-          },
-          required: ['query']
-        }
-      }];
-    }
-    
-    return base;
-  }, [hasFunctions]);
-  
-  React.useEffect(() => {
-    if (!initialHasFunctions) {
-      const timer = setTimeout(() => setHasFunctions(true), 100);
-      return () => clearTimeout(timer);
-    }
-  }, [initialHasFunctions]);
-  
-  return (
-    <DeepgramVoiceInteraction
-      apiKey={MOCK_API_KEY}
-      agentOptions={agentOptions}
-    />
-  );
-}
-
 describe('Agent Options useEffect Must Run - Issue #318', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
   let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
-  let consoleLogs: string[];
 
   beforeEach(() => {
     jest.clearAllMocks();
     resetTestState();
-    consoleLogs = [];
-    
-    // Capture console logs
-    const originalLog = console.log;
-    console.log = (...args: unknown[]) => {
-      const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
-      consoleLogs.push(message);
-      originalLog(...args);
-    };
     
     mockWebSocketManager = createMockWebSocketManager();
     mockAudioManager = createMockAudioManager();
@@ -121,19 +54,15 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
     
     WebSocketManager.mockImplementation(() => mockWebSocketManager);
     AudioManager.mockImplementation(() => mockAudioManager);
-    
-    // Enable diagnostic logging to verify useEffect runs
-    (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true;
   });
 
   afterEach(() => {
     jest.clearAllMocks();
-    delete (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
   });
 
-  test('should verify useEffect MUST run when useMemo creates new reference (customer pattern)', async () => {
-    // This test uses the customer's exact pattern and verifies the useEffect runs
-    // If this test fails, it means the useEffect isn't running when it should
+  test('should verify Settings re-sent when useMemo creates new reference (customer pattern)', async () => {
+    // Behavior-based test: Verify Settings re-sent when agentOptions reference changes
+    // This proves useEffect runs when it should
     
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
@@ -151,8 +80,7 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
     // Establish connection first
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
-    // Clear logs to only capture logs from the update
-    consoleLogs.length = 0;
+    // Clear captured settings to only track re-sent Settings
     capturedSettings.length = 0;
     
     // Update with new reference (matching customer's useMemo pattern)
@@ -180,32 +108,27 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
       );
     });
     
-    // Wait for React to process the update and run effects
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 300));
-    });
+    // Wait for Settings to be re-sent
+    // If useEffect doesn't run, Settings won't be re-sent, and this will timeout
+    await waitFor(() => {
+      expect(capturedSettings.length).toBeGreaterThan(0);
+    }, { timeout: 2000 });
     
-    // CRITICAL ASSERTION: The useEffect MUST run when agentOptions changes
-    // If it doesn't run, we won't see the entry point log
-    const entryPointLogs = consoleLogs.filter(log => 
-      log.includes('[agentOptions useEffect] Entry point')
+    // Verify Settings was re-sent with functions
+    // This assertion proves useEffect ran and detected the change
+    const settingsWithFunctions = capturedSettings.find(s => 
+      s.type === 'Settings' &&
+      s.agent?.think?.functions && 
+      s.agent.think.functions.length > 0
     );
     
-    // This assertion will FAIL if the bug exists (useEffect doesn't run)
-    expect(entryPointLogs.length).toBeGreaterThan(0);
-    
-    // Verify we see the diagnostic logs (confirms useEffect ran and did change detection)
-    const diagnosticLogs = consoleLogs.filter(log => 
-      log.includes('[agentOptions Change] Diagnostic') ||
-      log.includes('[agentOptions useEffect] Comparing values')
-    );
-    
-    expect(diagnosticLogs.length).toBeGreaterThan(0);
+    expect(settingsWithFunctions).toBeDefined();
+    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test_function');
   });
 
-  test('should verify useEffect runs with customer useMemo pattern component', async () => {
-    // This test uses the exact customer pattern component
-    // If the useEffect doesn't run, this test will fail
+  test('should verify Settings re-sent with customer useMemo pattern component', async () => {
+    // Behavior-based test: Verify Settings re-sent using customer's exact pattern
+    // If useEffect doesn't run, Settings won't be re-sent
     
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
@@ -256,8 +179,7 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
     // Wait for component to establish connection
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
-    // Clear logs to only capture logs from the update
-    consoleLogs.length = 0;
+    // Clear captured settings to only track re-sent Settings
     capturedSettings.length = 0;
     
     // Wait for hasFunctions to update (triggers useMemo to create new reference)
@@ -265,21 +187,27 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
       await new Promise(resolve => setTimeout(resolve, 200));
     });
     
-    // CRITICAL ASSERTION: The useEffect MUST run when agentOptions reference changes
-    // This will fail if the bug exists
-    const entryPointLogs = consoleLogs.filter(log => 
-      log.includes('[agentOptions useEffect] Entry point') &&
-      !log.includes('isFirstRender: true') // Exclude first render
+    // Wait for Settings to be re-sent
+    // If useEffect doesn't run, Settings won't be re-sent
+    await waitFor(() => {
+      expect(capturedSettings.length).toBeGreaterThan(0);
+    }, { timeout: 2000 });
+    
+    // Verify Settings was re-sent with functions
+    // This proves useEffect ran when agentOptions reference changed
+    const settingsWithFunctions = capturedSettings.find(s => 
+      s.type === 'Settings' &&
+      s.agent?.think?.functions && 
+      s.agent.think.functions.length > 0
     );
     
-    expect(entryPointLogs.length).toBeGreaterThan(0);
+    expect(settingsWithFunctions).toBeDefined();
+    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test');
   });
 
-  test('should verify useEffect runs even without diagnostic logging enabled', async () => {
-    // This test verifies the useEffect runs even if diagnostic logging is disabled
+  test('should verify Settings re-sent even without diagnostic logging enabled', async () => {
+    // Behavior-based test: Verify Settings re-sent even if diagnostic logging is disabled
     // We verify by checking that Settings is re-sent (which requires useEffect to run)
-    
-    delete (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
     
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
@@ -317,24 +245,28 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
       );
     });
     
-    // Wait for useEffect to run and Settings to be re-sent
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 500));
-    });
+    // Wait for Settings to be re-sent
+    // If useEffect doesn't run, Settings won't be re-sent, and this will timeout
+    await waitFor(() => {
+      expect(capturedSettings.length).toBeGreaterThan(0);
+    }, { timeout: 2000 });
     
-    // CRITICAL ASSERTION: If useEffect runs, Settings should be re-sent
+    // Verify Settings was re-sent with functions
     // This is the functional verification (not just log checking)
     const settingsWithFunctions = capturedSettings.filter(s => 
-      s.agent?.think?.functions && s.agent.think.functions.length > 0
+      s.type === 'Settings' &&
+      s.agent?.think?.functions && 
+      s.agent.think.functions.length > 0
     );
     
     // If useEffect doesn't run, Settings won't be re-sent, and this will fail
     expect(settingsWithFunctions.length).toBeGreaterThan(0);
+    expect(settingsWithFunctions[0].agent.think.functions[0].name).toBe('test');
   });
 
-  test('should verify useEffect dependency array tracks props.agentOptions correctly', async () => {
-    // This test verifies that the dependency array correctly tracks the prop
-    // by checking that the useEffect runs when the prop changes
+  test('should verify Settings re-sent when props.agentOptions changes', async () => {
+    // Behavior-based test: Verify Settings re-sent when prop reference changes
+    // This proves dependency array correctly tracks the prop
     
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
@@ -350,7 +282,8 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
 
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
-    consoleLogs.length = 0;
+    // Clear captured settings
+    capturedSettings.length = 0;
     
     // Create new reference (simulating useMemo creating new reference)
     const updatedOptions = createAgentOptions({
@@ -374,25 +307,21 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
       );
     });
     
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 300));
-    });
+    // Wait for Settings to be re-sent
+    // If useEffect doesn't run, Settings won't be re-sent
+    await waitFor(() => {
+      expect(capturedSettings.length).toBeGreaterThan(0);
+    }, { timeout: 2000 });
     
-    // CRITICAL ASSERTION: useEffect MUST run when prop reference changes
-    // This will fail if React's dependency tracking isn't working
-    const entryPointLogs = consoleLogs.filter(log => 
-      log.includes('[agentOptions useEffect] Entry point')
+    // Verify Settings was re-sent with functions
+    // This proves useEffect ran when prop reference changed
+    const settingsWithFunctions = capturedSettings.find(s => 
+      s.type === 'Settings' &&
+      s.agent?.think?.functions && 
+      s.agent.think.functions.length > 0
     );
     
-    expect(entryPointLogs.length).toBeGreaterThan(0);
-    
-    // Verify the effect detected the change
-    const changeDetectionLogs = consoleLogs.filter(log => 
-      log.includes('agentOptionsChanged: true') ||
-      log.includes('[agentOptions Change] Diagnostic')
-    );
-    
-    expect(changeDetectionLogs.length).toBeGreaterThan(0);
+    expect(settingsWithFunctions).toBeDefined();
+    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test');
   });
 });
-

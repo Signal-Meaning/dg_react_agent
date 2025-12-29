@@ -107,6 +107,10 @@ export async function setupComponentAndConnect(
   mockWebSocketManager: MockWebSocketManager,
   options: { agent?: boolean; transcription?: boolean } = { agent: true }
 ): Promise<((event: any) => void) | undefined> {
+  // Clear globalSettingsSent flag BEFORE starting connection
+  // This allows Settings to be sent (component checks this flag)
+  (window as any).globalSettingsSent = false;
+  
   // Start the connection
   await act(async () => {
     await ref.current?.start(options);
@@ -121,7 +125,7 @@ export async function setupComponentAndConnect(
   // Wait for Settings to be sent
   await waitForSettingsSent(mockWebSocketManager);
 
-  // Ensure globalSettingsSent flag is set (component uses this)
+  // Ensure globalSettingsSent flag is set after Settings is sent (component uses this)
   (window as any).globalSettingsSent = true;
 
   return eventListener;

@@ -19,7 +19,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { render, act } from '@testing-library/react';
-import { DeepgramVoiceInteractionHandle, AgentOptions, AgentFunction } from '../src/types';
+import { DeepgramVoiceInteractionHandle, AgentOptions } from '../src/types';
 import { createMockWebSocketManager, createMockAudioManager } from './fixtures/mocks';
 import {
   resetTestState,
@@ -89,20 +89,10 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
   let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
-  let consoleLogs: string[];
 
   beforeEach(() => {
     jest.clearAllMocks();
     resetTestState();
-    consoleLogs = [];
-    
-    // Capture console logs
-    const originalLog = console.log;
-    console.log = (...args: unknown[]) => {
-      const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
-      consoleLogs.push(message);
-      originalLog(...args);
-    };
     
     mockWebSocketManager = createMockWebSocketManager();
     mockAudioManager = createMockAudioManager();
@@ -111,13 +101,10 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     
     WebSocketManager.mockImplementation(() => mockWebSocketManager);
     AudioManager.mockImplementation(() => mockAudioManager);
-    
-    (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true;
   });
 
   afterEach(() => {
     jest.clearAllMocks();
-    delete (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
   });
 
   test('should handle agentOptions changing from undefined to defined', async () => {
@@ -324,9 +311,9 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     expect(settingsWithFunctions).toBeDefined();
   });
 
-  test('should verify comparison happens after ref update', async () => {
-    // Edge case: Verify the ref is updated AFTER comparison, not before
-    // This ensures we're comparing the right values
+  test('should verify comparison correctly detects change', async () => {
+    // Behavior-based test: Verify that comparison correctly detects change
+    // by checking that Settings are re-sent with the new functions
     
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
@@ -340,7 +327,9 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     );
 
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    consoleLogs.length = 0;
+    
+    // Clear captured settings
+    capturedSettings.length = 0;
     
     const updatedOptions = createAgentOptions({
       functions: [{
@@ -360,23 +349,22 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
       );
     });
     
+    // Wait for Settings to be re-sent
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 500));
     });
     
-    // Check comparison logs to verify prev vs current values
-    const comparisonLogs = consoleLogs.filter(log => 
-      log.includes('Comparing values')
+    // Verify Settings was re-sent with functions
+    // This proves the comparison correctly detected the change
+    const settingsWithFunctions = capturedSettings.find(s => 
+      s.type === 'Settings' &&
+      s.agent?.think?.functions && 
+      s.agent.think.functions.length > 0 &&
+      s.agent.think.functions[0].name === 'test'
     );
     
-    expect(comparisonLogs.length).toBeGreaterThan(0);
-    
-    // The comparison log should show:
-    // - prevHasFunctions: false
-    // - currentHasFunctions: true
-    const comparisonLog = comparisonLogs[comparisonLogs.length - 1];
-    expect(comparisonLog).toContain('prevHasFunctions');
-    expect(comparisonLog).toContain('currentHasFunctions');
+    expect(settingsWithFunctions).toBeDefined();
+    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test');
   });
 });
 
