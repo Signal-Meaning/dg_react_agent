@@ -69,6 +69,7 @@
 #### Category 6: Function Calling (4 tests)
 7. ❌ `function-calling-e2e.spec.js:65:3` - "should trigger client-side function call and execute it"
    - **Status**: In Progress - FunctionCallRequest timeout
+   - **Proxy-Specific**: ⚠️ **UNKNOWN** - Requires real API keys to test (uses `skipIfNoRealAPI`)
    - **Root Cause**: SettingsApplied is received, but FunctionCallRequest from Deepgram is not arriving (test times out after 20 seconds)
    - **Observations**: 
      - Settings message is sent (verified in logs)
@@ -77,40 +78,48 @@
      - FunctionCallRequest never arrives (test times out waiting)
    - **Antipatterns**: Over-reliance on WebSocket capture, requires SettingsApplied
    - **Next Steps**: 
+     - **First**: Verify test passes without proxy mode using real API keys
      - Switch to window variables (`__DEEPGRAM_LAST_SETTINGS__`) for verification instead of WebSocket capture
      - Verify functions are actually included in Settings message sent to Deepgram (check proxy logs)
      - Investigate if proxy is correctly forwarding FunctionCallRequest messages from Deepgram
      - Check if Deepgram is sending FunctionCallRequest (may need to verify function definitions are valid)
 8. ❌ `function-calling-e2e.spec.js:308:3` - "should verify functions are included in Settings message"
    - **Status**: In Progress - Functions not found in Settings message
+   - **Proxy-Specific**: ⚠️ **UNKNOWN** - Requires real API keys to test (uses `skipIfNoRealAPI`)
    - **Root Cause**: WebSocket capture doesn't work in proxy mode, and window variables may not be set
    - **Observations**: Test uses URL parameters (best practice) but still relies on WebSocket capture
    - **Antipatterns**: Complex console log parsing, over-reliance on WebSocket capture
    - **Next Steps**: 
+     - **First**: Verify test passes without proxy mode using real API keys
      - Use window variables as primary verification method
      - Make WebSocket capture optional/fallback only
      - Verify component exposes Settings to window in test mode
 9. ❌ `function-calling-e2e.spec.js:512:3` - "should test minimal function definition for SettingsApplied issue"
    - **Status**: In Progress - Page closure issue
+   - **Proxy-Specific**: ⚠️ **UNKNOWN** - Requires real API keys to test (uses `skipIfNoRealAPI`)
    - **Root Cause**: Test page/browser context closing unexpectedly during execution (error: "Target page, context or browser has been closed")
    - **Observations**: Error occurs at `page.waitForTimeout(1000)` after updating agentOptions
    - **Antipatterns**: Complex timing with `waitForFunction` checking console logs, multiple retry loops
    - **Next Steps**: 
+     - **First**: Verify test passes without proxy mode using real API keys
      - Investigate why page is closing - may be connection closure or error causing browser to close
      - Simplify timing - wait for window variables instead of console logs
      - Check if there's an error in the component that's causing the page to close
 10. ❌ `function-calling-e2e.spec.js:772:3` - "should test minimal function with explicit required array"
    - **Status**: In Progress - SettingsApplied not received
+   - **Proxy-Specific**: ⚠️ **UNKNOWN** - Requires real API keys to test (uses `skipIfNoRealAPI`)
    - **Root Cause**: Similar to test #9 - SettingsApplied not received, may be Deepgram rejecting Settings
    - **Observations**: Tests edge case (explicit required array)
    - **Antipatterns**: Similar to test #9
    - **Next Steps**: 
+     - **First**: Verify test passes without proxy mode using real API keys
      - Don't require SettingsApplied - verify functions were sent instead
      - Use window variables for verification
 
 #### Category 7: Idle Timeout Behavior (1 test)
 9. ❌ `idle-timeout-behavior.spec.js:887:3` - "should restart timeout after USER_STOPPED_SPEAKING when agent is idle - reproduces Issue #262/#430"
    - **Status**: In Progress - Timeout not starting
+   - **Proxy-Specific**: ❌ **NO** - Test also fails without proxy mode (real bug, not proxy-specific)
    - **Root Cause**: IdleTimeoutService disables resets when `AGENT_STATE_CHANGED` arrives with 'idle' while `isPlaying` is still true. When `PLAYBACK_STATE_CHANGED` arrives with `isPlaying: false`, `updateTimeoutBehavior()` should enable resets and start timeout, but it's not happening.
    - **Fix Attempted**: 
      - Modified `MEANINGFUL_USER_ACTIVITY` handler to check if agent is idle and enable resets/start timeout
@@ -121,6 +130,7 @@
      - Investigate why timeout isn't starting when `AGENT_STATE_CHANGED` with 'idle' and `PLAYBACK_STATE_CHANGED` with `isPlaying=false` both occur
      - May need to add a delayed check or ensure timeout starts in all code paths when conditions are met
      - Check if there's a race condition or timing issue preventing timeout from starting
+     - **Note**: This is a real bug that affects both proxy and non-proxy modes
 
 #### Category 8: Interim Transcript Validation (1 test)
 10. ✅ `interim-transcript-validation.spec.js:32:3` - "should receive both interim and final transcripts with fake audio"
