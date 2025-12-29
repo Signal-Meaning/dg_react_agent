@@ -71,20 +71,45 @@ wss.on('connection', (clientWs, req) => {
   // Pass API key via WebSocket protocol array: ['token', apiKey]
   const deepgramWs = new WebSocket(deepgramUrl.toString(), ['token', DEEPGRAM_API_KEY]);
 
+  // Queue messages from client until Deepgram connection is ready
+  const messageQueue = [];
+
   // Forward messages from client to Deepgram
   clientWs.on('message', (data, isBinary) => {
     if (deepgramWs.readyState === WebSocket.OPEN) {
-      console.log(`[Proxy] Client → Deepgram: ${isBinary ? 'binary' : 'text'} message`);
+      if (!isBinary) {
+        try {
+          const text = data.toString('utf8');
+          const parsed = JSON.parse(text);
+          console.log(`[Proxy] Client → Deepgram: ${parsed.type || 'unknown'} message`);
+        } catch (e) {
+          console.log(`[Proxy] Client → Deepgram: text message (not JSON)`);
+        }
+      } else {
+        console.log(`[Proxy] Client → Deepgram: binary message (${data.length} bytes)`);
+      }
       deepgramWs.send(data, { binary: isBinary });
     } else {
-      console.warn(`[Proxy] Deepgram not ready, dropping message`);
+      // Queue message until Deepgram connection is ready
+      console.log(`[Proxy] Deepgram not ready, queuing message`);
+      messageQueue.push({ data, isBinary });
     }
   });
 
   // Forward messages from Deepgram to client
   deepgramWs.on('message', (data, isBinary) => {
     if (clientWs.readyState === WebSocket.OPEN) {
-      console.log(`[Proxy] Deepgram → Client: ${isBinary ? 'binary' : 'text'} message`);
+      if (!isBinary) {
+        try {
+          const text = data.toString('utf8');
+          const parsed = JSON.parse(text);
+          console.log(`[Proxy] Deepgram → Client: ${parsed.type || 'unknown'} message`);
+        } catch (e) {
+          console.log(`[Proxy] Deepgram → Client: text message (not JSON)`);
+        }
+      } else {
+        console.log(`[Proxy] Deepgram → Client: binary message (${data.length} bytes)`);
+      }
       clientWs.send(data, { binary: isBinary });
     } else {
       console.warn(`[Proxy] Client not ready, dropping message`);
@@ -94,7 +119,22 @@ wss.on('connection', (clientWs, req) => {
   // Handle Deepgram connection open
   deepgramWs.on('open', () => {
     console.log(`[Proxy] Connected to Deepgram`);
-    // Forward any queued messages if needed
+    // Forward any queued messages now that connection is ready
+    while (messageQueue.length > 0) {
+      const { data, isBinary } = messageQueue.shift();
+      if (!isBinary) {
+        try {
+          const text = data.toString('utf8');
+          const parsed = JSON.parse(text);
+          console.log(`[Proxy] Client → Deepgram (queued): ${parsed.type || 'unknown'} message`);
+        } catch (e) {
+          console.log(`[Proxy] Client → Deepgram (queued): text message (not JSON)`);
+        }
+      } else {
+        console.log(`[Proxy] Client → Deepgram (queued): binary message (${data.length} bytes)`);
+      }
+      deepgramWs.send(data, { binary: isBinary });
+    }
   });
 
   // Handle Deepgram connection close
@@ -102,8 +142,13 @@ wss.on('connection', (clientWs, req) => {
     console.log(`[Proxy] Deepgram connection closed: ${code} ${reason}`);
     if (clientWs.readyState === WebSocket.OPEN) {
       // Ensure code is a valid WebSocket close code
-      const closeCode = typeof code === 'number' && code >= 1000 && code < 5000 ? code : 1000;
-      clientWs.close(closeCode, reason || 'Connection closed');
+      // 1005 (No Status Received) and 1006 (Abnormal Closure) cannot be sent
+      let closeCode = 1000; // Default to normal closure
+      if (typeof code === 'number' && code >= 1000 && code < 5000 && code !== 1005 && code !== 1006) {
+        closeCode = code;
+      }
+      const closeReason = Buffer.isBuffer(reason) ? reason.toString() : (reason || 'Connection closed');
+      clientWs.close(closeCode, closeReason);
     }
   });
 
@@ -120,8 +165,13 @@ wss.on('connection', (clientWs, req) => {
     console.log(`[Proxy] Client connection closed: ${code} ${reason}`);
     if (deepgramWs.readyState === WebSocket.OPEN) {
       // Ensure code is a valid WebSocket close code
-      const closeCode = typeof code === 'number' && code >= 1000 && code < 5000 ? code : 1000;
-      deepgramWs.close(closeCode, reason || 'Connection closed');
+      // 1005 (No Status Received) and 1006 (Abnormal Closure) cannot be sent
+      let closeCode = 1000; // Default to normal closure
+      if (typeof code === 'number' && code >= 1000 && code < 5000 && code !== 1005 && code !== 1006) {
+        closeCode = code;
+      }
+      const closeReason = Buffer.isBuffer(reason) ? reason.toString() : (reason || 'Connection closed');
+      deepgramWs.close(closeCode, closeReason);
     }
   });
 
