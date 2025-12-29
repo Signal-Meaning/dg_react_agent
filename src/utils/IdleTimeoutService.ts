@@ -87,7 +87,18 @@ export class IdleTimeoutService {
         this.currentState.agentState = event.state;
         // Log state to debug timeout not starting
         this.log(`AGENT_STATE_CHANGED: state=${event.state}, isPlaying=${this.currentState.isPlaying}, isUserSpeaking=${this.currentState.isUserSpeaking}`);
-        this.updateTimeoutBehavior();
+        // CRITICAL: If agent becomes idle and playback has stopped, ensure timeout starts
+        // This handles the case where AGENT_STATE_CHANGED with 'idle' arrives
+        // after PLAYBACK_STATE_CHANGED with isPlaying=false
+        if ((event.state === 'idle' || event.state === 'listening') && 
+            !this.currentState.isPlaying && 
+            !this.currentState.isUserSpeaking) {
+          // Agent is idle and playback stopped, so enable resets and start timeout
+          this.enableResetsAndUpdateBehavior();
+        } else {
+          // Normal update behavior
+          this.updateTimeoutBehavior();
+        }
         break;
         
       case 'PLAYBACK_STATE_CHANGED':
