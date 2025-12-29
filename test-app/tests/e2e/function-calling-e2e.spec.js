@@ -620,22 +620,11 @@ test.describe('Function Calling E2E Tests', () => {
     
     await setupTestPage(page);
     
-    // CRITICAL: Wait for React to compute memoizedAgentOptions with functions
-    // The component might receive agentOptions prop before useMemo recomputes
-    // We need to ensure functions are in agentOptions before starting connection
-    // Wait for the log that shows memoizedAgentOptions was computed with the correct functionType
-    console.log('🔍 Step 0: Waiting for memoizedAgentOptions to be computed with functions...');
-    await page.waitForFunction(() => {
-      // Check console logs for the memoizedAgentOptions computation
-      // We look for the log that shows functionType=minimal
-      const logs = window.consoleLogs || [];
-      return logs.some(log => 
-        log.includes('memoizedAgentOptions: enableFunctionCalling=true, functionType=minimal')
-      );
-    }, { timeout: 5000 }).catch(() => {
-      console.log('⚠️ Could not verify memoizedAgentOptions computation, proceeding anyway...');
-    });
-    await page.waitForTimeout(1000); // Extra time for React to re-render with updated agentOptions prop
+    // Wait for component to be ready (simpler than checking console logs)
+    console.log('🔍 Step 0: Waiting for component to be ready...');
+    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    // Give React time to compute memoizedAgentOptions and render
+    await page.waitForTimeout(2000);
     
     // Match manual test flow exactly:
     // Manual test shows: "Starting agent connection on text focus gesture"

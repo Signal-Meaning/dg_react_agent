@@ -99,25 +99,18 @@
      - Updated test to use window variables (`__DEEPGRAM_LAST_SETTINGS__`) as primary verification method
      - Made WebSocket capture optional/fallback only
    - **Verification**: Test passes, functions verified via window variables
-9. ❌ `function-calling-e2e.spec.js:512:3` - "should test minimal function definition for SettingsApplied issue"
-   - **Status**: In Progress - Page closure issue
-   - **Proxy-Specific**: ❌ **NO** - Test also fails without proxy mode (requires real API keys)
-   - **Root Cause**: Test page/browser context closing unexpectedly during execution (error: "Target page, context or browser has been closed")
-   - **Observations**: Error occurs at `page.waitForTimeout(1000)` after updating agentOptions
-   - **Antipatterns**: Complex timing with `waitForFunction` checking console logs, multiple retry loops
-   - **Next Steps**: 
-     - Investigate why page is closing - may be connection closure or error causing browser to close
-     - Simplify timing - wait for window variables instead of console logs
-     - Check if there's an error in the component that's causing the page to close
-10. ❌ `function-calling-e2e.spec.js:772:3` - "should test minimal function with explicit required array"
-   - **Status**: In Progress - SettingsApplied not received
-   - **Proxy-Specific**: ❌ **NO** - Test also fails without proxy mode (requires real API keys)
+9. ✅ `function-calling-e2e.spec.js:512:3` - "should test minimal function definition for SettingsApplied issue"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Proxy-Specific**: ❌ **NO** - Test passes without proxy mode (requires real API keys)
+   - **Root Cause**: Complex `waitForFunction` checking console logs was causing page closure issues
+   - **Solution**: Simplified test to wait for component to be ready instead of checking console logs
+   - **Verification**: Test passes, SettingsApplied received with minimal function
+10. ✅ `function-calling-e2e.spec.js:772:3` - "should test minimal function with explicit required array"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Proxy-Specific**: ❌ **NO** - Test passes without proxy mode (requires real API keys)
    - **Root Cause**: Settings sent twice causing "SETTINGS_ALREADY_APPLIED" error (React StrictMode issue)
-   - **Fix Applied**: Fixed Settings double-send issue (React StrictMode) - set flags immediately when Settings is sent
-   - **Next Steps**: 
-     - Re-run test to verify fix works
-     - Don't require SettingsApplied - verify functions were sent instead
-     - Use window variables for verification
+   - **Solution**: Fixed Settings double-send issue (React StrictMode) - set flags immediately when Settings is sent
+   - **Verification**: Test passes, SettingsApplied received with minimal-with-required function
 
 #### Category 7: Idle Timeout Behavior (1 test)
 9. ❌ `idle-timeout-behavior.spec.js:887:3` - "should restart timeout after USER_STOPPED_SPEAKING when agent is idle - reproduces Issue #262/#430"
