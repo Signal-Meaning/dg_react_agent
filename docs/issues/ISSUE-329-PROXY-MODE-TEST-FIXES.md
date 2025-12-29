@@ -260,6 +260,28 @@
 
 **Status**: ✅ Fixed - Combined with Fix #4 below
 
+### Fix #5: Settings Double-Send in React StrictMode (2025-01-29)
+
+**Problem**: Settings messages were being sent twice in React StrictMode, causing "SETTINGS_ALREADY_APPLIED" errors from Deepgram.
+
+**Root Cause**: 
+1. Component was setting `hasSentSettingsRef.current` and `windowWithGlobals.globalSettingsSent` flags only when `SettingsApplied` was received
+2. In React StrictMode, component unmounts and remounts before `SettingsApplied` is received
+3. Second mount checks flags (still false), sends Settings again, causing duplicate Settings error
+
+**Solution**: 
+1. Set flags immediately when Settings is successfully sent (not wait for SettingsApplied)
+2. This prevents React StrictMode from sending Settings twice when component remounts
+3. Flags are still checked in `SettingsApplied` handler to ensure they're set
+
+**Files Changed**:
+- `src/components/DeepgramVoiceInteraction/index.tsx` - Set flags immediately after successful sendJSON call
+- `test-app/tests/e2e/function-calling-e2e.spec.js` - Updated test #8 to use window variables as primary verification method
+
+**Verification**: 
+- ✅ Function calling test #8 passes (functions verified via window variables)
+- ✅ No more "SETTINGS_ALREADY_APPLIED" errors in function calling tests
+
 ### Fix #4: WebSocket Timing Issue for Settings Messages (2025-01-29)
 
 **Problem**: Settings messages were being sent before WebSocket was fully OPEN, causing `sendJSON` to return false and messages to never reach the proxy.
