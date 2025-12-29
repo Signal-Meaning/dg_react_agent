@@ -46,8 +46,6 @@ test-app/test-results/
 
 # Test log files
 *.log
-test-output.log
-test-run-summary.log
 
 test-app/.env*
 test-app/playwright-report/
