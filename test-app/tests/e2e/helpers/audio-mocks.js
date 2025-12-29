@@ -230,8 +230,10 @@ async function simulateSpeech(page, description = 'simulated speech', options = 
   
   if (useRealisticAudio) {
     // Use VAD Audio Simulator for realistic speech
-    const AudioSimulator = require('../../utils/audio-simulator');
-    await AudioSimulator.simulateSpeech(page, phrase, {
+    // Import dynamically to avoid require() in browser context
+    const vadAudioSimulatorModule = await import('../../utils/vad-audio-simulator.js');
+    const VADAudioSimulator = vadAudioSimulatorModule.default || vadAudioSimulatorModule.VADAudioSimulator || vadAudioSimulatorModule;
+    await VADAudioSimulator.simulateSpeechWithSilence(page, phrase, {
       silenceDuration: 1000,
       onsetSilence: 300
     });

@@ -948,8 +948,9 @@ test.describe('Idle Timeout Behavior', () => {
     console.log('✅ Initial timeout started');
     
     // Step 3: Simulate user starting to speak (this should stop the timeout)
+    // Use realistic audio so Deepgram can detect speech and send UserStartedSpeaking
     console.log('Step 3: Simulating user starting to speak...');
-    await simulateSpeech(page, 'test message');
+    await simulateSpeech(page, 'test message', { useRealisticAudio: true, phrase: 'Hello' });
     
     // Wait for timeout to be stopped (polling should detect isUserSpeaking=true and stop timeout)
     // Polling checks every 200ms, so wait a bit longer to ensure it catches the state change

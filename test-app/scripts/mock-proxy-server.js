@@ -276,6 +276,16 @@ wss.on('connection', (clientWs, req) => {
               deepgramReady: deepgramWs.readyState === WebSocket.OPEN
             }, 'E');
           }
+          
+          // Special logging for UserStartedSpeaking to debug idle timeout issue
+          if (messageType === 'UserStartedSpeaking') {
+            console.log(`[Proxy] 🎤 UserStartedSpeaking received from Deepgram, forwarding to client`);
+            debugLog('mock-proxy-server.js:194', 'UserStartedSpeaking received', { 
+              serviceType, 
+              clientReady: clientWs.readyState === WebSocket.OPEN,
+              deepgramReady: deepgramWs.readyState === WebSocket.OPEN
+            }, 'F');
+          }
         } catch (e) {
           console.log(`[Proxy] Deepgram → Client: text message (not JSON)`);
         }
