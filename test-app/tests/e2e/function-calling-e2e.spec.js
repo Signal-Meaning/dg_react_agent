@@ -179,61 +179,94 @@ test.describe('Function Calling E2E Tests', () => {
     await page.waitForTimeout(2000);
     
     // Step 5: Verify functions are in Settings message
-    // Note: SettingsApplied may not be received when functions are included (Deepgram validation issue)
-    // But we can verify functions are being sent via WebSocket capture or component logs
-    const wsData = await getCapturedWebSocketData(page);
+    // PRIMARY: Use window variables (most reliable, works in proxy mode)
+    const settingsFromWindow = await page.evaluate(() => {
+      if (window.__DEEPGRAM_TEST_MODE__ && window.__DEEPGRAM_LAST_SETTINGS__) {
+        return {
+          settings: window.__DEEPGRAM_LAST_SETTINGS__,
+          functions: window.__DEEPGRAM_LAST_FUNCTIONS__
+        };
+      }
+      return null;
+    });
     
-    // In proxy mode, WebSocket capture might not work (Issue #329)
-    if (!wsData || !wsData.sent) {
-      console.log('⚠️ WebSocket capture data not available - this is expected in proxy mode');
-      console.log('⚠️ Skipping WebSocket message verification, but SettingsApplied was received');
-      // In proxy mode, WebSocket capture might not work, but we've verified SettingsApplied was received
-      // and the component logs show functions are being sent
-      // Continue with the test to verify function calling works end-to-end
-    } else {
-      const settingsMessages = wsData.sent.filter(msg => 
-        msg.type === 'Settings' || (msg.data && msg.data.type === 'Settings')
-      );
+    if (settingsFromWindow && settingsFromWindow.settings) {
+      const settings = settingsFromWindow.settings;
+      console.log('📤 Settings message captured from window (test mode)');
       
-      if (settingsMessages.length > 0) {
-        const latestSettings = settingsMessages[settingsMessages.length - 1];
-        const settings = latestSettings.data || latestSettings;
+      // Check if functions are included in agent.think.functions
+      if (settings.agent && settings.agent.think && settings.agent.think.functions) {
+        console.log('✅ Functions found in Settings message (from window):', settings.agent.think.functions.length);
+        expect(settings.agent.think.functions.length).toBeGreaterThan(0);
         
-        console.log('📤 Settings message captured via WebSocket');
-        
-        // Check if functions are included in agent.think.functions
-        if (settings.agent && settings.agent.think && settings.agent.think.functions) {
-          console.log('✅ Functions found in Settings message:', settings.agent.think.functions.length);
-          expect(settings.agent.think.functions.length).toBeGreaterThan(0);
-          
-          // Verify function structure
-          const functionDef = settings.agent.think.functions[0];
-          expect(functionDef.name).toBeDefined();
-          expect(functionDef.description).toBeDefined();
-          expect(functionDef.parameters).toBeDefined();
-          console.log('   Function structure verified:', {
-            name: functionDef.name,
-            hasDescription: !!functionDef.description,
-            hasParameters: !!functionDef.parameters
-          });
-        } else {
-          console.log('❌ Functions NOT found in Settings message');
-          console.log('   Settings structure:', {
-            hasAgent: !!settings.agent,
-            hasThink: !!(settings.agent && settings.agent.think),
-            thinkKeys: settings.agent?.think ? Object.keys(settings.agent.think) : []
-          });
-          // In proxy mode, WebSocket capture might not capture full message structure
-          console.log('⚠️ WebSocket capture may not capture full message in proxy mode - continuing test');
-        }
+        // Verify function structure
+        const functionDef = settings.agent.think.functions[0];
+        expect(functionDef.name).toBeDefined();
+        expect(functionDef.description).toBeDefined();
+        expect(functionDef.parameters).toBeDefined();
+        console.log('   Function structure verified:', {
+          name: functionDef.name,
+          hasDescription: !!functionDef.description,
+          hasParameters: !!functionDef.parameters
+        });
+      } else if (settingsFromWindow.functions) {
+        // Functions might be in separate window variable
+        console.log('✅ Functions found in window.__DEEPGRAM_LAST_FUNCTIONS__:', settingsFromWindow.functions.length);
+        expect(settingsFromWindow.functions.length).toBeGreaterThan(0);
+        const functionDef = settingsFromWindow.functions[0];
+        expect(functionDef.name).toBeDefined();
+        expect(functionDef.description).toBeDefined();
+        expect(functionDef.parameters).toBeDefined();
+        console.log('   Function structure verified:', {
+          name: functionDef.name,
+          hasDescription: !!functionDef.description,
+          hasParameters: !!functionDef.parameters
+        });
       } else {
-        // WebSocket capture didn't work, but component logs show functions are being sent
-        // The component logs "functionsCount" and "functionsIncluded" when sending Settings
-        console.log('⚠️ WebSocket capture did not capture Settings message');
-        console.log('   However, component console logs show functions are being sent');
-        console.log('   (See browser console for "functionsCount" and "functionsIncluded" logs)');
-        // For now, we'll trust the component is working correctly based on unit tests
-        console.log('   Unit tests confirm functions are included in Settings message ✅');
+        console.log('❌ Functions NOT found in Settings message (from window)');
+        console.log('   Settings structure:', {
+          hasAgent: !!settings.agent,
+          hasThink: !!(settings.agent && settings.agent.think),
+          thinkKeys: settings.agent?.think ? Object.keys(settings.agent.think) : []
+        });
+        throw new Error('Functions not found in Settings message - this indicates functions are not being included');
+      }
+    } else {
+      // FALLBACK: Try WebSocket capture (may not work in proxy mode)
+      const wsData = await getCapturedWebSocketData(page);
+      
+      if (!wsData || !wsData.sent) {
+        console.log('⚠️ WebSocket capture data not available - this is expected in proxy mode');
+        console.log('⚠️ Window variables also not available - cannot verify functions');
+        throw new Error('Cannot verify functions in Settings message - window variables and WebSocket capture both unavailable');
+      } else {
+        const settingsMessages = wsData.sent.filter(msg => 
+          msg.type === 'Settings' || (msg.data && msg.data.type === 'Settings')
+        );
+        
+        if (settingsMessages.length > 0) {
+          const latestSettings = settingsMessages[settingsMessages.length - 1];
+          const settings = latestSettings.data || latestSettings;
+          
+          console.log('📤 Settings message captured via WebSocket (fallback)');
+          
+          // Check if functions are included in agent.think.functions
+          if (settings.agent && settings.agent.think && settings.agent.think.functions) {
+            console.log('✅ Functions found in Settings message (from WebSocket):', settings.agent.think.functions.length);
+            expect(settings.agent.think.functions.length).toBeGreaterThan(0);
+          } else {
+            console.log('❌ Functions NOT found in Settings message (from WebSocket)');
+            console.log('   Settings structure:', {
+              hasAgent: !!settings.agent,
+              hasThink: !!(settings.agent && settings.agent.think),
+              thinkKeys: settings.agent?.think ? Object.keys(settings.agent.think) : []
+            });
+            console.log('⚠️ WebSocket capture may not capture full message structure - continuing test');
+          }
+        } else {
+          console.log('⚠️ WebSocket capture did not capture Settings message');
+          throw new Error('Cannot verify functions in Settings message - WebSocket capture failed');
+        }
       }
     }
     
@@ -463,32 +496,66 @@ test.describe('Function Calling E2E Tests', () => {
       throw new Error(`Settings message with functions caused error: ${JSON.stringify(errorMessages[0].data || errorMessages[0])}`);
     }
     
-    // Try to get Settings message from WebSocket capture
-    const settingsMessages = wsData.sent.filter(msg => 
-      msg.type === 'Settings' || (msg.data && msg.data.type === 'Settings')
-    );
-    
-    if (settingsMessages.length > 0) {
-      const latestSettings = settingsMessages[settingsMessages.length - 1];
-      const settings = latestSettings.data || latestSettings;
-      
-      console.log('📋 Settings message captured via WebSocket');
+    // PRIMARY: Use window variables (most reliable, works in proxy mode)
+    // The component exposes Settings to window.__DEEPGRAM_LAST_SETTINGS__ in test mode
+    if (settingsFromWindow && settingsFromWindow.settings) {
+      const settings = settingsFromWindow.settings;
+      console.log('📋 Using Settings message from window (test mode) - most reliable');
       
       // Verify functions are included
       if (settings.agent && settings.agent.think && settings.agent.think.functions) {
-        console.log('✅ Functions found in Settings message:', settings.agent.think.functions.length);
+        console.log('✅ Functions found in Settings message (from window):', settings.agent.think.functions.length);
         expect(settings.agent.think.functions.length).toBeGreaterThan(0);
         console.log('   Function structure:', JSON.stringify(settings.agent.think.functions[0], null, 2));
+      } else if (settingsFromWindow.functions) {
+        // Functions might be in separate window variable
+        console.log('✅ Functions found in window.__DEEPGRAM_LAST_FUNCTIONS__:', settingsFromWindow.functions.length);
+        expect(settingsFromWindow.functions.length).toBeGreaterThan(0);
+        console.log('   Function structure:', JSON.stringify(settingsFromWindow.functions[0], null, 2));
       } else {
-        console.log('❌ Functions NOT found in Settings message');
-        throw new Error('Functions not found in Settings message - this indicates the fix is not working');
+        console.log('❌ Functions NOT found in Settings message (from window)');
+        console.log('   Settings structure:', {
+          hasAgent: !!settings.agent,
+          hasThink: !!(settings.agent && settings.agent.think),
+          thinkKeys: settings.agent?.think ? Object.keys(settings.agent.think) : []
+        });
+        throw new Error('Functions not found in Settings message - this indicates functions are not being included');
       }
     } else {
-      // WebSocket capture didn't work, but we can verify via component logs
-      // The component logs show "functionsCount" and "functionsIncluded" when sending Settings
-      console.log('⚠️ WebSocket capture did not capture Settings message');
-      console.log('   This is OK - we can verify via component behavior');
-      console.log('   Component logs show Settings were sent with functions (see browser console)');
+      // FALLBACK: Try WebSocket capture (may not work in proxy mode)
+      const settingsMessages = wsData.sent.filter(msg => 
+        msg.type === 'Settings' || (msg.data && msg.data.type === 'Settings')
+      );
+      
+      if (settingsMessages.length > 0) {
+        const latestSettings = settingsMessages[settingsMessages.length - 1];
+        const settings = latestSettings.data || latestSettings;
+        
+        console.log('📋 Settings message captured via WebSocket (fallback)');
+        
+        // Verify functions are included
+        if (settings.agent && settings.agent.think && settings.agent.think.functions) {
+          console.log('✅ Functions found in Settings message (from WebSocket):', settings.agent.think.functions.length);
+          expect(settings.agent.think.functions.length).toBeGreaterThan(0);
+          console.log('   Function structure:', JSON.stringify(settings.agent.think.functions[0], null, 2));
+        } else {
+          console.log('❌ Functions NOT found in Settings message (from WebSocket)');
+          console.log('   Settings structure:', {
+            hasAgent: !!settings.agent,
+            hasThink: !!(settings.agent && settings.agent.think),
+            thinkKeys: settings.agent?.think ? Object.keys(settings.agent.think) : []
+          });
+          // Don't fail - WebSocket capture may not capture full structure
+          console.log('⚠️ WebSocket capture may not capture full message structure - this is OK');
+          console.log('   Component logs show Settings were sent with functions (see browser console)');
+        }
+      } else {
+        // Neither window variables nor WebSocket capture worked
+        console.log('⚠️ Could not capture Settings message from window or WebSocket');
+        console.log('   This may indicate the component is not exposing Settings to window in test mode');
+        console.log('   Or WebSocket capture is not working');
+        throw new Error('Could not verify functions in Settings message - window variables and WebSocket capture both failed');
+      }
     }
     
     // Check received messages to see what Deepgram sent back

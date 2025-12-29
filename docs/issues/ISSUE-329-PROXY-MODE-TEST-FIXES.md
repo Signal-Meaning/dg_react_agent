@@ -75,50 +75,47 @@
 #### Category 6: Function Calling (4 tests)
 7. ❌ `function-calling-e2e.spec.js:65:3` - "should trigger client-side function call and execute it"
    - **Status**: In Progress - FunctionCallRequest timeout
-   - **Proxy-Specific**: ⚠️ **UNKNOWN** - Requires real API keys to test (uses `skipIfNoRealAPI`)
+   - **Proxy-Specific**: ❌ **NO** - Test also fails without proxy mode (requires real API keys)
    - **Root Cause**: SettingsApplied is received, but FunctionCallRequest from Deepgram is not arriving (test times out after 20 seconds)
-   - **Observations**: 
-     - Settings message is sent (verified in logs)
+   - **Observations** (with real API keys, no proxy mode): 
+     - Settings message is sent (verified via window variables)
      - SettingsApplied is received (verified in logs)
-     - Functions may not be in Settings message (WebSocket capture shows functions missing, but capture may be unreliable in proxy mode)
-     - FunctionCallRequest never arrives (test times out waiting)
-   - **Antipatterns**: Over-reliance on WebSocket capture, requires SettingsApplied
+     - Functions ARE included in Settings message (verified via window.__DEEPGRAM_LAST_SETTINGS__)
+     - FunctionCallRequest never arrives from Deepgram (test times out waiting)
+     - Error: "We waited too long for a websocket message. Please ensure that you send a 'Settings' message at the beginning of the session."
+   - **Fix Applied**: 
+     - Fixed Settings double-send issue (React StrictMode) - set flags immediately when Settings is sent
+     - Updated test to use window variables as primary verification method
    - **Next Steps**: 
-     - **First**: Verify test passes without proxy mode using real API keys
-     - Switch to window variables (`__DEEPGRAM_LAST_SETTINGS__`) for verification instead of WebSocket capture
-     - Verify functions are actually included in Settings message sent to Deepgram (check proxy logs)
-     - Investigate if proxy is correctly forwarding FunctionCallRequest messages from Deepgram
-     - Check if Deepgram is sending FunctionCallRequest (may need to verify function definitions are valid)
-8. ❌ `function-calling-e2e.spec.js:308:3` - "should verify functions are included in Settings message"
-   - **Status**: In Progress - Functions not found in Settings message
-   - **Proxy-Specific**: ⚠️ **UNKNOWN** - Requires real API keys to test (uses `skipIfNoRealAPI`)
-   - **Root Cause**: WebSocket capture doesn't work in proxy mode, and window variables may not be set
-   - **Observations**: Test uses URL parameters (best practice) but still relies on WebSocket capture
-   - **Antipatterns**: Complex console log parsing, over-reliance on WebSocket capture
-   - **Next Steps**: 
-     - **First**: Verify test passes without proxy mode using real API keys
-     - Use window variables as primary verification method
-     - Make WebSocket capture optional/fallback only
-     - Verify component exposes Settings to window in test mode
+     - Investigate why Deepgram is not sending FunctionCallRequest - may be API issue or function definition issue
+     - Check if user message "What time is it?" is being sent correctly
+     - Verify function definition matches Deepgram API requirements
+8. ✅ `function-calling-e2e.spec.js:308:3` - "should verify functions are included in Settings message"
+   - **Status**: ✅ **FIXED** - 2025-01-29
+   - **Proxy-Specific**: ❌ **NO** - Test passes without proxy mode (requires real API keys)
+   - **Root Cause**: Test was using WebSocket capture which doesn't work reliably, and wasn't checking window variables first
+   - **Solution**: 
+     - Fixed Settings double-send issue (React StrictMode) - set flags immediately when Settings is sent
+     - Updated test to use window variables (`__DEEPGRAM_LAST_SETTINGS__`) as primary verification method
+     - Made WebSocket capture optional/fallback only
+   - **Verification**: Test passes, functions verified via window variables
 9. ❌ `function-calling-e2e.spec.js:512:3` - "should test minimal function definition for SettingsApplied issue"
    - **Status**: In Progress - Page closure issue
-   - **Proxy-Specific**: ⚠️ **UNKNOWN** - Requires real API keys to test (uses `skipIfNoRealAPI`)
+   - **Proxy-Specific**: ❌ **NO** - Test also fails without proxy mode (requires real API keys)
    - **Root Cause**: Test page/browser context closing unexpectedly during execution (error: "Target page, context or browser has been closed")
    - **Observations**: Error occurs at `page.waitForTimeout(1000)` after updating agentOptions
    - **Antipatterns**: Complex timing with `waitForFunction` checking console logs, multiple retry loops
    - **Next Steps**: 
-     - **First**: Verify test passes without proxy mode using real API keys
      - Investigate why page is closing - may be connection closure or error causing browser to close
      - Simplify timing - wait for window variables instead of console logs
      - Check if there's an error in the component that's causing the page to close
 10. ❌ `function-calling-e2e.spec.js:772:3` - "should test minimal function with explicit required array"
    - **Status**: In Progress - SettingsApplied not received
-   - **Proxy-Specific**: ⚠️ **UNKNOWN** - Requires real API keys to test (uses `skipIfNoRealAPI`)
-   - **Root Cause**: Similar to test #9 - SettingsApplied not received, may be Deepgram rejecting Settings
-   - **Observations**: Tests edge case (explicit required array)
-   - **Antipatterns**: Similar to test #9
+   - **Proxy-Specific**: ❌ **NO** - Test also fails without proxy mode (requires real API keys)
+   - **Root Cause**: Settings sent twice causing "SETTINGS_ALREADY_APPLIED" error (React StrictMode issue)
+   - **Fix Applied**: Fixed Settings double-send issue (React StrictMode) - set flags immediately when Settings is sent
    - **Next Steps**: 
-     - **First**: Verify test passes without proxy mode using real API keys
+     - Re-run test to verify fix works
      - Don't require SettingsApplied - verify functions were sent instead
      - Use window variables for verification
 

@@ -1946,6 +1946,14 @@ function DeepgramVoiceInteraction(
     
     const sendResult = agentManagerRef.current.sendJSON(settingsMessage);
     if (sendResult) {
+      // CRITICAL FIX: Set flags immediately when Settings is sent (not wait for SettingsApplied)
+      // This prevents React StrictMode from sending Settings twice when component remounts
+      // before SettingsApplied is received
+      hasSentSettingsRef.current = true;
+      windowWithGlobals.globalSettingsSent = true;
+      if (debug) {
+        console.log('🔧 [sendAgentSettings] Flags set immediately after successful send (StrictMode protection)');
+      }
       console.log('📤 [Protocol] Settings message sent successfully (sendJSON returned true)');
     } else {
       console.error('❌ [Protocol] Settings message send FAILED (sendJSON returned false)');
