@@ -16,9 +16,9 @@
  *   - PROXY_PATH: WebSocket path (default: /deepgram-proxy)
  */
 
-const WebSocket = require('ws');
-const http = require('http');
-const url = require('url');
+import { WebSocket, WebSocketServer } from 'ws';
+import http from 'http';
+import url from 'url';
 
 // Configuration
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
@@ -36,7 +36,7 @@ if (!DEEPGRAM_API_KEY) {
 const server = http.createServer();
 
 // Create WebSocket server
-const wss = new WebSocket.Server({ 
+const wss = new WebSocketServer({ 
   server,
   path: PROXY_PATH,
   verifyClient: (info) => {
@@ -64,11 +64,12 @@ wss.on('connection', (clientWs, req) => {
   const authToken = parsedUrl.query.token;
 
   // Create connection to Deepgram
+  // Deepgram Voice Agent API requires API key via WebSocket protocol, not query params
   const deepgramUrl = new URL(DEEPGRAM_AGENT_URL);
-  deepgramUrl.searchParams.append('api_key', DEEPGRAM_API_KEY);
 
   console.log(`[Proxy] Connecting to Deepgram...`);
-  const deepgramWs = new WebSocket(deepgramUrl.toString());
+  // Pass API key via WebSocket protocol array: ['token', apiKey]
+  const deepgramWs = new WebSocket(deepgramUrl.toString(), ['token', DEEPGRAM_API_KEY]);
 
   // Forward messages from client to Deepgram
   clientWs.on('message', (data, isBinary) => {
@@ -100,7 +101,9 @@ wss.on('connection', (clientWs, req) => {
   deepgramWs.on('close', (code, reason) => {
     console.log(`[Proxy] Deepgram connection closed: ${code} ${reason}`);
     if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.close(code, reason);
+      // Ensure code is a valid WebSocket close code
+      const closeCode = typeof code === 'number' && code >= 1000 && code < 5000 ? code : 1000;
+      clientWs.close(closeCode, reason || 'Connection closed');
     }
   });
 
@@ -116,7 +119,9 @@ wss.on('connection', (clientWs, req) => {
   clientWs.on('close', (code, reason) => {
     console.log(`[Proxy] Client connection closed: ${code} ${reason}`);
     if (deepgramWs.readyState === WebSocket.OPEN) {
-      deepgramWs.close();
+      // Ensure code is a valid WebSocket close code
+      const closeCode = typeof code === 'number' && code >= 1000 && code < 5000 ? code : 1000;
+      deepgramWs.close(closeCode, reason || 'Connection closed');
     }
   });
 
