@@ -204,13 +204,25 @@ export class WebSocketManager {
         // Determine if we're in proxy mode (no API key)
         const isProxyMode = !this.options.apiKey || this.options.apiKey === '';
         
+        if (this.options.debug) {
+          console.log(`🔌 [WebSocketManager.connect] URL: ${url}`);
+          console.log(`🔌 [WebSocketManager.connect] Is proxy mode: ${isProxyMode}`);
+          console.log(`🔌 [WebSocketManager.connect] Service: ${this.options.service}`);
+        }
+        
         // Create WebSocket
         // In direct mode: use token protocol with API key
         // In proxy mode: connect without token protocol (backend handles auth)
         if (isProxyMode) {
           this.ws = new WebSocket(url);
+          if (this.options.debug) {
+            console.log(`🔌 [WebSocketManager.connect] Created WebSocket without token protocol (proxy mode)`);
+          }
         } else {
           this.ws = new WebSocket(url, ['token', this.options.apiKey || '']);
+          if (this.options.debug) {
+            console.log(`🔌 [WebSocketManager.connect] Created WebSocket with token protocol (direct mode)`);
+          }
         }
         
         // Log socket readyState
@@ -640,8 +652,29 @@ export class WebSocketManager {
    * Sends a JSON message over the WebSocket
    */
   public sendJSON(data: unknown): boolean {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      this.log('Cannot send message, WebSocket not open');
+    const dataType = data && typeof data === 'object' && 'type' in data ? (data as { type: string }).type : 'unknown';
+    
+    if (!this.ws) {
+      this.log(`❌ Cannot send ${dataType} message, WebSocket is null`);
+      if (dataType === 'Settings') {
+        console.error(`[WebSocketManager.sendJSON] ❌ CRITICAL: Settings - WebSocket is null`);
+        console.error(`[WebSocketManager.sendJSON] URL: ${this.options.url}, Service: ${this.options.service}`);
+      }
+      return false;
+    }
+    
+    const wsState = this.ws.readyState;
+    const wsStateName = wsState === 0 ? 'CONNECTING' : wsState === 1 ? 'OPEN' : wsState === 2 ? 'CLOSING' : wsState === 3 ? 'CLOSED' : 'UNKNOWN';
+    
+    if (wsState !== 1) { // WebSocket.OPEN = 1
+      this.log(`❌ Cannot send ${dataType} message, WebSocket not open (state: ${wsState} ${wsStateName})`);
+      if (dataType === 'Settings') {
+        console.error(`[WebSocketManager.sendJSON] ❌ CRITICAL: Settings message cannot be sent`);
+        console.error(`[WebSocketManager.sendJSON] WebSocket state: ${wsState} (${wsStateName})`);
+        console.error(`[WebSocketManager.sendJSON] WebSocket URL: ${this.options.url}`);
+        console.error(`[WebSocketManager.sendJSON] WebSocket object:`, this.ws);
+        console.error(`[WebSocketManager.sendJSON] WebSocket readyState property:`, this.ws.readyState);
+      }
       return false;
     }
     

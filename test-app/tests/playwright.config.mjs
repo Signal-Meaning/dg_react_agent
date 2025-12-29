@@ -25,7 +25,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: [
-    ['html', { outputFolder: '../playwright-report' }],
+    ['html', { outputFolder: '../playwright-report', open: 'never' }],
     ['json', { outputFile: '../test-results/results.json' }],
     ['junit', { outputFile: '../test-results/results.xml' }]
   ],
@@ -102,8 +102,10 @@ export default defineConfig({
       port: 8080, // Proxy server port
       reuseExistingServer: true,
       timeout: 10000,
-      stdout: process.env.CI ? 'pipe' : 'ignore',
-      stderr: process.env.CI ? 'pipe' : 'ignore',
+      // Show proxy server logs for debugging Issue #329
+      // In CI, pipe to capture logs. Locally, show logs to help debug proxy mode issues
+      stdout: 'pipe',
+      stderr: 'pipe',
       env: {
         DEEPGRAM_API_KEY: process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY || '',
         PROXY_PORT: '8080',

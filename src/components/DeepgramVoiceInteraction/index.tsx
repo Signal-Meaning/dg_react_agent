@@ -636,6 +636,31 @@ function DeepgramVoiceInteraction(
             dispatch({ type: 'CONNECTION_STATE_CHANGE', service: 'transcription', state: event.state });
             onConnectionStateChange?.('transcription', event.state);
             lastConnectionStates.current.transcription = event.state;
+            
+            // Issue #329: Send small keepalive audio to transcription service immediately after connection
+            // to prevent timeout (Deepgram requires audio within timeout window)
+            if (event.state === 'connected' && transcriptionManagerRef.current) {
+              // Create a small silent audio buffer (160 samples = 10ms at 16kHz) to keep connection alive
+              // This prevents "Deepgram did not receive audio data" timeout error
+              const keepaliveBuffer = new ArrayBuffer(320); // 160 samples * 2 bytes (16-bit PCM)
+              const view = new Int16Array(keepaliveBuffer);
+              // Fill with silence (zero samples)
+              view.fill(0);
+              
+              if (config.debug) {
+                console.log('🔧 [TRANSCRIPTION] Sending keepalive audio to prevent timeout');
+              }
+              
+              // Send keepalive immediately after connection
+              setTimeout(() => {
+                if (transcriptionManagerRef.current?.getState() === 'connected') {
+                  transcriptionManagerRef.current.sendBinary(keepaliveBuffer);
+                  if (config.debug) {
+                    console.log('🔧 [TRANSCRIPTION] Keepalive audio sent');
+                  }
+                }
+              }, 100); // Small delay to ensure connection is fully ready
+            }
           } else {
             if (config.debug) {
               console.log('🔧 [DEBUG] Transcription state unchanged, skipping:', event.state);
@@ -682,6 +707,14 @@ function DeepgramVoiceInteraction(
       // Create Agent WebSocket manager
       // Add service type to query params for proxy routing
       const agentQueryParams = { service: 'agent' };
+      
+      if (config.debug) {
+        console.log('🔧 [AGENT] Creating WebSocketManager with URL:', finalAgentUrl);
+        console.log('🔧 [AGENT] Connection mode:', config.connectionMode);
+        console.log('🔧 [AGENT] Proxy endpoint:', config.proxyEndpoint);
+        console.log('🔧 [AGENT] API key present:', !!connectionOptions.apiKey);
+        console.log('🔧 [AGENT] Auth token present:', !!connectionOptions.authToken);
+      }
       
       const manager = new WebSocketManager({
         url: finalAgentUrl,
@@ -779,11 +812,68 @@ function DeepgramVoiceInteraction(
           }
           
           // Send settings message when connection is established
-          if (event.state === 'connected' && !hasSentSettingsRef.current && !windowWithGlobals.globalSettingsSent) {
-            log('Connection established, sending settings via connection state handler');
-            sendAgentSettings();
-          } else if (event.state === 'connected' && state.hasSentSettings) {
-            log('Connection established but settings already sent, skipping');
+          if (event.state === 'connected') {
+            if (config.debug) {
+              console.log('🔧 [Connection State] Agent connected, checking if Settings should be sent:', {
+                hasSentSettingsRef: hasSentSettingsRef.current,
+                globalSettingsSent: windowWithGlobals.globalSettingsSent,
+                stateHasSentSettings: state.hasSentSettings,
+                shouldSend: !hasSentSettingsRef.current && !windowWithGlobals.globalSettingsSent
+              });
+            }
+            if (!hasSentSettingsRef.current && !windowWithGlobals.globalSettingsSent) {
+              log('Connection established, sending settings via connection state handler');
+              if (config.debug) {
+                console.log('🔧 [Connection State] ✅ Will send Settings after WebSocket is fully open');
+              }
+              // Wait for WebSocket to be fully OPEN before sending Settings (Issue #329)
+              // React StrictMode can cause timing issues where state is 'connected' but WebSocket isn't fully OPEN yet
+              const checkAndSend = () => {
+                const wsManager = agentManagerRef.current as any;
+                const wsState = wsManager?.ws?.readyState;
+                const wsStateName = wsState === 0 ? 'CONNECTING' : 
+                                    wsState === 1 ? 'OPEN' : 
+                                    wsState === 2 ? 'CLOSING' : 
+                                    wsState === 3 ? 'CLOSED' : 'UNKNOWN';
+                
+                if (config.debug) {
+                  console.log('🔧 [Connection State] Checking WebSocket state:', wsState, `(${wsStateName})`);
+                }
+                
+                if (wsState === 1) { // OPEN
+                  if (config.debug) {
+                    console.log('🔧 [Connection State] WebSocket is OPEN, sending Settings');
+                  }
+                  sendAgentSettings();
+                } else if (wsState === 0) { // CONNECTING
+                  // Still connecting, wait a bit more
+                  if (config.debug) {
+                    console.log('🔧 [Connection State] WebSocket still CONNECTING, will retry');
+                  }
+                  setTimeout(checkAndSend, 50);
+                } else {
+                  // CLOSING or CLOSED - connection is gone, can't send Settings
+                  if (config.debug) {
+                    console.error('🔧 [Connection State] WebSocket is', wsStateName, '- cannot send Settings');
+                  }
+                }
+              };
+              
+              // Start checking after a small delay to allow WebSocket to transition to OPEN
+              setTimeout(checkAndSend, 50);
+            } else if (state.hasSentSettings) {
+              log('Connection established but settings already sent, skipping');
+              if (config.debug) {
+                console.log('🔧 [Connection State] ⚠️ Settings already sent, skipping');
+              }
+            } else {
+              if (config.debug) {
+                console.log('🔧 [Connection State] ⚠️ Settings not sent - blocked by flags:', {
+                  hasSentSettingsRef: hasSentSettingsRef.current,
+                  globalSettingsSent: windowWithGlobals.globalSettingsSent
+                });
+              }
+            }
           }
         } else if (event.type === 'message') {
           handleAgentMessage(event.data);
@@ -1755,9 +1845,40 @@ function DeepgramVoiceInteraction(
     console.log('📤 [Component] About to call agentManagerRef.current.sendJSON with Settings message');
     console.log('📤 [Component] Settings message type:', settingsMessage.type);
     console.log('📤 [Component] Has functions?', !!(settingsMessage.agent?.think?.functions));
+    console.log('📤 [Component] WebSocketManager exists?', !!agentManagerRef.current);
+    console.log('📤 [Component] WebSocket URL:', agentManagerRef.current ? (agentManagerRef.current as any).options?.url : 'N/A');
     
-    agentManagerRef.current.sendJSON(settingsMessage);
-    console.log('📤 [Protocol] Settings message sent successfully');
+    // Check WebSocket state directly from manager before sending
+    const wsManager = agentManagerRef.current as any;
+    const ws = wsManager?.ws;
+    const wsState = ws?.readyState;
+    // WebSocket readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+    const wsStateName = wsState === 0 ? 'CONNECTING' : 
+                        wsState === 1 ? 'OPEN' : 
+                        wsState === 2 ? 'CLOSING' : 
+                        wsState === 3 ? 'CLOSED' : 'UNKNOWN';
+    console.log('📤 [Component] Before sendJSON call:');
+    console.log('📤 [Component] - agentManagerRef.current exists?', !!agentManagerRef.current);
+    console.log('📤 [Component] - WebSocket exists?', !!ws);
+    console.log('📤 [Component] - WebSocket readyState:', wsState, `(${wsStateName})`);
+    console.log('📤 [Component] - WebSocket URL:', ws?.url || 'N/A');
+    
+    // Only send if WebSocket is actually OPEN
+    if (!ws || wsState !== 1) {
+      console.error('❌ [Protocol] Cannot send Settings - WebSocket not OPEN');
+      console.error('❌ [Protocol] WebSocket state:', wsState, `(${wsStateName})`);
+      return; // Don't mark as sent if we can't actually send
+    }
+    
+    const sendResult = agentManagerRef.current.sendJSON(settingsMessage);
+    if (sendResult) {
+      console.log('📤 [Protocol] Settings message sent successfully (sendJSON returned true)');
+    } else {
+      console.error('❌ [Protocol] Settings message send FAILED (sendJSON returned false)');
+      console.error('❌ [Protocol] WebSocket state at send time:', wsState, `(${wsStateName})`);
+      console.error('❌ [Protocol] This means the WebSocket is not open or not available');
+      return; // Don't mark as sent if send failed
+    }
     
     // Mark settings as sent for welcome-first behavior
     dispatch({ type: 'SETTINGS_SENT', sent: true });

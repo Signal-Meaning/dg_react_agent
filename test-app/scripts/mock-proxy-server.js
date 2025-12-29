@@ -84,6 +84,37 @@ console.log(`   API Key: ${DEEPGRAM_API_KEY.substring(0, 10)}...`);
 wss.on('connection', (clientWs, req) => {
   const clientIp = req.socket.remoteAddress;
   console.log(`[Proxy] New client connection from ${clientIp}`);
+  
+  // Queue messages from Deepgram until client connection is ready (Issue #329)
+  // This prevents critical messages like SettingsApplied from being dropped
+  const deepgramMessageQueue = [];
+  
+  // Helper function to forward queued Deepgram messages when client is ready
+  const forwardQueuedDeepgramMessages = () => {
+    if (clientWs.readyState === WebSocket.OPEN && deepgramMessageQueue.length > 0) {
+      console.log(`[Proxy] Forwarding ${deepgramMessageQueue.length} queued messages from Deepgram to client`);
+      while (deepgramMessageQueue.length > 0) {
+        const { data, isBinary } = deepgramMessageQueue.shift();
+        if (!isBinary) {
+          try {
+            const text = data.toString('utf8');
+            const parsed = JSON.parse(text);
+            const messageType = parsed.type || 'unknown';
+            console.log(`[Proxy] Deepgram → Client (queued): ${messageType} message`);
+            
+            if (messageType === 'SettingsApplied') {
+              console.log(`[Proxy] ✅ SettingsApplied forwarded from queue`);
+            }
+          } catch (e) {
+            console.log(`[Proxy] Deepgram → Client (queued): text message (not JSON)`);
+          }
+        } else {
+          console.log(`[Proxy] Deepgram → Client (queued): binary message (${data.length} bytes)`);
+        }
+        clientWs.send(data, { binary: isBinary });
+      }
+    }
+  };
 
   // #region debug log - connection received
   console.log(`[DEBUG] Connection received from ${clientIp}, URL: ${req.url}`);
@@ -164,12 +195,42 @@ wss.on('connection', (clientWs, req) => {
 
   // Forward messages from client to Deepgram
   clientWs.on('message', (data, isBinary) => {
+    // Always log Settings messages, even if connection is closing
+    if (!isBinary) {
+      try {
+        const text = data.toString('utf8');
+        const parsed = JSON.parse(text);
+        const messageType = parsed.type || 'unknown';
+        
+        // Special logging for Settings messages (Issue #329)
+        if (messageType === 'Settings') {
+          console.log(`[Proxy] 📤 Settings message received from client!`);
+          console.log(`[Proxy] 📤 Client state: ${clientWs.readyState}, Deepgram state: ${deepgramWs.readyState}`);
+          debugLog('mock-proxy-server.js:200', 'Settings received from client', { 
+            serviceType,
+            clientState: clientWs.readyState,
+            deepgramState: deepgramWs.readyState,
+            hasFunctions: parsed.agent?.think?.functions?.length > 0,
+            functionsCount: parsed.agent?.think?.functions?.length || 0
+          }, 'G');
+        }
+      } catch (e) {
+        // Not JSON, ignore
+      }
+    }
+    
     if (deepgramWs.readyState === WebSocket.OPEN) {
       if (!isBinary) {
         try {
           const text = data.toString('utf8');
           const parsed = JSON.parse(text);
-          console.log(`[Proxy] Client → Deepgram: ${parsed.type || 'unknown'} message`);
+          const messageType = parsed.type || 'unknown';
+          console.log(`[Proxy] Client → Deepgram: ${messageType} message`);
+          
+          // Special logging for Settings messages (Issue #329)
+          if (messageType === 'Settings') {
+            console.log(`[Proxy] 📤 Settings message forwarded to Deepgram`);
+          }
         } catch (e) {
           console.log(`[Proxy] Client → Deepgram: text message (not JSON)`);
         }
@@ -179,28 +240,85 @@ wss.on('connection', (clientWs, req) => {
       deepgramWs.send(data, { binary: isBinary });
     } else {
       // Queue message until Deepgram connection is ready
-      console.log(`[Proxy] Deepgram not ready, queuing message`);
+      const messageType = !isBinary ? (() => {
+        try {
+          const parsed = JSON.parse(data.toString('utf8'));
+          return parsed.type || 'unknown';
+        } catch {
+          return 'unknown';
+        }
+      })() : 'binary';
+      console.log(`[Proxy] Deepgram not ready (state: ${deepgramWs.readyState}), queuing ${messageType} message`);
+      if (messageType === 'Settings') {
+        console.log(`[Proxy] ⚠️ Settings message queued (Deepgram not ready yet)`);
+      }
       messageQueue.push({ data, isBinary });
     }
   });
 
   // Forward messages from Deepgram to client
   deepgramWs.on('message', (data, isBinary) => {
+    // Try to forward immediately if client is ready
     if (clientWs.readyState === WebSocket.OPEN) {
       if (!isBinary) {
         try {
           const text = data.toString('utf8');
           const parsed = JSON.parse(text);
-          console.log(`[Proxy] Deepgram → Client: ${parsed.type || 'unknown'} message`);
+          const messageType = parsed.type || 'unknown';
+          console.log(`[Proxy] Deepgram → Client: ${messageType} message`);
+          
+          // Special logging for SettingsApplied to debug issue #329
+          if (messageType === 'SettingsApplied') {
+            console.log(`[Proxy] ✅ SettingsApplied received from Deepgram, forwarding to client`);
+            debugLog('mock-proxy-server.js:194', 'SettingsApplied received', { 
+              serviceType, 
+              clientReady: clientWs.readyState === WebSocket.OPEN,
+              deepgramReady: deepgramWs.readyState === WebSocket.OPEN
+            }, 'E');
+          }
         } catch (e) {
           console.log(`[Proxy] Deepgram → Client: text message (not JSON)`);
         }
       } else {
         console.log(`[Proxy] Deepgram → Client: binary message (${data.length} bytes)`);
       }
-      clientWs.send(data, { binary: isBinary });
+      
+      try {
+        clientWs.send(data, { binary: isBinary });
+      } catch (error) {
+        console.error(`[Proxy] Error sending message to client:`, error);
+        // If send fails, queue the message to retry later
+        deepgramMessageQueue.push({ data, isBinary });
+      }
     } else {
-      console.warn(`[Proxy] Client not ready, dropping message`);
+      // Queue message until client connection is ready (Issue #329 fix)
+      // This prevents critical messages like SettingsApplied from being dropped
+      const messageType = !isBinary ? (() => {
+        try {
+          const parsed = JSON.parse(data.toString('utf8'));
+          return parsed.type || 'unknown';
+        } catch {
+          return 'unknown';
+        }
+      })() : 'binary';
+      console.log(`[Proxy] Client not ready (state: ${clientWs.readyState}), queuing ${messageType} message`);
+      deepgramMessageQueue.push({ data, isBinary });
+      
+      // Special logging for SettingsApplied
+      if (messageType === 'SettingsApplied') {
+        console.log(`[Proxy] ⚠️ SettingsApplied queued (client not ready yet, will forward when ready)`);
+        debugLog('mock-proxy-server.js:203', 'SettingsApplied queued', { 
+          serviceType,
+          clientState: clientWs.readyState,
+          queuedMessages: deepgramMessageQueue.length
+        }, 'F');
+      }
+      
+      // Try to forward queued messages periodically in case client becomes ready
+      // This handles edge cases where client state might change
+      setTimeout(() => {
+        forwardQueuedDeepgramMessages();
+      }, 100);
     }
   });
 
@@ -210,7 +328,7 @@ wss.on('connection', (clientWs, req) => {
     debugLog('mock-proxy-server.js:120', 'Deepgram connection opened', { serviceType, targetUrl: targetDeepgramUrl, queuedMessages: messageQueue.length }, 'A');
     // #endregion
     console.log(`[Proxy] Connected to Deepgram ${serviceType} service`);
-    // Forward any queued messages now that connection is ready
+    // Forward any queued messages from client to Deepgram now that connection is ready
     while (messageQueue.length > 0) {
       const { data, isBinary } = messageQueue.shift();
       if (!isBinary) {
@@ -226,6 +344,10 @@ wss.on('connection', (clientWs, req) => {
       }
       deepgramWs.send(data, { binary: isBinary });
     }
+    
+    // Also forward any queued messages from Deepgram to client (Issue #329)
+    // This handles the case where Deepgram messages arrived before client was ready
+    forwardQueuedDeepgramMessages();
   });
 
   // Handle Deepgram connection close
@@ -259,7 +381,15 @@ wss.on('connection', (clientWs, req) => {
 
   // Handle client connection close
   clientWs.on('close', (code, reason) => {
-    console.log(`[Proxy] Client connection closed: ${code} ${reason}`);
+    console.log(`[Proxy] Client connection closed: ${code} ${reason || ''}`);
+    console.log(`[Proxy] Client connection closed - messages sent to Deepgram: ${messageQueue.length} queued, messages received from Deepgram: ${deepgramMessageQueue.length} queued`);
+    debugLog('mock-proxy-server.js:close', 'Client connection closed', { 
+      serviceType,
+      code,
+      reason: reason?.toString(),
+      queuedToDeepgram: messageQueue.length,
+      queuedFromDeepgram: deepgramMessageQueue.length
+    }, 'H');
     if (deepgramWs.readyState === WebSocket.OPEN) {
       // Ensure code is a valid WebSocket close code
       // 1005 (No Status Received) and 1006 (Abnormal Closure) cannot be sent
