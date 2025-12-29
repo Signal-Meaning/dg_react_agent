@@ -122,7 +122,11 @@
      - Modified `PLAYBACK_STATE_CHANGED` handler to check if playback stopped and agent is idle, then enable resets/start timeout
      - **NEW**: Modified `AGENT_STATE_CHANGED` handler to check if agent becomes idle and playback has stopped, then enable resets/start timeout (fixes race condition)
      - Added detailed logging to track state transitions
-   - **Current Issue**: Test waits for DOM to show agent is idle and audio is not playing, but events may not be arriving at IdleTimeoutService, or events are arriving in wrong order. The fix should handle both cases, but test still failing - may need additional investigation.
+   - **Current Issue**: Test waits for DOM to show agent is idle and audio is not playing, but events (`PLAYBACK_STATE_CHANGED` with `isPlaying=false` and `AGENT_STATE_CHANGED` with `state=idle`) are not arriving at IdleTimeoutService. The component dispatches state changes when playback stops, but the useEffect in `useIdleTimeoutManager` may not be firing due to React batching or timing issues.
+   - **Fix Attempted (Latest)**: 
+     - Added delayed check in `updateTimeoutBehavior()` using `setTimeout` to ensure timeout starts after all state updates are processed
+     - Added debug logging to `useIdleTimeoutManager` to track state changes
+     - Still investigating why events aren't reaching IdleTimeoutService when DOM shows state has changed
    - **Next Steps**: 
      - Investigate why timeout isn't starting when `AGENT_STATE_CHANGED` with 'idle' and `PLAYBACK_STATE_CHANGED` with `isPlaying=false` both occur
      - May need to add a delayed check or ensure timeout starts in all code paths when conditions are met

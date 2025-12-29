@@ -98,15 +98,32 @@ export function useIdleTimeoutManager(
       isPlaying: prevStateRef.current.isPlaying,
     };
 
+    // Debug logging to track state changes
+    if (debug) {
+      console.log('[useIdleTimeoutManager] State change detected:', {
+        prev: prevState,
+        current: currentState,
+        agentStateChanged: currentState.agentState !== prevState.agentState,
+        isPlayingChanged: currentState.isPlaying !== prevState.isPlaying,
+        isUserSpeakingChanged: currentState.isUserSpeaking !== prevState.isUserSpeaking
+      });
+    }
+
     // Emit events for state changes
     if (currentState.isUserSpeaking !== prevState.isUserSpeaking) {
       const event: IdleTimeoutEvent = currentState.isUserSpeaking 
         ? { type: 'USER_STARTED_SPEAKING' }
         : { type: 'USER_STOPPED_SPEAKING' };
+      if (debug) {
+        console.log('[useIdleTimeoutManager] Emitting USER_STARTED/STOPPED_SPEAKING event');
+      }
       serviceRef.current.handleEvent(event);
     }
 
     if (currentState.agentState !== prevState.agentState) {
+      if (debug) {
+        console.log(`[useIdleTimeoutManager] Emitting AGENT_STATE_CHANGED: ${prevState.agentState} -> ${currentState.agentState}`);
+      }
       serviceRef.current.handleEvent({ 
         type: 'AGENT_STATE_CHANGED', 
         state: currentState.agentState 
@@ -114,6 +131,9 @@ export function useIdleTimeoutManager(
     }
 
     if (currentState.isPlaying !== prevState.isPlaying) {
+      if (debug) {
+        console.log(`[useIdleTimeoutManager] Emitting PLAYBACK_STATE_CHANGED: ${prevState.isPlaying} -> ${currentState.isPlaying}`);
+      }
       serviceRef.current.handleEvent({ 
         type: 'PLAYBACK_STATE_CHANGED', 
         isPlaying: currentState.isPlaying 
@@ -121,7 +141,7 @@ export function useIdleTimeoutManager(
     }
 
     prevStateRef.current = state;
-  }, [state.isUserSpeaking, state.agentState, state.isPlaying]);
+  }, [state.isUserSpeaking, state.agentState, state.isPlaying, debug]);
 
   // Handle meaningful user activity from WebSocket managers
   const handleMeaningfulActivity = useCallback((activity: string) => {

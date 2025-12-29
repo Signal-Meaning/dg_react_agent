@@ -187,6 +187,22 @@ export class IdleTimeoutService {
         }
       }
     }
+    
+    // CRITICAL FIX: After any state update, check if we should start timeout
+    // This handles cases where events arrive in wrong order or React batches updates
+    // Use setTimeout to ensure this check happens after all state updates are processed
+    setTimeout(() => {
+      const shouldStartTimeout = (this.currentState.agentState === 'idle' || this.currentState.agentState === 'listening') && 
+          !this.currentState.isUserSpeaking && 
+          !this.currentState.isPlaying &&
+          !this.isDisabled;
+      
+      if (shouldStartTimeout && this.timeoutId === null) {
+        this.log('updateTimeoutBehavior() - delayed check: conditions met, starting timeout');
+        this.enableResets();
+        this.startTimeout();
+      }
+    }, 0);
   }
 
   /**
