@@ -82,6 +82,21 @@ export function useIdleTimeoutManager(
     };
   }, [debug]);
 
+  // Update state getter when state changes (separate useEffect to avoid recreating service)
+  useEffect(() => {
+    if (serviceRef.current) {
+      // Set up state getter for polling to read state directly from component
+      // This ensures polling can check current state even if events don't arrive
+      serviceRef.current.setStateGetter(() => {
+        return {
+          agentState: state.agentState,
+          isPlaying: state.isPlaying,
+          isUserSpeaking: state.isUserSpeaking,
+        };
+      });
+    }
+  }, [state.agentState, state.isPlaying, state.isUserSpeaking]);
+
   // Handle state changes
   useEffect(() => {
     if (!serviceRef.current) return;
@@ -141,6 +156,26 @@ export function useIdleTimeoutManager(
     }
 
     prevStateRef.current = state;
+    
+    // CRITICAL FIX: If state changed but events weren't emitted (React batching issue),
+    // directly update IdleTimeoutService state as fallback
+    // This ensures state is always in sync even if useEffect doesn't fire for all changes
+    if (serviceRef.current) {
+      const stateChanged = 
+        currentState.agentState !== prevState.agentState ||
+        currentState.isPlaying !== prevState.isPlaying ||
+        currentState.isUserSpeaking !== prevState.isUserSpeaking;
+      
+      if (stateChanged) {
+        // Directly sync state to IdleTimeoutService as fallback
+        // This handles cases where React batches updates and events aren't emitted
+        serviceRef.current.updateStateDirectly({
+          agentState: currentState.agentState,
+          isPlaying: currentState.isPlaying,
+          isUserSpeaking: currentState.isUserSpeaking
+        });
+      }
+    }
   }, [state.isUserSpeaking, state.agentState, state.isPlaying, debug]);
 
   // Handle meaningful user activity from WebSocket managers

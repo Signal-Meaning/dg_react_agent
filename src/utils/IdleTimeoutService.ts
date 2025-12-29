@@ -31,6 +31,8 @@ export class IdleTimeoutService {
   private currentState: IdleTimeoutState;
   private onTimeoutCallback?: () => void;
   private onStateChangeCallback?: (state: IdleTimeoutState) => void;
+  private pollingIntervalId: ReturnType<typeof setInterval> | null = null;
+  private stateGetter?: () => IdleTimeoutState | null; // Callback to get current state from component
 
   constructor(config: IdleTimeoutConfig) {
     this.config = config;
@@ -59,6 +61,50 @@ export class IdleTimeoutService {
   }
 
   /**
+   * Set callback to get current state from component
+   * This allows polling to read state directly even if events don't arrive
+   */
+  public setStateGetter(getter: () => IdleTimeoutState | null): void {
+    this.stateGetter = getter;
+  }
+
+  /**
+   * Directly update state (bypasses event system)
+   * This is used when events aren't arriving but we know the state has changed
+   * (e.g., DOM shows state has changed but useEffect didn't fire)
+   */
+  public updateStateDirectly(state: Partial<IdleTimeoutState>): void {
+    const prevState = { ...this.currentState };
+    
+    if (state.agentState !== undefined) {
+      this.currentState.agentState = state.agentState;
+    }
+    if (state.isPlaying !== undefined) {
+      this.currentState.isPlaying = state.isPlaying;
+    }
+    if (state.isUserSpeaking !== undefined) {
+      this.currentState.isUserSpeaking = state.isUserSpeaking;
+    }
+    
+    this.log(`updateStateDirectly() called: agentState=${this.currentState.agentState}, isPlaying=${this.currentState.isPlaying}, isUserSpeaking=${this.currentState.isUserSpeaking}`);
+    
+    // Update behavior based on new state
+    this.updateTimeoutBehavior();
+    
+    // Always start polling when state is updated directly (ensures we catch future changes)
+    // Polling will check conditions every 500ms and start timeout if conditions are met
+    if (this.pollingIntervalId === null && this.timeoutId === null) {
+      this.startPolling();
+      this.log('Started polling for idle timeout conditions (fallback mechanism)');
+    }
+    
+    // Notify listeners of state change
+    if (this.onStateChangeCallback && this.hasStateChanged(prevState, this.currentState)) {
+      this.onStateChangeCallback(this.currentState);
+    }
+  }
+
+  /**
    * Handle events that affect idle timeout behavior
    */
   public handleEvent(event: IdleTimeoutEvent): void {
@@ -67,6 +113,13 @@ export class IdleTimeoutService {
       console.log(`🎯 [DEBUG] handleEvent called with event type: ${event.type}`);
     }
     const prevState = { ...this.currentState };
+    
+    // Start polling if we're not already polling and timeout isn't active
+    // This ensures we catch state changes even if events don't arrive in expected order
+    if (this.pollingIntervalId === null && this.timeoutId === null) {
+      // Start polling when we receive any event (indicates service is active)
+      this.startPolling();
+    }
     
     switch (event.type) {
       case 'USER_STARTED_SPEAKING':
@@ -192,17 +245,67 @@ export class IdleTimeoutService {
     // This handles cases where events arrive in wrong order or React batches updates
     // Use setTimeout to ensure this check happens after all state updates are processed
     setTimeout(() => {
-      const shouldStartTimeout = (this.currentState.agentState === 'idle' || this.currentState.agentState === 'listening') && 
-          !this.currentState.isUserSpeaking && 
-          !this.currentState.isPlaying &&
-          !this.isDisabled;
-      
-      if (shouldStartTimeout && this.timeoutId === null) {
-        this.log('updateTimeoutBehavior() - delayed check: conditions met, starting timeout');
-        this.enableResets();
-        this.startTimeout();
-      }
+      this.checkAndStartTimeoutIfNeeded();
     }, 0);
+  }
+
+  /**
+   * Check if conditions are met to start timeout and start it if needed
+   * This is called after state updates to handle cases where events arrive in wrong order
+   */
+  private checkAndStartTimeoutIfNeeded(): void {
+    // CRITICAL: If stateGetter is available, use it to get current state from component
+    // This ensures we have the latest state even if events didn't arrive
+    let stateToCheck = this.currentState;
+    if (this.stateGetter) {
+      const componentState = this.stateGetter();
+      if (componentState) {
+        // Update our state from component state
+        this.currentState = componentState;
+        stateToCheck = componentState;
+        this.log(`checkAndStartTimeoutIfNeeded() - synced state from component: agentState=${componentState.agentState}, isPlaying=${componentState.isPlaying}, isUserSpeaking=${componentState.isUserSpeaking}`);
+      }
+    }
+    
+    const shouldStartTimeout = (stateToCheck.agentState === 'idle' || stateToCheck.agentState === 'listening') && 
+        !stateToCheck.isUserSpeaking && 
+        !stateToCheck.isPlaying &&
+        !this.isDisabled;
+    
+    if (shouldStartTimeout && this.timeoutId === null) {
+      this.log('checkAndStartTimeoutIfNeeded() - conditions met, starting timeout');
+      this.enableResets();
+      this.startTimeout();
+    }
+  }
+
+  /**
+   * Start polling to check if timeout should start
+   * This is a fallback mechanism in case events don't arrive
+   */
+  private startPolling(): void {
+    if (this.pollingIntervalId !== null) return; // Already polling
+    
+    this.pollingIntervalId = window.setInterval(() => {
+      this.checkAndStartTimeoutIfNeeded();
+    }, 500); // Check every 500ms
+    
+    if (this.config.debug) {
+      console.log('🎯 [DEBUG] Started polling for idle timeout conditions');
+    }
+  }
+
+  /**
+   * Stop polling
+   */
+  private stopPolling(): void {
+    if (this.pollingIntervalId !== null) {
+      window.clearInterval(this.pollingIntervalId);
+      this.pollingIntervalId = null;
+      if (this.config.debug) {
+        console.log('🎯 [DEBUG] Stopped polling for idle timeout conditions');
+      }
+    }
   }
 
   /**
@@ -256,6 +359,8 @@ export class IdleTimeoutService {
       console.log('🎯 [DEBUG] Timeout started with timeoutId:', this.timeoutId);
     }
     this.log(`Started idle timeout (${this.config.timeoutMs}ms)`);
+    // Stop polling once timeout is started (we're now actively monitoring)
+    this.stopPolling();
   }
 
   /**
