@@ -347,6 +347,158 @@ USE_PROXY_MODE=true npm run test:e2e -- tests/e2e/extended-silence-idle-timeout.
 - **2025-01-29**: 5 tests fixed, 3 in progress (transcription timeout affects multiple tests), 19 remaining
 - **TODO**: Revert proxy server logging to 'ignore' once all tests pass
 
+## 📋 Function Calling Test Coverage Review
+
+### Test Status Overview
+
+**Total Function Calling Tests**: 4  
+**Passing in Non-Proxy Mode**: 0 (all require real API keys)  
+**Passing in Proxy Mode**: 0  
+**Status**: All 4 tests failing in proxy mode
+
+### Test Breakdown
+
+1. **`function-calling-e2e.spec.js:65`** - "should trigger client-side function call and execute it"
+   - **Purpose**: Full end-to-end test of function calling workflow
+   - **Pattern**: Uses `addInitScript` to inject functions before component initialization
+   - **Failure**: FunctionCallRequest timeout (20 seconds) - request never arrives from Deepgram
+   - **Best Practice**: ✅ Uses `addInitScript` to inject functions before navigation
+   - **Antipattern**: ⚠️ Relies on WebSocket capture which may not work in proxy mode
+   - **Antipattern**: ⚠️ Waits for SettingsApplied which may not be received when functions are included
+
+2. **`function-calling-e2e.spec.js:308`** - "should verify functions are included in Settings message"
+   - **Purpose**: Verify functions are included in Settings message structure
+   - **Pattern**: Uses URL parameters (`enable-function-calling=true`) to enable functions
+   - **Failure**: Functions not found in Settings message (WebSocket capture issue)
+   - **Best Practice**: ✅ Uses URL parameters for configuration (cleaner than init script)
+   - **Best Practice**: ✅ Has fallback to window variables (`__DEEPGRAM_LAST_SETTINGS__`)
+   - **Antipattern**: ⚠️ Relies heavily on WebSocket capture which fails in proxy mode
+   - **Antipattern**: ⚠️ Complex JSON parsing from console logs (fragile)
+
+3. **`function-calling-e2e.spec.js:512`** - "should test minimal function definition for SettingsApplied issue"
+   - **Purpose**: Test minimal function definition to isolate SettingsApplied issue
+   - **Pattern**: Uses URL parameter `function-type=minimal` for minimal function definition
+   - **Failure**: Page closure issue - browser context closes unexpectedly
+   - **Best Practice**: ✅ Tests different function definition formats (minimal vs standard)
+   - **Antipattern**: ⚠️ Complex timing with `waitForFunction` checking console logs
+   - **Antipattern**: ⚠️ Multiple retry loops with `waitForTimeout` (fragile timing)
+   - **Antipattern**: ⚠️ Page closure suggests connection error or component crash
+
+4. **`function-calling-e2e.spec.js:772`** - "should test minimal function with explicit required array"
+   - **Purpose**: Test minimal function with explicit empty required array
+   - **Pattern**: Uses URL parameter `function-type=minimal-with-required`
+   - **Failure**: Similar to test #3 - SettingsApplied not received
+   - **Best Practice**: ✅ Tests edge cases (explicit required array)
+   - **Antipattern**: ⚠️ Similar issues as test #3
+
+### Best Practices Identified
+
+1. **✅ URL Parameter Configuration**
+   - Tests #2, #3, #4 use URL parameters (`enable-function-calling=true`, `function-type=...`)
+   - Cleaner than `addInitScript` approach
+   - Allows test app to handle function configuration in `memoizedAgentOptions`
+
+2. **✅ Fallback Mechanisms**
+   - Test #2 has fallback to window variables when WebSocket capture fails
+   - Uses `window.__DEEPGRAM_LAST_SETTINGS__` and `window.__DEEPGRAM_LAST_FUNCTIONS__`
+   - Component exposes these in test mode for E2E testing
+
+3. **✅ Test Mode Support**
+   - All tests enable `window.__DEEPGRAM_TEST_MODE__ = true`
+   - Component exposes Settings payload to window for verification
+   - Allows tests to verify Settings message without WebSocket capture
+
+4. **✅ Function Definition Variants**
+   - Tests cover different function definition formats:
+     - Standard (full definition with properties)
+     - Minimal (minimal required fields)
+     - Minimal with explicit required array
+   - Helps identify Deepgram API validation issues
+
+### Antipatterns Identified
+
+1. **⚠️ Over-Reliance on WebSocket Capture**
+   - All tests use `installWebSocketCapture` and `getCapturedWebSocketData`
+   - WebSocket capture doesn't work reliably in proxy mode (Issue #329)
+   - **Recommendation**: Use window variables (`__DEEPGRAM_LAST_SETTINGS__`) as primary verification method
+   - **Recommendation**: Make WebSocket capture optional/fallback only
+
+2. **⚠️ Complex Console Log Parsing**
+   - Test #2 and #3 parse JSON from console log strings
+   - Fragile - depends on exact log format
+   - **Recommendation**: Use window variables instead of parsing logs
+
+3. **⚠️ SettingsApplied Dependency**
+   - Tests wait for `SettingsApplied` which may not be received when functions are included
+   - Deepgram may reject Settings with invalid function definitions
+   - **Recommendation**: Don't fail test if SettingsApplied not received - verify functions were sent instead
+
+4. **⚠️ Timing Issues**
+   - Multiple `waitForTimeout` calls with arbitrary delays
+   - `waitForFunction` checking console logs (fragile)
+   - **Recommendation**: Wait for specific DOM elements or window variables instead
+
+5. **⚠️ Mixed Verification Approaches**
+   - Tests mix WebSocket capture, window variables, and console log parsing
+   - Inconsistent - makes tests hard to maintain
+   - **Recommendation**: Standardize on window variables for proxy mode compatibility
+
+### Recommendations for Fixing Function Calling Tests
+
+1. **Primary Verification Method**: Use window variables
+   ```javascript
+   const settings = await page.evaluate(() => window.__DEEPGRAM_LAST_SETTINGS__);
+   const functions = await page.evaluate(() => window.__DEEPGRAM_LAST_FUNCTIONS__);
+   ```
+
+2. **Make WebSocket Capture Optional**: Only use as fallback, don't fail if unavailable
+   ```javascript
+   const wsData = await getCapturedWebSocketData(page);
+   if (!wsData || !wsData.sent) {
+     // Use window variables instead
+     console.log('⚠️ WebSocket capture not available, using window variables');
+   }
+   ```
+
+3. **Don't Require SettingsApplied**: Verify functions were sent, not that Deepgram accepted them
+   ```javascript
+   try {
+     await waitForSettingsApplied(page, 10000);
+   } catch (e) {
+     console.log('⚠️ SettingsApplied not received - may be expected with functions');
+     // Continue test - verify functions were sent instead
+   }
+   ```
+
+4. **Wait for Specific Conditions**: Use DOM elements or window variables instead of timeouts
+   ```javascript
+   // Wait for functions to be set in window
+   await page.waitForFunction(() => window.__DEEPGRAM_LAST_FUNCTIONS__?.length > 0);
+   ```
+
+5. **Standardize Function Injection**: Use URL parameters consistently
+   ```javascript
+   await page.goto(buildUrlWithParams(BASE_URL, { 
+     'enable-function-calling': 'true',
+     'function-type': 'standard' // or 'minimal', 'minimal-with-required'
+   }));
+   ```
+
+### Proxy Mode Specific Issues
+
+1. **WebSocket Capture**: Doesn't work in proxy mode - messages go through proxy server
+2. **FunctionCallRequest Forwarding**: Proxy may not be forwarding FunctionCallRequest messages correctly
+3. **Settings Message Validation**: Deepgram may reject Settings with functions, causing connection issues
+4. **Page Closure**: May be caused by connection errors when Deepgram rejects Settings
+
+### Next Steps
+
+1. **Fix WebSocket Capture Dependency**: Update all tests to use window variables as primary verification
+2. **Investigate Proxy Forwarding**: Verify proxy server correctly forwards FunctionCallRequest messages
+3. **Add Proxy Logging**: Add detailed logging to proxy server for function calling messages
+4. **Test Function Definitions**: Verify function definitions match Deepgram API requirements
+5. **Handle SettingsApplied Gracefully**: Don't fail tests if SettingsApplied not received with functions
+
 ## ✅ Success Criteria
 
 All 22 tests must pass when run with `USE_PROXY_MODE=true`:
