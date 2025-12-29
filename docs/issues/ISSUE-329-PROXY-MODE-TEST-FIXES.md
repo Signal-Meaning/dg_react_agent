@@ -16,7 +16,6 @@
 - **7 failed** ❌ (new failures discovered when running all tests together)
 - **11 skipped**
 - **Duration**: 3.8 minutes
-- **Results File**: `e2e-test-results-proxy-mode-20251229-140833.txt`
 
 **Important Notes**: 
 - Some tests require real API keys to pass (function calling tests use `skipIfNoRealAPI`). These tests cannot be verified without real API keys.
@@ -550,7 +549,6 @@ USE_PROXY_MODE=true npm run test:e2e -- tests/e2e/extended-silence-idle-timeout.
 - **2025-01-29**: All 23 Issue #329 tests fixed and passing individually
 - **2025-12-29**: Full test run completed - 160 passed, 7 failed, 11 skipped
   - **New Failures Discovered**: 7 tests fail when running all tests together (test isolation issues)
-  - **Results File**: `e2e-test-results-proxy-mode-20251229-140833.txt`
 - **2025-12-29**: ✅ Removed all debug instrumentation code
   - **Result**: All `fetch is not defined` errors resolved in Jest tests
   - **Test Results**: 20 failed suites (down from 23), 100 failed tests (down from 104), 623 passed (up from 619)
