@@ -120,8 +120,9 @@
    - **Fix Attempted**: 
      - Modified `MEANINGFUL_USER_ACTIVITY` handler to check if agent is idle and enable resets/start timeout
      - Modified `PLAYBACK_STATE_CHANGED` handler to check if playback stopped and agent is idle, then enable resets/start timeout
+     - **NEW**: Modified `AGENT_STATE_CHANGED` handler to check if agent becomes idle and playback has stopped, then enable resets/start timeout (fixes race condition)
      - Added detailed logging to track state transitions
-   - **Current Issue**: Logs show events only up to `MEANINGFUL_USER_ACTIVITY` while agent is still speaking. Test waits for agent to be idle and audio to stop, but timeout isn't starting when those conditions are met.
+   - **Current Issue**: Test waits for DOM to show agent is idle and audio is not playing, but events may not be arriving at IdleTimeoutService, or events are arriving in wrong order. The fix should handle both cases, but test still failing - may need additional investigation.
    - **Next Steps**: 
      - Investigate why timeout isn't starting when `AGENT_STATE_CHANGED` with 'idle' and `PLAYBACK_STATE_CHANGED` with `isPlaying=false` both occur
      - May need to add a delayed check or ensure timeout starts in all code paths when conditions are met
