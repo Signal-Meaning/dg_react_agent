@@ -45,21 +45,6 @@ test.describe('Function Calling E2E Tests', () => {
     
     // Install WebSocket capture BEFORE navigation to ensure we capture all messages
     await installWebSocketCapture(page);
-    
-    // Navigate to test app with function calling enabled and debug mode
-    await page.goto(buildUrlWithParams(BASE_URL, { 
-      'test-mode': 'true',
-      'enable-function-calling': 'true',
-      'debug': 'true'  // Enable debug mode to see full Settings message
-    }));
-    
-    // Capture console logs for debugging
-    page.on('console', msg => {
-      const text = msg.text();
-      if (text.includes('[FUNCTION]') || text.includes('FunctionCall') || text.includes('Settings')) {
-        console.log(`[BROWSER] ${text}`);
-      }
-    });
   });
 
   test('should trigger client-side function call and execute it', async ({ page }) => {
@@ -68,6 +53,7 @@ test.describe('Function Calling E2E Tests', () => {
     // Step 1: Inject functions into agentOptions BEFORE component initializes
     // We do this by modifying the environment or using a URL parameter approach
     // For this test, we'll inject functions via page evaluation before navigation
+    // Note: addInitScript must be called BEFORE navigation
     await page.addInitScript(() => {
       // Store functions that will be injected into agentOptions
       window.testFunctions = [
@@ -118,8 +104,22 @@ test.describe('Function Calling E2E Tests', () => {
       window.functionCallResponses = [];
     });
     
-    // Step 2: Set up function call handler using component's onFunctionCallRequest callback
-    // (Navigation already happened in beforeEach with function calling enabled)
+    // Step 2: Navigate to test app with function calling enabled and debug mode
+    await page.goto(buildUrlWithParams(BASE_URL, { 
+      'test-mode': 'true',
+      'enable-function-calling': 'true',
+      'debug': 'true'  // Enable debug mode to see full Settings message
+    }));
+    
+    // Capture console logs for debugging
+    page.on('console', msg => {
+      const text = msg.text();
+      if (text.includes('[FUNCTION]') || text.includes('FunctionCall') || text.includes('Settings')) {
+        console.log(`[BROWSER] ${text}`);
+      }
+    });
+    
+    // Step 3: Set up function call handler using component's onFunctionCallRequest callback
     await page.evaluate(() => {
       // Store function call requests and responses for verification
       window.functionCallRequests = [];
@@ -163,22 +163,22 @@ test.describe('Function Calling E2E Tests', () => {
       };
     });
     
-    // Step 3: Wait for component to be ready
-    await setupTestPage(page);
+    // Step 4: Wait for component to be ready (page already navigated in Step 2)
+    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     console.log('✅ Test page setup complete');
     
-    // Step 4: Establish connection via text message (same pattern as working tests)
+    // Step 5: Establish connection via text message (same pattern as working tests)
     await page.fill('[data-testid="text-input"]', 'What time is it?');
     await page.click('[data-testid="send-button"]');
     
-    // Wait for connection first
+    // Wait for connection to be established
     await waitForConnection(page, 10000);
     console.log('✅ Connection established');
     
     // Wait a bit for Settings to be sent
     await page.waitForTimeout(2000);
     
-    // Step 5: Verify functions are in Settings message
+    // Step 6: Verify functions are in Settings message
     // PRIMARY: Use window variables (most reliable, works in proxy mode)
     const settingsFromWindow = await page.evaluate(() => {
       if (window.__DEEPGRAM_TEST_MODE__ && window.__DEEPGRAM_LAST_SETTINGS__) {
@@ -193,6 +193,15 @@ test.describe('Function Calling E2E Tests', () => {
     if (settingsFromWindow && settingsFromWindow.settings) {
       const settings = settingsFromWindow.settings;
       console.log('📤 Settings message captured from window (test mode)');
+      
+      // Debug: Log Settings structure to verify listen provider is not included
+      console.log('📋 Settings structure:', {
+        hasAgent: !!settings.agent,
+        hasListen: !!(settings.agent && settings.agent.listen),
+        hasThink: !!(settings.agent && settings.agent.think),
+        hasFunctions: !!(settings.agent && settings.agent.think && settings.agent.think.functions),
+        functionsCount: settings.agent?.think?.functions?.length || 0
+      });
       
       // Check if functions are included in agent.think.functions
       if (settings.agent && settings.agent.think && settings.agent.think.functions) {
@@ -281,7 +290,7 @@ test.describe('Function Calling E2E Tests', () => {
       // Don't fail the test - the important part is that functions are being sent
     }
     
-    // Step 6: Wait for FunctionCallRequest via component's onFunctionCallRequest callback
+    // Step 7: Wait for FunctionCallRequest via component's onFunctionCallRequest callback
     // Using direct prompts that map to function descriptions should reliably trigger function calls
     console.log('⏳ Waiting for FunctionCallRequest via component callback...');
     
@@ -327,7 +336,7 @@ test.describe('Function Calling E2E Tests', () => {
     expect(responseContent.timezone).toBeDefined();
     console.log('✅ Function executed successfully, result:', responseContent);
     
-    // Step 7: Verify agent continues conversation (check for agent response)
+    // Step 8: Verify agent continues conversation (check for agent response)
     await page.waitForSelector('[data-testid="agent-response"]', { timeout: 20000 });
     const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
     

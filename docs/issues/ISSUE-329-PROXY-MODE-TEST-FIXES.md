@@ -74,22 +74,28 @@
 
 #### Category 6: Function Calling (4 tests)
 7. ❌ `function-calling-e2e.spec.js:65:3` - "should trigger client-side function call and execute it"
-   - **Status**: In Progress - FunctionCallRequest timeout
+   - **Status**: In Progress - CLIENT_MESSAGE_TIMEOUT error
    - **Proxy-Specific**: ❌ **NO** - Test also fails without proxy mode (requires real API keys)
-   - **Root Cause**: SettingsApplied is received, but FunctionCallRequest from Deepgram is not arriving (test times out after 20 seconds)
+   - **Root Cause**: 
+     - ✅ **FIXED**: Syntax error in component (duplicate else clause) - component now loads
+     - ✅ **FIXED**: Removed `listenModel` from agentOptions for text-only interactions to avoid CLIENT_MESSAGE_TIMEOUT
+     - ✅ **VERIFIED**: Settings message is correct (hasListen: false, functions included, SettingsApplied received)
+     - ❌ **REMAINING**: Still getting CLIENT_MESSAGE_TIMEOUT error - "We did not receive audio within our timeout"
    - **Observations** (with real API keys, no proxy mode): 
      - Settings message is sent (verified via window variables)
      - SettingsApplied is received (verified in logs)
      - Functions ARE included in Settings message (verified via window.__DEEPGRAM_LAST_SETTINGS__)
-     - FunctionCallRequest never arrives from Deepgram (test times out waiting)
-     - Error: "We waited too long for a websocket message. Please ensure that you send a 'Settings' message at the beginning of the session."
+     - `hasListen: false` - listen provider correctly omitted
+     - Connection closes with CLIENT_MESSAGE_TIMEOUT before FunctionCallRequest arrives
    - **Fix Applied**: 
-     - Fixed Settings double-send issue (React StrictMode) - set flags immediately when Settings is sent
-     - Updated test to use window variables as primary verification method
+     - Fixed syntax error (duplicate else clause in sendAgentSettings)
+     - Removed default `listenModel` from test app agentOptions (only include if VITE_AGENT_MODEL env var is set)
+     - This allows text-only interactions without triggering CLIENT_MESSAGE_TIMEOUT
    - **Next Steps**: 
-     - Investigate why Deepgram is not sending FunctionCallRequest - may be API issue or function definition issue
-     - Check if user message "What time is it?" is being sent correctly
-     - Verify function definition matches Deepgram API requirements
+     - Investigate why CLIENT_MESSAGE_TIMEOUT still occurs even without listen provider
+     - Check if text message "What time is it?" is being sent correctly via injectUserMessage
+     - May need to verify Deepgram API behavior with text-only function calling
+     - Consider if this is a Deepgram API limitation or test setup issue
 8. ✅ `function-calling-e2e.spec.js:308:3` - "should verify functions are included in Settings message"
    - **Status**: ✅ **FIXED** - 2025-01-29
    - **Proxy-Specific**: ❌ **NO** - Test passes without proxy mode (requires real API keys)

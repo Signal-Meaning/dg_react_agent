@@ -1911,8 +1911,16 @@ function DeepgramVoiceInteraction(
         windowWithGlobals.__DEEPGRAM_LAST_SETTINGS__ = settingsMessage;
         windowWithGlobals.__DEEPGRAM_LAST_FUNCTIONS__ = settingsMessage.agent.think.functions;
       }
-    } else if (props.debug) {
-      console.log('🔍 [DEBUG] Full Settings message structure:', JSON.stringify(settingsMessage, null, 2));
+    } else {
+      // Expose Settings to window even when functions are not present (for E2E testing)
+      if (typeof window !== 'undefined' && windowWithGlobals.__DEEPGRAM_TEST_MODE__) {
+        windowWithGlobals.__DEEPGRAM_LAST_SETTINGS__ = settingsMessage;
+        windowWithGlobals.__DEEPGRAM_LAST_FUNCTIONS__ = undefined;
+      }
+      
+      if (props.debug) {
+        console.log('🔍 [DEBUG] Full Settings message structure:', JSON.stringify(settingsMessage, null, 2));
+      }
     }
     
     // Log before sending to verify code path
