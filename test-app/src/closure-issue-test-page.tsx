@@ -27,7 +27,26 @@ declare global {
 }
 
 export function ClosureIssueTestPage() {
-  const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY || '';
+  // Support proxy mode via URL parameters (same as main App.tsx)
+  const memoizedProxyConfig = useMemo(() => {
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const connectionModeParam = urlParams?.get('connectionMode');
+    const proxyEndpointParam = urlParams?.get('proxyEndpoint');
+    const proxyAuthTokenParam = urlParams?.get('proxyAuthToken');
+    
+    return {
+      connectionMode: (connectionModeParam === 'proxy' ? 'proxy' : 'direct') as 'direct' | 'proxy',
+      proxyEndpoint: proxyEndpointParam || import.meta.env.VITE_PROXY_ENDPOINT || '',
+      proxyAuthToken: proxyAuthTokenParam || '',
+    };
+  }, []);
+  
+  const [connectionMode] = useState<'direct' | 'proxy'>(memoizedProxyConfig.connectionMode);
+  const [proxyEndpoint] = useState<string>(memoizedProxyConfig.proxyEndpoint);
+  const [proxyAuthToken] = useState<string>(memoizedProxyConfig.proxyAuthToken);
+  
+  // Only use API key in direct mode
+  const apiKey = connectionMode === 'direct' ? (import.meta.env.VITE_DEEPGRAM_API_KEY || '') : '';
   const ref = useRef<DeepgramVoiceInteractionHandle>(null);
   
   // State to control whether functions are included
@@ -82,6 +101,11 @@ export function ClosureIssueTestPage() {
   
   // Track connection state for E2E tests
   const [connectionState, setConnectionState] = useState<string>('closed');
+  const [hasSentSettingsDom, setHasSentSettingsDom] = useState(false);
+  
+  const handleSettingsApplied = useCallback(() => {
+    setHasSentSettingsDom(true);
+  }, []);
   
   return (
     <div data-testid="closure-issue-test-page">
@@ -89,6 +113,7 @@ export function ClosureIssueTestPage() {
       <div>
         <p>Functions enabled: {hasFunctions ? 'Yes' : 'No'}</p>
         <p data-testid="connection-status">{connectionState}</p>
+        <p>Settings Applied: <strong data-testid="has-sent-settings">{String(hasSentSettingsDom)}</strong></p>
         <button 
           onClick={() => setHasFunctions(!hasFunctions)}
           data-testid="toggle-functions-button"
@@ -98,14 +123,21 @@ export function ClosureIssueTestPage() {
       </div>
       <DeepgramVoiceInteraction
         ref={ref}
-        apiKey={apiKey}
+        {...(connectionMode === 'direct' 
+          ? { apiKey }
+          : {
+              proxyEndpoint: proxyEndpoint || import.meta.env.VITE_PROXY_ENDPOINT,
+              ...(proxyAuthToken ? { proxyAuthToken } : {})
+            })}
         agentOptions={agentOptions}
+        autoStartAgent={true}
         debug={true}
         onConnectionStateChange={(service, state) => {
           if (service === 'agent') {
             setConnectionState(state);
           }
         }}
+        onSettingsApplied={handleSettingsApplied}
       />
     </div>
   );

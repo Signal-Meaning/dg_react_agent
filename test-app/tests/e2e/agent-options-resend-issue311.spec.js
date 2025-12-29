@@ -76,7 +76,7 @@ test.describe('Agent Options Re-send Test - Issue #311', () => {
     
     // Wait for connection and first Settings
     console.log('⏳ Waiting for initial connection and Settings...');
-    await waitForConnectionAndSettings(page, { timeout: 10000 });
+    await waitForConnectionAndSettings(page, 10000, 10000);
     
     // Get captured WebSocket messages
     const wsData = await getCapturedWebSocketData(page);

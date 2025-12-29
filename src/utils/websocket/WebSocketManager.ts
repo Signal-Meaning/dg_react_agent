@@ -92,6 +92,7 @@ export class WebSocketManager {
   // private reconnectDelay = 1000; // Start with 1 second - Unused for now
   private hasEverConnected = false;
   private idleTimeoutDisabled = false; // Flag to disable idle timeout resets
+  private settingsSent = false; // Track if Settings has been sent (for agent service only)
 
   /**
    * Creates a new WebSocketManager
@@ -243,7 +244,18 @@ export class WebSocketManager {
           
           this.updateState('connected', isReconnection);
           this.enableIdleTimeoutResets(); // Re-enable idle timeout resets on new connection
-          this.startKeepalive();
+          
+          // For agent service, don't start keepalive until Settings is sent
+          // This ensures Settings is always the first message after connection
+          if (this.options.service === 'agent') {
+            this.log('Agent service: Keepalive will start after Settings is sent');
+            this.settingsSent = false; // Reset on new connection
+            // Keepalive will be started when Settings is sent via markSettingsSent()
+          } else {
+            // For transcription service, start keepalive immediately
+            this.startKeepalive();
+          }
+          
           this.startIdleTimeout();
           this.reconnectAttempts = 0;
           resolve();
@@ -348,6 +360,11 @@ export class WebSocketManager {
           window.clearTimeout(this.connectionTimeoutId!);
           this.connectionTimeoutId = null;
           
+          // Reset settingsSent flag on close (for agent service)
+          if (this.options.service === 'agent') {
+            this.settingsSent = false;
+          }
+          
           // Check if we were connected before updating state
           const wasConnected = this.connectionState === 'connected';
           this.updateState('closed');
@@ -423,8 +440,15 @@ export class WebSocketManager {
 
   /**
    * Sends a keepalive message
+   * For agent service, only sends if Settings has been sent first
    */
   private sendKeepalive(): void {
+    // For agent service, ensure Settings is sent before KeepAlive
+    if (this.options.service === 'agent' && !this.settingsSent) {
+      this.log('Keepalive blocked: Settings must be sent before KeepAlive for agent service');
+      return;
+    }
+    
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       // Only emit keepalive events in debug mode to reduce noise
       if (this.options.debug) {
@@ -442,6 +466,21 @@ export class WebSocketManager {
         this.ws.send(JSON.stringify({ type: 'KeepAlive' }));
       } catch (error) {
         this.log('Error sending keepalive:', error);
+      }
+    }
+  }
+  
+  /**
+   * Mark that Settings has been sent (for agent service)
+   * This allows keepalive to start sending KeepAlive messages
+   */
+  public markSettingsSent(): void {
+    if (this.options.service === 'agent') {
+      this.settingsSent = true;
+      this.log('Settings sent - keepalive can now send KeepAlive messages');
+      // Start keepalive now that Settings has been sent
+      if (this.connectionState === 'connected' && this.keepaliveIntervalId === null) {
+        this.startKeepalive();
       }
     }
   }
@@ -659,6 +698,12 @@ export class WebSocketManager {
         } catch (e) {
           // Silently fail - window exposure is for testing only
         }
+      }
+      
+      // For agent service, mark Settings as sent before actually sending
+      // This ensures Settings is always the first message and keepalive can start
+      if (data && typeof data === 'object' && 'type' in data && data.type === 'Settings' && this.options.service === 'agent') {
+        this.markSettingsSent();
       }
       
       this.log('Sending JSON:', data);

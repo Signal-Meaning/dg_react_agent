@@ -608,12 +608,17 @@ function DeepgramVoiceInteraction(
       const connectionOptions = getConnectionOptions();
       
       // Create Transcription WebSocket manager
+      // Add service type to query params for proxy routing
+      const transcriptionQueryParamsWithService = useKeytermPrompting 
+        ? { service: 'transcription' }
+        : { ...transcriptionQueryParams, service: 'transcription' };
+      
       const manager = new WebSocketManager({
         url: finalTranscriptionUrl,
         apiKey: connectionOptions.apiKey,
         authToken: connectionOptions.authToken,
         service: 'transcription',
-        queryParams: useKeytermPrompting ? undefined : transcriptionQueryParams, 
+        queryParams: transcriptionQueryParamsWithService, 
         debug: config.debug,
         keepaliveInterval: 0, // Disable keepalives for transcription service
         onMeaningfulActivity: handleMeaningfulActivity,
@@ -675,11 +680,15 @@ function DeepgramVoiceInteraction(
       const connectionOptions = getConnectionOptions();
       
       // Create Agent WebSocket manager
+      // Add service type to query params for proxy routing
+      const agentQueryParams = { service: 'agent' };
+      
       const manager = new WebSocketManager({
         url: finalAgentUrl,
         apiKey: connectionOptions.apiKey,
         authToken: connectionOptions.authToken,
         service: 'agent',
+        queryParams: agentQueryParams,
         debug: config.debug,
         onMeaningfulActivity: handleMeaningfulActivity,
       });
