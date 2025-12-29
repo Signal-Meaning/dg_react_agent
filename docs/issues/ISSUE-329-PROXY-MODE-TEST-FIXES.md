@@ -66,27 +66,47 @@
    - **Root Cause**: Fixed by Fix #5 (UtteranceEnd callback fix) - test was failing because UtteranceEnd callback wasn't being called
    - **Verification**: Test passes, connection closes after idle timeout as expected
 
-#### Category 6: Function Calling (2 tests)
+#### Category 6: Function Calling (4 tests)
 7. ❌ `function-calling-e2e.spec.js:65:3` - "should trigger client-side function call and execute it"
-   - **Status**: In Progress - FunctionCallRequest not being received
-   - **Root Cause**: SettingsApplied is received, but FunctionCallRequest from Deepgram is not arriving
+   - **Status**: In Progress - FunctionCallRequest timeout
+   - **Root Cause**: SettingsApplied is received, but FunctionCallRequest from Deepgram is not arriving (test times out after 20 seconds)
    - **Observations**: 
      - Settings message is sent (verified in logs)
      - SettingsApplied is received (verified in logs)
      - Functions may not be in Settings message (WebSocket capture shows functions missing, but capture may be unreliable in proxy mode)
      - FunctionCallRequest never arrives (test times out waiting)
+   - **Antipatterns**: Over-reliance on WebSocket capture, requires SettingsApplied
    - **Next Steps**: 
+     - Switch to window variables (`__DEEPGRAM_LAST_SETTINGS__`) for verification instead of WebSocket capture
      - Verify functions are actually included in Settings message sent to Deepgram (check proxy logs)
      - Investigate if proxy is correctly forwarding FunctionCallRequest messages from Deepgram
      - Check if Deepgram is sending FunctionCallRequest (may need to verify function definitions are valid)
-8. ❌ `function-calling-e2e.spec.js:501:3` - "should test minimal function definition for SettingsApplied issue"
+8. ❌ `function-calling-e2e.spec.js:308:3` - "should verify functions are included in Settings message"
+   - **Status**: In Progress - Functions not found in Settings message
+   - **Root Cause**: WebSocket capture doesn't work in proxy mode, and window variables may not be set
+   - **Observations**: Test uses URL parameters (best practice) but still relies on WebSocket capture
+   - **Antipatterns**: Complex console log parsing, over-reliance on WebSocket capture
+   - **Next Steps**: 
+     - Use window variables as primary verification method
+     - Make WebSocket capture optional/fallback only
+     - Verify component exposes Settings to window in test mode
+9. ❌ `function-calling-e2e.spec.js:512:3` - "should test minimal function definition for SettingsApplied issue"
    - **Status**: In Progress - Page closure issue
    - **Root Cause**: Test page/browser context closing unexpectedly during execution (error: "Target page, context or browser has been closed")
    - **Observations**: Error occurs at `page.waitForTimeout(1000)` after updating agentOptions
+   - **Antipatterns**: Complex timing with `waitForFunction` checking console logs, multiple retry loops
    - **Next Steps**: 
      - Investigate why page is closing - may be connection closure or error causing browser to close
+     - Simplify timing - wait for window variables instead of console logs
      - Check if there's an error in the component that's causing the page to close
-     - May need to add error handling or check connection state before waiting
+10. ❌ `function-calling-e2e.spec.js:772:3` - "should test minimal function with explicit required array"
+   - **Status**: In Progress - SettingsApplied not received
+   - **Root Cause**: Similar to test #9 - SettingsApplied not received, may be Deepgram rejecting Settings
+   - **Observations**: Tests edge case (explicit required array)
+   - **Antipatterns**: Similar to test #9
+   - **Next Steps**: 
+     - Don't require SettingsApplied - verify functions were sent instead
+     - Use window variables for verification
 
 #### Category 7: Idle Timeout Behavior (1 test)
 9. ❌ `idle-timeout-behavior.spec.js:887:3` - "should restart timeout after USER_STOPPED_SPEAKING when agent is idle - reproduces Issue #262/#430"
