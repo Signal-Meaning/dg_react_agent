@@ -284,6 +284,12 @@ export class WebSocketManager {
               const data = JSON.parse(event.data);
               this.log(`📨 [WEBSOCKET.onmessage] Parsed JSON message:`, data);
               
+              // Issue #336: Enhanced logging for FunctionCallRequest messages
+              if (data.type === 'FunctionCallRequest') {
+                console.log('🔧 [WEBSOCKET] FunctionCallRequest message received at WebSocket level');
+                console.log('🔧 [WEBSOCKET] FunctionCallRequest data:', JSON.stringify(data, null, 2));
+              }
+              
               // Only reset idle timeout on meaningful user activity (not every protocol message)
               const shouldResetTimeout = this.shouldResetIdleTimeout(data);
               if (shouldResetTimeout) {

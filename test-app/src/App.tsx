@@ -116,6 +116,8 @@ function App() {
   const [micEnabled, setMicEnabled] = useState(false);
   const [agentSpeaking, setAgentSpeaking] = useState(false);
   const [agentSilent, setAgentSilent] = useState(false);
+  // Function call tracking for E2E tests (Issue #336)
+  const [functionCallCount, setFunctionCallCount] = useState(0);
   // Greeting status indicator for E2E tests
   const [greetingSent, setGreetingSent] = useState(false);
   const hasShownGreetingRef = useRef(false);
@@ -729,6 +731,9 @@ function App() {
     // Handle function call requests from Deepgram
     console.log('[APP] FunctionCallRequest received:', request);
     
+    // Issue #336: Increment function call count for E2E test tracking
+    setFunctionCallCount(prev => prev + 1);
+    
     // Issue #305: Support declarative return value pattern
     // Check for test handler first (for E2E tests), then fallback to window.handleFunctionCall
     const testWindow = window as TestWindow;
@@ -1215,6 +1220,10 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         </div>
         <div style={{ fontSize: '14px' }}>
           Settings Applied: <strong data-testid="has-sent-settings">{String(hasSentSettingsDom)}</strong>
+        </div>
+        {/* Function call tracker for E2E tests (Issue #336) */}
+        <div style={{ fontSize: '14px', display: 'none' }}>
+          <span data-testid="function-call-tracker">{functionCallCount}</span>
         </div>
         <button 
           onClick={handleMuteToggle}

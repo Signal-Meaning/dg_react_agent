@@ -946,6 +946,75 @@ async function getComponentAudioContextState(page) {
   });
 }
 
+/**
+ * Wait for function call to be made (tracked via data-testid="function-call-tracker")
+ * This is the DRY, canonical implementation for function call detection.
+ * All tests should use this instead of duplicate implementations.
+ * 
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {Object} options - Options object
+ * @param {number} options.count - Expected function call count (default: 1)
+ * @param {number} options.timeout - Timeout in ms (default: 10000)
+ * @returns {Promise<{count: number, info: Object}>} Function call count and diagnostic info
+ */
+async function waitForFunctionCall(page, options = {}) {
+  const expectedCount = options.count || 1;
+  const timeout = options.timeout || 10000;
+  
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < timeout) {
+    const result = await page.evaluate(() => {
+      const tracker = document.querySelector('[data-testid="function-call-tracker"]');
+      const count = tracker ? parseInt(tracker.textContent || '0', 10) : 0;
+      
+      // Also check window variables for additional diagnostic info
+      const windowRequests = window.functionCallRequests || [];
+      const windowResponses = window.functionCallResponses || [];
+      
+      return {
+        count,
+        hasTracker: !!tracker,
+        windowRequestsCount: windowRequests.length,
+        windowResponsesCount: windowResponses.length,
+        lastRequest: windowRequests[windowRequests.length - 1] || null,
+        lastResponse: windowResponses[windowResponses.length - 1] || null
+      };
+    });
+    
+    if (result.count >= expectedCount) {
+      return {
+        count: result.count,
+        info: result
+      };
+    }
+    
+    await page.waitForTimeout(200);
+  }
+  
+  // Timeout - return current state for diagnostics
+  const finalResult = await page.evaluate(() => {
+    const tracker = document.querySelector('[data-testid="function-call-tracker"]');
+    const count = tracker ? parseInt(tracker.textContent || '0', 10) : 0;
+    const windowRequests = window.functionCallRequests || [];
+    const windowResponses = window.functionCallResponses || [];
+    
+    return {
+      count,
+      hasTracker: !!tracker,
+      windowRequestsCount: windowRequests.length,
+      windowResponsesCount: windowResponses.length,
+      lastRequest: windowRequests[windowRequests.length - 1] || null,
+      lastResponse: windowResponses[windowResponses.length - 1] || null
+    };
+  });
+  
+  return {
+    count: finalResult.count,
+    info: finalResult
+  };
+}
+
 // Import microphone helpers
 import MicrophoneHelpers from './microphone-helpers.js';
 
@@ -987,6 +1056,7 @@ export {
   establishConnectionViaText, // Establish connection by clicking text input (auto-connect pattern)
   establishConnectionViaMicrophone, // Establish connection via microphone button (permissions + click)
   getComponentAudioContextState, // Get AudioContext state from component (recommended over window.audioContext)
+  waitForFunctionCall, // Wait for function call to be made (tracked via data-testid="function-call-tracker")
   MicrophoneHelpers // Microphone utility helpers for E2E tests (activate/deactivate mic)
 };
 

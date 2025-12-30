@@ -2138,6 +2138,7 @@ function DeepgramVoiceInteraction(
     // Handle FunctionCallRequest from Deepgram
     if (data.type === 'FunctionCallRequest') {
       console.log('🔧 [FUNCTION] FunctionCallRequest received from Deepgram');
+      console.log('🔧 [FUNCTION DEBUG] Full FunctionCallRequest message:', JSON.stringify(data, null, 2));
       log('FunctionCallRequest received from Deepgram');
       
       // Type-safe extraction of function call information
@@ -2154,6 +2155,9 @@ function DeepgramVoiceInteraction(
       const requestData = data as FunctionCallRequestMessage;
       const functions = Array.isArray(requestData.functions) ? requestData.functions : [];
       
+      console.log('🔧 [FUNCTION DEBUG] Functions array length:', functions.length);
+      console.log('🔧 [FUNCTION DEBUG] Functions:', JSON.stringify(functions, null, 2));
+      
       if (functions.length > 0) {
         // Check if any client-side functions are present
         const hasClientSideFunctions = functions.some((funcCall) => funcCall.client_side);
@@ -2168,7 +2172,15 @@ function DeepgramVoiceInteraction(
         
         // For each function call request, invoke the callback
         functions.forEach((funcCall) => {
+          console.log('🔧 [FUNCTION DEBUG] Processing function call:', {
+            id: funcCall.id,
+            name: funcCall.name,
+            client_side: funcCall.client_side,
+            hasArguments: !!funcCall.arguments
+          });
+          
           if (funcCall.client_side) {
+            console.log('🔧 [FUNCTION DEBUG] Client-side function detected, invoking callback');
             // Only invoke callback for client-side functions
             const functionCall: FunctionCallRequest = {
               id: funcCall.id,
@@ -2176,6 +2188,12 @@ function DeepgramVoiceInteraction(
               arguments: funcCall.arguments,
               client_side: funcCall.client_side
             };
+            
+            console.log('🔧 [FUNCTION DEBUG] Calling onFunctionCallRequest callback with:', {
+              id: functionCall.id,
+              name: functionCall.name,
+              hasCallback: !!onFunctionCallRequest
+            });
             
             // Create sendResponse callback that wraps sendFunctionCallResponse
             const sendResponse = (response: FunctionCallResponse): void => {
@@ -2194,6 +2212,7 @@ function DeepgramVoiceInteraction(
             // Invoke callback with both functionCall and sendResponse
             // Issue #305: Support declarative return value pattern
             const result = onFunctionCallRequest?.(functionCall, sendResponse);
+            console.log('🔧 [FUNCTION DEBUG] onFunctionCallRequest callback result:', result !== undefined && result !== null ? 'returned value' : 'void (imperative)');
             
             // If callback returns a value (or Promise), use that instead of sendResponse
             if (result !== undefined && result !== null) {
@@ -2231,6 +2250,7 @@ function DeepgramVoiceInteraction(
               });
             }
           } else {
+            console.log('🔧 [FUNCTION DEBUG] Server-side function call received (not handled by component):', funcCall.name);
             log('Server-side function call received (not handled by component):', funcCall.name);
           }
         });
