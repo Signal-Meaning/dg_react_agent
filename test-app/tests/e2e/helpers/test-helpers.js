@@ -1015,6 +1015,140 @@ async function waitForFunctionCall(page, options = {}) {
   };
 }
 
+/**
+ * Try multiple prompts to trigger function call with retry logic
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {Array<string>} prompts - Array of prompts to try
+ * @param {Object} options - Options
+ * @param {number} options.connectionTimeout - Timeout for connection (default: 30000)
+ * @param {number} options.functionCallTimeout - Timeout per prompt attempt (default: 20000)
+ * @returns {Promise<{count: number, prompt: string, info: Object, promptsTried: Array<string>}>}
+ */
+async function tryPromptsForFunctionCall(page, prompts, options = {}) {
+  const connectionTimeout = options.connectionTimeout || 30000;
+  const functionCallTimeout = options.functionCallTimeout || 20000;
+  
+  let functionCallInfo = { count: 0 };
+  let successfulPrompt = null;
+  
+  for (const prompt of prompts) {
+    await page.fill('[data-testid="text-input"]', prompt);
+    await page.click('[data-testid="send-button"]');
+    await waitForConnection(page, connectionTimeout);
+    
+    console.log(`⏳ Trying prompt: "${prompt}"...`);
+    functionCallInfo = await waitForFunctionCall(page, { timeout: functionCallTimeout });
+    
+    if (functionCallInfo.count > 0) {
+      successfulPrompt = prompt;
+      console.log(`✅ Function call triggered with prompt: "${prompt}"`);
+      break;
+    }
+    
+    console.log(`⚠️ Function call not triggered with prompt: "${prompt}", trying next...`);
+    await page.fill('[data-testid="text-input"]', '');
+    await page.waitForTimeout(1000);
+  }
+  
+  return {
+    ...functionCallInfo,
+    prompt: successfulPrompt,
+    promptsTried: prompts
+  };
+}
+
+/**
+ * Set up function calling test infrastructure
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {Object} options - Options
+ * @param {Array} options.functions - Function definitions (default: get_current_time)
+ * @param {Function} options.handler - Function handler (default: time handler)
+ * @returns {Promise<void>}
+ */
+async function setupFunctionCallingTest(page, options = {}) {
+  const defaultFunctions = [
+    {
+      name: 'get_current_time',
+      description: 'Get the current time in a specific timezone. ALWAYS use this function when users ask about time, what time it is, current time, or any time-related question. This function is required for all time queries.',
+      parameters: {
+        type: 'object',
+        properties: {
+          timezone: {
+            type: 'string',
+            description: 'Timezone (e.g., "America/New_York", "UTC", "Europe/London"). Defaults to UTC if not specified.',
+            default: 'UTC'
+          }
+        }
+      }
+    }
+  ];
+  
+  const defaultHandler = (functionName, args) => {
+    if (functionName === 'get_current_time') {
+      const timezone = args.timezone || 'UTC';
+      const now = new Date();
+      return {
+        success: true,
+        time: now.toLocaleString('en-US', { 
+          timeZone: timezone,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        }),
+        timezone: timezone,
+        timestamp: now.toISOString()
+      };
+    }
+    return { success: false, error: 'Unknown function' };
+  };
+  
+  await page.addInitScript((functions, handler) => {
+    window.testFunctions = functions;
+    window.testFunctionHandler = handler;
+    window.functionCallRequests = [];
+    window.functionCallResponses = [];
+  }, options.functions || defaultFunctions, options.handler || defaultHandler);
+  
+  await page.evaluate(() => {
+    window.handleFunctionCall = (request) => {
+      window.functionCallRequests.push(request);
+      if (window.testFunctionHandler) {
+        const result = window.testFunctionHandler(request.name, JSON.parse(request.arguments || '{}'));
+        if (window.deepgramRef?.current?.sendFunctionCallResponse) {
+          window.deepgramRef.current.sendFunctionCallResponse(
+            request.id,
+            request.name,
+            JSON.stringify(result)
+          );
+          window.functionCallResponses.push({
+            id: request.id,
+            name: request.name,
+            content: JSON.stringify(result)
+          });
+        }
+      }
+    };
+  });
+}
+
+/**
+ * Establish connection and wait for function call with retry
+ * Combines connection establishment and function call waiting
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {string} prompt - User prompt to send
+ * @param {Object} options - Options
+ * @param {number} options.connectionTimeout - Timeout for connection (default: 30000)
+ * @param {number} options.functionCallTimeout - Timeout for function call (default: 20000)
+ * @returns {Promise<{count: number, info: Object}>}
+ */
+async function establishConnectionAndWaitForFunctionCall(page, prompt, options = {}) {
+  await page.fill('[data-testid="text-input"]', prompt);
+  await page.click('[data-testid="send-button"]');
+  await waitForConnection(page, options.connectionTimeout || 30000);
+  return await waitForFunctionCall(page, { timeout: options.functionCallTimeout || 20000 });
+}
+
 // Import microphone helpers
 import MicrophoneHelpers from './microphone-helpers.js';
 
@@ -1057,6 +1191,9 @@ export {
   establishConnectionViaMicrophone, // Establish connection via microphone button (permissions + click)
   getComponentAudioContextState, // Get AudioContext state from component (recommended over window.audioContext)
   waitForFunctionCall, // Wait for function call to be made (tracked via data-testid="function-call-tracker")
+  tryPromptsForFunctionCall, // Try multiple prompts to trigger function call with retry logic
+  setupFunctionCallingTest, // Set up function calling test infrastructure
+  establishConnectionAndWaitForFunctionCall, // Establish connection and wait for function call
   MicrophoneHelpers // Microphone utility helpers for E2E tests (activate/deactivate mic)
 };
 

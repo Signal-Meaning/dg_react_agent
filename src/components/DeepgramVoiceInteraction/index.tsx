@@ -29,6 +29,7 @@ import { useCallbackRef, useBooleanDeclarativeProp } from '../../hooks/declarati
 import { AgentStateService } from '../../services/AgentStateService';
 import { compareAgentOptionsIgnoringContext, hasDependencyChanged } from '../../utils/option-comparison';
 import { filterFunctionsForSettings } from '../../utils/function-utils';
+import { functionCallLogger } from '../../utils/function-call-logger';
 
 // Default endpoints
 const DEFAULT_ENDPOINTS = {
@@ -2137,8 +2138,7 @@ function DeepgramVoiceInteraction(
     
     // Handle FunctionCallRequest from Deepgram
     if (data.type === 'FunctionCallRequest') {
-      console.log('🔧 [FUNCTION] FunctionCallRequest received from Deepgram');
-      console.log('🔧 [FUNCTION DEBUG] Full FunctionCallRequest message:', JSON.stringify(data, null, 2));
+      functionCallLogger.functionCallRequestReceived(data);
       log('FunctionCallRequest received from Deepgram');
       
       // Type-safe extraction of function call information
@@ -2155,8 +2155,7 @@ function DeepgramVoiceInteraction(
       const requestData = data as FunctionCallRequestMessage;
       const functions = Array.isArray(requestData.functions) ? requestData.functions : [];
       
-      console.log('🔧 [FUNCTION DEBUG] Functions array length:', functions.length);
-      console.log('🔧 [FUNCTION DEBUG] Functions:', JSON.stringify(functions, null, 2));
+      functionCallLogger.functionsArrayInfo(functions);
       
       if (functions.length > 0) {
         // Check if any client-side functions are present
@@ -2166,13 +2165,14 @@ function DeepgramVoiceInteraction(
         // This provides immediate feedback that the agent is processing a function call
         // Issue #294: onAgentStateChange('thinking') Not Emitted for Client-Side Function Calls
         // Issue #302: Maintain keepalive during thinking state to prevent CLIENT_MESSAGE_TIMEOUT
+        functionCallLogger.clientSideFunctionDetected(hasClientSideFunctions);
         if (hasClientSideFunctions) {
           transitionToThinkingState('FunctionCallRequest received', true); // Maintain keepalive during function call processing
         }
         
         // For each function call request, invoke the callback
         functions.forEach((funcCall) => {
-          console.log('🔧 [FUNCTION DEBUG] Processing function call:', {
+          functionCallLogger.debug('Processing function call:', {
             id: funcCall.id,
             name: funcCall.name,
             client_side: funcCall.client_side,
@@ -2180,7 +2180,6 @@ function DeepgramVoiceInteraction(
           });
           
           if (funcCall.client_side) {
-            console.log('🔧 [FUNCTION DEBUG] Client-side function detected, invoking callback');
             // Only invoke callback for client-side functions
             const functionCall: FunctionCallRequest = {
               id: funcCall.id,
@@ -2189,11 +2188,7 @@ function DeepgramVoiceInteraction(
               client_side: funcCall.client_side
             };
             
-            console.log('🔧 [FUNCTION DEBUG] Calling onFunctionCallRequest callback with:', {
-              id: functionCall.id,
-              name: functionCall.name,
-              hasCallback: !!onFunctionCallRequest
-            });
+            functionCallLogger.callbackInvoked(functionCall, !!onFunctionCallRequest);
             
             // Create sendResponse callback that wraps sendFunctionCallResponse
             const sendResponse = (response: FunctionCallResponse): void => {
@@ -2212,7 +2207,7 @@ function DeepgramVoiceInteraction(
             // Invoke callback with both functionCall and sendResponse
             // Issue #305: Support declarative return value pattern
             const result = onFunctionCallRequest?.(functionCall, sendResponse);
-            console.log('🔧 [FUNCTION DEBUG] onFunctionCallRequest callback result:', result !== undefined && result !== null ? 'returned value' : 'void (imperative)');
+            functionCallLogger.callbackResult(result !== undefined && result !== null);
             
             // If callback returns a value (or Promise), use that instead of sendResponse
             if (result !== undefined && result !== null) {

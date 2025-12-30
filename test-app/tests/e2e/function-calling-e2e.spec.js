@@ -27,6 +27,9 @@ import {
   installWebSocketCapture,
   getCapturedWebSocketData,
   waitForFunctionCall,
+  tryPromptsForFunctionCall,
+  setupFunctionCallingTest,
+  establishConnectionAndWaitForFunctionCall,
 } from './helpers/test-helpers.js';
 
 test.describe('Function Calling E2E Tests', () => {
@@ -1055,31 +1058,11 @@ test.describe('Function Calling E2E Tests', () => {
       console.log('🧪 [TDD] Testing function call count increment...');
       skipIfNoRealAPI('Requires real Deepgram API key');
       
-      // Set up function with VERY explicit description to increase likelihood of agent calling it
-      await page.addInitScript(() => {
-        window.testFunctions = [
-          {
-            name: 'get_current_time',
-            description: 'Get the current time in a specific timezone. ALWAYS use this function when users ask about time, what time it is, current time, or any time-related question. This function is required for all time queries.',
-            parameters: {
-              type: 'object',
-              properties: {
-                timezone: {
-                  type: 'string',
-                  description: 'Timezone (e.g., "America/New_York", "UTC", "Europe/London"). Defaults to UTC if not specified.',
-                  default: 'UTC'
-                }
-              }
-            }
-          }
-        ];
-        
-        window.testFunctionHandler = (functionName, args) => {
+      // Set up function calling test infrastructure
+      await setupFunctionCallingTest(page, {
+        handler: (functionName, args) => {
           return { success: true, time: new Date().toISOString() };
-        };
-        
-        window.functionCallRequests = [];
-        window.functionCallResponses = [];
+        }
       });
       
       await page.goto(buildUrlWithParams(BASE_URL, { 
@@ -1089,23 +1072,6 @@ test.describe('Function Calling E2E Tests', () => {
       
       await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 15000 });
       
-      // Set up handler
-      await page.evaluate(() => {
-        window.handleFunctionCall = (request) => {
-          window.functionCallRequests.push(request);
-          if (window.testFunctionHandler) {
-            const result = window.testFunctionHandler(request.name, JSON.parse(request.arguments || '{}'));
-            if (window.deepgramRef?.current?.sendFunctionCallResponse) {
-              window.deepgramRef.current.sendFunctionCallResponse(
-                request.id,
-                request.name,
-                JSON.stringify(result)
-              );
-            }
-          }
-        };
-      });
-      
       // Try multiple prompts to increase likelihood of function call (retry pattern)
       const prompts = [
         'What time is it?',
@@ -1114,28 +1080,10 @@ test.describe('Function Calling E2E Tests', () => {
         'Please use get_current_time to tell me the time'
       ];
       
-      let functionCallInfo = { count: 0 };
-      
-      for (const prompt of prompts) {
-        // Establish connection
-        await page.fill('[data-testid="text-input"]', prompt);
-        await page.click('[data-testid="send-button"]');
-        await waitForConnection(page, 30000);
-        
-        // Wait for function call with shorter timeout per attempt
-        console.log(`⏳ [TDD] Waiting for function call with prompt: "${prompt}"...`);
-        functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
-        
-        if (functionCallInfo.count > 0) {
-          console.log(`✅ Function call triggered with prompt: "${prompt}"`);
-          break;
-        }
-        
-        console.log(`⚠️ Function call not triggered with prompt: "${prompt}", trying next...`);
-        // Clear input for next attempt
-        await page.fill('[data-testid="text-input"]', '');
-        await page.waitForTimeout(1000); // Brief pause between attempts
-      }
+      const functionCallInfo = await tryPromptsForFunctionCall(page, prompts, {
+        connectionTimeout: 30000,
+        functionCallTimeout: 20000
+      });
       
       // This assertion will FAIL if function calls aren't happening after all prompts
       expect(functionCallInfo.count).toBeGreaterThan(0, 
@@ -1151,26 +1099,9 @@ test.describe('Function Calling E2E Tests', () => {
       console.log('🧪 [TDD] Testing full function call execution flow...');
       skipIfNoRealAPI('Requires real Deepgram API key');
       
-      // Set up function with VERY explicit description to increase likelihood of agent calling it
-      await page.addInitScript(() => {
-        window.testFunctions = [
-          {
-            name: 'get_current_time',
-            description: 'Get the current time in a specific timezone. ALWAYS use this function when users ask about time, what time it is, current time, or any time-related question. This function is required for all time queries.',
-            parameters: {
-              type: 'object',
-              properties: {
-                timezone: {
-                  type: 'string',
-                  description: 'Timezone (e.g., "America/New_York", "UTC", "Europe/London"). Defaults to UTC if not specified.',
-                  default: 'UTC'
-                }
-              }
-            }
-          }
-        ];
-        
-        window.testFunctionHandler = (functionName, args) => {
+      // Set up function calling test infrastructure with custom handler
+      await setupFunctionCallingTest(page, {
+        handler: (functionName, args) => {
           const timezone = args.timezone || 'UTC';
           const now = new Date();
           return {
@@ -1185,10 +1116,7 @@ test.describe('Function Calling E2E Tests', () => {
             timezone: timezone,
             timestamp: now.toISOString()
           };
-        };
-        
-        window.functionCallRequests = [];
-        window.functionCallResponses = [];
+        }
       });
       
       await page.goto(buildUrlWithParams(BASE_URL, { 
@@ -1199,35 +1127,13 @@ test.describe('Function Calling E2E Tests', () => {
       
       await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 15000 });
       
-      // Set up handler
+      // Set up custom handler with logging
       await page.evaluate(() => {
+        const originalHandler = window.handleFunctionCall;
         window.handleFunctionCall = (request) => {
           console.log('[FUNCTION] onFunctionCallRequest callback invoked:', request);
-          window.functionCallRequests.push(request);
-          
-          if (window.testFunctionHandler) {
-            let functionArgs = {};
-            try {
-              functionArgs = JSON.parse(request.arguments || '{}');
-            } catch (e) {
-              console.warn('[FUNCTION] Failed to parse function arguments:', e);
-            }
-            
-            const result = window.testFunctionHandler(request.name, functionArgs);
-            
-            if (window.deepgramRef?.current?.sendFunctionCallResponse) {
-              window.deepgramRef.current.sendFunctionCallResponse(
-                request.id,
-                request.name,
-                JSON.stringify(result)
-              );
-              
-              window.functionCallResponses.push({
-                id: request.id,
-                name: request.name,
-                content: JSON.stringify(result)
-              });
-            }
+          if (originalHandler) {
+            originalHandler(request);
           }
         };
       });
@@ -1270,28 +1176,16 @@ test.describe('Function Calling E2E Tests', () => {
       let promptUsed = allPrompts[0]; // First prompt already sent
       let promptsTried = [allPrompts[0]];
       
-      // If not triggered, try additional prompts
+      // If not triggered, try additional prompts using helper
       if (functionCallInfo.count === 0) {
         const additionalPrompts = allPrompts.slice(1);
-        
-        for (const prompt of additionalPrompts) {
-          await page.fill('[data-testid="text-input"]', prompt);
-          await page.click('[data-testid="send-button"]');
-          await waitForConnection(page, 30000);
-          
-          functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
-          promptsTried.push(prompt);
-          
-          if (functionCallInfo.count > 0) {
-            promptUsed = prompt;
-            console.log(`✅ Function call triggered with prompt: "${prompt}"`);
-            break;
-          }
-          
-          console.log(`⚠️ Function call not triggered with prompt: "${prompt}", trying next...`);
-          await page.fill('[data-testid="text-input"]', '');
-          await page.waitForTimeout(1000);
-        }
+        const retryResult = await tryPromptsForFunctionCall(page, additionalPrompts, {
+          connectionTimeout: 30000,
+          functionCallTimeout: 20000
+        });
+        functionCallInfo = retryResult;
+        promptUsed = retryResult.prompt || allPrompts[0];
+        promptsTried = [allPrompts[0], ...additionalPrompts];
       } else {
         console.log('✅ Function call triggered with initial prompt: "What time is it?"');
       }
@@ -1360,25 +1254,11 @@ test.describe('Function Calling E2E Tests', () => {
       console.log('🧪 [TDD] Testing function call request structure...');
       skipIfNoRealAPI('Requires real Deepgram API key');
       
-      await page.addInitScript(() => {
-        window.testFunctions = [
-          {
-            name: 'get_current_time',
-            description: 'Get the current time in a specific timezone. ALWAYS use this function when users ask about time, what time it is, current time, or any time-related question. This function is required for all time queries.',
-            parameters: {
-              type: 'object',
-              properties: {
-                timezone: {
-                  type: 'string',
-                  description: 'Timezone (e.g., "America/New_York", "UTC", "Europe/London"). Defaults to UTC if not specified.',
-                  default: 'UTC'
-                }
-              }
-            }
-          }
-        ];
-        
-        window.functionCallRequests = [];
+      // Set up function calling test infrastructure
+      await setupFunctionCallingTest(page, {
+        handler: (functionName, args) => {
+          return { success: true, time: new Date().toISOString() };
+        }
       });
       
       await page.goto(buildUrlWithParams(BASE_URL, { 
@@ -1388,20 +1268,6 @@ test.describe('Function Calling E2E Tests', () => {
       
       await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 15000 });
       
-      await page.evaluate(() => {
-        window.handleFunctionCall = (request) => {
-          window.functionCallRequests.push(request);
-          // Send a simple response
-          if (window.deepgramRef?.current?.sendFunctionCallResponse) {
-            window.deepgramRef.current.sendFunctionCallResponse(
-              request.id,
-              request.name,
-              JSON.stringify({ success: true, time: new Date().toISOString() })
-            );
-          }
-        };
-      });
-      
       // Try multiple prompts to increase likelihood of function call
       const prompts = [
         'What time is it?',
@@ -1409,25 +1275,10 @@ test.describe('Function Calling E2E Tests', () => {
         'What time is it now?'
       ];
       
-      let functionCallInfo = { count: 0 };
-      
-      for (const prompt of prompts) {
-        await page.fill('[data-testid="text-input"]', prompt);
-        await page.click('[data-testid="send-button"]');
-        await waitForConnection(page, 30000);
-        
-        // Wait for function call
-        functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
-        
-        if (functionCallInfo.count > 0) {
-          console.log(`✅ Function call triggered with prompt: "${prompt}"`);
-          break;
-        }
-        
-        console.log(`⚠️ Function call not triggered with prompt: "${prompt}", trying next...`);
-        await page.fill('[data-testid="text-input"]', '');
-        await page.waitForTimeout(1000);
-      }
+      const functionCallInfo = await tryPromptsForFunctionCall(page, prompts, {
+        connectionTimeout: 30000,
+        functionCallTimeout: 20000
+      });
       
       if (functionCallInfo.count > 0) {
         // Verify request structure
