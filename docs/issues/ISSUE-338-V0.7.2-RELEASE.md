@@ -78,19 +78,19 @@ This is a patch release for version v0.7.2 of the Deepgram Voice Interaction Rea
   - ✅ **Status**: Complete - All version references updated to v0.7.2
 
 ### Release
-- [ ] **Commit Changes**: Commit all release-related changes
-  - [ ] **Commit**: `git add . && git commit -m "chore: prepare release v0.7.2"`
-- [ ] **Create Release Branch**: Create a release branch for the version
-  - [ ] **Create**: `git checkout -b release/v0.7.2` (from current working branch or main)
-  - [ ] **Push**: `git push origin release/v0.7.2`
-- [ ] **Publish**: Publish to GitHub Registry
-  - [ ] **Preferred**: Use CI build (create GitHub release to trigger `.github/workflows/test-and-publish.yml`)
-    - Create GitHub release (this triggers CI publish workflow)
-    - Monitor CI workflow: Wait for CI build to complete successfully
-      - Check GitHub Actions workflow status
-      - Verify all CI checks pass
-      - Verify package appears in GitHub Packages
-    - Only proceed to tagging if publish succeeds
+- [x] **Commit Changes**: Commit all release-related changes
+  - ✅ **Commit**: `chore: prepare release v0.7.2` - All changes committed
+- [x] **Create Release Branch**: Create a release branch for the version
+  - ✅ **Create**: `release/v0.7.2` branch created from `davidrmcgee/issue338`
+  - ✅ **Push**: `release/v0.7.2` branch pushed to remote
+- [x] **Publish**: Publish to GitHub Registry
+  - [x] **Preferred**: Use CI build (create GitHub release to trigger `.github/workflows/test-and-publish.yml`)
+    - ✅ **Create GitHub release**: Created v0.7.2 release targeting `release/v0.7.2` branch
+    - [ ] **Monitor CI workflow**: Wait for CI build to complete successfully
+      - [ ] Check GitHub Actions workflow status
+      - [ ] Verify all CI checks pass
+      - [ ] Verify package appears in GitHub Packages
+    - [ ] Only proceed to tagging if publish succeeds
   - [ ] **Fallback**: Dev publish (only if CI fails)
     - Run: `npm publish` (automatically publishes to GitHub Registry)
     - Verify: Package appears in GitHub Packages
@@ -99,10 +99,10 @@ This is a patch release for version v0.7.2 of the Deepgram Voice Interaction Rea
   - [ ] **Verify**: Package is successfully published to GitHub Packages
   - [ ] **Tag**: `git tag v0.7.2`
   - [ ] **Push**: `git push origin v0.7.2`
-- [ ] **GitHub Release**: Create GitHub release (if not already created for CI publish)
-  - [ ] **Title**: `v0.7.2`
-  - [ ] **Description**: Copy from CHANGELOG.md
-  - [ ] **Target**: `release/v0.7.2` branch (or `main` if release branch merged)
+- [x] **GitHub Release**: Create GitHub release (if not already created for CI publish)
+  - ✅ **Title**: `v0.7.2`
+  - ✅ **Description**: From RELEASE-NOTES.md
+  - ✅ **Target**: `release/v0.7.2` branch
 - [ ] **Post-Release**: Merge release branch to main (if not already merged)
   - [ ] **Merge**: `release/v0.7.2` → `main`
   - [ ] **Push**: `git push origin main`
