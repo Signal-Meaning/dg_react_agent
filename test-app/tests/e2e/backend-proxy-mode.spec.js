@@ -29,6 +29,40 @@ test.describe('Backend Proxy Mode', () => {
       test.skip(true, 'Proxy server not available in CI');
       return;
     }
+    
+    // Verify proxy server is running before proceeding with tests
+    // Use page.evaluate to check from browser context (WebSocket is available there)
+    const proxyRunning = await page.evaluate(async (endpoint) => {
+      return new Promise((resolve) => {
+        try {
+          const ws = new WebSocket(endpoint);
+          
+          const timeout = setTimeout(() => {
+            ws.close();
+            resolve(false);
+          }, 2000);
+          
+          ws.onopen = () => {
+            clearTimeout(timeout);
+            ws.close();
+            resolve(true);
+          };
+          
+          ws.onerror = () => {
+            clearTimeout(timeout);
+            resolve(false);
+          };
+        } catch (error) {
+          resolve(false);
+        }
+      });
+    }, PROXY_ENDPOINT);
+    
+    if (!proxyRunning) {
+      test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run test:proxy:server`);
+      return;
+    }
+    
     // Note: Each test configures the page via URL query params, so no common setup needed
   });
 
@@ -83,6 +117,9 @@ test.describe('Backend Proxy Mode', () => {
   });
 
   test('should work with agent responses through proxy', async ({ page }) => {
+    // NOTE: This test requires the proxy server to be running
+    // Start it with: npm run test:proxy:server
+    
     // Configure component via URL query parameters
     const testUrl = buildUrlWithParams(BASE_URL, {
       connectionMode: 'proxy',
@@ -90,9 +127,11 @@ test.describe('Backend Proxy Mode', () => {
     });
     await page.goto(testUrl);
     await page.waitForLoadState('networkidle');
+    
+    // Wait for component to be ready
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
-    // Wait for connection mode to be set to proxy
+    // Wait for connection mode to be set to proxy (component initialization)
     await page.waitForFunction(() => {
       const modeEl = document.querySelector('[data-testid="connection-mode"]');
       return modeEl && modeEl.textContent?.includes('proxy');
@@ -102,45 +141,63 @@ test.describe('Backend Proxy Mode', () => {
     const connectionMode = await page.locator('[data-testid="connection-mode"]').textContent();
     expect(connectionMode).toContain('proxy');
 
-    // Wait for connection to be established (component auto-connects in dual mode)
-    // In proxy mode, connection should still auto-connect when text input is focused
-    // First ensure proxy server is ready by checking if we can reach it
-    await page.waitForTimeout(3000); // Give proxy server time to be ready
+    // Wait for text input to be ready and focusable before triggering auto-connect
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.waitFor({ state: 'visible', timeout: 10000 });
     
-    // Retry connection attempt up to 3 times for full test runs
-    let connectionEstablished = false;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        await page.click('[data-testid="text-input"]');
-        await page.waitForTimeout(3000); // Give time for auto-connect to trigger
+    // Focus text input to trigger auto-connect (in dual mode, this should establish connection)
+    // The onFocus handler calls deepgramRef.current?.start?.({ agent: true, transcription: false })
+    await textInput.focus();
+    
+    // Wait for connection status element to appear (component may be initializing)
+    await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
+    
+    // Wait for connection to transition from "closed" to "connecting" to "connected"
+    // First check if it's attempting to connect (status should change from "closed")
+    await page.waitForFunction(() => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      if (!statusEl) return false;
+      const status = statusEl.textContent?.toLowerCase() || '';
+      // Wait for status to change from "closed" (either "connecting" or "connected")
+      return status !== 'closed';
+    }, { timeout: 10000 }).catch(async (error) => {
+      // If status never changes from "closed", the connection isn't being attempted
+      const diagnosticInfo = await page.evaluate(() => {
+        const statusEl = document.querySelector('[data-testid="connection-status"]');
+        return {
+          connectionStatus: statusEl?.textContent || 'not found',
+          // Check if there are WebSocket errors in console
+          consoleLogs: (window.consoleLogs || []).slice(-10) // Last 10 logs
+        };
+      });
+      throw new Error(`Connection not attempting to establish. Status stuck at "${diagnosticInfo.connectionStatus}". This should not happen if proxy server check passed.`);
+    });
+    
+    // Now wait for connection to be fully established
+    await page.waitForFunction(() => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      if (!statusEl) return false;
+      const status = statusEl.textContent?.toLowerCase() || '';
+      return status.includes('connected');
+    }, { timeout: 20000 }).catch(async (error) => {
+      // If connection fails, capture diagnostic information
+      const diagnosticInfo = await page.evaluate(() => {
+        const statusEl = document.querySelector('[data-testid="connection-status"]');
+        const modeEl = document.querySelector('[data-testid="connection-mode"]');
+        const hasSettings = document.querySelector('[data-testid="has-sent-settings"]');
         
-        // Wait for connection with longer timeout for proxy mode
-        // In full test runs, proxy server may need more time
-        await waitForConnection(page, 30000);
-        connectionEstablished = true;
-        break;
-      } catch (error) {
-        if (attempt < 3) {
-          console.log(`Connection attempt ${attempt} failed, retrying...`);
-          await page.waitForTimeout(2000);
-          // Navigate away and back to reset state
-          await page.goto('about:blank');
-          await page.waitForTimeout(1000);
-          await page.goto(testUrl);
-          await page.waitForLoadState('networkidle');
-          await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
-        } else {
-          // Last attempt failed, check status and throw
-          const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-          console.log(`Connection status after ${attempt} attempts: ${connectionStatus}`);
-          throw error;
-        }
-      }
-    }
-    
-    if (!connectionEstablished) {
-      throw new Error('Failed to establish connection after 3 attempts');
-    }
+        return {
+          connectionStatus: statusEl?.textContent || 'not found',
+          connectionMode: modeEl?.textContent || 'not found',
+          hasSentSettings: hasSettings?.textContent || 'not found',
+          // Check for any error messages in console
+          consoleLogs: (window.consoleLogs || []).slice(-10) // Last 10 logs
+        };
+      });
+      
+      console.error('Connection failed. Diagnostic info:', JSON.stringify(diagnosticInfo, null, 2));
+      throw new Error(`Connection failed to establish. Status: "${diagnosticInfo.connectionStatus}", Mode: "${diagnosticInfo.connectionMode}". Proxy server check passed, but connection still failed.`);
+    });
 
     // Verify connection is established
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();

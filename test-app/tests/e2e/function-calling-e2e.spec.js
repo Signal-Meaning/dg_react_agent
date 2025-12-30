@@ -20,16 +20,12 @@ import {
   buildUrlWithParams
 } from './helpers/test-helpers.mjs';
 import {
-  hasRealAPIKey,
   skipIfNoRealAPI,
   setupTestPage,
   waitForConnection,
-  waitForConnectionAndSettings,
   waitForSettingsApplied,
-  sendTextMessage,
   installWebSocketCapture,
   getCapturedWebSocketData,
-  establishConnectionViaText
 } from './helpers/test-helpers.js';
 
 test.describe('Function Calling E2E Tests', () => {
@@ -192,7 +188,7 @@ test.describe('Function Calling E2E Tests', () => {
     });
     
     // Step 4: Wait for component to be ready (page already navigated in Step 2)
-    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 15000 });
     console.log('✅ Test page setup complete');
     
     // Step 5: Establish connection and send message (same pattern as other passing tests)
@@ -202,13 +198,13 @@ test.describe('Function Calling E2E Tests', () => {
     
     // Wait for connection to be established
     // Increased timeout for full test runs where API may be slower
-    await waitForConnection(page, 20000);
+    await waitForConnection(page, 30000);
     console.log('✅ Connection established');
     
     // Wait for SettingsApplied (may not be received when functions are included, but try anyway)
     // Increased timeout for full test runs
     try {
-      await waitForSettingsApplied(page, 20000);
+      await waitForSettingsApplied(page, 30000);
       console.log('✅ Settings applied (SettingsApplied received)');
     } catch (e) {
       console.log('⚠️ SettingsApplied not received - continuing anyway (may be expected with functions)');
@@ -330,12 +326,34 @@ test.describe('Function Calling E2E Tests', () => {
     // Using direct prompts that map to function descriptions should reliably trigger function calls
     console.log('⏳ Waiting for FunctionCallRequest via component callback...');
     
+    // First verify connection is still stable before waiting for function call
+    const connectionStatusBeforeWait = await page.locator('[data-testid="connection-status"]').textContent();
+    if (!connectionStatusBeforeWait?.toLowerCase().includes('connected')) {
+      throw new Error(`Connection not stable before waiting for function call. Status: "${connectionStatusBeforeWait}"`);
+    }
+    
     // Wait for function call request with timeout
     // Increased timeout for full test runs where API may be slower
-    await page.waitForFunction(
-      () => window.functionCallRequests && window.functionCallRequests.length > 0,
-      { timeout: 45000 }
-    );
+    try {
+      await page.waitForFunction(
+        () => window.functionCallRequests && window.functionCallRequests.length > 0,
+        { timeout: 45000 }
+      );
+    } catch (error) {
+      // If timeout, check connection status and provide diagnostics
+      const diagnosticInfo = await page.evaluate(() => {
+        return {
+          connectionStatus: document.querySelector('[data-testid="connection-status"]')?.textContent || 'not found',
+          functionCallRequestsCount: (window.functionCallRequests || []).length,
+          hasFunctionHandler: typeof window.handleFunctionCall === 'function',
+          hasTestFunctionHandler: typeof window.testFunctionHandler === 'function',
+          agentResponse: document.querySelector('[data-testid="agent-response"]')?.textContent || 'not found'
+        };
+      });
+      
+      console.error('Function call timeout. Diagnostic info:', JSON.stringify(diagnosticInfo, null, 2));
+      throw new Error(`Function call request not received within timeout. Connection: "${diagnosticInfo.connectionStatus}", Requests: ${diagnosticInfo.functionCallRequestsCount}, Handler: ${diagnosticInfo.hasFunctionHandler}`);
+    }
     
     const functionCallRequests = await page.evaluate(() => {
       return window.functionCallRequests || [];
@@ -917,7 +935,7 @@ test.describe('Function Calling E2E Tests', () => {
     await page.click('[data-testid="send-button"]');
     
     // Wait for connection with longer timeout for full test runs
-    await waitForConnection(page, 20000);
+    await waitForConnection(page, 30000);
     console.log('✅ Connection established');
     
     // Wait for Settings to be sent and check multiple times
@@ -956,10 +974,10 @@ test.describe('Function Calling E2E Tests', () => {
     }
     
     // Verify function has explicit required array (if captured)
-    if (settingsFromWindow && functions) {
-      expect(functions.length).toBe(1);
+    if (settingsFromWindow && settingsFromWindow.functions) {
+      expect(settingsFromWindow.functions.length).toBe(1);
       
-      const func = functions[0];
+      const func = settingsFromWindow.functions[0];
       expect(func.name).toBe('test');
       expect(func.description).toBe('test');
       expect(func.parameters).toBeDefined();

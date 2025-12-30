@@ -105,8 +105,9 @@ export default defineConfig({
         VITE_BASE_URL: process.env.VITE_BASE_URL || 'http://localhost:5173',
       },
     },
-    // Start proxy server when USE_PROXY_MODE is enabled
-    ...(process.env.USE_PROXY_MODE === 'true' ? [{
+    // Always start proxy server for E2E tests (required for backend-proxy-mode tests)
+    // The proxy server is a test dependency, not a runtime dependency
+    {
       command: 'npm run test:proxy:server',
       cwd: '.', // Run from test-app directory
       port: 8080, // Proxy server port
@@ -120,7 +121,7 @@ export default defineConfig({
         PROXY_PORT: '8080',
         PROXY_PATH: '/deepgram-proxy',
       },
-    }] : []),
+    },
   ],
 
   /* 
