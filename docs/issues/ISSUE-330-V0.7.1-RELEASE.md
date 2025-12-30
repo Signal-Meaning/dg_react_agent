@@ -182,8 +182,14 @@ The following test files are now fully passing:
      - ✅ E2E tests: 167 passing (163 stable, 4 flaky with `@flaky` tag)
      - ℹ️ **Note**: E2E tests are currently disabled in CI but pass locally
      - ℹ️ **CI Status**: CI will run Jest tests (mock only), linting, and build verification
-   - [ ] **Create release tag (v0.7.1)** ← Next step
-   - [ ] Publish to npm
+   - [x] **Create release tag (v0.7.1)**: ✅ Completed
+     - ✅ Tag created: `v0.7.1`
+     - ✅ Tag pushed to remote
+     - ✅ Tag message includes release summary
+   - [ ] **Publish to npm** ← Next step
+     - ℹ️ **Note**: Publishing is done via GitHub Actions workflow
+     - ℹ️ **Method**: Create GitHub release (triggers publish workflow) OR manually trigger workflow
+     - ℹ️ **Registry**: GitHub Package Registry (@signal-meaning scope)
    - [ ] Create GitHub release
    - [ ] Update main branch
 
