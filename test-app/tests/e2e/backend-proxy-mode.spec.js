@@ -32,6 +32,30 @@ test.describe('Backend Proxy Mode', () => {
     // Note: Each test configures the page via URL query params, so no common setup needed
   });
 
+  test.afterEach(async ({ page }) => {
+    // Clean up: Close any open connections and clear state
+    try {
+      await page.evaluate(() => {
+        // Close component if it exists
+        if (window.deepgramRef?.current) {
+          window.deepgramRef.current.stop?.();
+        }
+        // Clear any global state
+        if (window.__DEEPGRAM_LAST_SETTINGS__) {
+          delete window.__DEEPGRAM_LAST_SETTINGS__;
+        }
+        if (window.__DEEPGRAM_LAST_FUNCTIONS__) {
+          delete window.__DEEPGRAM_LAST_FUNCTIONS__;
+        }
+      });
+      // Navigate away to ensure clean state for next test
+      await page.goto('about:blank');
+      await page.waitForTimeout(500); // Give time for cleanup
+    } catch (error) {
+      // Ignore cleanup errors - test may have already navigated away
+    }
+  });
+
   test('should connect through proxy endpoint when proxyEndpoint prop is provided', async ({ page }) => {
     // Configure component via URL query parameters (no App.tsx modifications needed)
     const testUrl = buildUrlWithParams(BASE_URL, {
@@ -80,11 +104,43 @@ test.describe('Backend Proxy Mode', () => {
 
     // Wait for connection to be established (component auto-connects in dual mode)
     // In proxy mode, connection should still auto-connect when text input is focused
-    await page.click('[data-testid="text-input"]');
-    await page.waitForTimeout(1000); // Give time for auto-connect to trigger
+    // First ensure proxy server is ready by checking if we can reach it
+    await page.waitForTimeout(3000); // Give proxy server time to be ready
     
-    // Wait for connection with longer timeout for proxy mode
-    await waitForConnection(page, 20000);
+    // Retry connection attempt up to 3 times for full test runs
+    let connectionEstablished = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await page.click('[data-testid="text-input"]');
+        await page.waitForTimeout(3000); // Give time for auto-connect to trigger
+        
+        // Wait for connection with longer timeout for proxy mode
+        // In full test runs, proxy server may need more time
+        await waitForConnection(page, 30000);
+        connectionEstablished = true;
+        break;
+      } catch (error) {
+        if (attempt < 3) {
+          console.log(`Connection attempt ${attempt} failed, retrying...`);
+          await page.waitForTimeout(2000);
+          // Navigate away and back to reset state
+          await page.goto('about:blank');
+          await page.waitForTimeout(1000);
+          await page.goto(testUrl);
+          await page.waitForLoadState('networkidle');
+          await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+        } else {
+          // Last attempt failed, check status and throw
+          const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
+          console.log(`Connection status after ${attempt} attempts: ${connectionStatus}`);
+          throw error;
+        }
+      }
+    }
+    
+    if (!connectionEstablished) {
+      throw new Error('Failed to establish connection after 3 attempts');
+    }
 
     // Verify connection is established
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();

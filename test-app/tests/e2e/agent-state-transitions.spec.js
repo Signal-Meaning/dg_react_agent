@@ -42,6 +42,23 @@ test.describe('Agent State Transitions', () => {
     await waitForConnection(page, 10000);
   });
 
+  test.afterEach(async ({ page }) => {
+    // Clean up: Close any open connections and clear state
+    try {
+      await page.evaluate(() => {
+        // Close component if it exists
+        if (window.deepgramRef?.current) {
+          window.deepgramRef.current.stop?.();
+        }
+      });
+      // Navigate away to ensure clean state for next test
+      await page.goto('about:blank');
+      await page.waitForTimeout(500); // Give time for cleanup
+    } catch (error) {
+      // Ignore cleanup errors - test may have already navigated away
+    }
+  });
+
   test('should transition: idle → speaking → idle (user types message and clicks send)', async ({ page }) => {
     // User Actions:
     // 1. User types message in text input field
@@ -62,6 +79,8 @@ test.describe('Agent State Transitions', () => {
     
     // Step 2: Verify TTS is unmuted (required for state transition to 'speaking')
     // TTS must be unmuted for audio to play and trigger 'speaking' state
+    // Wait a bit for UI to be ready
+    await page.waitForTimeout(1000);
     const ttsMuteButton = page.locator('[data-testid="tts-mute-button"]');
     const ttsButtonText = await ttsMuteButton.textContent();
     
@@ -89,11 +108,13 @@ test.describe('Agent State Transitions', () => {
     // Step 4: Wait for agent to enter speaking state
     // Agent state should transition to 'speaking' when audio playback begins (TTS is unmuted)
     // This validates the idle → speaking transition
-    await waitForAgentState(page, 'speaking', 15000);
+    // Increased timeout for full test runs where API may be slower
+    await waitForAgentState(page, 'speaking', 30000);
     
     // Step 5: Wait for agent to finish speaking and return to idle
     // This validates the speaking → idle transition
-    await waitForAgentState(page, 'idle', 15000);
+    // Increased timeout for full test runs where API may be slower
+    await waitForAgentState(page, 'idle', 30000);
     
     // Step 6: Verify we got an agent response
     const response = await page.locator('[data-testid="agent-response"]').textContent();

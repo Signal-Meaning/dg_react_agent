@@ -48,6 +48,33 @@ test.describe('Function Calling E2E Tests', () => {
     await installWebSocketCapture(page);
   });
 
+  test.afterEach(async ({ page }) => {
+    // Clean up: Close any open connections and clear state
+    try {
+      await page.evaluate(() => {
+        // Close component if it exists
+        if (window.deepgramRef?.current) {
+          window.deepgramRef.current.stop?.();
+        }
+        // Clear any global state
+        if (window.__DEEPGRAM_LAST_SETTINGS__) {
+          delete window.__DEEPGRAM_LAST_SETTINGS__;
+        }
+        if (window.__DEEPGRAM_LAST_FUNCTIONS__) {
+          delete window.__DEEPGRAM_LAST_FUNCTIONS__;
+        }
+        if (window.__DEEPGRAM_TEST_MODE__) {
+          delete window.__DEEPGRAM_TEST_MODE__;
+        }
+      });
+      // Navigate away to ensure clean state for next test
+      await page.goto('about:blank');
+      await page.waitForTimeout(500); // Give time for cleanup
+    } catch (error) {
+      // Ignore cleanup errors - test may have already navigated away
+    }
+  });
+
   test('should trigger client-side function call and execute it', async ({ page }) => {
     console.log('🧪 Testing client-side function calling end-to-end...');
     
@@ -174,12 +201,14 @@ test.describe('Function Calling E2E Tests', () => {
     await page.click('[data-testid="send-button"]');
     
     // Wait for connection to be established
-    await waitForConnection(page, 10000);
+    // Increased timeout for full test runs where API may be slower
+    await waitForConnection(page, 20000);
     console.log('✅ Connection established');
     
     // Wait for SettingsApplied (may not be received when functions are included, but try anyway)
+    // Increased timeout for full test runs
     try {
-      await waitForSettingsApplied(page, 10000);
+      await waitForSettingsApplied(page, 20000);
       console.log('✅ Settings applied (SettingsApplied received)');
     } catch (e) {
       console.log('⚠️ SettingsApplied not received - continuing anyway (may be expected with functions)');
@@ -302,9 +331,10 @@ test.describe('Function Calling E2E Tests', () => {
     console.log('⏳ Waiting for FunctionCallRequest via component callback...');
     
     // Wait for function call request with timeout
+    // Increased timeout for full test runs where API may be slower
     await page.waitForFunction(
       () => window.functionCallRequests && window.functionCallRequests.length > 0,
-      { timeout: 20000 }
+      { timeout: 45000 }
     );
     
     const functionCallRequests = await page.evaluate(() => {
@@ -345,13 +375,14 @@ test.describe('Function Calling E2E Tests', () => {
     
     // Step 8: Verify agent continues conversation (check for agent response)
     // Wait for agent response after function call (may take longer as agent processes function result)
+    // Increased timeout for full test runs where API may be slower
     await page.waitForFunction(
       () => {
         const responseEl = document.querySelector('[data-testid="agent-response"]');
         const text = responseEl?.textContent || '';
         return text && text !== '(Waiting for agent response...)';
       },
-      { timeout: 30000 }
+      { timeout: 45000 }
     );
     const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
     
@@ -368,7 +399,15 @@ test.describe('Function Calling E2E Tests', () => {
     // This test focuses specifically on verifying functions are in Settings message
     // It's a simpler test that doesn't require function execution
     
-    await setupTestPage(page);
+    // Navigate with function calling enabled via URL parameters
+    await page.goto(buildUrlWithParams(BASE_URL, { 
+      'test-mode': 'true',
+      'enable-function-calling': 'true',
+      'function-type': 'standard',
+      'debug': 'true'
+    }));
+    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
     // Establish connection
     await page.fill('[data-testid="text-input"]', 'Hello');
@@ -877,14 +916,15 @@ test.describe('Function Calling E2E Tests', () => {
     await page.fill('[data-testid="text-input"]', 'Hello');
     await page.click('[data-testid="send-button"]');
     
-    // Wait for connection
-    await waitForConnection(page, 10000);
+    // Wait for connection with longer timeout for full test runs
+    await waitForConnection(page, 20000);
     console.log('✅ Connection established');
     
     // Wait for Settings to be sent and check multiple times
+    // Increased retries and wait time for full test runs
     let settingsFromWindow = null;
-    for (let i = 0; i < 5; i++) {
-      await page.waitForTimeout(1000);
+    for (let i = 0; i < 10; i++) {
+      await page.waitForTimeout(2000);
       settingsFromWindow = await page.evaluate(() => {
         if (window.__DEEPGRAM_TEST_MODE__ && window.__DEEPGRAM_LAST_SETTINGS__) {
           return {

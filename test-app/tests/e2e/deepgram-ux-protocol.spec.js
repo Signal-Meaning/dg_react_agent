@@ -29,6 +29,24 @@ import {
 test.use({ browserName: 'chromium' });
 
 test.describe('Deepgram Protocol UX Validation', () => {
+  
+  test.afterEach(async ({ page }) => {
+    // Clean up: Close any open connections and clear state
+    try {
+      await page.evaluate(() => {
+        // Close component if it exists
+        if (window.deepgramRef?.current) {
+          window.deepgramRef.current.stop?.();
+        }
+      });
+      // Navigate away to ensure clean state for next test
+      await page.goto('about:blank');
+      await page.waitForTimeout(500); // Give time for cleanup
+    } catch (error) {
+      // Ignore cleanup errors - test may have already navigated away
+    }
+  });
+  
   test('should complete full protocol flow through UI interactions', async ({ page, context }) => {
     console.log('🧪 Starting Deepgram Protocol UX Test...');
     
@@ -127,10 +145,11 @@ test.describe('Deepgram Protocol UX Validation', () => {
     console.log('🎤 Starting Microphone Protocol State Test...');
     
     // Use MicrophoneHelpers for reliable microphone activation
+    // Increased timeouts for full test runs where API may be slower
     const result = await MicrophoneHelpers.waitForMicrophoneReady(page, {
-      connectionTimeout: 10000,
-      greetingTimeout: 8000,
-      micEnableTimeout: 5000
+      connectionTimeout: 20000,
+      greetingTimeout: 15000,
+      micEnableTimeout: 10000
     });
     
     if (!result.success) {

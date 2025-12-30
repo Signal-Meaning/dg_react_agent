@@ -66,6 +66,23 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     
     console.log('🧪 VAD Redundancy Test Suite initialized');
   });
+
+  test.afterEach(async ({ page }) => {
+    // Clean up: Close any open connections and clear state
+    try {
+      await page.evaluate(() => {
+        // Close component if it exists
+        if (window.deepgramRef?.current) {
+          window.deepgramRef.current.stop?.();
+        }
+      });
+      // Navigate away to ensure clean state for next test
+      await page.goto('about:blank');
+      await page.waitForTimeout(500); // Give time for cleanup
+    } catch (error) {
+      // Ignore cleanup errors - test may have already navigated away
+    }
+  });
   
   test('should detect and handle VAD signal redundancy with pre-recorded audio', async ({ page }) => {
     console.log('🧪 Testing VAD signal redundancy detection with pre-recorded audio...');
@@ -103,7 +120,8 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     console.log('🧪 Testing agent state timeout behavior with text input...');
     
     // Establish connection via text input (triggers auto-connect)
-    await establishConnectionViaText(page, 15000);
+    // Increased timeout for full test runs where API may be slower
+    await establishConnectionViaText(page, 30000);
     
     // Use text input to trigger agent responses (more reliable than audio)
     const testMessage = 'Can you make me a list of ways to keep my cats busy?';
@@ -118,11 +136,12 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     await page.click('[data-testid="send-button"]');
     
     // Wait for agent response instead of console logs (more reliable)
+    // Increased timeout for full test runs where API may be slower
     await page.waitForFunction(() => {
       const agentResponse = document.querySelector('[data-testid="agent-response"]');
       return agentResponse && agentResponse.textContent && 
              agentResponse.textContent !== '(Waiting for agent response...)';
-    }, { timeout: 15000 });
+    }, { timeout: 30000 });
     
     // Brief pause for complete processing
     await page.waitForTimeout(1000);
@@ -177,7 +196,8 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     console.log('🧪 Testing AgentThinking functionality by injecting message...');
     
     // Establish connection via text input (triggers auto-connect)
-    await establishConnectionViaText(page, 15000);
+    // Increased timeout for full test runs where API may be slower
+    await establishConnectionViaText(page, 30000);
     
     // Instead of trying to inject messages, let's directly test the component's message handling
     // by simulating what happens when AgentThinking is received
@@ -222,7 +242,8 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     console.log('🔍 Debugging agent response flow and state transitions...');
     
     // Establish connection via text input (triggers auto-connect)
-    await establishConnectionViaText(page, 15000);
+    // Increased timeout for full test runs where API may be slower
+    await establishConnectionViaText(page, 30000);
     
     // Use text input to trigger agent responses
     const testMessage = 'Can you make me a list of ways to keep my cats busy?';
@@ -235,11 +256,12 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     await page.click('[data-testid="send-button"]');
     
     // Wait for any response (text or audio)
+    // Increased timeout for full test runs where API may be slower
     await page.waitForFunction(() => {
       const agentResponse = document.querySelector('[data-testid="agent-response"]');
       return agentResponse && agentResponse.textContent && 
              agentResponse.textContent !== '(Waiting for agent response...)';
-    }, { timeout: 15000 });
+    }, { timeout: 30000 });
     
     // Get all console logs and filter for agent-related messages
     const allLogs = await page.evaluate(() => window.consoleLogs || []);
@@ -318,7 +340,8 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     console.log('🧪 Testing agent state transitions with state inspection...');
     
     // Establish connection via text input (triggers auto-connect)
-    await establishConnectionViaText(page, 15000);
+    // Increased timeout for full test runs where API may be slower
+    await establishConnectionViaText(page, 30000);
     
     // Use text input to trigger agent responses
     const testMessage = 'Can you make me a list of ways to keep my cats busy?';
@@ -331,21 +354,23 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     await page.click('[data-testid="send-button"]');
     
     // Wait for agent response first (more reliable than state transitions)
+    // Increased timeout for full test runs where API may be slower
     await page.waitForFunction(() => {
       const agentResponse = document.querySelector('[data-testid="agent-response"]');
       return agentResponse && agentResponse.textContent && 
              agentResponse.textContent !== '(Waiting for agent response...)';
-    }, { timeout: 15000 });
+    }, { timeout: 30000 });
     
     // Verify agent state transitions (use data-testid, be lenient - state may transition quickly)
     let stateVerificationSucceeded = false;
     try {
       // Wait for agent to enter any non-idle state first
+      // Increased timeout for full test runs where state transitions may be slower
     await page.waitForFunction(() => {
         const stateElement = document.querySelector('[data-testid="agent-state"]');
         return stateElement && stateElement.textContent && 
                !stateElement.textContent.includes('idle');
-    }, { timeout: 10000 });
+    }, { timeout: 20000 });
     
       const anyState = await page.locator('[data-testid="agent-state"]').textContent();
       console.log('✅ Agent state changed from idle:', anyState);
@@ -406,15 +431,16 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     
     // Step 2: Wait for agent to be idle and playback to finish
     console.log('Step 2: Waiting for agent to be idle and playback to finish...');
+    // Increased timeouts for full test runs where state transitions may be slower
     await page.waitForFunction(() => {
       const agentState = document.querySelector('[data-testid="agent-state"]')?.textContent;
       return agentState === 'idle';
-    }, { timeout: 10000 });
+    }, { timeout: 20000 });
     
     await page.waitForFunction(() => {
       const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]')?.textContent;
       return audioPlaying === 'false';
-    }, { timeout: 5000 });
+    }, { timeout: 10000 });
     
     // Step 3: Wait for all idle conditions to be met (agent idle, user idle, audio not playing)
     console.log('Step 3: Waiting for all idle conditions to be met...');
