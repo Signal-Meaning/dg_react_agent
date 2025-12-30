@@ -194,8 +194,15 @@ The following test files are now fully passing:
      - ✅ Version 0.7.1 successfully published
      - ℹ️ **Registry**: GitHub Package Registry
      - ℹ️ **Workflow URL**: https://github.com/Signal-Meaning/dg_react_agent/actions/runs/20588693765
-   - [ ] Create GitHub release
-   - [ ] Update main branch
+   - [x] **Create GitHub release**: ✅ Completed
+     - ✅ Release created: v0.7.1
+     - ✅ Title: "v0.7.1 - Proxy Mode Test Coverage & Stability Improvements"
+     - ✅ Release notes from: `docs/releases/v0.7.1/RELEASE-NOTES.md`
+     - ✅ Target branch: issue-330
+   - [x] **Update main branch**: ✅ Completed
+     - ✅ Merged issue-330 into main
+     - ✅ Merge commit includes release summary
+     - ✅ Pushed to origin/main
 
 ## 📈 Progress Summary
 
