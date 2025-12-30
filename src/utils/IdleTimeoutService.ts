@@ -174,14 +174,15 @@ export class IdleTimeoutService {
         // MEANINGFUL_USER_ACTIVITY events (like AgentAudioDone) can arrive after agent becomes idle
         // Log state to debug why timeout isn't starting
         this.log(`MEANINGFUL_USER_ACTIVITY: activity=${event.activity}, agentState=${this.currentState.agentState}, isPlaying=${this.currentState.isPlaying}, isUserSpeaking=${this.currentState.isUserSpeaking}, isDisabled=${this.isDisabled}`);
-        // CRITICAL FIX: If agent is idle and not playing, enable resets and start timeout
+        // CRITICAL FIX: If agent is idle and not playing, enable resets and RESET timeout
         // This handles the case where MEANINGFUL_USER_ACTIVITY arrives after agent becomes idle
         // but before PLAYBACK_STATE_CHANGED with isPlaying=false
         if ((this.currentState.agentState === 'idle' || this.currentState.agentState === 'listening') && 
             !this.currentState.isUserSpeaking && 
             !this.currentState.isPlaying) {
-          // Agent is idle, so enable resets and start timeout
-          this.enableResetsAndUpdateBehavior();
+          // Agent is idle, so enable resets and RESET the timeout (user activity should reset it)
+          this.enableResets();
+          this.resetTimeout(event.activity);
         } else {
           // Agent is still active, so just update behavior (may disable resets if needed)
           this.updateTimeoutBehavior();

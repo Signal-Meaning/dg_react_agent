@@ -21,14 +21,14 @@ After removing debug instrumentation code (Issue #329), 20 Jest test suites are 
 - **Time**: ~42 seconds
 
 **Current Status (2025-01-29)**:
-- **Test Suites**: 65 passed, 2 failed, 67 total
-- **Tests**: 718 passed, 3 failed, 10 skipped, 731 total
+- **Test Suites**: 66 passed, 1 failed, 67 total
+- **Tests**: 720 passed, 1 failed, 10 skipped, 731 total
 - **Refactoring**: Complete for Category 1 (Agent Options & Settings) - 8 test suites, 27 tests
 - **Current Failures**: 
-  - `tests/integration/unified-timeout-coordination.test.js` (2 tests failing)
-  - `tests/agent-state-handling.test.ts` (1 test failing)
-- **Note**: The original 20 failing test suites were from the initial discovery. After our refactoring work, only 2 test suites are currently failing, indicating that:
+  - `tests/integration/unified-timeout-coordination.test.js` (1 test failing)
+- **Note**: The original 20 failing test suites were from the initial discovery. After our refactoring work, only 1 test suite is currently failing, indicating that:
   - 8 test suites were fixed by our refactoring (Category 1)
+  - 1 test suite fixed by timeout reset fix (`agent-state-handling.test.ts`)
   - 10 test suites from the original list are now passing (may have been fixed by shared helper functions or were false positives)
 
 ## 📋 Failing Test Suites
@@ -57,14 +57,20 @@ After removing debug instrumentation code (Issue #329), 20 Jest test suites are 
 
 **Test Results**: 27 tests passing, 1 skipped (Issue #333)
 
-### ❌ Currently Failing Test Suites (2)
+### ❌ Currently Failing Test Suites (1)
 
 **Current Failures** (2025-01-29):
-1. `tests/integration/unified-timeout-coordination.test.js` - 2 tests failing
-   - "should reset timeout on meaningful activity" - timeout callback called when it shouldn't be
-   - "should only fire timeout once, not multiple times" - timeout not firing as expected
-2. `tests/agent-state-handling.test.ts` - 1 test failing
+1. `tests/integration/unified-timeout-coordination.test.js` - 1 test failing
    - Test failure details to be investigated
+
+### ✅ Fixed Test Suites (1)
+
+**Fixed** (2025-01-29):
+1. ✅ `tests/agent-state-handling.test.ts` - **FIXED**
+   - **Issue**: "should reset timeout when user ConversationText message arrives" - timeout callback was firing too early after reset
+   - **Root Cause**: When `MEANINGFUL_USER_ACTIVITY` was received and agent was idle, the code called `enableResetsAndUpdateBehavior()` which didn't properly reset the timeout if it was already running
+   - **Solution**: Changed to call `resetTimeout()` directly when agent is idle, which properly stops and restarts the timeout
+   - **Files Changed**: `src/utils/IdleTimeoutService.ts` - Updated MEANINGFUL_USER_ACTIVITY handler
 
 **Note**: These 2 failing test suites are from the original Issue #331 list. The other 18 test suites from the original list are now passing, likely due to:
 - Our refactoring work (8 test suites in Category 1)
