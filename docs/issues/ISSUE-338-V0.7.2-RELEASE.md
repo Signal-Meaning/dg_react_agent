@@ -27,6 +27,10 @@ This is a patch release for version v0.7.2 of the Deepgram Voice Interaction Rea
 - ✅ Improved test reliability with retry logic and explicit function descriptions
 - ✅ Updated cursor rules to emphasize TDD methodology
 - ✅ Created best practices documentation for deterministic function calling tests
+- ✅ Refactored: Extracted function definitions to factory function (`test-app/src/utils/functionDefinitions.ts`)
+  - Removed 51 lines of test-specific code from `App.tsx`
+  - Improved separation of concerns and testability
+  - Uses proper TypeScript types (`AgentFunction`) instead of `any`
 
 ## ✅ Release Checklist Progress
 
@@ -147,10 +151,13 @@ This is a patch release for version v0.7.2 of the Deepgram Voice Interaction Rea
 - Function call tracker element (`data-testid="function-call-tracker"`) for E2E testing
 - Diagnostic logging for FunctionCallRequest message flow
 - Best practices documentation for deterministic function calling tests
+- Factory function for function definitions (`test-app/src/utils/functionDefinitions.ts`)
 
 #### Improved
 - Test reliability with retry logic and explicit function descriptions
 - TDD methodology documentation in cursor rules
+- Code organization: Extracted function definition logic from component to utility function
+- Type safety: Replaced `any` types with proper `AgentFunction` types
 
 ## 🔗 Related Issues
 
