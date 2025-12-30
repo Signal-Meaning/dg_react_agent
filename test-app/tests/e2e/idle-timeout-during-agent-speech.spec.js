@@ -32,7 +32,24 @@ import { monitorConnectionStatus } from './fixtures/idle-timeout-helpers';
 
 test.describe('Idle Timeout During Agent Speech', () => {
   
-  test('should NOT timeout while agent is actively speaking', async ({ page }) => {
+  test.afterEach(async ({ page }) => {
+    // Clean up: Close any open connections and clear state
+    try {
+      await page.evaluate(() => {
+        // Close component if it exists
+        if (window.deepgramRef?.current) {
+          window.deepgramRef.current.stop?.();
+        }
+      });
+      // Navigate away to ensure clean state for next test
+      await page.goto('about:blank');
+      await page.waitForTimeout(500); // Give time for cleanup
+    } catch (error) {
+      // Ignore cleanup errors - test may have already navigated away
+    }
+  });
+  
+  test('@flaky should NOT timeout while agent is actively speaking', async ({ page }) => {
     // Skip test if real APIs are not available
     // This test requires real Deepgram APIs because the idle timeout fix
     // only triggers with real agent messages, not mock responses
@@ -73,10 +90,11 @@ test.describe('Idle Timeout During Agent Speech', () => {
     console.log('Step 3: Waiting for agent to start responding...');
     
     // Wait for agent response to appear and start growing
+    // Increased timeout for full test runs where API may be slower
     await page.waitForFunction(() => {
       const agentResponse = document.querySelector('[data-testid="agent-response"]');
       return agentResponse?.textContent && agentResponse.textContent.length > 100;
-    }, { timeout: 15000 });
+    }, { timeout: 30000 });
     
     console.log('✅ Agent started responding');
     

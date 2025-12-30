@@ -20,16 +20,12 @@ import {
   buildUrlWithParams
 } from './helpers/test-helpers.mjs';
 import {
-  hasRealAPIKey,
   skipIfNoRealAPI,
   setupTestPage,
   waitForConnection,
-  waitForConnectionAndSettings,
   waitForSettingsApplied,
-  sendTextMessage,
   installWebSocketCapture,
   getCapturedWebSocketData,
-  establishConnectionViaText
 } from './helpers/test-helpers.js';
 
 test.describe('Function Calling E2E Tests', () => {
@@ -46,6 +42,33 @@ test.describe('Function Calling E2E Tests', () => {
     
     // Install WebSocket capture BEFORE navigation to ensure we capture all messages
     await installWebSocketCapture(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    // Clean up: Close any open connections and clear state
+    try {
+      await page.evaluate(() => {
+        // Close component if it exists
+        if (window.deepgramRef?.current) {
+          window.deepgramRef.current.stop?.();
+        }
+        // Clear any global state
+        if (window.__DEEPGRAM_LAST_SETTINGS__) {
+          delete window.__DEEPGRAM_LAST_SETTINGS__;
+        }
+        if (window.__DEEPGRAM_LAST_FUNCTIONS__) {
+          delete window.__DEEPGRAM_LAST_FUNCTIONS__;
+        }
+        if (window.__DEEPGRAM_TEST_MODE__) {
+          delete window.__DEEPGRAM_TEST_MODE__;
+        }
+      });
+      // Navigate away to ensure clean state for next test
+      await page.goto('about:blank');
+      await page.waitForTimeout(500); // Give time for cleanup
+    } catch (error) {
+      // Ignore cleanup errors - test may have already navigated away
+    }
   });
 
   test('should trigger client-side function call and execute it', async ({ page }) => {
@@ -165,7 +188,7 @@ test.describe('Function Calling E2E Tests', () => {
     });
     
     // Step 4: Wait for component to be ready (page already navigated in Step 2)
-    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 15000 });
     console.log('✅ Test page setup complete');
     
     // Step 5: Establish connection and send message (same pattern as other passing tests)
@@ -174,12 +197,14 @@ test.describe('Function Calling E2E Tests', () => {
     await page.click('[data-testid="send-button"]');
     
     // Wait for connection to be established
-    await waitForConnection(page, 10000);
+    // Increased timeout for full test runs where API may be slower
+    await waitForConnection(page, 30000);
     console.log('✅ Connection established');
     
     // Wait for SettingsApplied (may not be received when functions are included, but try anyway)
+    // Increased timeout for full test runs
     try {
-      await waitForSettingsApplied(page, 10000);
+      await waitForSettingsApplied(page, 30000);
       console.log('✅ Settings applied (SettingsApplied received)');
     } catch (e) {
       console.log('⚠️ SettingsApplied not received - continuing anyway (may be expected with functions)');
@@ -301,11 +326,34 @@ test.describe('Function Calling E2E Tests', () => {
     // Using direct prompts that map to function descriptions should reliably trigger function calls
     console.log('⏳ Waiting for FunctionCallRequest via component callback...');
     
+    // First verify connection is still stable before waiting for function call
+    const connectionStatusBeforeWait = await page.locator('[data-testid="connection-status"]').textContent();
+    if (!connectionStatusBeforeWait?.toLowerCase().includes('connected')) {
+      throw new Error(`Connection not stable before waiting for function call. Status: "${connectionStatusBeforeWait}"`);
+    }
+    
     // Wait for function call request with timeout
-    await page.waitForFunction(
-      () => window.functionCallRequests && window.functionCallRequests.length > 0,
-      { timeout: 20000 }
-    );
+    // Increased timeout for full test runs where API may be slower
+    try {
+      await page.waitForFunction(
+        () => window.functionCallRequests && window.functionCallRequests.length > 0,
+        { timeout: 45000 }
+      );
+    } catch (error) {
+      // If timeout, check connection status and provide diagnostics
+      const diagnosticInfo = await page.evaluate(() => {
+        return {
+          connectionStatus: document.querySelector('[data-testid="connection-status"]')?.textContent || 'not found',
+          functionCallRequestsCount: (window.functionCallRequests || []).length,
+          hasFunctionHandler: typeof window.handleFunctionCall === 'function',
+          hasTestFunctionHandler: typeof window.testFunctionHandler === 'function',
+          agentResponse: document.querySelector('[data-testid="agent-response"]')?.textContent || 'not found'
+        };
+      });
+      
+      console.error('Function call timeout. Diagnostic info:', JSON.stringify(diagnosticInfo, null, 2));
+      throw new Error(`Function call request not received within timeout. Connection: "${diagnosticInfo.connectionStatus}", Requests: ${diagnosticInfo.functionCallRequestsCount}, Handler: ${diagnosticInfo.hasFunctionHandler}`);
+    }
     
     const functionCallRequests = await page.evaluate(() => {
       return window.functionCallRequests || [];
@@ -345,13 +393,14 @@ test.describe('Function Calling E2E Tests', () => {
     
     // Step 8: Verify agent continues conversation (check for agent response)
     // Wait for agent response after function call (may take longer as agent processes function result)
+    // Increased timeout for full test runs where API may be slower
     await page.waitForFunction(
       () => {
         const responseEl = document.querySelector('[data-testid="agent-response"]');
         const text = responseEl?.textContent || '';
         return text && text !== '(Waiting for agent response...)';
       },
-      { timeout: 30000 }
+      { timeout: 45000 }
     );
     const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
     
@@ -368,7 +417,15 @@ test.describe('Function Calling E2E Tests', () => {
     // This test focuses specifically on verifying functions are in Settings message
     // It's a simpler test that doesn't require function execution
     
-    await setupTestPage(page);
+    // Navigate with function calling enabled via URL parameters
+    await page.goto(buildUrlWithParams(BASE_URL, { 
+      'test-mode': 'true',
+      'enable-function-calling': 'true',
+      'function-type': 'standard',
+      'debug': 'true'
+    }));
+    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
     // Establish connection
     await page.fill('[data-testid="text-input"]', 'Hello');
@@ -877,14 +934,15 @@ test.describe('Function Calling E2E Tests', () => {
     await page.fill('[data-testid="text-input"]', 'Hello');
     await page.click('[data-testid="send-button"]');
     
-    // Wait for connection
-    await waitForConnection(page, 10000);
+    // Wait for connection with longer timeout for full test runs
+    await waitForConnection(page, 30000);
     console.log('✅ Connection established');
     
     // Wait for Settings to be sent and check multiple times
+    // Increased retries and wait time for full test runs
     let settingsFromWindow = null;
-    for (let i = 0; i < 5; i++) {
-      await page.waitForTimeout(1000);
+    for (let i = 0; i < 10; i++) {
+      await page.waitForTimeout(2000);
       settingsFromWindow = await page.evaluate(() => {
         if (window.__DEEPGRAM_TEST_MODE__ && window.__DEEPGRAM_LAST_SETTINGS__) {
           return {
@@ -916,10 +974,10 @@ test.describe('Function Calling E2E Tests', () => {
     }
     
     // Verify function has explicit required array (if captured)
-    if (settingsFromWindow && functions) {
-      expect(functions.length).toBe(1);
+    if (settingsFromWindow && settingsFromWindow.functions) {
+      expect(settingsFromWindow.functions.length).toBe(1);
       
-      const func = functions[0];
+      const func = settingsFromWindow.functions[0];
       expect(func.name).toBe('test');
       expect(func.description).toBe('test');
       expect(func.parameters).toBeDefined();

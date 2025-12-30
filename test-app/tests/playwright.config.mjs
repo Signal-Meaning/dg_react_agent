@@ -23,6 +23,12 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
+  /* Increase timeout for full test runs where API may be slower */
+  timeout: 60000, // 60 seconds default timeout (increased from 30s)
+  expect: {
+    /* Increase assertion timeout for slower API responses in full test runs */
+    timeout: 10000, // 10 seconds for assertions
+  },
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: [
     ['html', { outputFolder: '../playwright-report', open: 'never' }],
@@ -33,6 +39,10 @@ export default defineConfig({
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: process.env.VITE_BASE_URL || 'http://localhost:5173',
+    
+    /* Add delay between tests to reduce resource contention in full test runs */
+    /* This helps when running all tests together where API may be slower */
+    actionTimeout: 30000, // 30 seconds for actions
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -95,8 +105,9 @@ export default defineConfig({
         VITE_BASE_URL: process.env.VITE_BASE_URL || 'http://localhost:5173',
       },
     },
-    // Start proxy server when USE_PROXY_MODE is enabled
-    ...(process.env.USE_PROXY_MODE === 'true' ? [{
+    // Always start proxy server for E2E tests (required for backend-proxy-mode tests)
+    // The proxy server is a test dependency, not a runtime dependency
+    {
       command: 'npm run test:proxy:server',
       cwd: '.', // Run from test-app directory
       port: 8080, // Proxy server port
@@ -110,7 +121,7 @@ export default defineConfig({
         PROXY_PORT: '8080',
         PROXY_PATH: '/deepgram-proxy',
       },
-    }] : []),
+    },
   ],
 
   /* 

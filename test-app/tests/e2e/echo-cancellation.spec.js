@@ -33,6 +33,23 @@ test.describe('Echo Cancellation Detection and Configuration', () => {
     await setupTestPage(page);
   });
 
+  test.afterEach(async ({ page }) => {
+    // Clean up: Close any open connections and clear state
+    try {
+      await page.evaluate(() => {
+        // Close component if it exists
+        if (window.deepgramRef?.current) {
+          window.deepgramRef.current.stop?.();
+        }
+      });
+      // Navigate away to ensure clean state for next test
+      await page.goto('about:blank');
+      await page.waitForTimeout(500); // Give time for cleanup
+    } catch (error) {
+      // Ignore cleanup errors - test may have already navigated away
+    }
+  });
+
   test('should detect echo cancellation support when microphone is enabled', async ({ page }) => {
     console.log('🔍 Testing echo cancellation detection...');
     
@@ -422,7 +439,7 @@ test.describe('Echo Cancellation Detection and Configuration', () => {
     console.log('   Note: Custom sample rate test requires test-app prop support');
   });
 
-  test('should prevent agent TTS from triggering itself (echo cancellation effectiveness)', async ({ page }) => {
+  test('@flaky should prevent agent TTS from triggering itself (echo cancellation effectiveness)', async ({ page }) => {
     console.log('🔍 Testing echo cancellation effectiveness: agent TTS should not trigger itself...');
     
     // Enable microphone so it's open and capturing audio

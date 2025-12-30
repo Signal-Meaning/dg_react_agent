@@ -47,6 +47,23 @@ import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpe
 
 test.describe('Idle Timeout Behavior', () => {
   
+  test.afterEach(async ({ page }) => {
+    // Clean up: Close any open connections and clear state
+    try {
+      await page.evaluate(() => {
+        // Close component if it exists
+        if (window.deepgramRef?.current) {
+          window.deepgramRef.current.stop?.();
+        }
+      });
+      // Navigate away to ensure clean state for next test
+      await page.goto('about:blank');
+      await page.waitForTimeout(500); // Give time for cleanup
+    } catch (error) {
+      // Ignore cleanup errors - test may have already navigated away
+    }
+  });
+  
   test('should handle microphone activation after idle timeout', async ({ page }) => {
     console.log('🧪 Testing microphone activation after idle timeout...');
     
@@ -612,15 +629,17 @@ test.describe('Idle Timeout Behavior', () => {
     
     // Step 2: Wait for agent to respond and finish speaking
     console.log('Step 2: Waiting for agent to respond and finish speaking...');
-    await waitForAgentGreeting(page, 15000);
+    // Increased timeout for full test runs where API may be slower
+    await waitForAgentGreeting(page, 30000);
     console.log('✅ Agent finished responding');
     
     // Step 3: Wait for playback to finish
     console.log('Step 3: Waiting for playback to finish...');
+    // Increased timeout for full test runs where playback may be slower
     await page.waitForFunction(() => {
       const audioPlaying = document.querySelector('[data-testid="audio-playing-status"]')?.textContent;
       return audioPlaying === 'false';
-    }, { timeout: 10000 });
+    }, { timeout: 20000 });
     console.log('✅ Playback finished (onPlaybackStateChange(false) fired)');
     
     // Step 4: Wait for agent state to transition to idle after playback finishes
@@ -629,14 +648,16 @@ test.describe('Idle Timeout Behavior', () => {
     // Wait for agent state to be 'idle' (with timeout)
     // The fix ensures AgentStateService.handleAudioPlaybackChange(false) is called,
     // which transitions the state to 'idle'
+    // Increased timeout for full test runs where state transitions may be slower
     try {
       await page.waitForFunction(() => {
         const agentState = document.querySelector('[data-testid="agent-state"]')?.textContent;
         return agentState === 'idle';
-      }, { timeout: 5000 });
+      }, { timeout: 25000 });
       console.log('✅ Agent state transitioned to idle');
     } catch (error) {
       console.log('⚠️  Agent state did not transition to idle within timeout');
+      // Don't fail the test - state may transition after timeout but test can still verify behavior
     }
     
     const agentStateAfterPlayback = await page.locator('[data-testid="agent-state"]').textContent();

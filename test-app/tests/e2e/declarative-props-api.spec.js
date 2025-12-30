@@ -29,6 +29,30 @@ import {
 
 test.describe('Declarative Props API - Issue #305', () => {
   
+  test.afterEach(async ({ page }) => {
+    // Clean up: Close any open connections and clear state
+    try {
+      await page.evaluate(() => {
+        // Close component if it exists
+        if (window.deepgramRef?.current) {
+          window.deepgramRef.current.stop?.();
+        }
+        // Clear test state
+        if (window.__testUserMessage) {
+          delete window.__testUserMessage;
+        }
+        if (window.__testFunctionCallHandler) {
+          delete window.__testFunctionCallHandler;
+        }
+      });
+      // Navigate away to ensure clean state for next test
+      await page.goto('about:blank');
+      await page.waitForTimeout(500); // Give time for cleanup
+    } catch (error) {
+      // Ignore cleanup errors - test may have already navigated away
+    }
+  });
+  
   test.describe('userMessage prop (replaces injectUserMessage)', () => {
     
     test('should send message when userMessage prop changes', async ({ page }) => {
@@ -334,10 +358,11 @@ test.describe('Declarative Props API - Issue #305', () => {
       
       // Wait for function call request to be received OR timeout (agent may not call function)
       // If function call happens, verify return value pattern works
+      // Increased timeout for full test runs where API may be slower
       try {
         await page.waitForFunction(
           () => window.__testFunctionCallRequestReceived === true || window.__testFunctionCallResponseSent === true,
-          { timeout: 20000 }
+          { timeout: 45000 }
         );
         
         // If we got here, either request was received or response was sent

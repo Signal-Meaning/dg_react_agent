@@ -29,6 +29,23 @@ test.describe('Interim Transcript Validation', () => {
     await page.goto(buildUrlWithParams(BASE_URL, { 'test-mode': 'true' }));
   });
 
+  test.afterEach(async ({ page }) => {
+    // Clean up: Close any open connections and clear state
+    try {
+      await page.evaluate(() => {
+        // Close component if it exists
+        if (window.deepgramRef?.current) {
+          window.deepgramRef.current.stop?.();
+        }
+      });
+      // Navigate away to ensure clean state for next test
+      await page.goto('about:blank');
+      await page.waitForTimeout(500); // Give time for cleanup
+    } catch (error) {
+      // Ignore cleanup errors - test may have already navigated away
+    }
+  });
+
   test('should receive both interim and final transcripts with fake audio', async ({ page, context }) => {
     console.log('🧪 Testing interim and final transcript receipt with fake audio...');
     

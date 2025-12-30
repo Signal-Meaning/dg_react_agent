@@ -45,6 +45,23 @@ test.describe('Callback Test Suite', () => {
     });
   });
 
+  test.afterEach(async ({ page }) => {
+    // Clean up: Close any open connections and clear state
+    try {
+      await page.evaluate(() => {
+        // Close component if it exists
+        if (window.deepgramRef?.current) {
+          window.deepgramRef.current.stop?.();
+        }
+      });
+      // Navigate away to ensure clean state for next test
+      await page.goto('about:blank');
+      await page.waitForTimeout(500); // Give time for cleanup
+    } catch (error) {
+      // Ignore cleanup errors - test may have already navigated away
+    }
+  });
+
   test('should test onTranscriptUpdate callback with existing audio sample', async ({ page, context }) => {
     console.log('🧪 Testing onTranscriptUpdate callback with existing audio sample...');
     
@@ -196,7 +213,8 @@ test.describe('Callback Test Suite', () => {
     await sendTextMessage(page, testMessage);
     
     // Wait for audio playback to start using helper
-    await waitForAudioPlaybackStart(page, 15000);
+    // Increased timeout for full test runs where API may be slower
+    await waitForAudioPlaybackStart(page, 30000);
     
     // Verify audio playing status is true
     const audioPlayingStatus = await getAudioPlayingStatus(page);
