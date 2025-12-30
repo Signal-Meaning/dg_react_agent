@@ -1055,12 +1055,12 @@ test.describe('Function Calling E2E Tests', () => {
       console.log('🧪 [TDD] Testing function call count increment...');
       skipIfNoRealAPI('Requires real Deepgram API key');
       
-      // Set up function and handler with detailed description (same as passing test)
+      // Set up function with VERY explicit description to increase likelihood of agent calling it
       await page.addInitScript(() => {
         window.testFunctions = [
           {
             name: 'get_current_time',
-            description: 'Get the current time in a specific timezone. Use this function when users ask about the time, what time it is, or current time.',
+            description: 'Get the current time in a specific timezone. ALWAYS use this function when users ask about time, what time it is, current time, or any time-related question. This function is required for all time queries.',
             parameters: {
               type: 'object',
               properties: {
@@ -1106,20 +1106,42 @@ test.describe('Function Calling E2E Tests', () => {
         };
       });
       
-      // Establish connection
-      await page.fill('[data-testid="text-input"]', 'What time is it?');
-      await page.click('[data-testid="send-button"]');
-      await waitForConnection(page, 30000);
+      // Try multiple prompts to increase likelihood of function call (retry pattern)
+      const prompts = [
+        'What time is it?',
+        'Tell me the current time',
+        'What time is it now?',
+        'Please use get_current_time to tell me the time'
+      ];
       
-      // Wait for function call (this test will FAIL if function calls aren't being triggered)
-      // This is the RED phase - we expect this to fail initially
-      console.log('⏳ [TDD RED] Waiting for function call to be tracked...');
-      const functionCallInfo = await waitForFunctionCall(page, { timeout: 45000 });
+      let functionCallInfo = { count: 0 };
       
-      // This assertion will FAIL if function calls aren't happening
+      for (const prompt of prompts) {
+        // Establish connection
+        await page.fill('[data-testid="text-input"]', prompt);
+        await page.click('[data-testid="send-button"]');
+        await waitForConnection(page, 30000);
+        
+        // Wait for function call with shorter timeout per attempt
+        console.log(`⏳ [TDD] Waiting for function call with prompt: "${prompt}"...`);
+        functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
+        
+        if (functionCallInfo.count > 0) {
+          console.log(`✅ Function call triggered with prompt: "${prompt}"`);
+          break;
+        }
+        
+        console.log(`⚠️ Function call not triggered with prompt: "${prompt}", trying next...`);
+        // Clear input for next attempt
+        await page.fill('[data-testid="text-input"]', '');
+        await page.waitForTimeout(1000); // Brief pause between attempts
+      }
+      
+      // This assertion will FAIL if function calls aren't happening after all prompts
       expect(functionCallInfo.count).toBeGreaterThan(0, 
         'Function call count should be incremented when FunctionCallRequest is received. ' +
-        'If this fails, function calls are not being triggered or handler is not being called.'
+        'Tried multiple prompts but agent did not trigger function call. ' +
+        'If this fails consistently, function calls may not be working or function description needs improvement.'
       );
       
       console.log('✅ [TDD GREEN] Function call count incremented:', functionCallInfo.count);
@@ -1303,7 +1325,7 @@ test.describe('Function Calling E2E Tests', () => {
         window.testFunctions = [
           {
             name: 'get_current_time',
-            description: 'Get the current time in a specific timezone. Use this function when users ask about the time, what time it is, or current time.',
+            description: 'Get the current time in a specific timezone. ALWAYS use this function when users ask about time, what time it is, current time, or any time-related question. This function is required for all time queries.',
             parameters: {
               type: 'object',
               properties: {
@@ -1341,12 +1363,32 @@ test.describe('Function Calling E2E Tests', () => {
         };
       });
       
-      await page.fill('[data-testid="text-input"]', 'What time is it?');
-      await page.click('[data-testid="send-button"]');
-      await waitForConnection(page, 30000);
+      // Try multiple prompts to increase likelihood of function call
+      const prompts = [
+        'What time is it?',
+        'Tell me the current time',
+        'What time is it now?'
+      ];
       
-      // Wait for function call
-      const functionCallInfo = await waitForFunctionCall(page, { timeout: 45000 });
+      let functionCallInfo = { count: 0 };
+      
+      for (const prompt of prompts) {
+        await page.fill('[data-testid="text-input"]', prompt);
+        await page.click('[data-testid="send-button"]');
+        await waitForConnection(page, 30000);
+        
+        // Wait for function call
+        functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
+        
+        if (functionCallInfo.count > 0) {
+          console.log(`✅ Function call triggered with prompt: "${prompt}"`);
+          break;
+        }
+        
+        console.log(`⚠️ Function call not triggered with prompt: "${prompt}", trying next...`);
+        await page.fill('[data-testid="text-input"]', '');
+        await page.waitForTimeout(1000);
+      }
       
       if (functionCallInfo.count > 0) {
         // Verify request structure
