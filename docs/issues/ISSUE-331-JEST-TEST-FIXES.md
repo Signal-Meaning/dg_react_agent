@@ -185,6 +185,19 @@ After removing debug instrumentation code (Issue #329), 20 Jest test suites are 
 
 **Verification**: All 27 tests passing, 1 skipped (Issue #333)
 
+### Fix #10: Timeout Reset on MEANINGFUL_USER_ACTIVITY (2025-01-29)
+
+**Date**: 2025-01-29  
+**Test**: `tests/agent-state-handling.test.ts` - "should reset timeout when user ConversationText message arrives"  
+**Root Cause**: When `MEANINGFUL_USER_ACTIVITY` was received and agent was idle, the code called `enableResetsAndUpdateBehavior()` which didn't properly reset the timeout if it was already running. The `updateTimeoutBehavior()` method only starts the timeout if it's not already running, so it didn't reset the existing timeout.
+
+**Solution**: Changed the `MEANINGFUL_USER_ACTIVITY` handler to call `resetTimeout()` directly when agent is idle, which properly stops and restarts the timeout with a fresh 10-second countdown.
+
+**Files Changed**:
+- `src/utils/IdleTimeoutService.ts` - Updated MEANINGFUL_USER_ACTIVITY handler to call `resetTimeout()` instead of `enableResetsAndUpdateBehavior()`
+
+**Verification**: Test now passes ✅ - All 45 tests in `agent-state-handling.test.ts` passing
+
 ## 🔄 Test Refactoring: Removing Log Scraping Antipattern
 
 **Date**: 2025-01-29  
