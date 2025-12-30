@@ -1257,25 +1257,30 @@ test.describe('Function Calling E2E Tests', () => {
       // Step 3: Wait for function call to be triggered (with retry logic)
       console.log('⏳ [TDD RED] Step 3: Waiting for function call to be triggered...');
       
+      // Define all prompts that will be tried
+      const allPrompts = [
+        'What time is it?',
+        'Tell me the current time',
+        'What time is it now?',
+        'Please use get_current_time to tell me the time'
+      ];
+      
       // First, check if function call already happened from Step 1 message
       let functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
+      let promptUsed = allPrompts[0]; // First prompt already sent
+      let promptsTried = [allPrompts[0]];
       
       // If not triggered, try additional prompts
       if (functionCallInfo.count === 0) {
-        const prompts = [
-          'Tell me the current time',
-          'What time is it now?',
-          'Please use get_current_time to tell me the time'
-        ];
+        const additionalPrompts = allPrompts.slice(1);
         
-        let promptUsed = 'What time is it?'; // First prompt already sent
-        
-        for (const prompt of prompts) {
+        for (const prompt of additionalPrompts) {
           await page.fill('[data-testid="text-input"]', prompt);
           await page.click('[data-testid="send-button"]');
           await waitForConnection(page, 30000);
           
           functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
+          promptsTried.push(prompt);
           
           if (functionCallInfo.count > 0) {
             promptUsed = prompt;
@@ -1294,7 +1299,7 @@ test.describe('Function Calling E2E Tests', () => {
       // This will FAIL if function calls aren't being triggered after all prompts
       expect(functionCallInfo.count).toBeGreaterThan(0,
         'Function call should be triggered by agent. ' +
-        `Tried prompts: ${prompts.join(', ')}. ` +
+        `Tried prompts: ${promptsTried.join(', ')}. ` +
         'If this fails, the agent is not deciding to call functions based on user message.'
       );
       console.log('✅ [TDD GREEN] Function call triggered, count:', functionCallInfo.count, `(prompt: "${promptUsed}")`);
