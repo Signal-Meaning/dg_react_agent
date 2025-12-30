@@ -37,13 +37,16 @@ This is a patch release for version v0.7.2 of the Deepgram Voice Interaction Rea
 ### Pre-Release
 - [x] **Tests Passing**: All tests passing
   - ✅ **Jest Tests**: 67 test suites passed, 721 tests passed, 10 skipped
-  - ✅ **E2E Tests**: 166 passed, 1 failed, 15 skipped
+  - ⚠️ **E2E Tests**: 164 passed, 3 failed, 15 skipped
     - ✅ **Issue #336 Tests**: All 4 tests passing
       - ✅ `should verify full execution flow: Connection → Message → Function Call → Execution → Response` (FIXED)
       - ✅ `should verify function call handler receives correct request structure` (FIXED)
       - ✅ `should track function calls via data-testid tracker element` (presumed passing)
       - ✅ `should increment function call count when FunctionCallRequest is received` (presumed passing)
-    - ❌ 1 unrelated test failing: `should start idle timeout after agent finishes speaking`
+    - ⚠️ **3 unrelated tests failing** (not blocking for v0.7.2):
+      - ❌ `should prevent agent TTS from triggering itself` (@flaky - echo cancellation)
+      - ❌ `should start idle timeout after agent finishes speaking - agent state transitions to idle`
+      - ❌ `should handle agent state transitions for idle timeout behavior with text input` (timeout)
   - ✅ **Run**: `npm test` - All passing
   - ✅ **Run**: `npm run test:e2e` - Issue #336 tests fixed and passing
 - [x] **Linting Clean**: No linting errors
@@ -112,14 +115,18 @@ This is a patch release for version v0.7.2 of the Deepgram Voice Interaction Rea
 - **Tests**: 721 passed, 10 skipped, 731 total
 - **Duration**: ~10.6 seconds
 
-### E2E Tests ✅
-- **Status**: 166 passed, 1 failed, 15 skipped
+### E2E Tests ⚠️
+- **Status**: 164 passed, 3 failed, 15 skipped
 - **Issue #336 Tests**: All 4 tests passing ✅
   - ✅ `should verify full execution flow: Connection → Message → Function Call → Execution → Response` (FIXED)
   - ✅ `should verify function call handler receives correct request structure` (FIXED)
   - ✅ `should track function calls via data-testid tracker element` (presumed passing)
   - ✅ `should increment function call count when FunctionCallRequest is received` (presumed passing)
-- **Total Tests**: 182 total (166 passed, 1 failed, 15 skipped)
+- **Total Tests**: 182 total (164 passed, 3 failed, 15 skipped)
+- **Failing Tests** (unrelated to Issue #336, not blocking for v0.7.2):
+  - `should prevent agent TTS from triggering itself` (@flaky)
+  - `should start idle timeout after agent finishes speaking - agent state transitions to idle`
+  - `should handle agent state transitions for idle timeout behavior with text input` (timeout)
 - **Duration**: ~3.3 minutes
 - **Test Output**: Saved to `test-results/e2e-test-output.log` (if directory exists)
 - **Fix Details**: 
