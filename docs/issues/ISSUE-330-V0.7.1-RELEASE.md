@@ -186,10 +186,14 @@ The following test files are now fully passing:
      - ✅ Tag created: `v0.7.1`
      - ✅ Tag pushed to remote
      - ✅ Tag message includes release summary
-   - [ ] **Publish to npm** ← Next step
-     - ℹ️ **Note**: Publishing is done via GitHub Actions workflow
-     - ℹ️ **Method**: Create GitHub release (triggers publish workflow) OR manually trigger workflow
-     - ℹ️ **Registry**: GitHub Package Registry (@signal-meaning scope)
+   - [x] **Publish to npm**: ✅ Completed
+     - ✅ Workflow triggered: Run ID 20588693765
+     - ✅ Jest Tests job: Passed (57s)
+     - ✅ Publish Package job: Passed (38s)
+     - ✅ Published to GitHub Package Registry (@signal-meaning scope)
+     - ✅ Version 0.7.1 successfully published
+     - ℹ️ **Registry**: GitHub Package Registry
+     - ℹ️ **Workflow URL**: https://github.com/Signal-Meaning/dg_react_agent/actions/runs/20588693765
    - [ ] Create GitHub release
    - [ ] Update main branch
 
