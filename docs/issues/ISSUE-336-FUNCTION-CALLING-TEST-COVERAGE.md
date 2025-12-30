@@ -234,11 +234,11 @@ for (const prompt of prompts) {
 
 ## Refactoring Opportunities
 
-After implementing TDD tests and infrastructure for function calling, several refactoring opportunities have been identified to improve code maintainability and reduce duplication.
+After implementing TDD tests and infrastructure for function calling, several refactoring opportunities were identified and **all have been implemented** ✅.
 
-### 1. Extract Retry Logic to Helper Function (High Priority)
+### 1. Extract Retry Logic to Helper Function (High Priority) ✅ **COMPLETED**
 
-**Current State**: Retry logic with multiple prompts is duplicated across 3 tests.
+**Previous State**: Retry logic with multiple prompts was duplicated across 3 tests.
 
 **Location**: `test-app/tests/e2e/function-calling-e2e.spec.js`
 - Lines 1109-1138: `should increment function call count when FunctionCallRequest is received`
@@ -297,13 +297,14 @@ async function tryPromptsForFunctionCall(page, prompts, options = {}) {
 - Easier to maintain and update retry logic
 - Better error messages with prompts tried
 
-**Files to Update**:
-- `test-app/tests/e2e/helpers/test-helpers.js` - Add helper function
-- `test-app/tests/e2e/function-calling-e2e.spec.js` - Replace duplicated code with helper calls
+**Status**: ✅ **COMPLETED**
+- `tryPromptsForFunctionCall()` helper added to `test-helpers.js`
+- All 3 tests refactored to use the helper
+- Reduces code duplication from ~30 lines per test to a single helper call
 
-### 2. Extract Function Setup to Helper (Medium Priority)
+### 2. Extract Function Setup to Helper (Medium Priority) ✅ **COMPLETED**
 
-**Current State**: Function setup code (`window.testFunctions`, `window.testFunctionHandler`) is duplicated across multiple tests.
+**Previous State**: Function setup code (`window.testFunctions`, `window.testFunctionHandler`) was duplicated across multiple tests.
 
 **Location**: Multiple tests in `function-calling-e2e.spec.js`
 
@@ -392,13 +393,14 @@ async function setupFunctionCallingTest(page, options = {}) {
 - Easier to update function descriptions in one place
 - Can customize per test if needed
 
-**Files to Update**:
-- `test-app/tests/e2e/helpers/test-helpers.js` - Add helper function
-- `test-app/tests/e2e/function-calling-e2e.spec.js` - Replace setup code with helper calls
+**Status**: ✅ **COMPLETED**
+- `setupFunctionCallingTest()` helper added to `test-helpers.js`
+- All tests refactored to use the helper
+- Consistent function definitions across all tests
 
-### 3. Extract Common Test Patterns (Medium Priority)
+### 3. Extract Common Test Patterns (Medium Priority) ✅ **COMPLETED**
 
-**Current State**: Common patterns like "establish connection and wait for function call" are repeated.
+**Previous State**: Common patterns like "establish connection and wait for function call" were repeated.
 
 **Proposed Refactoring**:
 ```javascript
@@ -415,14 +417,13 @@ async function establishConnectionAndWaitForFunctionCall(page, prompt, options =
 }
 ```
 
-**Benefits**:
+**Status**: ✅ **COMPLETED**
+- `establishConnectionAndWaitForFunctionCall()` helper added to `test-helpers.js`
 - Reduces boilerplate in tests
-- Consistent connection + function call pattern
-- Easier to maintain
 
-### 4. Consolidate Diagnostic Logging (Low Priority)
+### 4. Consolidate Diagnostic Logging (Low Priority) ✅ **COMPLETED**
 
-**Current State**: Diagnostic logging is scattered throughout the component and WebSocketManager.
+**Previous State**: Diagnostic logging was scattered throughout the component and WebSocketManager.
 
 **Location**:
 - `src/components/DeepgramVoiceInteraction/index.tsx` - Lines 2140-2256
@@ -438,11 +439,28 @@ async function establishConnectionAndWaitForFunctionCall(page, prompt, options =
 - Better performance (less logging in production)
 - Easier to enable/disable diagnostic logging
 
-**Files to Consider**:
-- `src/utils/function-call-logger.ts` - New utility for function call logging
-- Update component and WebSocketManager to use centralized logger
+**Status**: ✅ **COMPLETED**
+- `src/utils/function-call-logger.ts` created with centralized logging utility
+- `DeepgramVoiceInteraction/index.tsx` updated to use centralized logger
+- `WebSocketManager.ts` updated to use centralized logger
+- Logging is conditional based on test mode or debug flags
+- All linter errors fixed (replaced `any` types with proper TypeScript types)
 
-### Priority Ranking
+### Refactoring Summary
+
+**All 4 refactoring opportunities have been implemented** ✅:
+1. ✅ Retry logic extracted to `tryPromptsForFunctionCall()` helper
+2. ✅ Function setup extracted to `setupFunctionCallingTest()` helper
+3. ✅ Common test patterns extracted to `establishConnectionAndWaitForFunctionCall()` helper
+4. ✅ Diagnostic logging consolidated to `function-call-logger.ts` utility
+
+**Results**:
+- Reduced code duplication by ~90 lines
+- Improved maintainability and test readability
+- Consistent patterns across all function calling tests
+- Better type safety (all `any` types replaced with proper types)
+
+### Priority Ranking (All Completed)
 
 1. **High Priority**: Extract retry logic to helper function
    - Most duplication (3 instances)
