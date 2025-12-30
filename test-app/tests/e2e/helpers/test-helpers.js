@@ -1103,33 +1103,52 @@ async function setupFunctionCallingTest(page, options = {}) {
     return { success: false, error: 'Unknown function' };
   };
   
+  // Use addInitScript to set up everything before page loads
   await page.addInitScript((functions, handler) => {
     window.testFunctions = functions;
     window.testFunctionHandler = handler;
     window.functionCallRequests = [];
     window.functionCallResponses = [];
-  }, options.functions || defaultFunctions, options.handler || defaultHandler);
-  
-  await page.evaluate(() => {
-    window.handleFunctionCall = (request) => {
+    
+    // Set up handler in init script so it's available when page loads
+    window.handleFunctionCall = (request, sendResponse) => {
+      // Push request to array for test verification
+      if (!window.functionCallRequests) {
+        window.functionCallRequests = [];
+      }
       window.functionCallRequests.push(request);
+      
       if (window.testFunctionHandler) {
         const result = window.testFunctionHandler(request.name, JSON.parse(request.arguments || '{}'));
-        if (window.deepgramRef?.current?.sendFunctionCallResponse) {
-          window.deepgramRef.current.sendFunctionCallResponse(
-            request.id,
-            request.name,
-            JSON.stringify(result)
-          );
-          window.functionCallResponses.push({
-            id: request.id,
-            name: request.name,
-            content: JSON.stringify(result)
-          });
+        
+        // Try to send response immediately if deepgramRef is available
+        // If not available yet, the component will handle it via declarative return value
+        if (window.deepgramRef?.current?.sendFunctionCallResponse && result) {
+          try {
+            window.deepgramRef.current.sendFunctionCallResponse(
+              request.id,
+              request.name,
+              JSON.stringify(result)
+            );
+            // Track response for test verification
+            if (!window.functionCallResponses) {
+              window.functionCallResponses = [];
+            }
+            window.functionCallResponses.push({
+              id: request.id,
+              name: request.name,
+              content: JSON.stringify(result)
+            });
+          } catch (error) {
+            console.error('[TEST] Error sending function call response:', error);
+          }
         }
+        
+        // Return result for declarative pattern support (component will handle if sendResponse wasn't called)
+        return result;
       }
     };
-  });
+  }, options.functions || defaultFunctions, options.handler || defaultHandler);
 }
 
 /**

@@ -16,6 +16,8 @@ import {
 } from '../../src/types';
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 import { ClosureIssueTestPage } from './closure-issue-test-page';
+import { getFunctionDefinitions } from './utils/functionDefinitions';
+import type { AgentFunction } from '../../src/types/agent';
 
 // Type declaration for E2E test support
 // Only used in test-app for E2E testing, not part of the component's public API
@@ -42,6 +44,7 @@ declare global {
     __testFunctionCallHandler?: (request: FunctionCallRequest, sendResponse: (response: FunctionCallResponse) => void) => void | FunctionCallResponse | Promise<FunctionCallResponse>;
     __testFunctionCallRequestReceived?: boolean;
     __testFunctionCallResponseSent?: boolean;
+    testFunctions?: AgentFunction[]; // Issue #336: Functions set by setupFunctionCallingTest helper
     __DEEPGRAM_TEST_MODE__?: boolean;
     __testSetUserMessage?: (message: string | null) => void;
     __testSetConnectionState?: (state: 'connected' | 'disconnected' | 'auto') => void;
@@ -388,57 +391,12 @@ function App() {
       console.log(`[APP] memoizedAgentOptions: enableFunctionCalling=true, functionType=${functionType}`);
     }
     
-    // Define functions for function calling tests
-    // Per Deepgram docs: if endpoint is not provided, function is called client-side
-    // client_side property is NOT part of Settings message - it only appears in FunctionCallRequest responses
-    let functions = undefined;
+    // Get test override if available (Issue #336: set by setupFunctionCallingTest helper)
+    const testWindow = window as TestWindow;
+    const testOverride = testWindow.testFunctions;
     
-    if (enableFunctionCalling) {
-      if (functionType === 'minimal') {
-        // Absolute minimal function definition
-        functions = [
-          {
-            name: 'test',
-            description: 'test',
-            parameters: {
-              type: 'object',
-              properties: {}
-            }
-          }
-        ];
-      } else if (functionType === 'minimal-with-required') {
-        // Minimal function with explicit required array
-        functions = [
-          {
-            name: 'test',
-            description: 'test',
-            parameters: {
-              type: 'object',
-              properties: {},
-              required: []
-            }
-          }
-        ];
-      } else {
-        // Standard function (default)
-        functions = [
-          {
-            name: 'get_current_time',
-            description: 'Get the current time in a specific timezone. Use this when users ask about the time, what time it is, or current time.',
-            parameters: {
-              type: 'object',
-              properties: {
-                timezone: {
-                  type: 'string',
-                  description: 'Timezone (e.g., "America/New_York", "UTC", "Europe/London"). Defaults to UTC if not specified.'
-                }
-              }
-            }
-            // No endpoint = client-side function (per Deepgram API spec)
-          }
-        ];
-      }
-    }
+    // Use factory function to get function definitions (extracted for testability)
+    const functions = getFunctionDefinitions(enableFunctionCalling, functionType, testOverride);
     
     return {
       // Use environment variables with sensible defaults
