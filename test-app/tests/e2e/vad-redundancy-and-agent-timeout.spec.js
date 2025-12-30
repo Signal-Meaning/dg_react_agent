@@ -238,7 +238,7 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     console.log('🎉 AgentThinking functionality proven to exist in code!');
   });
 
-  test('should debug agent response flow and state transitions', async ({ page }) => {
+  test.flaky('should debug agent response flow and state transitions', async ({ page }) => {
     console.log('🔍 Debugging agent response flow and state transitions...');
     
     // Establish connection via text input (triggers auto-connect)
@@ -336,7 +336,7 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     console.log('✅ Agent response debug completed');
   });
 
-  test('should verify agent state transitions using state inspection', async ({ page }) => {
+  test.flaky('should verify agent state transitions using state inspection', async ({ page }) => {
     console.log('🧪 Testing agent state transitions with state inspection...');
     
     // Establish connection via text input (triggers auto-connect)

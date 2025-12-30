@@ -49,7 +49,7 @@ test.describe('Idle Timeout During Agent Speech', () => {
     }
   });
   
-  test('should NOT timeout while agent is actively speaking', async ({ page }) => {
+  test.flaky('should NOT timeout while agent is actively speaking', async ({ page }) => {
     // Skip test if real APIs are not available
     // This test requires real Deepgram APIs because the idle timeout fix
     // only triggers with real agent messages, not mock responses

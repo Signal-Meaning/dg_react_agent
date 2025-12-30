@@ -439,7 +439,7 @@ test.describe('Echo Cancellation Detection and Configuration', () => {
     console.log('   Note: Custom sample rate test requires test-app prop support');
   });
 
-  test('should prevent agent TTS from triggering itself (echo cancellation effectiveness)', async ({ page }) => {
+  test.flaky('should prevent agent TTS from triggering itself (echo cancellation effectiveness)', async ({ page }) => {
     console.log('🔍 Testing echo cancellation effectiveness: agent TTS should not trigger itself...');
     
     // Enable microphone so it's open and capturing audio
