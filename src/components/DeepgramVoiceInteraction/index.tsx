@@ -29,6 +29,7 @@ import { useCallbackRef, useBooleanDeclarativeProp } from '../../hooks/declarati
 import { AgentStateService } from '../../services/AgentStateService';
 import { compareAgentOptionsIgnoringContext, hasDependencyChanged } from '../../utils/option-comparison';
 import { filterFunctionsForSettings } from '../../utils/function-utils';
+import { functionCallLogger } from '../../utils/function-call-logger';
 
 // Default endpoints
 const DEFAULT_ENDPOINTS = {
@@ -2137,7 +2138,7 @@ function DeepgramVoiceInteraction(
     
     // Handle FunctionCallRequest from Deepgram
     if (data.type === 'FunctionCallRequest') {
-      console.log('🔧 [FUNCTION] FunctionCallRequest received from Deepgram');
+      functionCallLogger.functionCallRequestReceived(data);
       log('FunctionCallRequest received from Deepgram');
       
       // Type-safe extraction of function call information
@@ -2154,6 +2155,8 @@ function DeepgramVoiceInteraction(
       const requestData = data as FunctionCallRequestMessage;
       const functions = Array.isArray(requestData.functions) ? requestData.functions : [];
       
+      functionCallLogger.functionsArrayInfo(functions);
+      
       if (functions.length > 0) {
         // Check if any client-side functions are present
         const hasClientSideFunctions = functions.some((funcCall) => funcCall.client_side);
@@ -2162,12 +2165,20 @@ function DeepgramVoiceInteraction(
         // This provides immediate feedback that the agent is processing a function call
         // Issue #294: onAgentStateChange('thinking') Not Emitted for Client-Side Function Calls
         // Issue #302: Maintain keepalive during thinking state to prevent CLIENT_MESSAGE_TIMEOUT
+        functionCallLogger.clientSideFunctionDetected(hasClientSideFunctions);
         if (hasClientSideFunctions) {
           transitionToThinkingState('FunctionCallRequest received', true); // Maintain keepalive during function call processing
         }
         
         // For each function call request, invoke the callback
         functions.forEach((funcCall) => {
+          functionCallLogger.debug('Processing function call:', {
+            id: funcCall.id,
+            name: funcCall.name,
+            client_side: funcCall.client_side,
+            hasArguments: !!funcCall.arguments
+          });
+          
           if (funcCall.client_side) {
             // Only invoke callback for client-side functions
             const functionCall: FunctionCallRequest = {
@@ -2176,6 +2187,8 @@ function DeepgramVoiceInteraction(
               arguments: funcCall.arguments,
               client_side: funcCall.client_side
             };
+            
+            functionCallLogger.callbackInvoked(functionCall, !!onFunctionCallRequest);
             
             // Create sendResponse callback that wraps sendFunctionCallResponse
             const sendResponse = (response: FunctionCallResponse): void => {
@@ -2194,6 +2207,7 @@ function DeepgramVoiceInteraction(
             // Invoke callback with both functionCall and sendResponse
             // Issue #305: Support declarative return value pattern
             const result = onFunctionCallRequest?.(functionCall, sendResponse);
+            functionCallLogger.callbackResult(result !== undefined && result !== null);
             
             // If callback returns a value (or Promise), use that instead of sendResponse
             if (result !== undefined && result !== null) {
@@ -2231,6 +2245,7 @@ function DeepgramVoiceInteraction(
               });
             }
           } else {
+            console.log('🔧 [FUNCTION DEBUG] Server-side function call received (not handled by component):', funcCall.name);
             log('Server-side function call received (not handled by component):', funcCall.name);
           }
         });

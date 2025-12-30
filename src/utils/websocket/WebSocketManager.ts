@@ -1,4 +1,5 @@
 import { ConnectionState, DeepgramError, ServiceType } from '../../types';
+import { functionCallLogger } from '../function-call-logger';
 
 /**
  * Event types emitted by the WebSocketManager
@@ -283,6 +284,11 @@ export class WebSocketManager {
               this.log(`📨 [WEBSOCKET.onmessage] Raw string message:`, event.data);
               const data = JSON.parse(event.data);
               this.log(`📨 [WEBSOCKET.onmessage] Parsed JSON message:`, data);
+              
+              // Issue #336: Enhanced logging for FunctionCallRequest messages
+              if (data.type === 'FunctionCallRequest') {
+                functionCallLogger.websocketMessageReceived(data);
+              }
               
               // Only reset idle timeout on meaningful user activity (not every protocol message)
               const shouldResetTimeout = this.shouldResetIdleTimeout(data);

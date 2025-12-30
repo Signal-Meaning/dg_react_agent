@@ -26,6 +26,10 @@ import {
   waitForSettingsApplied,
   installWebSocketCapture,
   getCapturedWebSocketData,
+  waitForFunctionCall,
+  tryPromptsForFunctionCall,
+  setupFunctionCallingTest,
+  establishConnectionAndWaitForFunctionCall,
 } from './helpers/test-helpers.js';
 
 test.describe('Function Calling E2E Tests', () => {
@@ -1020,6 +1024,288 @@ test.describe('Function Calling E2E Tests', () => {
     }
     
     console.log('🎉 Minimal-with-required function test completed');
+  });
+
+  // ============================================================================
+  // Issue #336: Comprehensive Function Call Execution Flow Tests (TDD)
+  // ============================================================================
+  // These tests follow TDD principles - they define expected behavior for
+  // the full function call execution flow that is currently missing coverage.
+  // ============================================================================
+
+  test.describe('Issue #336: Function Call Execution Flow (TDD)', () => {
+    test('should track function calls via data-testid tracker element', async ({ page }) => {
+      console.log('🧪 [TDD] Testing function call tracker element exists...');
+      skipIfNoRealAPI('Requires real Deepgram API key');
+      
+      await page.goto(buildUrlWithParams(BASE_URL, { 
+        'test-mode': 'true',
+        'enable-function-calling': 'true'
+      }));
+      
+      await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 15000 });
+      
+      // Verify tracker element exists (this should pass - infrastructure is in place)
+      const tracker = await page.locator('[data-testid="function-call-tracker"]');
+      await expect(tracker).toBeVisible({ visible: false }); // Hidden but exists in DOM
+      
+      const initialCount = await tracker.textContent();
+      expect(parseInt(initialCount || '0', 10)).toBe(0);
+      console.log('✅ Function call tracker element exists and is initialized to 0');
+    });
+
+    test('should increment function call count when FunctionCallRequest is received', async ({ page }) => {
+      console.log('🧪 [TDD] Testing function call count increment...');
+      skipIfNoRealAPI('Requires real Deepgram API key');
+      
+      // Set up function calling test infrastructure
+      await setupFunctionCallingTest(page, {
+        handler: (functionName, args) => {
+          return { success: true, time: new Date().toISOString() };
+        }
+      });
+      
+      await page.goto(buildUrlWithParams(BASE_URL, { 
+        'test-mode': 'true',
+        'enable-function-calling': 'true'
+      }));
+      
+      await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 15000 });
+      
+      // Try multiple prompts to increase likelihood of function call (retry pattern)
+      const prompts = [
+        'What time is it?',
+        'Tell me the current time',
+        'What time is it now?',
+        'Please use get_current_time to tell me the time'
+      ];
+      
+      const functionCallInfo = await tryPromptsForFunctionCall(page, prompts, {
+        connectionTimeout: 30000,
+        functionCallTimeout: 20000
+      });
+      
+      // This assertion will FAIL if function calls aren't happening after all prompts
+      expect(functionCallInfo.count).toBeGreaterThan(0, 
+        'Function call count should be incremented when FunctionCallRequest is received. ' +
+        'Tried multiple prompts but agent did not trigger function call. ' +
+        'If this fails consistently, function calls may not be working or function description needs improvement.'
+      );
+      
+      console.log('✅ [TDD GREEN] Function call count incremented:', functionCallInfo.count);
+    });
+
+    test('should verify full execution flow: Connection → Message → Function Call → Execution → Response', async ({ page }) => {
+      console.log('🧪 [TDD] Testing full function call execution flow...');
+      skipIfNoRealAPI('Requires real Deepgram API key');
+      
+      // Set up function calling test infrastructure with custom handler
+      await setupFunctionCallingTest(page, {
+        handler: (functionName, args) => {
+          const timezone = args.timezone || 'UTC';
+          const now = new Date();
+          return {
+            success: true,
+            time: now.toLocaleString('en-US', { 
+              timeZone: timezone,
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: true
+            }),
+            timezone: timezone,
+            timestamp: now.toISOString()
+          };
+        }
+      });
+      
+      await page.goto(buildUrlWithParams(BASE_URL, { 
+        'test-mode': 'true',
+        'enable-function-calling': 'true',
+        'debug': 'true'
+      }));
+      
+      await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 15000 });
+      
+      // Set up custom handler with logging
+      await page.evaluate(() => {
+        const originalHandler = window.handleFunctionCall;
+        window.handleFunctionCall = (request) => {
+          console.log('[FUNCTION] onFunctionCallRequest callback invoked:', request);
+          if (originalHandler) {
+            originalHandler(request);
+          }
+        };
+      });
+      
+      // Step 1: Establish connection and verify Settings
+      console.log('📡 [TDD] Step 1: Establishing connection...');
+      await page.fill('[data-testid="text-input"]', 'What time is it?');
+      await page.click('[data-testid="send-button"]');
+      await waitForConnection(page, 30000);
+      console.log('✅ Connection established');
+      
+      // Step 2: Verify functions in Settings message
+      console.log('📋 [TDD] Step 2: Verifying functions in Settings message...');
+      const settingsFromWindow = await page.evaluate(() => {
+        if (window.__DEEPGRAM_TEST_MODE__ && window.__DEEPGRAM_LAST_SETTINGS__) {
+          return window.__DEEPGRAM_LAST_SETTINGS__;
+        }
+        return null;
+      });
+      
+      if (settingsFromWindow) {
+        expect(settingsFromWindow.agent?.think?.functions).toBeDefined();
+        expect(settingsFromWindow.agent.think.functions.length).toBeGreaterThan(0);
+        console.log('✅ Functions found in Settings message');
+      }
+      
+      // Step 3: Wait for function call to be triggered (with retry logic)
+      console.log('⏳ [TDD RED] Step 3: Waiting for function call to be triggered...');
+      
+      // Define all prompts that will be tried
+      const allPrompts = [
+        'What time is it?',
+        'Tell me the current time',
+        'What time is it now?',
+        'Please use get_current_time to tell me the time'
+      ];
+      
+      // First, check if function call already happened from Step 1 message
+      let functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
+      let promptUsed = allPrompts[0]; // First prompt already sent
+      let promptsTried = [allPrompts[0]];
+      
+      // If not triggered, try additional prompts using helper
+      if (functionCallInfo.count === 0) {
+        const additionalPrompts = allPrompts.slice(1);
+        const retryResult = await tryPromptsForFunctionCall(page, additionalPrompts, {
+          connectionTimeout: 30000,
+          functionCallTimeout: 20000
+        });
+        functionCallInfo = retryResult;
+        promptUsed = retryResult.prompt || allPrompts[0];
+        promptsTried = [allPrompts[0], ...additionalPrompts];
+      } else {
+        console.log('✅ Function call triggered with initial prompt: "What time is it?"');
+      }
+      
+      // This will FAIL if function calls aren't being triggered after all prompts
+      expect(functionCallInfo.count).toBeGreaterThan(0,
+        'Function call should be triggered by agent. ' +
+        `Tried prompts: ${promptsTried.join(', ')}. ` +
+        'If this fails, the agent is not deciding to call functions based on user message.'
+      );
+      console.log('✅ [TDD GREEN] Function call triggered, count:', functionCallInfo.count, `(prompt: "${promptUsed}")`);
+      
+      // Step 4: Verify handler was invoked
+      console.log('🔍 [TDD] Step 4: Verifying handler was invoked...');
+      const handlerInvoked = await page.evaluate(() => {
+        return (window.functionCallRequests || []).length > 0;
+      });
+      expect(handlerInvoked).toBe(true, 'Handler should be invoked when FunctionCallRequest is received');
+      console.log('✅ Handler was invoked');
+      
+      // Step 5: Verify function was executed
+      console.log('⚙️ [TDD] Step 5: Verifying function was executed...');
+      const functionExecuted = await page.evaluate(() => {
+        return (window.functionCallResponses || []).length > 0;
+      });
+      expect(functionExecuted).toBe(true, 'Function should be executed and response sent');
+      console.log('✅ Function was executed');
+      
+      // Step 6: Verify response structure
+      console.log('📤 [TDD] Step 6: Verifying response structure...');
+      const response = await page.evaluate(() => {
+        const responses = window.functionCallResponses || [];
+        return responses[0] || null;
+      });
+      
+      expect(response).not.toBeNull();
+      expect(response.id).toBeDefined();
+      expect(response.name).toBe('get_current_time');
+      expect(response.content).toBeDefined();
+      
+      const responseContent = JSON.parse(response.content);
+      expect(responseContent.success).toBe(true);
+      expect(responseContent.time).toBeDefined();
+      console.log('✅ Response structure verified');
+      
+      // Step 7: Verify agent continues conversation
+      console.log('💬 [TDD] Step 7: Verifying agent continues conversation...');
+      await page.waitForFunction(
+        () => {
+          const responseEl = document.querySelector('[data-testid="agent-response"]');
+          const text = responseEl?.textContent || '';
+          return text && text !== '(Waiting for agent response...)';
+        },
+        { timeout: 45000 }
+      );
+      
+      const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
+      expect(agentResponse).toBeTruthy();
+      expect(agentResponse).not.toBe('(Waiting for agent response...)');
+      console.log('✅ Agent continued conversation after function execution');
+      
+      console.log('🎉 [TDD] Full execution flow test completed');
+    });
+
+    test('should verify function call handler receives correct request structure', async ({ page }) => {
+      console.log('🧪 [TDD] Testing function call request structure...');
+      skipIfNoRealAPI('Requires real Deepgram API key');
+      
+      // Set up function calling test infrastructure
+      await setupFunctionCallingTest(page, {
+        handler: (functionName, args) => {
+          return { success: true, time: new Date().toISOString() };
+        }
+      });
+      
+      await page.goto(buildUrlWithParams(BASE_URL, { 
+        'test-mode': 'true',
+        'enable-function-calling': 'true'
+      }));
+      
+      await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 15000 });
+      
+      // Try multiple prompts to increase likelihood of function call
+      const prompts = [
+        'What time is it?',
+        'Tell me the current time',
+        'What time is it now?'
+      ];
+      
+      const functionCallInfo = await tryPromptsForFunctionCall(page, prompts, {
+        connectionTimeout: 30000,
+        functionCallTimeout: 20000
+      });
+      
+      if (functionCallInfo.count > 0) {
+        // Verify request structure
+        const request = await page.evaluate(() => {
+          return (window.functionCallRequests || [])[0] || null;
+        });
+        
+        expect(request).not.toBeNull();
+        expect(request.id).toBeDefined();
+        expect(request.name).toBe('get_current_time');
+        expect(request.arguments).toBeDefined();
+        expect(request.client_side).toBeDefined();
+        
+        console.log('✅ Function call request structure verified:', {
+          id: request.id,
+          name: request.name,
+          hasArguments: !!request.arguments,
+          client_side: request.client_side
+        });
+      } else {
+        console.log('⚠️ Function call not triggered - cannot verify request structure');
+        // This is expected to fail initially (RED phase)
+        expect(functionCallInfo.count).toBeGreaterThan(0,
+          'Function call should be triggered to verify request structure'
+        );
+      }
+    });
   });
 });
 

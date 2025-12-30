@@ -16,6 +16,54 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 - Demonstrate proper usage of the headless dg_react_agent component
 - MUST maintain API compatibility with the headless dg_react_agent component
 
+## ⚠️ CRITICAL: Test-Driven Development (TDD)
+
+**THIS PROJECT USES TEST-DRIVEN DEVELOPMENT. TESTS ALWAYS COME FIRST.**
+
+### TDD Workflow (MANDATORY)
+
+1. **🔴 RED**: Write failing tests FIRST that define expected behavior
+2. **🟢 GREEN**: Implement minimal code to make tests pass
+3. **♻️ REFACTOR**: Improve code quality while keeping tests green
+4. **🔄 REPEAT**: Continue cycle for each feature increment
+
+### TDD Rules
+
+- **NEVER write implementation code without tests first**
+- **NEVER skip writing tests** - tests are not optional
+- **ALWAYS write tests before implementation** - this is non-negotiable
+- **Tests define requirements** - tests serve as executable specifications
+- **Red-Green-Refactor cycle** - follow this cycle for all development
+
+### When Starting Any Feature or Bug Fix
+
+1. **First**: Write failing tests that describe the desired behavior
+2. **Second**: Run tests to confirm they fail (RED)
+3. **Third**: Write minimal implementation to make tests pass (GREEN)
+4. **Fourth**: Refactor code while keeping tests passing (REFACTOR)
+
+### Test Requirements
+
+- **Unit Tests**: Required for all component logic, utilities, and services
+- **Integration Tests**: Required for WebSocket, audio, and cross-service interactions
+- **E2E Tests**: Required for user-facing features and critical workflows
+- **Test Coverage**: Maintain high coverage (>90% for critical paths)
+
+### Test File Organization
+
+- **Unit Tests**: `tests/` directory (Jest)
+- **E2E Tests**: `test-app/tests/e2e/` directory (Playwright)
+- **Test Utilities**: `tests/utils/` and `test-app/tests/helpers/`
+- **Test Fixtures**: `tests/fixtures/` and `test-app/tests/fixtures/`
+
+### Testing Standards
+
+- **Test Naming**: Descriptive test names that explain what is being tested
+- **Test Structure**: Arrange-Act-Assert pattern
+- **Test Isolation**: Each test should be independent and not rely on other tests
+- **Mock vs Real**: Prefer real API testing for integration, use mocks for unit tests
+- **Test Documentation**: Tests should be self-documenting through clear naming
+
 ## Development Guidelines
 
 ### Fork Point
@@ -44,7 +92,71 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 - Microphone control should primarily be handled by the test app, not the component
 - The component should focus on WebSocket management and audio processing
 
-## Testing
-- E2E tests are failing due to microphone activation sequence issues
-- Use `MicrophoneHelpers` utility for consistent microphone testing
-- Focus on fixing the 40 failing microphone tests
+## Testing Guidelines
+
+### Test Types and When to Use Them
+
+#### Unit Tests (Jest) - `tests/` directory
+- **Purpose**: Test component logic, utilities, and services in isolation
+- **When**: Testing individual functions, methods, or component behavior
+- **Tools**: Jest, React Testing Library, mocks
+- **Example**: Testing that functions are included in Settings message
+
+#### Integration Tests (Jest) - `tests/` directory
+- **Purpose**: Test interactions between components, services, and WebSocket
+- **When**: Testing cross-service interactions, WebSocket message handling
+- **Tools**: Jest, mocks for WebSocketManager and AudioManager
+- **Example**: Testing Settings message sending and receiving
+
+#### E2E Tests (Playwright) - `test-app/tests/e2e/` directory
+- **Purpose**: Test complete user workflows with real API connections
+- **When**: Testing full user flows, real API integration, critical paths
+- **Tools**: Playwright, real Deepgram API (when available)
+- **Example**: Testing full function calling flow from connection to execution
+
+### Test Utilities
+
+- **MicrophoneHelpers**: Use for consistent microphone testing in E2E tests
+- **Component Test Helpers**: `tests/utils/component-test-helpers.tsx` for component setup
+- **WebSocket Capture**: Use `installWebSocketCapture()` for E2E WebSocket inspection
+- **Audio Helpers**: `test-app/tests/e2e/fixtures/audio-helpers.js` for audio testing
+
+### Testing Best Practices
+
+- **Real API First**: Prefer real API testing for integration tests when possible
+- **Mock for Speed**: Use mocks for unit tests and edge case testing
+- **Test Isolation**: Each test should be independent and not rely on execution order
+- **Clear Assertions**: Use descriptive assertion messages
+- **Test Data**: Use fixtures and helpers for consistent test data
+
+### Current Test Status
+
+- Focus on maintaining and improving test coverage
+
+## Git Branch Management
+
+### CRITICAL: Never Delete Release Branches
+- **NEVER delete branches that match the pattern `release/v*`** (e.g., `release/v0.6.5`, `release/v0.7.0`)
+- Release branches are permanent historical references and must be preserved
+- Even if a release branch appears "merged" to main, it should NOT be deleted
+- Release branches serve as:
+  - Historical reference points for specific releases
+  - Documentation of release state at time of publication
+  - Rollback points if needed
+  - Reference for release documentation
+
+### Branch Cleanup Rules
+- **Safe to delete**: Feature branches (e.g., `davidrmcgee/issueXXX`, `issue-XXX`) that are:
+  - Fully merged to main
+  - Confirmed closed/resolved
+  - No longer needed for reference
+- **NEVER delete**:
+  - Any branch matching `release/v*` pattern
+  - Branches that are explicitly protected
+  - Branches that might be needed for historical reference
+
+### Before Deleting Any Branch
+1. Verify it's not a release branch (check for `release/` prefix)
+2. Confirm it's fully merged and no longer needed
+3. Check if there are any open PRs or issues referencing it
+4. When in doubt, DO NOT DELETE - ask the user first
