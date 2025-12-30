@@ -19,14 +19,18 @@
 
 import React, { useState, useMemo } from 'react';
 import { render, act } from '@testing-library/react';
-import { DeepgramVoiceInteractionHandle, AgentOptions, AgentFunction } from '../src/types';
+import { DeepgramVoiceInteractionHandle, AgentOptions } from '../src/types';
 import { createMockWebSocketManager, createMockAudioManager } from './fixtures/mocks';
 import {
   resetTestState,
   createAgentOptions,
   setupComponentAndConnect,
   createSettingsCapture,
+  findSettingsWithFunctions,
+  assertSettingsWithFunctions,
+  clearCapturedSettings,
   MOCK_API_KEY,
+  type CapturedSettings,
 } from './utils/component-test-helpers';
 import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
@@ -88,21 +92,11 @@ function TestComponentWithMemoIssue({
 describe('Agent Options Re-send Edge Cases - Issue #311', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
-  let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
-  let consoleLogs: string[];
+  let capturedSettings: CapturedSettings;
 
   beforeEach(() => {
     jest.clearAllMocks();
     resetTestState();
-    consoleLogs = [];
-    
-    // Capture console logs
-    const originalLog = console.log;
-    console.log = (...args: unknown[]) => {
-      const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
-      consoleLogs.push(message);
-      originalLog(...args);
-    };
     
     mockWebSocketManager = createMockWebSocketManager();
     mockAudioManager = createMockAudioManager();
@@ -111,13 +105,10 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     
     WebSocketManager.mockImplementation(() => mockWebSocketManager);
     AudioManager.mockImplementation(() => mockAudioManager);
-    
-    (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true;
   });
 
   afterEach(() => {
     jest.clearAllMocks();
-    delete (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
   });
 
   test('should handle agentOptions changing from undefined to defined', async () => {
@@ -161,7 +152,7 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear previous Settings to only capture the re-send
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Trigger agentOptions change by updating it again (to test re-send after connection)
     const updatedOptions = createAgentOptions({
@@ -187,9 +178,7 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     });
     
     // Should send Settings with functions (from the re-send after connection)
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.agent?.think?.functions && s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
     expect(settingsWithFunctions).toBeDefined();
   });
@@ -208,7 +197,7 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     );
 
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Rapid changes
     const options1 = createAgentOptions({
@@ -303,7 +292,7 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear previous Settings to only capture the re-send
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Trigger another change to test re-send after connection
     // Update hasFunctions again to trigger agentOptions change
@@ -315,18 +304,16 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     
     // Check if Settings was sent with functions (either initial or re-sent)
     // This test verifies the useMemo pattern the customer is using
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.agent?.think?.functions && s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
     // Note: This might fail if there's a timing issue
     // But it helps us understand if the pattern itself works
     expect(settingsWithFunctions).toBeDefined();
   });
 
-  test('should verify comparison happens after ref update', async () => {
-    // Edge case: Verify the ref is updated AFTER comparison, not before
-    // This ensures we're comparing the right values
+  test('should verify comparison correctly detects change', async () => {
+    // Behavior-based test: Verify that comparison correctly detects change
+    // by checking that Settings are re-sent with the new functions
     
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
@@ -340,7 +327,9 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     );
 
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    consoleLogs.length = 0;
+    
+    // Clear captured settings
+    clearCapturedSettings(capturedSettings);
     
     const updatedOptions = createAgentOptions({
       functions: [{
@@ -360,23 +349,17 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
       );
     });
     
+    // Wait for Settings to be re-sent
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 500));
     });
     
-    // Check comparison logs to verify prev vs current values
-    const comparisonLogs = consoleLogs.filter(log => 
-      log.includes('Comparing values')
-    );
+    // Verify Settings was re-sent with functions
+    // This proves the comparison correctly detected the change
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
-    expect(comparisonLogs.length).toBeGreaterThan(0);
-    
-    // The comparison log should show:
-    // - prevHasFunctions: false
-    // - currentHasFunctions: true
-    const comparisonLog = comparisonLogs[comparisonLogs.length - 1];
-    expect(comparisonLog).toContain('prevHasFunctions');
-    expect(comparisonLog).toContain('currentHasFunctions');
+    assertSettingsWithFunctions(settingsWithFunctions, 'when comparison correctly detects change');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 });
 

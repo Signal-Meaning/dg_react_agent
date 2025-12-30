@@ -24,6 +24,17 @@ export const createMockWebSocketManager = () => ({
   destroy: jest.fn(),
   startKeepalive: jest.fn(),
   stopKeepalive: jest.fn(),
+  
+  // WebSocket property for readyState checking (required for Settings sending)
+  // Component checks agentManagerRef.current.ws.readyState before sending Settings
+  // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+  ws: {
+    readyState: 1, // OPEN - allows Settings to be sent
+    CONNECTING: 0,
+    OPEN: 1,
+    CLOSING: 2,
+    CLOSED: 3,
+  },
 });
 
 /**

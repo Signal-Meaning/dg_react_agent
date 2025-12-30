@@ -6,22 +6,19 @@
 /**
  * Agent Options useEffect Dependency Test - Issue #311
  * 
- * This test verifies that the useEffect with dependency [agentOptions, props.debug]
- * actually runs when agentOptions reference changes.
- * 
- * This is critical - if the useEffect doesn't run, no comparison happens, no re-send happens.
+ * Behavior-based tests: Verify that useEffect runs when agentOptions reference changes
+ * by checking that Settings are re-sent, not by checking logs.
  * 
  * Test scenarios:
- * 1. Verify useEffect runs when agentOptions reference changes
- * 2. Verify useEffect does NOT run when agentOptions reference doesn't change (mutation)
- * 3. Verify useEffect runs even if agentOptions content is the same but reference is new
- * 4. Test what happens if agentOptions is the exact same object reference
+ * 1. Verify Settings re-sent when agentOptions reference changes
+ * 2. Verify Settings NOT re-sent when agentOptions reference doesn't change (mutation)
+ * 3. Verify useMemo creates new reference when dependency changes
  * 
  * Issue #311: Component not re-sending Settings when agentOptions changes after connection
  */
 
 import React, { useMemo, useState } from 'react';
-import { render, act } from '@testing-library/react';
+import { render, act, waitFor } from '@testing-library/react';
 import { DeepgramVoiceInteractionHandle, AgentOptions } from '../src/types';
 import { createMockWebSocketManager, createMockAudioManager } from './fixtures/mocks';
 import {
@@ -29,7 +26,11 @@ import {
   createAgentOptions,
   setupComponentAndConnect,
   createSettingsCapture,
+  findSettingsWithFunctions,
+  assertSettingsWithFunctions,
+  clearCapturedSettings,
   MOCK_API_KEY,
+  type CapturedSettings,
 } from './utils/component-test-helpers';
 import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
@@ -43,7 +44,7 @@ const { AudioManager } = require('../src/utils/audio/AudioManager');
 /**
  * Test component that tracks how many times agentOptions reference changes
  */
-function TestComponentWithReferenceTracking() {
+const TestComponentWithReferenceTracking = React.forwardRef<DeepgramVoiceInteractionHandle, {}>((props, ref) => {
   const [hasFunctions, setHasFunctions] = useState(false);
   const [renderCount, setRenderCount] = useState(0);
   
@@ -99,30 +100,21 @@ function TestComponentWithReferenceTracking() {
   
   return (
     <DeepgramVoiceInteraction
+      ref={ref}
       apiKey={MOCK_API_KEY}
       agentOptions={agentOptions}
     />
   );
-}
+});
 
 describe('Agent Options useEffect Dependency - Issue #311', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
-  let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
-  let consoleLogs: string[];
+  let capturedSettings: CapturedSettings;
 
   beforeEach(() => {
     jest.clearAllMocks();
     resetTestState();
-    consoleLogs = [];
-    
-    // Capture console logs
-    const originalLog = console.log;
-    console.log = (...args: unknown[]) => {
-      const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
-      consoleLogs.push(message);
-      originalLog(...args);
-    };
     
     mockWebSocketManager = createMockWebSocketManager();
     mockAudioManager = createMockAudioManager();
@@ -131,19 +123,18 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
     
     WebSocketManager.mockImplementation(() => mockWebSocketManager);
     AudioManager.mockImplementation(() => mockAudioManager);
-    
-    (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__ = true;
   });
 
   afterEach(() => {
     jest.clearAllMocks();
-    delete (window as any).__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
     delete (window as any).__testReferenceChangeCount;
     delete (window as any).__testRenderCount;
   });
 
-  test('should verify useEffect runs when agentOptions reference changes', async () => {
-    // This test verifies the core issue: does the useEffect run when reference changes?
+  test('should verify Settings re-sent when agentOptions reference changes', async () => {
+    // Behavior-based test: Verify Settings re-sent when reference changes
+    // This proves useEffect runs when dependency changes
+    
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
     const initialOptions = createAgentOptions({ functions: undefined });
@@ -157,12 +148,8 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
 
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
-    // Count entry point logs before update
-    const entryPointLogsBefore = consoleLogs.filter(log => 
-      log.includes('[agentOptions useEffect] Entry point')
-    ).length;
-    
-    consoleLogs.length = 0; // Clear logs
+    // Clear captured settings
+    clearCapturedSettings(capturedSettings);
     
     // Update with new reference
     const updatedOptions = createAgentOptions({
@@ -183,30 +170,24 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
       );
     });
     
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 200));
-    });
+    // Wait for Settings to be re-sent
+    // If useEffect doesn't run, Settings won't be re-sent
+    await waitFor(() => {
+      expect(capturedSettings.length).toBeGreaterThan(0);
+    }, { timeout: 2000 });
     
-    // Count entry point logs after update
-    const entryPointLogsAfter = consoleLogs.filter(log => 
-      log.includes('[agentOptions useEffect] Entry point')
-    ).length;
+    // Verify Settings was re-sent with functions
+    // This proves useEffect ran and detected the change
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
-    // Should have new entry point logs (useEffect should have run)
-    expect(entryPointLogsAfter).toBeGreaterThan(0);
-    
-    // Verify the logs show change detection (the diagnostic logs should appear)
-    const changeDetectionLogs = consoleLogs.filter(log => 
-      log.includes('agentOptionsChanged: true') ||
-      log.includes('[agentOptions Change]')
-    );
-    // The useEffect runs, and we should see the change detection logs
-    // This confirms the comparison detected the change
-    expect(changeDetectionLogs.length).toBeGreaterThan(0);
+    assertSettingsWithFunctions(settingsWithFunctions, 'when agentOptions reference changes');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 
-  test('should verify useEffect does NOT run when reference is the same', async () => {
-    // This test verifies that mutation (same reference) doesn't trigger useEffect
+  test('should verify Settings NOT re-sent when reference is the same', async () => {
+    // Behavior-based test: Verify Settings NOT re-sent when reference doesn't change
+    // This proves useEffect doesn't run for same reference
+    
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
     const agentOptions = createAgentOptions({ functions: undefined });
@@ -220,7 +201,9 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
     );
 
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    consoleLogs.length = 0;
+    
+    // Clear captured settings
+    clearCapturedSettings(capturedSettings);
     
     // Re-render with SAME reference (no change)
     await act(async () => {
@@ -237,43 +220,45 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
       await new Promise(resolve => setTimeout(resolve, 200));
     });
     
-    // Should NOT have new entry point logs (useEffect shouldn't run for same reference)
-    // Actually, React might re-render, but the dependency array should prevent useEffect from running
-    // Let's check if there are any new entry point logs
-    const newEntryPointLogs = consoleLogs.filter(log => 
-      log.includes('[agentOptions useEffect] Entry point') &&
-      log.includes('isFirstRender: false')
-    );
-    
-    // This is expected behavior - same reference shouldn't trigger useEffect
-    // But React might still call it, so we just verify the behavior
-    console.log('New entry point logs with same reference:', newEntryPointLogs.length);
+    // Settings should NOT be re-sent because reference didn't change
+    // (useEffect won't run because dependency array watches reference)
+    expect(capturedSettings.length).toBe(0);
   });
 
   test('should verify useMemo creates new reference when dependency changes', async () => {
-    // This test verifies that useMemo actually creates new references
-    // when its dependency changes (matching customer's pattern)
-    // NOTE: Add .only to run this test individually: test.only(...)
+    // Behavior-based test: Verify useMemo creates new references
+    // by checking that Settings are re-sent when dependency changes
     
-    render(<TestComponentWithReferenceTracking />);
+    const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
-    // Wait for component to initialize and hasFunctions to change
+    render(<TestComponentWithReferenceTracking ref={ref} />);
+    
+    // Wait for component to initialize and establish connection
+    await setupComponentAndConnect(ref, mockWebSocketManager);
+    
+    // Clear captured settings
+    clearCapturedSettings(capturedSettings);
+    
+    // Wait for hasFunctions to change (triggers useMemo to create new reference)
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 300));
     });
     
-    // Check if reference changed
+    // Check if reference changed (via window variable)
     const referenceChangeCount = (window as any).__testReferenceChangeCount || 0;
-    const renderCount = (window as any).__testRenderCount || 0;
-    
-    console.log('Reference change count:', referenceChangeCount);
-    console.log('Render count:', renderCount);
     
     // useMemo should create new reference when hasFunctions changes
     // This verifies the customer's pattern works
-    // Note: This test verifies the pattern, not the full component behavior
-    // The reference count should be at least 1 (initial render creates first reference)
     expect(referenceChangeCount).toBeGreaterThanOrEqual(1);
+    
+    // Verify Settings was re-sent (proves useEffect ran when reference changed)
+    await waitFor(() => {
+      expect(capturedSettings.length).toBeGreaterThan(0);
+    }, { timeout: 2000 });
+    
+    // Verify Settings has functions (proves new reference was detected)
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
+    
+    expect(settingsWithFunctions).toBeDefined();
   });
 });
-
