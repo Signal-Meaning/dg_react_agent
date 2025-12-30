@@ -32,8 +32,10 @@ import {
   createSettingsCapture,
   verifySettingsStructure,
   verifySettingsHasFunctions,
-  verifySettingsNoFunctions,
+  findSettingsWithFunctions,
+  assertSettingsWithFunctions,
   waitFor,
+  type CapturedSettings,
 } from './utils/component-test-helpers';
 
 // Mock WebSocket and Audio managers
@@ -46,7 +48,7 @@ const { AudioManager } = require('../src/utils/audio/AudioManager');
 describe('AgentOptions Timing Issue', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
-  let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
+  let capturedSettings: CapturedSettings;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -97,20 +99,16 @@ describe('AgentOptions Timing Issue', () => {
     });
     
     await waitFor(() => {
-      const settingsWithFunctions = capturedSettings.find(s => 
-        s.agent?.think?.functions && s.agent.think.functions.length > 0
-      );
+      const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
       return settingsWithFunctions !== undefined;
     }, { timeout: 5000 });
 
     // Verify that Settings was re-sent with functions
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.agent?.think?.functions && s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
-    expect(settingsWithFunctions).toBeDefined();
+    assertSettingsWithFunctions(settingsWithFunctions, 'when agentOptions changes');
     verifySettingsHasFunctions(settingsWithFunctions, 1);
-    expect(settingsWithFunctions?.agent?.think?.functions?.[0]?.name).toBe('test');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 
   test('should send Settings with functions when agentOptions includes functions from start', async () => {
@@ -125,6 +123,7 @@ describe('AgentOptions Timing Issue', () => {
     // Verify Settings HAS functions
     const settings = capturedSettings[0];
     verifySettingsStructure(settings);
+    assertSettingsWithFunctions(settings, 'when agentOptions includes functions from start');
     verifySettingsHasFunctions(settings, 1);
     expect(settings.agent.think.functions[0].name).toBe('test');
   });
@@ -160,9 +159,7 @@ describe('AgentOptions Timing Issue', () => {
     
     // Wait for second Settings (with functions)
     await waitFor(() => {
-      const settingsWithFunctions = capturedSettings.find(s => 
-        s.agent?.think?.functions && s.agent.think.functions.length > 0
-      );
+      const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
       return settingsWithFunctions !== undefined;
     }, { timeout: 5000 });
 
@@ -280,6 +277,7 @@ describe('AgentOptions Timing Issue', () => {
 
     // Verify first Settings
     const firstSettings = capturedSettings[0];
+    assertSettingsWithFunctions(firstSettings, 'initial Settings with functions');
     verifySettingsHasFunctions(firstSettings, 1);
     expect(firstSettings.agent.think.functions[0].name).toBe('test1');
 

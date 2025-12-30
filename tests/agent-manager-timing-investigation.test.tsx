@@ -24,7 +24,11 @@ import {
   createAgentOptions,
   setupComponentAndConnect,
   createSettingsCapture,
+  findSettingsWithFunctions,
+  assertSettingsWithFunctions,
+  clearCapturedSettings,
   MOCK_API_KEY,
+  type CapturedSettings,
 } from './utils/component-test-helpers';
 import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
@@ -38,7 +42,7 @@ const { AudioManager } = require('../src/utils/audio/AudioManager');
 describe('Agent Manager Timing Investigation - Issue #311', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
-  let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
+  let capturedSettings: CapturedSettings;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -73,7 +77,7 @@ describe('Agent Manager Timing Investigation - Issue #311', () => {
     );
 
     // Clear captured Settings before connection
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Establish connection (this should create the agent manager)
     await setupComponentAndConnect(ref, mockWebSocketManager);
@@ -115,16 +119,12 @@ describe('Agent Manager Timing Investigation - Issue #311', () => {
     const reSentSettings = capturedSettings.slice(initialSettingsCount);
     expect(reSentSettings.length).toBeGreaterThan(0);
     
-    const settingsWithFunctions = reSentSettings.find(s => 
-      s.type === 'Settings' && 
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(reSentSettings);
     
     // This assertion proves agentManager existed when agentOptions changed
     // If agentManager was null, Settings would not have been re-sent
-    expect(settingsWithFunctions).toBeDefined();
-    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test');
+    assertSettingsWithFunctions(settingsWithFunctions, 'when agentOptions changes after connection');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
   
   test('should verify agentManager is created during connection', async () => {
@@ -143,7 +143,7 @@ describe('Agent Manager Timing Investigation - Issue #311', () => {
     );
 
     // Clear captured Settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Establish connection
     await setupComponentAndConnect(ref, mockWebSocketManager);

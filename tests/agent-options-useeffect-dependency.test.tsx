@@ -26,7 +26,11 @@ import {
   createAgentOptions,
   setupComponentAndConnect,
   createSettingsCapture,
+  findSettingsWithFunctions,
+  assertSettingsWithFunctions,
+  clearCapturedSettings,
   MOCK_API_KEY,
+  type CapturedSettings,
 } from './utils/component-test-helpers';
 import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
@@ -106,7 +110,7 @@ const TestComponentWithReferenceTracking = React.forwardRef<DeepgramVoiceInterac
 describe('Agent Options useEffect Dependency - Issue #311', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
-  let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
+  let capturedSettings: CapturedSettings;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -145,7 +149,7 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear captured settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Update with new reference
     const updatedOptions = createAgentOptions({
@@ -174,14 +178,10 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
     
     // Verify Settings was re-sent with functions
     // This proves useEffect ran and detected the change
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
-    expect(settingsWithFunctions).toBeDefined();
-    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test');
+    assertSettingsWithFunctions(settingsWithFunctions, 'when agentOptions reference changes');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 
   test('should verify Settings NOT re-sent when reference is the same', async () => {
@@ -203,7 +203,7 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear captured settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Re-render with SAME reference (no change)
     await act(async () => {
@@ -237,7 +237,7 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear captured settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Wait for hasFunctions to change (triggers useMemo to create new reference)
     await act(async () => {
@@ -257,11 +257,7 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
     }, { timeout: 2000 });
     
     // Verify Settings has functions (proves new reference was detected)
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
     expect(settingsWithFunctions).toBeDefined();
   });

@@ -19,7 +19,7 @@
  */
 
 import React from 'react';
-import { render, act, waitFor } from '@testing-library/react';
+import { render, act } from '@testing-library/react';
 import { DeepgramVoiceInteractionHandle } from '../src/types';
 import { createMockWebSocketManager, createMockAudioManager } from './fixtures/mocks';
 import {
@@ -27,7 +27,12 @@ import {
   createAgentOptions,
   setupComponentAndConnect,
   createSettingsCapture,
+  findSettingsWithFunctions,
+  assertSettingsWithFunctions,
+  clearCapturedSettings,
   MOCK_API_KEY,
+  waitFor,
+  type CapturedSettings,
 } from './utils/component-test-helpers';
 import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
@@ -42,7 +47,7 @@ const { AudioManager } = require('../src/utils/audio/AudioManager');
 describe('Agent Options Remount Behavior - Issue #318', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
-  let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
+  let capturedSettings: CapturedSettings;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -105,8 +110,7 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear Settings before agentOptions change
-    const beforeChangeCount = capturedSettings.length;
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Now change agentOptions after remount
     const updatedOptions = createAgentOptions({
@@ -134,14 +138,10 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
     }, { timeout: 2000 });
     
     // Verify Settings was re-sent with functions
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
-    expect(settingsWithFunctions).toBeDefined();
-    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test');
+    assertSettingsWithFunctions(settingsWithFunctions, 'after remount when agentOptions changes');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 
   // Issue #333: Settings not sent on new connection after remount
@@ -191,7 +191,7 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
     });
     
     // Clear capturedSettings to track only Settings sent after remount
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Reset mock to ensure we get a fresh event listener from the new component instance
     // This is important because the new instance will register a new event listener
@@ -231,24 +231,13 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
     
     // Verify Settings was sent with the remount options
     // Find Settings message with functions (should be from remount)
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
     // After remount with different options, Settings should be sent with new options
     // (The "first render" skip only applies to change detection, not initial Settings send)
-    expect(settingsWithFunctions).toBeDefined();
-    if (settingsWithFunctions) {
-      expect(settingsWithFunctions.agent.think.functions.length).toBeGreaterThan(0);
-      expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
-    } else {
-      // Debug: log all captured Settings to understand what was sent
-      console.log('All captured Settings after remount:', JSON.stringify(capturedSettings, null, 2));
-      console.log('Remount options:', JSON.stringify(remountOptions, null, 2));
-      throw new Error('Settings with functions not found after remount');
-    }
+    assertSettingsWithFunctions(settingsWithFunctions, 'after remount with different options');
+    expect(settingsWithFunctions.agent.think.functions.length).toBeGreaterThan(0);
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 
   test('should verify Settings re-send works on second change after remount', async () => {
@@ -321,8 +310,7 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear Settings for second change
-    const beforeSecondChange = capturedSettings.length;
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Second change after remount (should trigger re-send)
     const secondChangeOptions = createAgentOptions({
@@ -350,14 +338,17 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
     }, { timeout: 2000 });
     
     // Verify Settings was re-sent with second change functions
-    const settingsWithFunctions = capturedSettings.find(s => 
+    // Find the one with 'second' function name (could be multiple Settings sent)
+    const settingsWithSecond = capturedSettings.find(s => 
       s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0 &&
-      s.agent.think.functions[0].name === 'second'
+      s.agent?.think?.functions?.some(f => f.name === 'second')
     );
     
-    expect(settingsWithFunctions).toBeDefined();
-    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('second');
+    expect(settingsWithSecond).toBeDefined();
+    if (settingsWithSecond?.agent?.think?.functions) {
+      expect(settingsWithSecond.agent.think.functions.find(f => f.name === 'second')?.name).toBe('second');
+    } else {
+      throw new Error('Settings with second function not found');
+    }
   });
 });

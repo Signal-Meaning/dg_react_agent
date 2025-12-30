@@ -28,7 +28,11 @@ import {
   setupComponentAndConnect,
   createSettingsCapture,
   verifySettingsHasFunctions,
+  findSettingsWithFunctions,
+  assertSettingsWithFunctions,
+  clearCapturedSettings,
   MOCK_API_KEY,
+  type CapturedSettings,
 } from './utils/component-test-helpers';
 import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
@@ -42,7 +46,7 @@ const { AudioManager } = require('../src/utils/audio/AudioManager');
 describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
-  let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
+  let capturedSettings: CapturedSettings;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -84,7 +88,7 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     expect(firstSettings.agent?.think?.functions).toBeUndefined();
     
     // Clear captured settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Update agentOptions with functions (new reference)
     const updatedOptions = createAgentOptions({
@@ -112,17 +116,11 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     }, { timeout: 2000 });
     
     // Verify Settings was re-sent with functions
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
-    expect(settingsWithFunctions).toBeDefined();
-    if (settingsWithFunctions) {
-      verifySettingsHasFunctions(settingsWithFunctions, 1);
-      expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test_function');
-    }
+    assertSettingsWithFunctions(settingsWithFunctions, 'when functions are added');
+    verifySettingsHasFunctions(settingsWithFunctions, 1);
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test_function');
   });
 
   test('should NOT detect change when object is mutated (same reference)', async () => {
@@ -145,7 +143,7 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear captured settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Mutate the same object (BAD practice, but test that we don't trigger on this)
     (agentOptions as any).functions = [{
@@ -198,7 +196,7 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear captured settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Update with different function (new reference)
     const updatedOptions = createAgentOptions({
@@ -225,15 +223,20 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     }, { timeout: 2000 });
     
     // Settings should be re-sent with new function
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
+    expect(settingsWithFunctions).toBeDefined();
+    // Find the one with function2 (could be multiple Settings sent)
     const settingsWithNewFunction = capturedSettings.find(s => 
       s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0 &&
-      s.agent.think.functions[0].name === 'function2'
+      s.agent?.think?.functions?.some(f => f.name === 'function2')
     );
     
     expect(settingsWithNewFunction).toBeDefined();
-    expect(settingsWithNewFunction!.agent.think.functions[0].name).toBe('function2');
+    if (settingsWithNewFunction?.agent?.think?.functions) {
+      expect(settingsWithNewFunction.agent.think.functions.find(f => f.name === 'function2')?.name).toBe('function2');
+    } else {
+      throw new Error('Settings with function2 not found');
+    }
   });
 
   test('should verify Settings re-sent when agentOptions reference changes', async () => {
@@ -254,7 +257,7 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear captured settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Update with new reference
     const updatedOptions = createAgentOptions({
@@ -282,13 +285,9 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     
     // Verify Settings was re-sent with functions
     // This proves useEffect ran and detected the change
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
-    expect(settingsWithFunctions).toBeDefined();
-    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test');
+    assertSettingsWithFunctions(settingsWithFunctions, 'when agentOptions reference changes');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 });

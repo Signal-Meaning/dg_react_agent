@@ -26,7 +26,11 @@ import {
   createAgentOptions,
   setupComponentAndConnect,
   createSettingsCapture,
+  findSettingsWithFunctions,
+  assertSettingsWithFunctions,
+  clearCapturedSettings,
   MOCK_API_KEY,
+  type CapturedSettings,
 } from './utils/component-test-helpers';
 import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
@@ -88,7 +92,7 @@ function TestComponentWithMemoIssue({
 describe('Agent Options Re-send Edge Cases - Issue #311', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
-  let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
+  let capturedSettings: CapturedSettings;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -148,7 +152,7 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear previous Settings to only capture the re-send
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Trigger agentOptions change by updating it again (to test re-send after connection)
     const updatedOptions = createAgentOptions({
@@ -174,9 +178,7 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     });
     
     // Should send Settings with functions (from the re-send after connection)
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.agent?.think?.functions && s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
     expect(settingsWithFunctions).toBeDefined();
   });
@@ -195,7 +197,7 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     );
 
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Rapid changes
     const options1 = createAgentOptions({
@@ -290,7 +292,7 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear previous Settings to only capture the re-send
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Trigger another change to test re-send after connection
     // Update hasFunctions again to trigger agentOptions change
@@ -302,9 +304,7 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     
     // Check if Settings was sent with functions (either initial or re-sent)
     // This test verifies the useMemo pattern the customer is using
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.agent?.think?.functions && s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
     // Note: This might fail if there's a timing issue
     // But it helps us understand if the pattern itself works
@@ -329,7 +329,7 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear captured settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     const updatedOptions = createAgentOptions({
       functions: [{
@@ -356,15 +356,10 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     
     // Verify Settings was re-sent with functions
     // This proves the comparison correctly detected the change
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0 &&
-      s.agent.think.functions[0].name === 'test'
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
-    expect(settingsWithFunctions).toBeDefined();
-    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test');
+    assertSettingsWithFunctions(settingsWithFunctions, 'when comparison correctly detects change');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 });
 

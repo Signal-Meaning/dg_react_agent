@@ -32,8 +32,12 @@ import {
   createSettingsCapture,
   verifySettingsStructure,
   verifySettingsHasFunctions,
+  findSettingsWithFunctions,
+  assertSettingsWithFunctions,
+  clearCapturedSettings,
   MOCK_API_KEY,
   waitFor,
+  type CapturedSettings,
 } from './utils/component-test-helpers';
 import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
@@ -47,7 +51,7 @@ const { AudioManager } = require('../src/utils/audio/AudioManager');
 describe('Agent Options Re-send After Connection - Issue #311', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
-  let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
+  let capturedSettings: CapturedSettings;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -102,7 +106,7 @@ describe('Agent Options Re-send After Connection - Issue #311', () => {
     expect(firstHasFunctions).toBeFalsy();
     
     // Step 4: Clear captured settings to track re-sent message
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Step 5: Update agentOptions with functions (new reference)
     // This simulates the customer creating a new agentOptions object with functions
@@ -151,8 +155,10 @@ describe('Agent Options Re-send After Connection - Issue #311', () => {
     );
     
     expect(reSentSettings.length).toBeGreaterThan(0);
-    verifySettingsHasFunctions(reSentSettings[0], 1);
-    expect(reSentSettings[0].agent.think.functions[0].name).toBe('test_function');
+    const firstReSent = reSentSettings[0];
+    assertSettingsWithFunctions(firstReSent, 'after agentOptions change');
+    verifySettingsHasFunctions(firstReSent, 1);
+    expect(firstReSent.agent.think.functions[0].name).toBe('test_function');
   });
   
   test('should verify agentManager exists when agentOptions changes after connection', async () => {
@@ -208,14 +214,10 @@ describe('Agent Options Re-send After Connection - Issue #311', () => {
     
     // Verify Settings was re-sent with functions
     // This assertion proves agentManager existed when agentOptions changed
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
-    expect(settingsWithFunctions).toBeDefined();
-    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test');
+    assertSettingsWithFunctions(settingsWithFunctions, 'when agentOptions changes after connection');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 });
 

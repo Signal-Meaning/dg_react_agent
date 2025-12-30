@@ -16,6 +16,36 @@ export { MOCK_API_KEY };
 export { rtlWaitFor as waitFor };
 
 /**
+ * Type definitions for captured Settings messages
+ */
+export interface CapturedSettingsMessage {
+  type: 'Settings';
+  agent?: {
+    think?: {
+      functions?: AgentFunction[];
+      [key: string]: any;
+    };
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
+export type CapturedSettings = Array<CapturedSettingsMessage>;
+
+/**
+ * Extend Window interface for test state
+ */
+declare global {
+  interface Window {
+    globalSettingsSent?: boolean;
+    __DEEPGRAM_TEST_MODE__?: boolean;
+    __DEEPGRAM_DEBUG_AGENT_OPTIONS__?: boolean;
+    __testReferenceChangeCount?: number;
+    __testRenderCount?: number;
+  }
+}
+
+/**
  * Mock WebSocket Manager type
  */
 export type MockWebSocketManager = {
@@ -109,7 +139,7 @@ export async function setupComponentAndConnect(
 ): Promise<((event: any) => void) | undefined> {
   // Clear globalSettingsSent flag BEFORE starting connection
   // This allows Settings to be sent (component checks this flag)
-  (window as any).globalSettingsSent = false;
+  window.globalSettingsSent = false;
   
   // Start the connection
   await act(async () => {
@@ -126,7 +156,7 @@ export async function setupComponentAndConnect(
   await waitForSettingsSent(mockWebSocketManager);
 
   // Ensure globalSettingsSent flag is set after Settings is sent (component uses this)
-  (window as any).globalSettingsSent = true;
+  window.globalSettingsSent = true;
 
   return eventListener;
 }
@@ -136,18 +166,106 @@ export async function setupComponentAndConnect(
  */
 export function createSettingsCapture(
   mockWebSocketManager: MockWebSocketManager
-): Array<{ type: string; agent?: any; [key: string]: any }> {
-  const captured: Array<any> = [];
+): CapturedSettings {
+  const captured: CapturedSettings = [];
+
+  // Get existing implementation if any (to support chaining)
+  const existingImpl = mockWebSocketManager.sendJSON.getMockImplementation();
 
   mockWebSocketManager.sendJSON.mockImplementation((message) => {
     const parsed = typeof message === 'string' ? JSON.parse(message) : message;
     if (parsed.type === 'Settings') {
-      captured.push(parsed);
+      captured.push(parsed as CapturedSettingsMessage);
+    }
+    // Call existing implementation if it exists (supports chaining)
+    if (existingImpl) {
+      return existingImpl(message);
     }
     return Promise.resolve();
   });
 
   return captured;
+}
+
+/**
+ * Find Settings message with functions
+ * DRY helper to replace repeated find() patterns
+ */
+export function findSettingsWithFunctions(
+  capturedSettings: CapturedSettings
+): CapturedSettingsMessage | undefined {
+  return capturedSettings.find(s => 
+    s.type === 'Settings' &&
+    s.agent?.think?.functions && 
+    s.agent.think.functions.length > 0
+  );
+}
+
+/**
+ * Find Settings message without functions
+ * DRY helper to replace repeated find() patterns
+ */
+export function findSettingsWithoutFunctions(
+  capturedSettings: CapturedSettings
+): CapturedSettingsMessage | undefined {
+  return capturedSettings.find(s => {
+    if (s.type !== 'Settings') return false;
+    const hasFunctions = s.agent?.think?.functions && s.agent.think.functions.length > 0;
+    return !hasFunctions;
+  });
+}
+
+/**
+ * Clear captured Settings array
+ * DRY helper to replace repeated `capturedSettings.length = 0` patterns
+ */
+export function clearCapturedSettings(capturedSettings: CapturedSettings): void {
+  capturedSettings.length = 0;
+}
+
+/**
+ * Wait for Settings message with functions to be captured
+ * Combines waitFor and findSettingsWithFunctions for common pattern
+ */
+export async function waitForSettingsWithFunctions(
+  capturedSettings: CapturedSettings,
+  timeout = 2000
+): Promise<CapturedSettingsMessage> {
+  await rtlWaitFor(() => {
+    const settings = findSettingsWithFunctions(capturedSettings);
+    expect(settings).toBeDefined();
+  }, { timeout });
+  
+  const settings = findSettingsWithFunctions(capturedSettings);
+  if (!settings) {
+    throw new Error('Settings with functions not found after timeout');
+  }
+  return settings;
+}
+
+/**
+ * Assert that Settings message has functions (type guard)
+ * Provides better error messages and type safety
+ * Properly narrows the type to ensure agent.think.functions is defined
+ */
+export function assertSettingsWithFunctions(
+  settings: CapturedSettingsMessage | undefined,
+  context?: string
+): asserts settings is CapturedSettingsMessage & {
+  agent: {
+    think: {
+      functions: AgentFunction[];
+    };
+  };
+} {
+  if (!settings) {
+    const contextMsg = context ? ` (${context})` : '';
+    throw new Error(`Settings with functions not found${contextMsg}`);
+  }
+  if (!settings.agent?.think?.functions || settings.agent.think.functions.length === 0) {
+    const contextMsg = context ? ` (${context})` : '';
+    throw new Error(`Settings does not have functions${contextMsg}`);
+  }
 }
 
 /**
@@ -273,39 +391,41 @@ export const TestComponentWithFunctions = React.forwardRef<
  * Reset global test state
  */
 export function resetTestState(): void {
-  (window as any).globalSettingsSent = false;
+  window.globalSettingsSent = false;
 }
 
 /**
  * Verify Settings message structure
  */
-export function verifySettingsStructure(settings: any): void {
+export function verifySettingsStructure(settings: CapturedSettingsMessage | undefined): void {
   expect(settings).toBeDefined();
-  expect(settings.type).toBe('Settings');
-  expect(settings.agent).toBeDefined();
-  expect(settings.agent.think).toBeDefined();
+  expect(settings?.type).toBe('Settings');
+  expect(settings?.agent).toBeDefined();
+  expect(settings?.agent?.think).toBeDefined();
 }
 
 /**
  * Verify Settings has functions
  */
 export function verifySettingsHasFunctions(
-  settings: any,
+  settings: CapturedSettingsMessage | undefined,
   expectedCount?: number
 ): void {
-  expect(settings.agent?.think?.functions).toBeDefined();
-  expect(Array.isArray(settings.agent.think.functions)).toBe(true);
+  expect(settings).toBeDefined();
+  expect(settings?.agent?.think?.functions).toBeDefined();
+  expect(Array.isArray(settings?.agent?.think?.functions)).toBe(true);
   if (expectedCount !== undefined) {
-    expect(settings.agent.think.functions.length).toBe(expectedCount);
+    expect(settings?.agent?.think?.functions?.length).toBe(expectedCount);
   }
 }
 
 /**
  * Verify Settings does NOT have functions
  */
-export function verifySettingsNoFunctions(settings: any): void {
+export function verifySettingsNoFunctions(settings: CapturedSettingsMessage | undefined): void {
+  expect(settings).toBeDefined();
   const hasFunctions =
-    settings.agent?.think?.functions &&
+    settings?.agent?.think?.functions &&
     settings.agent.think.functions.length > 0;
   expect(hasFunctions).toBe(false);
 }

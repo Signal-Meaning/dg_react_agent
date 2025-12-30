@@ -27,7 +27,11 @@ import {
   createAgentOptions,
   setupComponentAndConnect,
   createSettingsCapture,
+  findSettingsWithFunctions,
+  assertSettingsWithFunctions,
+  clearCapturedSettings,
   MOCK_API_KEY,
+  type CapturedSettings,
 } from './utils/component-test-helpers';
 import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
@@ -41,7 +45,7 @@ const { AudioManager } = require('../src/utils/audio/AudioManager');
 describe('Agent Options useEffect Must Run - Issue #318', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
-  let capturedSettings: Array<{ type: string; agent?: any; [key: string]: any }>;
+  let capturedSettings: CapturedSettings;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -81,7 +85,7 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear captured settings to only track re-sent Settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Update with new reference (matching customer's useMemo pattern)
     const updatedOptions = createAgentOptions({
@@ -116,14 +120,10 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
     
     // Verify Settings was re-sent with functions
     // This assertion proves useEffect ran and detected the change
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
-    expect(settingsWithFunctions).toBeDefined();
-    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test_function');
+    assertSettingsWithFunctions(settingsWithFunctions, 'when useMemo creates new reference');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test_function');
   });
 
   test('should verify Settings re-sent with customer useMemo pattern component', async () => {
@@ -180,7 +180,7 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear captured settings to only track re-sent Settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Wait for hasFunctions to update (triggers useMemo to create new reference)
     await act(async () => {
@@ -195,14 +195,10 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
     
     // Verify Settings was re-sent with functions
     // This proves useEffect ran when agentOptions reference changed
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
-    expect(settingsWithFunctions).toBeDefined();
-    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test');
+    assertSettingsWithFunctions(settingsWithFunctions, 'with customer useMemo pattern');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 
   test('should verify Settings re-sent even without diagnostic logging enabled', async () => {
@@ -224,7 +220,7 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear captured settings to only track re-sent Settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Update with new reference
     const updatedOptions = createAgentOptions({
@@ -253,15 +249,11 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
     
     // Verify Settings was re-sent with functions
     // This is the functional verification (not just log checking)
-    const settingsWithFunctions = capturedSettings.filter(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
     // If useEffect doesn't run, Settings won't be re-sent, and this will fail
-    expect(settingsWithFunctions.length).toBeGreaterThan(0);
-    expect(settingsWithFunctions[0].agent.think.functions[0].name).toBe('test');
+    assertSettingsWithFunctions(settingsWithFunctions, 'after agentOptions update');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 
   test('should verify Settings re-sent when props.agentOptions changes', async () => {
@@ -283,7 +275,7 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
     await setupComponentAndConnect(ref, mockWebSocketManager);
     
     // Clear captured settings
-    capturedSettings.length = 0;
+    clearCapturedSettings(capturedSettings);
     
     // Create new reference (simulating useMemo creating new reference)
     const updatedOptions = createAgentOptions({
@@ -315,13 +307,9 @@ describe('Agent Options useEffect Must Run - Issue #318', () => {
     
     // Verify Settings was re-sent with functions
     // This proves useEffect ran when prop reference changed
-    const settingsWithFunctions = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions && 
-      s.agent.think.functions.length > 0
-    );
+    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
     
-    expect(settingsWithFunctions).toBeDefined();
-    expect(settingsWithFunctions!.agent.think.functions[0].name).toBe('test');
+    assertSettingsWithFunctions(settingsWithFunctions, 'when props.agentOptions changes');
+    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 });
