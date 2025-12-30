@@ -1055,16 +1055,20 @@ test.describe('Function Calling E2E Tests', () => {
       console.log('🧪 [TDD] Testing function call count increment...');
       skipIfNoRealAPI('Requires real Deepgram API key');
       
-      // Set up function and handler
+      // Set up function and handler with detailed description (same as passing test)
       await page.addInitScript(() => {
         window.testFunctions = [
           {
             name: 'get_current_time',
-            description: 'Get the current time. Use this when users ask about the time.',
+            description: 'Get the current time in a specific timezone. Use this function when users ask about the time, what time it is, or current time.',
             parameters: {
               type: 'object',
               properties: {
-                timezone: { type: 'string', description: 'Timezone' }
+                timezone: {
+                  type: 'string',
+                  description: 'Timezone (e.g., "America/New_York", "UTC", "Europe/London"). Defaults to UTC if not specified.',
+                  default: 'UTC'
+                }
               }
             }
           }
@@ -1298,12 +1302,16 @@ test.describe('Function Calling E2E Tests', () => {
       await page.addInitScript(() => {
         window.testFunctions = [
           {
-            name: 'test_function',
-            description: 'A test function for verifying request structure',
+            name: 'get_current_time',
+            description: 'Get the current time in a specific timezone. Use this function when users ask about the time, what time it is, or current time.',
             parameters: {
               type: 'object',
               properties: {
-                param1: { type: 'string', description: 'Test parameter' }
+                timezone: {
+                  type: 'string',
+                  description: 'Timezone (e.g., "America/New_York", "UTC", "Europe/London"). Defaults to UTC if not specified.',
+                  default: 'UTC'
+                }
               }
             }
           }
@@ -1327,13 +1335,13 @@ test.describe('Function Calling E2E Tests', () => {
             window.deepgramRef.current.sendFunctionCallResponse(
               request.id,
               request.name,
-              JSON.stringify({ success: true })
+              JSON.stringify({ success: true, time: new Date().toISOString() })
             );
           }
         };
       });
       
-      await page.fill('[data-testid="text-input"]', 'Call the test function');
+      await page.fill('[data-testid="text-input"]', 'What time is it?');
       await page.click('[data-testid="send-button"]');
       await waitForConnection(page, 30000);
       
@@ -1348,7 +1356,7 @@ test.describe('Function Calling E2E Tests', () => {
         
         expect(request).not.toBeNull();
         expect(request.id).toBeDefined();
-        expect(request.name).toBeDefined();
+        expect(request.name).toBe('get_current_time');
         expect(request.arguments).toBeDefined();
         expect(request.client_side).toBeDefined();
         
