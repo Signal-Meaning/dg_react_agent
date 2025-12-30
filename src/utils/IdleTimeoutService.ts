@@ -377,6 +377,10 @@ export class IdleTimeoutService {
     }
     this.timeoutId = window.setTimeout(() => {
       this.log(`Idle timeout reached (${this.config.timeoutMs}ms) - firing callback`);
+      // Clear timeoutId before calling callback so a new timeout can be started if needed
+      this.timeoutId = null;
+      // Stop polling when timeout fires - polling should only restart if new events come in
+      this.stopPolling();
       this.onTimeoutCallback?.();
     }, this.config.timeoutMs);
     if (this.config.debug) {
