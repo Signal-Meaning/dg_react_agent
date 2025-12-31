@@ -45,6 +45,15 @@ The test failures are due to **test environment setup improvements made AFTER v0
    - **On v0.6.9:** The test config doesn't pass env vars to dev server, so `import.meta.env.VITE_DEEPGRAM_API_KEY` is undefined
    - **Result:** API key becomes empty string due to `|| ''` fallback, causing authentication failure (code 1006)
 
+**Verification Testing:**
+- ✅ Tested commit `305e2d0` (before fix): Tests FAILED with connection timeout
+- ⚠️ Tested commit `50131d0` (with fix): Tests STILL FAILED with same timeout
+- **Finding:** The env var fix alone is **not sufficient**. Tests fail on both commits, suggesting:
+  - Additional test environment issues beyond env var passing
+  - Tests may require other improvements made after v0.6.9
+  - Component code changes may be needed for tests to pass
+- **Conclusion:** The env var passing fix is necessary but not sufficient. Further investigation needed to identify all contributing factors.
+
 2. **Test Helpers and Patterns:**
    - Tests were written **after** v0.6.9 release (cherry-picked from later branch)
    - Test helpers and patterns may expect different behavior than what v0.6.9 supports
