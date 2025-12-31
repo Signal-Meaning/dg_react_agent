@@ -854,7 +854,16 @@ function DeepgramVoiceInteraction(
         } else if (event.type === 'message') {
           handleAgentMessage(event.data);
         } else if (event.type === 'binary') {
-          handleAgentAudio(event.data);
+          // Issue #341: Wrap audio processing in try-catch to prevent unhandled errors from closing connection
+          try {
+            handleAgentAudio(event.data).catch((error: Error) => {
+              // Error already logged in handleAgentAudio, but ensure it doesn't propagate
+              log('Error in handleAgentAudio (caught at event listener level):', error);
+            });
+          } catch (error) {
+            // Synchronous errors in handleAgentAudio (shouldn't happen, but be safe)
+            log('Synchronous error in handleAgentAudio:', error);
+          }
         } else if (event.type === 'error') {
           handleError(event.error);
         }

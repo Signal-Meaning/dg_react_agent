@@ -3,7 +3,9 @@ import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
-dotenv.config({ path: '../.env' });
+// Try test-app/.env first, then fall back to root .env
+dotenv.config({ path: '../.env' }); // Root .env
+dotenv.config({ path: '.env' }); // test-app/.env (overrides root if exists)
 
 // Debug: Log the baseURL being used
 console.log('Playwright baseURL:', process.env.VITE_BASE_URL || 'http://localhost:5173');

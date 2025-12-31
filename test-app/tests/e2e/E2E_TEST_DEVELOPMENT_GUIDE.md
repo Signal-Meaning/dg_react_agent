@@ -20,6 +20,44 @@ This guide consolidates lessons learned and best practices from achieving 100% t
 
 ## Quick Start
 
+### Running Full Test Passes (⚠️ IMPORTANT)
+
+**When running full test suites or comprehensive test passes, you MUST:**
+
+1. **Send output to a file** for later analysis
+2. **Provide real-time monitoring** so both you and collaborators can track progress
+
+**Required Approach:**
+
+```bash
+# Run full test suite with output to file AND real-time monitoring
+npx playwright test tests/e2e/ \
+  --config=tests/playwright.config.mjs \
+  --reporter=list \
+  2>&1 | tee test-results-full-$(date +%Y%m%d-%H%M%S).log
+
+# In another terminal, monitor the log file in real-time:
+tail -f test-results-full-*.log
+
+# Or monitor with line numbers and grep for failures:
+tail -f test-results-full-*.log | grep -E "failed|passed|Error|✘|✓"
+```
+
+**Why This Matters:**
+
+- ✅ **File Output**: Full test results preserved for analysis, debugging, and sharing
+- ✅ **Real-Time Monitoring**: Track progress without blocking the terminal
+- ✅ **Collaboration**: Multiple team members can monitor the same log file
+- ✅ **Debugging**: Complete logs available for investigating failures
+- ✅ **History**: Test results archived with timestamps for comparison
+
+**Best Practices:**
+
+- Always include timestamp in filename: `test-results-YYYYMMDD-HHMMSS.log`
+- Use `tee` to see output AND save to file simultaneously
+- Use `tail -f` in separate terminal for real-time monitoring
+- Archive important test runs for later reference
+
 ### Writing a New VAD Test
 
 ```javascript

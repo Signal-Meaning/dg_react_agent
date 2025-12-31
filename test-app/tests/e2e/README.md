@@ -25,6 +25,8 @@ VITE_DEEPGRAM_VOICE=aura-asteria-en
 ```
 
 ### 3. Run Tests
+
+#### Quick Test Runs
 ```bash
 # Run all E2E tests
 npm run test:e2e
@@ -40,6 +42,67 @@ npx playwright test --grep "Timeout"        # All timeout-related tests
 npx playwright test --grep "Idle Timeout"   # Idle timeout specific tests
 npx playwright test --grep "Microphone"     # All microphone tests
 ```
+
+#### Full Test Passes (⚠️ IMPORTANT: Use File Output + Monitoring)
+
+**When running full test suites or comprehensive test passes, you MUST:**
+
+1. **Send output to a file** for later analysis
+2. **Provide real-time monitoring** so both you and collaborators can track progress
+
+**Recommended Approach:**
+
+```bash
+# Run full test suite with output to file AND real-time monitoring
+npx playwright test tests/e2e/ \
+  --config=tests/playwright.config.mjs \
+  --reporter=list \
+  2>&1 | tee test-results-full-$(date +%Y%m%d-%H%M%S).log
+
+# In another terminal, monitor the log file in real-time:
+tail -f test-results-full-*.log
+
+# Or monitor with line numbers and grep for failures:
+tail -f test-results-full-*.log | grep -E "failed|passed|Error|✘|✓"
+```
+
+**Alternative: Background Process with Monitoring**
+
+```bash
+# Run tests in background, output to file
+npx playwright test tests/e2e/ \
+  --config=tests/playwright.config.mjs \
+  --reporter=list \
+  > test-results-full-$(date +%Y%m%d-%H%M%S).log 2>&1 &
+
+# Get the process ID
+TEST_PID=$!
+
+# Monitor the log file
+tail -f test-results-full-*.log
+
+# Check if tests are still running
+ps -p $TEST_PID
+
+# Wait for tests to complete
+wait $TEST_PID
+echo "Tests completed with exit code: $?"
+```
+
+**Why This Matters:**
+
+- ✅ **File Output**: Full test results preserved for analysis, debugging, and sharing
+- ✅ **Real-Time Monitoring**: Track progress without blocking the terminal
+- ✅ **Collaboration**: Multiple team members can monitor the same log file
+- ✅ **Debugging**: Complete logs available for investigating failures
+- ✅ **History**: Test results archived with timestamps for comparison
+
+**Best Practices:**
+
+- Always include timestamp in filename: `test-results-YYYYMMDD-HHMMSS.log`
+- Use `tee` to see output AND save to file simultaneously
+- Use `tail -f` in separate terminal for real-time monitoring
+- Archive important test runs for later reference
 
 ## Why Real API Key Instead of Mocks?
 

@@ -616,17 +616,25 @@ export class AudioManager {
       this.log(`Audio scheduled to play at ${this.startTimeRef.current?.toFixed?.(3) || 'undefined'}s, current time: ${this.audioContext?.currentTime?.toFixed?.(3) || 'N/A'}s, active sources: ${this.activeSourceNodes.length}`);
       
     } catch (error) {
+      // Issue #341: Log error but don't re-throw to prevent unhandled promise rejections
+      // that could cause WebSocket connections to close
       this.log('Failed to process audio:', error);
+      
+      // Emit error event for error handling callbacks, but don't throw
+      // This allows the connection to remain stable even if audio processing fails
       this.emit({
         type: 'error',
         error: {
           service: 'agent',
           code: 'audio_process_error',
-          message: 'Failed to process audio data',
+          message: `Failed to process audio data: ${error instanceof Error ? error.message : 'Unknown error'}`,
           details: error,
         },
       });
-      throw error; // Re-throw to be caught by caller
+      
+      // Issue #341: Don't re-throw - log and continue to prevent connection closure
+      // The error is already logged and emitted, caller can handle it via error callback
+      this.log('Audio processing error handled - connection will remain stable');
     }
   }
   

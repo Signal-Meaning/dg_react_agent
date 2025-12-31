@@ -14,7 +14,18 @@ export function createAudioBuffer(
   data: ArrayBuffer, 
   sampleRate: number = 24000
 ): AudioBuffer | undefined {
-  const audioDataView = new Int16Array(data);
+  // Issue #340: Validate and fix odd-length buffers before creating Int16Array
+  // PCM16 requires 2 bytes per sample, so buffer length must be a multiple of 2
+  let processedData = data;
+  if (data.byteLength % 2 !== 0) {
+    // Truncate to even length (remove last byte)
+    processedData = data.slice(0, data.byteLength - 1);
+    console.warn(
+      `Audio buffer had odd length (${data.byteLength} bytes), truncated to even length (${processedData.byteLength} bytes)`
+    );
+  }
+  
+  const audioDataView = new Int16Array(processedData);
   if (audioDataView.length === 0) {
     console.error("Received audio data is empty.");
     return undefined;

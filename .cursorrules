@@ -94,6 +94,33 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 
 ## Testing Guidelines
 
+### 📚 Test Documentation
+
+**ALWAYS consult the test documentation before writing or running tests:**
+
+- **[E2E Test README](test-app/tests/e2e/README.md)**: Complete guide to E2E testing with real Deepgram API
+  - Setup instructions and environment configuration
+  - **Full Test Pass Guidelines**: How to run full test suites with file output and monitoring
+  - Available test files and their purposes
+  - Troubleshooting common issues
+
+- **[E2E Test Development Guide](test-app/tests/e2e/E2E_TEST_DEVELOPMENT_GUIDE.md)**: Comprehensive guide for writing E2E tests
+  - Available fixtures and their usage
+  - Best practices and common patterns
+  - Common pitfalls to avoid
+  - Migration examples and test structure guidelines
+  - **Full Test Pass Guidelines**: Required practices for running comprehensive test suites
+
+- **[Testing Quick Start](docs/TESTING-QUICK-START.md)**: Quick reference for testing voice features
+  - Basic voice interaction test examples
+  - Available audio samples
+  - Common pitfalls and solutions
+
+- **[Test Utilities](docs/TEST-UTILITIES.md)**: Complete testing infrastructure guide
+  - Available test utilities and helpers
+  - Mock vs real API testing strategies
+  - Test data and fixtures
+
 ### Test Types and When to Use Them
 
 #### Unit Tests (Jest) - `tests/` directory
@@ -113,6 +140,7 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 - **When**: Testing full user flows, real API integration, critical paths
 - **Tools**: Playwright, real Deepgram API (when available)
 - **Example**: Testing full function calling flow from connection to execution
+- **⚠️ IMPORTANT**: See [E2E Test README](test-app/tests/e2e/README.md) for full test pass guidelines
 
 ### Test Utilities
 
@@ -128,6 +156,16 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 - **Test Isolation**: Each test should be independent and not rely on execution order
 - **Clear Assertions**: Use descriptive assertion messages
 - **Test Data**: Use fixtures and helpers for consistent test data
+- **Full Test Passes**: Always output to file and provide monitoring (see [E2E Test README](test-app/tests/e2e/README.md))
+
+### Running Full Test Passes
+
+**⚠️ CRITICAL**: When running full test suites or comprehensive test passes:
+
+1. **MUST send output to a file** for later analysis
+2. **MUST provide real-time monitoring** so both you and collaborators can track progress
+
+See [E2E Test README - Full Test Passes](test-app/tests/e2e/README.md#full-test-passes--important-use-file-output--monitoring) for required commands and best practices.
 
 ### Current Test Status
 

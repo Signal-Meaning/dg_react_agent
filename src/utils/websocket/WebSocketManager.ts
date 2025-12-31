@@ -94,6 +94,7 @@ export class WebSocketManager {
   private hasEverConnected = false;
   private idleTimeoutDisabled = false; // Flag to disable idle timeout resets
   private settingsSent = false; // Track if Settings has been sent (for agent service only)
+  private connectionTimestamp: number | null = null; // Issue #341: Track when connection was established
 
   /**
    * Creates a new WebSocketManager
@@ -209,6 +210,9 @@ export class WebSocketManager {
           console.log(`🔌 [WebSocketManager.connect] URL: ${url}`);
           console.log(`🔌 [WebSocketManager.connect] Is proxy mode: ${isProxyMode}`);
           console.log(`🔌 [WebSocketManager.connect] Service: ${this.options.service}`);
+          console.log(`🔌 [WebSocketManager.connect] API key present: ${!!this.options.apiKey}`);
+          console.log(`🔌 [WebSocketManager.connect] API key length: ${this.options.apiKey?.length || 0}`);
+          console.log(`🔌 [WebSocketManager.connect] API key preview: ${this.options.apiKey ? `${this.options.apiKey.substring(0, 8)}...${this.options.apiKey.substring(this.options.apiKey.length - 4)}` : 'EMPTY'}`);
         }
         
         // Create WebSocket
@@ -220,7 +224,14 @@ export class WebSocketManager {
             console.log(`🔌 [WebSocketManager.connect] Created WebSocket without token protocol (proxy mode)`);
           }
         } else {
-          this.ws = new WebSocket(url, ['token', this.options.apiKey || '']);
+          const apiKeyForProtocol = this.options.apiKey || '';
+          if (this.options.debug) {
+            console.log(`🔌 [WebSocketManager.connect] Creating WebSocket with token protocol, API key length: ${apiKeyForProtocol.length}`);
+            if (!apiKeyForProtocol) {
+              console.error(`🔌 [WebSocketManager.connect] ⚠️ WARNING: API key is empty! This will cause authentication failure.`);
+            }
+          }
+          this.ws = new WebSocket(url, ['token', apiKeyForProtocol]);
           if (this.options.debug) {
             console.log(`🔌 [WebSocketManager.connect] Created WebSocket with token protocol (direct mode)`);
           }
@@ -254,6 +265,15 @@ export class WebSocketManager {
           // Track if this is a reconnection
           const isReconnection = this.hasEverConnected;
           this.hasEverConnected = true;
+          
+          // Issue #341: Record connection timestamp to diagnose immediate closure
+          // Safety check: Only set if not already set (prevents overwriting on multiple onopen calls)
+          if (this.connectionTimestamp === null) {
+            this.connectionTimestamp = Date.now();
+            console.log(`✅ [ISSUE #341] Connection established at ${this.connectionTimestamp}`);
+          } else {
+            this.log('⚠️ [ISSUE #341] Warning: connectionTimestamp already set, onopen may have been called multiple times');
+          }
           
           this.updateState('connected', isReconnection);
           this.enableIdleTimeoutResets(); // Re-enable idle timeout resets on new connection
@@ -329,11 +349,13 @@ export class WebSocketManager {
             // Handle Blob data by converting to ArrayBuffer
             this.log(`Received Blob binary data (size: ${event.data.size}), converting to ArrayBuffer...`);
             
-            // Convert Blob to ArrayBuffer
+            // Issue #341: Ensure Blob conversion errors don't cause unhandled promise rejections
+            // that could close the WebSocket connection
             event.data.arrayBuffer().then(arrayBuffer => {
               this.log(`Converted Blob to ArrayBuffer (byteLength: ${arrayBuffer.byteLength}), emitting binary event...`);
               this.emit({ type: 'binary', data: arrayBuffer });
             }).catch(error => {
+              // Issue #341: Log error but don't let it propagate - connection should remain stable
               this.log('Error converting Blob to ArrayBuffer:', error);
               this.emit({
                 type: 'error',
@@ -344,6 +366,7 @@ export class WebSocketManager {
                   details: error,
                 }
               });
+              // Don't throw or close connection - error is logged and emitted for error handling callbacks
             });
           } else {
             // Log if data is neither string, ArrayBuffer, nor Blob
@@ -352,7 +375,29 @@ export class WebSocketManager {
         };
 
         this.ws.onerror = (event) => {
-          this.log('WebSocket error event:', event);
+          // Issue #341: Enhanced error logging to diagnose connection closure
+          const ws = event.target as WebSocket;
+          const errorDetails = {
+            type: event.type,
+            target: ws?.constructor?.name || 'WebSocket',
+            readyState: ws?.readyState,
+            readyStateName: ws?.readyState === 0 ? 'CONNECTING' : 
+                          ws?.readyState === 1 ? 'OPEN' : 
+                          ws?.readyState === 2 ? 'CLOSING' : 
+                          ws?.readyState === 3 ? 'CLOSED' : 'UNKNOWN',
+            url: this.options.url,
+            service: this.options.service,
+            connectionState: this.connectionState,
+            hasEverConnected: this.hasEverConnected,
+            settingsSent: this.settingsSent,
+          };
+          
+          this.log('🚨 WebSocket error event (Issue #341 investigation):', errorDetails);
+          console.error('🚨 [ISSUE #341] WebSocket error details:', errorDetails);
+          
+          // Issue #341: Don't reject immediately - wait for onclose to get close code and reason
+          // The error event doesn't provide close code/reason, but onclose will
+          // This allows us to distinguish between connection rejection (1006) and other errors
           const errorMessage = `WebSocket connection error for ${this.options.service}`;
           this.emit({ 
             type: 'error', 
@@ -360,19 +405,69 @@ export class WebSocketManager {
               service: this.options.service,
               code: 'websocket_error',
               message: errorMessage,
-              details: {
-                type: event.type,
-                target: event.target?.constructor?.name || 'WebSocket',
-                readyState: (event.target as WebSocket)?.readyState
-              }
+              details: errorDetails
             }
           });
           this.updateState('error');
-          reject(new Error(errorMessage));
+          
+          // Issue #341: Only reject if connection was never established
+          // If readyState is CLOSED and we never connected, reject immediately
+          // Otherwise, wait for onclose to provide close code/reason
+          if (ws?.readyState === 3 && !this.hasEverConnected) {
+            // Connection was rejected before establishing - reject immediately
+            reject(new Error(`${errorMessage} - Connection rejected (readyState: CLOSED)`));
+          }
+          // If connection was established, onclose will handle the rejection
         };
 
         this.ws.onclose = (event) => {
+          // Issue #341: Enhanced close logging to diagnose immediate closure
+          // Calculate time since connection for diagnostics
+          const timeSinceConnection = this.connectionTimestamp ? Date.now() - this.connectionTimestamp : null;
+          
+          const closeDetails: {
+            code: number;
+            reason: string;
+            wasClean: boolean;
+            service: ServiceType;
+            previousState: ConnectionState;
+            hasEverConnected: boolean;
+            settingsSent: boolean;
+            url: string;
+            timeSinceConnection?: number;
+          } = {
+            code: event.code,
+            reason: event.reason,
+            wasClean: event.wasClean,
+            service: this.options.service,
+            previousState: this.connectionState,
+            hasEverConnected: this.hasEverConnected,
+            settingsSent: this.settingsSent,
+            url: this.options.url,
+          };
+          
+          // Add timeSinceConnection if available
+          if (timeSinceConnection !== null) {
+            closeDetails.timeSinceConnection = timeSinceConnection;
+          }
+          
           this.log(`WebSocket closed: code=${event.code}, reason='${event.reason}', wasClean=${event.wasClean}`);
+          console.log('🚨 [ISSUE #341] WebSocket close details:', closeDetails);
+          
+          // Issue #341: Log if connection closed immediately after being reported as connected
+          if (this.connectionState === 'connected' || this.hasEverConnected) {
+            const timeSinceConnectionForLog = timeSinceConnection ?? 0;
+            console.warn(`🚨 [ISSUE #341] Connection closed ${timeSinceConnectionForLog}ms after being reported as connected`, closeDetails);
+          }
+          
+          // Issue #341: If connection was rejected (code 1006) and never established, reject the promise
+          // This handles the case where onerror fires but we waited for onclose to get close code
+          if (event.code === 1006 && !this.hasEverConnected && this.connectionState === 'error') {
+            const errorMessage = `WebSocket connection rejected for ${this.options.service} (code: ${event.code}, reason: ${event.reason || 'Abnormal Closure'})`;
+            console.error(`🚨 [ISSUE #341] Connection rejected: ${errorMessage}`, closeDetails);
+            reject(new Error(errorMessage));
+          }
+          
           this.stopKeepalive();
           this.stopIdleTimeout();
           window.clearTimeout(this.connectionTimeoutId!);
@@ -382,6 +477,9 @@ export class WebSocketManager {
           if (this.options.service === 'agent') {
             this.settingsSent = false;
           }
+          
+          // Issue #341: Reset connection timestamp
+          this.connectionTimestamp = null;
           
           // Check if we were connected before updating state
           const wasConnected = this.connectionState === 'connected';
@@ -538,13 +636,17 @@ export class WebSocketManager {
     // For transcription service, only reset on meaningful messages
     if (this.options.service === 'transcription') {
       // Don't reset on empty Results (silence)
-      if (data.type === 'Results') {
-        const hasAlternatives = data.alternatives && data.alternatives.length > 0;
-        const hasTranscript = hasAlternatives && data.alternatives[0].transcript && data.alternatives[0].transcript.trim().length > 0;
+      if (typeof data === 'object' && data !== null && 'type' in data && data.type === 'Results') {
+        const resultsData = data as { alternatives?: Array<{ transcript?: string }> };
+        const hasAlternatives = resultsData.alternatives && resultsData.alternatives.length > 0;
+        const hasTranscript = hasAlternatives && 
+                              resultsData.alternatives![0] && 
+                              resultsData.alternatives![0].transcript && 
+                              resultsData.alternatives![0].transcript.trim().length > 0;
         
         // Only reset if there's actual transcript content
         if (hasTranscript) {
-          this.log(`Resetting idle timeout - meaningful transcript: "${data.alternatives[0].transcript}"`);
+          this.log(`Resetting idle timeout - meaningful transcript: "${resultsData.alternatives![0].transcript}"`);
           return true;
         } else {
           this.log(`NOT resetting idle timeout - empty transcript`);
@@ -572,20 +674,25 @@ export class WebSocketManager {
     
     // For agent service, reset on activity indicators
     if (this.options.service === 'agent') {
-      // User text injection (explicit user activity)
-      if (data.type === 'InjectUserMessage') {
-        this.options.onMeaningfulActivity?.(data.type);
-        return true;
-      }
-      
-      // Agent activity that should keep connection alive
-      // Note: These are handled by agent state changes, but we keep them here
-      // as a fallback in case state hasn't updated yet
-      const agentActivityMessages = ['AgentThinking', 'AgentStartedSpeaking', 'AgentAudioDone']; // Agent responding
-      
-      if (agentActivityMessages.includes(data.type)) {
-        this.options.onMeaningfulActivity?.(data.type);
-        return true;
+      // Type guard for message data
+      if (typeof data === 'object' && data !== null && 'type' in data) {
+        const messageData = data as { type: string };
+        
+        // User text injection (explicit user activity)
+        if (messageData.type === 'InjectUserMessage') {
+          this.options.onMeaningfulActivity?.(messageData.type);
+          return true;
+        }
+        
+        // Agent activity that should keep connection alive
+        // Note: These are handled by agent state changes, but we keep them here
+        // as a fallback in case state hasn't updated yet
+        const agentActivityMessages = ['AgentThinking', 'AgentStartedSpeaking', 'AgentAudioDone']; // Agent responding
+        
+        if (agentActivityMessages.includes(messageData.type)) {
+          this.options.onMeaningfulActivity?.(messageData.type);
+          return true;
+        }
       }
       
       // ConversationText messages (both user and assistant) are redundant:
@@ -599,11 +706,17 @@ export class WebSocketManager {
     // For transcription service, only reset on actual speech activity
     if (this.options.service === 'transcription') {
       // Only reset on actual speech content, not empty results or protocol messages
-      if (data.type === 'Results') {
-        const hasAlternatives = data.alternatives && data.alternatives.length > 0;
-        const hasTranscript = hasAlternatives && data.alternatives[0].transcript && data.alternatives[0].transcript.trim().length > 0;
-        if (hasTranscript) {
-          this.options.onMeaningfulActivity?.(`Results with transcript: "${data.alternatives[0].transcript}"`);
+      if (typeof data === 'object' && data !== null && 'type' in data && data.type === 'Results') {
+        const resultsData = data as { alternatives?: Array<{ transcript?: string }> };
+        const hasAlternatives = resultsData.alternatives && resultsData.alternatives.length > 0;
+        const firstAlternative = hasAlternatives && resultsData.alternatives ? resultsData.alternatives[0] : null;
+        const hasTranscript = Boolean(
+          firstAlternative && 
+          firstAlternative.transcript && 
+          firstAlternative.transcript.trim().length > 0
+        );
+        if (hasTranscript && firstAlternative) {
+          this.options.onMeaningfulActivity?.(`Results with transcript: "${firstAlternative.transcript}"`);
         }
         return hasTranscript; // Only reset if there's actual transcript content
       }
@@ -624,7 +737,10 @@ export class WebSocketManager {
    * coordinated timeout behavior across all services.
    */
   public resetIdleTimeout(triggerMessage?: unknown): void {
-    const triggerInfo = triggerMessage ? ` (triggered by: ${triggerMessage.type || 'unknown'})` : '';
+    const triggerType = triggerMessage && typeof triggerMessage === 'object' && triggerMessage !== null && 'type' in triggerMessage 
+      ? (triggerMessage as { type?: string }).type || 'unknown' 
+      : 'unknown';
+    const triggerInfo = triggerMessage ? ` (triggered by: ${triggerType})` : '';
     this.log(`🎯 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for ${this.options.service}${triggerInfo}`);
     // Individual WebSocket timeout resets are disabled - IdleTimeoutService handles all timeout logic
   }
@@ -689,11 +805,11 @@ export class WebSocketManager {
       
       // Debug logging for sendJSON calls
       if (this.options.debug) {
-        const dataType = data?.type || 'unknown';
+        const dataType = (data && typeof data === 'object' && 'type' in data) ? (data as { type?: string }).type || 'unknown' : 'unknown';
         console.log('📤 [WEBSOCKET.sendJSON] Called with type:', dataType);
-        console.log('📤 [WEBSOCKET.sendJSON] DEBUG: data.type=' + dataType + ', isSettings=' + (data?.type === 'Settings'));
+        console.log('📤 [WEBSOCKET.sendJSON] DEBUG: data.type=' + dataType + ', isSettings=' + (dataType === 'Settings'));
         
-        if (data && data.type === 'Settings') {
+        if (data && typeof data === 'object' && 'type' in data && (data as { type: string }).type === 'Settings') {
           console.log('📤 [WEBSOCKET.sendJSON] ✅ ENTERED Settings block!');
           
           // Expose Settings payload to window for automated testing (only in debug mode)
@@ -728,7 +844,7 @@ export class WebSocketManager {
       
       // Always expose Settings payload to window for automated testing (even without debug mode)
       // This is needed for E2E tests that check window variables
-      if (data && data.type === 'Settings' && typeof window !== 'undefined') {
+      if (data && typeof data === 'object' && 'type' in data && (data as { type: string }).type === 'Settings' && typeof window !== 'undefined') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).__DEEPGRAM_WS_SETTINGS_PAYLOAD__ = jsonString;
         try {
