@@ -20,15 +20,18 @@ require('dotenv').config({
   override: true // Override any values loaded from root .env by tests/setup.js
 });
 
-describe('Deepgram WebSocket Connectivity', () => {
-  // Skip in CI or when RUN_REAL_API_TESTS is false
-  const shouldSkip = process.env.CI === 'true' || process.env.RUN_REAL_API_TESTS === 'false';
-  
-  // Get API key and clean it (trim whitespace/newlines)
-  const rawApiKey = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
-  const apiKey = rawApiKey ? rawApiKey.trim() : null;
-  const url = 'wss://agent.deepgram.com/v1/agent/converse';
+// Skip in CI or when RUN_REAL_API_TESTS is false
+const shouldSkip = process.env.CI === 'true' || process.env.RUN_REAL_API_TESTS === 'false';
 
+// Get API key and clean it (trim whitespace/newlines)
+const rawApiKey = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
+const apiKey = rawApiKey ? rawApiKey.trim() : null;
+const url = 'wss://agent.deepgram.com/v1/agent/converse';
+
+// Use describe.skip() in CI to skip entire test suite
+const describeFn = shouldSkip ? describe.skip : describe;
+
+describeFn('Deepgram WebSocket Connectivity', () => {
   beforeAll(() => {
     if (shouldSkip) {
       console.warn('⚠️  Skipping real API tests in CI (requires real API key)');
@@ -108,7 +111,12 @@ describe('Deepgram WebSocket Connectivity', () => {
 
       // Test with invalid API key
       const invalidKey = 'invalid-key-12345';
-      const ws = new WebSocket(url, ['token', invalidKey]);
+      const ws = new WebSocket(url, ['token', invalidKey], {
+        headers: {
+          'Origin': 'http://localhost:5173',
+          'User-Agent': 'Node.js WebSocket Test (Jest)'
+        }
+      });
 
       const result = await new Promise((resolve) => {
         const timeout = setTimeout(() => {
@@ -228,4 +236,3 @@ describe('Deepgram WebSocket Connectivity', () => {
     });
   });
 });
-
