@@ -13,6 +13,10 @@ module.exports = {
     '<rootDir>/test-app/tests/**/*.test.tsx',
     '!<rootDir>/test-app/tests/e2e/**/*' // Exclude test-app E2E tests
   ],
+  // Exclude websocket-connectivity tests in CI (requires real API key)
+  testPathIgnorePatterns: process.env.CI === 'true' 
+    ? ['/node_modules/', '/dist/', 'websocket-connectivity.test.js']
+    : ['/node_modules/', '/dist/'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
