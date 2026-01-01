@@ -26,7 +26,9 @@ require('dotenv').config({
 
 // Skip in CI or when RUN_REAL_API_TESTS is false (consistent with other real-API tests)
 // Pattern matches: start-stop-methods.test.js, duplicate-settings.test.js
-const shouldSkipInCI = process.env.CI && !process.env.RUN_REAL_API_TESTS;
+// Note: process.env values are strings, so 'false' is truthy - need explicit check
+const shouldSkipInCI = process.env.CI === 'true' && 
+                       (process.env.RUN_REAL_API_TESTS === 'false' || !process.env.RUN_REAL_API_TESTS);
 
 // Get API key and clean it (trim whitespace/newlines)
 const rawApiKey = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
