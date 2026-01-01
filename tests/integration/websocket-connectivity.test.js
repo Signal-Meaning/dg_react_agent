@@ -6,6 +6,10 @@
  * These tests validate actual Deepgram API WebSocket connections.
  * Uses Node.js environment (not jsdom) to avoid WebSocket wrapper interference.
  * 
+ * ⚠️ REQUIRES REAL API KEY: These tests make actual WebSocket connections to Deepgram.
+ * - Skipped in CI (requires real API key, see .github/workflows/test-and-publish.yml)
+ * - Run locally with DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY in test-app/.env
+ * 
  * Best Practice: Test WebSocket connectivity separately from React component tests.
  * See docs/issues/ISSUE-341/JEST-WEBSOCKET-BEST-PRACTICES.md for details.
  */
@@ -20,25 +24,19 @@ require('dotenv').config({
   override: true // Override any values loaded from root .env by tests/setup.js
 });
 
-// Skip in CI or when RUN_REAL_API_TESTS is false
-const shouldSkip = process.env.CI === 'true' || process.env.RUN_REAL_API_TESTS === 'false';
+// Skip in CI or when RUN_REAL_API_TESTS is false (consistent with other real-API tests)
+// Pattern matches: start-stop-methods.test.js, duplicate-settings.test.js
+const shouldSkipInCI = process.env.CI === 'true' && !process.env.RUN_REAL_API_TESTS;
 
 // Get API key and clean it (trim whitespace/newlines)
 const rawApiKey = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
 const apiKey = rawApiKey ? rawApiKey.trim() : null;
 const url = 'wss://agent.deepgram.com/v1/agent/converse';
 
-// Skip entire test suite in CI - don't define tests at all
-if (shouldSkip) {
-  describe.skip('Deepgram WebSocket Connectivity', () => {
-    it('skipped in CI - requires real API key', () => {
-      // This test suite is skipped in CI environment
-    });
-  });
-} else {
-  describe('Deepgram WebSocket Connectivity', () => {
+// Use consistent pattern with other real-API tests: (shouldSkipInCI ? describe.skip : describe)
+(shouldSkipInCI ? describe.skip : describe)('Deepgram WebSocket Connectivity', () => {
   beforeAll(() => {
-    if (shouldSkip) {
+    if (shouldSkipInCI) {
       console.warn('⚠️  Skipping real API tests in CI (requires real API key)');
       return;
     }
@@ -63,7 +61,7 @@ if (shouldSkip) {
 
   describe('Connection Lifecycle', () => {
     it('should connect to Deepgram API successfully', async () => {
-      if (shouldSkip || !apiKey) {
+      if (shouldSkipInCI || !apiKey) {
         return; // Skip in CI or if no API key
       }
 
@@ -110,7 +108,7 @@ if (shouldSkip) {
     });
 
     it('should handle connection errors gracefully', async () => {
-      if (shouldSkip || !apiKey) {
+      if (shouldSkipInCI || !apiKey) {
         return; // Skip in CI or if no API key
       }
 
@@ -153,7 +151,7 @@ if (shouldSkip) {
 
   describe('Protocol Handling', () => {
     it('should accept token protocol', async () => {
-      if (shouldSkip || !apiKey) {
+      if (shouldSkipInCI || !apiKey) {
         return; // Skip in CI or if no API key
       }
 
@@ -194,7 +192,7 @@ if (shouldSkip) {
 
   describe('Connection State', () => {
     it('should transition through connection states', async () => {
-      if (shouldSkip || !apiKey) {
+      if (shouldSkipInCI || !apiKey) {
         return; // Skip in CI or if no API key
       }
 
@@ -240,5 +238,4 @@ if (shouldSkip) {
       expect(result.states).toContain(3); // CLOSED
     });
   });
-  }); // End of describe('Deepgram WebSocket Connectivity')
-} // End of else block
+});
