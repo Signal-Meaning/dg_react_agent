@@ -21,12 +21,20 @@ require('dotenv').config({
 });
 
 describe('Deepgram WebSocket Connectivity', () => {
+  // Skip in CI or when RUN_REAL_API_TESTS is false
+  const shouldSkip = process.env.CI === 'true' || process.env.RUN_REAL_API_TESTS === 'false';
+  
   // Get API key and clean it (trim whitespace/newlines)
   const rawApiKey = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
   const apiKey = rawApiKey ? rawApiKey.trim() : null;
   const url = 'wss://agent.deepgram.com/v1/agent/converse';
 
   beforeAll(() => {
+    if (shouldSkip) {
+      console.warn('⚠️  Skipping real API tests in CI (requires real API key)');
+      return;
+    }
+    
     if (!apiKey) {
       console.warn('⚠️  DEEPGRAM_API_KEY not set - skipping real API tests');
       console.warn('   Set DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY in test-app/.env');
@@ -47,8 +55,8 @@ describe('Deepgram WebSocket Connectivity', () => {
 
   describe('Connection Lifecycle', () => {
     it('should connect to Deepgram API successfully', async () => {
-      if (!apiKey) {
-        return; // Skip if no API key
+      if (shouldSkip || !apiKey) {
+        return; // Skip in CI or if no API key
       }
 
       // Include headers like the standalone validation script
@@ -94,8 +102,8 @@ describe('Deepgram WebSocket Connectivity', () => {
     });
 
     it('should handle connection errors gracefully', async () => {
-      if (!apiKey) {
-        return; // Skip if no API key
+      if (shouldSkip || !apiKey) {
+        return; // Skip in CI or if no API key
       }
 
       // Test with invalid API key
@@ -132,8 +140,8 @@ describe('Deepgram WebSocket Connectivity', () => {
 
   describe('Protocol Handling', () => {
     it('should accept token protocol', async () => {
-      if (!apiKey) {
-        return; // Skip if no API key
+      if (shouldSkip || !apiKey) {
+        return; // Skip in CI or if no API key
       }
 
       // Include headers like the standalone validation script
@@ -173,8 +181,8 @@ describe('Deepgram WebSocket Connectivity', () => {
 
   describe('Connection State', () => {
     it('should transition through connection states', async () => {
-      if (!apiKey) {
-        return; // Skip if no API key
+      if (shouldSkip || !apiKey) {
+        return; // Skip in CI or if no API key
       }
 
       // Include headers like the standalone validation script
