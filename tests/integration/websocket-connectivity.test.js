@@ -240,4 +240,5 @@ if (shouldSkip) {
       expect(result.states).toContain(3); // CLOSED
     });
   });
-  } // End of else block for non-CI tests
+  }); // End of describe('Deepgram WebSocket Connectivity')
+} // End of else block
