@@ -961,10 +961,14 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <DeepgramVoiceInteraction
         ref={deepgramRef}
         {...(connectionMode === 'direct' 
-          ? { apiKey: import.meta.env.VITE_DEEPGRAM_API_KEY || '' }
+          ? { 
+              apiKey: import.meta.env.VITE_DEEPGRAM_API_KEY, // Remove || '' fallback - let component handle missing key
+              debug: isDebugMode || window.location.search.includes('debug=true') // Enable debug for authentication troubleshooting
+            }
           : { 
               proxyEndpoint: proxyEndpoint || import.meta.env.VITE_PROXY_ENDPOINT,
-              ...(proxyAuthToken ? { proxyAuthToken } : {})
+              ...(proxyAuthToken ? { proxyAuthToken } : {}),
+              debug: isDebugMode || window.location.search.includes('debug=true') // Enable debug for authentication troubleshooting
             }
         )}
         transcriptionOptions={memoizedTranscriptionOptions}

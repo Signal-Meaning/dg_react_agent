@@ -35,6 +35,7 @@ build/
 
 # Test results
 test-results/
+test-reports/
 playwright-report/
 coverage/
 test-results.json
@@ -43,9 +44,6 @@ test-app/test-results.json
 guidance/
 test-results/.last-run.json
 test-app/test-results/
-
-# Test log files
-*.log
 
 test-app/.env*
 test-app/playwright-report/

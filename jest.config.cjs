@@ -1,6 +1,8 @@
 module.exports = {
   preset: 'ts-jest',
-  testEnvironment: 'jsdom',
+  testEnvironment: process.env.DEEPGRAM_API_KEY && process.env.DEEPGRAM_API_KEY !== 'mock' && process.env.CI !== 'true'
+    ? '<rootDir>/tests/custom-jsdom-env.js'  // Use custom environment with real WebSocket for API tests
+    : 'jsdom',  // Use standard jsdom for mock tests
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testMatch: [
     '<rootDir>/tests/**/*.test.js',

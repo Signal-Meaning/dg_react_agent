@@ -481,8 +481,23 @@ function DeepgramVoiceInteraction(
         authToken: config.proxyAuthToken,
       };
     }
+    // In direct mode, pass the actual apiKey value
+    // REGRESSION FIX (v0.7.0): The original code used || '' which converted undefined to empty string.
+    // This caused WebSocketManager to incorrectly detect proxy mode when apiKey was undefined.
+    // We now use ?? '' to preserve undefined values (converted to empty string for type safety).
+    // However, if apiKey is actually provided, it should be passed through correctly.
+    const apiKeyValue = config.apiKey ?? '';
+    // ALWAYS log this to debug the regression (remove after fix is verified)
+    console.log('🔧 [getConnectionOptions] Direct mode (ALWAYS LOG):', {
+      connectionMode: config.connectionMode,
+      apiKeyProvided: !!config.apiKey,
+      apiKeyLength: config.apiKey?.length || 0,
+      apiKeyPreview: config.apiKey ? `${config.apiKey.substring(0, 8)}...${config.apiKey.substring(config.apiKey.length - 4)}` : 'EMPTY',
+      apiKeyValueLength: apiKeyValue.length,
+      apiKeyValuePreview: apiKeyValue ? `${apiKeyValue.substring(0, 8)}...${apiKeyValue.substring(apiKeyValue.length - 4)}` : 'EMPTY',
+    });
     return {
-      apiKey: config.apiKey || '',
+      apiKey: apiKeyValue,
     };
   };
 
