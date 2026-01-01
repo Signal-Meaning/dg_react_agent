@@ -28,10 +28,15 @@ const rawApiKey = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_
 const apiKey = rawApiKey ? rawApiKey.trim() : null;
 const url = 'wss://agent.deepgram.com/v1/agent/converse';
 
-// Use describe.skip() in CI to skip entire test suite
-const describeFn = shouldSkip ? describe.skip : describe;
-
-describeFn('Deepgram WebSocket Connectivity', () => {
+// Skip entire test suite in CI - don't define tests at all
+if (shouldSkip) {
+  describe.skip('Deepgram WebSocket Connectivity', () => {
+    it('skipped in CI - requires real API key', () => {
+      // This test suite is skipped in CI environment
+    });
+  });
+} else {
+  describe('Deepgram WebSocket Connectivity', () => {
   beforeAll(() => {
     if (shouldSkip) {
       console.warn('⚠️  Skipping real API tests in CI (requires real API key)');
