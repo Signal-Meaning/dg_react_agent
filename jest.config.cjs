@@ -15,7 +15,7 @@ module.exports = {
   ],
   // Exclude websocket-connectivity tests in CI (requires real API key)
   testPathIgnorePatterns: process.env.CI === 'true' 
-    ? ['/node_modules/', '/dist/', 'websocket-connectivity.test.js']
+    ? ['/node_modules/', '/dist/', '.*websocket-connectivity\\.test\\.js$']
     : ['/node_modules/', '/dist/'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
