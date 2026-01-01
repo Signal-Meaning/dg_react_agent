@@ -241,4 +241,3 @@ if (shouldSkip) {
     });
   });
   } // End of else block for non-CI tests
-}
