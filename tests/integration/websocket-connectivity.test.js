@@ -6,6 +6,10 @@
  * These tests validate actual Deepgram API WebSocket connections.
  * Uses Node.js environment (not jsdom) to avoid WebSocket wrapper interference.
  * 
+ * ⚠️ REQUIRES REAL API KEY: These tests make actual WebSocket connections to Deepgram.
+ * - Skipped in CI (requires real API key, see .github/workflows/test-and-publish.yml)
+ * - Run locally with DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY in test-app/.env
+ * 
  * Best Practice: Test WebSocket connectivity separately from React component tests.
  * See docs/issues/ISSUE-341/JEST-WEBSOCKET-BEST-PRACTICES.md for details.
  */
@@ -20,13 +24,25 @@ require('dotenv').config({
   override: true // Override any values loaded from root .env by tests/setup.js
 });
 
-describe('Deepgram WebSocket Connectivity', () => {
-  // Get API key and clean it (trim whitespace/newlines)
-  const rawApiKey = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
-  const apiKey = rawApiKey ? rawApiKey.trim() : null;
-  const url = 'wss://agent.deepgram.com/v1/agent/converse';
+// Skip in CI or when RUN_REAL_API_TESTS is false (consistent with other real-API tests)
+// Pattern matches: start-stop-methods.test.js, duplicate-settings.test.js
+// Note: process.env values are strings, so 'false' is truthy - need explicit check
+const shouldSkipInCI = process.env.CI === 'true' && 
+                       (process.env.RUN_REAL_API_TESTS === 'false' || !process.env.RUN_REAL_API_TESTS);
 
+// Get API key and clean it (trim whitespace/newlines)
+const rawApiKey = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
+const apiKey = rawApiKey ? rawApiKey.trim() : null;
+const url = 'wss://agent.deepgram.com/v1/agent/converse';
+
+// Use consistent pattern with other real-API tests: (shouldSkipInCI ? describe.skip : describe)
+(shouldSkipInCI ? describe.skip : describe)('Deepgram WebSocket Connectivity', () => {
   beforeAll(() => {
+    if (shouldSkipInCI) {
+      console.warn('⚠️  Skipping real API tests in CI (requires real API key)');
+      return;
+    }
+    
     if (!apiKey) {
       console.warn('⚠️  DEEPGRAM_API_KEY not set - skipping real API tests');
       console.warn('   Set DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY in test-app/.env');
@@ -47,8 +63,8 @@ describe('Deepgram WebSocket Connectivity', () => {
 
   describe('Connection Lifecycle', () => {
     it('should connect to Deepgram API successfully', async () => {
-      if (!apiKey) {
-        return; // Skip if no API key
+      if (shouldSkipInCI || !apiKey) {
+        return; // Skip in CI or if no API key
       }
 
       // Include headers like the standalone validation script
@@ -94,13 +110,18 @@ describe('Deepgram WebSocket Connectivity', () => {
     });
 
     it('should handle connection errors gracefully', async () => {
-      if (!apiKey) {
-        return; // Skip if no API key
+      if (shouldSkipInCI || !apiKey) {
+        return; // Skip in CI or if no API key
       }
 
       // Test with invalid API key
       const invalidKey = 'invalid-key-12345';
-      const ws = new WebSocket(url, ['token', invalidKey]);
+      const ws = new WebSocket(url, ['token', invalidKey], {
+        headers: {
+          'Origin': 'http://localhost:5173',
+          'User-Agent': 'Node.js WebSocket Test (Jest)'
+        }
+      });
 
       const result = await new Promise((resolve) => {
         const timeout = setTimeout(() => {
@@ -132,8 +153,8 @@ describe('Deepgram WebSocket Connectivity', () => {
 
   describe('Protocol Handling', () => {
     it('should accept token protocol', async () => {
-      if (!apiKey) {
-        return; // Skip if no API key
+      if (shouldSkipInCI || !apiKey) {
+        return; // Skip in CI or if no API key
       }
 
       // Include headers like the standalone validation script
@@ -173,8 +194,8 @@ describe('Deepgram WebSocket Connectivity', () => {
 
   describe('Connection State', () => {
     it('should transition through connection states', async () => {
-      if (!apiKey) {
-        return; // Skip if no API key
+      if (shouldSkipInCI || !apiKey) {
+        return; // Skip in CI or if no API key
       }
 
       // Include headers like the standalone validation script
@@ -220,4 +241,3 @@ describe('Deepgram WebSocket Connectivity', () => {
     });
   });
 });
-
