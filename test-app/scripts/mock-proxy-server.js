@@ -23,11 +23,64 @@ import fs from 'fs';
 import path from 'path';
 
 // Configuration
-const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
+const RAW_DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
+
+/**
+ * Prepares Deepgram API key for WebSocket authentication.
+ * 
+ * Deepgram API keys are stored in .env without any prefix (as provided by Deepgram).
+ * For WebSocket subprotocol ['token', apiKey], Deepgram expects the raw key.
+ * 
+ * This function strips the 'dgkey_' prefix if accidentally present (legacy support),
+ * but keys should be stored without prefix in .env.
+ * 
+ * @param apiKey - The API key from environment (should be raw, without prefix)
+ * @returns The raw API key ready for WebSocket authentication
+ */
+function prepareApiKeyForWebSocket(apiKey) {
+  if (!apiKey || apiKey.trim() === '') {
+    return undefined;
+  }
+  
+  const trimmed = apiKey.trim();
+  
+  // If it's a test key, return as-is
+  if (trimmed.startsWith('test')) {
+    return trimmed;
+  }
+  
+  // For WebSocket authentication: Deepgram expects raw key (without 'dgkey_' prefix)
+  // If key accidentally has 'dgkey_' prefix (legacy), strip it
+  // Keys should be stored in .env without prefix
+  if (trimmed.startsWith('dgkey_')) {
+    return trimmed.substring(6); // Remove 'dgkey_' prefix if present
+  }
+  return trimmed; // Use raw key as-is
+}
+
+// Prepare API key for WebSocket authentication
+// Keys should be stored in .env without prefix (as provided by Deepgram)
+// This function strips prefix if accidentally present (legacy support)
+const DEEPGRAM_API_KEY = prepareApiKeyForWebSocket(RAW_DEEPGRAM_API_KEY);
 const PROXY_PORT = parseInt(process.env.PROXY_PORT || '8080', 10);
 const PROXY_PATH = process.env.PROXY_PATH || '/deepgram-proxy';
 const DEEPGRAM_AGENT_URL = 'wss://agent.deepgram.com/v1/agent/converse';
 const DEBUG_LOG_PATH = path.join(process.cwd(), '.cursor', 'debug.log');
+
+// Log API key status at startup (for debugging authentication issues)
+if (DEEPGRAM_API_KEY) {
+  const apiKeyPreview = DEEPGRAM_API_KEY.length > 8 
+    ? `${DEEPGRAM_API_KEY.substring(0, 8)}...${DEEPGRAM_API_KEY.substring(DEEPGRAM_API_KEY.length - 4)}`
+    : '***';
+  const hadPrefix = RAW_DEEPGRAM_API_KEY && RAW_DEEPGRAM_API_KEY.startsWith('dgkey_');
+  console.log(`[Proxy] DEEPGRAM_API_KEY loaded: ${apiKeyPreview} (length: ${DEEPGRAM_API_KEY.length})`);
+  console.log(`[Proxy]    Raw key from env: ${RAW_DEEPGRAM_API_KEY ? (RAW_DEEPGRAM_API_KEY.substring(0, 8) + '...') : 'NOT SET'}`);
+  console.log(`[Proxy]    Prefix stripped: ${hadPrefix ? 'YES (dgkey_ removed for WebSocket auth)' : 'NO (raw key used as-is)'}`);
+} else {
+  console.error('[Proxy] ❌ DEEPGRAM_API_KEY not found in environment');
+  console.error('[Proxy]    Checked: DEEPGRAM_API_KEY, VITE_DEEPGRAM_API_KEY');
+  console.error('[Proxy]    Raw key value:', RAW_DEEPGRAM_API_KEY ? 'SET' : 'NOT SET');
+}
 
 // Debug logging helper
 function debugLog(location, message, data, hypothesisId) {
@@ -52,10 +105,19 @@ function debugLog(location, message, data, hypothesisId) {
   }
 }
 
-if (!DEEPGRAM_API_KEY) {
+if (!DEEPGRAM_API_KEY || DEEPGRAM_API_KEY.trim() === '') {
   console.error('❌ Error: DEEPGRAM_API_KEY environment variable is required');
   console.error('   Set it in your .env file or as an environment variable');
+  console.error('   Checked: DEEPGRAM_API_KEY, VITE_DEEPGRAM_API_KEY');
+  console.error('   DEEPGRAM_API_KEY value:', process.env.DEEPGRAM_API_KEY ? 'SET' : 'NOT SET');
+  console.error('   VITE_DEEPGRAM_API_KEY value:', process.env.VITE_DEEPGRAM_API_KEY ? 'SET' : 'NOT SET');
   process.exit(1);
+}
+
+// Validate API key format (Deepgram keys don't require prefix)
+if (!DEEPGRAM_API_KEY.startsWith('test') && DEEPGRAM_API_KEY.length < 40) {
+  console.warn(`[Proxy] ⚠️  Warning: API key appears to be too short (should be 40+ characters)`);
+  console.warn(`[Proxy]    API key preview: ${DEEPGRAM_API_KEY.substring(0, 10)}...`);
 }
 
 // Create HTTP server for WebSocket upgrade
@@ -184,6 +246,19 @@ wss.on('connection', (clientWs, req) => {
   // #endregion
   
   // Pass API key via WebSocket protocol array: ['token', apiKey]
+  // Validate API key format before attempting connection
+  if (!DEEPGRAM_API_KEY || DEEPGRAM_API_KEY.trim() === '') {
+    console.error(`[Proxy] ❌ DEEPGRAM_API_KEY is empty or invalid for ${serviceType} service`);
+    clientWs.close(1011, 'Proxy configuration error: DEEPGRAM_API_KEY not set');
+    return;
+  }
+  
+  // Log API key status (first 8 chars only for security)
+  const apiKeyPreview = DEEPGRAM_API_KEY.length > 8 
+    ? `${DEEPGRAM_API_KEY.substring(0, 8)}...${DEEPGRAM_API_KEY.substring(DEEPGRAM_API_KEY.length - 4)}`
+    : '***';
+  console.log(`[Proxy] Connecting to Deepgram with API key: ${apiKeyPreview} (length: ${DEEPGRAM_API_KEY.length})`);
+  
   const deepgramWs = new WebSocket(deepgramUrl.toString(), ['token', DEEPGRAM_API_KEY]);
   
   // #region debug log - after WebSocket creation
@@ -381,11 +456,20 @@ wss.on('connection', (clientWs, req) => {
   // Handle Deepgram errors
   deepgramWs.on('error', (error) => {
     // #region debug log - Deepgram error
-    debugLog('mock-proxy-server.js:156', 'Deepgram error', { serviceType, targetUrl: targetDeepgramUrl, error: error.message || String(error) }, 'C');
+    const errorMessage = error.message || String(error);
+    debugLog('mock-proxy-server.js:156', 'Deepgram error', { serviceType, targetUrl: targetDeepgramUrl, error: errorMessage }, 'C');
     // #endregion
-    console.error(`[Proxy] Deepgram ${serviceType} error:`, error);
+    console.error(`[Proxy] Deepgram ${serviceType} error:`, errorMessage);
+    
+    // Special handling for authentication errors (401)
+    if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+      console.error(`[Proxy] ❌ Authentication failed - check DEEPGRAM_API_KEY is valid and not expired`);
+      console.error(`[Proxy] ❌ API key length: ${DEEPGRAM_API_KEY.length}, preview: ${DEEPGRAM_API_KEY.substring(0, 8)}...`);
+      console.error(`[Proxy] ❌ Target URL: ${deepgramUrl.toString()}`);
+    }
+    
     if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.close(1011, 'Proxy error');
+      clientWs.close(1011, `Proxy error: ${errorMessage}`);
     }
   });
 

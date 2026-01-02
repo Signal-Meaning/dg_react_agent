@@ -220,7 +220,14 @@ export class WebSocketManager {
             console.log(`🔌 [WebSocketManager.connect] Created WebSocket without token protocol (proxy mode)`);
           }
         } else {
-          this.ws = new WebSocket(url, ['token', this.options.apiKey || '']);
+          // For WebSocket authentication: Use raw API key as provided by Deepgram
+          // Deepgram API keys are stored without prefix in .env
+          // If key accidentally has 'dgkey_' prefix (legacy), strip it for WebSocket
+          let apiKeyForAuth = (this.options.apiKey || '').trim();
+          if (apiKeyForAuth.startsWith('dgkey_')) {
+            apiKeyForAuth = apiKeyForAuth.substring(6); // Remove 'dgkey_' prefix if present
+          }
+          this.ws = new WebSocket(url, ['token', apiKeyForAuth]);
           if (this.options.debug) {
             console.log(`🔌 [WebSocketManager.connect] Created WebSocket with token protocol (direct mode)`);
           }
@@ -488,6 +495,14 @@ export class WebSocketManager {
     }
   }
   
+  /**
+   * Checks if Settings has been sent
+   * @returns true if Settings message has been sent
+   */
+  public hasSettingsBeenSent(): boolean {
+    return this.settingsSent;
+  }
+
   /**
    * Mark that Settings has been sent (for agent service)
    * This allows keepalive to start sending KeepAlive messages

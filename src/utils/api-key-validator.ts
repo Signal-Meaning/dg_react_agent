@@ -1,23 +1,39 @@
 /**
  * API Key Validation Utilities
  * 
- * Centralized logic for validating Deepgram API keys
- * to ensure consistency across the application.
+ * Centralized logic for validating Deepgram API keys.
+ * 
+ * Note: Deepgram API keys are used as-is (no prefix required).
+ * Keys are stored in .env without any prefix, as provided by Deepgram.
  */
 
 /**
  * Validates if an API key is a real Deepgram API key
- * @param apiKey - The API key to validate
+ * 
+ * Deepgram API keys are provided without any prefix.
+ * This function validates the key format without requiring a prefix.
+ * 
+ * @param apiKey - The API key to validate (raw key as provided by Deepgram)
  * @returns true if the API key is valid, false otherwise
  */
 export function isValidDeepgramApiKey(apiKey: string | undefined): boolean {
   if (!apiKey) return false;
   
-  return (
-    apiKey !== 'your-deepgram-api-key-here' &&
-    apiKey.startsWith('dgkey_') &&
-    apiKey.length >= 40 // Deepgram API keys are typically 40+ characters
-  );
+  const trimmed = apiKey.trim();
+  
+  // Reject placeholder keys
+  if (trimmed === 'your-deepgram-api-key-here') {
+    return false;
+  }
+  
+  // Accept test keys
+  if (trimmed.startsWith('test')) {
+    return true;
+  }
+  
+  // Validate length (Deepgram API keys are typically 40+ characters)
+  // Note: We don't require 'dgkey_' prefix as Deepgram doesn't use it
+  return trimmed.length >= 40;
 }
 
 /**
@@ -59,10 +75,6 @@ export function getApiKeyErrorMessage(apiKey: string | undefined): string {
   
   if (apiKey.startsWith('test')) {
     return 'Test API keys are not supported in production mode';
-  }
-  
-  if (!apiKey.startsWith('dgkey_')) {
-    return 'API key must start with "dgkey_"';
   }
   
   if (apiKey.length < 40) {

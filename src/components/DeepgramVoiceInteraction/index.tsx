@@ -2903,8 +2903,32 @@ function DeepgramVoiceInteraction(
         throw new Error('Agent manager was cleared or replaced during connection');
       }
       
-      // Wait a moment for settings to be sent
-      await new Promise(resolve => setTimeout(resolve, SETTINGS_SEND_DELAY_MS));
+      // Wait for Settings to be sent and ideally SettingsApplied to be received
+      // This ensures Settings is sent before InjectUserMessage (required by Deepgram)
+      // In proxy mode, this is especially important due to additional network hops
+      const maxWaitTime = 5000; // Maximum 5 seconds to wait for Settings
+      const checkInterval = 100; // Check every 100ms
+      const startTime = Date.now();
+      
+      while (Date.now() - startTime < maxWaitTime) {
+        // Check if Settings was sent (SettingsApplied received)
+        if (hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent) {
+          log('Settings confirmed (SettingsApplied received), safe to send user message');
+          break;
+        }
+        
+        // Check if Settings was at least sent (even if SettingsApplied not received yet)
+        // This is a fallback for cases where SettingsApplied might not be received (e.g., with functions)
+        if (agentManagerRef.current?.hasSettingsBeenSent()) {
+          log('Settings sent (but SettingsApplied not yet received), waiting a bit more...');
+          // Wait a bit more for SettingsApplied, but don't wait forever
+          await new Promise(resolve => setTimeout(resolve, 500));
+          break;
+        }
+        
+        // Wait before checking again
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+      }
       
       // Final check - manager should still exist
       if (!agentManagerRef.current || agentManagerRef.current !== managerBeforeConnect) {
@@ -2913,9 +2937,35 @@ function DeepgramVoiceInteraction(
       }
       
       const finalState = agentManagerRef.current.getState();
-      log('Connection established, final state:', finalState);
+      const settingsSent = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
+      const settingsSentToWebSocket = agentManagerRef.current?.hasSettingsBeenSent() || false;
+      log('Connection established, final state:', finalState, 'Settings sent:', settingsSent, 'Settings sent to WebSocket:', settingsSentToWebSocket);
+      
+      // CRITICAL: Ensure Settings is sent before InjectUserMessage (required by Deepgram)
+      // If Settings hasn't been sent yet, wait a bit more or throw an error
+      if (!settingsSent && !settingsSentToWebSocket) {
+        log('⚠️ Settings not sent yet, waiting additional time...');
+        // Wait a bit more for Settings to be sent
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Check again
+        const settingsSentAfterWait = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
+        const settingsSentToWebSocketAfterWait = agentManagerRef.current?.hasSettingsBeenSent() || false;
+        
+        if (!settingsSentAfterWait && !settingsSentToWebSocketAfterWait) {
+          log('❌ Settings still not sent after waiting - this may cause Deepgram to reject InjectUserMessage');
+          // Don't throw error - let it proceed and see if Deepgram accepts it
+          // Some edge cases might not send Settings (e.g., reconnection scenarios)
+        }
+      }
     } else {
       log('Agent manager already connected');
+      // Even if already connected, verify Settings was sent
+      const settingsSent = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
+      const settingsSentToWebSocket = agentManagerRef.current?.hasSettingsBeenSent() || false;
+      if (!settingsSent && !settingsSentToWebSocket) {
+        log('⚠️ Agent already connected but Settings not sent - this may cause issues');
+      }
     }
     
     // Check WebSocket state before sending
@@ -2967,6 +3017,31 @@ function DeepgramVoiceInteraction(
           log('Failed to get or resume AudioContext:', error);
       }
     }
+    }
+    
+    // FINAL CHECK: Ensure Settings is sent before InjectUserMessage (required by Deepgram)
+    // This is critical - Deepgram will reject InjectUserMessage if sent before Settings
+    const finalSettingsCheck = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
+    const finalSettingsSentToWebSocket = agentManagerRef.current?.hasSettingsBeenSent() || false;
+    
+    if (!finalSettingsCheck && !finalSettingsSentToWebSocket) {
+      log('❌ CRITICAL: Settings not sent before InjectUserMessage - this will cause Deepgram to reject the message');
+      log('   Waiting additional time for Settings to be sent...');
+      // Wait one more time for Settings
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Final check
+      const finalSettingsCheck2 = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
+      const finalSettingsSentToWebSocket2 = agentManagerRef.current?.hasSettingsBeenSent() || false;
+      
+      if (!finalSettingsCheck2 && !finalSettingsSentToWebSocket2) {
+        log('❌ CRITICAL: Settings still not sent - InjectUserMessage will likely be rejected by Deepgram');
+        log('   Proceeding anyway - this may cause an error from Deepgram');
+      } else {
+        log('✅ Settings sent after additional wait - safe to send InjectUserMessage');
+      }
+    } else {
+      log('✅ Settings confirmed sent - safe to send InjectUserMessage');
     }
     
     agentManagerRef.current.sendJSON({

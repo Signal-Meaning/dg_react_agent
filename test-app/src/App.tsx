@@ -1110,19 +1110,21 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
                   }}
                 />
               </div>
-              <p style={{ 
-                marginTop: '10px', 
-                fontSize: '0.85em', 
-                color: '#2d3748',
-                fontStyle: 'italic'
-              }}>
-                Current mode: <strong data-testid="connection-mode">{connectionMode}</strong>
-                {connectionMode === 'proxy' && (
-                  <span> → {proxyEndpoint || 'Not set'}</span>
-                )}
-              </p>
             </div>
           )}
+          
+          {/* Connection mode display - always visible for both direct and proxy modes */}
+          <p style={{ 
+            marginTop: '10px', 
+            fontSize: '0.85em', 
+            color: '#2d3748',
+            fontStyle: 'italic'
+          }}>
+            Current mode: <strong data-testid="connection-mode">{connectionMode}</strong>
+            {connectionMode === 'proxy' && (
+              <span> → {proxyEndpoint || 'Not set'}</span>
+            )}
+          </p>
         </div>
         
         <p>Audio Recording: <strong>{isRecording.toString()}</strong></p>
