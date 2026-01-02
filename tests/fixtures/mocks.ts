@@ -25,6 +25,9 @@ export const createMockWebSocketManager = () => ({
   startKeepalive: jest.fn(),
   stopKeepalive: jest.fn(),
   
+  // Issue #345: Settings wait helper method
+  hasSettingsBeenSent: jest.fn().mockReturnValue(false),
+  
   // WebSocket property for readyState checking (required for Settings sending)
   // Component checks agentManagerRef.current.ws.readyState before sending Settings
   // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED

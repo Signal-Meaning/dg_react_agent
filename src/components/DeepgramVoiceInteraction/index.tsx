@@ -44,7 +44,10 @@ function hasSettingsBeenSent(
   agentManager: WebSocketManager | null
 ): { confirmed: boolean; sent: boolean; both: boolean } {
   const confirmed = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent || false;
-  const sent = agentManager?.hasSettingsBeenSent() || false;
+  // Check if agentManager has the hasSettingsBeenSent method (defensive check for mocks)
+  const sent = (agentManager && typeof agentManager.hasSettingsBeenSent === 'function')
+    ? agentManager.hasSettingsBeenSent()
+    : false;
   return {
     confirmed,
     sent,
