@@ -121,7 +121,7 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 
 | Issue | Description | Status | Priority |
 |-------|-------------|--------|----------|
-| #1 | `backend-proxy-mode.spec.js:119` - Settings not being sent within timeout (30s). Connection establishes but Settings message never sent, causing timeout. May be related to Issue #341 fix or timing issue. | 🔍 Investigating | High |
+| #1 | `backend-proxy-mode.spec.js:119` - Connection closes after Settings sent, before SettingsApplied received. Diagnostic shows: Settings WAS sent (window variable exists), but connection status is "closed" and SettingsApplied callback never fired. Connection establishes, Settings sent, then connection closes - likely authentication issue. | 🔍 Investigating | High |
 
 ## 🔍 Validation Checklist
 
@@ -460,10 +460,11 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 - Test environment configured
 - Proxy accessibility verified
 
-**Phase 3 Status**: 🔄 IN PROGRESS
+**Phase 3 Status**: 🔄 IN PROGRESS - Blocked by Issue #1
 - Core proxy tests executed: 5/6 passing
-- One failure identified: Settings timeout issue
+- One failure identified: Connection closes after Settings sent (Issue #1)
 - Authentication tests: 2/2 passing
+- **BLOCKER**: Cannot complete Phase 3 until agent response test passes (requires SettingsApplied to be received)
 
 **Immediate Actions**:
 1. Investigate Settings timeout issue in `backend-proxy-mode.spec.js:119`

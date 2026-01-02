@@ -209,7 +209,28 @@ test.describe('Backend Proxy Mode', () => {
     await page.waitForFunction(() => {
       const settingsEl = document.querySelector('[data-testid="has-sent-settings"]');
       return settingsEl && settingsEl.textContent === 'true';
-    }, { timeout: 20000 });
+    }, { timeout: 20000 }).catch(async (error) => {
+      // Capture diagnostic information if Settings timeout occurs
+      const diagnosticInfo = await page.evaluate(() => {
+        const settingsEl = document.querySelector('[data-testid="has-sent-settings"]');
+        const statusEl = document.querySelector('[data-testid="connection-status"]');
+        const modeEl = document.querySelector('[data-testid="connection-mode"]');
+        const windowSettings = window.__DEEPGRAM_WS_SETTINGS_PARSED__;
+        const globalSettingsSent = window.__DEEPGRAM_GLOBAL_SETTINGS_SENT__;
+        
+        return {
+          hasSentSettings: settingsEl?.textContent || 'not found',
+          connectionStatus: statusEl?.textContent || 'not found',
+          connectionMode: modeEl?.textContent || 'not found',
+          windowSettingsParsed: windowSettings ? 'exists' : 'not found',
+          globalSettingsSent: globalSettingsSent || false,
+          consoleLogs: (window.consoleLogs || []).slice(-20) // Last 20 logs
+        };
+      });
+      
+      console.error('Settings timeout. Diagnostic info:', JSON.stringify(diagnosticInfo, null, 2));
+      throw new Error(`Settings not applied within timeout. hasSentSettings: "${diagnosticInfo.hasSentSettings}", connectionStatus: "${diagnosticInfo.connectionStatus}"`);
+    });
 
     // Send a text message to trigger agent response through proxy
     const testMessage = 'Hello, this is a proxy mode test';
