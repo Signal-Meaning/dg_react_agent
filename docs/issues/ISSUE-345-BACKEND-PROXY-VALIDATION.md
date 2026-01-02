@@ -58,6 +58,7 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 3. **All E2E tests with `USE_PROXY_MODE=true`**
    - Verify all existing E2E tests pass in proxy mode
    - Document any proxy-specific failures
+   - **Note**: Tests are now written to work in both modes - use `USE_PROXY_MODE=true` to run in proxy mode, omit to run in direct mode
 
 ### Test Execution Plan
 
@@ -94,7 +95,7 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 | Test | Status | Notes |
 |------|--------|-------|
 | `backend-proxy-mode.spec.js:93` - Connection through proxy | ✅ PASSED | Test completed successfully |
-| `backend-proxy-mode.spec.js:119` - Agent responses | ❌ FAILED | Timeout waiting for Settings to be sent (30s timeout exceeded) |
+| `backend-proxy-mode.spec.js:119` - Agent responses | ❌ FAILED | Connection closes after Settings sent, before SettingsApplied received. **CRITICAL**: Same test PASSES in direct mode, confirming PROXY-SPECIFIC issue. |
 | `backend-proxy-mode.spec.js:234` - Reconnection | ✅ PASSED | Test completed successfully |
 | `backend-proxy-mode.spec.js:259` - Error handling | ✅ PASSED | Test completed successfully |
 
@@ -453,7 +454,7 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 
 ## 🎯 Next Steps
 
-**Current Phase**: Phase 3 - Core Proxy Test Execution (IN PROGRESS)
+**Current Phase**: Phase 3 - Core Proxy Test Execution (BLOCKED by Issue #1)
 
 **Phase 2 Status**: ✅ COMPLETE
 - Proxy server auto-starts via Playwright config
@@ -468,16 +469,50 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 - **BLOCKER**: Cannot complete Phase 3 until agent response test passes (requires SettingsApplied to be received)
 - **Root Cause**: Proxy connection closes after Settings sent, before SettingsApplied received - likely proxy server authentication/forwarding issue
 
+**Test Infrastructure Improvements**:
+- ✅ Refactored tests to support both direct and proxy modes via `USE_PROXY_MODE` env var
+- ✅ Standardized on single `USE_PROXY_MODE` env var (removed redundant `USE_BACKEND_PROXY`)
+- ✅ Tests now use `buildUrlWithParams()` helper which automatically handles proxy mode
+- ✅ Single test file validates both modes - no duplicate test files needed
+
 **Immediate Actions**:
-1. Investigate Settings timeout issue in `backend-proxy-mode.spec.js:119`
-2. Continue with Phase 4: Feature Parity Validation
-3. Document findings and update tracking
+1. **Investigate Issue #1**: Proxy connection closure after Settings sent
+   - Check proxy server logs for errors after Settings is sent
+   - Verify proxy server is forwarding SettingsApplied from Deepgram
+   - Check if proxy server connection to Deepgram is closing prematurely
+   - Verify proxy server authentication with Deepgram is working correctly
+2. **Fix proxy server issue** blocking agent response test
+3. **Re-run agent response test** to verify fix
+4. **Complete Phase 3** once agent response test passes
+5. Continue with Phase 4: Feature Parity Validation
 
 ## 📝 Notes
 
 - Last validation: v0.7.1 (18 of 22 tests passing)
-- Current status: Unknown (not validated in v0.7.3)
+- Current status: 5/6 core proxy tests passing (83%), blocked by proxy-specific connection closure issue
 - Target: All proxy tests passing, feature parity confirmed
+- **Test Infrastructure**: Tests refactored to support both direct and proxy modes via `USE_PROXY_MODE` env var
+- **Environment Variable**: Standardized on `USE_PROXY_MODE` (removed redundant `USE_BACKEND_PROXY`)
+
+## 🔧 Recent Changes
+
+### Test Infrastructure Refactoring (2025-12-31)
+
+1. **Unified Test Approach**
+   - Refactored `backend-proxy-mode.spec.js` to work in both direct and proxy modes
+   - Tests use `buildUrlWithParams()` helper which automatically handles proxy mode via `USE_PROXY_MODE` env var
+   - Single test file validates both modes - no duplicate test files needed
+   - Tests verify connection mode dynamically based on `IS_PROXY_MODE` flag
+
+2. **Environment Variable Standardization**
+   - Removed redundant `USE_BACKEND_PROXY` environment variable
+   - Standardized on single `USE_PROXY_MODE` env var for proxy mode
+   - Simplified configuration and reduced confusion
+
+3. **Direct Mode Comparison Test**
+   - Created comparison test to verify same test passes in direct mode
+   - Confirmed Issue #1 is PROXY-SPECIFIC (test passes in direct mode, fails in proxy mode)
+   - This narrows investigation to proxy server implementation
 
 ---
 
