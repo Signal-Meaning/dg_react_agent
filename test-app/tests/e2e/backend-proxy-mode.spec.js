@@ -24,7 +24,7 @@ import { sendTextMessage, waitForConnection } from '../utils/test-helpers';
 import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
 
 const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
-const IS_PROXY_MODE = process.env.USE_PROXY_MODE === 'true' || process.env.USE_BACKEND_PROXY === 'true';
+const IS_PROXY_MODE = process.env.USE_PROXY_MODE === 'true';
 
 test.describe('Backend Proxy Mode', () => {
   test.beforeEach(async ({ page }) => {
