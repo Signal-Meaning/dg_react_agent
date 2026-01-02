@@ -121,7 +121,7 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 
 | Issue | Description | Status | Priority |
 |-------|-------------|--------|----------|
-| #1 | `backend-proxy-mode.spec.js:119` - Connection closes after Settings sent, before SettingsApplied received. Diagnostic shows: Settings WAS sent (window variable exists), but connection status is "closed" and SettingsApplied callback never fired. Connection establishes, Settings sent, then connection closes - likely authentication issue. | 🔍 Investigating | High |
+| #1 | `backend-proxy-mode.spec.js:119` - Connection closes after Settings sent, before SettingsApplied received. **CRITICAL FINDING**: Same test PASSES in direct mode (without proxy), confirming this is a PROXY-SPECIFIC issue, not a general connection problem. Diagnostic shows: Settings WAS sent (window variable exists), but connection status is "closed" and SettingsApplied callback never fired. Connection establishes, Settings sent, then connection closes - likely proxy authentication/forwarding issue. | 🔍 Investigating | High |
 
 ## 🔍 Validation Checklist
 
@@ -460,11 +460,13 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 - Test environment configured
 - Proxy accessibility verified
 
-**Phase 3 Status**: 🔄 IN PROGRESS - Blocked by Issue #1
+**Phase 3 Status**: 🔄 IN PROGRESS - Blocked by Issue #1 (PROXY-SPECIFIC)
 - Core proxy tests executed: 5/6 passing
 - One failure identified: Connection closes after Settings sent (Issue #1)
 - Authentication tests: 2/2 passing
+- **CRITICAL FINDING**: Same test PASSES in direct mode - confirms issue is PROXY-SPECIFIC
 - **BLOCKER**: Cannot complete Phase 3 until agent response test passes (requires SettingsApplied to be received)
+- **Root Cause**: Proxy connection closes after Settings sent, before SettingsApplied received - likely proxy server authentication/forwarding issue
 
 **Immediate Actions**:
 1. Investigate Settings timeout issue in `backend-proxy-mode.spec.js:119`
