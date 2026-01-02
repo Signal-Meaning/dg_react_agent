@@ -93,18 +93,17 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 
 | Test | Status | Notes |
 |------|--------|-------|
-| `backend-proxy-mode.spec.js` - Connection through proxy | ⏳ Pending | |
-| `backend-proxy-mode.spec.js` - Agent responses | ⏳ Pending | |
-| `backend-proxy-mode.spec.js` - Feature parity | ⏳ Pending | |
-| `backend-proxy-mode.spec.js` - Reconnection | ⏳ Pending | |
-| `backend-proxy-mode.spec.js` - Error handling | ⏳ Pending | |
+| `backend-proxy-mode.spec.js:93` - Connection through proxy | ✅ PASSED | Test completed successfully |
+| `backend-proxy-mode.spec.js:119` - Agent responses | ❌ FAILED | Timeout waiting for Settings to be sent (30s timeout exceeded) |
+| `backend-proxy-mode.spec.js:234` - Reconnection | ✅ PASSED | Test completed successfully |
+| `backend-proxy-mode.spec.js:259` - Error handling | ✅ PASSED | Test completed successfully |
 
 #### Backend Proxy Authentication Tests
 
 | Test | Status | Notes |
 |------|--------|-------|
-| `backend-proxy-authentication.spec.js` - Auth token included | ⏳ Pending | |
-| `backend-proxy-authentication.spec.js` - Optional auth | ⏳ Pending | |
+| `backend-proxy-authentication.spec.js:26` - Auth token included | ✅ PASSED | Test completed successfully |
+| `backend-proxy-authentication.spec.js:53` - Optional auth | ✅ PASSED | Test completed successfully |
 
 #### Full E2E Suite in Proxy Mode
 
@@ -122,7 +121,7 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 
 | Issue | Description | Status | Priority |
 |-------|-------------|--------|----------|
-| - | - | - | - |
+| #1 | `backend-proxy-mode.spec.js:119` - Settings not being sent within timeout (30s). Connection establishes but Settings message never sent, causing timeout. May be related to Issue #341 fix or timing issue. | 🔍 Investigating | High |
 
 ## 🔍 Validation Checklist
 
@@ -454,13 +453,22 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 
 ## 🎯 Next Steps
 
-**Current Phase**: Phase 2 - Test Environment Setup
+**Current Phase**: Phase 3 - Core Proxy Test Execution (IN PROGRESS)
+
+**Phase 2 Status**: ✅ COMPLETE
+- Proxy server auto-starts via Playwright config
+- Test environment configured
+- Proxy accessibility verified
+
+**Phase 3 Status**: 🔄 IN PROGRESS
+- Core proxy tests executed: 5/6 passing
+- One failure identified: Settings timeout issue
+- Authentication tests: 2/2 passing
 
 **Immediate Actions**:
-1. Start proxy server
-2. Verify proxy accessibility
-3. Configure test environment
-4. Begin Phase 3 execution
+1. Investigate Settings timeout issue in `backend-proxy-mode.spec.js:119`
+2. Continue with Phase 4: Feature Parity Validation
+3. Document findings and update tracking
 
 ## 📝 Notes
 
