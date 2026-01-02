@@ -31,6 +31,69 @@ import { compareAgentOptionsIgnoringContext, hasDependencyChanged } from '../../
 import { filterFunctionsForSettings } from '../../utils/function-utils';
 import { functionCallLogger } from '../../utils/function-call-logger';
 
+/**
+ * Helper function to check if Settings has been sent
+ * @param hasSentSettingsRef - Ref tracking if SettingsApplied was received
+ * @param windowWithGlobals - Window object with globalSettingsSent flag
+ * @param agentManager - Agent manager to check if Settings was sent to WebSocket
+ * @returns Object with confirmed (SettingsApplied received), sent (sent to WebSocket), and both flags
+ */
+function hasSettingsBeenSent(
+  hasSentSettingsRef: React.MutableRefObject<boolean>,
+  windowWithGlobals: WindowWithDeepgramGlobals,
+  agentManager: WebSocketManager | null
+): { confirmed: boolean; sent: boolean; both: boolean } {
+  const confirmed = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent || false;
+  const sent = agentManager?.hasSettingsBeenSent() || false;
+  return {
+    confirmed,
+    sent,
+    both: confirmed || sent
+  };
+}
+
+/**
+ * Helper function to wait for Settings to be sent with timeout
+ * @param hasSentSettingsRef - Ref tracking if SettingsApplied was received
+ * @param windowWithGlobals - Window object with globalSettingsSent flag
+ * @param agentManager - Agent manager to check if Settings was sent to WebSocket
+ * @param log - Logging function
+ * @param maxWaitMs - Maximum time to wait in milliseconds (default: 5000)
+ * @param checkIntervalMs - Interval between checks in milliseconds (default: 100)
+ * @returns Promise that resolves to true if Settings was sent, false if timeout
+ */
+async function waitForSettings(
+  hasSentSettingsRef: React.MutableRefObject<boolean>,
+  windowWithGlobals: WindowWithDeepgramGlobals,
+  agentManager: WebSocketManager | null,
+  log: (...args: unknown[]) => void,
+  maxWaitMs: number = 5000,
+  checkIntervalMs: number = 100
+): Promise<boolean> {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < maxWaitMs) {
+    const { confirmed, sent } = hasSettingsBeenSent(hasSentSettingsRef, windowWithGlobals, agentManager);
+    
+    if (confirmed) {
+      log('Settings confirmed (SettingsApplied received), safe to send user message');
+      return true;
+    }
+    
+    if (sent) {
+      log('Settings sent (but SettingsApplied not yet received), waiting a bit more...');
+      // Wait a bit more for SettingsApplied, but don't wait forever
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return true;
+    }
+    
+    // Wait before checking again
+    await new Promise(resolve => setTimeout(resolve, checkIntervalMs));
+  }
+  
+  return false;
+}
+
 // Default endpoints
 const DEFAULT_ENDPOINTS = {
   transcriptionUrl: 'wss://api.deepgram.com/v1/listen',
@@ -2906,29 +2969,12 @@ function DeepgramVoiceInteraction(
       // Wait for Settings to be sent and ideally SettingsApplied to be received
       // This ensures Settings is sent before InjectUserMessage (required by Deepgram)
       // In proxy mode, this is especially important due to additional network hops
-      const maxWaitTime = 5000; // Maximum 5 seconds to wait for Settings
-      const checkInterval = 100; // Check every 100ms
-      const startTime = Date.now();
-      
-      while (Date.now() - startTime < maxWaitTime) {
-        // Check if Settings was sent (SettingsApplied received)
-        if (hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent) {
-          log('Settings confirmed (SettingsApplied received), safe to send user message');
-          break;
-        }
-        
-        // Check if Settings was at least sent (even if SettingsApplied not received yet)
-        // This is a fallback for cases where SettingsApplied might not be received (e.g., with functions)
-        if (agentManagerRef.current?.hasSettingsBeenSent()) {
-          log('Settings sent (but SettingsApplied not yet received), waiting a bit more...');
-          // Wait a bit more for SettingsApplied, but don't wait forever
-          await new Promise(resolve => setTimeout(resolve, 500));
-          break;
-        }
-        
-        // Wait before checking again
-        await new Promise(resolve => setTimeout(resolve, checkInterval));
-      }
+      const settingsReady = await waitForSettings(
+        hasSentSettingsRef,
+        windowWithGlobals,
+        agentManagerRef.current,
+        log
+      );
       
       // Final check - manager should still exist
       if (!agentManagerRef.current || agentManagerRef.current !== managerBeforeConnect) {
@@ -2937,22 +2983,17 @@ function DeepgramVoiceInteraction(
       }
       
       const finalState = agentManagerRef.current.getState();
-      const settingsSent = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
-      const settingsSentToWebSocket = agentManagerRef.current?.hasSettingsBeenSent() || false;
-      log('Connection established, final state:', finalState, 'Settings sent:', settingsSent, 'Settings sent to WebSocket:', settingsSentToWebSocket);
+      const { both: settingsSent } = hasSettingsBeenSent(hasSentSettingsRef, windowWithGlobals, agentManagerRef.current);
+      log('Connection established, final state:', finalState, 'Settings sent:', settingsSent);
       
       // CRITICAL: Ensure Settings is sent before InjectUserMessage (required by Deepgram)
-      // If Settings hasn't been sent yet, wait a bit more or throw an error
-      if (!settingsSent && !settingsSentToWebSocket) {
+      // If Settings hasn't been sent yet, wait a bit more
+      if (!settingsReady && !settingsSent) {
         log('⚠️ Settings not sent yet, waiting additional time...');
-        // Wait a bit more for Settings to be sent
         await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // Check again
-        const settingsSentAfterWait = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
-        const settingsSentToWebSocketAfterWait = agentManagerRef.current?.hasSettingsBeenSent() || false;
-        
-        if (!settingsSentAfterWait && !settingsSentToWebSocketAfterWait) {
+        const { both: settingsSentAfterWait } = hasSettingsBeenSent(hasSentSettingsRef, windowWithGlobals, agentManagerRef.current);
+        if (!settingsSentAfterWait) {
           log('❌ Settings still not sent after waiting - this may cause Deepgram to reject InjectUserMessage');
           // Don't throw error - let it proceed and see if Deepgram accepts it
           // Some edge cases might not send Settings (e.g., reconnection scenarios)
@@ -2961,9 +3002,8 @@ function DeepgramVoiceInteraction(
     } else {
       log('Agent manager already connected');
       // Even if already connected, verify Settings was sent
-      const settingsSent = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
-      const settingsSentToWebSocket = agentManagerRef.current?.hasSettingsBeenSent() || false;
-      if (!settingsSent && !settingsSentToWebSocket) {
+      const { both: settingsSent } = hasSettingsBeenSent(hasSentSettingsRef, windowWithGlobals, agentManagerRef.current);
+      if (!settingsSent) {
         log('⚠️ Agent already connected but Settings not sent - this may cause issues');
       }
     }
@@ -3021,20 +3061,18 @@ function DeepgramVoiceInteraction(
     
     // FINAL CHECK: Ensure Settings is sent before InjectUserMessage (required by Deepgram)
     // This is critical - Deepgram will reject InjectUserMessage if sent before Settings
-    const finalSettingsCheck = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
-    const finalSettingsSentToWebSocket = agentManagerRef.current?.hasSettingsBeenSent() || false;
+    const { both: finalSettingsReady } = hasSettingsBeenSent(hasSentSettingsRef, windowWithGlobals, agentManagerRef.current);
     
-    if (!finalSettingsCheck && !finalSettingsSentToWebSocket) {
+    if (!finalSettingsReady) {
       log('❌ CRITICAL: Settings not sent before InjectUserMessage - this will cause Deepgram to reject the message');
       log('   Waiting additional time for Settings to be sent...');
       // Wait one more time for Settings
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Final check
-      const finalSettingsCheck2 = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
-      const finalSettingsSentToWebSocket2 = agentManagerRef.current?.hasSettingsBeenSent() || false;
+      const { both: finalSettingsReadyAfterWait } = hasSettingsBeenSent(hasSentSettingsRef, windowWithGlobals, agentManagerRef.current);
       
-      if (!finalSettingsCheck2 && !finalSettingsSentToWebSocket2) {
+      if (!finalSettingsReadyAfterWait) {
         log('❌ CRITICAL: Settings still not sent - InjectUserMessage will likely be rejected by Deepgram');
         log('   Proceeding anyway - this may cause an error from Deepgram');
       } else {

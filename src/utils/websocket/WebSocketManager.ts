@@ -77,6 +77,8 @@ const DEFAULT_OPTIONS: Partial<WebSocketManagerOptions> = {
   debug: false,
 };
 
+import { normalizeApiKeyForWebSocket } from '../api-key-normalizer';
+
 /**
  * Manages a WebSocket connection to Deepgram API endpoints
  */
@@ -220,12 +222,10 @@ export class WebSocketManager {
             console.log(`🔌 [WebSocketManager.connect] Created WebSocket without token protocol (proxy mode)`);
           }
         } else {
-          // For WebSocket authentication: Use raw API key as provided by Deepgram
-          // Deepgram API keys are stored without prefix in .env
-          // If key accidentally has 'dgkey_' prefix (legacy), strip it for WebSocket
-          let apiKeyForAuth = (this.options.apiKey || '').trim();
-          if (apiKeyForAuth.startsWith('dgkey_')) {
-            apiKeyForAuth = apiKeyForAuth.substring(6); // Remove 'dgkey_' prefix if present
+          // For WebSocket authentication: Use normalized API key (raw key, prefix stripped if present)
+          const apiKeyForAuth = normalizeApiKeyForWebSocket(this.options.apiKey);
+          if (!apiKeyForAuth) {
+            throw new Error('API key is required for direct mode connection');
           }
           this.ws = new WebSocket(url, ['token', apiKeyForAuth]);
           if (this.options.debug) {

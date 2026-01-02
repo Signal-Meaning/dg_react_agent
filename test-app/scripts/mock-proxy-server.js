@@ -26,7 +26,10 @@ import path from 'path';
 const RAW_DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
 
 /**
- * Prepares Deepgram API key for WebSocket authentication.
+ * Normalizes Deepgram API key for WebSocket authentication.
+ * 
+ * This function matches the logic in src/utils/api-key-normalizer.ts
+ * but is implemented here for Node.js compatibility (no TypeScript imports).
  * 
  * Deepgram API keys are stored in .env without any prefix (as provided by Deepgram).
  * For WebSocket subprotocol ['token', apiKey], Deepgram expects the raw key.
@@ -35,33 +38,35 @@ const RAW_DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || process.env.VITE_DE
  * but keys should be stored without prefix in .env.
  * 
  * @param apiKey - The API key from environment (should be raw, without prefix)
- * @returns The raw API key ready for WebSocket authentication
+ * @returns The normalized API key ready for WebSocket authentication, or undefined if invalid
  */
-function prepareApiKeyForWebSocket(apiKey) {
+function normalizeApiKeyForWebSocket(apiKey) {
   if (!apiKey || apiKey.trim() === '') {
     return undefined;
   }
   
   const trimmed = apiKey.trim();
   
-  // If it's a test key, return as-is
+  // Test keys are used as-is (for testing/mocking scenarios)
   if (trimmed.startsWith('test')) {
     return trimmed;
   }
   
-  // For WebSocket authentication: Deepgram expects raw key (without 'dgkey_' prefix)
-  // If key accidentally has 'dgkey_' prefix (legacy), strip it
-  // Keys should be stored in .env without prefix
+  // Deepgram WebSocket API expects raw keys (without 'dgkey_' prefix)
+  // If key accidentally has 'dgkey_' prefix (legacy support), strip it
+  // Keys should be stored in .env without prefix (as provided by Deepgram)
   if (trimmed.startsWith('dgkey_')) {
-    return trimmed.substring(6); // Remove 'dgkey_' prefix if present
+    return trimmed.substring(6); // Remove 'dgkey_' prefix (6 characters)
   }
-  return trimmed; // Use raw key as-is
+  
+  // Return raw key as-is (correct format)
+  return trimmed;
 }
 
-// Prepare API key for WebSocket authentication
+// Normalize API key for WebSocket authentication
 // Keys should be stored in .env without prefix (as provided by Deepgram)
 // This function strips prefix if accidentally present (legacy support)
-const DEEPGRAM_API_KEY = prepareApiKeyForWebSocket(RAW_DEEPGRAM_API_KEY);
+const DEEPGRAM_API_KEY = normalizeApiKeyForWebSocket(RAW_DEEPGRAM_API_KEY);
 const PROXY_PORT = parseInt(process.env.PROXY_PORT || '8080', 10);
 const PROXY_PATH = process.env.PROXY_PATH || '/deepgram-proxy';
 const DEEPGRAM_AGENT_URL = 'wss://agent.deepgram.com/v1/agent/converse';
