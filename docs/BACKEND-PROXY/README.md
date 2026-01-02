@@ -43,7 +43,16 @@ This directory contains comprehensive documentation for implementing and using b
 - Reduced risk of unauthorized usage
 - Better control over API usage
 
+## Validation & Testing
+
+- **[Issue #345 Validation Report](../issues/ISSUE-345-VALIDATION-REPORT.md)** - Comprehensive validation pass confirming backend proxy support is production-ready
+  - ✅ 47/47 proxy mode tests passing (100% pass rate)
+  - ✅ All connection-relevant features validated
+  - ✅ Equivalent test coverage confirmed
+  - ✅ All v0.7.3 fixes validated in proxy mode
+
 ## Related Documentation
 
 - [API Reference](../API-REFERENCE.md) - Component API documentation with proxy mode examples
 - [Issue #242 Tracking](../issues/ISSUE-242-BACKEND-PROXY-SUPPORT.md) - Complete feature tracking document
+- [Issue #345 Validation](../issues/ISSUE-345-BACKEND-PROXY-VALIDATION.md) - Backend proxy validation pass tracking
