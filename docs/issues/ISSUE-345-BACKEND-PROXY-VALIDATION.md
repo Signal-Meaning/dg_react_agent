@@ -35,6 +35,8 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 
 - [ ] All backend proxy E2E tests pass (`backend-proxy-mode.spec.js`, `backend-proxy-authentication.spec.js`)
 - [ ] Feature parity verified: transcription, agent responses, VAD events, callbacks, reconnection all work through proxy
+- [ ] Equivalent test coverage: proxy mode has equivalent test coverage to direct mode
+- [ ] Equivalent Jest tests cover newly skipped E2E tests (due to Deepgram security changes)
 - [ ] Test results documented in release notes or validation report
 - [ ] Any issues discovered are tracked and fixed
 - [ ] Backend proxy documentation is up to date
@@ -190,27 +192,36 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 
 ## 🎯 Next Steps
 
-1. **Setup Test Environment**
+1. **Create Detailed Plan**
+   - Review all acceptance criteria
+   - Identify test suites and scenarios needed to achieve each AC
+   - Plan approach for equivalent test coverage (proxy vs direct mode)
+   - Plan approach for Jest tests covering skipped E2E tests (due to Deepgram security changes)
+   - Document test execution strategy
+   - Define success criteria for each acceptance criterion
+   - Create timeline and resource requirements
+
+2. **Setup Test Environment**
    - Start proxy server
    - Configure test environment
    - Verify proxy accessibility
 
-2. **Run Core Proxy Tests**
+3. **Run Core Proxy Tests**
    - Execute backend proxy test suites
    - Document results
    - Identify failures
 
-3. **Run Full E2E Suite**
+4. **Run Full E2E Suite**
    - Execute all E2E tests in proxy mode
    - Compare with direct mode results
    - Document differences
 
-4. **Validate Features**
+5. **Validate Features**
    - Test each feature category
    - Verify Issue #340 and #341 fixes work in proxy mode
    - Document any issues
 
-5. **Documentation & Reporting**
+6. **Documentation & Reporting**
    - Update test results
    - Create validation report
    - Update release notes if needed
