@@ -352,6 +352,11 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 
 **AC Mapping**: Addresses AC #4 - "Equivalent Jest tests cover newly skipped E2E tests"
 
+**Important Note**: Jest tests use mocks and don't "run in modes" like E2E tests. Instead, they test component logic for both proxy and direct mode scenarios by verifying:
+- Component correctly selects proxy mode when `proxyEndpoint` prop is provided
+- Component correctly selects direct mode when `apiKey` prop is provided
+- Component logic handles both scenarios correctly
+
 **Tasks**:
 1. **Identify Skipped E2E Tests**
    - [x] Review E2E test files for `skipIfNoRealAPI` usage
@@ -362,9 +367,11 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 2. **Inventory Existing Jest Tests**
    - [x] Review Jest test files for proxy-related tests
    - [x] Document existing Jest test coverage:
-     - `tests/backend-proxy-mode.test.tsx` - Component prop handling
-     - `tests/websocket-proxy-connection.test.ts` - WebSocket proxy connection
-     - `tests/connection-mode-selection.test.tsx` - Connection mode selection
+     - `tests/backend-proxy-mode.test.tsx` - Component prop handling (tests both proxy and direct modes)
+     - `tests/websocket-proxy-connection.test.ts` - WebSocket proxy connection logic
+     - `tests/connection-mode-selection.test.tsx` - Connection mode selection logic (tests both modes)
+   - [x] Verify Jest tests cover both proxy and direct mode scenarios
+   - [x] Run all Jest tests to confirm they pass (✅ 725/725 passing)
    - [x] Identify what functionality is covered
 
 3. **Coverage Gap Analysis**
@@ -384,6 +391,11 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 **Results**:
 - **Skipped E2E Tests**: 6 files, 33 instances of `skipIfNoRealAPI`
 - **Jest Coverage**: ✅ Comprehensive - 65 Jest test files covering all component logic
+- **Jest Test Execution**: ✅ **ALL PASSING** - 725/725 tests passing (100% pass rate)
+- **Proxy/Direct Mode Coverage**: ✅ **COMPLETE** - Jest tests verify component logic for both modes:
+  - `backend-proxy-mode.test.tsx`: Tests proxy mode selection, direct mode selection, and mode prioritization
+  - `connection-mode-selection.test.tsx`: Tests mode detection for both proxy and direct scenarios
+  - `websocket-proxy-connection.test.ts`: Tests WebSocket connection logic for proxy mode
 - **Coverage Status**: ✅ **COMPLETE** - All skipped functionality is either:
   - Covered by existing Jest tests (component logic: declarative props, function calling, agent options, VAD)
   - Appropriately E2E-only (workflows, audio playback - require full browser environment)
