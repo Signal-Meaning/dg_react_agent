@@ -125,7 +125,7 @@ Tests involve:
 
 ### AudioUtils.ts - createAudioBuffer Function
 
-**Current Implementation:**
+**Implementation at Time of Evidence Collection (2025-12-31):**
 ```typescript
 export function createAudioBuffer(
   audioContext: AudioContext, 
@@ -137,7 +137,15 @@ export function createAudioBuffer(
 }
 ```
 
-**Note:** The fix for Issue #340 (odd-length buffer handling) was applied. The fact that **0 errors** occurred in 600+ audio buffer creations proves the fix is working, OR all buffers received are even-length (which is expected for PCM16 audio).
+**⚠️ Important Note:** At the time this evidence was collected (2025-12-31), the fix for Issue #340 was **documented** in release notes but **NOT actually implemented** in the source code. The fact that **0 errors** occurred in 600+ audio buffer creations indicates that all buffers received during testing were even-length (which is expected for PCM16 audio), not that the fix was working.
+
+**Current Implementation (2026-01-02):**
+The fix has now been properly implemented in `src/utils/audio/AudioUtils.ts:17-26`:
+- Validates buffer length before creating `Int16Array`
+- Truncates odd-length buffers to even length
+- Logs warning when truncation occurs
+
+See `docs/issues/ISSUE-341/VOICE-COMMERCE-RECOMMENDATIONS.md` for details.
 
 ### Test Results
 - **600+ successful audio buffer creations**
@@ -146,9 +154,12 @@ export function createAudioBuffer(
 - **All buffers processed successfully**
 
 ### Conclusion
-✅ The Int16Array error defect has been resolved. Either:
-1. The fix handles odd-length buffers gracefully (if they occur), OR
-2. All buffers from Deepgram API are correctly formatted (even-length, as expected for PCM16)
+⚠️ **At time of evidence collection (2025-12-31)**: The Int16Array error did not occur because all buffers received were even-length (expected for PCM16 audio). However, the fix was **not actually implemented** in the code despite being documented in release notes.
+
+✅ **Current status (2026-01-02)**: The fix has now been properly implemented and tested. The component now handles odd-length buffers gracefully by:
+1. Truncating odd-length buffers to even length before creating `Int16Array`
+2. Logging warnings when truncation occurs
+3. Preventing RangeError exceptions
 
 ---
 
