@@ -109,6 +109,8 @@ describe('Lazy Initialization Tests', () => {
       addEventListener: jest.fn().mockReturnValue(jest.fn()),
       removeEventListener: jest.fn(),
       destroy: jest.fn(),
+      // Issue #345: Add hasSettingsBeenSent method for Settings wait logic
+      hasSettingsBeenSent: jest.fn().mockReturnValue(false),
     };
 
     // Mock AudioManager
@@ -436,6 +438,10 @@ describe('Lazy Initialization Tests', () => {
       mockAgentManager.getState.mockReturnValueOnce('closed');
       mockAgentManager.getState.mockReturnValueOnce('connecting');
       mockAgentManager.getState.mockReturnValueOnce('connected');
+      
+      // Issue #345: Set up Settings before calling injectUserMessage (it waits for Settings)
+      mockAgentManager.hasSettingsBeenSent.mockReturnValue(true);
+      window.globalSettingsSent = true;
 
       // Call injectUserMessage
       await act(async () => {
@@ -474,7 +480,11 @@ describe('Lazy Initialization Tests', () => {
 
       await waitFor(() => {
         expect(ref.current).toBeTruthy();
-      });
+      }, { timeout: 5000 });
+
+      // Issue #345: Set up Settings flags before calling methods
+      window.globalSettingsSent = false;
+      mockAgentManager.hasSettingsBeenSent.mockReturnValue(false);
 
       // Create manager via start()
       await act(async () => {
@@ -522,7 +532,11 @@ describe('Lazy Initialization Tests', () => {
 
       await waitFor(() => {
         expect(ref.current).toBeTruthy();
-      });
+      }, { timeout: 5000 });
+
+      // Issue #345: Set up Settings flags before calling methods
+      window.globalSettingsSent = false;
+      mockAgentManager.hasSettingsBeenSent.mockReturnValue(false);
 
       // Mock getState to return 'closed' initially, then 'connected' after connect
       mockTranscriptionManager.getState.mockReturnValue('closed');
