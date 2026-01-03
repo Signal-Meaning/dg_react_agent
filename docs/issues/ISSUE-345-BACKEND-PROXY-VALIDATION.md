@@ -391,7 +391,7 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
    - [x] Run new Jest tests
    - [x] Document coverage achieved
 
-**Success Criteria**: ✅ **COMPLETE** - All functionality skipped in E2E tests (due to security) is covered by Jest tests
+**Success Criteria**: ✅ **COMPLETE WITH CLARIFICATION** - Component logic for skipped E2E tests is covered by Jest tests. Actual API connection testing remains E2E-only.
 
 **Results**:
 - **Skipped E2E Tests**: 6 files, 33 instances of `skipIfNoRealAPI`
@@ -401,9 +401,13 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
   - `backend-proxy-mode.test.tsx`: Tests proxy mode selection, direct mode selection, and mode prioritization
   - `connection-mode-selection.test.tsx`: Tests mode detection for both proxy and direct scenarios
   - `websocket-proxy-connection.test.ts`: Tests WebSocket connection logic for proxy mode
-- **Coverage Status**: ✅ **COMPLETE** - All skipped functionality is either:
-  - Covered by existing Jest tests (component logic: declarative props, function calling, agent options, VAD)
-  - Appropriately E2E-only (workflows, audio playback - require full browser environment)
+- **Coverage Status**: ✅ **COMPLETE** - All skipped E2E functionality is appropriately handled:
+  - **Component Logic**: Covered by Jest tests (message construction, prop handling, state management)
+    - Declarative props, function calling Settings message construction, agent options, VAD event handling
+  - **Actual API Integration**: Appropriately E2E-only (requires real API connections)
+    - Real Deepgram API connections, real function call execution, real agent responses
+    - Workflows, audio playback - require full browser environment and real API
+- **Important Distinction**: Jest tests verify **component logic** (e.g., "functions are included in Settings message"), but they do **NOT** verify **actual API integration (e.g., "Deepgram receives and responds to function calls"). The skipped E2E tests are appropriately E2E-only for actual API integration testing.
 - **Detailed Analysis**: See [PHASE-6-JEST-COVERAGE-ANALYSIS.md](./PHASE-6-JEST-COVERAGE-ANALYSIS.md)
 
 ### Phase 7: Issue #340 & #341 Fix Validation
