@@ -221,24 +221,32 @@ The acceptance criteria mentions "newly skipped E2E tests (due to Deepgram secur
 
 ### Conclusion
 
-✅ **Phase 6 is COMPLETE** - All functionality skipped in E2E tests (due to security/CI constraints) is appropriately covered:
+✅ **Phase 6 is COMPLETE** - Component logic for skipped E2E tests is covered by Jest tests. Actual API connection testing remains E2E-only.
+
+**Critical Clarification**: Jest tests **cannot** compensate for E2E tests that evaluate actual API connections. They test different things:
+- **Jest tests**: Component logic (message construction, prop handling, state management) - uses mocks, no real API connections
+- **E2E tests**: Actual API integration (real Deepgram connections, real responses) - requires real API keys
+- **Coverage Assessment**: Jest tests verify that the component logic is correct (e.g., "functions are included in Settings message"), but they do NOT verify that the actual API connection works (e.g., "Deepgram receives and responds to function calls").
 
 1. **Component Logic**: ✅ Fully covered by Jest tests
-   - Declarative props, function calling, agent options, VAD events
+   - Declarative props, function calling Settings message construction, agent options, VAD event handling
    - All component-level logic has comprehensive Jest coverage
+   - **What Jest tests verify**: Message format, prop handling, state management, component behavior
 
-2. **Workflow Testing**: ✅ Appropriately E2E-only
+2. **Actual API Integration**: ✅ Appropriately E2E-only
+   - Real Deepgram API connections, real function call execution, real agent responses
    - Real user workflows and audio playback scenarios
-   - These require full browser environment and are appropriately E2E-only
+   - These require full browser environment and real API connections
+   - **What E2E tests verify**: Actual API communication, real responses, end-to-end workflows
 
 3. **Jest Test Coverage**: ✅ Comprehensive
    - 65 Jest test files covering all component logic
    - Proxy-specific tests, function calling tests, VAD tests all covered
 
 **Recommendation**: 
-- ✅ **No additional Jest tests needed** - All skipped E2E functionality is either:
-  - Covered by existing Jest tests (component logic)
-  - Appropriately E2E-only (workflows, audio playback)
+- ✅ **No additional Jest tests needed** - All skipped E2E functionality is appropriately handled:
+  - **Component logic**: Covered by existing Jest tests (message construction, prop handling, state management)
+  - **Actual API integration**: Appropriately E2E-only (requires real API connections)
 
 **Next Steps**: 
 - Proceed to Phase 7: Issue #340 & #341 Fix Validation

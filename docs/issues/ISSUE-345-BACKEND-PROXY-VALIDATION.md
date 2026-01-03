@@ -36,7 +36,7 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 - [x] All backend proxy E2E tests pass (`backend-proxy-mode.spec.js`, `backend-proxy-authentication.spec.js`) - **✅ COMPLETE**: 4/4 passing in proxy mode, 3/4 passing in direct mode (1 expected skip)
 - [x] Feature parity verified: transcription, agent responses, VAD events, callbacks, reconnection all work through proxy - **✅ COMPLETE**: All features validated (47/47 tests passing)
 - [x] Equivalent test coverage: proxy mode has equivalent test coverage to direct mode - **✅ COMPLETE**: Equivalent coverage confirmed (Phase 5)
-- [x] Equivalent Jest tests cover newly skipped E2E tests (due to Deepgram security changes) - **✅ COMPLETE**: All covered or appropriately E2E-only (Phase 6). Jest tests verify component logic for both proxy and direct modes (725/725 passing).
+- [x] Equivalent Jest tests cover newly skipped E2E tests (due to Deepgram security changes) - **✅ COMPLETE WITH CLARIFICATION**: Jest tests cover **component logic** (message construction, prop handling, state management) that the skipped E2E tests would exercise. They do **NOT** test actual API connections (which require real Deepgram API keys). The skipped E2E tests are appropriately E2E-only for actual API integration testing. See Phase 6 for details.
 - [x] Test results documented in release notes or validation report - **✅ COMPLETE**: Comprehensive validation report created (ISSUE-345-VALIDATION-REPORT.md)
 - [x] Any issues discovered are tracked and fixed - **✅ COMPLETE**: 3 issues fixed (Issues #1, #2, #3), 1 issue tracked (Issue #346)
 - [x] Backend proxy documentation is up to date - **✅ COMPLETE**: Documentation reviewed and confirmed current
@@ -356,6 +356,11 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 - Component correctly selects proxy mode when `proxyEndpoint` prop is provided
 - Component correctly selects direct mode when `apiKey` prop is provided
 - Component logic handles both scenarios correctly
+
+**Critical Clarification**: Jest tests **cannot** compensate for E2E tests that evaluate actual API connections. They test different things:
+- **Jest tests**: Component logic (message construction, prop handling, state management) - uses mocks, no real API connections
+- **E2E tests**: Actual API integration (real Deepgram connections, real responses) - requires real API keys
+- **Coverage Assessment**: Jest tests verify that the component logic is correct (e.g., "functions are included in Settings message"), but they do NOT verify that the actual API connection works (e.g., "Deepgram receives and responds to function calls"). The skipped E2E tests are appropriately E2E-only for actual API integration testing.
 
 **Tasks**:
 1. **Identify Skipped E2E Tests**
