@@ -407,7 +407,7 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
   - **Actual API Integration**: Appropriately E2E-only (requires real API connections)
     - Real Deepgram API connections, real function call execution, real agent responses
     - Workflows, audio playback - require full browser environment and real API
-- **Important Distinction**: Jest tests verify **component logic** (e.g., "functions are included in Settings message"), but they do **NOT** verify **actual API integration (e.g., "Deepgram receives and responds to function calls"). The skipped E2E tests are appropriately E2E-only for actual API integration testing.
+- **Important Distinction**: Jest tests verify **component logic** (e.g., "functions are included in Settings message"), but they do **NOT** verify **actual API integration** (e.g., "Deepgram receives and responds to function calls"). The skipped E2E tests are appropriately E2E-only for actual API integration testing.
 - **Detailed Analysis**: See [PHASE-6-JEST-COVERAGE-ANALYSIS.md](./PHASE-6-JEST-COVERAGE-ANALYSIS.md)
 
 ### Phase 7: Issue #340 & #341 Fix Validation
