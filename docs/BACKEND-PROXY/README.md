@@ -58,4 +58,3 @@ For detailed validation results, see the [validation documentation](../issues/IS
 
 - [API Reference](../API-REFERENCE.md) - Component API documentation with proxy mode examples
 - [Issue #242 Tracking](../issues/ISSUE-242-BACKEND-PROXY-SUPPORT.md) - Complete feature tracking document
-- [Issue #345 Validation](../issues/ISSUE-345-BACKEND-PROXY-VALIDATION.md) - Backend proxy validation pass tracking
