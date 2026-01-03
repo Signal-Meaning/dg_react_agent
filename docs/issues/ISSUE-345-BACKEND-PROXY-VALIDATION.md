@@ -560,6 +560,11 @@ v0.7.3 restored functionality broken by proxy refactoring, but we haven't valida
 **Phase 6 Results**: ✅ **COMPLETE**
 - ✅ Skipped E2E tests: 6 files, 33 instances of `skipIfNoRealAPI` identified
 - ✅ Jest coverage: 65 Jest test files covering all component logic
+- ✅ Jest test execution: **ALL PASSING** - 725/725 tests passing (100% pass rate)
+- ✅ Proxy/Direct mode coverage: Jest tests verify component logic for both modes
+  - `backend-proxy-mode.test.tsx`: Tests proxy mode, direct mode, and mode prioritization (5 tests)
+  - `connection-mode-selection.test.tsx`: Tests mode detection for both scenarios (multiple tests)
+  - `websocket-proxy-connection.test.ts`: Tests WebSocket proxy connection logic
 - ✅ Coverage status: **COMPLETE** - All skipped functionality is either covered by Jest tests or appropriately E2E-only
 - ✅ Detailed analysis: [PHASE-6-JEST-COVERAGE-ANALYSIS.md](./PHASE-6-JEST-COVERAGE-ANALYSIS.md)
 
