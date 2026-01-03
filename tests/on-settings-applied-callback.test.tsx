@@ -338,8 +338,13 @@ describe('onSettingsApplied Callback Tests', () => {
         />
       );
 
-      // Setup connection (but don't send SettingsApplied)
+      // Setup connection (setupComponentAndConnect now simulates SettingsApplied)
+      // Clear the callback count after setup since SettingsApplied was already sent
       const eventListener = await setupComponentAndConnect(ref, mockWebSocketManager);
+      
+      // Clear the callback count - we already got one call from setupComponentAndConnect
+      // Now we want to verify other event types don't trigger it
+      onSettingsApplied.mockClear();
 
       // Simulate other event types
       if (eventListener) {
@@ -355,6 +360,7 @@ describe('onSettingsApplied Callback Tests', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // onSettingsApplied should NOT be called for other event types
+      // (We cleared the count after setupComponentAndConnect, so this should be 0)
       expect(onSettingsApplied).not.toHaveBeenCalled();
     });
   });

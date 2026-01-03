@@ -107,13 +107,17 @@ export async function simulateSettingsApplied(
 
 /**
  * Complete flow: Setup, connect, send Settings, and receive SettingsApplied
+ * 
+ * Note: setupComponentAndConnect already simulates SettingsApplied, so this function
+ * doesn't need to call it again to avoid duplicate SettingsApplied events.
  */
 export async function setupConnectAndReceiveSettingsApplied(
   ref: React.RefObject<DeepgramVoiceInteractionHandle>,
   mockWebSocketManager: MockWebSocketManager
 ): Promise<((event: any) => void) | undefined> {
+  // setupComponentAndConnect already simulates SettingsApplied, so just call it
   const eventListener = await setupComponentAndConnect(ref, mockWebSocketManager);
-  await simulateSettingsApplied(eventListener);
+  // Don't call simulateSettingsApplied again - it's already called in setupComponentAndConnect
   return eventListener;
 }
 
@@ -141,6 +145,12 @@ export async function setupComponentAndConnect(
   // This allows Settings to be sent (component checks this flag)
   window.globalSettingsSent = false;
   
+  // Issue #345: Ensure mock hasSettingsBeenSent method returns true after Settings is sent
+  // This allows injectUserMessage to proceed (it waits for Settings to be sent)
+  if (mockWebSocketManager.hasSettingsBeenSent) {
+    mockWebSocketManager.hasSettingsBeenSent.mockReturnValue(true);
+  }
+  
   // Start the connection
   await act(async () => {
     await ref.current?.start(options);
@@ -154,10 +164,20 @@ export async function setupComponentAndConnect(
 
   // Wait for Settings to be sent
   await waitForSettingsSent(mockWebSocketManager);
-
-  // Ensure globalSettingsSent flag is set after Settings is sent (component uses this)
+  
+  // Issue #345: Simulate SettingsApplied to set hasSentSettingsRef and globalSettingsSent
+  // This ensures injectUserMessage can proceed (it waits for Settings confirmation)
+  await simulateSettingsApplied(eventListener);
+  
+  // Ensure globalSettingsSent flag is set after SettingsApplied (component uses this)
   window.globalSettingsSent = true;
-
+  
+  // Issue #345: Ensure mock hasSettingsBeenSent returns true (Settings was sent to WebSocket)
+  // This allows injectUserMessage to proceed (it checks this method)
+  if (mockWebSocketManager.hasSettingsBeenSent) {
+    mockWebSocketManager.hasSettingsBeenSent.mockReturnValue(true);
+  }
+  
   return eventListener;
 }
 

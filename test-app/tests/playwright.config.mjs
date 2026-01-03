@@ -3,7 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
-dotenv.config({ path: '../.env' });
+// Load from test-app/.env (primary location for test app configuration)
+dotenv.config({ path: '.env' });
 
 // Debug: Log the baseURL being used
 console.log('Playwright baseURL:', process.env.VITE_BASE_URL || 'http://localhost:5173');
@@ -117,7 +118,10 @@ export default defineConfig({
       stdout: 'ignore',
       stderr: 'ignore',
       env: {
-        DEEPGRAM_API_KEY: process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY || '',
+        // Use VITE_DEEPGRAM_API_KEY as primary source (matches test-app/.env)
+        // Fall back to DEEPGRAM_API_KEY if VITE_* not available
+        DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || process.env.DEEPGRAM_API_KEY || '',
+        VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '', // Also pass VITE_* for proxy server fallback
         PROXY_PORT: '8080',
         PROXY_PATH: '/deepgram-proxy',
       },

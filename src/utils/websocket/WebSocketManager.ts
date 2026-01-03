@@ -77,6 +77,8 @@ const DEFAULT_OPTIONS: Partial<WebSocketManagerOptions> = {
   debug: false,
 };
 
+import { normalizeApiKeyForWebSocket } from '../api-key-normalizer';
+
 /**
  * Manages a WebSocket connection to Deepgram API endpoints
  */
@@ -220,7 +222,12 @@ export class WebSocketManager {
             console.log(`🔌 [WebSocketManager.connect] Created WebSocket without token protocol (proxy mode)`);
           }
         } else {
-          this.ws = new WebSocket(url, ['token', this.options.apiKey || '']);
+          // For WebSocket authentication: Use normalized API key (raw key, prefix stripped if present)
+          const apiKeyForAuth = normalizeApiKeyForWebSocket(this.options.apiKey);
+          if (!apiKeyForAuth) {
+            throw new Error('API key is required for direct mode connection');
+          }
+          this.ws = new WebSocket(url, ['token', apiKeyForAuth]);
           if (this.options.debug) {
             console.log(`🔌 [WebSocketManager.connect] Created WebSocket with token protocol (direct mode)`);
           }
@@ -488,6 +495,14 @@ export class WebSocketManager {
     }
   }
   
+  /**
+   * Checks if Settings has been sent
+   * @returns true if Settings message has been sent
+   */
+  public hasSettingsBeenSent(): boolean {
+    return this.settingsSent;
+  }
+
   /**
    * Mark that Settings has been sent (for agent service)
    * This allows keepalive to start sending KeepAlive messages

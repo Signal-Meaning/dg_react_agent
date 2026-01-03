@@ -19,7 +19,7 @@ export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || process.env.VITE_BASE
  */
 function getProxyConfig() {
   // Check if proxy mode is enabled via environment variable
-  if (process.env.USE_PROXY_MODE === 'true' || process.env.USE_BACKEND_PROXY === 'true') {
+  if (process.env.USE_PROXY_MODE === 'true') {
     const proxyEndpoint = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
     const proxyAuthToken = process.env.VITE_PROXY_AUTH_TOKEN || '';
     
@@ -40,7 +40,7 @@ function getProxyConfig() {
 /**
  * Safely build a URL with query parameters
  * Prevents URL injection by properly constructing URLs
- * Automatically adds proxy configuration if USE_PROXY_MODE or USE_BACKEND_PROXY env var is set
+ * Automatically adds proxy configuration if USE_PROXY_MODE env var is set
  * @param {string} baseUrl - Base URL (should be BASE_URL constant)
  * @param {Record<string, string>} params - Query parameters as key-value pairs
  * @returns {string} Safe URL with query parameters
@@ -88,7 +88,7 @@ const SELECTORS = {
 
 /**
  * Navigate to the test app and wait for it to load
- * Automatically uses proxy mode if USE_PROXY_MODE or USE_BACKEND_PROXY env var is set
+ * Automatically uses proxy mode if USE_PROXY_MODE env var is set
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 10000)
  */

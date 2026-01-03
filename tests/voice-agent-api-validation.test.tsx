@@ -1077,25 +1077,52 @@ describe('Component API Surface Validation', () => {
 
       const message = 'Test user message';
       
+      // Issue #345: Set up mock to indicate Settings has been sent
+      // This allows injectUserMessage to proceed (it waits for Settings)
+      if (mockWebSocketManager.hasSettingsBeenSent) {
+        mockWebSocketManager.hasSettingsBeenSent.mockReturnValue(true);
+      }
+      window.globalSettingsSent = true;
+      
       // Set up mock to return 'connected' after connect
       mockWebSocketManager.getState.mockReturnValueOnce('closed');
       mockWebSocketManager.getState.mockReturnValueOnce('connecting');
       mockWebSocketManager.getState.mockReturnValueOnce('connected');
       
+      // Set up event listener to simulate SettingsApplied when connection happens
+      let eventListener: ((event: any) => void) | undefined;
+      mockWebSocketManager.addEventListener.mockImplementation((callback: (event: any) => void) => {
+        eventListener = callback;
+        return jest.fn();
+      });
+      
       await act(async () => {
         await ref.current.injectUserMessage(message);
       });
+      
+      // Simulate SettingsApplied if event listener was set up
+      if (eventListener) {
+        await act(async () => {
+          eventListener!({ type: 'message', data: { type: 'SettingsApplied' } });
+        });
+      }
 
       // Verify the method can be called without errors
       // Should create manager, connect, and send message
       expect(mockWebSocketManager.connect).toHaveBeenCalled();
       expect(mockWebSocketManager.sendJSON).toHaveBeenCalled();
-    });
+    }, 10000); // Increase timeout to 10s to allow Settings wait logic
 
     // NOTE: getState() is a debug/testing method, excluded from public API validation
 
     it('should detect API removals - fail if required method is missing', async () => {
       const ref = React.createRef<any>();
+      
+      // Issue #345: Ensure Settings flags are cleared before render
+      window.globalSettingsSent = false;
+      if (mockWebSocketManager.hasSettingsBeenSent) {
+        mockWebSocketManager.hasSettingsBeenSent.mockReturnValue(false);
+      }
       
       render(
         <DeepgramVoiceInteraction
@@ -1108,7 +1135,7 @@ describe('Component API Surface Validation', () => {
 
       await waitFor(() => {
         expect(ref.current).toBeTruthy();
-      });
+      }, { timeout: 5000 });
 
       // Required methods from DeepgramVoiceInteractionHandle interface
       // Source of Truth: src/types/index.ts - DeepgramVoiceInteractionHandle
@@ -1168,6 +1195,12 @@ describe('Component API Surface Validation', () => {
     it('should maintain method signatures for stability', async () => {
       const ref = React.createRef<any>();
       
+      // Issue #345: Ensure Settings flags are cleared before render
+      window.globalSettingsSent = false;
+      if (mockWebSocketManager.hasSettingsBeenSent) {
+        mockWebSocketManager.hasSettingsBeenSent.mockReturnValue(false);
+      }
+      
       render(
         <DeepgramVoiceInteraction
           ref={ref}
@@ -1179,7 +1212,7 @@ describe('Component API Surface Validation', () => {
 
       await waitFor(() => {
         expect(ref.current).toBeTruthy();
-      });
+      }, { timeout: 5000 });
 
       // start() should be async and return Promise<void>
       const startPromise = ref.current.start();
@@ -1195,8 +1228,19 @@ describe('Component API Surface Validation', () => {
       }).not.toThrow();
       
       // injectUserMessage should accept string and return Promise
+      // Issue #345: Set up Settings before calling injectUserMessage (it waits for Settings)
+      if (mockWebSocketManager.hasSettingsBeenSent) {
+        mockWebSocketManager.hasSettingsBeenSent.mockReturnValue(true);
+      }
+      window.globalSettingsSent = true;
+      
       const injectPromise = ref.current.injectUserMessage('test message');
       expect(injectPromise).toBeInstanceOf(Promise);
+      
+      // Wait for the promise to resolve (it might wait for Settings)
+      await act(async () => {
+        await injectPromise;
+      });
     });
   });
 });

@@ -30,54 +30,18 @@ import { AgentStateService } from '../../services/AgentStateService';
 import { compareAgentOptionsIgnoringContext, hasDependencyChanged } from '../../utils/option-comparison';
 import { filterFunctionsForSettings } from '../../utils/function-utils';
 import { functionCallLogger } from '../../utils/function-call-logger';
+import {
+  hasSettingsBeenSent,
+  waitForSettings,
+  warnAboutNonMemoizedOptions,
+  WindowWithDeepgramGlobals
+} from '../../utils/component-helpers';
 
 // Default endpoints
 const DEFAULT_ENDPOINTS = {
   transcriptionUrl: 'wss://api.deepgram.com/v1/listen',
   agentUrl: 'wss://agent.deepgram.com/v1/agent/converse',
 };
-
-// Extended Window interface for global properties used by the component
-interface WindowWithDeepgramGlobals extends Window {
-  globalSettingsSent?: boolean;
-  componentInitializationCount?: number;
-  audioCaptureInProgress?: boolean;
-  __DEEPGRAM_DEBUG_AGENT_OPTIONS__?: boolean;
-  __DEEPGRAM_TEST_MODE__?: boolean;
-  __DEEPGRAM_LAST_SETTINGS__?: unknown;
-  __DEEPGRAM_LAST_FUNCTIONS__?: unknown;
-}
-
-/**
- * Helper function to warn about non-memoized options in development mode
- * @param propName - The name of the prop being checked
- * @param options - The options object to check
- */
-function warnAboutNonMemoizedOptions(propName: string, options: unknown): void {
-  if (!options || typeof options !== 'object') {
-    return;
-  }
-  
-  // Check if the object appears to be an inline object (not memoized)
-  // We use a heuristic: if the object has a constructor that's not Object
-  // or if it's not frozen, it might be an inline object
-  const isLikelyInlineObject = 
-    options.constructor === Object && 
-    !Object.isFrozen(options) &&
-    Object.getOwnPropertyNames(options).length > 0;
-  
-  if (isLikelyInlineObject) {
-    try {
-      console.warn(
-        `[DeepgramVoiceInteraction] ${propName} prop detected. ` +
-        'For optimal performance, memoize this prop with useMemo() to prevent unnecessary re-initialization. ' +
-        'See component documentation for details.'
-      );
-    } catch (error) {
-      // Silently fail if console.warn is not available
-    }
-  }
-}
 
 /**
  * DeepgramVoiceInteraction component
@@ -2903,8 +2867,15 @@ function DeepgramVoiceInteraction(
         throw new Error('Agent manager was cleared or replaced during connection');
       }
       
-      // Wait a moment for settings to be sent
-      await new Promise(resolve => setTimeout(resolve, SETTINGS_SEND_DELAY_MS));
+      // Wait for Settings to be sent and ideally SettingsApplied to be received
+      // This ensures Settings is sent before InjectUserMessage (required by Deepgram)
+      // In proxy mode, this is especially important due to additional network hops
+      const settingsReady = await waitForSettings(
+        hasSentSettingsRef,
+        windowWithGlobals,
+        agentManagerRef.current,
+        log
+      );
       
       // Final check - manager should still exist
       if (!agentManagerRef.current || agentManagerRef.current !== managerBeforeConnect) {
@@ -2913,9 +2884,29 @@ function DeepgramVoiceInteraction(
       }
       
       const finalState = agentManagerRef.current.getState();
-      log('Connection established, final state:', finalState);
+      const { both: settingsSent } = hasSettingsBeenSent(hasSentSettingsRef, windowWithGlobals, agentManagerRef.current);
+      log('Connection established, final state:', finalState, 'Settings sent:', settingsSent);
+      
+      // CRITICAL: Ensure Settings is sent before InjectUserMessage (required by Deepgram)
+      // If Settings hasn't been sent yet, wait a bit more
+      if (!settingsReady && !settingsSent) {
+        log('⚠️ Settings not sent yet, waiting additional time...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const { both: settingsSentAfterWait } = hasSettingsBeenSent(hasSentSettingsRef, windowWithGlobals, agentManagerRef.current);
+        if (!settingsSentAfterWait) {
+          log('❌ Settings still not sent after waiting - this may cause Deepgram to reject InjectUserMessage');
+          // Don't throw error - let it proceed and see if Deepgram accepts it
+          // Some edge cases might not send Settings (e.g., reconnection scenarios)
+        }
+      }
     } else {
       log('Agent manager already connected');
+      // Even if already connected, verify Settings was sent
+      const { both: settingsSent } = hasSettingsBeenSent(hasSentSettingsRef, windowWithGlobals, agentManagerRef.current);
+      if (!settingsSent) {
+        log('⚠️ Agent already connected but Settings not sent - this may cause issues');
+      }
     }
     
     // Check WebSocket state before sending
@@ -2967,6 +2958,29 @@ function DeepgramVoiceInteraction(
           log('Failed to get or resume AudioContext:', error);
       }
     }
+    }
+    
+    // FINAL CHECK: Ensure Settings is sent before InjectUserMessage (required by Deepgram)
+    // This is critical - Deepgram will reject InjectUserMessage if sent before Settings
+    const { both: finalSettingsReady } = hasSettingsBeenSent(hasSentSettingsRef, windowWithGlobals, agentManagerRef.current);
+    
+    if (!finalSettingsReady) {
+      log('❌ CRITICAL: Settings not sent before InjectUserMessage - this will cause Deepgram to reject the message');
+      log('   Waiting additional time for Settings to be sent...');
+      // Wait one more time for Settings
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Final check
+      const { both: finalSettingsReadyAfterWait } = hasSettingsBeenSent(hasSentSettingsRef, windowWithGlobals, agentManagerRef.current);
+      
+      if (!finalSettingsReadyAfterWait) {
+        log('❌ CRITICAL: Settings still not sent - InjectUserMessage will likely be rejected by Deepgram');
+        log('   Proceeding anyway - this may cause an error from Deepgram');
+      } else {
+        log('✅ Settings sent after additional wait - safe to send InjectUserMessage');
+      }
+    } else {
+      log('✅ Settings confirmed sent - safe to send InjectUserMessage');
     }
     
     agentManagerRef.current.sendJSON({

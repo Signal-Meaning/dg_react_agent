@@ -2,17 +2,20 @@
  * Backend Proxy Mode E2E Tests - Issue #242
  * 
  * End-to-end tests for backend proxy mode functionality.
- * These tests require the mock proxy server to be running.
+ * These tests work in both direct and proxy modes based on environment configuration.
  * 
- * To run:
+ * To run in proxy mode:
  *   1. Start mock proxy server: npm run test:proxy:server
- *   2. In another terminal: npm run test:e2e:proxy
+ *   2. Set USE_PROXY_MODE=true: USE_PROXY_MODE=true npm run test:e2e
+ * 
+ * To run in direct mode:
+ *   npm run test:e2e (without USE_PROXY_MODE)
  * 
  * Test scenarios:
- * 1. Connection through proxy endpoint
+ * 1. Connection through proxy endpoint (or direct)
  * 2. Feature parity (transcription, agent, VAD, etc.)
  * 3. Authentication flow
- * 4. Reconnection through proxy
+ * 4. Reconnection through proxy (or direct)
  * 5. Error handling
  */
 
@@ -21,46 +24,50 @@ import { sendTextMessage, waitForConnection } from '../utils/test-helpers';
 import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
 
 const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
+const IS_PROXY_MODE = process.env.USE_PROXY_MODE === 'true';
 
 test.describe('Backend Proxy Mode', () => {
   test.beforeEach(async ({ page }) => {
-    // Skip in CI if proxy server is not available
-    if (process.env.CI && !process.env.VITE_PROXY_ENDPOINT) {
-      test.skip(true, 'Proxy server not available in CI');
-      return;
-    }
-    
-    // Verify proxy server is running before proceeding with tests
-    // Use page.evaluate to check from browser context (WebSocket is available there)
-    const proxyRunning = await page.evaluate(async (endpoint) => {
-      return new Promise((resolve) => {
-        try {
-          const ws = new WebSocket(endpoint);
-          
-          const timeout = setTimeout(() => {
-            ws.close();
+    // If running in proxy mode, verify proxy server is available
+    if (IS_PROXY_MODE) {
+      // Skip in CI if proxy server is not available
+      if (process.env.CI && !process.env.VITE_PROXY_ENDPOINT) {
+        test.skip(true, 'Proxy server not available in CI');
+        return;
+      }
+      
+      // Verify proxy server is running before proceeding with tests
+      // Use page.evaluate to check from browser context (WebSocket is available there)
+      const proxyRunning = await page.evaluate(async (endpoint) => {
+        return new Promise((resolve) => {
+          try {
+            const ws = new WebSocket(endpoint);
+            
+            const timeout = setTimeout(() => {
+              ws.close();
+              resolve(false);
+            }, 2000);
+            
+            ws.onopen = () => {
+              clearTimeout(timeout);
+              ws.close();
+              resolve(true);
+            };
+            
+            ws.onerror = () => {
+              clearTimeout(timeout);
+              resolve(false);
+            };
+          } catch (error) {
             resolve(false);
-          }, 2000);
-          
-          ws.onopen = () => {
-            clearTimeout(timeout);
-            ws.close();
-            resolve(true);
-          };
-          
-          ws.onerror = () => {
-            clearTimeout(timeout);
-            resolve(false);
-          };
-        } catch (error) {
-          resolve(false);
-        }
-      });
-    }, PROXY_ENDPOINT);
-    
-    if (!proxyRunning) {
-      test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run test:proxy:server`);
-      return;
+          }
+        });
+      }, PROXY_ENDPOINT);
+      
+      if (!proxyRunning) {
+        test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run test:proxy:server`);
+        return;
+      }
     }
     
     // Note: Each test configures the page via URL query params, so no common setup needed
@@ -90,56 +97,56 @@ test.describe('Backend Proxy Mode', () => {
     }
   });
 
-  test('should connect through proxy endpoint when proxyEndpoint prop is provided', async ({ page }) => {
-    // Configure component via URL query parameters (no App.tsx modifications needed)
-    const testUrl = buildUrlWithParams(BASE_URL, {
-      connectionMode: 'proxy',
-      proxyEndpoint: PROXY_ENDPOINT
-    });
+  test('should connect through configured endpoint (proxy or direct)', async ({ page }) => {
+    // buildUrlWithParams automatically adds proxy config if USE_PROXY_MODE is set
+    // If not set, it will use direct mode (no proxy params)
+    const testUrl = buildUrlWithParams(BASE_URL);
     await page.goto(testUrl);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
-    // Wait for connection mode to be set to proxy
+    // Wait for connection mode to be set (either proxy or direct)
     await page.waitForFunction(() => {
       const modeEl = document.querySelector('[data-testid="connection-mode"]');
-      return modeEl && modeEl.textContent?.includes('proxy');
+      return modeEl && (modeEl.textContent?.includes('proxy') || modeEl.textContent?.includes('direct'));
     }, { timeout: 5000 });
 
-    // Verify connection mode is proxy
+    // Verify connection mode matches expected mode
     const connectionMode = await page.locator('[data-testid="connection-mode"]').textContent();
-    expect(connectionMode).toContain('proxy');
-
-    // Verify proxy endpoint is set
-    const endpointInput = await page.locator('input[placeholder*="localhost:8080"]').inputValue();
-    expect(endpointInput).toContain('localhost:8080');
-    expect(endpointInput).toContain('deepgram-proxy');
+    if (IS_PROXY_MODE) {
+      expect(connectionMode).toContain('proxy');
+      // Verify proxy endpoint is set
+      const endpointInput = await page.locator('input[placeholder*="localhost:8080"]').inputValue();
+      expect(endpointInput).toContain('localhost:8080');
+      expect(endpointInput).toContain('deepgram-proxy');
+    } else {
+      expect(connectionMode).toContain('direct');
+    }
   });
 
-  test('should work with agent responses through proxy', async ({ page }) => {
-    // NOTE: This test requires the proxy server to be running
-    // Start it with: npm run test:proxy:server
-    
-    // Configure component via URL query parameters
-    const testUrl = buildUrlWithParams(BASE_URL, {
-      connectionMode: 'proxy',
-      proxyEndpoint: PROXY_ENDPOINT
-    });
+  test('should work with agent responses (proxy or direct mode)', async ({ page }) => {
+    // buildUrlWithParams automatically adds proxy config if USE_PROXY_MODE is set
+    // If not set, it will use direct mode (no proxy params)
+    const testUrl = buildUrlWithParams(BASE_URL);
     await page.goto(testUrl);
     await page.waitForLoadState('networkidle');
     
     // Wait for component to be ready
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
-    // Wait for connection mode to be set to proxy (component initialization)
+    // Wait for connection mode to be set (either proxy or direct)
     await page.waitForFunction(() => {
       const modeEl = document.querySelector('[data-testid="connection-mode"]');
-      return modeEl && modeEl.textContent?.includes('proxy');
+      return modeEl && (modeEl.textContent?.includes('proxy') || modeEl.textContent?.includes('direct'));
     }, { timeout: 5000 });
 
-    // Verify connection mode is proxy
+    // Verify connection mode matches expected mode
     const connectionMode = await page.locator('[data-testid="connection-mode"]').textContent();
-    expect(connectionMode).toContain('proxy');
+    if (IS_PROXY_MODE) {
+      expect(connectionMode).toContain('proxy');
+    } else {
+      expect(connectionMode).toContain('direct');
+    }
 
     // Wait for text input to be ready and focusable before triggering auto-connect
     const textInput = page.locator('[data-testid="text-input"]');
@@ -196,7 +203,7 @@ test.describe('Backend Proxy Mode', () => {
       });
       
       console.error('Connection failed. Diagnostic info:', JSON.stringify(diagnosticInfo, null, 2));
-      throw new Error(`Connection failed to establish. Status: "${diagnosticInfo.connectionStatus}", Mode: "${diagnosticInfo.connectionMode}". Proxy server check passed, but connection still failed.`);
+      throw new Error(`Connection failed to establish. Status: "${diagnosticInfo.connectionStatus}", Mode: "${diagnosticInfo.connectionMode}".`);
     });
 
     // Verify connection is established
@@ -209,13 +216,34 @@ test.describe('Backend Proxy Mode', () => {
     await page.waitForFunction(() => {
       const settingsEl = document.querySelector('[data-testid="has-sent-settings"]');
       return settingsEl && settingsEl.textContent === 'true';
-    }, { timeout: 20000 });
+    }, { timeout: 20000 }).catch(async (error) => {
+      // Capture diagnostic information if Settings timeout occurs
+      const diagnosticInfo = await page.evaluate(() => {
+        const settingsEl = document.querySelector('[data-testid="has-sent-settings"]');
+        const statusEl = document.querySelector('[data-testid="connection-status"]');
+        const modeEl = document.querySelector('[data-testid="connection-mode"]');
+        const windowSettings = window.__DEEPGRAM_WS_SETTINGS_PARSED__;
+        const globalSettingsSent = window.__DEEPGRAM_GLOBAL_SETTINGS_SENT__;
+        
+        return {
+          hasSentSettings: settingsEl?.textContent || 'not found',
+          connectionStatus: statusEl?.textContent || 'not found',
+          connectionMode: modeEl?.textContent || 'not found',
+          windowSettingsParsed: windowSettings ? 'exists' : 'not found',
+          globalSettingsSent: globalSettingsSent || false,
+          consoleLogs: (window.consoleLogs || []).slice(-20) // Last 20 logs
+        };
+      });
+      
+      console.error('Settings timeout. Diagnostic info:', JSON.stringify(diagnosticInfo, null, 2));
+      throw new Error(`Settings not applied within timeout. hasSentSettings: "${diagnosticInfo.hasSentSettings}", connectionStatus: "${diagnosticInfo.connectionStatus}"`);
+    });
 
-    // Send a text message to trigger agent response through proxy
-    const testMessage = 'Hello, this is a proxy mode test';
+    // Send a text message to trigger agent response
+    const testMessage = IS_PROXY_MODE ? 'Hello, this is a proxy mode test' : 'Hello, this is a direct mode test';
     await sendTextMessage(page, testMessage);
 
-    // Wait for agent response (through proxy)
+    // Wait for agent response
     // Use a longer timeout since proxy may add some latency
     await page.waitForFunction(() => {
       const responseEl = document.querySelector('[data-testid="agent-response"]');
@@ -231,32 +259,38 @@ test.describe('Backend Proxy Mode', () => {
     expect(agentResponse).not.toBe('(Waiting for agent response...)');
   });
 
-  test('should handle reconnection through proxy', async ({ page }) => {
-    // Configure component via URL query parameters
-    const testUrl = buildUrlWithParams(BASE_URL, {
-      connectionMode: 'proxy',
-      proxyEndpoint: PROXY_ENDPOINT
-    });
+  test('should handle reconnection (proxy or direct mode)', async ({ page }) => {
+    // buildUrlWithParams automatically adds proxy config if USE_PROXY_MODE is set
+    const testUrl = buildUrlWithParams(BASE_URL);
     await page.goto(testUrl);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 
-    // Wait for connection mode to be proxy
+    // Wait for connection mode to be set (either proxy or direct)
     await page.waitForFunction(() => {
       const modeEl = document.querySelector('[data-testid="connection-mode"]');
-      return modeEl && modeEl.textContent?.includes('proxy');
+      return modeEl && (modeEl.textContent?.includes('proxy') || modeEl.textContent?.includes('direct'));
     }, { timeout: 5000 });
 
-    // Verify component is configured for proxy mode
+    // Verify component is configured for expected mode
     const connectionMode = await page.locator('[data-testid="connection-mode"]').textContent();
-    expect(connectionMode).toContain('proxy');
+    if (IS_PROXY_MODE) {
+      expect(connectionMode).toContain('proxy');
+    } else {
+      expect(connectionMode).toContain('direct');
+    }
     
-    // Component should handle reconnection through proxy the same way as direct mode
+    // Component should handle reconnection the same way in both modes
     // The proxy is transparent to the component's reconnection logic
     expect(await page.locator('[data-testid="voice-agent"]').isVisible()).toBe(true);
   });
 
-  test('should handle proxy server unavailable gracefully', async ({ page }) => {
+  test('should handle proxy server unavailable gracefully (proxy mode only)', async ({ page }) => {
+    // Skip this test if not in proxy mode
+    if (!IS_PROXY_MODE) {
+      test.skip(true, 'Test only applies to proxy mode');
+      return;
+    }
     // Configure component via URL query parameters with invalid endpoint
     const invalidEndpoint = 'ws://localhost:9999/invalid-proxy';
     const testUrl = buildUrlWithParams(BASE_URL, {
