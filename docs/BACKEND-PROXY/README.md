@@ -45,11 +45,14 @@ This directory contains comprehensive documentation for implementing and using b
 
 ## Validation & Testing
 
-- **[Issue #345 Validation Report](../issues/ISSUE-345/ISSUE-345-VALIDATION-REPORT.md)** - Comprehensive validation pass confirming backend proxy support is production-ready
-  - ✅ 47/47 proxy mode tests passing (100% pass rate)
-  - ✅ All connection-relevant features validated
-  - ✅ Equivalent test coverage confirmed
-  - ✅ All v0.7.3 fixes validated in proxy mode
+Backend proxy support has been comprehensively validated and is production-ready:
+
+- ✅ 47/47 proxy mode tests passing (100% pass rate)
+- ✅ All connection-relevant features validated
+- ✅ Equivalent test coverage confirmed between proxy and direct modes
+- ✅ All regression fixes validated in proxy mode
+
+For detailed validation results, see the [validation documentation](../issues/ISSUE-345/ISSUE-345-VALIDATION-REPORT.md).
 
 ## Related Documentation
 
