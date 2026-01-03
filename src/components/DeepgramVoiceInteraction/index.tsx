@@ -210,8 +210,8 @@ function DeepgramVoiceInteraction(
   const BLOCK_AUDIO = false;
   const allowAgentRef = useRef<boolean>(ALLOW_AUDIO);
   
-  // Connection timeout for settings to be sent after manager connection
-  const SETTINGS_SEND_DELAY_MS = 500;
+  // Note: Settings are sent immediately after connection - no delay needed
+  // Removed SETTINGS_SEND_DELAY_MS as it was unused
   
   // Global flag to prevent settings from being sent multiple times across component instances
   const windowWithGlobals = window as WindowWithDeepgramGlobals;
