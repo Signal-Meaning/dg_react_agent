@@ -27,6 +27,11 @@ export async function setupVADTest(page, options = {}) {
     waitForNetworkIdle = true 
   } = options;
   
+  // Skip in CI if skipInCI is true
+  // Reason: VAD tests require real Deepgram API connections to validate actual VAD behavior
+  // CI environments may not have API keys configured or may have rate limits
+  // Action: Run locally with real API key (tests will execute), or configure CI with real API keys
+  // Note: Consider refactoring to use skipIfNoRealAPI() for consistency with other real API tests
   if (process.env.CI && skipInCI) {
     test.skip(true, skipReason);
     return;

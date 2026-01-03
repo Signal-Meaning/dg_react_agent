@@ -16,6 +16,8 @@ const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/d
 test.describe('Backend Proxy Authentication', () => {
   test.beforeEach(async ({ page }) => {
     // Skip in CI if proxy server is not available
+    // Reason: Proxy server is not automatically started in CI environments
+    // Action: Configure CI to start proxy server or set VITE_PROXY_ENDPOINT in CI
     if (process.env.CI && !process.env.VITE_PROXY_ENDPOINT) {
       test.skip(true, 'Proxy server not available in CI');
       return;

@@ -31,12 +31,16 @@ test.describe('Backend Proxy Mode', () => {
     // If running in proxy mode, verify proxy server is available
     if (IS_PROXY_MODE) {
       // Skip in CI if proxy server is not available
+      // Reason: Proxy server is not automatically started in CI environments
+      // Action: Configure CI to start proxy server or set VITE_PROXY_ENDPOINT in CI
       if (process.env.CI && !process.env.VITE_PROXY_ENDPOINT) {
         test.skip(true, 'Proxy server not available in CI');
         return;
       }
       
       // Verify proxy server is running before proceeding with tests
+      // Reason: Tests require proxy server to be running to validate proxy functionality
+      // Action: Start proxy server with: npm run test:proxy:server
       // Use page.evaluate to check from browser context (WebSocket is available there)
       const proxyRunning = await page.evaluate(async (endpoint) => {
         return new Promise((resolve) => {
@@ -287,6 +291,8 @@ test.describe('Backend Proxy Mode', () => {
 
   test('should handle proxy server unavailable gracefully (proxy mode only)', async ({ page }) => {
     // Skip this test if not in proxy mode
+    // Reason: This test specifically validates proxy server error handling, which only applies in proxy mode
+    // Action: Run with USE_PROXY_MODE=true to execute this test
     if (!IS_PROXY_MODE) {
       test.skip(true, 'Test only applies to proxy mode');
       return;

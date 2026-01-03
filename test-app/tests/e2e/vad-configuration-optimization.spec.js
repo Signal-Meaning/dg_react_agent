@@ -14,6 +14,11 @@ import { getVADState } from './fixtures/vad-helpers.js';
 
 test.describe('VAD Configuration Optimization', () => {
   test.beforeEach(async ({ page }) => {
+    // Skip in CI - VAD tests require real Deepgram API connections
+    // Reason: VAD (Voice Activity Detection) tests require real API connections to validate actual VAD behavior
+    // CI environments may not have API keys configured or may have rate limits
+    // Action: Run locally with real API key (tests will execute), or configure CI with real API keys
+    // Note: Consider refactoring to use skipIfNoRealAPI() for consistency with other real API tests
     if (process.env.CI) {
       test.skip(true, 'VAD tests require real Deepgram API connections - skipped in CI.');
       return;

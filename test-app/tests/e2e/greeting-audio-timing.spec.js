@@ -21,6 +21,11 @@ import {
 const ENABLE_AUDIO = process.env.PW_ENABLE_AUDIO === 'true';
 
 test.describe('Greeting Audio Timing', () => {
+  // Skip if PW_ENABLE_AUDIO is not enabled
+  // Reason: Audio playback tests require audio output to be enabled in Playwright
+  // By default, Playwright mutes/disables audio (--disable-audio-output, --mute-audio) to prevent noise in automated tests
+  // Action: Set PW_ENABLE_AUDIO=true environment variable to run these tests
+  // Note: This should probably be enabled by default for audio-related tests, but is currently opt-in to avoid noise in CI
   test.skip(!ENABLE_AUDIO, 'PW_ENABLE_AUDIO is not enabled; skipping greeting audio playback tests.');
   
   // Helper function to verify initial state (test-specific)

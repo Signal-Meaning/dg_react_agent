@@ -37,6 +37,10 @@ test.describe('Audio Interruption Timing', () => {
     await expect(page.locator('[data-testid="connection-status"]')).toContainText('closed', { timeout: 10000 });
   });
 
+  // TODO: Issue #348 - Investigate why this test is skipped
+  // This test verifies audio interruption timing (should stop within 50ms)
+  // Currently skipped - reason unknown. May be flaky due to timing sensitivity.
+  // Consider: Should this use PW_ENABLE_AUDIO check like other audio tests?
   test.skip('should interrupt audio within 50ms when interruptAgent() is called', async ({ page }) => {
     console.log('🔊 Testing audio interruption timing...');
     
@@ -100,6 +104,10 @@ test.describe('Audio Interruption Timing', () => {
     console.log('✅ SUCCESS: Audio interrupted within 50ms');
   });
 
+  // TODO: Issue #348 - Investigate why this test is skipped
+  // This test verifies rapid interrupt clicks don't cause errors
+  // Currently skipped - reason unknown. May be flaky or have race conditions.
+  // Consider: Should this use PW_ENABLE_AUDIO check like other audio tests?
   test.skip('should handle rapid interrupt clicks without errors', async ({ page }) => {
     console.log('🔊 Testing rapid interrupt clicks...');
     
@@ -198,6 +206,10 @@ test.describe('Audio Interruption Timing', () => {
     console.log('✅ Basic button click functionality verified');
   });
 
+  // Skip if PW_ENABLE_AUDIO is not enabled
+  // Reason: Audio playback tests require audio output to be enabled in Playwright
+  // By default, Playwright mutes/disables audio to prevent noise in automated tests
+  // Action: Set PW_ENABLE_AUDIO=true environment variable to run this test
   if (!ENABLE_AUDIO) {
     test.skip(true, 'PW_ENABLE_AUDIO is not enabled; skipping audio playback-dependent test.');
   }
@@ -265,6 +277,10 @@ test.describe('Audio Interruption Timing', () => {
   });
 
 
+  // Skip if PW_ENABLE_AUDIO is not enabled
+  // Reason: Audio playback tests require audio output to be enabled in Playwright
+  // By default, Playwright mutes/disables audio to prevent noise in automated tests
+  // Action: Set PW_ENABLE_AUDIO=true environment variable to run this test
   if (!ENABLE_AUDIO) {
     test.skip(true, 'PW_ENABLE_AUDIO is not enabled; skipping audio playback-dependent test.');
   }
@@ -392,6 +408,10 @@ test.describe('Audio Interruption Timing', () => {
     console.log('✅ Test passed: Audio blocking persisted across turns');
   });
 
+  // Skip if PW_ENABLE_AUDIO is not enabled
+  // Reason: Audio playback tests require audio output to be enabled in Playwright
+  // By default, Playwright mutes/disables audio to prevent noise in automated tests
+  // Action: Set PW_ENABLE_AUDIO=true environment variable to run this test
   if (!ENABLE_AUDIO) {
     test.skip(true, 'PW_ENABLE_AUDIO is not enabled; skipping audio playback-dependent test.');
   }
