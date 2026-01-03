@@ -59,30 +59,26 @@ This document catalogs all E2E tests that are explicitly skipped (using `test.sk
 - **Action Required**: Configure CI to start proxy server or set `VITE_PROXY_ENDPOINT` in CI
 
 #### `vad-configuration-optimization.spec.js`
-- **Skip Condition**: `process.env.CI`
+- **Skip Condition**: Uses `skipIfNoRealAPI()` helper (checks for real API key availability)
 - **Location**: Line 18 (in `beforeEach`)
-- **Reason**: VAD tests require real Deepgram API connections - skipped in CI
+- **Reason**: VAD tests require real Deepgram API connections
 - **Details**: 
   - VAD (Voice Activity Detection) tests require real API connections
-  - CI environments may not have API keys configured or may have rate limits
-- **Can Unskip**: ⚠️ **CONDITIONAL** - Can run locally with real API key
-- **Action Required**: Configure CI with real API keys if VAD testing is needed
+  - **Refactored**: Now uses `skipIfNoRealAPI()` for consistency with other real API tests
+- **Can Unskip**: ⚠️ **CONDITIONAL** - Can run locally or in CI with real API key
+- **Action Required**: Set `VITE_DEEPGRAM_API_KEY` with a real Deepgram API key
 
 #### `fixtures/vad-helpers.js` (used by multiple VAD test files)
-- **Skip Condition**: `process.env.CI && skipInCI`
-- **Location**: Line 31
+- **Skip Condition**: Uses `skipIfNoRealAPI()` helper (checks for real API key availability)
+- **Location**: Line 22 (in `setupVADTest` function)
 - **Reason**: VAD tests require real Deepgram API connections
 - **Details**: 
   - Used by: `manual-vad-workflow.spec.js`, `vad-events-core.spec.js`, `vad-audio-patterns.spec.js`
-  - **Why skipped differently**: These tests are skipped ONLY in CI environments (`process.env.CI`), not locally
-  - **Unskipping requirement**: Only requires real Deepgram API key (same as other real API tests)
-  - **Why not grouped with others**: The skip logic checks `process.env.CI` specifically, while other tests use `skipIfNoRealAPI()` which checks for API key availability
-  - **Should be grouped**: Yes - these should use `skipIfNoRealAPI()` like other real API tests for consistency
-- **Can Unskip**: ✅ **YES** - Run locally with real API key (they're only skipped in CI)
-- **Action Required**: 
-  - Locally: Just run with real API key (tests will execute)
-  - CI: Configure CI with real API keys if VAD testing is needed
-  - **Refactoring**: Consider changing to use `skipIfNoRealAPI()` for consistency with other real API tests
+  - **Refactored**: Now uses `skipIfNoRealAPI()` for consistency with other real API tests
+  - **Unskipping requirement**: Requires real Deepgram API key (`VITE_DEEPGRAM_API_KEY` set with valid key)
+  - **Action to Unskip**: Set `VITE_DEEPGRAM_API_KEY` with a real Deepgram API key
+- **Can Unskip**: ✅ **YES** - Run locally or in CI with real API key
+- **Action Required**: Set `VITE_DEEPGRAM_API_KEY` with a real Deepgram API key
 
 ### 3. Infrastructure Dependencies
 
@@ -196,7 +192,7 @@ This document catalogs all E2E tests that are explicitly skipped (using `test.sk
 3. **Feature Tracking**: Track Issues #212 and #178 to know when tests can be unskipped
 4. **CI Configuration**: Consider setting up CI to run proxy and VAD tests if needed
 5. **Audio Testing**: Document when and why `PW_ENABLE_AUDIO` is needed
-6. **VAD Test Consistency**: Consider refactoring VAD tests to use `skipIfNoRealAPI()` for consistency with other real API tests
+6. **VAD Test Consistency**: ✅ **COMPLETE** - VAD tests now use `skipIfNoRealAPI()` for consistency with other real API tests
 
 ## Related Issues
 

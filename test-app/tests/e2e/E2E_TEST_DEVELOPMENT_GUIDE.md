@@ -30,10 +30,7 @@ import { assertVADEventsDetected, setupVADTest } from './fixtures/vad-helpers.js
 
 test.describe('My VAD Test Suite', () => {
   test.beforeEach(async ({ page }) => {
-    await setupVADTest(page, {
-      skipInCI: true,
-      skipReason: 'Requires real Deepgram API connections'
-    });
+    await setupVADTest(page);
   });
 
   test('should detect VAD events', async ({ page }) => {
@@ -72,16 +69,13 @@ test.describe('My VAD Test Suite', () => {
 ### VAD Testing (`fixtures/vad-helpers.js`)
 
 #### `setupVADTest(page, options)`
-Standard test setup for VAD/audio tests with CI skip logic.
+Standard test setup for VAD/audio tests. Uses `skipIfNoRealAPI()` internally for consistency with other real API tests.
 
 ```javascript
 import { setupVADTest } from './fixtures/vad-helpers.js';
 
 test.beforeEach(async ({ page }) => {
-  await setupVADTest(page, {
-    skipInCI: true,
-    skipReason: 'VAD tests require real Deepgram API connections'
-  });
+  await setupVADTest(page);
 });
 ```
 
@@ -561,15 +555,12 @@ test.beforeEach(async ({ page }) => {
 });
 ```
 
-**After (5 lines):**
+**After (3 lines):**
 ```javascript
 import { setupVADTest } from './fixtures/vad-helpers.js';
 
 test.beforeEach(async ({ page }) => {
-  await setupVADTest(page, {
-    skipInCI: true,
-    skipReason: 'VAD tests require real Deepgram API connections - skipped in CI.'
-  });
+  await setupVADTest(page);
 });
 ```
 
@@ -592,10 +583,7 @@ import { assertVADEventsDetected, setupVADTest } from './fixtures/vad-helpers.js
 
 test.describe('Feature Test Suite', () => {
   test.beforeEach(async ({ page }) => {
-    await setupVADTest(page, {
-      skipInCI: true,
-      skipReason: 'Requires real Deepgram API connections'
-    });
+    await setupVADTest(page);
   });
 
   test('should test feature', async ({ page }) => {

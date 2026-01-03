@@ -17,13 +17,10 @@ import { assertVADEventsDetected, setupVADTest } from './fixtures/vad-helpers.js
  */
 
 test.describe('Manual VAD Workflow Tests', () => {
-  // Skip these tests in CI - they require real Deepgram API connections
+  // These tests require real Deepgram API connections
   // See issue #99 for mock implementation
   test.beforeEach(async ({ page }) => {
-    await setupVADTest(page, {
-      skipInCI: true,
-      skipReason: 'VAD tests require real Deepgram API connections - skipped in CI. See issue #99 for mock implementation.'
-    });
+    await setupVADTest(page);
   });
 
   test('should handle complete manual workflow: speak → silence → timeout', async ({ page }) => {

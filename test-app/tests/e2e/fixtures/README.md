@@ -31,7 +31,7 @@ const eventsDetected = await waitForVADEvents(page, [
 **Purpose:** Utilities for VAD state checking and assertions.
 
 **Exports:**
-- `setupVADTest(page, options)` - Standard test setup for VAD/audio tests
+- `setupVADTest(page, options)` - Standard test setup for VAD/audio tests (uses `skipIfNoRealAPI()` internally)
 - `getVADState(page, eventTypes)` - Get current VAD state from DOM elements
 - `assertVADEventsDetected(page, expect, eventTypes, options)` - Assert that VAD events were detected
 

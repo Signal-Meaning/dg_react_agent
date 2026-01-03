@@ -10,32 +10,24 @@
 
 import { test } from '@playwright/test';
 import { setupTestPage } from '../helpers/test-helpers.js';
+import { skipIfNoRealAPI } from '../helpers/test-helpers.js';
 
 /**
  * Standard test setup for VAD/audio tests
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {Object} options - Setup options
- * @param {boolean} options.skipInCI - Skip in CI (default: true)
- * @param {string} options.skipReason - Reason for skipping (default: 'Requires real API')
  * @param {boolean} options.waitForNetworkIdle - Wait for network idle (default: true)
  * @returns {Promise<void>}
  */
 export async function setupVADTest(page, options = {}) {
   const { 
-    skipInCI = true, 
-    skipReason = 'Requires real Deepgram API connections', 
     waitForNetworkIdle = true 
   } = options;
   
-  // Skip in CI if skipInCI is true
+  // Skip if real API key is not available
   // Reason: VAD tests require real Deepgram API connections to validate actual VAD behavior
-  // CI environments may not have API keys configured or may have rate limits
-  // Action: Run locally with real API key (tests will execute), or configure CI with real API keys
-  // Note: Consider refactoring to use skipIfNoRealAPI() for consistency with other real API tests
-  if (process.env.CI && skipInCI) {
-    test.skip(true, skipReason);
-    return;
-  }
+  // Uses skipIfNoRealAPI() for consistency with other real API tests
+  skipIfNoRealAPI('VAD tests require real Deepgram API connections');
   
   await setupTestPage(page);
   if (waitForNetworkIdle) {

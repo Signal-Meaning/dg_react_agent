@@ -17,10 +17,7 @@ import { setupVADTest } from './fixtures/vad-helpers.js';
 
 test.describe('VAD Audio Patterns', () => {
   test.beforeEach(async ({ page }) => {
-    await setupVADTest(page, {
-      skipInCI: true,
-      skipReason: 'VAD tests require real Deepgram API connections - skipped in CI.'
-    });
+    await setupVADTest(page);
   });
 
   test('should detect VAD events with pre-generated audio samples', async ({ page }) => {

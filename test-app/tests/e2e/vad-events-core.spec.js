@@ -18,10 +18,7 @@ import { assertVADEventsDetected, setupVADTest } from './fixtures/vad-helpers.js
 
 test.describe('Core VAD Events', () => {
   test.beforeEach(async ({ page }) => {
-    await setupVADTest(page, {
-      skipInCI: true,
-      skipReason: 'VAD tests require real Deepgram API connections - skipped in CI.'
-    });
+    await setupVADTest(page);
   });
 
   test('should detect basic VAD events (UserStartedSpeaking, UtteranceEnd)', async ({ page }) => {
