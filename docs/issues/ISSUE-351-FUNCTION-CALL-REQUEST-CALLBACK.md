@@ -161,11 +161,61 @@ From voicecommerce team test run:
 2. ✅ GitHub issue created (#351)
 3. ✅ Tracking document created
 4. ✅ Code review completed - no obvious bugs found in message handling flow
-5. ⏳ Test with `debug={true}` to see diagnostic logs (voicecommerce team)
-6. ⏳ Identify root cause from logs
-7. ⏳ Fix the issue
-8. ⏳ Add regression test
-9. ⏳ Verify fix with voicecommerce team
+5. ✅ Customer diagnostic instructions provided (GitHub issue comment)
+6. ✅ Reproduction test created (`test-app/tests/e2e/issue-351-function-call-proxy-mode.spec.js`)
+7. ⏳ **IN PROGRESS**: Run reproduction test to verify if we can reproduce the issue
+8. ⏳ **WAITING FOR CUSTOMER**: Test with `debug={true}` and provide diagnostic logs (if we can't reproduce)
+9. ⏳ Identify root cause from logs (ours or customer's)
+10. ⏳ **Implement fix** (after root cause identified)
+11. ⏳ Add regression test
+12. ⏳ Verify fix with voicecommerce team
+
+## Release Plan
+
+**v0.7.6** (Next release):
+- ✅ Enhanced diagnostic logging
+- ❌ **NOT** a fix - diagnostic tools only
+
+**v0.7.7 or v0.8.0** (After root cause identified):
+- ✅ Actual bug fix
+- ✅ Regression test
+
+## Customer Instructions
+
+**Status**: ✅ Instructions provided in GitHub issue #351
+
+**What we told the customer**:
+1. **v0.7.6 will contain diagnostic logging only** - NOT a fix for the bug
+2. Upgrade to v0.7.6 (or build from branch) to get diagnostic logging
+3. Enable `debug={true}` on component
+4. Reproduce the issue and capture all console logs
+5. Report back with:
+   - Component version
+   - All console logs (especially `🔧 [FUNCTION]` and `🔧 [AGENT]` logs)
+   - Which diagnostic messages appear
+   - Any error messages
+
+**Important**: We have NOT fixed the bug yet. We're providing diagnostic tools first, then we'll fix the issue once we understand the root cause from the logs.
+
+**Diagnostic messages to look for**:
+- `🔧 [FUNCTION] FunctionCallRequest detected in handleAgentMessage`
+- `🔧 [FUNCTION] FunctionCallRequest received from Deepgram`
+- `🔧 [FUNCTION] Functions array length: X`
+- `🔧 [FUNCTION] onFunctionCallRequest callback available: true/false`
+- `🔧 [FUNCTION] About to invoke onFunctionCallRequest callback`
+- `🔧 [FUNCTION] Invoking onFunctionCallRequest callback now...`
+- `🔧 [FUNCTION] onFunctionCallRequest callback completed`
+- `🔧 [AGENT] ⚠️ Received unexpected agent message but service is not configured`
+- `🔧 [AGENT] ⚠️ Invalid agent message format`
+- `🔧 [FUNCTION] ⚠️ onFunctionCallRequest callback is not defined`
+
+**What the logs will tell us**:
+- If no `FunctionCallRequest detected` log → Message isn't reaching the component handler
+- If `agent service is not configured` → Agent manager isn't initialized
+- If `Invalid agent message format` → Message format issue
+- If `callback available: false` → Callback prop not being passed
+- If `About to invoke` but no `Invoking` → Callback check failed
+- If `Invoking` but no `completed` → Callback threw an error
 
 ## Investigation Notes
 
