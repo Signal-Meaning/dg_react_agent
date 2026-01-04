@@ -1925,6 +1925,13 @@ function DeepgramVoiceInteraction(
     const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as { type?: string }).type || 'unknown' : 'unknown';
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
     
+    // Enhanced logging for FunctionCallRequest messages
+    if (messageType === 'FunctionCallRequest') {
+      if (configRef.current.debug) {
+        console.log('🔧 [FUNCTION] FunctionCallRequest detected in handleAgentMessage:', JSON.stringify(data, null, 2));
+      }
+    }
+    
     // Special logging for Error messages when functions are configured (to debug SettingsApplied issue)
     // Issue #307: Use ref to access latest agentOptions value
     if (messageType === 'Error' && agentOptionsRef.current?.functions && agentOptionsRef.current.functions.length > 0) {
@@ -1937,13 +1944,21 @@ function DeepgramVoiceInteraction(
     
     // Skip processing if agent service isn't configured
     if (!agentManagerRef.current) {
-      log('Received unexpected agent message but service is not configured:', data);
+      const errorMsg = 'Received unexpected agent message but service is not configured';
+      log(errorMsg, data);
+      if (configRef.current.debug) {
+        console.warn('🔧 [AGENT] ⚠️', errorMsg, 'Message type:', messageType, 'Data:', data);
+      }
       return;
     }
 
     // Type guard check
     if (!isAgentMessage(data)) {
-      log('Invalid agent message format:', data);
+      const errorMsg = 'Invalid agent message format';
+      log(errorMsg, data);
+      if (configRef.current.debug) {
+        console.warn('🔧 [AGENT] ⚠️', errorMsg, 'Message type:', messageType, 'Data:', data);
+      }
       return;
     }
     
@@ -2120,6 +2135,11 @@ function DeepgramVoiceInteraction(
       functionCallLogger.functionCallRequestReceived(data);
       log('FunctionCallRequest received from Deepgram');
       
+      // Enhanced logging when debug is enabled (not just in test mode)
+      if (configRef.current.debug) {
+        console.log('🔧 [FUNCTION] FunctionCallRequest received from Deepgram:', JSON.stringify(data, null, 2));
+      }
+      
       // Type-safe extraction of function call information
       interface FunctionCallRequestMessage {
         type: 'FunctionCallRequest';
@@ -2135,6 +2155,11 @@ function DeepgramVoiceInteraction(
       const functions = Array.isArray(requestData.functions) ? requestData.functions : [];
       
       functionCallLogger.functionsArrayInfo(functions);
+      
+      if (configRef.current.debug) {
+        console.log('🔧 [FUNCTION] Functions array length:', functions.length);
+        console.log('🔧 [FUNCTION] onFunctionCallRequest callback available:', !!onFunctionCallRequest);
+      }
       
       if (functions.length > 0) {
         // Check if any client-side functions are present
@@ -2158,6 +2183,15 @@ function DeepgramVoiceInteraction(
             hasArguments: !!funcCall.arguments
           });
           
+          if (configRef.current.debug) {
+            console.log('🔧 [FUNCTION] Processing function call:', {
+              id: funcCall.id,
+              name: funcCall.name,
+              client_side: funcCall.client_side,
+              hasArguments: !!funcCall.arguments
+            });
+          }
+          
           if (funcCall.client_side) {
             // Only invoke callback for client-side functions
             const functionCall: FunctionCallRequest = {
@@ -2168,6 +2202,25 @@ function DeepgramVoiceInteraction(
             };
             
             functionCallLogger.callbackInvoked(functionCall, !!onFunctionCallRequest);
+            
+            // Enhanced logging for callback invocation
+            if (configRef.current.debug) {
+              console.log('🔧 [FUNCTION] About to invoke onFunctionCallRequest callback:', {
+                id: functionCall.id,
+                name: functionCall.name,
+                hasCallback: !!onFunctionCallRequest
+              });
+            }
+            
+            // Check if callback is available before invoking
+            if (!onFunctionCallRequest) {
+              const errorMsg = 'onFunctionCallRequest callback is not defined. Function call will not be handled.';
+              log(errorMsg);
+              if (configRef.current.debug) {
+                console.warn('🔧 [FUNCTION] ⚠️', errorMsg);
+              }
+              return; // Skip this function call if no callback
+            }
             
             // Create sendResponse callback that wraps sendFunctionCallResponse
             const sendResponse = (response: FunctionCallResponse): void => {
@@ -2185,43 +2238,63 @@ function DeepgramVoiceInteraction(
             
             // Invoke callback with both functionCall and sendResponse
             // Issue #305: Support declarative return value pattern
-            const result = onFunctionCallRequest?.(functionCall, sendResponse);
-            functionCallLogger.callbackResult(result !== undefined && result !== null);
-            
-            // If callback returns a value (or Promise), use that instead of sendResponse
-            if (result !== undefined && result !== null) {
-              // Handle both sync and async returns
-              Promise.resolve(result).then((response) => {
-                if (response && typeof response === 'object' && 'id' in response) {
-                  // Convert result or error to JSON string for content
-                  let content: string;
-                  if ('error' in response && response.error) {
-                    content = JSON.stringify({ error: response.error });
-                  } else if ('result' in response) {
-                    content = JSON.stringify(response.result);
-                  } else {
-                    // If response is the result itself, stringify it
-                    content = JSON.stringify(response);
+            try {
+              if (configRef.current.debug) {
+                console.log('🔧 [FUNCTION] Invoking onFunctionCallRequest callback now...');
+              }
+              const result = onFunctionCallRequest(functionCall, sendResponse);
+              functionCallLogger.callbackResult(result !== undefined && result !== null);
+              
+              if (configRef.current.debug) {
+                console.log('🔧 [FUNCTION] onFunctionCallRequest callback completed:', {
+                  returnedValue: result !== undefined && result !== null,
+                  resultType: result !== undefined && result !== null ? typeof result : 'void'
+                });
+              }
+              
+              // If callback returns a value (or Promise), use that instead of sendResponse
+              if (result !== undefined && result !== null) {
+                // Handle both sync and async returns
+                Promise.resolve(result).then((response) => {
+                  if (response && typeof response === 'object' && 'id' in response) {
+                    // Convert result or error to JSON string for content
+                    let content: string;
+                    if ('error' in response && response.error) {
+                      content = JSON.stringify({ error: response.error });
+                    } else if ('result' in response) {
+                      content = JSON.stringify(response.result);
+                    } else {
+                      // If response is the result itself, stringify it
+                      content = JSON.stringify(response);
+                    }
+                    
+                    // Call the internal sendFunctionCallResponse method
+                    sendFunctionCallResponse(functionCall.id, functionCall.name, content);
+                    
+                    // Mark response sent for E2E tests (Issue #305)
+                    if (typeof window !== 'undefined') {
+                      (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
+                    }
                   }
+                }).catch((error) => {
+                  log('Error handling function call response:', error);
+                  // Fallback: send error response
+                  sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: error.message || 'Unknown error' }));
                   
-                  // Call the internal sendFunctionCallResponse method
-                  sendFunctionCallResponse(functionCall.id, functionCall.name, content);
-                  
-                  // Mark response sent for E2E tests (Issue #305)
+                  // Mark response sent even on error (for tests)
                   if (typeof window !== 'undefined') {
                     (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
                   }
-                }
-              }).catch((error) => {
-                log('Error handling function call response:', error);
-                // Fallback: send error response
-                sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: error.message || 'Unknown error' }));
-                
-                // Mark response sent even on error (for tests)
-                if (typeof window !== 'undefined') {
-                  (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
-                }
-              });
+                });
+              }
+            } catch (error) {
+              const errorMsg = `Error invoking onFunctionCallRequest callback: ${error instanceof Error ? error.message : 'Unknown error'}`;
+              log(errorMsg, error);
+              if (configRef.current.debug) {
+                console.error('🔧 [FUNCTION] ❌', errorMsg, error);
+              }
+              // Re-throw to let error handling continue
+              throw error;
             }
           } else {
             console.log('🔧 [FUNCTION DEBUG] Server-side function call received (not handled by component):', funcCall.name);
