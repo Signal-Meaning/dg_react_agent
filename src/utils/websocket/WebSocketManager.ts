@@ -188,6 +188,54 @@ export class WebSocketManager {
   }
 
   /**
+   * Issue #353: Check if binary data contains JSON agent message
+   * If it does, parse and route as 'message' event; otherwise route as 'binary' event
+   */
+  private handleBinaryData(arrayBuffer: ArrayBuffer, source: 'ArrayBuffer' | 'Blob'): void {
+    try {
+      // Try to decode as UTF-8 text
+      const decoder = new TextDecoder('utf-8', { fatal: false });
+      const text = decoder.decode(arrayBuffer);
+      
+      // Try to parse as JSON
+      try {
+        const data = JSON.parse(text);
+        
+        // Check if it's an agent message (has a 'type' field)
+        // Agent messages include: FunctionCallRequest, SettingsApplied, ConversationText, etc.
+        if (data && typeof data === 'object' && 'type' in data) {
+          const messageType = data.type;
+          
+          // Log that we detected JSON in binary data
+          this.log(`🔧 [Issue #353] Detected JSON agent message in binary ${source}: ${messageType}`);
+          
+          // Special handling for FunctionCallRequest (the main use case)
+          if (messageType === 'FunctionCallRequest') {
+            this.log(`🔧 [Issue #353] Parsing FunctionCallRequest from binary ${source}`);
+            functionCallLogger.websocketMessageReceived(data);
+          }
+          
+          // Route as 'message' event (same as text JSON messages)
+          this.log(`📨 [WEBSOCKET.onmessage] About to emit message event with type: ${messageType} (from binary ${source})`);
+          this.emit({ type: 'message', data });
+          this.log(`📨 [WEBSOCKET.onmessage] Emit completed for message type: ${messageType} (from binary ${source})`);
+          return;
+        }
+      } catch (jsonError) {
+        // Not valid JSON, continue to route as binary
+        this.log(`Binary ${source} does not contain valid JSON, routing as binary event`);
+      }
+    } catch (decodeError) {
+      // Failed to decode as UTF-8, continue to route as binary
+      this.log(`Binary ${source} could not be decoded as UTF-8, routing as binary event`);
+    }
+    
+    // Not JSON or not an agent message - route as binary event
+    this.log(`Emitting binary event for ${source} (not JSON agent message)`);
+    this.emit({ type: 'binary', data: arrayBuffer });
+  }
+
+  /**
    * Connects to the WebSocket
    */
   public connect(): Promise<void> {
@@ -330,16 +378,16 @@ export class WebSocketManager {
               });
             }
           } else if (event.data instanceof ArrayBuffer) {
-            this.log('Received ArrayBuffer binary data, emitting binary event...');
-            this.emit({ type: 'binary', data: event.data });
+            // Issue #353: Check if binary ArrayBuffer contains JSON agent message
+            this.log('Received ArrayBuffer binary data, checking if it contains JSON...');
+            this.handleBinaryData(event.data, 'ArrayBuffer');
           } else if (event.data instanceof Blob) {
-            // Handle Blob data by converting to ArrayBuffer
-            this.log(`Received Blob binary data (size: ${event.data.size}), converting to ArrayBuffer...`);
+            // Issue #353: Check if binary Blob contains JSON agent message before converting
+            this.log(`Received Blob binary data (size: ${event.data.size}), checking if it contains JSON...`);
             
-            // Convert Blob to ArrayBuffer
+            // Convert Blob to ArrayBuffer first to check for JSON
             event.data.arrayBuffer().then(arrayBuffer => {
-              this.log(`Converted Blob to ArrayBuffer (byteLength: ${arrayBuffer.byteLength}), emitting binary event...`);
-              this.emit({ type: 'binary', data: arrayBuffer });
+              this.handleBinaryData(arrayBuffer, 'Blob');
             }).catch(error => {
               this.log('Error converting Blob to ArrayBuffer:', error);
               this.emit({
