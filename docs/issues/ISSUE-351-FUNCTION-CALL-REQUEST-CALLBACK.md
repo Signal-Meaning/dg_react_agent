@@ -165,11 +165,13 @@ From voicecommerce team test run:
 6. ✅ Reproduction test created (`test-app/tests/e2e/issue-351-function-call-proxy-mode.spec.js`)
 7. ✅ **REPRODUCTION TEST PASSED** - Cannot reproduce the issue in our test environment
 8. ✅ **CUSTOMER PROVIDED LOGS** - Received diagnostic information
-9. ⏳ **WAITING FOR CUSTOMER**: Provide **browser console logs** (not just backend logs)
-10. ⏳ Identify root cause from customer browser console logs
-11. ⏳ **Implement fix** (after root cause identified)
-12. ⏳ Add regression test
-13. ⏳ Verify fix with voicecommerce team
+9. ✅ **Release Issue Created** - Issue #352 for v0.7.6 release with diagnostic logging
+10. ⏳ **WAITING FOR CUSTOMER**: Provide **browser console logs** (not just backend logs)
+11. ⏳ **WAITING FOR RELEASE**: v0.7.6 release with enhanced diagnostic logging
+12. ⏳ Identify root cause from customer browser console logs
+13. ⏳ **Implement fix** (after root cause identified)
+14. ⏳ Add regression test
+15. ⏳ Verify fix with voicecommerce team
 
 ## Customer Logs Analysis
 
