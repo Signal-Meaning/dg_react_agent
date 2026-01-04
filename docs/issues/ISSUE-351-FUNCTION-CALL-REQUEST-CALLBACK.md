@@ -164,11 +164,56 @@ From voicecommerce team test run:
 5. ✅ Customer diagnostic instructions provided (GitHub issue comment)
 6. ✅ Reproduction test created (`test-app/tests/e2e/issue-351-function-call-proxy-mode.spec.js`)
 7. ✅ **REPRODUCTION TEST PASSED** - Cannot reproduce the issue in our test environment
-8. ⏳ **WAITING FOR CUSTOMER**: Test with `debug={true}` and provide diagnostic logs
-9. ⏳ Identify root cause from customer logs
-10. ⏳ **Implement fix** (after root cause identified)
-11. ⏳ Add regression test
-12. ⏳ Verify fix with voicecommerce team
+8. ✅ **CUSTOMER PROVIDED LOGS** - Received diagnostic information
+9. ⏳ **WAITING FOR CUSTOMER**: Provide **browser console logs** (not just backend logs)
+10. ⏳ Identify root cause from customer browser console logs
+11. ⏳ **Implement fix** (after root cause identified)
+12. ⏳ Add regression test
+13. ⏳ Verify fix with voicecommerce team
+
+## Customer Logs Analysis
+
+**Date**: January 2, 2026  
+**Component Version**: v0.7.5 (does NOT include enhanced diagnostic logging yet)
+
+### Key Finding from Customer
+
+**Scenario 1 (Critical)**: 
+- ✅ FunctionCallRequest **WAS received** from Deepgram (verified in backend logs)
+- ❌ `onFunctionCallRequest` callback **NOT invoked** by component
+- ❌ Connection closes with code 1005 shortly after (~11 seconds)
+
+**Scenario 2**:
+- ❌ No FunctionCallRequest received (connection closes due to idle timeout)
+- ❌ Connection closes before Deepgram responds
+
+### Missing Information
+
+**Critical**: Customer provided **backend/server logs** but NOT **browser console logs**
+
+We need the browser console logs to see our diagnostic messages:
+- `🔧 [FUNCTION] FunctionCallRequest detected in handleAgentMessage`
+- `🔧 [FUNCTION] onFunctionCallRequest callback available: true/false`
+- `🔧 [FUNCTION] About to invoke onFunctionCallRequest callback`
+- etc.
+
+**Note**: v0.7.5 does NOT include our enhanced diagnostic logging. Customer needs to:
+- Wait for v0.7.6 release (with diagnostic logging), OR
+- Build from `davidrmcgee/issue351` branch
+
+### Potential Issues Identified
+
+1. **Connection Close Timing**: Code 1005 (No Status Received) suggests connection closes abruptly
+   - Could be closing **while** processing FunctionCallRequest
+   - Need to verify if message reaches `handleAgentMessage` before close
+
+2. **Version Mismatch**: Customer is on v0.7.5, enhanced logging is in development branch
+   - Need browser console logs to diagnose
+   - May need to upgrade to v0.7.6 or build from branch
+
+3. **Proxy Implementation Difference**: Customer's proxy may handle messages differently
+   - Our mock proxy works correctly
+   - Their proxy may have timing or message handling differences
 
 ## Release Plan
 
