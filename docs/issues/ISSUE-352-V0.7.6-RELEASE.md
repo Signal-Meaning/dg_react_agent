@@ -75,16 +75,18 @@ This is a patch release for version v0.7.6 of the Deepgram Voice Interaction Rea
   - ✅ **Status**: All version references updated to v0.7.6
 
 ### Release
-- [ ] **Commit Changes**: Commit all release-related changes
-  - [ ] **Commit**: `git add . && git commit -m "chore: prepare release v0.7.6"`
-  - [ ] **Status**: TBD
-- [ ] **Create Release Branch**: Create a release branch for the version
-  - [ ] **Create**: `git checkout -b release/v0.7.6` (from current working branch or main)
-  - [ ] **Push**: `git push origin release/v0.7.6`
-  - [ ] **Status**: TBD
-- [ ] **Publish**: Publish to GitHub Registry
-  - [ ] **Preferred**: Use CI build (create GitHub release to trigger `.github/workflows/test-and-publish.yml`)
-    - [ ] **Create GitHub release**: Create v0.7.6 release targeting `release/v0.7.6` branch
+- [x] **Commit Changes**: Commit all release-related changes
+  - [x] **Commit**: `chore: prepare release v0.7.6`
+  - ✅ **Status**: All changes committed
+- [x] **Create Release Branch**: Create a release branch for the version
+  - [x] **Create**: `git checkout -b release/v0.7.6` (from `davidrmcgee/issue352`)
+  - [x] **Push**: `git push origin release/v0.7.6`
+  - ✅ **Status**: Release branch created and pushed
+- [x] **Publish**: Publish to GitHub Registry
+  - [x] **Preferred**: Use CI build (create GitHub release to trigger `.github/workflows/test-and-publish.yml`)
+    - [x] **Create GitHub release**: Created v0.7.6 release targeting `release/v0.7.6` branch
+      - Release URL: https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.7.6
+      - Status: Published (draft status removed)
     - [ ] **Monitor CI workflow**: Wait for CI build to complete successfully
       - [ ] Check GitHub Actions workflow status
       - [ ] Verify all CI checks pass
