@@ -1,4 +1,5 @@
 import { ConnectionState, DeepgramError, ServiceType } from '../../types';
+import { AgentResponseType } from '../../types/agent';
 import { functionCallLogger } from '../function-call-logger';
 
 /**
@@ -191,6 +192,24 @@ export class WebSocketManager {
    * Issue #353: Check if binary data contains JSON agent message
    * If it does, parse and route as 'message' event; otherwise route as 'binary' event
    */
+  /**
+   * Handles binary data (ArrayBuffer or Blob) that may contain JSON agent messages.
+   * 
+   * Attempts to decode the binary data as UTF-8 and parse as JSON. If the JSON
+   * contains a known agent message type (from AgentResponseType enum), routes it
+   * as a 'message' event. Otherwise, routes as 'binary' event.
+   * 
+   * Supported agent message types:
+   * - FunctionCallRequest
+   * - SettingsApplied
+   * - ConversationText
+   * - Error
+   * - And all other AgentResponseType values
+   * 
+   * @param arrayBuffer - The binary data to process
+   * @param source - The original source type ('ArrayBuffer' or 'Blob') for logging
+   * @private
+   */
   private handleBinaryData(arrayBuffer: ArrayBuffer, source: 'ArrayBuffer' | 'Blob'): void {
     try {
       // Try to decode as UTF-8 text
@@ -202,24 +221,30 @@ export class WebSocketManager {
         const data = JSON.parse(text);
         
         // Check if it's an agent message (has a 'type' field)
-        // Agent messages include: FunctionCallRequest, SettingsApplied, ConversationText, etc.
         if (data && typeof data === 'object' && 'type' in data) {
           const messageType = data.type;
           
-          // Log that we detected JSON in binary data
-          this.log(`🔧 [Issue #353] Detected JSON agent message in binary ${source}: ${messageType}`);
-          
-          // Special handling for FunctionCallRequest (the main use case)
-          if (messageType === 'FunctionCallRequest') {
-            this.log(`🔧 [Issue #353] Parsing FunctionCallRequest from binary ${source}`);
-            functionCallLogger.websocketMessageReceived(data);
+          // Validate it's a known agent message type from AgentResponseType enum
+          // This prevents non-agent JSON from being incorrectly routed as messages
+          if (Object.values(AgentResponseType).includes(messageType as AgentResponseType)) {
+            // Log that we detected JSON in binary data
+            this.log(`[Issue #353] Detected JSON agent message in binary ${source}: ${messageType}`);
+            
+            // Special handling for FunctionCallRequest (the main use case)
+            if (messageType === AgentResponseType.FUNCTION_CALL_REQUEST) {
+              this.log(`[Issue #353] Parsing FunctionCallRequest from binary ${source}`);
+              functionCallLogger.websocketMessageReceived(data);
+            }
+            
+            // Route as 'message' event (same as text JSON messages)
+            this.log(`📨 [WEBSOCKET.onmessage] About to emit message event with type: ${messageType} (from binary ${source})`);
+            this.emit({ type: 'message', data });
+            this.log(`📨 [WEBSOCKET.onmessage] Emit completed for message type: ${messageType} (from binary ${source})`);
+            return;
+          } else {
+            // Has 'type' field but not a known agent message type - route as binary
+            this.log(`Binary ${source} contains JSON with unknown type '${messageType}', routing as binary event`);
           }
-          
-          // Route as 'message' event (same as text JSON messages)
-          this.log(`📨 [WEBSOCKET.onmessage] About to emit message event with type: ${messageType} (from binary ${source})`);
-          this.emit({ type: 'message', data });
-          this.log(`📨 [WEBSOCKET.onmessage] Emit completed for message type: ${messageType} (from binary ${source})`);
-          return;
         }
       } catch (jsonError) {
         // Not valid JSON, continue to route as binary

@@ -8,10 +8,19 @@
  * 
  * Unit tests for WebSocketManager binary JSON message handling using ArrayBuffer.
  * 
- * Note: Blob tests are in Playwright E2E tests (test-app/tests/e2e/issue-353-binary-json-messages.spec.js)
- * because Blob.arrayBuffer() requires real browser APIs that jsdom doesn't fully support.
+ * **Test Strategy (Hybrid Approach)**:
+ * - ArrayBuffer tests: Jest (fast, works in jsdom)
+ * - Blob tests: Playwright E2E (requires real browser APIs)
  * 
- * Test scenarios (ArrayBuffer only):
+ * **Why This Split?**
+ * - jsdom doesn't fully support Blob.arrayBuffer()
+ * - ArrayBuffer works perfectly in jsdom for unit testing
+ * - Blob tests need real browser for accurate testing
+ * - Clear separation: unit tests (fast) vs E2E tests (real browser)
+ * 
+ * **E2E Tests**: See test-app/tests/e2e/issue-353-binary-json-messages.spec.js
+ * 
+ * **Test scenarios (ArrayBuffer only)**:
  * 1. Binary ArrayBuffer containing JSON FunctionCallRequest should be parsed and routed as 'message' event
  * 2. Binary ArrayBuffer containing other agent message types (SettingsApplied, ConversationText, etc.)
  * 3. Binary data that is not valid JSON should be routed as 'binary' event
@@ -424,6 +433,42 @@ describe('WebSocket Binary JSON Message Handling - Issue #353 (ArrayBuffer Tests
       const binaryEvents = receivedEvents.filter(e => e.type === 'binary');
       
       // JSON without 'type' field should route as binary
+      expect(binaryEvents.length).toBeGreaterThan(0);
+
+      unsubscribe();
+    }, 10000);
+
+    it('should route binary JSON with unknown type field as binary event', async () => {
+      const options: WebSocketManagerOptions = {
+        url: 'wss://agent.deepgram.com/v1/agent/converse',
+        apiKey: 'test-api-key',
+        service: 'agent',
+      };
+
+      manager = new WebSocketManager(options);
+      const unsubscribe = manager.addEventListener((event) => {
+        receivedEvents.push(event);
+      });
+
+      await waitForConnection(manager);
+
+      // JSON with 'type' field but not a valid AgentResponseType
+      // This tests the validation fix - should route as binary, not message
+      const nonAgentMessage = {
+        type: 'UnknownMessageType',
+        data: 'not an agent message'
+      };
+      const jsonString = JSON.stringify(nonAgentMessage);
+      
+      const mockWs = (manager as any).ws as MockWebSocket;
+      mockWs.simulateBinaryArrayBufferMessage(jsonString);
+      await waitForEvents();
+
+      const messageEvents = receivedEvents.filter(e => e.type === 'message' && e.data?.type === 'UnknownMessageType');
+      const binaryEvents = receivedEvents.filter(e => e.type === 'binary');
+      
+      // Should route as binary since 'type' is not a valid AgentResponseType
+      expect(messageEvents.length).toBe(0);
       expect(binaryEvents.length).toBeGreaterThan(0);
 
       unsubscribe();

@@ -88,6 +88,40 @@ test.describe('Issue #353: Binary JSON Message Handling', () => {
       // Store original WebSocket
       const OriginalWebSocket = window.WebSocket;
       
+      /**
+       * Helper function to convert FunctionCallRequest to binary Blob format.
+       * Returns a new MessageEvent with binary Blob data if the event contains
+       * a FunctionCallRequest, otherwise returns null.
+       * 
+       * @param {MessageEvent} event - The original message event
+       * @returns {MessageEvent|null} - Binary event if FunctionCallRequest, null otherwise
+       */
+      const convertFunctionCallRequestToBinary = (event) => {
+        if (typeof event.data === 'string') {
+          try {
+            const parsed = JSON.parse(event.data);
+            if (parsed.type === 'FunctionCallRequest') {
+              console.log('🔧 [Issue #353] Converting FunctionCallRequest to binary format');
+              
+              // Convert text JSON to binary Blob
+              const blob = new Blob([event.data], { type: 'application/json' });
+              
+              // Create new event with binary data
+              return new MessageEvent('message', {
+                data: blob,
+                origin: event.origin,
+                lastEventId: event.lastEventId,
+                source: event.source,
+                ports: event.ports
+              });
+            }
+          } catch (e) {
+            // Not JSON, continue with normal handling
+          }
+        }
+        return null; // Not a FunctionCallRequest
+      };
+      
       // Intercept WebSocket creation for proxy endpoint
       window.WebSocket = function(url, protocols) {
         const ws = new OriginalWebSocket(url, protocols);
@@ -102,33 +136,11 @@ test.describe('Issue #353: Binary JSON Message Handling', () => {
             if (type === 'message') {
               // Wrap the listener to intercept FunctionCallRequest
               const wrappedListener = (event) => {
-                // Check if this is a FunctionCallRequest message
-                if (typeof event.data === 'string') {
-                  try {
-                    const parsed = JSON.parse(event.data);
-                    if (parsed.type === 'FunctionCallRequest') {
-                      console.log('🔧 [Issue #353] Converting FunctionCallRequest to binary format');
-                      
-                      // Convert text JSON to binary Blob
-                      const jsonString = event.data;
-                      const blob = new Blob([jsonString], { type: 'application/json' });
-                      
-                      // Create new event with binary data
-                      const binaryEvent = new MessageEvent('message', {
-                        data: blob,
-                        origin: event.origin,
-                        lastEventId: event.lastEventId,
-                        source: event.source,
-                        ports: event.ports
-                      });
-                      
-                      // Call wrapped listener with binary event
-                      listener(binaryEvent);
-                      return;
-                    }
-                  } catch (e) {
-                    // Not JSON, continue with normal handling
-                  }
+                const binaryEvent = convertFunctionCallRequestToBinary(event);
+                if (binaryEvent) {
+                  // Call wrapped listener with binary event
+                  listener(binaryEvent);
+                  return;
                 }
                 
                 // For non-FunctionCallRequest messages, call original listener
@@ -153,33 +165,11 @@ test.describe('Issue #353: Binary JSON Message Handling', () => {
               if (handler) {
                 // Wrap handler to intercept FunctionCallRequest
                 originalAddEventListener('message', (event) => {
-                  // Check if this is a FunctionCallRequest message
-                  if (typeof event.data === 'string') {
-                    try {
-                      const parsed = JSON.parse(event.data);
-                      if (parsed.type === 'FunctionCallRequest') {
-                        console.log('🔧 [Issue #353] Converting FunctionCallRequest to binary format (onmessage)');
-                        
-                        // Convert text JSON to binary Blob
-                        const jsonString = event.data;
-                        const blob = new Blob([jsonString], { type: 'application/json' });
-                        
-                        // Create new event with binary data
-                        const binaryEvent = new MessageEvent('message', {
-                          data: blob,
-                          origin: event.origin,
-                          lastEventId: event.lastEventId,
-                          source: event.source,
-                          ports: event.ports
-                        });
-                        
-                        // Call handler with binary event
-                        handler.call(this, binaryEvent);
-                        return;
-                      }
-                    } catch (e) {
-                      // Not JSON, continue with normal handling
-                    }
+                  const binaryEvent = convertFunctionCallRequestToBinary(event);
+                  if (binaryEvent) {
+                    // Call handler with binary event
+                    handler.call(this, binaryEvent);
+                    return;
                   }
                   
                   // For non-FunctionCallRequest messages, call original handler
