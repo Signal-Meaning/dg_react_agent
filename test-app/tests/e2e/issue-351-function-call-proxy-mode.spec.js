@@ -155,7 +155,25 @@ test.describe('Issue #351: FunctionCallRequest Callback in Proxy Mode', () => {
     expect(connectionMode).toContain('proxy');
     console.log('✅ [Issue #351] Confirmed proxy mode:', connectionMode);
     
-    // Wait for connection to be established
+    // Wait for text input to be ready and focusable before triggering auto-connect
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.waitFor({ state: 'visible', timeout: 10000 });
+    
+    // Focus text input to trigger auto-connect (in dual mode, this should establish connection)
+    await textInput.focus();
+    
+    // Wait for connection status element to appear
+    await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
+    
+    // Wait for connection to transition from "closed" to "connecting" to "connected"
+    await page.waitForFunction(() => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      if (!statusEl) return false;
+      const status = statusEl.textContent?.toLowerCase() || '';
+      return status !== 'closed';
+    }, { timeout: 10000 });
+    
+    // Now wait for connection to be fully established
     await page.waitForFunction(() => {
       const statusEl = document.querySelector('[data-testid="connection-status"]');
       return statusEl && statusEl.textContent?.toLowerCase().includes('connected');
@@ -179,13 +197,7 @@ test.describe('Issue #351: FunctionCallRequest Callback in Proxy Mode', () => {
     
     console.log('✅ [Issue #351] Connection established and Settings applied');
     
-    // Track function call requests
-    const functionCallRequests = await page.evaluate(() => {
-      return window.functionCallRequests || [];
-    });
-    
     // Send a message that should trigger a function call
-    const textInput = page.locator('[data-testid="text-input"]');
     await textInput.fill('What time is it?');
     await textInput.press('Enter');
     

@@ -163,9 +163,9 @@ From voicecommerce team test run:
 4. ✅ Code review completed - no obvious bugs found in message handling flow
 5. ✅ Customer diagnostic instructions provided (GitHub issue comment)
 6. ✅ Reproduction test created (`test-app/tests/e2e/issue-351-function-call-proxy-mode.spec.js`)
-7. ⏳ **IN PROGRESS**: Run reproduction test to verify if we can reproduce the issue
-8. ⏳ **WAITING FOR CUSTOMER**: Test with `debug={true}` and provide diagnostic logs (if we can't reproduce)
-9. ⏳ Identify root cause from logs (ours or customer's)
+7. ✅ **REPRODUCTION TEST PASSED** - Cannot reproduce the issue in our test environment
+8. ⏳ **WAITING FOR CUSTOMER**: Test with `debug={true}` and provide diagnostic logs
+9. ⏳ Identify root cause from customer logs
 10. ⏳ **Implement fix** (after root cause identified)
 11. ⏳ Add regression test
 12. ⏳ Verify fix with voicecommerce team
@@ -216,6 +216,43 @@ From voicecommerce team test run:
 - If `callback available: false` → Callback prop not being passed
 - If `About to invoke` but no `Invoking` → Callback check failed
 - If `Invoking` but no `completed` → Callback threw an error
+
+## Reproduction Test Results
+
+**Status**: ✅ **TEST PASSED** - Cannot reproduce the issue
+
+**Test File**: `test-app/tests/e2e/issue-351-function-call-proxy-mode.spec.js`
+
+**Test Results** (2026-01-03):
+- ✅ Connection established in proxy mode
+- ✅ Settings applied successfully
+- ✅ FunctionCallRequest received from Deepgram
+- ✅ `onFunctionCallRequest` callback **WAS INVOKED** successfully
+- ✅ Function call tracker incremented (count: 1)
+- ✅ All diagnostic logs show correct flow
+
+**Key Logs from Test**:
+```
+🔧 [FUNCTION] FunctionCallRequest detected in handleAgentMessage
+🔧 [FUNCTION] onFunctionCallRequest callback available: true
+🔧 [FUNCTION] About to invoke onFunctionCallRequest callback
+🔧 [FUNCTION] Invoking onFunctionCallRequest callback now...
+🔧 [FUNCTION] onFunctionCallRequest callback completed
+✅ Function call callback was invoked successfully!
+```
+
+**Conclusion**: 
+- The callback **works correctly** in our test environment with mock proxy server
+- We **cannot reproduce** the customer's issue
+- This suggests the issue may be:
+  - Specific to customer's proxy implementation
+  - A timing/race condition that doesn't occur in our tests
+  - A configuration issue on customer's end
+  - A version mismatch or environment-specific issue
+
+**Next Steps**:
+- Customer must test with `debug={true}` and provide diagnostic logs
+- Compare customer's logs with our working test logs to identify differences
 
 ## Investigation Notes
 
