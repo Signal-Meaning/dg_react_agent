@@ -2222,8 +2222,13 @@ function DeepgramVoiceInteraction(
               return; // Skip this function call if no callback
             }
             
+            // Issue #355: Track whether response was sent to guarantee a response is always sent
+            let responseSent = false;
+            
             // Create sendResponse callback that wraps sendFunctionCallResponse
-            const sendResponse = (response: FunctionCallResponse): void => {
+            // Wrap it to track when it's called (Issue #355)
+            const trackedSendResponse = (response: FunctionCallResponse): void => {
+              responseSent = true;
               // Convert result or error to JSON string for content
               let content: string;
               if (response.error) {
@@ -2238,11 +2243,12 @@ function DeepgramVoiceInteraction(
             
             // Invoke callback with both functionCall and sendResponse
             // Issue #305: Support declarative return value pattern
+            // Issue #355: Guarantee response is always sent
             try {
               if (configRef.current.debug) {
                 console.log('🔧 [FUNCTION] Invoking onFunctionCallRequest callback now...');
               }
-              const result = onFunctionCallRequest(functionCall, sendResponse);
+              const result = onFunctionCallRequest(functionCall, trackedSendResponse);
               functionCallLogger.callbackResult(result !== undefined && result !== null);
               
               if (configRef.current.debug) {
@@ -2256,36 +2262,69 @@ function DeepgramVoiceInteraction(
               if (result !== undefined && result !== null) {
                 // Handle both sync and async returns
                 Promise.resolve(result).then((response) => {
-                  if (response && typeof response === 'object' && 'id' in response) {
-                    // Convert result or error to JSON string for content
-                    let content: string;
-                    if ('error' in response && response.error) {
-                      content = JSON.stringify({ error: response.error });
-                    } else if ('result' in response) {
-                      content = JSON.stringify(response.result);
+                  // Issue #355: Only send response if handler didn't already send one via sendResponse
+                  if (!responseSent) {
+                    if (response && typeof response === 'object' && 'id' in response) {
+                      // Convert result or error to JSON string for content
+                      let content: string;
+                      if ('error' in response && response.error) {
+                        content = JSON.stringify({ error: response.error });
+                      } else if ('result' in response) {
+                        content = JSON.stringify(response.result);
+                      } else {
+                        // If response is the result itself, stringify it
+                        content = JSON.stringify(response);
+                      }
+                      
+                      // Call the internal sendFunctionCallResponse method
+                      sendFunctionCallResponse(functionCall.id, functionCall.name, content);
+                      responseSent = true;
+                      
+                      // Mark response sent for E2E tests (Issue #305)
+                      if (typeof window !== 'undefined') {
+                        (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
+                      }
                     } else {
-                      // If response is the result itself, stringify it
-                      content = JSON.stringify(response);
-                    }
-                    
-                    // Call the internal sendFunctionCallResponse method
-                    sendFunctionCallResponse(functionCall.id, functionCall.name, content);
-                    
-                    // Mark response sent for E2E tests (Issue #305)
-                    if (typeof window !== 'undefined') {
-                      (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
+                      // Promise resolved to undefined/null or invalid value
+                      // Handler didn't send response via sendResponse, send default error
+                      const defaultError = 'Handler completed without sending a response';
+                      log(`Function call ${functionCall.id} Promise resolved without sending response, sending default error`);
+                      sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: defaultError }));
+                      responseSent = true;
+                      
+                      // Mark response sent for E2E tests
+                      if (typeof window !== 'undefined') {
+                        (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
+                      }
                     }
                   }
                 }).catch((error) => {
                   log('Error handling function call response:', error);
-                  // Fallback: send error response
-                  sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: error.message || 'Unknown error' }));
+                  // Issue #355: Send error response if handler didn't already send one
+                  if (!responseSent) {
+                    sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: error.message || 'Unknown error' }));
+                    responseSent = true;
+                  }
                   
                   // Mark response sent even on error (for tests)
                   if (typeof window !== 'undefined') {
                     (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
                   }
                 });
+              } else {
+                // Issue #355: Handler returned void - check if it called sendResponse
+                // If not, send default error response
+                if (!responseSent) {
+                  const defaultError = 'Handler completed without sending a response';
+                  log(`Function call ${functionCall.id} completed without sending response, sending default error`);
+                  sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: defaultError }));
+                  responseSent = true;
+                  
+                  // Mark response sent for E2E tests
+                  if (typeof window !== 'undefined') {
+                    (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
+                  }
+                }
               }
             } catch (error) {
               const errorMsg = `Error invoking onFunctionCallRequest callback: ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -2293,8 +2332,17 @@ function DeepgramVoiceInteraction(
               if (configRef.current.debug) {
                 console.error('🔧 [FUNCTION] ❌', errorMsg, error);
               }
-              // Re-throw to let error handling continue
-              throw error;
+              // Issue #355: Send error response instead of re-throwing
+              if (!responseSent) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: errorMessage }));
+                responseSent = true;
+                
+                // Mark response sent for E2E tests
+                if (typeof window !== 'undefined') {
+                  (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
+                }
+              }
             }
           } else {
             console.log('🔧 [FUNCTION DEBUG] Server-side function call received (not handled by component):', funcCall.name);
