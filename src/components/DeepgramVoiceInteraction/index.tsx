@@ -857,17 +857,18 @@ function DeepgramVoiceInteraction(
     // This is the most reliable indicator - refs are only undefined on true first mount
     const isFirstMount = prevTranscriptionOptionsRef.current === undefined;
     
-    // Check current ready state - if component is not ready, we need to initialize
-    // This handles StrictMode re-invocation where cleanup may have reset state
+    // Issue #357: Only re-initialize on first mount or when dependencies actually change
+    // Do NOT use isReady state as a condition - isReady can be false during cleanup/reconnection
+    // without requiring re-initialization. Re-initialization should only happen when:
+    // 1. First mount (refs are undefined)
+    // 2. Dependencies actually changed (detected via deep comparison)
     const currentState = stateRef.current;
-    const needsInitialization = isFirstMount || !currentState.isReady;
     
     // Debug: Log initialization decision
-    if (props.debug || !currentState.isReady) {
+    if (props.debug) {
       console.log('🔧 [Component] Initialization check', {
         isFirstMount,
         isReady: currentState.isReady,
-        needsInitialization,
         isMounted: isMountedRef.current,
         mountId: mountIdRef.current
       });
@@ -876,34 +877,38 @@ function DeepgramVoiceInteraction(
     // Deep comparison check: Only re-initialize if dependencies actually changed
     // This prevents unnecessary re-initialization when parent re-renders with
     // new object references but same content (Issue #276)
-    // On first mount or if not ready, always initialize
+    // On first mount, always initialize (needsInitialization = true)
     
     const transcriptionOptionsChanged = hasDependencyChanged(
       prevTranscriptionOptionsRef.current,
       transcriptionOptions,
-      needsInitialization
+      isFirstMount
     );
     const agentOptionsChanged = hasDependencyChanged(
       prevAgentOptionsRef.current as Record<string, unknown> | undefined,
       agentOptions as Record<string, unknown>,
-      needsInitialization,
+      isFirstMount,
       compareAgentOptionsIgnoringContext
     );
     const endpointConfigChanged = hasDependencyChanged(
       prevEndpointConfigRef.current,
       endpointConfig,
-      needsInitialization
+      isFirstMount
     );
-    const apiKeyChanged = needsInitialization || prevApiKeyRef.current !== apiKey;
-    const debugChanged = needsInitialization || prevDebugRef.current !== props.debug;
+    const apiKeyChanged = isFirstMount || prevApiKeyRef.current !== apiKey;
+    const debugChanged = isFirstMount || prevDebugRef.current !== props.debug;
     
-    // If nothing actually changed (and not first mount and component is ready), skip re-initialization
-    if (!needsInitialization && 
-        !transcriptionOptionsChanged && 
-        !agentOptionsChanged && 
-        !endpointConfigChanged && 
-        !apiKeyChanged && 
-        !debugChanged) {
+    // Determine if we need to initialize
+    // Only initialize on first mount OR when dependencies actually changed
+    const needsInitialization = isFirstMount || 
+        transcriptionOptionsChanged || 
+        agentOptionsChanged || 
+        endpointConfigChanged || 
+        apiKeyChanged || 
+        debugChanged;
+    
+    // If nothing actually changed (and not first mount), skip re-initialization
+    if (!needsInitialization) {
       // Update refs to current values (in case they're new references with same content)
       prevTranscriptionOptionsRef.current = transcriptionOptions;
       prevAgentOptionsRef.current = agentOptions;
@@ -911,7 +916,7 @@ function DeepgramVoiceInteraction(
       prevApiKeyRef.current = apiKey;
       prevDebugRef.current = props.debug;
       if (props.debug) {
-        console.log('🔧 [Component] Skipping re-initialization - dependencies unchanged and component is ready');
+        console.log('🔧 [Component] Skipping re-initialization - dependencies unchanged');
       }
       return; // Skip re-initialization
     }
@@ -925,7 +930,13 @@ function DeepgramVoiceInteraction(
         agentOptionsChanged,
         endpointConfigChanged,
         apiKeyChanged,
-        debugChanged
+        debugChanged,
+        reason: isFirstMount ? 'first mount' : 
+                (transcriptionOptionsChanged ? 'transcriptionOptions changed' :
+                (agentOptionsChanged ? 'agentOptions changed' :
+                (endpointConfigChanged ? 'endpointConfig changed' :
+                (apiKeyChanged ? 'apiKey changed' :
+                (debugChanged ? 'debug changed' : 'unknown')))))
       });
     }
     
