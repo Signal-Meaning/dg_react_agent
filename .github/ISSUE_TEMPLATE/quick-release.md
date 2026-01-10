@@ -33,7 +33,7 @@ This is a patch release for version vX.X.X of the Deepgram Voice Interaction Rea
   - [ ] Run: `npm run package:local`
 
 #### Documentation
-- [ ] **Create Release Documentation**: Follow the established structure
+- [ ] **⚠️ CRITICAL: Create Release Documentation BEFORE Publishing** ⚠️
   - [ ] Create: `docs/releases/vX.X.X/` directory
   - [ ] Create: `CHANGELOG.md` with all changes (Keep a Changelog format)
   - [ ] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
@@ -42,14 +42,16 @@ This is a patch release for version vX.X.X of the Deepgram Voice Interaction Rea
 - [ ] **Validate Documentation**: Run validation to ensure all required documents are present
   - [ ] Run: `npm run validate:release-docs X.X.X` (version without "v" prefix)
 - [ ] **Update Version**: Update version references in docs
+- [ ] **⚠️ DO NOT proceed to Release section until documentation is complete** ⚠️
 
 #### Release
-- [ ] **Commit Changes**: Commit all release-related changes
+- [ ] **Commit Changes**: Commit all release-related changes (including documentation)
   - [ ] Commit: `git add . && git commit -m "chore: prepare release vX.X.X"`
 - [ ] **Create Release Branch**: Create a release branch for the version
   - [ ] Create: `git checkout -b release/vX.X.X` (from current working branch or main)
   - [ ] Push: `git push origin release/vX.X.X`
 - [ ] **Publish**: Publish to GitHub Registry
+  - [ ] **⚠️ Documentation must be committed to release branch BEFORE creating GitHub release** ⚠️
   - [ ] **Preferred**: Use CI build (create GitHub release to trigger `.github/workflows/test-and-publish.yml`)
     - Create GitHub release (this triggers CI publish workflow)
     - **Monitor CI workflow**: Wait for CI build to complete successfully
