@@ -9,6 +9,7 @@ export interface WindowWithDeepgramGlobals extends Window {
   componentInitializationCount?: number;
   audioCaptureInProgress?: boolean;
   __DEEPGRAM_DEBUG_AGENT_OPTIONS__?: boolean;
+  __DEEPGRAM_DEBUG_REMOUNTS__?: boolean;
   __DEEPGRAM_TEST_MODE__?: boolean;
   __DEEPGRAM_LAST_SETTINGS__?: unknown;
   __DEEPGRAM_LAST_FUNCTIONS__?: unknown;
