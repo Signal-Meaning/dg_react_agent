@@ -164,6 +164,44 @@ function DeepgramVoiceInteraction(
   const isMountedRef = useRef(true);
   const mountIdRef = useRef<string>('0');
   
+  // Issue #769: Track component remounts for debugging
+  // This ref persists across re-renders but resets on actual remount
+  // Use this to detect if component is actually remounting vs just re-rendering
+  const componentInstanceIdRef = useRef<string | null>(null);
+  const previousInstanceIdRef = useRef<string | null>(null);
+  
+  // Detect actual remounts (not just re-renders)
+  // This runs on every render, but only generates a new ID on first mount
+  if (componentInstanceIdRef.current === null) {
+    // First mount - generate instance ID
+    componentInstanceIdRef.current = `instance-${Date.now()}-${Math.random()}`;
+    const windowWithGlobals = typeof window !== 'undefined' ? window as WindowWithDeepgramGlobals : undefined;
+    const shouldLogRemounts = props.debug || windowWithGlobals?.__DEEPGRAM_DEBUG_REMOUNTS__;
+    
+    // If we had a previous instance ID, this is a remount
+    // (This can happen if the component was unmounted and remounted)
+    if (previousInstanceIdRef.current !== null && shouldLogRemounts) {
+      console.warn('⚠️ [Component] COMPONENT REMOUNT DETECTED!', {
+        previousInstanceId: previousInstanceIdRef.current,
+        newInstanceId: componentInstanceIdRef.current,
+        reason: 'Component was unmounted and remounted by React (likely parent component remount or key prop change)',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Always log mount (even if not a remount) when debugging is enabled
+    if (shouldLogRemounts) {
+      console.log('🔧 [Component] DeepgramVoiceInteraction component MOUNTED (new instance)', {
+        instanceId: componentInstanceIdRef.current,
+        previousInstanceId: previousInstanceIdRef.current,
+        isRemount: previousInstanceIdRef.current !== null,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    previousInstanceIdRef.current = componentInstanceIdRef.current;
+  }
+  
   // Ref to store cleanup timeout ID for proper cleanup
   const cleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
@@ -996,7 +1034,15 @@ function DeepgramVoiceInteraction(
       console.log('🔧 [Component] DeepgramVoiceInteraction initialized', {
         services: servicesStr,
         mountId: currentMountId,
-        isStrictModeReInvoke: previousMountId !== '0' && previousMountId !== currentMountId
+        instanceId: componentInstanceIdRef.current,
+        isStrictModeReInvoke: previousMountId !== '0' && previousMountId !== currentMountId,
+        isFirstMount,
+        reason: isFirstMount ? 'first mount' : 
+                (transcriptionOptionsChanged ? 'transcriptionOptions changed' :
+                (agentOptionsChanged ? 'agentOptions changed' :
+                (endpointConfigChanged ? 'endpointConfig changed' :
+                (apiKeyChanged ? 'apiKey changed' :
+                (debugChanged ? 'debug changed' : 'unknown')))))
       });
     }
     
