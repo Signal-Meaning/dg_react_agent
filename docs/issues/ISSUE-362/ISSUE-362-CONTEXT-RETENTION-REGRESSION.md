@@ -4,19 +4,19 @@
 **GitHub Issue**: #362  
 **Customer Issue**: #587 (voice-commerce team)  
 **Priority**: 🔴 **CRITICAL** - Blocks release  
-**Status**: Regression confirmed - Context sent correctly but agent not using it  
+**Status**: ⚠️ **FLAKY REGRESSION CONFIRMED** - Context sent correctly but agent intermittently not using it  
 **Package Version**: `@signal-meaning/deepgram-voice-interaction-react@^0.7.8`  
-**Regression Version**: `0.7.7` (confirmed - context retention fails)  
+**Regression Version**: `0.7.7` (confirmed - context retention fails intermittently)  
 **Working Baseline**: `0.7.6` (confirmed working)  
-**Test Status**: ✅ Test working correctly - consistently failing at expected assertion
+**Test Status**: ⚠️ **FLAKY** - Test sometimes passes, sometimes fails (intermittent behavior)
 
 ---
 
 ## Executive Summary
 
-We have a **confirmed regression** where conversation context is being sent correctly to the Deepgram agent via `agentOptions.context`, but the agent model is **not using the context** to answer questions about previous conversations. This was working in previous releases.
+We have a **confirmed flaky regression** where conversation context is being sent correctly to the Deepgram agent via `agentOptions.context`, but the agent model **intermittently does not use the context** to answer questions about previous conversations. This was working consistently in previous releases (v0.7.6).
 
-**Key Finding**: Context format is correct, context is included in Settings message (verified in logs), but agent responds with greeting only and doesn't reference previous conversation despite receiving context messages.
+**Key Finding**: Context format is correct, context is included in Settings message (verified in logs), but agent **intermittently** responds with greeting only or doesn't reference previous conversation despite receiving context messages. The behavior is **non-deterministic** - sometimes works, sometimes fails.
 
 **Regression Identified**: Version `0.7.7` introduced the regression. Version `0.7.6` works correctly (confirmed via testing on `release/frontend-v1.5.1` branch with cherry-picked test).
 
