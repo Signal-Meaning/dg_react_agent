@@ -101,7 +101,9 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
       console.log('📋 Settings message sent on reconnection:', {
         hasContext: !!settings.agent?.context,
         contextMessageCount: settings.agent?.context?.messages?.length || 0,
-        sampleContext: settings.agent?.context?.messages?.slice(0, 2) || []
+        sampleContext: settings.agent?.context?.messages?.slice(0, 2) || [],
+        greetingIncluded: 'greeting' in settings.agent,
+        greeting: settings.agent?.greeting
       });
       
       // Verify context was included
@@ -109,6 +111,16 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
       expect(settings.agent.context).toBeDefined();
       expect(settings.agent.context.messages).toBeDefined();
       expect(settings.agent.context.messages.length).toBeGreaterThan(0);
+      
+      // CRITICAL: Verify greeting is NOT included when context is present (Issue #234, #238)
+      // If greeting is included, it might interfere with agent's ability to use context
+      if ('greeting' in settings.agent) {
+        console.error('❌ [ISSUE #362] Greeting is included in Settings when context is present!');
+        console.error('   This violates Issue #234/#238 fix and may cause context not to be used');
+        console.error('   Greeting:', settings.agent.greeting);
+        console.error('   Context messages:', settings.agent.context.messages.length);
+      }
+      expect(settings.agent.greeting).toBeUndefined();
       
       // Verify context format
       // Note: Context may include greeting first, then user message, then agent response
@@ -126,6 +138,26 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
       console.log('✅ Context verified in Settings message');
     } else {
       console.warn('⚠️ Could not verify context in Settings message (WebSocket capture may not have captured it)');
+    }
+    
+    // Check for ConversationText messages with greeting (Issue #238)
+    // Deepgram may send greeting in ConversationText even when omitted from Settings
+    const wsDataAfterReconnect = await getCapturedWebSocketData(page);
+    const conversationTextMessages = wsDataAfterReconnect.received.filter(msg => 
+      msg.type === 'ConversationText'
+    );
+    
+    const greetingMessages = conversationTextMessages.filter(msg => {
+      const content = msg.data?.content?.toLowerCase() || '';
+      return content.includes('hello') || content.includes('greeting') || content.includes('how can i help');
+    });
+    
+    if (greetingMessages.length > 0) {
+      console.warn('⚠️ [ISSUE #362] ConversationText with greeting received after reconnection:');
+      greetingMessages.forEach((msg, idx) => {
+        console.warn(`   [${idx + 1}] ${msg.data?.content?.substring(0, 60)}...`);
+      });
+      console.warn('   This may interfere with agent\'s ability to use context (Issue #238)');
     }
     
     // Step 5: Ask agent about previous conversation
