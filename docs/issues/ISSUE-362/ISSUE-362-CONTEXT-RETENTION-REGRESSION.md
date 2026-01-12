@@ -537,9 +537,11 @@ We have created a **standalone test-app** that demonstrates the issue independen
    - ✅ Test should FAIL with current regression (v0.7.7+)
    - ✅ Test should PASS when regression is fixed
 
-6. ⏳ **Run E2E test to confirm regression**
-   - Test should fail, confirming agent doesn't use context
-   - This will validate the regression before implementing fix
+6. ✅ **Run E2E test to confirm regression**
+   - ✅ Test created: `test-app/tests/e2e/context-retention-agent-usage.spec.js`
+   - ✅ Test confirms regression: Agent responds with "Hello!" instead of referencing context
+   - ✅ Context is being sent correctly (verified: 4 messages including user message about "running shoes")
+   - ✅ Test correctly fails, validating the regression
 
 7. ⏳ **Investigate root cause**
    - Possible Deepgram API-side issue
