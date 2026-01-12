@@ -10,8 +10,8 @@
  * 3. Wait for agent response (not greeting - greeting arrives on connection)
  * 4. Disconnect agent
  * 5. Reconnect agent (context should be sent in Settings message)
- * 6. Ask: "What were we just talking about?"
- * 7. Verify agent response references "running shoes" from context
+ * 6. Ask: "Provide a summary of our conversation to this point."
+ * 7. Verify agent response references "running shoes" or previous conversation from context
  * 
  * This test should FAIL with current regression (v0.7.7+) where agent doesn't use context.
  * This test should PASS when the regression is fixed.
@@ -169,8 +169,8 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     }
     
     // Step 5: Ask agent about previous conversation
-    console.log('📝 Step 5: Asking agent: "What were we just talking about?"');
-    const recallQuestion = "What were we just talking about?";
+    console.log('📝 Step 5: Asking agent: "Provide a summary of our conversation to this point."');
+    const recallQuestion = "Provide a summary of our conversation to this point.";
     
     // Wait for agent response to recall question
     // This is the critical assertion - agent should reference "running shoes"
