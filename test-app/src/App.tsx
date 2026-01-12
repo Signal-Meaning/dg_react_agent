@@ -56,6 +56,7 @@ declare global {
     __testGetConnectionState?: () => 'connected' | 'disconnected' | 'auto' | undefined;
     __testGetInterruptAgent?: () => boolean;
     __testGetStartAudioCapture?: () => boolean;
+    __testConversationHistory?: Array<{ role: 'user' | 'assistant'; content: string; timestamp: number }>; // Issue #362: Expose conversation history for E2E tests
   }
 }
 
@@ -114,6 +115,12 @@ function App() {
     content: string;
     timestamp: number;
   }>>([]);
+  
+  // Expose conversation history to window for E2E testing (Issue #362)
+  useEffect(() => {
+    const testWindow = window as TestWindow;
+    testWindow.__testConversationHistory = conversationHistory;
+  }, [conversationHistory]);
   
   // Auto-connect dual mode state
   const [micEnabled, setMicEnabled] = useState(false);

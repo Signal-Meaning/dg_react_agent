@@ -177,50 +177,9 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     // Step 6: Capture full conversation exchange for regression confirmation
     console.log('📋 Step 6: Capturing full conversation exchange');
     
-    // Get full conversation history from test app
-    const fullConversation = await page.evaluate(() => {
-      // Try to get conversation history from window or DOM
-      // The test app stores conversationHistory in React state
-      // We can access it via window if exposed, or extract from DOM
-      const conversationEntries = [];
-      
-      // Try to get from window (if test app exposes it)
-      if (window.conversationHistory) {
-        return window.conversationHistory;
-      }
-      
-      // Otherwise, we'll need to extract from agent responses and user messages
-      // This is a fallback - ideally the test app would expose conversationHistory
-      return null;
-    });
-    
-    // Also capture all agent responses and user messages from DOM
-    const conversationExchange = await page.evaluate(() => {
-      const exchange = [];
-      
-      // Get all agent responses (they're displayed in order)
-      const agentResponseEl = document.querySelector('[data-testid="agent-response"]');
-      if (agentResponseEl && agentResponseEl.textContent && 
-          agentResponseEl.textContent !== '(Waiting for agent response...)') {
-        exchange.push({
-          role: 'assistant',
-          content: agentResponseEl.textContent,
-          source: 'agent-response-element'
-        });
-      }
-      
-      // Get user message from server
-      const userMessageEl = document.querySelector('[data-testid="user-message"]');
-      if (userMessageEl && userMessageEl.textContent && 
-          userMessageEl.textContent !== '(No user messages from server yet...)') {
-        exchange.push({
-          role: 'user',
-          content: userMessageEl.textContent,
-          source: 'user-message-element'
-        });
-      }
-      
-      return exchange;
+    // Get full conversation history from test app (exposed via window)
+    const fullConversationHistory = await page.evaluate(() => {
+      return window.__testConversationHistory || [];
     });
     
     // Get conversation history from context that was sent
@@ -231,24 +190,32 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     console.log('\n📝 Context sent in Settings (on reconnection):');
     if (contextMessages.length > 0) {
       contextMessages.forEach((msg, idx) => {
-        console.log(`   [${idx + 1}] ${msg.role.toUpperCase()}: ${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}`);
+        console.log(`   [${idx + 1}] ${msg.role.toUpperCase()}: ${msg.content}`);
       });
     } else {
       console.log('   (No context messages found)');
     }
     
-    console.log('\n💬 User/Assistant Exchange:');
-    console.log(`   [1] USER: "${firstMessage}"`);
-    console.log(`   [2] ASSISTANT: "${firstResponse?.substring(0, 150)}${firstResponse?.length > 150 ? '...' : ''}"`);
-    console.log(`   [3] USER: "${recallQuestion}"`);
-    console.log(`   [4] ASSISTANT: "${recallResponse}"`);
+    console.log('\n💬 Complete User/Assistant Exchange:');
+    if (fullConversationHistory.length > 0) {
+      fullConversationHistory.forEach((msg, idx) => {
+        console.log(`   [${idx + 1}] ${msg.role.toUpperCase()}: ${msg.content}`);
+      });
+    } else {
+      // Fallback: show what we know from the test
+      console.log(`   [1] USER: "${firstMessage}"`);
+      console.log(`   [2] ASSISTANT: "${firstResponse}"`);
+      console.log(`   [3] USER: "${recallQuestion}"`);
+      console.log(`   [4] ASSISTANT: "${recallResponse}"`);
+    }
     
     // Also show any ConversationText messages received
     if (conversationTextMessages.length > 0) {
-      console.log('\n📨 ConversationText Messages Received:');
+      console.log('\n📨 ConversationText Messages Received (after reconnection):');
       conversationTextMessages.forEach((msg, idx) => {
         const content = msg.data?.content || '';
-        console.log(`   [${idx + 1}] ${msg.data?.role?.toUpperCase() || 'UNKNOWN'}: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`);
+        const role = msg.data?.role?.toUpperCase() || 'UNKNOWN';
+        console.log(`   [${idx + 1}] ${role}: ${content}`);
       });
     }
     
