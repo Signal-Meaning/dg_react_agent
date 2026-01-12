@@ -2,7 +2,7 @@
 
 **Date**: January 12, 2026  
 **Test Run**: E2E test with real Deepgram API  
-**Status**: ✅ **REGRESSION CONFIRMED**
+**Status**: ⚠️ **FLAKY REGRESSION CONFIRMED** (intermittent failure)
 
 ---
 
@@ -48,11 +48,17 @@ ASSISTANT: "Additionally, knowing your foot type and any specific features you n
 2. **Greeting is NOT in Settings**: `greetingIncluded: false` ✅ (Issue #234/#238 fix working)
 3. **Context format is correct**: Matches Deepgram API specification
 
-### ❌ What's Broken
+### ⚠️ What's Broken (Intermittent/FLAKY)
 
-1. **Agent doesn't answer the recall question**: When asked "What were we just talking about?", agent responds with a continuation of the previous response about foot type, not an answer to the question.
+1. **Agent sometimes doesn't answer the recall question**: When asked "What were we just talking about?", agent sometimes responds with:
+   - A continuation of the previous response (e.g., "Additionally, knowing your foot type...")
+   - A generic response that doesn't reference context (e.g., "Also, do you have any specific preferences...")
+   - **BUT sometimes responds correctly** (e.g., "We were talking about running shoes")
 
-2. **Agent doesn't reference context**: The agent's response suggests it's continuing the previous conversation thread, but it's not acknowledging the question or referencing that they were talking about "running shoes".
+2. **Test is flaky**: The E2E test shows "1 flaky" - sometimes passes, sometimes fails. This indicates:
+   - Context is sometimes used correctly ✅
+   - Context is sometimes ignored ❌
+   - The regression is **non-deterministic/intermittent**
 
 3. **ConversationText with greeting received**: After reconnection, a ConversationText message with greeting is received (Issue #238). This might be interfering with context processing.
 
@@ -103,16 +109,17 @@ ASSISTANT: "Additionally, knowing your foot type and any specific features you n
 
 ## Hypothesis
 
-### Primary Hypothesis: Agent is Continuing Previous Response
+### Primary Hypothesis: Intermittent Context Processing (FLAKY)
 
-The agent's response ("Additionally, knowing your foot type...") is message [5] from the context. This suggests:
+The test's flaky behavior suggests:
 
-1. **Agent receives context correctly** ✅
-2. **Agent receives new question** ✅
-3. **Agent processes new question incorrectly** ❌
-   - Instead of answering "What were we just talking about?"
-   - Agent continues from the last message in context
-   - This might be a Deepgram API-side issue with how the agent processes new messages when context is present
+1. **Agent receives context correctly** ✅ (always)
+2. **Agent receives new question** ✅ (always)
+3. **Agent processes new question inconsistently** ⚠️ (intermittent)
+   - Sometimes: Agent correctly uses context and answers the recall question ✅
+   - Sometimes: Agent continues from the last message in context ❌
+   - Sometimes: Agent responds generically without referencing context ❌
+   - This might be a Deepgram API-side issue with timing, race conditions, or non-deterministic context processing
 
 ### Secondary Hypothesis: Greeting Interference
 
