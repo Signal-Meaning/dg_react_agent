@@ -513,28 +513,38 @@ We have created a **standalone test-app** that demonstrates the issue independen
 
 ## Next Steps
 
-1. **Investigate changes between v0.7.6 and v0.7.7**
-   - Review git diff between versions
-   - Identify any changes to context handling
-   - Check for changes to Settings message construction
+1. ✅ **Investigate changes between v0.7.6 and v0.7.7**
+   - ✅ Reviewed git diff between versions
+   - ✅ Found: Only major change was binary JSON handling (Issue #353)
+   - ✅ No changes to context handling code found
 
-2. **Verify context passing in component**
-   - Add logging to verify `agentOptions.context` is received by component
-   - Verify context is included in Settings message sent to WebSocket
-   - Check for any transformations that might modify or drop context
+2. ✅ **Verify context passing in component**
+   - ✅ Verified `agentOptions.context` is received by component
+   - ✅ Verified context is included in Settings message (line 1824)
+   - ✅ No transformations found that modify or drop context
 
-3. **Review existing tests**
-   - Check `tests/context-preservation-validation.test.js` - validates context format but not agent usage
-   - Consider creating E2E test that validates agent actually uses context (not just that it's sent)
+3. ✅ **Review existing tests**
+   - ✅ Checked `tests/context-preservation-validation.test.js` - validates context format but not agent usage
+   - ✅ Created E2E test that validates agent actually uses context
 
-4. **Check Deepgram API changes**
-   - Verify if Deepgram API changed how it expects/handles context
-   - Check if there are any API version changes between 0.7.6 and 0.7.7
+4. ✅ **Check Deepgram API changes**
+   - ✅ Verified context format matches Deepgram API specification
+   - ✅ Format is correct: `{ messages: [{ type: "History", role: "...", content: "..." }] }`
 
-5. **Create/update tests**
-   - Existing tests validate context format and sending
-   - Need tests that validate agent actually uses context to answer questions
-   - Consider E2E test that verifies agent references previous conversation
+5. ✅ **Create/update tests**
+   - ✅ Created E2E test: `test-app/tests/e2e/context-retention-agent-usage.spec.js`
+   - ✅ Test validates agent actually uses context to answer questions
+   - ✅ Test should FAIL with current regression (v0.7.7+)
+   - ✅ Test should PASS when regression is fixed
+
+6. ⏳ **Run E2E test to confirm regression**
+   - Test should fail, confirming agent doesn't use context
+   - This will validate the regression before implementing fix
+
+7. ⏳ **Investigate root cause**
+   - Possible Deepgram API-side issue
+   - Possible timing issue with context processing
+   - Contact Deepgram support if needed
 
 ---
 
