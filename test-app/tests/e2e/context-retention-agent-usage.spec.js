@@ -174,8 +174,88 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     console.log('✅ Agent responded to recall question');
     console.log(`📝 Agent recall response: ${recallResponse}`);
     
-    // Step 6: Verify agent response references previous conversation
-    console.log('🔍 Step 6: Verifying agent response references previous conversation');
+    // Step 6: Capture full conversation exchange for regression confirmation
+    console.log('📋 Step 6: Capturing full conversation exchange');
+    
+    // Get full conversation history from test app
+    const fullConversation = await page.evaluate(() => {
+      // Try to get conversation history from window or DOM
+      // The test app stores conversationHistory in React state
+      // We can access it via window if exposed, or extract from DOM
+      const conversationEntries = [];
+      
+      // Try to get from window (if test app exposes it)
+      if (window.conversationHistory) {
+        return window.conversationHistory;
+      }
+      
+      // Otherwise, we'll need to extract from agent responses and user messages
+      // This is a fallback - ideally the test app would expose conversationHistory
+      return null;
+    });
+    
+    // Also capture all agent responses and user messages from DOM
+    const conversationExchange = await page.evaluate(() => {
+      const exchange = [];
+      
+      // Get all agent responses (they're displayed in order)
+      const agentResponseEl = document.querySelector('[data-testid="agent-response"]');
+      if (agentResponseEl && agentResponseEl.textContent && 
+          agentResponseEl.textContent !== '(Waiting for agent response...)') {
+        exchange.push({
+          role: 'assistant',
+          content: agentResponseEl.textContent,
+          source: 'agent-response-element'
+        });
+      }
+      
+      // Get user message from server
+      const userMessageEl = document.querySelector('[data-testid="user-message"]');
+      if (userMessageEl && userMessageEl.textContent && 
+          userMessageEl.textContent !== '(No user messages from server yet...)') {
+        exchange.push({
+          role: 'user',
+          content: userMessageEl.textContent,
+          source: 'user-message-element'
+        });
+      }
+      
+      return exchange;
+    });
+    
+    // Get conversation history from context that was sent
+    const contextMessages = reconnectSettings?.data?.agent?.context?.messages || [];
+    
+    // Display full exchange
+    console.log('\n📊 ===== FULL CONVERSATION EXCHANGE =====');
+    console.log('\n📝 Context sent in Settings (on reconnection):');
+    if (contextMessages.length > 0) {
+      contextMessages.forEach((msg, idx) => {
+        console.log(`   [${idx + 1}] ${msg.role.toUpperCase()}: ${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}`);
+      });
+    } else {
+      console.log('   (No context messages found)');
+    }
+    
+    console.log('\n💬 User/Assistant Exchange:');
+    console.log(`   [1] USER: "${firstMessage}"`);
+    console.log(`   [2] ASSISTANT: "${firstResponse?.substring(0, 150)}${firstResponse?.length > 150 ? '...' : ''}"`);
+    console.log(`   [3] USER: "${recallQuestion}"`);
+    console.log(`   [4] ASSISTANT: "${recallResponse}"`);
+    
+    // Also show any ConversationText messages received
+    if (conversationTextMessages.length > 0) {
+      console.log('\n📨 ConversationText Messages Received:');
+      conversationTextMessages.forEach((msg, idx) => {
+        const content = msg.data?.content || '';
+        console.log(`   [${idx + 1}] ${msg.data?.role?.toUpperCase() || 'UNKNOWN'}: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`);
+      });
+    }
+    
+    console.log('\n📊 ========================================\n');
+    
+    // Step 7: Verify agent response references previous conversation
+    console.log('🔍 Step 7: Verifying agent response references previous conversation');
     
     // Check if agent response mentions "running shoes" or similar context
     const responseLower = recallResponse.toLowerCase();
@@ -192,12 +272,26 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
                          responseLower.includes("no memory");
     
     if (deniesMemory) {
-      console.error('❌ Agent denies having memory - context not being used');
-      console.error(`   Agent response: "${recallResponse}"`);
+      console.error('\n❌ ===== REGRESSION CONFIRMED =====');
+      console.error('Agent denies having memory - context not being used');
+      console.error(`\nFull Exchange:`);
+      console.error(`   USER: "${firstMessage}"`);
+      console.error(`   ASSISTANT: "${firstResponse}"`);
+      console.error(`   USER: "${recallQuestion}"`);
+      console.error(`   ASSISTANT: "${recallResponse}"`);
+      console.error(`\nContext sent: ${contextMessages.length} messages`);
+      console.error(`Context included user message: "${firstMessage}"`);
+      console.error(`Agent response: "${recallResponse}"`);
+      console.error('❌ ================================\n');
       throw new Error(
         `Agent response does not reference previous conversation. ` +
         `Expected agent to mention "running shoes" or similar context. ` +
-        `Agent responded: "${recallResponse}"`
+        `Agent responded: "${recallResponse}"\n\n` +
+        `Full exchange:\n` +
+        `  USER: "${firstMessage}"\n` +
+        `  ASSISTANT: "${firstResponse}"\n` +
+        `  USER: "${recallQuestion}"\n` +
+        `  ASSISTANT: "${recallResponse}"`
       );
     }
     
@@ -214,10 +308,26 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
                                responseLower.includes('you were');
       
       if (!mentionsPrevious) {
+        console.error('\n❌ ===== REGRESSION CONFIRMED =====');
+        console.error('Agent response does not reference previous conversation');
+        console.error(`\nFull Exchange:`);
+        console.error(`   USER: "${firstMessage}"`);
+        console.error(`   ASSISTANT: "${firstResponse}"`);
+        console.error(`   USER: "${recallQuestion}"`);
+        console.error(`   ASSISTANT: "${recallResponse}"`);
+        console.error(`\nContext sent: ${contextMessages.length} messages`);
+        console.error(`Context included user message: "${firstMessage}"`);
+        console.error(`Agent response: "${recallResponse}"`);
+        console.error('❌ ================================\n');
         throw new Error(
           `Agent response does not reference previous conversation. ` +
           `Expected agent to mention "running shoes" or reference previous conversation. ` +
-          `Agent responded: "${recallResponse}"`
+          `Agent responded: "${recallResponse}"\n\n` +
+          `Full exchange:\n` +
+          `  USER: "${firstMessage}"\n` +
+          `  ASSISTANT: "${firstResponse}"\n` +
+          `  USER: "${recallQuestion}"\n` +
+          `  ASSISTANT: "${recallResponse}"`
         );
       }
     }
