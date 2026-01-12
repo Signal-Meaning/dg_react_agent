@@ -47,23 +47,24 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     await establishConnectionViaText(page);
     console.log('✅ Initial connection established');
     
-    // Step 2: Send first message
+    // Step 2: Send first message and wait for agent response
     console.log('📝 Step 2: Sending first message: "I am looking for running shoes"');
     const firstMessage = "I am looking for running shoes";
     
-    // Wait for agent response (not greeting - greeting arrives on connection)
-    // Use enhanced helper that distinguishes between greeting and actual response
-    const firstResponse = await waitForAgentResponseEnhanced(page, {
-      timeout: 30000, // Allow time for function calls or processing
-      expectedText: undefined // Don't check content, just wait for any response
-    });
+    // Send message using sendMessageAndWaitForResponse which handles timing better
+    // This ensures both user message and agent response are in conversationHistory
+    const firstResponse = await sendMessageAndWaitForResponse(page, firstMessage, 45000);
     
     console.log('✅ First message sent and agent responded');
     console.log(`📝 First agent response: ${firstResponse?.substring(0, 100)}...`);
     
-    // Verify we got a response (not just greeting)
+    // Verify we got a response (not just waiting message)
     expect(firstResponse).toBeTruthy();
     expect(firstResponse).not.toBe('(Waiting for agent response...)');
+    expect(firstResponse.length).toBeGreaterThan(0);
+    
+    // Wait a bit to ensure conversationHistory is updated
+    await page.waitForTimeout(2000);
     
     // Step 3: Disconnect agent
     console.log('⏸️ Step 3: Disconnecting agent');
@@ -79,7 +80,10 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     // Reconnect by sending a message (auto-connect)
     // The test app should have conversationHistory populated from first message
     // Context should be included in agentOptions when agent is not connected
-    await establishConnectionViaText(page);
+    // Use sendMessageAndWaitForResponse which triggers auto-connect
+    const reconnectMessage = "Hello again";
+    await sendMessageAndWaitForResponse(page, reconnectMessage);
+    console.log('✅ Connection re-established via auto-connect');
     
     // Wait for SettingsApplied to confirm context was sent
     await waitForSettingsApplied(page);
@@ -107,10 +111,17 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
       expect(settings.agent.context.messages.length).toBeGreaterThan(0);
       
       // Verify context format
+      // Note: Context may include greeting first, then user message, then agent response
+      // Find the user message about running shoes
       const contextMessages = settings.agent.context.messages;
-      expect(contextMessages[0].type).toBe('History');
-      expect(contextMessages[0].role).toBe('user');
-      expect(contextMessages[0].content).toContain('running shoes');
+      const userMessage = contextMessages.find(msg => 
+        msg.role === 'user' && msg.content.toLowerCase().includes('running shoes')
+      );
+      
+      expect(userMessage).toBeDefined();
+      expect(userMessage.type).toBe('History');
+      expect(userMessage.role).toBe('user');
+      expect(userMessage.content).toContain('running shoes');
       
       console.log('✅ Context verified in Settings message');
     } else {
@@ -200,8 +211,8 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     await disconnectComponent(page);
     await page.waitForTimeout(1000);
     
-    // Reconnect
-    await establishConnectionViaText(page);
+    // Reconnect by sending a message (auto-connect)
+    await sendMessageAndWaitForResponse(page, "Reconnecting");
     await waitForSettingsApplied(page);
     
     // Verify context format
