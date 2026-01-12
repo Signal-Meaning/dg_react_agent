@@ -11,6 +11,8 @@
 
 - **[ISSUE-362-CONTEXT-RETENTION-REGRESSION.md](./ISSUE-362-CONTEXT-RETENTION-REGRESSION.md)** - Main tracking document with problem description, evidence, and investigation status
 - **[ISSUE-362-TEST-GAPS.md](./ISSUE-362-TEST-GAPS.md)** - Test gaps analysis identifying missing tests that would have caught the regression
+- **[ROOT-CAUSE-ANALYSIS.md](./ROOT-CAUSE-ANALYSIS.md)** - Root cause investigation findings
+- **[TEST-RESULTS.md](./TEST-RESULTS.md)** - E2E test results confirming the regression
 
 ---
 
@@ -24,9 +26,16 @@
 
 ---
 
+## Current Status
+
+✅ **Regression Confirmed**: E2E test validates that context is sent correctly but agent doesn't use it
+- Context is being sent: ✅ Verified (4 messages including user message)
+- Agent uses context: ❌ Agent responds with "Hello!" instead of referencing previous conversation
+
 ## Next Steps
 
-1. Investigate what changed between v0.7.6 (working) and v0.7.7 (broken)
-2. Create E2E test that validates agent uses context (see test gaps document)
-3. Implement fix
-4. Validate fix with E2E test
+1. ✅ Investigate what changed between v0.7.6 (working) and v0.7.7 (broken) - No code changes found
+2. ✅ Create E2E test that validates agent uses context - Test created and working
+3. ⏳ Investigate root cause (possible Deepgram API-side issue)
+4. ⏳ Implement fix
+5. ⏳ Validate fix with E2E test (should PASS when fixed)
