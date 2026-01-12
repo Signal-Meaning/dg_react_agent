@@ -13,6 +13,7 @@
 - **[ISSUE-362-TEST-GAPS.md](./ISSUE-362-TEST-GAPS.md)** - Test gaps analysis identifying missing tests that would have caught the regression
 - **[ROOT-CAUSE-ANALYSIS.md](./ROOT-CAUSE-ANALYSIS.md)** - Root cause investigation findings
 - **[TEST-RESULTS.md](./TEST-RESULTS.md)** - E2E test results confirming the regression
+- **[GREETING-HYPOTHESIS.md](./GREETING-HYPOTHESIS.md)** - Hypothesis that greeting regression may be related to context retention issue
 
 ---
 

@@ -51,12 +51,20 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     console.log('📝 Step 2: Sending first message: "I am looking for running shoes"');
     const firstMessage = "I am looking for running shoes";
     
-    // Send message using sendMessageAndWaitForResponse which handles timing better
+    // Send message
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.fill(firstMessage);
+    await textInput.press('Enter');
+    
+    // Wait for agent response using enhanced helper with longer timeout
     // This ensures both user message and agent response are in conversationHistory
-    const firstResponse = await sendMessageAndWaitForResponse(page, firstMessage, 45000);
+    const firstResponse = await waitForAgentResponseEnhanced(page, {
+      timeout: 60000, // Longer timeout for agent processing (function calls, etc.)
+      expectedText: undefined // Don't check content, just wait for any response
+    });
     
     console.log('✅ First message sent and agent responded');
-    console.log(`📝 First agent response: ${firstResponse?.substring(0, 100)}...`);
+    console.log(`📝 First agent response: ${firstResponse?.substring(0, 150)}${firstResponse?.length > 150 ? '...' : ''}`);
     
     // Verify we got a response (not just waiting message)
     expect(firstResponse).toBeTruthy();
