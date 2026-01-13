@@ -46,54 +46,56 @@ Both tests verify:
 
 ---
 
-## Differences We've Identified
+## Next Steps - Please Use Our Test Examples
 
-To understand why your test fails while ours pass, we need to investigate these potential differences:
+To help us identify the root cause, please try running our test examples in your environment:
 
-### 1. **Instructions/Prompts**
-- **Question**: What instructions/prompts are you using in production?
-- **Why**: Different instructions might affect how the agent handles context
-- **Our Test**: Uses default test-app instructions
+### Option 1: Run Our Tests Directly
 
-### 2. **Context Construction**
-- **Question**: How do you construct `agentOptions.context`? Can you share the code?
-- **Why**: Context format or message ordering might differ
-- **Our Test**: Converts conversation history to `{ type: 'History', role: 'user'|'assistant', content: string }`
+Our tests are available in the `dg_react_agent` repository:
+- `test-app/tests/e2e/context-retention-agent-usage.spec.js` (without function calling)
+- `test-app/tests/e2e/context-retention-with-function-calling.spec.js` (with function calling)
 
-### 3. **Function Calling Setup**
-- **Question**: How is your `search_products` function configured?
-- **Why**: Function calling might interact differently with context in your setup
-- **Our Test**: Uses client-side `get_current_datetime` function
+Please run these tests in your environment and let us know:
+- Do they pass or fail?
+- If they fail, what error do you see?
 
-### 4. **Environment/Configuration**
-- **Question**: Are there any other configuration differences (API endpoints, SDK versions, etc.)?
-- **Why**: Different environments might behave differently
+### Option 2: Adapt Our Test Pattern
+
+If you cannot run our tests directly, please adapt your test to match our test pattern:
+
+1. **Use our test messages**:
+   - Without function calling: "My favorite color is blue"
+   - With function calling: "What is the time?" (with a simple datetime function)
+
+2. **Use our recall question**: "Provide a summary of our conversation to this point."
+
+3. **Follow our test flow**:
+   - Send first message
+   - Wait for agent response
+   - Disconnect
+   - Reconnect (context should be sent automatically)
+   - Ask recall question
+   - Verify agent references previous conversation
+
+This will help us determine if the issue is specific to your setup or a broader problem.
 
 ---
 
-## What We Need From You
+## What We'll Do
 
-To proceed with the investigation, please provide:
-
-1. **Your production instructions/prompts** (the `agent.instructions` you're using)
-2. **Your context construction code** (how you build `agentOptions.context`)
-3. **Your function calling setup** (function definitions and handlers)
-4. **Any other relevant configuration** that might differ from our test-app
-
----
-
-## Next Steps
-
-Once we have this information, we will:
-1. Replicate your exact setup in our test-app
-2. Identify the root cause of the difference
-3. Implement a fix or provide guidance
+Once we understand whether our tests pass in your environment:
+1. If they pass: We'll investigate what's different about your specific setup
+2. If they fail: We'll investigate why the same tests behave differently in your environment
+3. We'll implement a fix or provide guidance based on the findings
 
 ---
 
 ## Technical Details
 
-### Context Format We're Using
+### Context Format
+
+The component automatically constructs context from conversation history in the correct format:
 
 ```typescript
 {
@@ -109,7 +111,7 @@ Once we have this information, we will:
 }
 ```
 
-This matches the Deepgram API specification. We've verified this format is being sent correctly in the Settings message.
+This matches the Deepgram API specification. The component handles context construction automatically - you just need to provide conversation history via `agentOptions.context`.
 
 ### Test Files
 
