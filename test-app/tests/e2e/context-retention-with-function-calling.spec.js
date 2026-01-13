@@ -5,7 +5,7 @@
  * This tests the hypothesis that function calling might interfere with context processing.
  * 
  * Test Flow:
- * 1. Setup function calling (get_current_datetime - server-side function with mocked backend)
+ * 1. Setup function calling (get_current_datetime - client-side function)
  * 2. Establish connection (function should be included in Settings)
  * 3. Send message: "What is the time?" (triggers function call)
  * 4. Wait for function call to execute and agent response
@@ -41,56 +41,15 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     
     console.log('🧪 Testing context retention with function calling - agent should use context after reconnection');
     
-    // Mock backend endpoint for server-side function
-    const MOCK_BACKEND_URL = 'http://localhost:3001/api/get-datetime';
-    
-    // Setup route mocking for the backend function endpoint
-    await page.route(MOCK_BACKEND_URL, async (route) => {
-      const request = route.request();
-      const method = request.method();
-      
-      if (method === 'POST') {
-        // Parse request body to get function arguments
-        const postData = request.postDataJSON() || {};
-        const timezone = postData.timezone || 'UTC';
-        
-        // Mock response: current date and time
-        const now = new Date();
-        const mockResponse = {
-          success: true,
-          datetime: now.toISOString(),
-          formatted: now.toLocaleString('en-US', {
-            timeZone: timezone,
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: true
-          }),
-          timezone: timezone,
-          timestamp: now.getTime()
-        };
-        
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(mockResponse)
-        });
-      } else {
-        await route.fulfill({ status: 405, body: 'Method not allowed' });
-      }
-    });
-    
     // Setup function calling BEFORE navigation
-    await page.addInitScript((backendUrl) => {
+    // Using client-side function (no endpoint) - we can handle it via window.handleFunctionCall
+    await page.addInitScript(() => {
       // Store functions that will be injected into agentOptions
-      // This is a server-side function (has endpoint) - Deepgram will call the endpoint
+      // This is a client-side function (no endpoint) - component will call window.handleFunctionCall
       window.testFunctions = [
         {
           name: 'get_current_datetime',
-          description: 'Get the current date and time. Use this when users ask about the current date, current time, what time it is, or what day it is.',
+          description: 'Get the current date and time. ALWAYS use this function when users ask about the current date, current time, what time it is, or what day it is. This function is required for all time-related queries.',
           parameters: {
             type: 'object',
             properties: {
@@ -100,23 +59,58 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
                 default: 'UTC'
               }
             }
-          },
-          endpoint: {
-            url: backendUrl,
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            }
           }
+          // No endpoint = client-side function (component will call window.handleFunctionCall)
         }
       ];
       
+      // Store function handler for client-side execution
+      window.handleFunctionCall = (request, sendResponse) => {
+        console.log(`[FUNCTION] Executing function: ${request.name}`, request.arguments);
+        
+        if (request.name === 'get_current_datetime') {
+          let args = {};
+          try {
+            args = typeof request.arguments === 'string' ? JSON.parse(request.arguments) : request.arguments;
+          } catch (e) {
+            console.warn('[FUNCTION] Failed to parse function arguments:', e);
+          }
+          
+          const timezone = args.timezone || 'UTC';
+          const now = new Date();
+          const result = {
+            success: true,
+            datetime: now.toISOString(),
+            formatted: now.toLocaleString('en-US', {
+              timeZone: timezone,
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: true
+            }),
+            timezone: timezone,
+            timestamp: now.getTime()
+          };
+          
+          const response = {
+            id: request.id,
+            result: result
+          };
+          
+          sendResponse(response);
+          return response;
+        }
+        
+        return { id: request.id, result: { success: false, error: 'Unknown function' } };
+      };
+      
       // Store FunctionCallRequest messages for verification
-      // Note: For server-side functions, we don't need a client-side handler
-      // Deepgram will call the endpoint directly
       window.functionCallRequests = [];
       window.functionCallResponses = [];
-    }, MOCK_BACKEND_URL);
+    });
     
     // Install WebSocket capture to verify context is sent
     await installWebSocketCapture(page);
@@ -150,9 +144,9 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
       console.log(`📋 Initial Settings - Functions included: ${hasFunctions}, Count: ${functionsCount}`);
       if (hasFunctions && functionsCount > 0) {
         const funcDef = initialSettings[0].data.agent.think.functions[0];
-        console.log(`✅ Function verified in initial Settings: ${funcDef.name}, has endpoint: ${!!funcDef.endpoint}`);
-        expect(funcDef.endpoint).toBeDefined();
-        expect(funcDef.endpoint.url).toBe(MOCK_BACKEND_URL);
+        console.log(`✅ Function verified in initial Settings: ${funcDef.name}, is client-side: ${!funcDef.endpoint}`);
+        // Client-side function should NOT have endpoint
+        expect(funcDef.endpoint).toBeUndefined();
       } else {
         console.error('❌ Function NOT found in initial Settings - test will likely fail');
         throw new Error('Function not included in Settings message - cannot test function calling');
@@ -173,24 +167,17 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     await textInput.fill(firstMessage);
     await textInput.press('Enter');
     
-    // Wait for function call to be triggered (server-side function)
-    // For server-side functions, Deepgram calls the endpoint directly
-    // We can verify the function was called by checking if the mock endpoint was hit
-    console.log('⏳ Waiting for function call to be triggered (server-side function)...');
+    // Wait for function call to be triggered (client-side function)
+    // For client-side functions, component calls window.handleFunctionCall
+    console.log('⏳ Waiting for function call to be triggered (client-side function)...');
     let functionCallDetected = false;
     
-    // Check if the mock endpoint was called
     try {
-      // Wait for the route to be hit (function call executed)
-      await page.waitForRequest(request => 
-        request.url().includes(MOCK_BACKEND_URL) && request.method() === 'POST',
-        { timeout: 30000 }
-      ).then(() => {
+      const functionCallResult = await waitForFunctionCall(page, { timeout: 30000 });
+      if (functionCallResult && functionCallResult.count > 0) {
         functionCallDetected = true;
-        console.log('✅ Function call detected: Mock backend endpoint was called');
-      }).catch(() => {
-        console.log('⚠️  No function call detected within timeout (mock endpoint not called)');
-      });
+        console.log(`✅ Function call detected: ${functionCallResult.lastCall}`);
+      }
     } catch (e) {
       console.log('⚠️  No function call detected within timeout, continuing...');
     }
