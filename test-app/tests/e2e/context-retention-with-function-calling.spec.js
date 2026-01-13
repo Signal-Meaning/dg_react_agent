@@ -217,8 +217,8 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
                             text.toLowerCase().includes("how can i assist") ||
                             text.toLowerCase().startsWith("hello!");
           
-          // Return the first non-greeting response with actual content
-          if (!isGreeting && text.length > 0) {
+          // Return the first non-greeting response with actual content (at least 10 chars to avoid empty responses)
+          if (!isGreeting && text.length > 10) {
             return text;
           }
         }
@@ -227,7 +227,16 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
       },
       firstMessage, // userMessageText
       { timeout: 60000 } // Wait up to 60 seconds for actual response (not greeting)
-    ).then(result => result.jsonValue()).catch(() => '');
+    ).then(result => {
+      const value = result.jsonValue();
+      if (!value || value.trim().length === 0) {
+        throw new Error('Agent response is empty');
+      }
+      return value;
+    }).catch((e) => {
+      console.error('Error waiting for agent response:', e.message);
+      throw new Error(`Failed to get agent response: ${e.message}`);
+    });
     
     console.log('✅ First message sent and agent responded');
     console.log(`📝 First agent response: ${firstResponse?.substring(0, 150)}${firstResponse?.length > 150 ? '...' : ''}`);
