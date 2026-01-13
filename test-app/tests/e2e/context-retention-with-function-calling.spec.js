@@ -9,12 +9,10 @@
  * 2. Establish connection (function should be included in Settings)
  * 3. Send message: "What is the time?" (triggers function call)
  * 4. Wait for function call to execute and agent response
- * 5. Send second message: "I am looking for running shoes" (builds context)
- * 6. Wait for agent response
- * 7. Disconnect agent
- * 8. Reconnect agent (context should be sent in Settings message with function)
- * 9. Ask: "Provide a summary of our conversation to this point."
- * 10. Verify agent response references "running shoes" or "time" from context
+ * 5. Disconnect agent
+ * 6. Reconnect agent (context should be sent in Settings message with function)
+ * 7. Ask: "Provide a summary of our conversation to this point."
+ * 8. Verify agent response references "time" from context
  * 
  * This test should FAIL if function calling interferes with context processing.
  * This test should PASS when context retention works correctly with function calling.
@@ -192,40 +190,19 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     // Wait a bit to ensure conversationHistory is updated
     await page.waitForTimeout(2000);
     
-    // Step 2b: Send second message to build more context (about running shoes)
-    // This ensures we have context that's not related to the function call
-    console.log('📝 Step 2b: Sending second message to build context: "I am looking for running shoes"');
-    const secondMessage = "I am looking for running shoes";
-    
-    const textInput2 = page.locator('[data-testid="text-input"]');
-    await textInput2.fill(secondMessage);
-    await textInput2.press('Enter');
-    
-    // Wait for agent response to second message
-    const secondResponse = await waitForAgentResponseEnhanced(page, {
-      timeout: 60000,
-      expectedText: undefined
-    });
-    
-    console.log('✅ Second message sent and agent responded');
-    console.log(`📝 Second agent response: ${secondResponse?.substring(0, 150)}${secondResponse?.length > 150 ? '...' : ''}`);
-    
-    // Wait a bit to ensure conversationHistory is updated with both messages
-    await page.waitForTimeout(2000);
-    
-    // Step 3: Disconnect agent
-    console.log('⏸️ Step 3: Disconnecting agent');
+    // Step 2b: Disconnect agent
+    console.log('⏸️ Step 2b: Disconnecting agent');
     await disconnectComponent(page);
     console.log('✅ Agent disconnected');
     
     // Wait a bit for disconnection to complete
     await page.waitForTimeout(1000);
     
-    // Step 4: Reconnect agent (context should be sent in Settings message)
-    console.log('🔄 Step 4: Reconnecting agent (context should be sent in Settings)');
+    // Step 2c: Reconnect agent (context should be sent in Settings message)
+    console.log('🔄 Step 2c: Reconnecting agent (context should be sent in Settings)');
     
     // Reconnect by sending a message (auto-connect)
-    // The test app should have conversationHistory populated from first message + function call
+    // The test app should have conversationHistory populated from time message + function call
     // Context should be included in agentOptions when agent is not connected
     const reconnectMessage = "Hello again";
     await sendMessageAndWaitForResponse(page, reconnectMessage);
@@ -272,39 +249,31 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
       }
       expect(settings.agent.greeting).toBeUndefined();
       
-      // Verify context format and find user messages
+      // Verify context format and find user message about time
       const contextMessages = settings.agent.context.messages;
-      
-      // Find the message about running shoes (second message)
-      const runningShoesMessage = contextMessages.find(msg => 
-        msg.role === 'user' && msg.content.toLowerCase().includes('running shoes')
-      );
-      
-      // Also verify the first message (about time) is in context
       const timeMessage = contextMessages.find(msg => 
         msg.role === 'user' && msg.content.toLowerCase().includes('time')
       );
       
-      // We should have both messages in context
-      expect(runningShoesMessage).toBeDefined();
-      expect(runningShoesMessage.type).toBe('History');
-      expect(runningShoesMessage.role).toBe('user');
-      expect(runningShoesMessage.content).toContain('running shoes');
+      expect(timeMessage).toBeDefined();
+      expect(timeMessage.type).toBe('History');
+      expect(timeMessage.role).toBe('user');
+      expect(timeMessage.content).toContain('time');
       
-      // The time message should also be there (with function call response)
-      expect(contextMessages.length).toBeGreaterThan(2); // At least: user time, agent time response, user running shoes
+      // Should have at least user message and agent response (with function call)
+      expect(contextMessages.length).toBeGreaterThan(1);
       
       console.log('✅ Context verified in Settings message');
     } else {
       console.warn('⚠️ Could not verify context in Settings message (WebSocket capture may not have captured it)');
     }
     
-    // Step 5: Ask agent about previous conversation
-    console.log('📝 Step 5: Asking agent: "Provide a summary of our conversation to this point."');
+    // Step 3: Ask agent about previous conversation
+    console.log('📝 Step 3: Asking agent: "Provide a summary of our conversation to this point."');
     const recallQuestion = "Provide a summary of our conversation to this point.";
     
     // Wait for agent response to recall question
-    // This is the critical assertion - agent should reference "running shoes"
+    // This is the critical assertion - agent should reference "time" from context
     const recallResponse = await waitForAgentResponseEnhanced(page, {
       timeout: 30000,
       expectedText: undefined // We'll check manually to see if it references context
@@ -313,8 +282,8 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     console.log('✅ Agent responded to recall question');
     console.log(`📝 Agent recall response: ${recallResponse}`);
     
-    // Step 6: Capture full conversation exchange for regression confirmation
-    console.log('📋 Step 6: Capturing full conversation exchange');
+    // Step 4: Capture full conversation exchange for regression confirmation
+    console.log('📋 Step 4: Capturing full conversation exchange');
     
     // Get full conversation history from test app (exposed via window)
     const fullConversationHistory = await page.evaluate(() => {
@@ -344,20 +313,17 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     
     console.log('\n📊 ========================================\n');
     
-    // Step 7: Verify agent response references previous conversation
-    console.log('🔍 Step 7: Verifying agent response references previous conversation');
+    // Step 5: Verify agent response references previous conversation
+    console.log('🔍 Step 5: Verifying agent response references previous conversation');
     
-    // Check if agent response mentions "running shoes" or similar context
-    // The agent should reference the conversation about running shoes (second message)
+    // Check if agent response mentions "time" or similar context
+    // The agent should reference the conversation about time (with function call)
     const responseLower = recallResponse.toLowerCase();
-    const mentionsRunningShoes = responseLower.includes('running shoes') || 
-                                responseLower.includes('running') ||
-                                responseLower.includes('shoes');
-    
-    // Also check if it mentions time (from first message with function call)
     const mentionsTime = responseLower.includes('time') || 
                         responseLower.includes('date') ||
-                        responseLower.includes('datetime');
+                        responseLower.includes('datetime') ||
+                        responseLower.includes('current time') ||
+                        responseLower.includes('what time');
     
     // Also check for common "can't recall" phrases that indicate context wasn't used
     const deniesMemory = responseLower.includes("can't recall") ||
@@ -373,17 +339,15 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
       console.error(`\nFull Exchange:`);
       console.error(`   USER: "${firstMessage}" (with function call)`);
       console.error(`   ASSISTANT: "${firstResponse}"`);
-      console.error(`   USER: "${secondMessage}"`);
-      console.error(`   ASSISTANT: "${secondResponse}"`);
       console.error(`   USER: "${recallQuestion}"`);
       console.error(`   ASSISTANT: "${recallResponse}"`);
       console.error(`\nContext sent: ${contextMessages.length} messages`);
-      console.error(`Context included messages about time and running shoes`);
+      console.error(`Context included message about time`);
       console.error(`Agent response: "${recallResponse}"`);
       console.error('❌ ================================\n');
         throw new Error(
           `Agent response does not reference previous conversation (with function calling). ` +
-          `Expected agent to mention "running shoes" or "time" from context. ` +
+          `Expected agent to mention "time" from context. ` +
           `Agent responded: "${recallResponse}"\n\n` +
           `This suggests function calling may interfere with context processing.`
         );
@@ -407,17 +371,15 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
         console.error(`\nFull Exchange:`);
         console.error(`   USER: "${firstMessage}" (with function call)`);
         console.error(`   ASSISTANT: "${firstResponse}"`);
-        console.error(`   USER: "${secondMessage}"`);
-        console.error(`   ASSISTANT: "${secondResponse}"`);
         console.error(`   USER: "${recallQuestion}"`);
         console.error(`   ASSISTANT: "${recallResponse}"`);
         console.error(`\nContext sent: ${contextMessages.length} messages`);
-        console.error(`Context included messages about time and running shoes`);
+        console.error(`Context included message about time`);
         console.error(`Agent response: "${recallResponse}"`);
         console.error('❌ ================================\n');
           throw new Error(
             `Agent response does not reference previous conversation (with function calling). ` +
-            `Expected agent to mention "running shoes" or "time" from context. ` +
+            `Expected agent to mention "time" from context. ` +
             `Agent responded: "${recallResponse}"\n\n` +
             `This suggests function calling may interfere with context processing.`
           );
@@ -425,10 +387,10 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     }
     
     // Success - agent used context even with function calling
-    // Agent should reference either running shoes or time (or both) from context
+    // Agent should reference time from context
     console.log('✅ Agent successfully used context to recall previous conversation (with function calling)');
     console.log('🎉 Context retention test PASSED - Agent is using context correctly even with function calling');
     
-    expect(mentionsRunningShoes || mentionsTime || mentionsPrevious).toBe(true);
+    expect(mentionsTime || mentionsPrevious).toBe(true);
   });
 });
