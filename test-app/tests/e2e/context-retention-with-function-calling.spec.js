@@ -5,10 +5,10 @@
  * This tests the hypothesis that function calling might interfere with context processing.
  * 
  * Test Flow:
- * 1. Setup function calling (get_current_datetime function - client-side with mock)
+ * 1. Setup function calling (get_current_datetime - server-side function with mocked backend)
  * 2. Establish connection
- * 3. Send message: "I am looking for running shoes" (may trigger function call)
- * 4. Wait for function call to execute (if triggered) and agent response
+ * 3. Send message: "I am looking for running shoes" (triggers function call)
+ * 4. Wait for function call to execute and agent response
  * 5. Disconnect agent
  * 6. Reconnect agent (context should be sent in Settings message)
  * 7. Ask: "Provide a summary of our conversation to this point."
@@ -41,14 +41,56 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     
     console.log('🧪 Testing context retention with function calling - agent should use context after reconnection');
     
+    // Mock backend endpoint for server-side function
+    const MOCK_BACKEND_URL = 'http://localhost:3001/api/get-datetime';
+    
+    // Setup route mocking for the backend function endpoint
+    await page.route(MOCK_BACKEND_URL, async (route) => {
+      const request = route.request();
+      const method = request.method();
+      
+      if (method === 'POST') {
+        // Parse request body to get function arguments
+        const postData = request.postDataJSON() || {};
+        const timezone = postData.timezone || 'UTC';
+        
+        // Mock response: current date and time
+        const now = new Date();
+        const mockResponse = {
+          success: true,
+          datetime: now.toISOString(),
+          formatted: now.toLocaleString('en-US', {
+            timeZone: timezone,
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+          }),
+          timezone: timezone,
+          timestamp: now.getTime()
+        };
+        
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(mockResponse)
+        });
+      } else {
+        await route.fulfill({ status: 405, body: 'Method not allowed' });
+      }
+    });
+    
     // Setup function calling BEFORE navigation
-    await page.addInitScript(() => {
+    await page.addInitScript((backendUrl) => {
       // Store functions that will be injected into agentOptions
-      // Using get_current_datetime as a client-side function (no endpoint = client-side)
+      // This is a server-side function (has endpoint) - Deepgram will call the endpoint
       window.testFunctions = [
         {
           name: 'get_current_datetime',
-          description: 'Get the current date and time. Use this when users ask about the current date, current time, what day it is, or what time it is.',
+          description: 'Get the current date and time. Use this when users ask about the current date, current time, what time it is, or what day it is.',
           parameters: {
             type: 'object',
             properties: {
@@ -58,48 +100,23 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
                 default: 'UTC'
               }
             }
+          },
+          endpoint: {
+            url: backendUrl,
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            }
           }
         }
       ];
       
-      // Store function handler (mocked client-side function)
-      window.handleFunctionCall = (request, sendResponse) => {
-        console.log(`[FUNCTION] Executing function: ${request.name}`, request.arguments);
-        
-        if (request.name === 'get_current_datetime') {
-          const timezone = request.arguments?.timezone || 'UTC';
-          const now = new Date();
-          
-          // Mock response with current date and time
-          const response = {
-            id: request.id,
-            result: {
-              success: true,
-              datetime: now.toISOString(),
-              date: now.toLocaleDateString('en-US', { timeZone: timezone }),
-              time: now.toLocaleTimeString('en-US', { 
-                timeZone: timezone,
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true
-              }),
-              timezone: timezone,
-              timestamp: now.getTime()
-            }
-          };
-          
-          sendResponse(response);
-          return response;
-        }
-        
-        return { id: request.id, result: { success: false, error: 'Unknown function' } };
-      };
-      
       // Store FunctionCallRequest messages for verification
+      // Note: For server-side functions, we don't need a client-side handler
+      // Deepgram will call the endpoint directly
       window.functionCallRequests = [];
       window.functionCallResponses = [];
-    });
+    }, MOCK_BACKEND_URL);
     
     // Install WebSocket capture to verify context is sent
     await installWebSocketCapture(page);
@@ -121,7 +138,9 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     await establishConnectionViaText(page);
     console.log('✅ Initial connection established with function calling enabled');
     
-    // Step 2: Send first message (may trigger function call, but function is for date/time queries)
+    // Step 2: Send first message that triggers function call
+    // Note: The message should trigger the function, but we'll use a message that builds context
+    // The function call will happen when agent processes the message
     console.log('📝 Step 2: Sending first message: "I am looking for running shoes"');
     const firstMessage = "I am looking for running shoes";
     
@@ -130,16 +149,24 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     await textInput.fill(firstMessage);
     await textInput.press('Enter');
     
-    // Wait for function call to be triggered
-    console.log('⏳ Waiting for function call to be triggered...');
+    // Wait for function call to be triggered (server-side function)
+    // For server-side functions, Deepgram calls the endpoint directly
+    // We can verify the function was called by checking if the mock endpoint was hit
+    console.log('⏳ Waiting for function call to be triggered (server-side function)...');
     let functionCallDetected = false;
     
+    // Check if the mock endpoint was called
     try {
-      const functionCallResult = await waitForFunctionCall(page, { timeout: 30000 });
-      if (functionCallResult && functionCallResult.count > 0) {
-        console.log(`✅ Function call detected: ${functionCallResult.lastCall}`);
+      // Wait for the route to be hit (function call executed)
+      await page.waitForRequest(request => 
+        request.url().includes(MOCK_BACKEND_URL) && request.method() === 'POST',
+        { timeout: 30000 }
+      ).then(() => {
         functionCallDetected = true;
-      }
+        console.log('✅ Function call detected: Mock backend endpoint was called');
+      }).catch(() => {
+        console.log('⚠️  No function call detected within timeout (mock endpoint not called)');
+      });
     } catch (e) {
       console.log('⚠️  No function call detected within timeout, continuing...');
     }
