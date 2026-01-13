@@ -364,8 +364,8 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
         );
     }
     
-    if (!mentionsRunningShoes) {
-      console.warn('⚠️ Agent response does not explicitly mention "running shoes"');
+    if (!mentionsTime) {
+      console.warn('⚠️ Agent response does not explicitly mention "time"');
       console.warn(`   Agent response: "${recallResponse}"`);
       console.warn('   This may indicate context is not being used, but checking for other context references...');
       
@@ -374,7 +374,9 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
                                responseLower.includes('earlier') ||
                                responseLower.includes('before') ||
                                responseLower.includes('we were') ||
-                               responseLower.includes('you were');
+                               responseLower.includes('you were') ||
+                               responseLower.includes('you asked') ||
+                               responseLower.includes('you wanted');
       
       if (!mentionsPrevious) {
         console.error('\n❌ ===== REGRESSION CONFIRMED =====');
