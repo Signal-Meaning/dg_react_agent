@@ -183,20 +183,68 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     }
     
     // Wait for agent response after function call (or just response if no function call)
-    console.log('⏳ Waiting for agent response (after function call if triggered)...');
-    const firstResponse = await waitForAgentResponseEnhanced(page, {
-      timeout: 60000, // Longer timeout for function call processing
-      expectedText: undefined // Don't check content, just wait for any response
-    });
+    // IMPORTANT: Wait for NON-GREETING response - greetings are NOT responses to user queries
+    console.log('⏳ Waiting for agent response (after function call if triggered, ignoring greeting)...');
+    
+    // Wait for a non-greeting response that comes AFTER the user message was sent
+    const firstResponse = await page.waitForFunction(
+      (userMessageText) => {
+        // Find the user message we just sent
+        const userMessages = Array.from(document.querySelectorAll('[data-testid="user-message"]'));
+        const targetUserMessage = userMessages.find(msg => 
+          msg.textContent && msg.textContent.includes(userMessageText)
+        );
+        
+        if (!targetUserMessage) return null;
+        
+        // Get all messages in order (user and agent mixed)
+        const allMessages = Array.from(document.querySelectorAll(
+          '[data-testid="user-message"], [data-testid="agent-response"], [data-testid="greeting-sent"], [data-testid="agent-speaking"]'
+        ));
+        const userMessageIndex = allMessages.indexOf(targetUserMessage);
+        
+        // Find the first NON-GREETING agent response after the user message
+        // Greetings are NOT responses to user queries - ignore them completely
+        for (let i = userMessageIndex + 1; i < allMessages.length; i++) {
+          const msg = allMessages[i];
+          const testId = msg.getAttribute('data-testid');
+          const text = msg.textContent?.trim() || '';
+          
+          // Skip greetings completely - these are NOT agent responses
+          const isGreeting = testId === 'greeting-sent' ||
+                            text.toLowerCase().includes("hello") ||
+                            text.toLowerCase().includes("i'm your") ||
+                            text.toLowerCase().includes("how can i assist") ||
+                            text.toLowerCase().startsWith("hello!");
+          
+          // Return the first non-greeting response with actual content
+          if (!isGreeting && text.length > 0) {
+            return text;
+          }
+        }
+        
+        return null;
+      },
+      firstMessage, // userMessageText
+      { timeout: 60000 } // Wait up to 60 seconds for actual response (not greeting)
+    ).then(result => result.jsonValue()).catch(() => '');
     
     console.log('✅ First message sent and agent responded');
     console.log(`📝 First agent response: ${firstResponse?.substring(0, 150)}${firstResponse?.length > 150 ? '...' : ''}`);
     console.log(`📝 Function call detected: ${functionCallDetected}`);
     
-    // Verify we got a response (not just waiting message)
+    // Verify we got a response (not just waiting message or greeting)
     expect(firstResponse).toBeTruthy();
     expect(firstResponse).not.toBe('(Waiting for agent response...)');
     expect(firstResponse.length).toBeGreaterThan(0);
+    
+    // Verify it's not just a greeting
+    const isGreeting = firstResponse.toLowerCase().includes("hello") ||
+                      firstResponse.toLowerCase().includes("how can i assist") ||
+                      firstResponse.toLowerCase().startsWith("hello!");
+    if (isGreeting) {
+      throw new Error(`Agent responded with greeting instead of actual response. Response: "${firstResponse}"`);
+    }
     
     // Wait a bit to ensure conversationHistory is updated
     await page.waitForTimeout(2000);
