@@ -5,10 +5,10 @@
  * This tests the hypothesis that function calling might interfere with context processing.
  * 
  * Test Flow:
- * 1. Setup function calling (search_products function)
+ * 1. Setup function calling (get_current_datetime function - client-side with mock)
  * 2. Establish connection
- * 3. Send message: "I am looking for running shoes" (triggers function call)
- * 4. Wait for function call to execute and agent response
+ * 3. Send message: "I am looking for running shoes" (may trigger function call)
+ * 4. Wait for function call to execute (if triggered) and agent response
  * 5. Disconnect agent
  * 6. Reconnect agent (context should be sent in Settings message)
  * 7. Ask: "Provide a summary of our conversation to this point."
@@ -44,42 +44,48 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     // Setup function calling BEFORE navigation
     await page.addInitScript(() => {
       // Store functions that will be injected into agentOptions
+      // Using get_current_datetime as a client-side function (no endpoint = client-side)
       window.testFunctions = [
         {
-          name: 'search_products',
-          description: 'Search for products. Use this when users are looking for products, want to find items, or ask about product availability.',
+          name: 'get_current_datetime',
+          description: 'Get the current date and time. Use this when users ask about the current date, current time, what day it is, or what time it is.',
           parameters: {
             type: 'object',
             properties: {
-              query: {
+              timezone: {
                 type: 'string',
-                description: 'Product search query (e.g., "running shoes", "laptop", "headphones")'
+                description: 'Timezone (e.g., "America/New_York", "UTC", "Europe/London"). Defaults to UTC if not specified.',
+                default: 'UTC'
               }
-            },
-            required: ['query']
+            }
           }
         }
       ];
       
-      // Store function handler
+      // Store function handler (mocked client-side function)
       window.handleFunctionCall = (request, sendResponse) => {
         console.log(`[FUNCTION] Executing function: ${request.name}`, request.arguments);
         
-        if (request.name === 'search_products') {
-          const query = request.arguments?.query || '';
-          // Simulate product search results
-          const mockResults = [
-            { id: 1, name: `${query} - Model A`, price: '$99.99' },
-            { id: 2, name: `${query} - Model B`, price: '$129.99' },
-            { id: 3, name: `${query} - Model C`, price: '$79.99' }
-          ];
+        if (request.name === 'get_current_datetime') {
+          const timezone = request.arguments?.timezone || 'UTC';
+          const now = new Date();
           
+          // Mock response with current date and time
           const response = {
             id: request.id,
             result: {
               success: true,
-              products: mockResults,
-              query: query
+              datetime: now.toISOString(),
+              date: now.toLocaleDateString('en-US', { timeZone: timezone }),
+              time: now.toLocaleTimeString('en-US', { 
+                timeZone: timezone,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+              }),
+              timezone: timezone,
+              timestamp: now.getTime()
             }
           };
           
@@ -115,8 +121,8 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     await establishConnectionViaText(page);
     console.log('✅ Initial connection established with function calling enabled');
     
-    // Step 2: Send first message that triggers function call
-    console.log('📝 Step 2: Sending first message: "I am looking for running shoes" (should trigger function call)');
+    // Step 2: Send first message (may trigger function call, but function is for date/time queries)
+    console.log('📝 Step 2: Sending first message: "I am looking for running shoes"');
     const firstMessage = "I am looking for running shoes";
     
     // Send message
