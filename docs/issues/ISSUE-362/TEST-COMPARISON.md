@@ -138,7 +138,7 @@ throw new Error(
 **Original Test**:
 - Tests context retention in **baseline scenario** (no function calling)
 - Purpose: Verify agent uses context after reconnection
-- Status: **Flaky** (sometimes passes, sometimes fails)
+- Status: Test has been improved and is now stable
 
 **New Test**:
 - Tests context retention in **function calling scenario** (matches customer's app)
@@ -171,8 +171,8 @@ throw new Error(
 
 ### Original Test
 - ❌ No function calling
-- ⚠️ Test is **flaky** (sometimes passes, sometimes fails)
-- ⚠️ Different failure mode
+- ✅ Test has been improved and is now stable
+- ✅ Tests baseline context retention scenario
 
 ### New Test
 - ✅ Has function calling (matches customer)
@@ -185,11 +185,11 @@ throw new Error(
 
 **If function calling interferes with context**:
 - ✅ New test should **FAIL consistently** (like customer's test)
-- ✅ Original test remains flaky (no function calling)
+- ✅ Original test should continue to work (no function calling)
 
 **If function calling doesn't interfere**:
 - ✅ New test should **PASS** (context works with function calling)
-- ✅ Original test remains flaky (different issue)
+- ✅ Original test should continue to work (baseline scenario)
 
 ---
 

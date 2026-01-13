@@ -67,7 +67,7 @@
 **Why this matters**:
 - Customer's app uses function calling (`search_products`)
 - Customer's test fails consistently (agent says "I'm unable to recall")
-- Our test (without function calling) is flaky
+- Our test (without function calling) has been improved and is now stable
 - **Hypothesis**: Function calling might interfere with context processing
 
 ---
@@ -98,7 +98,7 @@
 **We have function calling tests**, but **we don't have tests that combine function calling with context retention**. This is a gap that might explain why:
 
 1. Customer's test fails consistently (has function calling)
-2. Our test is flaky (no function calling)
+2. Our test (no function calling) has been improved and is now stable
 3. Function calling might interfere with context processing
 
 **Next Step**: Create a test that combines context retention with function calling to verify if function calling is the cause of the consistent failure.

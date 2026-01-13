@@ -42,7 +42,7 @@
    - Sometimes: References context correctly ✅
 
 **Key Characteristics**:
-- ⚠️ **Flaky/intermittent** - Sometimes passes, sometimes fails
+- ✅ **Stable** - Test has been improved and is now stable
 - ⚠️ **Different responses** - Not the specific "I'm unable to recall" message
 - ⚠️ **Different question** - We changed from "What were we just talking about?" to "Provide a summary..."
 
@@ -75,7 +75,7 @@
 ### 4. Behavior Pattern
 
 **Customer**: ✅ **Consistent failure** - Always gets "I'm unable to recall"  
-**Our Test**: ⚠️ **Flaky** - Sometimes passes, sometimes fails
+**Our Test**: ✅ **Stable** - Test has been improved and is now stable
 
 ---
 
@@ -84,7 +84,7 @@
 1. **Different scenarios** - We may not be testing the same conditions the customer is experiencing
 2. **Different environments** - Customer's test runs in voice-commerce app, ours runs in test-app
 3. **Different question** - The question phrasing might affect agent behavior
-4. **Different failure mode** - Customer gets consistent "can't recall" message, we get flaky behavior
+4. **Different failure mode** - Customer gets consistent "can't recall" message, our test (without function calling) is stable
 
 ---
 
