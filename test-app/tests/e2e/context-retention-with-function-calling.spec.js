@@ -126,15 +126,6 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
       'enable-function-calling': 'true'
     });
     
-    // Set up function call handler in the page
-    await page.evaluate(() => {
-      if (window.deepgramRef?.current && window.handleFunctionCall) {
-        // The component will use window.handleFunctionCall via onFunctionCallRequest prop
-        // We need to ensure it's set up correctly
-        console.log('[TEST] Function call handler ready');
-      }
-    });
-    
     await establishConnectionViaText(page);
     console.log('✅ Initial connection established with function calling enabled');
     
