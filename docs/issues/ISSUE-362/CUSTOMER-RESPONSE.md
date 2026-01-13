@@ -122,4 +122,4 @@ Both tests are available in the `dg_react_agent` repository for your review.
 
 ---
 
-**Status**: ⚠️ **INVESTIGATING** - Awaiting additional information to reproduce your exact scenario
+**Status**: ✅ **RESOLVED** - Customer has reported the issue is resolved (January 13, 2026)

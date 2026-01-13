@@ -4,7 +4,7 @@
 **GitHub Issue**: #362  
 **Customer Issue**: #587 (voice-commerce team)  
 **Priority**: 🔴 **CRITICAL** - Blocks release  
-**Status**: ⚠️ **INVESTIGATING** - Our tests passing, but customer's test still failing consistently - investigating differences  
+**Status**: ✅ **RESOLVED** - Customer has reported the issue is resolved (January 13, 2026)  
 **Package Version**: `@signal-meaning/deepgram-voice-interaction-react@^0.7.8`  
 **Regression Version**: `0.7.7` (confirmed - context retention fails intermittently)  
 **Working Baseline**: `0.7.6` (confirmed working)  
