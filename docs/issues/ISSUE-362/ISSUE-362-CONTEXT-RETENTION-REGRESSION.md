@@ -4,7 +4,7 @@
 **GitHub Issue**: #362  
 **Customer Issue**: #587 (voice-commerce team)  
 **Priority**: 🔴 **CRITICAL** - Blocks release  
-**Status**: ⚠️ **FLAKY REGRESSION CONFIRMED** - Context sent correctly but agent intermittently not using it  
+**Status**: ⚠️ **INVESTIGATING** - Customer reports consistent failure, our test shows flaky behavior (may be testing different scenario)  
 **Package Version**: `@signal-meaning/deepgram-voice-interaction-react@^0.7.8`  
 **Regression Version**: `0.7.7` (confirmed - context retention fails intermittently)  
 **Working Baseline**: `0.7.6` (confirmed working)  
@@ -14,9 +14,9 @@
 
 ## Executive Summary
 
-We have a **confirmed flaky regression** where conversation context is being sent correctly to the Deepgram agent via `agentOptions.context`, but the agent model **intermittently does not use the context** to answer questions about previous conversations. This was working consistently in previous releases (v0.7.6).
+We have a **reported regression** where conversation context is being sent correctly to the Deepgram agent via `agentOptions.context`, but the agent model **does not use the context** to answer questions about previous conversations. Customer reports **consistent failure** ("I'm unable to recall previous conversations"), but our test shows **flaky behavior** - we may be testing a different scenario.
 
-**Key Finding**: Context format is correct, context is included in Settings message (verified in logs), but agent **intermittently** responds with greeting only or doesn't reference previous conversation despite receiving context messages. The behavior is **non-deterministic** - sometimes works, sometimes fails.
+**Key Finding**: Context format is correct, context is included in Settings message (verified in logs). **Customer reports consistent failure** with specific message "I'm unable to recall previous conversations", but **our test shows flaky behavior** - we may not be testing the same scenario as the customer.
 
 **Regression Identified**: Version `0.7.7` introduced the regression. Version `0.7.6` works correctly (confirmed via testing on `release/frontend-v1.5.1` branch with cherry-picked test).
 
