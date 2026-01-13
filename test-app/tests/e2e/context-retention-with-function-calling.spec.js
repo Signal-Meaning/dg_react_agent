@@ -129,6 +129,27 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     await establishConnectionViaText(page);
     console.log('✅ Initial connection established with function calling enabled');
     
+    // Verify function is included in Settings after connection
+    await waitForSettingsApplied(page);
+    const wsDataInitial = await getCapturedWebSocketData(page);
+    const initialSettings = wsDataInitial.sent.filter(msg => msg.type === 'Settings');
+    if (initialSettings.length > 0 && initialSettings[0].data) {
+      const hasFunctions = !!(initialSettings[0].data.agent?.think?.functions);
+      const functionsCount = initialSettings[0].data.agent?.think?.functions?.length || 0;
+      console.log(`📋 Initial Settings - Functions included: ${hasFunctions}, Count: ${functionsCount}`);
+      if (hasFunctions && functionsCount > 0) {
+        const funcDef = initialSettings[0].data.agent.think.functions[0];
+        console.log(`✅ Function verified in initial Settings: ${funcDef.name}, has endpoint: ${!!funcDef.endpoint}`);
+        expect(funcDef.endpoint).toBeDefined();
+        expect(funcDef.endpoint.url).toBe(MOCK_BACKEND_URL);
+      } else {
+        console.error('❌ Function NOT found in initial Settings - test will likely fail');
+        throw new Error('Function not included in Settings message - cannot test function calling');
+      }
+    } else {
+      console.warn('⚠️  Could not verify function in initial Settings (WebSocket capture may not have captured it)');
+    }
+    
     // Step 2: Send first message that triggers function call
     // Use a message that will trigger the datetime function AND build context
     // We'll ask about time first, then follow up about running shoes to build context
