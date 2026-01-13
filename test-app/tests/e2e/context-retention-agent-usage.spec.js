@@ -6,12 +6,12 @@
  * 
  * Test Flow:
  * 1. Establish connection
- * 2. Send message: "I'm looking for running shoes"
+ * 2. Send message: "My favorite color is blue"
  * 3. Wait for agent response (not greeting - greeting arrives on connection)
  * 4. Disconnect agent
  * 5. Reconnect agent (context should be sent in Settings message)
  * 6. Ask: "Provide a summary of our conversation to this point."
- * 7. Verify agent response references "running shoes" or previous conversation from context
+ * 7. Verify agent response references "blue" or "color" or previous conversation from context
  * 
  * This test should FAIL with current regression (v0.7.7+) where agent doesn't use context.
  * This test should PASS when the regression is fixed.
@@ -48,8 +48,8 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     console.log('✅ Initial connection established');
     
     // Step 2: Send first message and wait for agent response
-    console.log('📝 Step 2: Sending first message: "I am looking for running shoes"');
-    const firstMessage = "I am looking for running shoes";
+    console.log('📝 Step 2: Sending first message: "My favorite color is blue"');
+    const firstMessage = "My favorite color is blue";
     
     // Send message
     const textInput = page.locator('[data-testid="text-input"]');
@@ -132,16 +132,16 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
       
       // Verify context format
       // Note: Context may include greeting first, then user message, then agent response
-      // Find the user message about running shoes
+      // Find the user message about favorite color
       const contextMessages = settings.agent.context.messages;
       const userMessage = contextMessages.find(msg => 
-        msg.role === 'user' && msg.content.toLowerCase().includes('running shoes')
+        msg.role === 'user' && (msg.content.toLowerCase().includes('blue') || msg.content.toLowerCase().includes('color'))
       );
       
       expect(userMessage).toBeDefined();
       expect(userMessage.type).toBe('History');
       expect(userMessage.role).toBe('user');
-      expect(userMessage.content).toContain('running shoes');
+      expect(userMessage.content.toLowerCase()).toMatch(/blue|color/);
       
       console.log('✅ Context verified in Settings message');
     } else {
@@ -173,7 +173,7 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     const recallQuestion = "Provide a summary of our conversation to this point.";
     
     // Wait for agent response to recall question
-    // This is the critical assertion - agent should reference "running shoes"
+    // This is the critical assertion - agent should reference "blue" or "color"
     const recallResponse = await waitForAgentResponseEnhanced(page, {
       timeout: 30000,
       expectedText: undefined // We'll check manually to see if it references context
@@ -232,11 +232,11 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     // Step 7: Verify agent response references previous conversation
     console.log('🔍 Step 7: Verifying agent response references previous conversation');
     
-    // Check if agent response mentions "running shoes" or similar context
+    // Check if agent response mentions "blue" or "color" or similar context
     const responseLower = recallResponse.toLowerCase();
-    const mentionsRunningShoes = responseLower.includes('running shoes') || 
-                                responseLower.includes('running') ||
-                                responseLower.includes('shoes');
+    const mentionsColor = responseLower.includes('blue') || 
+                         responseLower.includes('color') ||
+                         responseLower.includes('favorite color');
     
     // Also check for common "can't recall" phrases that indicate context wasn't used
     const deniesMemory = responseLower.includes("can't recall") ||
@@ -260,7 +260,7 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
       console.error('❌ ================================\n');
       throw new Error(
         `Agent response does not reference previous conversation. ` +
-        `Expected agent to mention "running shoes" or similar context. ` +
+        `Expected agent to mention "blue" or "color" or similar context. ` +
         `Agent responded: "${recallResponse}"\n\n` +
         `Full exchange:\n` +
         `  USER: "${firstMessage}"\n` +
@@ -270,8 +270,8 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
       );
     }
     
-    if (!mentionsRunningShoes) {
-      console.warn('⚠️ Agent response does not explicitly mention "running shoes"');
+    if (!mentionsColor) {
+      console.warn('⚠️ Agent response does not explicitly mention "blue" or "color"');
       console.warn(`   Agent response: "${recallResponse}"`);
       console.warn('   This may indicate context is not being used, but checking for other context references...');
       
@@ -296,7 +296,7 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
         console.error('❌ ================================\n');
         throw new Error(
           `Agent response does not reference previous conversation. ` +
-          `Expected agent to mention "running shoes" or reference previous conversation. ` +
+          `Expected agent to mention "blue" or "color" or reference previous conversation. ` +
           `Agent responded: "${recallResponse}"\n\n` +
           `Full exchange:\n` +
           `  USER: "${firstMessage}"\n` +
@@ -321,7 +321,7 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     
     // Send first message to establish conversation
     await establishConnectionViaText(page);
-    const firstMessage = "I am looking for running shoes";
+    const firstMessage = "My favorite color is blue";
     await sendMessageAndWaitForResponse(page, firstMessage);
     
     // Disconnect
