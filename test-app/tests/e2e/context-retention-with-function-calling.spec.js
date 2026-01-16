@@ -22,7 +22,6 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  setupTestPage,
   establishConnectionViaText,
   sendMessageAndWaitForResponse,
   disconnectComponent,
@@ -33,6 +32,7 @@ import {
   skipIfNoRealAPI,
   waitForFunctionCall
 } from './helpers/test-helpers.js';
+import { setupTestPage } from './helpers/test-helpers.mjs';
 
 test.describe('Context Retention with Function Calling (Issue #362)', () => {
   

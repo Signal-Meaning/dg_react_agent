@@ -21,7 +21,6 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  setupTestPage,
   establishConnectionViaText,
   sendMessageAndWaitForResponse,
   disconnectComponent,
@@ -31,6 +30,7 @@ import {
   getCapturedWebSocketData,
   skipIfNoRealAPI
 } from './helpers/test-helpers.js';
+import { setupTestPage } from './helpers/test-helpers.mjs';
 
 test.describe('Context Retention - Agent Usage (Issue #362)', () => {
   
