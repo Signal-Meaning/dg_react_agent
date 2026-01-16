@@ -286,8 +286,9 @@ context: !isAgentConnected && contextMessages.length > 0
 
 ### All Context Retention Tests Run with Real APIs
 
-**Test Run Date**: January 12, 2026  
+**Test Run Date**: January 12, 2026 (initial), January 16, 2026 (proxy mode validation)  
 **Environment**: Real APIs (`USE_REAL_API_KEYS=true`)  
+**Test Mode**: **Proxy mode** (proxy mode is the default and primary mode for the component)  
 **Package Version**: `@signal-meaning/deepgram-voice-interaction-react@^0.7.8`
 
 ### Test 1: Context Retention Across Disconnect

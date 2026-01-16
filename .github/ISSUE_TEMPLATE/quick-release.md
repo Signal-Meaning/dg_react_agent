@@ -21,6 +21,10 @@ This is a patch release for version vX.X.X of the Deepgram Voice Interaction Rea
 #### Pre-Release
 - [ ] **Tests Passing**: All tests passing
   - [ ] Run: `npm test`
+  - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode** (proxy mode is the default and primary mode)
+    - [ ] Start proxy server: `npm run test:proxy:server` (in test-app directory)
+    - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e` (all E2E tests must pass in proxy mode)
+    - [ ] Verify: All tests pass in proxy mode before proceeding
 - [ ] **Linting Clean**: No linting errors
   - [ ] Run: `npm run lint`
 

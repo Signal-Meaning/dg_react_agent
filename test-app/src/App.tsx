@@ -152,8 +152,9 @@ function App() {
     const proxyAuthTokenParam = urlParams?.get('proxyAuthToken');
     
     return {
-      connectionMode: (connectionModeParam === 'proxy' ? 'proxy' : 'direct') as 'direct' | 'proxy',
-      proxyEndpoint: proxyEndpointParam || import.meta.env.VITE_PROXY_ENDPOINT || '',
+      // Default to proxy mode (direct mode is deprecated - only bug fixes, no new features)
+      connectionMode: (connectionModeParam === 'direct' ? 'direct' : 'proxy') as 'direct' | 'proxy',
+      proxyEndpoint: proxyEndpointParam || import.meta.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy',
       proxyAuthToken: proxyAuthTokenParam || '',
     };
   }, []);
@@ -1063,21 +1064,21 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
               <input
                 type="radio"
                 name="connectionMode"
-                value="direct"
-                checked={connectionMode === 'direct'}
+                value="proxy"
+                checked={connectionMode === 'proxy'}
                 onChange={(e) => setConnectionMode(e.target.value as 'direct' | 'proxy')}
               />
-              Direct (apiKey)
+              Proxy (proxyEndpoint) - Default
             </label>
             <label>
               <input
                 type="radio"
                 name="connectionMode"
-                value="proxy"
-                checked={connectionMode === 'proxy'}
+                value="direct"
+                checked={connectionMode === 'direct'}
                 onChange={(e) => setConnectionMode(e.target.value as 'direct' | 'proxy')}
               />
-              Proxy (proxyEndpoint)
+              Direct (apiKey) - Deprecated (bug fixes only, no new features)
             </label>
           </div>
           

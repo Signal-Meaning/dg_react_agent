@@ -36,6 +36,8 @@ Both tests verify:
 - ✅ Context format matches Deepgram API specification
 - ✅ Agent uses context to answer recall questions
 
+**Test Mode**: Tests were run in **proxy mode** (proxy mode is the default and primary mode for the component). All tests passed in proxy mode.
+
 ---
 
 ## Your Test Status
