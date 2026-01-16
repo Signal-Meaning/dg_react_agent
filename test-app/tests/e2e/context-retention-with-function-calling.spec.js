@@ -22,7 +22,6 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  establishConnectionViaText,
   sendMessageAndWaitForResponse,
   disconnectComponent,
   waitForSettingsApplied,
@@ -30,7 +29,8 @@ import {
   installWebSocketCapture,
   getCapturedWebSocketData,
   skipIfNoRealAPI,
-  waitForFunctionCall
+  waitForFunctionCall,
+  waitForConnection
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/test-helpers.mjs';
 
@@ -120,7 +120,24 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
       'enable-function-calling': 'true'
     });
     
-    await establishConnectionViaText(page);
+    // Wait for connection mode to be set (proxy mode)
+    await page.waitForFunction(() => {
+      const modeEl = document.querySelector('[data-testid="connection-mode"]');
+      return modeEl && (modeEl.textContent?.includes('proxy') || modeEl.textContent?.includes('direct'));
+    }, { timeout: 5000 });
+    
+    // Wait for text input to be ready and focusable before triggering auto-connect
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.waitFor({ state: 'visible', timeout: 10000 });
+    
+    // Focus text input to trigger auto-connect (same pattern as passing proxy mode tests)
+    await textInput.focus();
+    
+    // Wait for connection status element to appear
+    await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
+    
+    // Wait for connection to be established (longer timeout for proxy mode)
+    await waitForConnection(page, 30000);
     console.log('✅ Initial connection established with function calling enabled');
     
     // Verify function is included in Settings after connection
