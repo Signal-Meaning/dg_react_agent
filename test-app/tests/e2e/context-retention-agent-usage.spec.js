@@ -69,8 +69,7 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     console.log('📝 Step 2: Sending first message: "My favorite color is blue"');
     const firstMessage = "My favorite color is blue";
     
-    // Send message
-    const textInput = page.locator('[data-testid="text-input"]');
+    // Send message (reuse textInput from above)
     await textInput.fill(firstMessage);
     await textInput.press('Enter');
     
@@ -339,7 +338,7 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     
     // Send first message to establish conversation
     // Wait for text input and focus to trigger auto-connect
-    const textInput = page.locator('[data-testid="text-input"]');
+    let textInput = page.locator('[data-testid="text-input"]');
     await textInput.waitFor({ state: 'visible', timeout: 10000 });
     await textInput.focus();
     await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });

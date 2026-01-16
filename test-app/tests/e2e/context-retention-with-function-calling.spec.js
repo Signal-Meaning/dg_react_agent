@@ -127,7 +127,7 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     }, { timeout: 5000 });
     
     // Wait for text input to be ready and focusable before triggering auto-connect
-    const textInput = page.locator('[data-testid="text-input"]');
+    let textInput = page.locator('[data-testid="text-input"]');
     await textInput.waitFor({ state: 'visible', timeout: 10000 });
     
     // Focus text input to trigger auto-connect (same pattern as passing proxy mode tests)
@@ -179,8 +179,8 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     console.log('📝 Step 2: Sending first message: "What is the time?" (should trigger function call)');
     const firstMessage = "What is the time?";
     
-    // Send message
-    const textInput = page.locator('[data-testid="text-input"]');
+    // Send message (reuse textInput from above)
+    textInput = page.locator('[data-testid="text-input"]');
     await textInput.fill(firstMessage);
     await textInput.press('Enter');
     
