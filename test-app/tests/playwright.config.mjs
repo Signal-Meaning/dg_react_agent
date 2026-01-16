@@ -114,9 +114,9 @@ export default defineConfig({
       port: 8080, // Proxy server port
       reuseExistingServer: true,
       timeout: 10000,
-      // Proxy server logging reverted to 'ignore' after Issue #329 debugging completed
-      stdout: 'ignore',
-      stderr: 'ignore',
+      // Enable logging temporarily to debug proxy server startup
+      stdout: 'pipe',
+      stderr: 'pipe',
       env: {
         // Use VITE_DEEPGRAM_API_KEY as primary source (matches test-app/.env)
         // Fall back to DEEPGRAM_API_KEY if VITE_* not available
