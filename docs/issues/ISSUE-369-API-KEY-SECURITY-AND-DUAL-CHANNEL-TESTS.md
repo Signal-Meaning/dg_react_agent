@@ -85,16 +85,12 @@ Create E2E tests that verify both text and microphone channels work together:
 
 **Requirements:**
 - Real Deepgram API key (`VITE_DEEPGRAM_API_KEY`) - for proxy server
-- Proxy server running (`npm run test:proxy:server`)
-- `USE_PROXY_MODE=true` environment variable
+- Proxy server automatically started by Playwright config
 
 **Run Command:**
 ```bash
-# Start proxy server
-npm run test:proxy:server
-
-# In another terminal, run security tests
-USE_PROXY_MODE=true npm run test:e2e -- api-key-security-proxy-mode
+# Run security tests (proxy mode is default)
+npm run test:e2e -- api-key-security-proxy-mode
 ```
 
 **Status**: ✅ **11/11 tests passing**
@@ -103,15 +99,15 @@ USE_PROXY_MODE=true npm run test:e2e -- api-key-security-proxy-mode
 
 **Requirements:**
 - Real Deepgram API key (`VITE_DEEPGRAM_API_KEY`)
-- For proxy mode tests: Proxy server running and `USE_PROXY_MODE=true`
+- Proxy server automatically started by Playwright config (proxy mode is default)
 
 **Run Command:**
 ```bash
-# Run dual channel tests
+# Run dual channel tests (proxy mode is default)
 npm run test:e2e -- dual-channel-text-and-microphone
 
-# Or in proxy mode
-USE_PROXY_MODE=true npm run test:e2e -- dual-channel-text-and-microphone
+# For direct mode (if needed)
+USE_PROXY_MODE=false npm run test:e2e -- dual-channel-text-and-microphone
 ```
 
 **Status**: ⚠️ **Tests created, some connection timing issues to resolve**
