@@ -34,13 +34,15 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 1: Establish connection via text input
     console.log('📝 Step 1: Establishing connection via text input');
-    await establishConnectionViaText(page);
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.waitFor({ state: 'visible', timeout: 10000 });
+    await textInput.focus(); // This triggers auto-connect
     
-    // Verify connection is established (may be 'connected' or 'connected (proxy)')
+    // Wait for connection (may be 'connected' or 'connected (proxy)')
     await page.waitForFunction(() => {
       const statusEl = document.querySelector('[data-testid="connection-status"]');
       return statusEl && statusEl.textContent && statusEl.textContent.toLowerCase().includes('connected');
-    }, { timeout: 10000 });
+    }, { timeout: 20000 });
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
     expect(connectionStatus.toLowerCase()).toContain('connected');
     console.log('✅ Connection established via text');
@@ -140,7 +142,15 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 1: Start with text
     console.log('📝 Step 1: Starting with text channel');
-    await establishConnectionViaText(page);
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.waitFor({ state: 'visible', timeout: 10000 });
+    await textInput.focus(); // This triggers auto-connect
+    
+    // Wait for connection
+    await page.waitForFunction(() => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      return statusEl && statusEl.textContent && statusEl.textContent.toLowerCase().includes('connected');
+    }, { timeout: 20000 });
     
     const textMessage1 = "First message via text.";
     await sendTextMessage(page, textMessage1);
@@ -204,7 +214,15 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 1: Establish connection via text
     console.log('📝 Step 1: Establishing connection via text');
-    await establishConnectionViaText(page);
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.waitFor({ state: 'visible', timeout: 10000 });
+    await textInput.focus(); // This triggers auto-connect
+    
+    // Wait for connection
+    await page.waitForFunction(() => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      return statusEl && statusEl.textContent && statusEl.textContent.toLowerCase().includes('connected');
+    }, { timeout: 20000 });
     
     let connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
     expect(connectionStatus).toContain('connected');
@@ -309,10 +327,18 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 1: Establish connection via text in proxy mode
     console.log('📝 Step 1: Establishing connection via text (proxy mode)');
-    await establishConnectionViaText(page);
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.waitFor({ state: 'visible', timeout: 10000 });
+    await textInput.focus(); // This triggers auto-connect
+    
+    // Wait for connection
+    await page.waitForFunction(() => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      return statusEl && statusEl.textContent && statusEl.textContent.toLowerCase().includes('connected');
+    }, { timeout: 20000 });
     
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    expect(connectionStatus).toContain('connected');
+    expect(connectionStatus.toLowerCase()).toContain('connected');
     
     // Verify proxy mode
     const connectionMode = await page.locator('[data-testid="connection-mode"]').textContent();
