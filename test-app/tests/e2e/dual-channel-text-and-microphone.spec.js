@@ -37,154 +37,180 @@ import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @returns {Promise<string>} Formatted transcript string
  */
+/**
+ * Capture and format conversation transcript for review
+ * Includes user messages (text and audio), agent responses, and function call summaries
+ * Optimized to avoid delays - uses quick DOM queries and window access
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @returns {Promise<string>} Formatted transcript string
+ */
 async function captureConversationTranscript(page) {
-  const transcript = await page.evaluate(() => {
-    const lines = [];
-    lines.push('='.repeat(80));
-    lines.push('CONVERSATION TRANSCRIPT');
-    lines.push('='.repeat(80));
-    lines.push('');
-    
-    // Get conversation history from window (includes both user and assistant messages)
-    const conversationHistory = window.__testConversationHistory || [];
-    
-    // Get transcript history from DOM (audio transcriptions)
-    const transcriptEntries = Array.from(document.querySelectorAll('[data-testid^="transcript-entry-"]'));
-    const transcripts = transcriptEntries.map((entry, index) => {
-      const textEl = entry.querySelector(`[data-testid="transcript-text-${index}"]`);
-      return {
-        text: textEl?.textContent?.trim() || '',
-        is_final: entry.getAttribute('data-is-final') === 'true',
-        timestamp: parseInt(entry.getAttribute('data-timestamp') || '0', 10)
-      };
-    }).filter(t => t.text && t.is_final); // Only include final transcripts
-    
-    // Get function call information
-    const functionCallRequests = window.functionCallRequests || [];
-    const functionCallResponses = window.functionCallResponses || [];
-    
-    // Build transcript chronologically by combining all sources
-    const allEvents = [];
-    
-    // Add conversation history entries (both user and assistant)
-    conversationHistory.forEach((msg) => {
-      allEvents.push({
-        type: msg.role === 'user' ? 'user_message' : 'agent_response',
-        content: msg.content,
-        timestamp: msg.timestamp || Date.now(),
-        source: 'conversation_history'
-      });
-    });
-    
-    // Add final audio transcriptions (these may duplicate user messages, but we'll dedupe)
-    transcripts.forEach(transcript => {
-      allEvents.push({
-        type: 'user_audio_transcript',
-        content: transcript.text,
-        timestamp: transcript.timestamp,
-        source: 'transcript_history'
-      });
-    });
-    
-    // Add function call information (inserted after the user message that triggered them)
-    functionCallRequests.forEach((req, idx) => {
-      const response = functionCallResponses[idx] || null;
-      let resultSummary = 'No response';
-      if (response) {
-        try {
-          const resultData = JSON.parse(response.content || '{}');
-          // Extract result count or summary
-          if (Array.isArray(resultData)) {
-            resultSummary = `${resultData.length} result(s)`;
-          } else if (resultData.results && Array.isArray(resultData.results)) {
-            resultSummary = `${resultData.results.length} result(s)`;
-          } else if (resultData.items && Array.isArray(resultData.items)) {
-            resultSummary = `${resultData.items.length} result(s)`;
-          } else if (resultData.data && Array.isArray(resultData.data)) {
-            resultSummary = `${resultData.data.length} result(s)`;
-          } else if (resultData.success !== undefined) {
-            resultSummary = resultData.success ? 'Success' : 'Failed';
-          } else {
-            resultSummary = 'Response received';
-          }
-        } catch (e) {
-          resultSummary = 'Response received (parse error)';
-        }
-      }
+  // Use a timeout to prevent hanging
+  const transcript = await Promise.race([
+    page.evaluate(() => {
+      const lines = [];
+      lines.push('='.repeat(80));
+      lines.push('CONVERSATION TRANSCRIPT');
+      lines.push('='.repeat(80));
+      lines.push('');
       
-      // Parse query/arguments
-      let queryText = 'No arguments';
       try {
-        if (req.arguments) {
-          const args = typeof req.arguments === 'string' ? JSON.parse(req.arguments) : req.arguments;
-          // Extract query or search term if available
-          if (args.query) {
-            queryText = args.query;
-          } else if (args.search) {
-            queryText = args.search;
-          } else if (args.text) {
-            queryText = args.text;
-          } else {
-            queryText = JSON.stringify(args);
+        // Get conversation history from window (includes both user and assistant messages)
+        const conversationHistory = window.__testConversationHistory || [];
+        
+        // Get transcript history from DOM (audio transcriptions) - limit to avoid long processing
+        const transcriptEntries = Array.from(document.querySelectorAll('[data-testid^="transcript-entry-"]')).slice(0, 50);
+        const transcripts = transcriptEntries.map((entry, index) => {
+          try {
+            const textEl = entry.querySelector(`[data-testid="transcript-text-${index}"]`);
+            return {
+              text: textEl?.textContent?.trim() || '',
+              is_final: entry.getAttribute('data-is-final') === 'true',
+              timestamp: parseInt(entry.getAttribute('data-timestamp') || '0', 10)
+            };
+          } catch (e) {
+            return null;
           }
+        }).filter(t => t && t.text && t.is_final); // Only include final transcripts
+        
+        // Get function call information
+        const functionCallRequests = (window.functionCallRequests || []).slice(0, 20); // Limit to 20
+        const functionCallResponses = (window.functionCallResponses || []).slice(0, 20);
+        
+        // Build transcript chronologically by combining all sources
+        const allEvents = [];
+        
+        // Add conversation history entries (both user and assistant)
+        conversationHistory.slice(0, 50).forEach((msg) => {
+          allEvents.push({
+            type: msg.role === 'user' ? 'user_message' : 'agent_response',
+            content: msg.content || '',
+            timestamp: msg.timestamp || Date.now(),
+            source: 'conversation_history'
+          });
+        });
+        
+        // Add final audio transcriptions (these may duplicate user messages, but we'll dedupe)
+        transcripts.forEach(transcript => {
+          allEvents.push({
+            type: 'user_audio_transcript',
+            content: transcript.text,
+            timestamp: transcript.timestamp,
+            source: 'transcript_history'
+          });
+        });
+        
+        // Add function call information (inserted after the user message that triggered them)
+        functionCallRequests.forEach((req, idx) => {
+          const response = functionCallResponses[idx] || null;
+          let resultSummary = 'No response';
+          if (response) {
+            try {
+              const resultData = JSON.parse(response.content || '{}');
+              // Extract result count or summary
+              if (Array.isArray(resultData)) {
+                resultSummary = `${resultData.length} result(s)`;
+              } else if (resultData.results && Array.isArray(resultData.results)) {
+                resultSummary = `${resultData.results.length} result(s)`;
+              } else if (resultData.items && Array.isArray(resultData.items)) {
+                resultSummary = `${resultData.items.length} result(s)`;
+              } else if (resultData.data && Array.isArray(resultData.data)) {
+                resultSummary = `${resultData.data.length} result(s)`;
+              } else if (resultData.success !== undefined) {
+                resultSummary = resultData.success ? 'Success' : 'Failed';
+              } else {
+                resultSummary = 'Response received';
+              }
+            } catch (e) {
+              resultSummary = 'Response received (parse error)';
+            }
+          }
+          
+          // Parse query/arguments - limit length to avoid huge strings
+          let queryText = 'No arguments';
+          try {
+            if (req.arguments) {
+              const args = typeof req.arguments === 'string' ? JSON.parse(req.arguments) : req.arguments;
+              // Extract query or search term if available
+              if (args.query) {
+                queryText = String(args.query).substring(0, 200);
+              } else if (args.search) {
+                queryText = String(args.search).substring(0, 200);
+              } else if (args.text) {
+                queryText = String(args.text).substring(0, 200);
+              } else {
+                queryText = JSON.stringify(args).substring(0, 200);
+              }
+            }
+          } catch (e) {
+            const argStr = typeof req.arguments === 'string' ? req.arguments : JSON.stringify(req.arguments);
+            queryText = argStr.substring(0, 200);
+          }
+          
+          allEvents.push({
+            type: 'function_call',
+            functionName: req.name || 'unknown',
+            query: queryText,
+            provider: 'Deepgram Agent',
+            resultCount: resultSummary,
+            timestamp: Date.now() // Approximate - function calls happen after user message
+          });
+        });
+        
+        // Sort by timestamp
+        allEvents.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        
+        // Format transcript with deduplication
+        let exchangeNumber = 1;
+        const seenUserMessages = new Set();
+        
+        allEvents.forEach((event) => {
+          if (event.type === 'user_message' || event.type === 'user_audio_transcript') {
+            // Deduplicate: if we've seen this exact message, skip it
+            const messageKey = (event.content || '').trim().toLowerCase().substring(0, 100);
+            if (seenUserMessages.has(messageKey)) {
+              return; // Skip duplicate
+            }
+            seenUserMessages.add(messageKey);
+            
+            const label = event.type === 'user_audio_transcript' ? 'USER (Audio)' : 'USER (Text)';
+            lines.push(`[Exchange ${exchangeNumber}]`);
+            lines.push(`${label}: ${event.content || '(empty)'}`);
+            lines.push('');
+          } else if (event.type === 'agent_response') {
+            lines.push(`ASSISTANT: ${event.content || '(empty)'}`);
+            lines.push('');
+            exchangeNumber++;
+          } else if (event.type === 'function_call') {
+            // Function calls are inserted after user messages
+            lines.push(`  [Function Call]`);
+            lines.push(`    Function: ${event.functionName}`);
+            lines.push(`    Query: ${event.query}`);
+            lines.push(`    Provider: ${event.provider}`);
+            lines.push(`    Results: ${event.resultCount}`);
+            lines.push('');
+          }
+        });
+        
+        lines.push('='.repeat(80));
+        lines.push(`Total Exchanges: ${exchangeNumber - 1}`);
+        if (functionCallRequests.length > 0) {
+          lines.push(`Function Calls: ${functionCallRequests.length}`);
         }
-      } catch (e) {
-        queryText = typeof req.arguments === 'string' ? req.arguments : JSON.stringify(req.arguments);
+        lines.push('='.repeat(80));
+      } catch (error) {
+        lines.push('Error capturing transcript: ' + (error.message || String(error)));
+        lines.push('='.repeat(80));
       }
       
-      allEvents.push({
-        type: 'function_call',
-        functionName: req.name,
-        query: queryText,
-        provider: 'Deepgram Agent',
-        resultCount: resultSummary,
-        timestamp: Date.now() // Approximate - function calls happen after user message
-      });
-    });
-    
-    // Sort by timestamp
-    allEvents.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-    
-    // Format transcript with deduplication
-    let exchangeNumber = 1;
-    const seenUserMessages = new Set();
-    
-    allEvents.forEach((event) => {
-      if (event.type === 'user_message' || event.type === 'user_audio_transcript') {
-        // Deduplicate: if we've seen this exact message, skip it
-        const messageKey = event.content.trim().toLowerCase();
-        if (seenUserMessages.has(messageKey)) {
-          return; // Skip duplicate
-        }
-        seenUserMessages.add(messageKey);
-        
-        const label = event.type === 'user_audio_transcript' ? 'USER (Audio)' : 'USER (Text)';
-        lines.push(`[Exchange ${exchangeNumber}]`);
-        lines.push(`${label}: ${event.content}`);
-        lines.push('');
-      } else if (event.type === 'agent_response') {
-        lines.push(`ASSISTANT: ${event.content}`);
-        lines.push('');
-        exchangeNumber++;
-      } else if (event.type === 'function_call') {
-        // Function calls are inserted after user messages
-        lines.push(`  [Function Call]`);
-        lines.push(`    Function: ${event.functionName}`);
-        lines.push(`    Query: ${event.query}`);
-        lines.push(`    Provider: ${event.provider}`);
-        lines.push(`    Results: ${event.resultCount}`);
-        lines.push('');
-      }
-    });
-    
-    lines.push('='.repeat(80));
-    lines.push(`Total Exchanges: ${exchangeNumber - 1}`);
-    if (functionCallRequests.length > 0) {
-      lines.push(`Function Calls: ${functionCallRequests.length}`);
-    }
-    lines.push('='.repeat(80));
-    
-    return lines.join('\n');
+      return lines.join('\n');
+    }),
+    new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Transcript capture timeout')), 5000)
+    )
+  ]).catch(() => {
+    // Return minimal transcript on timeout/error
+    return '='.repeat(80) + '\nCONVERSATION TRANSCRIPT\n' + '='.repeat(80) + '\n\n(Transcript capture timed out or failed)\n\n' + '='.repeat(80);
   });
   
   return transcript;
