@@ -26,7 +26,8 @@ import {
   sendTextMessage,
   MicrophoneHelpers,
   waitForAgentResponse,
-  skipIfNoRealAPI
+  skipIfNoRealAPI,
+  writeTranscriptToFile
 } from './helpers/test-helpers.js';
 import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
 import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
@@ -334,6 +335,12 @@ test.describe('Dual Channel - Text and Microphone', () => {
     console.log('\n📋 CONVERSATION TRANSCRIPT:');
     console.log(transcript);
     
+    // Write transcript to file if enabled
+    await writeTranscriptToFile(transcript, {
+      testName: test.info().title,
+      testFile: test.info().file
+    });
+    
     console.log('🎉 Test passed - successfully switched from text to microphone');
   });
 
@@ -405,6 +412,12 @@ test.describe('Dual Channel - Text and Microphone', () => {
     const transcript = await captureConversationTranscript(page);
     console.log('\n📋 CONVERSATION TRANSCRIPT:');
     console.log(transcript);
+    
+    // Write transcript to file if enabled
+    await writeTranscriptToFile(transcript, {
+      testName: test.info().title,
+      testFile: test.info().file
+    });
     
     console.log('🎉 Test passed - successfully used text while microphone is active');
   });
@@ -536,6 +549,12 @@ test.describe('Dual Channel - Text and Microphone', () => {
     console.log('\n📋 CONVERSATION TRANSCRIPT:');
     console.log(transcript);
     
+    // Write transcript to file if enabled
+    await writeTranscriptToFile(transcript, {
+      testName: test.info().title,
+      testFile: test.info().file
+    });
+    
     console.log('🎉 Test passed - successfully alternated between text and microphone');
   });
 
@@ -644,6 +663,12 @@ test.describe('Dual Channel - Text and Microphone', () => {
     const transcript = await captureConversationTranscript(page);
     console.log('\n📋 CONVERSATION TRANSCRIPT:');
     console.log(transcript);
+    
+    // Write transcript to file if enabled
+    await writeTranscriptToFile(transcript, {
+      testName: test.info().title,
+      testFile: test.info().file
+    });
     
     console.log('🎉 Test passed - connection maintained when switching channels');
   });
@@ -778,6 +803,12 @@ test.describe('Dual Channel - Text and Microphone', () => {
     const transcript = await captureConversationTranscript(page);
     console.log('\n📋 CONVERSATION TRANSCRIPT:');
     console.log(transcript);
+    
+    // Write transcript to file if enabled
+    await writeTranscriptToFile(transcript, {
+      testName: test.info().title,
+      testFile: test.info().file
+    });
     
     console.log('🎉 Test passed - both channels work in proxy mode');
   });

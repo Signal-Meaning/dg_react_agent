@@ -15,6 +15,8 @@ This document contains example conversation transcripts from the dual-channel E2
 
 ## How to View Transcripts
 
+### Option 1: Console Output (Default)
+
 Transcripts are automatically logged to the console at the end of each test. To view them:
 
 ```bash
@@ -24,6 +26,28 @@ USE_PROXY_MODE=true VITE_PROXY_ENDPOINT=ws://localhost:8080/deepgram-proxy npm r
 ```
 
 Look for sections marked `📋 CONVERSATION TRANSCRIPT:` in the output.
+
+### Option 2: Save to Files (Optional)
+
+Transcripts can be automatically saved to files for easier review. Enable this feature:
+
+```bash
+cd test-app
+unset CI
+SAVE_TEST_TRANSCRIPTS=true USE_PROXY_MODE=true VITE_PROXY_ENDPOINT=ws://localhost:8080/deepgram-proxy npm run test:e2e -- dual-channel-text-and-microphone
+```
+
+Transcripts will be saved to: `test-results/transcripts/`
+
+**File Naming Format**: `{test-file-name}_{test-name}_{timestamp}.txt`
+
+**Example**: `dual-channel-text-and-microphone_should_start_with_text_channel_then_switch_to_microphone_2026-01-17T12-30-45.txt`
+
+Each transcript file includes:
+- Test file name
+- Test name
+- Timestamp
+- Full conversation transcript
 
 ## Transcript Format
 
