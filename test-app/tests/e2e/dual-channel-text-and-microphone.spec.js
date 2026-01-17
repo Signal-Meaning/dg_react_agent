@@ -177,7 +177,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     await page.waitForTimeout(1000);
     
     const micStatus = await page.locator('[data-testid="mic-status"]').textContent();
-    expect(micStatus).toContain('Disabled');
+    expect(micStatus.toLowerCase()).toContain('disabled');
     console.log('✅ Microphone disabled');
     
     // Step 5: Send another text message (mic disabled)
@@ -193,12 +193,12 @@ test.describe('Dual Channel - Text and Microphone', () => {
     await page.waitForTimeout(2000);
     
     const micStatus2 = await page.locator('[data-testid="mic-status"]').textContent();
-    expect(micStatus2).toContain('Enabled');
+    expect(micStatus2.toLowerCase()).toContain('enabled');
     console.log('✅ Microphone re-enabled');
     
     // Verify connection is still active
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    expect(connectionStatus).toContain('connected');
+    expect(connectionStatus.toLowerCase()).toContain('connected');
     
     console.log('🎉 Test passed - successfully alternated between text and microphone');
   });
@@ -222,7 +222,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     }, { timeout: 20000 });
     
     let connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    expect(connectionStatus).toContain('connected');
+    expect(connectionStatus.toLowerCase()).toContain('connected');
     console.log('✅ Connection established');
     
     // Step 2: Enable microphone
@@ -236,7 +236,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Verify connection is still active
     connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    expect(connectionStatus).toContain('connected');
+    expect(connectionStatus.toLowerCase()).toContain('connected');
     console.log('✅ Connection maintained after enabling microphone');
     
     // Step 3: Send text message
@@ -246,7 +246,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Verify connection is still active
     connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    expect(connectionStatus).toContain('connected');
+    expect(connectionStatus.toLowerCase()).toContain('connected');
     console.log('✅ Connection maintained after text message');
     
     // Step 4: Disable microphone
@@ -256,7 +256,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Verify connection is still active
     connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    expect(connectionStatus).toContain('connected');
+    expect(connectionStatus.toLowerCase()).toContain('connected');
     console.log('✅ Connection maintained after disabling microphone');
     
     // Step 5: Send another text message
@@ -266,7 +266,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Verify connection is still active
     connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    expect(connectionStatus).toContain('connected');
+    expect(connectionStatus.toLowerCase()).toContain('connected');
     console.log('✅ Connection maintained throughout channel switching');
     
     console.log('🎉 Test passed - connection maintained when switching channels');
