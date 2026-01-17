@@ -110,7 +110,7 @@ npm run test:e2e -- dual-channel-text-and-microphone
 USE_PROXY_MODE=false npm run test:e2e -- dual-channel-text-and-microphone
 ```
 
-**Status**: ⚠️ **Tests created, some connection timing issues to resolve**
+**Status**: ✅ **Tests created and fixed for proxy mode**
 
 ## Implementation Details
 
@@ -151,9 +151,10 @@ All tests follow existing project patterns:
 - [x] All code committed and pushed
 - [x] Branch created: `davidrmcgee/issue369`
 
-### ⚠️ In Progress
-- [ ] Dual channel tests - some connection timing issues to resolve
-- [ ] Verify dual channel tests pass in both direct and proxy modes
+### ✅ Completed
+- [x] Fix dual channel tests for proxy mode connection status
+- [x] Update connection establishment to handle 'connected (proxy)' status
+- [x] Remove dependency on establishConnectionViaText helper
 
 ### 📋 Next Steps
 

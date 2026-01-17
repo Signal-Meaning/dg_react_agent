@@ -16,10 +16,8 @@
 import { test, expect } from '@playwright/test';
 import {
   setupTestPage,
-  waitForConnection,
   sendTextMessage,
   MicrophoneHelpers,
-  establishConnectionViaText,
   waitForAgentResponse,
   skipIfNoRealAPI
 } from './helpers/test-helpers.js';
