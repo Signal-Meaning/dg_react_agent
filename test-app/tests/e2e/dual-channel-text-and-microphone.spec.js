@@ -10,6 +10,11 @@
  * 3. Alternate between text and microphone in same session
  * 4. Use both channels simultaneously (text while mic is active)
  * 
+ * Test Improvements:
+ * - Captures and logs agent responses for each user interaction
+ * - Uses pre-recorded audio samples to simulate realistic user speech
+ * - Verifies agent responses to both text and audio inputs
+ * 
  * These tests use real Deepgram API connections to ensure authentic behavior.
  */
 
@@ -22,6 +27,7 @@ import {
   skipIfNoRealAPI
 } from './helpers/test-helpers.js';
 import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
+import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
 
 test.describe('Dual Channel - Text and Microphone', () => {
   
@@ -55,12 +61,13 @@ test.describe('Dual Channel - Text and Microphone', () => {
       console.log('⚠️ sendTextMessage timeout (continuing anyway)');
     }
     
-    // Wait for agent response
+    // Wait for agent response and capture it
     await waitForAgentResponse(page, undefined, 20000);
-    const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
-    expect(agentResponse).toBeTruthy();
-    expect(agentResponse.trim()).not.toBe('');
+    const agentResponse1 = await page.locator('[data-testid="agent-response"]').textContent();
+    expect(agentResponse1).toBeTruthy();
+    expect(agentResponse1.trim()).not.toBe('');
     console.log('✅ Agent responded to text message');
+    console.log(`📝 Agent Response #1 (Text): "${agentResponse1}"`);
     
     // Step 3: Enable microphone (switch to microphone channel)
     console.log('🎤 Step 3: Enabling microphone channel');
@@ -76,6 +83,24 @@ test.describe('Dual Channel - Text and Microphone', () => {
     expect(micResult.success).toBe(true);
     expect(micResult.micStatus).toBe('Enabled');
     console.log('✅ Microphone enabled');
+    
+    // Step 3b: Send pre-recorded audio to simulate user speaking
+    console.log('🎤 Step 3b: Sending pre-recorded audio to simulate user speech');
+    await loadAndSendAudioSample(page, 'hello', {
+      sampleRate: 16000,
+      bytesPerSample: 2,
+      channels: 1,
+      chunkSize: 4096
+    });
+    console.log('✅ Pre-recorded audio sent');
+    
+    // Wait for agent response to audio input
+    await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse2 = await page.locator('[data-testid="agent-response"]').textContent();
+    expect(agentResponse2).toBeTruthy();
+    expect(agentResponse2.trim()).not.toBe('');
+    console.log('✅ Agent responded to audio input');
+    console.log(`🎤 Agent Response #2 (Audio): "${agentResponse2}"`);
     
     // Step 4: Verify both channels are available
     // Text input should still be available
@@ -107,6 +132,24 @@ test.describe('Dual Channel - Text and Microphone', () => {
     expect(micResult.micStatus).toBe('Enabled');
     console.log('✅ Connection established via microphone');
     
+    // Step 1b: Send pre-recorded audio to simulate user speaking
+    console.log('🎤 Step 1b: Sending pre-recorded audio to simulate user speech');
+    await loadAndSendAudioSample(page, 'hello', {
+      sampleRate: 16000,
+      bytesPerSample: 2,
+      channels: 1,
+      chunkSize: 4096
+    });
+    console.log('✅ Pre-recorded audio sent');
+    
+    // Wait for agent response to audio input
+    await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse1 = await page.locator('[data-testid="agent-response"]').textContent();
+    expect(agentResponse1).toBeTruthy();
+    expect(agentResponse1.trim()).not.toBe('');
+    console.log('✅ Agent responded to audio input');
+    console.log(`🎤 Agent Response #1 (Audio): "${agentResponse1}"`);
+    
     // Step 2: Verify microphone is active
     const micStatus = await page.locator('[data-testid="mic-status"]').textContent();
     expect(micStatus).toContain('Enabled');
@@ -116,12 +159,13 @@ test.describe('Dual Channel - Text and Microphone', () => {
     const textMessage = "I'm switching to text input now.";
     await sendTextMessage(page, textMessage);
     
-    // Wait for agent response
+    // Wait for agent response and capture it
     await waitForAgentResponse(page, undefined, 20000);
-    const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
-    expect(agentResponse).toBeTruthy();
-    expect(agentResponse.trim()).not.toBe('');
+    const agentResponse2 = await page.locator('[data-testid="agent-response"]').textContent();
+    expect(agentResponse2).toBeTruthy();
+    expect(agentResponse2.trim()).not.toBe('');
     console.log('✅ Agent responded to text message');
+    console.log(`📝 Agent Response #2 (Text): "${agentResponse2}"`);
     
     // Step 4: Verify both channels are still available
     // Text input should be available
@@ -164,7 +208,9 @@ test.describe('Dual Channel - Text and Microphone', () => {
       console.log('⚠️ sendTextMessage timeout (continuing anyway)');
     }
     await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse1 = await page.locator('[data-testid="agent-response"]').textContent();
     console.log('✅ Text message 1 sent and responded');
+    console.log(`📝 Agent Response #1 (Text): "${agentResponse1}"`);
     
     // Step 2: Enable microphone
     console.log('🎤 Step 2: Enabling microphone');
@@ -176,6 +222,22 @@ test.describe('Dual Channel - Text and Microphone', () => {
     expect(micResult.success).toBe(true);
     console.log('✅ Microphone enabled');
     
+    // Step 2b: Send pre-recorded audio to simulate user speaking
+    console.log('🎤 Step 2b: Sending pre-recorded audio to simulate user speech');
+    await loadAndSendAudioSample(page, 'hello_there', {
+      sampleRate: 16000,
+      bytesPerSample: 2,
+      channels: 1,
+      chunkSize: 4096
+    });
+    console.log('✅ Pre-recorded audio sent');
+    
+    // Wait for agent response to audio input
+    await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse2 = await page.locator('[data-testid="agent-response"]').textContent();
+    console.log('✅ Agent responded to audio input');
+    console.log(`🎤 Agent Response #2 (Audio): "${agentResponse2}"`);
+    
     // Step 3: Send another text message (while mic is enabled)
     console.log('📝 Step 3: Sending text message while microphone is enabled');
     const textMessage2 = "Second message via text, microphone is active.";
@@ -185,7 +247,9 @@ test.describe('Dual Channel - Text and Microphone', () => {
       console.log('⚠️ sendTextMessage timeout (continuing anyway)');
     }
     await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse3 = await page.locator('[data-testid="agent-response"]').textContent();
     console.log('✅ Text message 2 sent and responded');
+    console.log(`📝 Agent Response #3 (Text): "${agentResponse3}"`);
     
     // Step 4: Disable microphone
     console.log('🎤 Step 4: Disabling microphone');
@@ -205,7 +269,9 @@ test.describe('Dual Channel - Text and Microphone', () => {
       console.log('⚠️ sendTextMessage timeout (continuing anyway)');
     }
     await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse4 = await page.locator('[data-testid="agent-response"]').textContent();
     console.log('✅ Text message 3 sent and responded');
+    console.log(`📝 Agent Response #4 (Text): "${agentResponse4}"`);
     
     // Step 6: Re-enable microphone
     console.log('🎤 Step 6: Re-enabling microphone');
@@ -215,6 +281,22 @@ test.describe('Dual Channel - Text and Microphone', () => {
     const micStatus2 = await page.locator('[data-testid="mic-status"]').textContent();
     expect(micStatus2.toLowerCase()).toContain('enabled');
     console.log('✅ Microphone re-enabled');
+    
+    // Step 6b: Send pre-recorded audio again to simulate user speaking
+    console.log('🎤 Step 6b: Sending pre-recorded audio again to simulate user speech');
+    await loadAndSendAudioSample(page, 'hello', {
+      sampleRate: 16000,
+      bytesPerSample: 2,
+      channels: 1,
+      chunkSize: 4096
+    });
+    console.log('✅ Pre-recorded audio sent');
+    
+    // Wait for agent response to audio input
+    await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse5 = await page.locator('[data-testid="agent-response"]').textContent();
+    console.log('✅ Agent responded to audio input');
+    console.log(`🎤 Agent Response #5 (Audio): "${agentResponse5}"`);
     
     // Verify connection is still active
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
@@ -259,6 +341,22 @@ test.describe('Dual Channel - Text and Microphone', () => {
     expect(connectionStatus.toLowerCase()).toContain('connected');
     console.log('✅ Connection maintained after enabling microphone');
     
+    // Step 2b: Send pre-recorded audio to simulate user speaking
+    console.log('🎤 Step 2b: Sending pre-recorded audio to simulate user speech');
+    await loadAndSendAudioSample(page, 'hello', {
+      sampleRate: 16000,
+      bytesPerSample: 2,
+      channels: 1,
+      chunkSize: 4096
+    });
+    console.log('✅ Pre-recorded audio sent');
+    
+    // Wait for agent response to audio input
+    await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse1 = await page.locator('[data-testid="agent-response"]').textContent();
+    console.log('✅ Agent responded to audio input');
+    console.log(`🎤 Agent Response #1 (Audio): "${agentResponse1}"`);
+    
     // Step 3: Send text message
     console.log('📝 Step 3: Sending text message');
     try {
@@ -267,6 +365,8 @@ test.describe('Dual Channel - Text and Microphone', () => {
       console.log('⚠️ sendTextMessage timeout (continuing anyway)');
     }
     await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse2 = await page.locator('[data-testid="agent-response"]').textContent();
+    console.log(`📝 Agent Response #2 (Text): "${agentResponse2}"`);
     
     // Verify connection is still active
     connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
@@ -294,6 +394,8 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Wait for agent response - this will ensure connection is active
     await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse3 = await page.locator('[data-testid="agent-response"]').textContent();
+    console.log(`📝 Agent Response #3 (Text): "${agentResponse3}"`);
     
     // After sending message, connection should be active
     // Wait a bit for connection status to update
@@ -387,7 +489,9 @@ test.describe('Dual Channel - Text and Microphone', () => {
       console.log('⚠️ sendTextMessage timeout (continuing anyway)');
     }
     await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse1 = await page.locator('[data-testid="agent-response"]').textContent();
     console.log('✅ Text message sent and responded');
+    console.log(`📝 Agent Response #1 (Text): "${agentResponse1}"`);
     
     // Step 3: Enable microphone
     console.log('🎤 Step 3: Enabling microphone');
@@ -399,6 +503,22 @@ test.describe('Dual Channel - Text and Microphone', () => {
     expect(micResult.success).toBe(true);
     console.log('✅ Microphone enabled');
     
+    // Step 3b: Send pre-recorded audio to simulate user speaking
+    console.log('🎤 Step 3b: Sending pre-recorded audio to simulate user speech');
+    await loadAndSendAudioSample(page, 'hello', {
+      sampleRate: 16000,
+      bytesPerSample: 2,
+      channels: 1,
+      chunkSize: 4096
+    });
+    console.log('✅ Pre-recorded audio sent');
+    
+    // Wait for agent response to audio input
+    await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse2 = await page.locator('[data-testid="agent-response"]').textContent();
+    console.log('✅ Agent responded to audio input');
+    console.log(`🎤 Agent Response #2 (Audio): "${agentResponse2}"`);
+    
     // Step 4: Send another text message (while mic is enabled)
     console.log('📝 Step 4: Sending text message while microphone is enabled');
     try {
@@ -407,7 +527,9 @@ test.describe('Dual Channel - Text and Microphone', () => {
       console.log('⚠️ sendTextMessage timeout (continuing anyway)');
     }
     await waitForAgentResponse(page, undefined, 20000);
+    const agentResponse3 = await page.locator('[data-testid="agent-response"]').textContent();
     console.log('✅ Text message sent and responded');
+    console.log(`📝 Agent Response #3 (Text): "${agentResponse3}"`);
     
     // Verify connection is still active
     const finalConnectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
