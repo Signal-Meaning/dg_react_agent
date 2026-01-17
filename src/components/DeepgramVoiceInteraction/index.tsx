@@ -2446,7 +2446,7 @@ function DeepgramVoiceInteraction(
       let errorDetails: unknown = data;
       
       if (errorCode === 'CLIENT_MESSAGE_TIMEOUT') {
-        finalErrorMessage = 'No message was received within the timeout period. This may occur if the connection is idle for too long or if there is a network issue.';
+        finalErrorMessage = 'No message was received within the timeout period. This typically occurs when a function call handler does not send a response to Deepgram.';
         // Don't preserve the misleading description in details - only preserve code/type for debugging
         errorDetails = {
           type: data.type,
