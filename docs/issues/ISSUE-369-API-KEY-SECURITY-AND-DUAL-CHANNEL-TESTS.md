@@ -2,7 +2,7 @@
 
 **GitHub Issue**: https://github.com/Signal-Meaning/dg_react_agent/issues/369  
 **Pull Request**: https://github.com/Signal-Meaning/dg_react_agent/pull/370  
-**Status**: 🟢 **PR CREATED** - Ready for Review  
+**Status**: ✅ **ALL TESTS PASSING** - Ready for Review  
 **Priority**: **High**  
 **Branch**: `davidrmcgee/issue369`  
 **Related Issues**: #242 (Backend Proxy Support)
@@ -111,7 +111,7 @@ npm run test:e2e -- dual-channel-text-and-microphone
 USE_PROXY_MODE=false npm run test:e2e -- dual-channel-text-and-microphone
 ```
 
-**Status**: ✅ **Tests created and fixed for proxy mode (2/5 passing, 3/5 with timeout handling improvements)**
+**Status**: ✅ **All 5 tests passing**
 
 ## Implementation Details
 
@@ -159,6 +159,9 @@ All tests follow existing project patterns:
 - [x] Make test assertions case-insensitive
 - [x] Add timeout handling for sendTextMessage calls
 - [x] Increase timeouts for microphone state changes
+- [x] Update security tests to work with default proxy mode
+- [x] Fix connection state handling when disabling microphone
+- [x] **All 16 tests passing (11 security + 5 dual channel)**
 
 ### 📋 Next Steps
 
@@ -220,11 +223,28 @@ Running 11 tests using 1 worker
   11 passed (58.6s)
 ```
 
-### Dual Channel Tests - Status
+### Dual Channel Tests - Latest Run
 
-Tests created but need connection timing fixes. Some tests fail due to:
-- Connection establishment timeouts
-- Need to wait for proper connection state before proceeding
+```
+Running 5 tests using 1 worker
+
+✅ Test passed - successfully switched from text to microphone
+  ✓  1 [chromium] › should start with text channel, then switch to microphone (2.7s)
+
+✅ Test passed - successfully used text while microphone is active
+  ✓  2 [chromium] › should start with microphone, then switch to text (1.6s)
+
+✅ Test passed - successfully alternated between text and microphone
+  ✓  3 [chromium] › should alternate between text and microphone in same session (7.7s)
+
+✅ Test passed - connection maintained when switching channels
+  ✓  4 [chromium] › should maintain connection when switching between channels (5.8s)
+
+✅ Test passed - both channels work in proxy mode
+  ✓  5 [chromium] › should work in proxy mode with both text and microphone channels (2.1s)
+
+  5 passed (21.4s)
+```
 
 ## Security Impact
 
