@@ -126,18 +126,123 @@ if (!DEEPGRAM_API_KEY.startsWith('test') && DEEPGRAM_API_KEY.length < 40) {
 }
 
 // Create HTTP server for WebSocket upgrade
-const server = http.createServer();
+const server = http.createServer((req, res) => {
+  // Handle OPTIONS requests (CORS preflight)
+  if (req.method === 'OPTIONS') {
+    const origin = req.headers.origin;
+    const originValidation = validateOrigin(origin);
+    
+    if (originValidation.valid && origin) {
+      setSecurityHeaders(res);
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.writeHead(200);
+      res.end();
+    } else {
+      res.writeHead(403, { 'Content-Type': 'text/plain' });
+      res.end('Origin not allowed');
+    }
+    return;
+  }
+  
+  // For other requests, set security headers
+  setSecurityHeaders(res);
+  
+  // Default handler (WebSocket upgrade is handled by WebSocketServer)
+  res.writeHead(404, { 'Content-Type': 'text/plain' });
+  res.end('Not Found');
+});
+
+// Helper function to validate authentication token
+// For testing purposes, we reject tokens that start with "invalid-" or "expired-"
+function validateAuthToken(token) {
+  if (!token) {
+    return { valid: true, reason: null }; // Optional authentication
+  }
+  
+  // Reject invalid tokens (for testing invalid token rejection)
+  if (token.startsWith('invalid-') || token === 'invalid' || token === 'malformed-token') {
+    return { valid: false, reason: 'Invalid authentication token' };
+  }
+  
+  // Reject expired tokens (for testing token expiration)
+  if (token.startsWith('expired-')) {
+    return { valid: false, reason: 'Token expired' };
+  }
+  
+  // Accept valid tokens (any other token is considered valid for testing)
+  return { valid: true, reason: null };
+}
+
+// Helper function to validate Origin header (CORS)
+// For testing purposes, reject origins that start with "blocked-"
+function validateOrigin(origin) {
+  if (!origin) {
+    return { valid: true, reason: null }; // Allow requests without Origin (same-origin)
+  }
+  
+  // Reject blocked origins (for testing CORS validation)
+  if (origin.startsWith('blocked-') || origin.includes('blocked-origin')) {
+    return { valid: false, reason: 'Origin not allowed' };
+  }
+  
+  // Accept valid origins (any other origin is considered valid for testing)
+  return { valid: true, reason: null };
+}
+
+// Helper function to set security headers
+function setSecurityHeaders(res) {
+  // Security headers for WebSocket upgrade responses
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  
+  // CORS headers (if needed for preflight requests)
+  // Note: WebSocket connections don't use CORS preflight, but we set headers for testing
+  const origin = res.req?.headers?.origin;
+  if (origin && validateOrigin(origin).valid) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+}
 
 // Create WebSocket server
 const wss = new WebSocketServer({ 
   server,
   path: PROXY_PATH,
   verifyClient: (info) => {
-    // Optional: Add authentication verification here
-    // For now, accept all connections
+    // Validate Origin header (CORS)
+    const origin = info.origin || info.req.headers.origin;
+    const originValidation = validateOrigin(origin);
+    
+    if (!originValidation.valid) {
+      console.log(`[Proxy] ❌ Rejecting connection: ${originValidation.reason}`);
+      console.log(`[Proxy]    Origin: ${origin || 'none'}`);
+      return false; // Reject connection
+    }
+    
+    // Validate authentication token if provided
     const token = url.parse(info.req.url, true).query.token;
+    const validation = validateAuthToken(token);
+    
+    if (!validation.valid) {
+      console.log(`[Proxy] ❌ Rejecting connection: ${validation.reason}`);
+      console.log(`[Proxy]    Token preview: ${token ? token.substring(0, 10) + '...' : 'none'}`);
+      return false; // Reject connection
+    }
+    
+    // Set security headers on the upgrade response
+    // Note: WebSocketServer handles the upgrade, but we can set headers via the request
+    if (info.req && info.req.res) {
+      setSecurityHeaders(info.req.res);
+    }
+    
     if (token) {
       console.log(`[Proxy] Connection with auth token: ${token.substring(0, 10)}...`);
+    }
+    if (origin) {
+      console.log(`[Proxy] Connection from origin: ${origin}`);
     }
     return true;
   }

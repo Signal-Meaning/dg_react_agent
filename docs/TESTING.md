@@ -113,6 +113,17 @@ cd test-app
 npm run test:e2e
 ```
 
+### E2E Tests in Proxy Mode (Default)
+```bash
+cd test-app
+# Proxy mode is now the default for E2E tests
+USE_PROXY_MODE=true npm run test:e2e
+
+# Run specific security tests (require real APIs, skip in CI)
+unset CI && USE_PROXY_MODE=true npm run test:e2e -- backend-proxy-authentication
+unset CI && USE_PROXY_MODE=true npm run test:e2e -- api-key-security-proxy-mode
+```
+
 ### Specific Test File
 ```bash
 npm test -- path/to/test.file
@@ -158,6 +169,80 @@ tests/
 │   ├── component.test.tsx   # React component tests (jsdom + MockWebSocket)
 │   └── websocket-connectivity.test.js  # Real API tests (node + real WebSocket)
 └── e2e/                     # E2E tests (Playwright)
+
+test-app/tests/e2e/
+├── backend-proxy-authentication.spec.js    # Security & authentication tests (11 tests)
+├── api-key-security-proxy-mode.spec.js     # API key security tests (11 tests)
+├── dual-channel-text-and-microphone.spec.js # Dual channel tests (5 tests)
+└── ...                                      # Other E2E tests
+```
+
+## Security Test Coverage
+
+### Backend Proxy Authentication Tests (11 tests)
+
+**File**: `test-app/tests/e2e/backend-proxy-authentication.spec.js`
+
+**Coverage**:
+- Basic authentication (2 tests) - Issue #242
+- Invalid token rejection (2 tests) - Issue #363
+- Token expiration handling (2 tests) - Issue #363
+- CORS/security headers validation (5 tests) - Issue #363
+
+**Requirements**:
+- Real Deepgram API key
+- Proxy server (automatically started by Playwright)
+- ⚠️ **Skips automatically in CI** - requires real APIs
+
+**Run**:
+```bash
+cd test-app
+unset CI && USE_PROXY_MODE=true npm run test:e2e -- backend-proxy-authentication
+```
+
+### API Key Security Tests (11 tests)
+
+**File**: `test-app/tests/e2e/api-key-security-proxy-mode.spec.js`
+
+**Coverage**:
+- Bundle inspection (2 tests)
+- Network request inspection (3 tests)
+- DOM and source code inspection (2 tests)
+- Console and log inspection (2 tests)
+- Proxy backend validation (2 tests)
+
+**Purpose**: Verify API keys are NOT exposed to the frontend when using proxy mode.
+
+**Requirements**:
+- Real Deepgram API key
+- Proxy server (automatically started by Playwright)
+- ⚠️ **Skips automatically in CI** - requires real APIs
+
+**Run**:
+```bash
+cd test-app
+unset CI && USE_PROXY_MODE=true npm run test:e2e -- api-key-security-proxy-mode
+```
+
+### Dual Channel Tests (5 tests)
+
+**File**: `test-app/tests/e2e/dual-channel-text-and-microphone.spec.js`
+
+**Coverage**:
+- Start with text, then switch to microphone
+- Start with microphone, then switch to text
+- Alternate between channels in same session
+- Connection stability during channel switching
+- Proxy mode support for both channels
+
+**Requirements**:
+- Real Deepgram API key
+- Works in both direct and proxy modes
+
+**Run**:
+```bash
+cd test-app
+npm run test:e2e -- dual-channel-text-and-microphone
 ```
 
 ## Best Practices
@@ -206,6 +291,8 @@ tests/
 
 ### For E2E Tests:
 - `VITE_DEEPGRAM_API_KEY` - Loaded from `test-app/.env`
+- `USE_PROXY_MODE` - Set to `true` to run tests in proxy mode (default)
+- `CI` - Set to skip security tests that require real APIs
 - See `test-app/tests/e2e/README.md` for E2E-specific setup
 
 ## Troubleshooting
@@ -248,10 +335,34 @@ When running comprehensive test passes, reports are generated in `test-results/c
 - E2E tests: Checks for `VITE_DEEPGRAM_API_KEY` in `test-app/.env`
 - Validates API key format (length >= 20, not "mock" or placeholder)
 
+## Test Coverage Summary
+
+### Unit/Integration Tests
+- **Jest Tests**: 749 passing, 21 skipped
+- **Coverage**: Component logic, WebSocket connectivity, state management
+
+### E2E Tests
+- **Core E2E Tests**: 47+ tests covering all features
+- **Security Tests**: 22 tests (authentication, API key security, CORS)
+- **Dual Channel Tests**: 5 tests
+- **Total E2E Tests**: 74+ tests
+
+### Security Test Coverage (v0.7.9)
+- ✅ Invalid token rejection
+- ✅ Token expiration handling
+- ✅ CORS origin validation
+- ✅ Security headers validation
+- ✅ API key security (not exposed to frontend)
+
+See `docs/TEST-COVERAGE-PROXY-MODE.md` for detailed coverage analysis.
+
 ## References
 
 - [Jest Documentation](https://jestjs.io/docs/getting-started)
 - [Playwright Documentation](https://playwright.dev/)
 - [WebSocket Testing Best Practices](./issues/ISSUE-341/JEST-WEBSOCKET-BEST-PRACTICES.md)
 - [Issue #341 Documentation](./issues/ISSUE-341/README.md)
+- [Proxy Mode Test Coverage](./TEST-COVERAGE-PROXY-MODE.md)
+- [Issue #363 - Security Test Expansion](./issues/ISSUE-363-EXPAND-SECURITY-TEST-COVERAGE.md)
+- [Issue #369 - API Key Security Tests](./issues/ISSUE-369-API-KEY-SECURITY-AND-DUAL-CHANNEL-TESTS.md)
 

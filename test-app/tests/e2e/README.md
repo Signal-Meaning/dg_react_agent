@@ -59,6 +59,17 @@ npx playwright test --grep "Microphone"     # All microphone tests
 - **`api-key-validation.spec.js`** - API key validation and error handling
 - **`lazy-initialization-e2e.spec.js`** - Lazy initialization behavior (no auto-connect, Issue #206)
 
+### Security & Authentication Tests
+- **`backend-proxy-authentication.spec.js`** - Backend proxy authentication and security tests (11 tests)
+  - Basic authentication (Issue #242)
+  - Invalid token rejection (Issue #363)
+  - Token expiration handling (Issue #363)
+  - CORS/security headers validation (Issue #363)
+  - ⚠️ **Requires real APIs - skips in CI**
+- **`api-key-security-proxy-mode.spec.js`** - API key security validation (11 tests) (Issue #369)
+  - Bundle, network, DOM, console, and proxy backend security validation
+  - ⚠️ **Requires real APIs - skips in CI**
+
 ### Timeout & Reconnection Tests
 - **`websocket-timeout-context-preservation.spec.js`** - Context preservation across timeout with TEXT input (accelerated time)
 - **`idle-timeout-behavior.spec.js`** - Idle timeout behavior in various scenarios (reconnection, active conversation)
@@ -74,6 +85,10 @@ npx playwright test --grep "Microphone"     # All microphone tests
 - **`text-only-conversation.spec.js`** - Text-only conversation without audio
 - **`real-user-workflows.spec.js`** - Real-world user interaction workflows (includes error handling)
 - **`page-content.spec.js`** - Basic component rendering validation
+- **`dual-channel-text-and-microphone.spec.js`** - Dual channel (text + microphone) tests (5 tests) (Issue #369)
+  - Channel switching scenarios
+  - Connection stability during channel switching
+  - Proxy mode support for both channels
 
 ### VAD (Voice Activity Detection) Tests
 - **`vad-websocket-events.spec.js`** - VAD event WebSocket validation
