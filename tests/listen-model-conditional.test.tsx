@@ -437,6 +437,18 @@ describe('Issue #299: Listen Model Conditional Inclusion', () => {
       expect(onError).toHaveBeenCalled();
       const errorCall = onError.mock.calls[0][0];
       expect(errorCall.code).toBe('CLIENT_MESSAGE_TIMEOUT');
+      // Issue #365/#366: Verify that the misleading Deepgram error message is replaced with a clearer, concise one
+      expect(errorCall.message).toBe('No message was received within the timeout period. This may occur if the connection is idle for too long or if there is a network issue.');
+      expect(errorCall.message).not.toContain('Please make sure you are sending binary messages');
+      expect(errorCall.message).not.toContain('Both text and audio messages are supported');
+      
+      // Issue #366: Verify that details field doesn't contain the misleading description
+      if (errorCall.details && typeof errorCall.details === 'object') {
+        const details = errorCall.details as { description?: string; type?: string; code?: string };
+        expect(details.type).toBe('Error');
+        expect(details.code).toBe('CLIENT_MESSAGE_TIMEOUT');
+        expect(details.description).toBeUndefined(); // Misleading description should be omitted
+      }
 
       // Verify component is still functional after error
       // Component should still be able to send messages

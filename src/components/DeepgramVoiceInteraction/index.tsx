@@ -420,13 +420,25 @@ function DeepgramVoiceInteraction(
 
   // Handle errors
   const handleError = (error: DeepgramError) => {
-    console.log('🚨 [ERROR] Deepgram error received:', error);
-    console.log('🚨 [ERROR] Error service:', error.service);
-    console.log('🚨 [ERROR] Error code:', error.code);
-    console.log('🚨 [ERROR] Error message:', error.message);
-    console.log('🚨 [ERROR] Error details:', error.details);
+    // Issue #366: CLIENT_MESSAGE_TIMEOUT occurs when Deepgram's server timeout fires
+    // This can happen if Deepgram's server-side timeout (~60s) fires before the component's idle timeout (10s)
+    // or when Deepgram is waiting for a response (e.g., function call) and doesn't receive it.
+    // Since this can occur during normal idle scenarios (when server timeout fires), log at debug level.
+    const isClientMessageTimeout = error.code === 'CLIENT_MESSAGE_TIMEOUT';
     
-    log('Error:', error);
+    if (isClientMessageTimeout) {
+      // Debug-level logging - can occur during idle disconnects when server timeout fires
+      log('⚠️ [Agent] CLIENT_MESSAGE_TIMEOUT (may occur during idle disconnects):', error);
+    } else {
+      // Error-level logging for unexpected errors
+      console.log('🚨 [ERROR] Deepgram error received:', error);
+      console.log('🚨 [ERROR] Error service:', error.service);
+      console.log('🚨 [ERROR] Error code:', error.code);
+      console.log('🚨 [ERROR] Error message:', error.message);
+      console.log('🚨 [ERROR] Error details:', error.details);
+      log('Error:', error);
+    }
+    
     dispatch({ type: 'ERROR', message: error.message });
     onError?.(error);
   };
@@ -2426,11 +2438,28 @@ function DeepgramVoiceInteraction(
         return;
       }
       
+      // Issue #365/#366: Provide clearer error message for CLIENT_MESSAGE_TIMEOUT
+      // The Deepgram API error message incorrectly suggests only binary audio messages are allowed.
+      // In reality, Deepgram may be expecting audio (if listenModel is provided), text (if listenModel is omitted),
+      // function call responses, or any message during idle timeout scenarios.
+      let finalErrorMessage = errorMessage;
+      let errorDetails: unknown = data;
+      
+      if (errorCode === 'CLIENT_MESSAGE_TIMEOUT') {
+        finalErrorMessage = 'No message was received within the timeout period. This may occur if the connection is idle for too long or if there is a network issue.';
+        // Don't preserve the misleading description in details - only preserve code/type for debugging
+        errorDetails = {
+          type: data.type,
+          code: data.code,
+          // Intentionally omit the misleading description
+        };
+      }
+      
       handleError({
         service: 'agent',
         code: errorCode,
-        message: errorMessage,
-        details: data,
+        message: finalErrorMessage,
+        details: errorDetails,
       });
       return;
     }
