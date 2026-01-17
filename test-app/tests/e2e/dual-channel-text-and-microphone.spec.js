@@ -74,7 +74,6 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 4: Verify both channels are available
     // Text input should still be available
-    const textInput = page.locator('[data-testid="text-input"]');
     await expect(textInput).toBeVisible();
     
     // Microphone should be enabled
