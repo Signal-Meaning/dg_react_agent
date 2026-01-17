@@ -1,10 +1,10 @@
 # Issue #371: Release v0.7.9 - Security Test Expansion and Test Fixes
 
-**GitHub Issue**: [#371](https://github.com/Signal-Meaning/dg_react_agent/issues/371)  
+**GitHub Issue**: [#371](https://github.com/Signal-Meaning/dg_react_agent/issues/371) ✅ **CLOSED**  
 **Status**: ✅ **COMPLETE** - Release v0.7.9 Published and Merged to Main  
 **Priority**: Medium  
 **Labels**: release, patch, priority:medium  
-**Branch**: `davidrmcgee/issue371`
+**Branch**: `davidrmcgee/issue371` (deleted - fully merged)
 
 ## 📋 Release Overview
 
