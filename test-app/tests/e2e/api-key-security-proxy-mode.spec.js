@@ -25,7 +25,9 @@ import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
 import { setupTestPage, waitForConnection } from './helpers/test-helpers.js';
 
 const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
-const IS_PROXY_MODE = process.env.USE_PROXY_MODE === 'true';
+// Proxy mode is now the default for e2e tests
+// Only skip if explicitly set to false
+const IS_PROXY_MODE = process.env.USE_PROXY_MODE !== 'false';
 const DEEPGRAM_API_KEY = process.env.VITE_DEEPGRAM_API_KEY || process.env.DEEPGRAM_API_KEY;
 
 // Helper to extract potential API keys from strings
