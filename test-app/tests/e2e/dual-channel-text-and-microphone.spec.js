@@ -270,7 +270,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 2: Send a text message
     console.log('📝 Step 2: Sending text message');
-    const textMessage = "Hello, I'm testing the text channel.";
+    const textMessage = "What is the capital city of France?";
     try {
       await sendTextMessage(page, textMessage);
     } catch (error) {
