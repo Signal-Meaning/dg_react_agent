@@ -160,9 +160,27 @@ async function captureConversationTranscript(page) {
         // Sort by timestamp
         allEvents.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
         
-        // Format transcript with deduplication
+        // Helper function to detect if a response is a greeting
+        function isGreeting(content) {
+          if (!content) return false;
+          const lowerContent = content.toLowerCase().trim();
+          const greetingPatterns = [
+            /^hello[!.]?\s*(how\s+can\s+i\s+(assist|help))/i,
+            /^hello[!.]?\s*$/i,
+            /^hi[!.]?\s*(how\s+can\s+i\s+(assist|help))/i,
+            /^hi[!.]?\s*$/i,
+            /how\s+can\s+i\s+(assist|help)\s+you\s+today/i,
+            /how\s+can\s+i\s+(assist|help)/i,
+            /^greetings/i
+          ];
+          return greetingPatterns.some(pattern => pattern.test(lowerContent));
+        }
+        
+        // Format transcript with deduplication and greeting detection
         let exchangeNumber = 1;
+        let greetingCount = 0;
         const seenUserMessages = new Set();
+        const greetings = [];
         
         allEvents.forEach((event) => {
           if (event.type === 'user_message' || event.type === 'user_audio_transcript') {
@@ -178,9 +196,18 @@ async function captureConversationTranscript(page) {
             lines.push(`${label}: ${event.content || '(empty)'}`);
             lines.push('');
           } else if (event.type === 'agent_response') {
-            lines.push(`ASSISTANT: ${event.content || '(empty)'}`);
-            lines.push('');
-            exchangeNumber++;
+            const content = event.content || '(empty)';
+            if (isGreeting(content)) {
+              // Mark as greeting and don't increment exchange number
+              greetings.push(content);
+              greetingCount++;
+              lines.push(`ASSISTANT (Greeting): ${content}`);
+              lines.push('');
+            } else {
+              lines.push(`ASSISTANT: ${content}`);
+              lines.push('');
+              exchangeNumber++;
+            }
           } else if (event.type === 'function_call') {
             // Function calls are inserted after user messages
             lines.push(`  [Function Call]`);
@@ -193,6 +220,9 @@ async function captureConversationTranscript(page) {
         });
         
         lines.push('='.repeat(80));
+        if (greetingCount > 0) {
+          lines.push(`Greetings: ${greetingCount} (excluded from exchange count)`);
+        }
         lines.push(`Total Exchanges: ${exchangeNumber - 1}`);
         if (functionCallRequests.length > 0) {
           lines.push(`Function Calls: ${functionCallRequests.length}`);
@@ -273,7 +303,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 3b: Send pre-recorded audio to simulate user speaking
     console.log('🎤 Step 3b: Sending pre-recorded audio to simulate user speech');
-    await loadAndSendAudioSample(page, 'hello', {
+    await loadAndSendAudioSample(page, 'hello__how_are_you_today_', {
       sampleRate: 16000,
       bytesPerSample: 2,
       channels: 1,
@@ -349,7 +379,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 3: Send a text message (switch to text channel)
     console.log('📝 Step 3: Sending text message while microphone is enabled');
-    const textMessage = "I'm switching to text input now.";
+    const textMessage = "What is the tallest mountain in the world?";
     await sendTextMessage(page, textMessage);
     
     // Wait for agent response and capture it
@@ -397,7 +427,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
       return statusEl && statusEl.textContent && statusEl.textContent.toLowerCase().includes('connected');
     }, { timeout: 20000 });
     
-    const textMessage1 = "First message via text.";
+    const textMessage1 = "What is the capital city of France?";
     // Use try-catch to handle potential sendTextMessage timeout
     try {
       await sendTextMessage(page, textMessage1);
@@ -423,7 +453,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 2b: Send pre-recorded audio to simulate user speaking
     console.log('🎤 Step 2b: Sending pre-recorded audio to simulate user speech');
-    await loadAndSendAudioSample(page, 'hello_there', {
+    await loadAndSendAudioSample(page, 'hello__how_are_you_today_', {
       sampleRate: 16000,
       bytesPerSample: 2,
       channels: 1,
@@ -439,7 +469,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 3: Send another text message (while mic is enabled)
     console.log('📝 Step 3: Sending text message while microphone is enabled');
-    const textMessage2 = "Second message via text, microphone is active.";
+    const textMessage2 = "Can you tell me what the largest planet in our solar system is?";
     try {
       await sendTextMessage(page, textMessage2);
     } catch (error) {
@@ -461,7 +491,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 5: Send another text message (mic disabled)
     console.log('📝 Step 5: Sending text message after microphone disabled');
-    const textMessage3 = "Third message via text, microphone is disabled.";
+    const textMessage3 = "What is the speed of light in a vacuum?";
     try {
       await sendTextMessage(page, textMessage3);
     } catch (error) {
@@ -483,7 +513,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 6b: Send pre-recorded audio again to simulate user speaking
     console.log('🎤 Step 6b: Sending pre-recorded audio again to simulate user speech');
-    await loadAndSendAudioSample(page, 'hello', {
+    await loadAndSendAudioSample(page, 'hello__how_are_you_today_', {
       sampleRate: 16000,
       bytesPerSample: 2,
       channels: 1,
@@ -547,7 +577,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 2b: Send pre-recorded audio to simulate user speaking
     console.log('🎤 Step 2b: Sending pre-recorded audio to simulate user speech');
-    await loadAndSendAudioSample(page, 'hello', {
+    await loadAndSendAudioSample(page, 'hello__how_are_you_today_', {
       sampleRate: 16000,
       bytesPerSample: 2,
       channels: 1,
@@ -564,7 +594,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     // Step 3: Send text message
     console.log('📝 Step 3: Sending text message');
     try {
-      await sendTextMessage(page, "Testing connection stability.");
+      await sendTextMessage(page, "What are the primary colors in art?");
     } catch (error) {
       console.log('⚠️ sendTextMessage timeout (continuing anyway)');
     }
@@ -591,7 +621,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     // Step 5: Send another text message (this should trigger reconnection if needed)
     console.log('📝 Step 5: Sending another text message');
     try {
-      await sendTextMessage(page, "Final test message.");
+      await sendTextMessage(page, "How many continents are there on Earth?");
     } catch (error) {
       console.log('⚠️ sendTextMessage timeout (continuing anyway)');
     }
@@ -693,7 +723,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     // Step 2: Send text message
     console.log('📝 Step 2: Sending text message');
     try {
-      await sendTextMessage(page, "Testing text channel in proxy mode.");
+      await sendTextMessage(page, "What is the chemical symbol for water?");
     } catch (error) {
       console.log('⚠️ sendTextMessage timeout (continuing anyway)');
     }
@@ -714,7 +744,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     // Step 3b: Send pre-recorded audio to simulate user speaking
     console.log('🎤 Step 3b: Sending pre-recorded audio to simulate user speech');
-    await loadAndSendAudioSample(page, 'hello', {
+    await loadAndSendAudioSample(page, 'hello__how_are_you_today_', {
       sampleRate: 16000,
       bytesPerSample: 2,
       channels: 1,
@@ -731,7 +761,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     // Step 4: Send another text message (while mic is enabled)
     console.log('📝 Step 4: Sending text message while microphone is enabled');
     try {
-      await sendTextMessage(page, "Testing text channel while microphone is active in proxy mode.");
+      await sendTextMessage(page, "Who wrote the novel '1984'?");
     } catch (error) {
       console.log('⚠️ sendTextMessage timeout (continuing anyway)');
     }
