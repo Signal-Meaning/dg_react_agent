@@ -438,7 +438,7 @@ describe('Issue #299: Listen Model Conditional Inclusion', () => {
       const errorCall = onError.mock.calls[0][0];
       expect(errorCall.code).toBe('CLIENT_MESSAGE_TIMEOUT');
       // Issue #365/#366: Verify that the misleading Deepgram error message is replaced with a clearer, concise one
-      expect(errorCall.message).toBe('No message was received within the timeout period. This may occur if the connection is idle for too long or if there is a network issue.');
+      expect(errorCall.message).toBe('No message was received within the timeout period. This typically occurs when a function call handler does not send a response to Deepgram.');
       expect(errorCall.message).not.toContain('Please make sure you are sending binary messages');
       expect(errorCall.message).not.toContain('Both text and audio messages are supported');
       
