@@ -14,6 +14,8 @@
  * - Captures and logs agent responses for each user interaction
  * - Uses pre-recorded audio samples to simulate realistic user speech
  * - Verifies agent responses to both text and audio inputs
+ * - Logs full conversation transcripts showing all user-assistant exchanges
+ * - Includes function call summaries (query, provider, result count) when applicable
  * 
  * These tests use real Deepgram API connections to ensure authentic behavior.
  */
@@ -28,6 +30,165 @@ import {
 } from './helpers/test-helpers.js';
 import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
 import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
+
+/**
+ * Capture and format conversation transcript for review
+ * Includes user messages (text and audio), agent responses, and function call summaries
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @returns {Promise<string>} Formatted transcript string
+ */
+async function captureConversationTranscript(page) {
+  const transcript = await page.evaluate(() => {
+    const lines = [];
+    lines.push('='.repeat(80));
+    lines.push('CONVERSATION TRANSCRIPT');
+    lines.push('='.repeat(80));
+    lines.push('');
+    
+    // Get conversation history from window (includes both user and assistant messages)
+    const conversationHistory = window.__testConversationHistory || [];
+    
+    // Get transcript history from DOM (audio transcriptions)
+    const transcriptEntries = Array.from(document.querySelectorAll('[data-testid^="transcript-entry-"]'));
+    const transcripts = transcriptEntries.map((entry, index) => {
+      const textEl = entry.querySelector(`[data-testid="transcript-text-${index}"]`);
+      return {
+        text: textEl?.textContent?.trim() || '',
+        is_final: entry.getAttribute('data-is-final') === 'true',
+        timestamp: parseInt(entry.getAttribute('data-timestamp') || '0', 10)
+      };
+    }).filter(t => t.text && t.is_final); // Only include final transcripts
+    
+    // Get function call information
+    const functionCallRequests = window.functionCallRequests || [];
+    const functionCallResponses = window.functionCallResponses || [];
+    
+    // Build transcript chronologically by combining all sources
+    const allEvents = [];
+    
+    // Add conversation history entries (both user and assistant)
+    conversationHistory.forEach((msg) => {
+      allEvents.push({
+        type: msg.role === 'user' ? 'user_message' : 'agent_response',
+        content: msg.content,
+        timestamp: msg.timestamp || Date.now(),
+        source: 'conversation_history'
+      });
+    });
+    
+    // Add final audio transcriptions (these may duplicate user messages, but we'll dedupe)
+    transcripts.forEach(transcript => {
+      allEvents.push({
+        type: 'user_audio_transcript',
+        content: transcript.text,
+        timestamp: transcript.timestamp,
+        source: 'transcript_history'
+      });
+    });
+    
+    // Add function call information (inserted after the user message that triggered them)
+    functionCallRequests.forEach((req, idx) => {
+      const response = functionCallResponses[idx] || null;
+      let resultSummary = 'No response';
+      if (response) {
+        try {
+          const resultData = JSON.parse(response.content || '{}');
+          // Extract result count or summary
+          if (Array.isArray(resultData)) {
+            resultSummary = `${resultData.length} result(s)`;
+          } else if (resultData.results && Array.isArray(resultData.results)) {
+            resultSummary = `${resultData.results.length} result(s)`;
+          } else if (resultData.items && Array.isArray(resultData.items)) {
+            resultSummary = `${resultData.items.length} result(s)`;
+          } else if (resultData.data && Array.isArray(resultData.data)) {
+            resultSummary = `${resultData.data.length} result(s)`;
+          } else if (resultData.success !== undefined) {
+            resultSummary = resultData.success ? 'Success' : 'Failed';
+          } else {
+            resultSummary = 'Response received';
+          }
+        } catch (e) {
+          resultSummary = 'Response received (parse error)';
+        }
+      }
+      
+      // Parse query/arguments
+      let queryText = 'No arguments';
+      try {
+        if (req.arguments) {
+          const args = typeof req.arguments === 'string' ? JSON.parse(req.arguments) : req.arguments;
+          // Extract query or search term if available
+          if (args.query) {
+            queryText = args.query;
+          } else if (args.search) {
+            queryText = args.search;
+          } else if (args.text) {
+            queryText = args.text;
+          } else {
+            queryText = JSON.stringify(args);
+          }
+        }
+      } catch (e) {
+        queryText = typeof req.arguments === 'string' ? req.arguments : JSON.stringify(req.arguments);
+      }
+      
+      allEvents.push({
+        type: 'function_call',
+        functionName: req.name,
+        query: queryText,
+        provider: 'Deepgram Agent',
+        resultCount: resultSummary,
+        timestamp: Date.now() // Approximate - function calls happen after user message
+      });
+    });
+    
+    // Sort by timestamp
+    allEvents.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    
+    // Format transcript with deduplication
+    let exchangeNumber = 1;
+    const seenUserMessages = new Set();
+    
+    allEvents.forEach((event) => {
+      if (event.type === 'user_message' || event.type === 'user_audio_transcript') {
+        // Deduplicate: if we've seen this exact message, skip it
+        const messageKey = event.content.trim().toLowerCase();
+        if (seenUserMessages.has(messageKey)) {
+          return; // Skip duplicate
+        }
+        seenUserMessages.add(messageKey);
+        
+        const label = event.type === 'user_audio_transcript' ? 'USER (Audio)' : 'USER (Text)';
+        lines.push(`[Exchange ${exchangeNumber}]`);
+        lines.push(`${label}: ${event.content}`);
+        lines.push('');
+      } else if (event.type === 'agent_response') {
+        lines.push(`ASSISTANT: ${event.content}`);
+        lines.push('');
+        exchangeNumber++;
+      } else if (event.type === 'function_call') {
+        // Function calls are inserted after user messages
+        lines.push(`  [Function Call]`);
+        lines.push(`    Function: ${event.functionName}`);
+        lines.push(`    Query: ${event.query}`);
+        lines.push(`    Provider: ${event.provider}`);
+        lines.push(`    Results: ${event.resultCount}`);
+        lines.push('');
+      }
+    });
+    
+    lines.push('='.repeat(80));
+    lines.push(`Total Exchanges: ${exchangeNumber - 1}`);
+    if (functionCallRequests.length > 0) {
+      lines.push(`Function Calls: ${functionCallRequests.length}`);
+    }
+    lines.push('='.repeat(80));
+    
+    return lines.join('\n');
+  });
+  
+  return transcript;
+}
 
 test.describe('Dual Channel - Text and Microphone', () => {
   
@@ -111,6 +272,12 @@ test.describe('Dual Channel - Text and Microphone', () => {
     expect(micStatus).toContain('Enabled');
     
     console.log('✅ Both channels are available');
+    
+    // Capture and log full conversation transcript
+    const transcript = await captureConversationTranscript(page);
+    console.log('\n📋 CONVERSATION TRANSCRIPT:');
+    console.log(transcript);
+    
     console.log('🎉 Test passed - successfully switched from text to microphone');
   });
 
@@ -177,6 +344,12 @@ test.describe('Dual Channel - Text and Microphone', () => {
     expect(micStatusAfter).toContain('Enabled');
     
     console.log('✅ Both channels remain available');
+    
+    // Capture and log full conversation transcript
+    const transcript = await captureConversationTranscript(page);
+    console.log('\n📋 CONVERSATION TRANSCRIPT:');
+    console.log(transcript);
+    
     console.log('🎉 Test passed - successfully used text while microphone is active');
   });
 
@@ -302,6 +475,11 @@ test.describe('Dual Channel - Text and Microphone', () => {
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
     expect(connectionStatus.toLowerCase()).toContain('connected');
     
+    // Capture and log full conversation transcript
+    const transcript = await captureConversationTranscript(page);
+    console.log('\n📋 CONVERSATION TRANSCRIPT:');
+    console.log(transcript);
+    
     console.log('🎉 Test passed - successfully alternated between text and microphone');
   });
 
@@ -405,6 +583,11 @@ test.describe('Dual Channel - Text and Microphone', () => {
     // Connection should be active after sending message (auto-reconnect if needed)
     expect(connectionStatus.toLowerCase()).toContain('connected');
     console.log('✅ Connection maintained throughout channel switching');
+    
+    // Capture and log full conversation transcript
+    const transcript = await captureConversationTranscript(page);
+    console.log('\n📋 CONVERSATION TRANSCRIPT:');
+    console.log(transcript);
     
     console.log('🎉 Test passed - connection maintained when switching channels');
   });
@@ -534,6 +717,11 @@ test.describe('Dual Channel - Text and Microphone', () => {
     // Verify connection is still active
     const finalConnectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
     expect(finalConnectionStatus).toContain('connected');
+    
+    // Capture and log full conversation transcript
+    const transcript = await captureConversationTranscript(page);
+    console.log('\n📋 CONVERSATION TRANSCRIPT:');
+    console.log(transcript);
     
     console.log('🎉 Test passed - both channels work in proxy mode');
   });
