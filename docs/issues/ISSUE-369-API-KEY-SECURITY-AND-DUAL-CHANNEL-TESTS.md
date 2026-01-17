@@ -1,7 +1,8 @@
 # Issue #369: Add API Key Security Tests and Dual Channel (Text + Microphone) Tests
 
 **GitHub Issue**: https://github.com/Signal-Meaning/dg_react_agent/issues/369  
-**Status**: 🟢 **IN PROGRESS** - Implementation Complete, Testing Phase  
+**Pull Request**: https://github.com/Signal-Meaning/dg_react_agent/pull/370  
+**Status**: 🟢 **PR CREATED** - Ready for Review  
 **Priority**: **High**  
 **Branch**: `davidrmcgee/issue369`  
 **Related Issues**: #242 (Backend Proxy Support)
