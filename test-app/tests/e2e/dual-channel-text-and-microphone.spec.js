@@ -36,9 +36,13 @@ test.describe('Dual Channel - Text and Microphone', () => {
     console.log('📝 Step 1: Establishing connection via text input');
     await establishConnectionViaText(page);
     
-    // Verify connection is established
+    // Verify connection is established (may be 'connected' or 'connected (proxy)')
+    await page.waitForFunction(() => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      return statusEl && statusEl.textContent && statusEl.textContent.toLowerCase().includes('connected');
+    }, { timeout: 10000 });
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
-    expect(connectionStatus).toContain('connected');
+    expect(connectionStatus.toLowerCase()).toContain('connected');
     console.log('✅ Connection established via text');
     
     // Step 2: Send a text message
@@ -47,7 +51,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     await sendTextMessage(page, textMessage);
     
     // Wait for agent response
-    await waitForAgentResponse(page, { timeout: 20000 });
+    await waitForAgentResponse(page, undefined, 20000);
     const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
     expect(agentResponse).toBeTruthy();
     expect(agentResponse.trim()).not.toBe('');
@@ -109,7 +113,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     await sendTextMessage(page, textMessage);
     
     // Wait for agent response
-    await waitForAgentResponse(page, { timeout: 20000 });
+    await waitForAgentResponse(page, undefined, 20000);
     const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
     expect(agentResponse).toBeTruthy();
     expect(agentResponse.trim()).not.toBe('');
@@ -140,7 +144,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     const textMessage1 = "First message via text.";
     await sendTextMessage(page, textMessage1);
-    await waitForAgentResponse(page, { timeout: 20000 });
+    await waitForAgentResponse(page, undefined, 20000);
     console.log('✅ Text message 1 sent and responded');
     
     // Step 2: Enable microphone
@@ -157,7 +161,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     console.log('📝 Step 3: Sending text message while microphone is enabled');
     const textMessage2 = "Second message via text, microphone is active.";
     await sendTextMessage(page, textMessage2);
-    await waitForAgentResponse(page, { timeout: 20000 });
+    await waitForAgentResponse(page, undefined, 20000);
     console.log('✅ Text message 2 sent and responded');
     
     // Step 4: Disable microphone
@@ -173,7 +177,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     console.log('📝 Step 5: Sending text message after microphone disabled');
     const textMessage3 = "Third message via text, microphone is disabled.";
     await sendTextMessage(page, textMessage3);
-    await waitForAgentResponse(page, { timeout: 20000 });
+    await waitForAgentResponse(page, undefined, 20000);
     console.log('✅ Text message 3 sent and responded');
     
     // Step 6: Re-enable microphone
@@ -223,7 +227,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     // Step 3: Send text message
     console.log('📝 Step 3: Sending text message');
     await sendTextMessage(page, "Testing connection stability.");
-    await waitForAgentResponse(page, { timeout: 20000 });
+    await waitForAgentResponse(page, undefined, 20000);
     
     // Verify connection is still active
     connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
@@ -243,7 +247,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     // Step 5: Send another text message
     console.log('📝 Step 5: Sending another text message');
     await sendTextMessage(page, "Final test message.");
-    await waitForAgentResponse(page, { timeout: 20000 });
+    await waitForAgentResponse(page, undefined, 20000);
     
     // Verify connection is still active
     connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
@@ -318,7 +322,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     // Step 2: Send text message
     console.log('📝 Step 2: Sending text message');
     await sendTextMessage(page, "Testing text channel in proxy mode.");
-    await waitForAgentResponse(page, { timeout: 20000 });
+    await waitForAgentResponse(page, undefined, 20000);
     console.log('✅ Text message sent and responded');
     
     // Step 3: Enable microphone
@@ -334,7 +338,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     // Step 4: Send another text message (while mic is enabled)
     console.log('📝 Step 4: Sending text message while microphone is enabled');
     await sendTextMessage(page, "Testing text channel while microphone is active in proxy mode.");
-    await waitForAgentResponse(page, { timeout: 20000 });
+    await waitForAgentResponse(page, undefined, 20000);
     console.log('✅ Text message sent and responded');
     
     // Verify connection is still active
