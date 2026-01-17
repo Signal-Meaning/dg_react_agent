@@ -242,9 +242,10 @@ npm run test:e2e -- dual-channel-text-and-microphone
 
 ## Related Issues
 
-- Fixes #369 (API Key Security Tests and Dual Channel Tests)
-- Implements #363 (Expand Security Test Coverage for Proxy Mode)
+- Fixes #369 (API Key Security Tests and Dual Channel Tests) ✅ **CLOSED**
+- Implements #363 (Expand Security Test Coverage for Proxy Mode) ✅ **CLOSED**
 - Fixes component remount test failures
+- Issue #371 (this release) ✅ **CLOSED**
 
 ## Test Summary
 
