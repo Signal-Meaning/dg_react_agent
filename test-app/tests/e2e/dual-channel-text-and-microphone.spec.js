@@ -162,16 +162,33 @@ async function captureConversationTranscript(page) {
         allEvents.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
         
         // Helper function to detect if a response is a greeting
-        function isGreeting(content) {
+        // Greetings are typically:
+        // 1. Short standalone messages (less than 50 chars)
+        // 2. Appear early in conversation (first 2 agent responses)
+        // 3. Match common greeting patterns
+        function isGreeting(content, eventIndex, allAgentResponses) {
           if (!content) return false;
           const lowerContent = content.toLowerCase().trim();
+          
+          // Only consider first 2 agent responses as potential greetings
+          const agentResponseIndex = allAgentResponses.findIndex(r => r === content);
+          if (agentResponseIndex > 1) {
+            return false; // Too late in conversation to be a greeting
+          }
+          
+          // Must be relatively short (greetings are typically brief)
+          if (content.length > 60) {
+            return false;
+          }
+          
           const greetingPatterns = [
             /^hello[!.]?\s*(how\s+can\s+i\s+(assist|help))/i,
             /^hello[!.]?\s*$/i,
             /^hi[!.]?\s*(how\s+can\s+i\s+(assist|help))/i,
             /^hi[!.]?\s*$/i,
-            /how\s+can\s+i\s+(assist|help)\s+you\s+today/i,
-            /how\s+can\s+i\s+(assist|help)/i,
+            // Only match "how can I help" if it's a standalone short message
+            /^how\s+can\s+i\s+(assist|help)\s+you\s+today[!.]?\s*$/i,
+            /^how\s+can\s+i\s+(assist|help)\s+you[!.]?\s*$/i,
             /^greetings/i
           ];
           return greetingPatterns.some(pattern => pattern.test(lowerContent));
@@ -183,7 +200,12 @@ async function captureConversationTranscript(page) {
         const seenUserMessages = new Set();
         const greetings = [];
         
-        allEvents.forEach((event) => {
+        // Collect all agent responses first to determine greeting context
+        const allAgentResponses = allEvents
+          .filter(e => e.type === 'agent_response')
+          .map(e => e.content || '(empty)');
+        
+        allEvents.forEach((event, index) => {
           if (event.type === 'user_message' || event.type === 'user_audio_transcript') {
             // Deduplicate: if we've seen this exact message, skip it
             const messageKey = (event.content || '').trim().toLowerCase().substring(0, 100);
@@ -198,7 +220,7 @@ async function captureConversationTranscript(page) {
             lines.push('');
           } else if (event.type === 'agent_response') {
             const content = event.content || '(empty)';
-            if (isGreeting(content)) {
+            if (isGreeting(content, index, allAgentResponses)) {
               // Mark as greeting and don't increment exchange number
               greetings.push(content);
               greetingCount++;
