@@ -22,7 +22,9 @@ export type IdleTimeoutEvent =
   | { type: 'UTTERANCE_END' }
   | { type: 'AGENT_STATE_CHANGED'; state: string }
   | { type: 'PLAYBACK_STATE_CHANGED'; isPlaying: boolean }
-  | { type: 'MEANINGFUL_USER_ACTIVITY'; activity: string };
+  | { type: 'MEANINGFUL_USER_ACTIVITY'; activity: string }
+  | { type: 'FUNCTION_CALL_STARTED'; functionCallId: string }
+  | { type: 'FUNCTION_CALL_COMPLETED'; functionCallId: string };
 
 export class IdleTimeoutService {
   private config: IdleTimeoutConfig;
@@ -33,6 +35,8 @@ export class IdleTimeoutService {
   private onStateChangeCallback?: (state: IdleTimeoutState) => void;
   private pollingIntervalId: ReturnType<typeof setInterval> | null = null;
   private stateGetter?: () => IdleTimeoutState | null; // Callback to get current state from component
+  // Issue #373: Track active function calls to prevent idle timeout during execution
+  private activeFunctionCalls: Set<string> = new Set();
 
   constructor(config: IdleTimeoutConfig) {
     this.config = config;
@@ -188,6 +192,27 @@ export class IdleTimeoutService {
           this.updateTimeoutBehavior();
         }
         break;
+        
+      case 'FUNCTION_CALL_STARTED':
+        // Issue #373: Function calls are active operations - disable idle timeout during execution
+        this.activeFunctionCalls.add(event.functionCallId);
+        this.log(`FUNCTION_CALL_STARTED: ${event.functionCallId} (active calls: ${this.activeFunctionCalls.size})`);
+        // Disable idle timeout resets when any function call is active
+        // This prevents timeout from firing during function execution
+        this.disableResets();
+        break;
+        
+      case 'FUNCTION_CALL_COMPLETED':
+        // Issue #373: Function call completed - remove from active set
+        this.activeFunctionCalls.delete(event.functionCallId);
+        this.log(`FUNCTION_CALL_COMPLETED: ${event.functionCallId} (active calls: ${this.activeFunctionCalls.size})`);
+        // If no more active function calls, re-enable timeout based on current state
+        if (this.activeFunctionCalls.size === 0) {
+          // No active function calls - update timeout behavior based on current state
+          this.updateTimeoutBehavior();
+        }
+        // If there are still active calls, keep timeout disabled
+        break;
     }
 
     // Notify listeners of state change
@@ -208,11 +233,13 @@ export class IdleTimeoutService {
         isDisabled: this.isDisabled
       });
     }
+    // Issue #373: Also disable timeout if there are active function calls
     const shouldDisableResets = 
       this.currentState.isUserSpeaking || 
       this.currentState.agentState === 'thinking' || 
       this.currentState.agentState === 'speaking' || 
-      this.currentState.isPlaying;
+      this.currentState.isPlaying ||
+      this.activeFunctionCalls.size > 0; // Disable timeout during function call execution
 
     if (shouldDisableResets) {
       this.disableResets();
@@ -220,9 +247,11 @@ export class IdleTimeoutService {
       this.enableResets();
       // Start timeout when all conditions are idle
       // CRITICAL: Check conditions again after enabling resets to ensure state is consistent
+      // Issue #373: Also check that there are no active function calls
       const canStartTimeout = (this.currentState.agentState === 'idle' || this.currentState.agentState === 'listening') && 
           !this.currentState.isUserSpeaking && 
-          !this.currentState.isPlaying;
+          !this.currentState.isPlaying &&
+          this.activeFunctionCalls.size === 0; // No active function calls
       
       if (canStartTimeout) {
         if (this.config.debug) {
@@ -268,10 +297,12 @@ export class IdleTimeoutService {
       }
     }
     
+    // Issue #373: Also check that there are no active function calls
     const shouldStartTimeout = (stateToCheck.agentState === 'idle' || stateToCheck.agentState === 'listening') && 
         !stateToCheck.isUserSpeaking && 
         !stateToCheck.isPlaying &&
-        !this.isDisabled;
+        !this.isDisabled &&
+        this.activeFunctionCalls.size === 0; // No active function calls
     
     // CRITICAL: If user is speaking, stop timeout immediately (don't wait for events)
     if (stateToCheck.isUserSpeaking && this.timeoutId !== null) {

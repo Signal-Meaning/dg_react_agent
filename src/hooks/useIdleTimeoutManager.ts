@@ -213,8 +213,29 @@ export function useIdleTimeoutManager(
     }
   }, [debug]);
 
+  // Issue #373: Handle function call events for idle timeout management
+  const handleFunctionCallStarted = useCallback((functionCallId: string) => {
+    if (serviceRef.current) {
+      serviceRef.current.handleEvent({
+        type: 'FUNCTION_CALL_STARTED',
+        functionCallId
+      });
+    }
+  }, []);
+
+  const handleFunctionCallCompleted = useCallback((functionCallId: string) => {
+    if (serviceRef.current) {
+      serviceRef.current.handleEvent({
+        type: 'FUNCTION_CALL_COMPLETED',
+        functionCallId
+      });
+    }
+  }, []);
+
   return {
     handleMeaningfulActivity,
     handleUtteranceEnd,
+    handleFunctionCallStarted,
+    handleFunctionCallCompleted,
   };
 }

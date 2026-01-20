@@ -264,6 +264,140 @@ describe('Unified Timeout Coordination Integration', () => {
     });
   });
 
+  describe('Issue #373: Function Call Idle Timeout', () => {
+    test('should NOT timeout during active function call execution', () => {
+      // Set up idle state (timeout should be active)
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      
+      // Wait 3 seconds (timeout is running)
+      jest.advanceTimersByTime(3000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+      
+      // Function call starts - should disable timeout
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'call-1' });
+      
+      // Wait full timeout period (5 seconds) - should NOT timeout because function call is active
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+      
+      // Wait even more - should still not timeout
+      jest.advanceTimersByTime(10000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+      
+      // Function call completes - should re-enable timeout behavior
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-1' });
+      
+      // Now timeout should start and fire after idle period
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    test('should handle multiple concurrent function calls', () => {
+      // Set up idle state
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      
+      // First function call starts
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'call-1' });
+      
+      // Wait 3 seconds - should not timeout
+      jest.advanceTimersByTime(3000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+      
+      // Second function call starts (concurrent)
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'call-2' });
+      
+      // Wait full timeout period - should still not timeout (both calls active)
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+      
+      // First function call completes - timeout should still be disabled (call-2 still active)
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-1' });
+      
+      // Wait timeout period - should still not timeout (call-2 still active)
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+      
+      // Second function call completes - now timeout should start
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-2' });
+      
+      // Now timeout should fire after idle period
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    test('should re-enable timeout after all function calls complete', () => {
+      // Set up idle state
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      
+      // Function call starts
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'call-1' });
+      
+      // Wait - should not timeout
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+      
+      // Function call completes
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-1' });
+      
+      // Timeout should now be active and fire after idle period
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    test('should prevent timeout even if agent state changes during function call', () => {
+      // Set up idle state
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      
+      // Function call starts
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'call-1' });
+      
+      // Agent state changes (e.g., to 'thinking' or 'speaking')
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'thinking' });
+      
+      // Wait full timeout period - should NOT timeout (function call is active)
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+      
+      // Agent state changes back to idle
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      
+      // Should still not timeout (function call still active)
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+      
+      // Function call completes
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-1' });
+      
+      // Now timeout should fire
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    test('should handle function call that starts before timeout begins', () => {
+      // Function call starts immediately (before idle state is set)
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'call-1' });
+      
+      // Set up idle state - timeout should not start because function call is active
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      
+      // Wait full timeout period - should NOT timeout
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+      
+      // Function call completes
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-1' });
+      
+      // Now timeout should start and fire
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('Backward Compatibility', () => {
     test('should maintain existing API compatibility', () => {
       // Test that all existing methods still work
