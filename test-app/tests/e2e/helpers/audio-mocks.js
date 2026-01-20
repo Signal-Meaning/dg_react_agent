@@ -164,14 +164,23 @@ async function setupAudioMocks(page) {
 async function setupTestPage(page) {
   await setupAudioMocks(page);
   
-  // Navigate to test app with debug mode enabled
-  await page.goto('http://localhost:5173/?debug=true');
+  // Import buildUrlWithParams to automatically add proxy config if USE_PROXY_MODE is set
+  const { buildUrlWithParams, BASE_URL } = await import('./test-helpers.mjs');
+  
+  // Build URL with proxy config if USE_PROXY_MODE env var is set, plus test-mode and debug
+  const testUrl = buildUrlWithParams(BASE_URL, {
+    'test-mode': 'true',
+    debug: 'true'
+  });
+  
+  // Navigate to test app with proper configuration
+  await page.goto(testUrl);
   await page.waitForLoadState('networkidle');
   
   // Wait for component to initialize
   await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
   
-  // Wait for connection to be established
+  // Wait for connection status element to appear (component may be initializing)
   await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
   
   // Simulate user gesture to enable AudioContext
