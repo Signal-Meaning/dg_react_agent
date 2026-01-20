@@ -54,7 +54,10 @@ For comprehensive test runs (all 217 tests, takes 2-3 hours), use background mod
 ```bash
 cd test-app
 
-# Start tests in background with logging
+# Start tests in background with logging (recommended - more robust)
+bash -c 'mkdir -p ../test-results/e2e-runs && USE_PROXY_MODE=true npm run test:e2e > ../test-results/e2e-runs/e2e-$(date +%Y%m%d-%H%M%S).log 2>&1' &
+
+# Alternative: Simple version (if the above doesn't work in your shell)
 mkdir -p ../test-results/e2e-runs
 USE_PROXY_MODE=true npm run test:e2e > ../test-results/e2e-runs/e2e-$(date +%Y%m%d-%H%M%S).log 2>&1 &
 
