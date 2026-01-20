@@ -17,7 +17,7 @@
 
 import { test, expect } from '@playwright/test';
 import { SELECTORS } from './helpers/test-helpers.js';
-import { BASE_URL } from './helpers/test-helpers.mjs';
+import { BASE_URL, buildUrlWithParams } from './helpers/test-helpers.mjs';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
 
 test.describe('StrictMode Behavior Validation', () => {
@@ -104,19 +104,26 @@ test.describe('StrictMode Behavior Validation', () => {
       }
       
       // Look for actual component initialization logs
-      if (text.includes('🔧 [Component] Initialization check') || 
-          text.includes('Component] Initialization check') ||
+      // The actual log message is: '🔧 [Component] DeepgramVoiceInteraction initialized'
+      if (text.includes('🔧 [Component] DeepgramVoiceInteraction initialized') || 
+          text.includes('[Component] DeepgramVoiceInteraction initialized') ||
+          text.includes('DeepgramVoiceInteraction initialized') ||
           text.includes('component initialized') || 
           text.includes('DeepgramVoiceInteraction component initialized')) {
         mountLogs.push(text);
       }
     });
     
-    await page.goto(BASE_URL);
+    // Enable debug mode to see component initialization logs
+    const testUrl = buildUrlWithParams(BASE_URL, {
+      'test-mode': 'true',
+      'debug': 'true'
+    });
+    await page.goto(testUrl);
     await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 10000 });
     
     // Wait for component to initialize and StrictMode cycle
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500); // Increased timeout to allow for StrictMode double-mount
     
     // Verify we see mount logs (should see at least initial mount, possibly StrictMode re-mount)
     expect(mountLogs.length).toBeGreaterThan(0);
