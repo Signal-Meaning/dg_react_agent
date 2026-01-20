@@ -54,8 +54,9 @@ For comprehensive test runs (all 217 tests, takes 2-3 hours), use background mod
 ```bash
 cd test-app
 
-# Start tests in background
-npm run test:e2e:background
+# Start tests in background with logging
+mkdir -p ../test-results/e2e-runs
+USE_PROXY_MODE=true npm run test:e2e > ../test-results/e2e-runs/e2e-$(date +%Y%m%d-%H%M%S).log 2>&1 &
 
 # In another terminal, monitor progress
 npm run test:e2e:monitor
@@ -82,7 +83,7 @@ The monitor displays:
 - Test status updates
 - Updates every 5 seconds
 
-**Note:** Tests are NOT automatically set to run in background mode. Use `test:e2e:background` explicitly when you need monitorable long-running test suites (e.g., for release validation).
+**Note:** Tests are NOT automatically set to run in background mode. Use the background operator (`&`) explicitly when you need monitorable long-running test suites (e.g., for release validation).
 
 ## Why Real API Key Instead of Mocks?
 

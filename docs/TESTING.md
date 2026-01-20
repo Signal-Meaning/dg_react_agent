@@ -130,7 +130,8 @@ For long-running test suites (217 tests, 2-3 hours), run tests in background wit
 ```bash
 cd test-app
 # Run all E2E tests in background with logging
-npm run test:e2e:background
+mkdir -p ../test-results/e2e-runs
+USE_PROXY_MODE=true npm run test:e2e > ../test-results/e2e-runs/e2e-$(date +%Y%m%d-%H%M%S).log 2>&1 &
 
 # Monitor test progress (in another terminal)
 npm run test:e2e:monitor

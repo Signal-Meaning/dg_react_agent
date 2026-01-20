@@ -16,7 +16,6 @@
     "test:e2e:debug": "playwright test tests/e2e/ --debug",
     "test:e2e:headed": "playwright test tests/e2e/ --headed",
     "test:e2e:report": "playwright show-report",
-    "test:e2e:background": "bash -c 'mkdir -p ../test-results/e2e-runs && USE_PROXY_MODE=true playwright test --config=tests/playwright.config.mjs > ../test-results/e2e-runs/e2e-$(date +%Y%m%d-%H%M%S).log 2>&1'",
     "test:e2e:monitor": "../scripts/monitor-e2e-tests.sh",
     "test:dev": "vite & playwright test tests/e2e/ --headed",
     "test:proxy:server": "node scripts/mock-proxy-server.js",
