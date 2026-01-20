@@ -31,14 +31,37 @@ while true; do
   echo "Log file: $LOG_FILE"
   echo ""
   
-  # Count tests
-  TOTAL=$(grep -c "Running.*tests" "$LOG_FILE" 2>/dev/null | head -1 || echo "0")
-  PASSED=$(grep -c "✓\|PASS" "$LOG_FILE" 2>/dev/null | wc -l || echo "0")
-  FAILED=$(grep -c "×\|FAIL" "$LOG_FILE" 2>/dev/null | wc -l || echo "0")
+  # Get test count from start of file
+  TOTAL=$(grep -oP "Running \K[0-9]+ tests" "$LOG_FILE" 2>/dev/null | head -1 || echo "?")
   
-  # Get last few lines
-  echo "📈 Progress:"
-  tail -30 "$LOG_FILE" 2>/dev/null | grep -E "(Running|PASS|FAIL|✓|×|passed|failed|Tests:)" | tail -10
+  # Count test results (look for Playwright test result patterns)
+  PASSED=$(grep -cE "^\s*✓|passed|PASS" "$LOG_FILE" 2>/dev/null || echo "0")
+  FAILED=$(grep -cE "^\s*×|failed|FAIL" "$LOG_FILE" 2>/dev/null || echo "0")
+  
+  # Check if tests are complete
+  COMPLETE=$(grep -E "Test Suite|Test Results|passed.*failed|Tests:.*passed" "$LOG_FILE" 2>/dev/null | tail -1)
+  
+  # Get current test being run (look for test names)
+  CURRENT_TEST=$(grep -E "🧪 Testing|Running.*spec\.js|test\(|describe\(" "$LOG_FILE" 2>/dev/null | tail -1 | sed 's/^.*🧪/🧪/' | cut -c1-80)
+  
+  echo "📊 Test Status:"
+  echo "   Total tests: $TOTAL"
+  echo "   Passed: $PASSED"
+  echo "   Failed: $FAILED"
+  if [ -n "$COMPLETE" ]; then
+    echo "   ✅ Tests Complete!"
+    echo "   $COMPLETE"
+  else
+    echo "   ⏳ Tests Running..."
+    if [ -n "$CURRENT_TEST" ]; then
+      echo "   Current: $CURRENT_TEST"
+    fi
+  fi
+  echo ""
+  
+  # Get last few lines with test activity
+  echo "📈 Recent Test Activity:"
+  tail -30 "$LOG_FILE" 2>/dev/null | grep -E "(🧪|Running|PASS|FAIL|✓|×|passed|failed|Tests:|spec\.js)" | tail -10 || tail -5 "$LOG_FILE"
   
   echo ""
   echo "📋 Recent Activity:"
