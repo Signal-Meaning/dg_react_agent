@@ -365,7 +365,7 @@ function DeepgramVoiceInteraction(
   };
   
   // Initialize idle timeout manager
-  const { handleMeaningfulActivity, handleUtteranceEnd } = useIdleTimeoutManager(
+  const { handleMeaningfulActivity, handleUtteranceEnd, handleFunctionCallStarted, handleFunctionCallCompleted } = useIdleTimeoutManager(
     state,
     agentManagerRef,
     props.debug,
@@ -2291,8 +2291,22 @@ function DeepgramVoiceInteraction(
               return; // Skip this function call if no callback
             }
             
+            // Issue #373: Emit function call started event to disable idle timeout during execution
+            handleFunctionCallStarted(functionCall.id);
+            
             // Issue #355: Track whether response was sent to guarantee a response is always sent
             let responseSent = false;
+            // Issue #373: Track whether function call completion event was emitted
+            let completionEventEmitted = false;
+            
+            // Helper function to mark function call as completed (Issue #373)
+            const markFunctionCallCompleted = (): void => {
+              if (!completionEventEmitted) {
+                // Only emit completion event once
+                completionEventEmitted = true;
+                handleFunctionCallCompleted(functionCall.id);
+              }
+            };
             
             // Create sendResponse callback that wraps sendFunctionCallResponse
             // Wrap it to track when it's called (Issue #355)
@@ -2308,6 +2322,8 @@ function DeepgramVoiceInteraction(
               
               // Call the internal sendFunctionCallResponse method
               sendFunctionCallResponse(functionCall.id, functionCall.name, content);
+              // Issue #373: Mark function call as completed when response is sent
+              markFunctionCallCompleted();
             };
             
             // Invoke callback with both functionCall and sendResponse
@@ -2348,6 +2364,8 @@ function DeepgramVoiceInteraction(
                       // Call the internal sendFunctionCallResponse method
                       sendFunctionCallResponse(functionCall.id, functionCall.name, content);
                       responseSent = true;
+                      // Issue #373: Mark function call as completed when response is sent
+                      markFunctionCallCompleted();
                       
                       // Mark response sent for E2E tests (Issue #305)
                       if (typeof window !== 'undefined') {
@@ -2360,6 +2378,8 @@ function DeepgramVoiceInteraction(
                       log(`Function call ${functionCall.id} Promise resolved without sending response, sending default error`);
                       sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: defaultError }));
                       responseSent = true;
+                      // Issue #373: Mark function call as completed when response is sent
+                      markFunctionCallCompleted();
                       
                       // Mark response sent for E2E tests
                       if (typeof window !== 'undefined') {
@@ -2374,6 +2394,8 @@ function DeepgramVoiceInteraction(
                     sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: error.message || 'Unknown error' }));
                     responseSent = true;
                   }
+                  // Issue #373: Always mark function call as completed when promise rejects
+                  markFunctionCallCompleted();
                   
                   // Mark response sent even on error (for tests)
                   if (typeof window !== 'undefined') {
@@ -2388,6 +2410,8 @@ function DeepgramVoiceInteraction(
                   log(`Function call ${functionCall.id} completed without sending response, sending default error`);
                   sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: defaultError }));
                   responseSent = true;
+                  // Issue #373: Mark function call as completed when default error response is sent
+                  markFunctionCallCompleted();
                   
                   // Mark response sent for E2E tests
                   if (typeof window !== 'undefined') {
@@ -2406,11 +2430,13 @@ function DeepgramVoiceInteraction(
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
                 sendFunctionCallResponse(functionCall.id, functionCall.name, JSON.stringify({ error: errorMessage }));
                 responseSent = true;
-                
-                // Mark response sent for E2E tests
-                if (typeof window !== 'undefined') {
-                  (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
-                }
+              }
+              // Issue #373: Always mark function call as completed when we exit (even if response was already sent)
+              markFunctionCallCompleted();
+              
+              // Mark response sent for E2E tests
+              if (typeof window !== 'undefined') {
+                (window as Window & { __testFunctionCallResponseSent?: boolean }).__testFunctionCallResponseSent = true;
               }
             }
           } else {

@@ -5,6 +5,8 @@
  * and consistent testing patterns across the test suite.
  */
 import { expect, test } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Check if real Deepgram API key is available for testing
@@ -1171,6 +1173,88 @@ async function establishConnectionAndWaitForFunctionCall(page, prompt, options =
 // Import microphone helpers
 import MicrophoneHelpers from './microphone-helpers.js';
 
+/**
+ * Write conversation transcript to file
+ * 
+ * This utility writes conversation transcripts to files for review and analysis.
+ * Can be enabled for any test via environment variable or test option.
+ * 
+ * @param {string} transcript - The formatted transcript string
+ * @param {Object} options - Configuration options
+ * @param {string} options.testName - Name of the test (default: 'unknown-test')
+ * @param {string} options.testFile - Name of the test file (default: 'unknown-file')
+ * @param {string} options.outputDir - Output directory (default: 'test-results/transcripts')
+ * @param {boolean} options.enabled - Whether to write file (default: checks SAVE_TEST_TRANSCRIPTS env var)
+ * @returns {Promise<string|null>} Path to written file, or null if not written
+ * 
+ * @example
+ * // Enable via environment variable:
+ * SAVE_TEST_TRANSCRIPTS=true npm run test:e2e
+ * 
+ * // Use in test:
+ * const transcript = await captureConversationTranscript(page);
+ * await writeTranscriptToFile(transcript, {
+ *   testName: test.info().title,
+ *   testFile: test.info().file
+ * });
+ */
+async function writeTranscriptToFile(transcript, options = {}) {
+  // Check if transcript saving is enabled
+  const enabled = options.enabled !== undefined 
+    ? options.enabled 
+    : process.env.SAVE_TEST_TRANSCRIPTS === 'true' || process.env.SAVE_TEST_TRANSCRIPTS === '1';
+  
+  if (!enabled) {
+    return null;
+  }
+  
+  try {
+    const {
+      testName = 'unknown-test',
+      testFile = 'unknown-file',
+      outputDir = 'test-results/transcripts'
+    } = options;
+    
+    // Create output directory if it doesn't exist
+    const fullOutputDir = path.resolve(process.cwd(), outputDir);
+    if (!fs.existsSync(fullOutputDir)) {
+      fs.mkdirSync(fullOutputDir, { recursive: true });
+    }
+    
+    // Generate filename: test-file-name_test-name_timestamp.txt
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const fileBaseName = path.basename(testFile, path.extname(testFile));
+    const safeTestName = testName.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 100);
+    const filename = `${fileBaseName}_${safeTestName}_${timestamp}.txt`;
+    const filePath = path.join(fullOutputDir, filename);
+    
+    // Write transcript to file
+    const fileContent = [
+      '='.repeat(80),
+      `TEST TRANSCRIPT`,
+      '='.repeat(80),
+      `Test File: ${testFile}`,
+      `Test Name: ${testName}`,
+      `Timestamp: ${new Date().toISOString()}`,
+      '='.repeat(80),
+      '',
+      transcript,
+      '',
+      '='.repeat(80),
+      `End of Transcript`,
+      '='.repeat(80)
+    ].join('\n');
+    
+    fs.writeFileSync(filePath, fileContent, 'utf8');
+    
+    console.log(`📄 Transcript saved to: ${filePath}`);
+    return filePath;
+  } catch (error) {
+    console.warn(`⚠️ Failed to write transcript to file: ${error.message}`);
+    return null;
+  }
+}
+
 export {
   // hasRealAPIKey and skipIfNoRealAPI are already exported inline above
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
@@ -1213,6 +1297,7 @@ export {
   tryPromptsForFunctionCall, // Try multiple prompts to trigger function call with retry logic
   setupFunctionCallingTest, // Set up function calling test infrastructure
   establishConnectionAndWaitForFunctionCall, // Establish connection and wait for function call
-  MicrophoneHelpers // Microphone utility helpers for E2E tests (activate/deactivate mic)
+  MicrophoneHelpers, // Microphone utility helpers for E2E tests (activate/deactivate mic)
+  writeTranscriptToFile // Write conversation transcript to file (optional, enabled via env var)
 };
 

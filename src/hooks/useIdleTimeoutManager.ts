@@ -3,6 +3,8 @@ import { VoiceInteractionState } from '../utils/state/VoiceInteractionState';
 import { WebSocketManager } from '../utils/websocket/WebSocketManager';
 import { IdleTimeoutService, IdleTimeoutEvent } from '../utils/IdleTimeoutService';
 
+const DEFAULT_IDLE_TIMEOUT_MS = 10000; // 10 seconds
+
 /**
  * Custom hook for managing idle timeout using the IdleTimeoutService
  * 
@@ -45,7 +47,7 @@ export function useIdleTimeoutManager(
       console.log('🎯 [DEBUG] About to create IdleTimeoutService');
     }
     serviceRef.current = new IdleTimeoutService({
-      timeoutMs: 10000, // 10 seconds
+      timeoutMs: DEFAULT_IDLE_TIMEOUT_MS,
       debug,
     });
     if (debug) {
@@ -213,8 +215,29 @@ export function useIdleTimeoutManager(
     }
   }, [debug]);
 
+  // Issue #373: Handle function call events for idle timeout management
+  const handleFunctionCallStarted = useCallback((functionCallId: string) => {
+    if (serviceRef.current) {
+      serviceRef.current.handleEvent({
+        type: 'FUNCTION_CALL_STARTED',
+        functionCallId
+      });
+    }
+  }, []);
+
+  const handleFunctionCallCompleted = useCallback((functionCallId: string) => {
+    if (serviceRef.current) {
+      serviceRef.current.handleEvent({
+        type: 'FUNCTION_CALL_COMPLETED',
+        functionCallId
+      });
+    }
+  }, []);
+
   return {
     handleMeaningfulActivity,
     handleUtteranceEnd,
+    handleFunctionCallStarted,
+    handleFunctionCallCompleted,
   };
 }
