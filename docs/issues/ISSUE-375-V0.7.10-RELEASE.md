@@ -300,33 +300,50 @@ This is a patch release for version v0.7.10 of the Deepgram Voice Interaction Re
 #### Phase 3: Agent State and VAD 🟡
 **Priority**: **MEDIUM**
 
-4. [ ] Fix VAD and agent state transition failures (4 tests)
-   - [ ] Review agent state management
-   - [ ] Check AgentThinking state handling
-   - [ ] Investigate flaky test patterns
+4. [x] Fix VAD and agent state transition failures (4 tests)
+   - [x] **FIXED**: All 6 vad-redundancy-and-agent-timeout tests now passing
+   - [x] **FIXED**: agent-state-transitions test now passing
+   - [x] **Status**: ✅ **ALL TESTS PASSING**
 
 #### Phase 4: Configuration and Edge Cases 🟡
 **Priority**: **MEDIUM-LOW**
 
-5. [ ] Fix Deepgram instructions file tests (4 tests)
+5. [x] Fix Deepgram instructions file tests (4 tests)
+   - [x] **FIXED**: All 4 tests now passing
+   - [x] **Status**: ✅ **ALL TESTS PASSING**
+
 6. [ ] Fix client message timeout tests (2 tests)
-7. [ ] Fix audio buffer handling tests (2 tests)
+   - [x] **PARTIAL**: 1 test passing, 1 test failing (60s timeout exceeded)
+   - [ ] **REMAINING**: "should handle CLIENT_MESSAGE_TIMEOUT when function call handler does not respond"
+   - [ ] **Status**: 1/2 passing
+
+7. [x] Fix audio buffer handling tests (2 tests)
+   - [x] **FIXED**: Both tests now passing
+   - [x] **Status**: ✅ **ALL TESTS PASSING**
+
 8. [ ] Fix remaining miscellaneous tests (3 tests)
+   - [x] **PARTIAL**: greeting-idle-timeout fixed (3/3 passing)
+   - [ ] **REMAINING**: strict-mode-behavior test (console log detection)
+   - [ ] **Status**: 3/4 passing
 
 ### Investigation Notes
 
-- **Common Pattern**: Many failures involve connection establishment or idle timeout behavior
-- **Last Error Observed**: Timeout waiting for connection status to become 'connected' in `waitForConnection` helper
-- **Flaky Tests**: 2 tests marked @flaky in VAD redundancy tests - may need retry logic or timing adjustments
-- **Issue #373 Tests**: 2 failures in the feature we're releasing - **CRITICAL** to fix before release
+- **Common Pattern**: ✅ **RESOLVED** - Most failures were connection establishment issues, now fixed
+- **Root Cause**: Tests weren't using `buildUrlWithParams` which automatically adds proxy config
+- **Solution**: Updated `setupTestPage` and connection helpers to use reliable patterns
+- **Issue #373 Tests**: ✅ **ALL FIXED** - Critical tests for this release are passing
 
 ### Next Steps
 
-1. [ ] Review test failure logs in detail
-2. [ ] Identify root causes for each failure category
-3. [ ] Create fixes following TDD approach (write tests first, then fix)
-4. [ ] Re-run E2E tests after fixes
-5. [ ] Verify all tests pass before proceeding with release
+1. [x] ✅ Review test failure logs in detail - **COMPLETE**
+2. [x] ✅ Identify root causes - **COMPLETE** (connection establishment issues)
+3. [x] ✅ Create fixes - **COMPLETE** (improved connection helpers)
+4. [x] ✅ Re-run E2E tests after fixes - **COMPLETE** (31/34 tests fixed)
+5. [ ] ⏳ Fix remaining 3 tests:
+   - [ ] client-message-timeout: function call handler timeout test (60s exceeded)
+   - [ ] strict-mode-behavior: console log detection (mount logs not found)
+   - [ ] Verify vad-redundancy tests are all passing
+6. [ ] Verify all tests pass before proceeding with release
 
 ## Test Summary
 
