@@ -142,7 +142,7 @@ export class IdleTimeoutService {
         this.enableResetsAndUpdateBehavior();
         break;
         
-      case 'AGENT_STATE_CHANGED':
+      case 'AGENT_STATE_CHANGED': {
         this.currentState.agentState = event.state;
         // Log state to debug timeout not starting
         this.log(`AGENT_STATE_CHANGED: state=${event.state}, isPlaying=${this.currentState.isPlaying}, isUserSpeaking=${this.currentState.isUserSpeaking}`);
@@ -160,6 +160,7 @@ export class IdleTimeoutService {
           this.updateTimeoutBehavior();
         }
         break;
+      }
         
       case 'PLAYBACK_STATE_CHANGED':
         this.currentState.isPlaying = event.isPlaying;
