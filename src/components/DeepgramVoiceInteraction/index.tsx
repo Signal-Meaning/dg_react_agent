@@ -3216,6 +3216,11 @@ function DeepgramVoiceInteraction(
       log('✅ Settings confirmed sent - safe to send InjectUserMessage');
     }
     
+    // Issue #373: Immediately transition to thinking state when user message is sent
+    // This prevents idle timeout from firing during the gap between message send and agent response
+    // Deepgram may not always send AgentThinking message, so we proactively enter thinking state
+    transitionToThinkingState('User message sent (injectUserMessage)', false); // Don't maintain keepalive (agent will handle it)
+    
     agentManagerRef.current.sendJSON({
       type: 'InjectUserMessage',
       content: message
