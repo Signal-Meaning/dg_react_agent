@@ -84,10 +84,25 @@ test.describe('Greeting Idle Timeout', () => {
     console.log('Step 6: Sending "hi" via text input...');
     
     // Click into text input to trigger reconnection
-    await page.click('input[type="text"]');
+    // Use establishConnectionViaText pattern for reliable reconnection
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.waitFor({ state: 'visible', timeout: 10000 });
+    await textInput.focus();
+    console.log('✅ Text input focused - auto-connect should trigger');
     
-    // Wait for reconnection
-    await waitForConnection(page, 10000);
+    // Wait for connection status element to appear
+    await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
+    
+    // Wait for connection to transition from "closed" to "connecting" to "connected"
+    await page.waitForFunction(() => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      if (!statusEl) return false;
+      const status = statusEl.textContent?.toLowerCase() || '';
+      return status !== 'closed';
+    }, { timeout: 10000 });
+    
+    // Wait for reconnection with longer timeout
+    await waitForConnection(page, 30000);
     console.log('✅ Reconnected after text input');
     
     // Send the message

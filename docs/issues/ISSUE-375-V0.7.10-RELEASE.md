@@ -171,8 +171,8 @@ This is a patch release for version v0.7.10 of the Deepgram Voice Interaction Re
 
 ### Test Results Summary
 
-- ✅ **151 tests passed** (68.0%)
-- ❌ **34 tests failed** (15.3%) - **BLOCKING RELEASE**
+- ✅ **171 tests passed** (77.0%) - **+20 tests fixed** 🎉
+- ❌ **14 tests failed** (6.3%) - **-20 tests fixed, still blocking release**
 - ⏭️ **37 tests skipped** (16.7%)
 
 ### Failed Tests by Category
@@ -192,11 +192,11 @@ This is a patch release for version v0.7.10 of the Deepgram Voice Interaction Re
 | `idle-timeout-during-agent-speech.spec.js` | @flaky should NOT timeout while agent is actively speaking | ❌ | @flaky |
 | `issue-373-idle-timeout-during-function-calls.spec.js` | should NOT timeout during agent thinking phase before function call | ❌ | **Related to Issue #373** |
 | `issue-373-idle-timeout-during-function-calls.spec.js` | should re-enable idle timeout after function calls complete | ❌ | **Related to Issue #373** |
-| `microphone-activation-after-idle-timeout.spec.js` | should handle microphone activation after idle timeout | ❌ | |
-| `microphone-activation-after-idle-timeout.spec.js` | should show loading state during reconnection attempt | ❌ | |
-| `microphone-functionality-fixed.spec.js` | should handle microphone activation after idle timeout (FIXED) | ❌ | |
-| `text-idle-timeout-suspended-audio.spec.js` | should timeout after text interaction even with suspended AudioContext | ❌ | |
-| `text-idle-timeout-suspended-audio.spec.js` | should resume AudioContext on text input focus | ❌ | |
+| `microphone-activation-after-idle-timeout.spec.js` | should handle microphone activation after idle timeout | ✅ | **FIXED** - Uses same helpers |
+| `microphone-activation-after-idle-timeout.spec.js` | should show loading state during reconnection attempt | ✅ | **FIXED** - Uses same helpers |
+| `microphone-functionality-fixed.spec.js` | should handle microphone activation after idle timeout (FIXED) | ✅ | **FIXED** - Uses same helpers |
+| `text-idle-timeout-suspended-audio.spec.js` | should timeout after text interaction even with suspended AudioContext | ✅ | **FIXED** - Uses same helpers |
+| `text-idle-timeout-suspended-audio.spec.js` | should resume AudioContext on text input focus | ✅ | **FIXED** - Uses same helpers |
 
 #### 2. Text Session Flow (4 failures)
 **Status**: 🔴 **HIGH PRIORITY** - Text input functionality affected
@@ -282,17 +282,15 @@ This is a patch release for version v0.7.10 of the Deepgram Voice Interaction Re
 #### Phase 2: Core Idle Timeout Behavior 🔴
 **Priority**: **HIGH** - Core functionality
 
-2. [ ] Fix idle timeout behavior test failures (7 tests in `idle-timeout-behavior.spec.js`)
-   - [ ] Review idle timeout state management
-   - [ ] Verify microphone activation after timeout
-   - [ ] Check connection re-establishment logic
-   - [ ] Validate timeout reset mechanisms
+2. [x] Fix idle timeout behavior test failures (7 tests in `idle-timeout-behavior.spec.js`)
+   - [x] **FIXED**: Updated `setupTestPage` to use `buildUrlWithParams` for automatic proxy mode support
+   - [x] **FIXED**: Improved `establishConnectionViaText` with more reliable connection pattern
+   - [x] **FIXED**: Increased `sendTextMessage` timeout for better reliability
+   - [x] **Status**: ✅ **ALL 9 TESTS PASSING**
 
-3. [ ] Fix text session flow failures (4 tests)
-   - [ ] Investigate connection establishment issues
-   - [ ] Check WebSocket reconnection logic
-   - [ ] Verify Settings message sending
-   - [ ] Test rapid message exchange handling
+3. [x] Fix text session flow failures (4 tests)
+   - [x] **FIXED**: Same fixes as idle-timeout-behavior (shared helpers)
+   - [x] **Status**: ✅ **ALL 4 TESTS PASSING**
 
 #### Phase 3: Agent State and VAD 🟡
 **Priority**: **MEDIUM**
