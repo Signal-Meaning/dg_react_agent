@@ -300,15 +300,33 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
     
     test.setTimeout(60000); // 60 seconds
     
-    // Track connection state
-    const connectionCloses = [];
+    // Track connection state via DOM instead of console logs (more reliable)
+    // Monitor connection status element for state changes
+    let connectionStatusHistory = [];
+    let lastConnectionStatus = null;
     
-    page.on('console', msg => {
-      const text = msg.text();
-      if (text.includes('Connection closed') || text.includes('WebSocket closed') || text.includes('idle timeout')) {
-        connectionCloses.push({ time: Date.now(), message: text });
+    // Monitor connection status via DOM polling (more reliable than console logs)
+    const monitorConnectionStatus = async () => {
+      const status = await page.evaluate(() => {
+        const statusEl = document.querySelector('[data-testid="connection-status"]');
+        return statusEl?.textContent?.toLowerCase() || 'unknown';
+      });
+      
+      if (status !== lastConnectionStatus) {
+        connectionStatusHistory.push({
+          time: Date.now(),
+          status: status,
+          previousStatus: lastConnectionStatus
+        });
+        lastConnectionStatus = status;
       }
-    });
+      return status;
+    };
+    
+    // Start monitoring connection status
+    const statusMonitorInterval = setInterval(async () => {
+      await monitorConnectionStatus();
+    }, 500); // Check every 500ms
     
     // Set up function that triggers after agent thinking
     await page.addInitScript(() => {
@@ -410,7 +428,16 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
       return false;
     });
     
-    // Check connection state
+    // Stop monitoring
+    clearInterval(statusMonitorInterval);
+    
+    // Get final connection status from DOM
+    const finalConnectionStatus = await page.evaluate(() => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      return statusEl?.textContent?.toLowerCase() || 'unknown';
+    });
+    
+    // Check connection state via ref (backup check)
     const connectionState = await page.evaluate(() => {
       const deepgramRef = window.deepgramRef || window.voiceAgentRef;
       return {
@@ -418,14 +445,25 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
       };
     });
     
+    // Count connection status changes to 'closed' during the test
+    const connectionCloses = connectionStatusHistory.filter(entry => 
+      entry.status === 'closed' && entry.previousStatus !== 'closed'
+    );
+    
     console.log('\n📊 Test Results:');
     console.log(`  Function call received: ${functionCallReceived ? 'yes' : 'no'}`);
-    console.log(`  Connection state: ${connectionState.isConnected ? 'connected' : 'disconnected'}`);
-    console.log(`  Connection closes detected: ${connectionCloses.length}`);
+    console.log(`  Final connection status (DOM): ${finalConnectionStatus}`);
+    console.log(`  Connection state (ref): ${connectionState.isConnected ? 'connected' : 'disconnected'}`);
+    console.log(`  Connection status changes: ${connectionStatusHistory.length}`);
+    console.log(`  Connection closes detected (DOM): ${connectionCloses.length}`);
+    if (connectionStatusHistory.length > 0) {
+      console.log(`  Connection status history:`, connectionStatusHistory.map(e => `${e.previousStatus} → ${e.status}`).join(', '));
+    }
     
-    // Assertions
-    expect(connectionState.isConnected).toBe(true); // Connection should still be open
-    expect(connectionCloses.length).toBe(0); // No connection closes during thinking phase
+    // Assertions - use DOM-based check (more reliable)
+    expect(finalConnectionStatus).toBe('connected'); // Connection should still be open (DOM check)
+    expect(connectionState.isConnected).toBe(true); // Connection should still be open (ref check)
+    expect(connectionCloses.length).toBe(0); // No connection closes during thinking phase (DOM-based)
     
     // If function call was received, that's a bonus (proves thinking phase didn't timeout)
     if (functionCallReceived) {
@@ -621,6 +659,8 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
           id: request.id,
           result: { success: true }
         });
+        // Set flag for test to check completion
+        window.__FUNCTION_CALL_RESPONSE_SENT__ = true;
         return { id: request.id, result: { success: true } };
       };
     });

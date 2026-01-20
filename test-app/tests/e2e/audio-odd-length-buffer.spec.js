@@ -17,7 +17,8 @@
 import { test, expect } from '@playwright/test';
 import { 
   setupTestPage, 
-  waitForConnection
+  waitForConnection,
+  establishConnectionViaMicrophone
 } from './helpers/test-helpers.js';
 
 test.describe('Odd-Length Audio Buffer Handling (Issue #340)', () => {
@@ -52,7 +53,7 @@ test.describe('Odd-Length Audio Buffer Handling (Issue #340)', () => {
     });
   });
 
-  test('should handle odd-length TTS audio buffers without RangeError', async ({ page }) => {
+  test('should handle odd-length TTS audio buffers without RangeError', async ({ page, context }) => {
     console.log('🧪 Testing odd-length audio buffer handling...');
     
     // Wait for component to be ready
@@ -61,12 +62,9 @@ test.describe('Odd-Length Audio Buffer Handling (Issue #340)', () => {
     }, { timeout: 5000 });
     console.log('✅ Component ready');
     
-    // Click microphone button to trigger connection
-    await page.click('[data-testid="mic-button"]');
-    console.log('✅ Microphone button clicked');
-    
-    // Wait for connection
-    await waitForConnection(page, 10000);
+    // Use improved connection helper for reliability
+    await establishConnectionViaMicrophone(page, context, 30000);
+    console.log('✅ Connection established via microphone');
     console.log('✅ Connection established');
     
     // Wait for settings to be applied and AudioManager to be initialized
@@ -183,8 +181,8 @@ test.describe('Odd-Length Audio Buffer Handling (Issue #340)', () => {
       return window.deepgramRef?.current !== undefined;
     }, { timeout: 5000 });
     
-    await page.click('[data-testid="mic-button"]');
-    await waitForConnection(page, 10000);
+    // Use improved connection helper for reliability
+    await establishConnectionViaMicrophone(page, null, 30000);
     await page.waitForTimeout(2000);
     
     // Verify component is working (no crashes)

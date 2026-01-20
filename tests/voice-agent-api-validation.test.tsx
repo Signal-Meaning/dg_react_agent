@@ -564,6 +564,9 @@ describe('Component API Surface Validation', () => {
       addEventListener: jest.fn().mockReturnValue(jest.fn()),
       removeEventListener: jest.fn(),
       destroy: jest.fn(),
+      // Keepalive methods (required for Issue #373 - transitionToThinkingState)
+      startKeepalive: jest.fn(),
+      stopKeepalive: jest.fn(),
     };
     
     WebSocketManager.mockImplementation(() => mockWebSocketManager);

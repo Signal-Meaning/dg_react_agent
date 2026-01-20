@@ -146,6 +146,15 @@ export class IdleTimeoutService {
         this.currentState.agentState = event.state;
         // Log state to debug timeout not starting
         this.log(`AGENT_STATE_CHANGED: state=${event.state}, isPlaying=${this.currentState.isPlaying}, isUserSpeaking=${this.currentState.isUserSpeaking}`);
+        
+        // Issue #373: CRITICAL FIX - If agent enters thinking state, immediately stop any running timeout
+        // This prevents timeout from firing during agent thinking phase (before function calls)
+        if (event.state === 'thinking') {
+          this.log('Agent entered thinking state - immediately stopping any running timeout');
+          this.stopTimeout(); // Stop timeout immediately, don't wait for updateTimeoutBehavior
+          this.disableResets(); // Disable resets to prevent timeout from restarting
+        }
+        
         // CRITICAL: If agent becomes idle and playback has stopped, ensure timeout starts
         // This handles the case where AGENT_STATE_CHANGED with 'idle' arrives
         // after PLAYBACK_STATE_CHANGED with isPlaying=false
@@ -155,8 +164,8 @@ export class IdleTimeoutService {
             !this.currentState.isUserSpeaking) {
           // Agent is idle and playback stopped, so enable resets and start timeout
           this.enableResetsAndUpdateBehavior();
-        } else {
-          // Normal update behavior
+        } else if (event.state !== 'thinking') {
+          // Normal update behavior (skip if we already handled thinking state above)
           this.updateTimeoutBehavior();
         }
         break;

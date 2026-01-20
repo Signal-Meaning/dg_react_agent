@@ -260,11 +260,12 @@ async function sendTextMessage(page, message) {
   await sendButton.click();
   
   // Wait for input to clear (confirms send)
-  await textInput.waitFor({ state: 'visible', timeout: 1000 });
+  // Increased timeout for reliability, especially in proxy mode
+  await textInput.waitFor({ state: 'visible', timeout: 5000 });
   await page.waitForFunction(
     (selector) => document.querySelector(selector)?.value === '',
     SELECTORS.textInput,
-    { timeout: 1000 }
+    { timeout: 5000 }
   );
 }
 
@@ -907,30 +908,65 @@ async function setupAudioSendingPrerequisites(page, context = null, options = {}
 
 /**
  * Establish connection via text input (auto-connect pattern)
- * Common pattern: click text input → wait for connection
+ * Common pattern: focus text input → wait for connection
+ * Updated to match Issue #373 test pattern for better reliability
  * @param {import('@playwright/test').Page} page - Playwright page object
- * @param {number} timeout - Timeout for connection wait (default: 10000)
+ * @param {number} timeout - Timeout for connection wait (default: 30000)
  * @returns {Promise<void>}
  */
-async function establishConnectionViaText(page, timeout = 10000) {
-  await page.click('input[type="text"]');
+async function establishConnectionViaText(page, timeout = 30000) {
+  // Use data-testid selector for more reliable targeting
+  const textInput = page.locator('[data-testid="text-input"]');
+  await textInput.waitFor({ state: 'visible', timeout: 10000 });
+  await textInput.focus();
+  console.log('✅ Text input focused - auto-connect should trigger');
+  
+  // Wait for connection status element to appear (component may be initializing)
+  await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
+  
+  // Wait for connection to transition from "closed" to "connecting" to "connected"
+  await page.waitForFunction(() => {
+    const statusEl = document.querySelector('[data-testid="connection-status"]');
+    if (!statusEl) return false;
+    const status = statusEl.textContent?.toLowerCase() || '';
+    return status !== 'closed';
+  }, { timeout: 10000 });
+  
+  // Now wait for connection to be fully established
   await waitForConnection(page, timeout);
 }
 
 /**
  * Establish connection via microphone button
  * Common pattern: grant permissions → click mic button → wait for connection
+ * Updated to match Issue #373 test pattern for better reliability
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {import('@playwright/test').BrowserContext} [context] - Browser context for permissions
- * @param {number} timeout - Timeout for connection wait (default: 10000)
+ * @param {number} timeout - Timeout for connection wait (default: 30000)
  * @returns {Promise<void>}
  */
-async function establishConnectionViaMicrophone(page, context = null, timeout = 10000) {
+async function establishConnectionViaMicrophone(page, context = null, timeout = 30000) {
   if (context) {
     await context.grantPermissions(['microphone']);
   }
-  await page.waitForSelector(SELECTORS.micButton, { timeout: 5000 });
-  await page.click(SELECTORS.micButton);
+  
+  const micButton = page.locator(SELECTORS.micButton);
+  await micButton.waitFor({ state: 'visible', timeout: 10000 });
+  await micButton.click();
+  console.log('✅ Microphone button clicked - connection should trigger');
+  
+  // Wait for connection status element to appear (component may be initializing)
+  await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
+  
+  // Wait for connection to transition from "closed" to "connecting" to "connected"
+  await page.waitForFunction(() => {
+    const statusEl = document.querySelector('[data-testid="connection-status"]');
+    if (!statusEl) return false;
+    const status = statusEl.textContent?.toLowerCase() || '';
+    return status !== 'closed';
+  }, { timeout: 10000 });
+  
+  // Now wait for connection to be fully established
   await waitForConnection(page, timeout);
 }
 

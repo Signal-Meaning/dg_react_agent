@@ -111,6 +111,9 @@ describe('Lazy Initialization Tests', () => {
       destroy: jest.fn(),
       // Issue #345: Add hasSettingsBeenSent method for Settings wait logic
       hasSettingsBeenSent: jest.fn().mockReturnValue(false),
+      // Keepalive methods (required for Issue #373 - transitionToThinkingState)
+      startKeepalive: jest.fn(),
+      stopKeepalive: jest.fn(),
     };
 
     // Mock AudioManager

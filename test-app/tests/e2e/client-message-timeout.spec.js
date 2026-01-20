@@ -49,6 +49,9 @@ test.describe('CLIENT_MESSAGE_TIMEOUT Error Handling', () => {
   test('should handle CLIENT_MESSAGE_TIMEOUT when function call handler does not respond', async ({ page }) => {
     skipIfNoRealAPI('Skipping test - requires real Deepgram API key');
     
+    // Increase test timeout to 120s to allow for Deepgram's 60s timeout + buffer
+    test.setTimeout(120000);
+    
     console.log('🧪 Testing CLIENT_MESSAGE_TIMEOUT from function call timeout...');
     
     // Track errors
