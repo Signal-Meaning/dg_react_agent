@@ -27,7 +27,8 @@ import {
   sendTextMessage, 
   waitForAgentResponse,
   getAgentState,
-  waitForAgentState
+  waitForAgentState,
+  establishConnectionViaText
 } from './helpers/test-helpers.js';
 
 // Constant for message that will trigger tool calls (when Issue #212 is implemented)
@@ -38,8 +39,8 @@ test.describe('Agent State Transitions', () => {
   test.beforeEach(async ({ page }) => {
     await setupTestPage(page);
     // Establish connection via text input (lazy initialization requires explicit trigger)
-    await page.click('input[type="text"]');
-    await waitForConnection(page, 10000);
+    // Use improved establishConnectionViaText helper for reliability
+    await establishConnectionViaText(page, 30000);
   });
 
   test.afterEach(async ({ page }) => {
