@@ -2,11 +2,20 @@
 # Monitor E2E test progress
 # Usage: ./scripts/monitor-e2e-tests.sh [log-file]
 
-LOG_FILE="${1:-$(find test-results/e2e-runs -name "*.log" -type f -mmin -60 | head -1)}"
+# Get the project root directory (where this script is located)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+E2E_RUNS_DIR="$PROJECT_ROOT/test-results/e2e-runs"
+
+LOG_FILE="${1:-$(find "$E2E_RUNS_DIR" -name "*.log" -type f -mmin -60 2>/dev/null | head -1)}"
 
 if [ -z "$LOG_FILE" ] || [ ! -f "$LOG_FILE" ]; then
   echo "❌ No log file found. Tests may not be running."
-  echo "Looking for: test-results/e2e-runs/*.log"
+  echo "Looking for: $E2E_RUNS_DIR/*.log"
+  if [ ! -d "$E2E_RUNS_DIR" ]; then
+    echo "Directory does not exist: $E2E_RUNS_DIR"
+    echo "Run tests first to create log files."
+  fi
   exit 1
 fi
 
