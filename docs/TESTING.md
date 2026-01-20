@@ -124,6 +124,39 @@ unset CI && USE_PROXY_MODE=true npm run test:e2e -- backend-proxy-authentication
 unset CI && USE_PROXY_MODE=true npm run test:e2e -- api-key-security-proxy-mode
 ```
 
+### E2E Tests in Background (Monitorable)
+For long-running test suites (217 tests, 2-3 hours), run tests in background with log output:
+
+```bash
+cd test-app
+# Run all E2E tests in background with logging
+npm run test:e2e:background
+
+# Monitor test progress (in another terminal)
+npm run test:e2e:monitor
+
+# Or monitor a specific log file
+../scripts/monitor-e2e-tests.sh test-results/e2e-runs/e2e-YYYYMMDD-HHMMSS.log
+```
+
+**Background Test Features:**
+- Tests run in background (non-blocking)
+- Output written to timestamped log file in `test-results/e2e-runs/`
+- Can monitor progress in real-time
+- Useful for release validation (all 217 tests)
+
+**Monitoring:**
+- The monitor script shows:
+  - Test progress (passed/failed counts)
+  - Recent test activity
+  - Last 15 lines of log output
+  - Updates every 5 seconds
+- Press Ctrl+C to stop monitoring (tests continue running)
+
+**Log File Location:**
+- `test-results/e2e-runs/e2e-YYYYMMDD-HHMMSS.log`
+- Automatically finds most recent log file if not specified
+
 ### Specific Test File
 ```bash
 npm test -- path/to/test.file

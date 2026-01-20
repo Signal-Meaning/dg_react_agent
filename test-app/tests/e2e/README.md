@@ -26,8 +26,14 @@ VITE_DEEPGRAM_VOICE=aura-asteria-en
 
 ### 3. Run Tests
 ```bash
-# Run all E2E tests
+# Run all E2E tests (foreground, blocks terminal)
 npm run test:e2e
+
+# Run all E2E tests in background (monitorable, for long test runs)
+npm run test:e2e:background
+
+# Monitor test progress (in another terminal)
+npm run test:e2e:monitor
 
 # Run specific test file
 npx playwright test tests/e2e/text-only-conversation.spec.js
@@ -40,6 +46,43 @@ npx playwright test --grep "Timeout"        # All timeout-related tests
 npx playwright test --grep "Idle Timeout"   # Idle timeout specific tests
 npx playwright test --grep "Microphone"     # All microphone tests
 ```
+
+### Running Tests in Background (Monitorable Mode)
+
+For comprehensive test runs (all 217 tests, takes 2-3 hours), use background mode:
+
+```bash
+cd test-app
+
+# Start tests in background
+npm run test:e2e:background
+
+# In another terminal, monitor progress
+npm run test:e2e:monitor
+```
+
+**Background Mode Features:**
+- ✅ Non-blocking - terminal remains available
+- ✅ Logged output - all test output saved to timestamped log file
+- ✅ Monitorable - real-time progress monitoring
+- ✅ Automatic log file naming - `test-results/e2e-runs/e2e-YYYYMMDD-HHMMSS.log`
+
+**Monitoring Test Progress:**
+```bash
+# Monitor most recent test run
+npm run test:e2e:monitor
+
+# Monitor specific log file
+../scripts/monitor-e2e-tests.sh test-results/e2e-runs/e2e-20260120-064800.log
+```
+
+The monitor displays:
+- Test progress (passed/failed counts)
+- Recent test activity (last 15 lines)
+- Test status updates
+- Updates every 5 seconds
+
+**Note:** Tests are NOT automatically set to run in background mode. Use `test:e2e:background` explicitly when you need monitorable long-running test suites (e.g., for release validation).
 
 ## Why Real API Key Instead of Mocks?
 
