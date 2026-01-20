@@ -118,11 +118,12 @@ This is a patch release for version v0.7.10 of the Deepgram Voice Interaction Re
   - [x] **Status**: ✅ Merged to `release/v0.7.10` branch
 - [x] **Commit Changes**: Commit all release-related changes (including documentation)
   - [x] **Commit**: All changes committed and pushed
-  - [ ] **Status**: TBD (pending - will commit after E2E tests)
-- [ ] **Create Release Branch**: Create a release branch for the version
-  - [ ] **Create**: `git checkout -b release/v0.7.10` (from current working branch or main)
-  - [ ] **Push**: `git push origin release/v0.7.10`
-  - [ ] **Status**: TBD
+  - [x] **Status**: ✅ Complete - All commits pushed to `davidrmcgee/issue375` branch
+- [x] **Create Release Branch**: Create a release branch for the version
+  - [x] **Create**: `release/v0.7.10` branch created
+  - [x] **Merge**: PR #377 merged `davidrmcgee/issue375` → `release/v0.7.10`
+  - [x] **Push**: `release/v0.7.10` branch pushed to origin
+  - [x] **Status**: ✅ Complete - Release branch created and merged
 - [ ] **Publish**: Publish to GitHub Registry
   - [ ] **⚠️ Documentation must be committed to release branch BEFORE creating GitHub release** ⚠️
   - [ ] **Preferred**: Use CI build (create GitHub release to trigger `.github/workflows/test-and-publish.yml`)
