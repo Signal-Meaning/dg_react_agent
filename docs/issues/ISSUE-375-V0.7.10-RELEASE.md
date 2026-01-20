@@ -65,10 +65,11 @@ This is a patch release for version v0.7.10 of the Deepgram Voice Interaction Re
     - [x] Start proxy server: `npm run test:proxy:server` (in test-app directory)
       - ✅ **Status**: Proxy server started automatically by Playwright config
     - [x] Run: `USE_PROXY_MODE=true npm run test:e2e` (all E2E tests must pass in proxy mode)
-      - ✅ **Status**: Tests running (222 tests, takes 30+ minutes to complete)
-      - ✅ **Note**: E2E tests are executing correctly, connection scenarios working
+      - ✅ **Status**: Tests running in background (217 tests, expected 2-3 hours)
+      - ✅ **Note**: Tests configured to run in background with output to log file for monitoring
+      - ✅ **Monitoring**: Can check progress via log file or test results
     - [ ] Verify: All tests pass in proxy mode before proceeding
-      - [ ] **Status**: In progress - tests running (will verify completion)
+      - [ ] **Status**: In progress - tests running in background (will verify completion when done)
 - [x] **Linting Clean**: No linting errors
   - [x] **Run**: `npm run lint`
   - ✅ **Status**: Clean (0 errors, 4 warnings - acceptable)
