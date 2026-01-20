@@ -16,6 +16,7 @@
     "test:e2e:debug": "playwright test tests/e2e/ --debug",
     "test:e2e:headed": "playwright test tests/e2e/ --headed",
     "test:e2e:report": "playwright show-report",
+    "test:e2e:monitor": "../scripts/monitor-e2e-tests.sh",
     "test:dev": "vite & playwright test tests/e2e/ --headed",
     "test:proxy:server": "node scripts/mock-proxy-server.js",
     "test:e2e:proxy": "playwright test tests/e2e/backend-proxy-mode.spec.js --config=tests/playwright.config.mjs"
