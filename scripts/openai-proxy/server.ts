@@ -23,6 +23,7 @@ import {
   mapSessionUpdatedToSettingsApplied,
   mapOutputTextDoneToConversationText,
   mapOutputAudioTranscriptDoneToConversationText,
+  mapFunctionCallArgumentsDoneToConversationText,
   mapErrorToComponentError,
   binaryToInputAudioBufferAppend,
 } from './translator';
@@ -253,6 +254,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         } else if (msg.type === 'response.output_audio_transcript.done') {
           const conversationText = mapOutputAudioTranscriptDoneToConversationText(
             msg as Parameters<typeof mapOutputAudioTranscriptDoneToConversationText>[0]
+          );
+          clientWs.send(JSON.stringify(conversationText));
+        } else if (msg.type === 'response.function_call_arguments.done') {
+          const conversationText = mapFunctionCallArgumentsDoneToConversationText(
+            msg as Parameters<typeof mapFunctionCallArgumentsDoneToConversationText>[0]
           );
           clientWs.send(JSON.stringify(conversationText));
         } else if (msg.type === 'error') {

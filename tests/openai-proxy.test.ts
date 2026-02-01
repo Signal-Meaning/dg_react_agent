@@ -11,6 +11,7 @@ import {
   mapSessionUpdatedToSettingsApplied,
   mapOutputTextDoneToConversationText,
   mapOutputAudioTranscriptDoneToConversationText,
+  mapFunctionCallArgumentsDoneToConversationText,
   mapErrorToComponentError,
   binaryToInputAudioBufferAppend,
 } from '../scripts/openai-proxy/translator';
@@ -113,6 +114,26 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       const event = { type: 'response.output_audio_transcript.done' as const };
       const out = mapOutputAudioTranscriptDoneToConversationText(event);
       expect(out.content).toBe('');
+    });
+
+    it('maps response.function_call_arguments.done to ConversationText (assistant) for UI', () => {
+      const event = {
+        type: 'response.function_call_arguments.done' as const,
+        name: 'get_current_time',
+        arguments: '{}',
+      };
+      const out = mapFunctionCallArgumentsDoneToConversationText(event);
+      expect(out).toEqual({
+        type: 'ConversationText',
+        role: 'assistant',
+        content: 'Function call: get_current_time({})',
+      });
+    });
+
+    it('maps response.function_call_arguments.done with no args to name()', () => {
+      const event = { type: 'response.function_call_arguments.done' as const, name: 'get_time' };
+      const out = mapFunctionCallArgumentsDoneToConversationText(event);
+      expect(out.content).toBe('Function call: get_time()');
     });
 
     it('maps OpenAI error to component Error (description, code)', () => {

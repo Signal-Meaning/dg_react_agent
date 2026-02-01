@@ -70,6 +70,14 @@ export interface OpenAIOutputAudioTranscriptDone {
   transcript?: string;
 }
 
+/** OpenAI server event: response.function_call_arguments.done (model requested a function call) */
+export interface OpenAIFunctionCallArgumentsDone {
+  type: 'response.function_call_arguments.done';
+  name?: string;
+  arguments?: string;
+  call_id?: string;
+}
+
 /** Component message: Error (incoming) */
 export interface ComponentError {
   type: 'Error';
@@ -148,6 +156,24 @@ export function mapOutputAudioTranscriptDoneToConversationText(
     type: 'ConversationText',
     role: 'assistant',
     content: event.transcript ?? '',
+  };
+}
+
+/**
+ * Map OpenAI response.function_call_arguments.done → component ConversationText (assistant).
+ * So the app can show that a function was requested (e.g. "Function call: get_current_time()").
+ * The component/test-app only update [data-testid="agent-response"] from ConversationText.
+ */
+export function mapFunctionCallArgumentsDoneToConversationText(
+  event: OpenAIFunctionCallArgumentsDone
+): ComponentConversationText {
+  const name = event.name ?? 'function';
+  const args = event.arguments?.trim();
+  const content = args ? `Function call: ${name}(${args})` : `Function call: ${name}()`;
+  return {
+    type: 'ConversationText',
+    role: 'assistant',
+    content,
   };
 }
 
