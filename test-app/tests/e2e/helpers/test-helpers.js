@@ -106,6 +106,20 @@ async function setupTestPageWithDeepgramProxy(page, timeout = 10000) {
 }
 
 /**
+ * Navigate to the test app with OpenAI proxy (VITE_OPENAI_PROXY_ENDPOINT).
+ * Use for E2E tests that target the OpenAI Realtime proxy (Issue #381).
+ * Skip with skipIfNoOpenAIProxy() when VITE_OPENAI_PROXY_ENDPOINT is not set.
+ * @param {import('@playwright/test').Page} page
+ * @param {number} timeout - Timeout in ms (default: 10000)
+ */
+async function setupTestPageWithOpenAIProxy(page, timeout = 10000) {
+  const { buildUrlWithParams, BASE_URL, getOpenAIProxyParams } = await import('./test-helpers.mjs');
+  const url = buildUrlWithParams(BASE_URL, getOpenAIProxyParams());
+  await page.goto(url);
+  await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
+}
+
+/**
  * Wait for connection to be established (auto-connect)
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 5000)
@@ -1330,6 +1344,7 @@ export {
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   setupTestPageWithDeepgramProxy, // Navigate to test app with Deepgram proxy (VITE_DEEPGRAM_PROXY_ENDPOINT)
+  setupTestPageWithOpenAIProxy, // Navigate to test app with OpenAI proxy (VITE_OPENAI_PROXY_ENDPOINT) – Issue #381
   waitForConnection, // Wait for connection to be established
   waitForSettingsApplied, // Wait for agent settings to be applied (SettingsApplied received from server)
   setupConnectionStateTracking, // Setup connection state tracking via DOM elements (data-testid attributes)

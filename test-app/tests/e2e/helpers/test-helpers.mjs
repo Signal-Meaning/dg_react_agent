@@ -50,6 +50,19 @@ export function getDeepgramProxyParams() {
 }
 
 /**
+ * Params for OpenAI proxy (used by tests that target the OpenAI Realtime proxy).
+ * Uses VITE_OPENAI_PROXY_ENDPOINT; default ws://localhost:8080/openai.
+ * See docs/issues/ISSUE-381/E2E-TEST-PLAN.md.
+ * @returns {Record<string, string>} connectionMode and proxyEndpoint
+ */
+export function getOpenAIProxyParams() {
+  return {
+    connectionMode: 'proxy',
+    proxyEndpoint: process.env.VITE_OPENAI_PROXY_ENDPOINT || 'ws://localhost:8080/openai',
+  };
+}
+
+/**
  * Safely build a URL with query parameters
  * Prevents URL injection by properly constructing URLs
  * Automatically adds proxy configuration if USE_PROXY_MODE env var is set

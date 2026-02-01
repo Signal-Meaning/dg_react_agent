@@ -4,7 +4,7 @@ Phased implementation so that **tests come first** and each phase ends with a gr
 
 ---
 
-## Phase 1: Unit tests and proxy core logic
+## Phase 1: Unit tests and proxy core logic ✅
 
 **Goal**: Proxy module exists and satisfies unit tests for parsing, mapping, and session logic.
 
@@ -19,9 +19,11 @@ Phased implementation so that **tests come first** and each phase ends with a gr
 4. **REFACTOR**: Clean up module structure and naming.
 5. **Checkpoint**: All new unit tests pass; no regression in existing tests.
 
+**Done**: `tests/openai-proxy.test.ts` (12 tests) and `scripts/openai-proxy/translator.ts` (pure mappers: Settings → session.update, InjectUserMessage → conversation.item.create, session.updated → SettingsApplied, response.output_text.done → ConversationText, error → Error). Run: `npm run test -- tests/openai-proxy.test.ts`.
+
 ---
 
-## Phase 2: Integration tests and WebSocket server
+## Phase 2: Integration tests and WebSocket server ✅
 
 **Goal**: Proxy runs as a WebSocket server and satisfies integration tests.
 
@@ -37,9 +39,11 @@ Phased implementation so that **tests come first** and each phase ends with a gr
 4. **REFACTOR**: Improve server structure and error handling.
 5. **Checkpoint**: All integration tests pass; unit tests still pass.
 
+**Done**: `tests/integration/openai-proxy-integration.test.ts` (3 tests, `@jest-environment node`) and `scripts/openai-proxy/server.ts` (WebSocket server that buffers client messages until upstream is open, then forwards with translation). Mock upstream in test; proxy uses translator from Phase 1. Run: `npm run test -- tests/integration/openai-proxy-integration.test.ts`.
+
 ---
 
-## Phase 3: E2E tests and full stack
+## Phase 3: E2E tests and full stack ✅
 
 **Goal**: Test-app works end-to-end with the OpenAI proxy; E2E suite is comprehensive and green.
 
@@ -54,6 +58,8 @@ Phased implementation so that **tests come first** and each phase ends with a gr
 3. **GREEN**: Fix proxy and/or app integration so all E2E tests pass (use real OpenAI Realtime API or a stable mock that matches the API).
 4. **REFACTOR**: Stabilize timeouts and assertions; remove flakiness.
 5. **Checkpoint**: All OpenAI proxy E2E tests pass when `VITE_OPENAI_PROXY_ENDPOINT` is set; existing E2E tests (Deepgram) still pass.
+
+**Done**: Proxy run script `scripts/openai-proxy/run.ts` (npm script `openai-proxy`) with `OPENAI_API_KEY` and optional `OPENAI_PROXY_PORT`/`OPENAI_REALTIME_URL`; server supports optional `upstreamHeaders` for upstream auth. E2E suite `test-app/tests/e2e/openai-proxy-e2e.spec.js`: connection, single message, multi-turn, reconnection, basic audio, function calling, and error handling (wrong proxy URL → connection closed/error within timeout). Run proxy: `OPENAI_API_KEY=sk-... npm run openai-proxy`. Run E2E: `VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npm run test:e2e -- openai-proxy-e2e`. See `scripts/openai-proxy/README.md`.
 
 ---
 
@@ -92,7 +98,7 @@ Phased implementation so that **tests come first** and each phase ends with a gr
 |-------|--------|-----------------|
 | 1 | Unit tests + proxy core logic | Unit tests green |
 | 2 | Integration tests + WebSocket server | Integration tests green |
-| 3 | E2E tests + full stack | OpenAI E2E suite green |
+| 3 | E2E tests + full stack | OpenAI E2E suite green ✅ |
 | 4 | Component tests with OpenAI backend | No regressions; suite green |
 | 5 | Documentation + CI | Docs and CI updated; all checkpoints green |
 

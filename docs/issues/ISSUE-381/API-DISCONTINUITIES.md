@@ -183,6 +183,12 @@ The component also sends and receives **binary audio** (e.g. via the same WebSoc
 
 ## 5. Recommended approach (before implementation)
 
+**Coverage in tests and code**: The following bullets are reflected as follows.  
+- (1) **Document in code**: Implemented in `src/types/connection.ts` and `src/types/agent.ts` (Proxy contract comment + link to this doc).  
+- (2)–(4) **Translation, ordering, audio**: Unit tests (`tests/openai-proxy.test.ts`) cover Settings → session.update, InjectUserMessage → conversation.item.create, session.updated → SettingsApplied, response.output_text.done → ConversationText. Integration tests (`tests/integration/openai-proxy-integration.test.ts`) cover server lifecycle, Settings round-trip, and InjectUserMessage → ConversationText. E2E tests (`test-app/tests/e2e/openai-proxy-e2e.spec.js`) cover connection, single message, multi-turn, reconnection, basic audio, function calling, and error handling.  
+- (5) **Function calling**: Unit tests cover think.functions → tools; E2E covers function-calling flow.  
+- (6) **Tests**: Unit, integration, and E2E plans and implementations are in the repo; see [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md).
+
 1. **Document in code**  
    Add a short “Proxy contract” section (or link to this doc) in the component or types so implementers know what the proxy must send and accept.
 
@@ -221,7 +227,7 @@ Decisions documented so the proxy implementation can proceed without ambiguity.
 |----------|-------------|
 | **Auto-response** | OpenAI Realtime does **not** auto-trigger a response after **conversation.item.create**. The proxy **must** send **response.create** after adding a user message (e.g. after mapping **InjectUserMessage** → **conversation.item.create**). See [OpenAI Realtime client events](https://platform.openai.com/docs/api-reference/realtime-client-events/response/create). |
 | **Binary vs base64** | The component sends **binary** WebSocket frames (ArrayBuffer) for audio. See `WebSocketManager.sendBinary()`, `DeepgramVoiceInteraction` sending to `agentManagerRef.current.sendBinary(data)`. The proxy must receive binary frames, convert to base64, and call **input_audio_buffer.append** (and **commit** on appropriate boundaries). |
-| **Greeting** | OpenAI session has no direct "greeting" field. The proxy should either: (a) inject an initial assistant message via **conversation.item.create** after session is ready, or (b) encode greeting behavior in **session.update** `instructions`. Document the chosen approach in the proxy. |
+| **Greeting** | The component is provided a greeting (e.g. in agent options) and sends it in **Settings** (e.g. `agent.greeting`). The proxy must **use** that greeting: after **session.updated** (and after sending **SettingsApplied** to the component), inject the component-provided greeting as an initial assistant message via **conversation.item.create** so the component receives it (e.g. as **ConversationText** or via the normal greeting flow). Document this behavior in the proxy. |
 | **Context/history** | Component sends **agent.context** (message history). The proxy must send **conversation.item.create** for each history message (user and assistant) **after** **session.updated** and before the first user interaction, so OpenAI's conversation state matches the component's context. Order: session.update → session.updated → (optional) conversation.item.create for each context message → then accept InjectUserMessage. |
 
 Resolving these and implementing the translation layer in the proxy (with tests) will address the discontinuities before or as part of the TDD implementation in ISSUE-381.

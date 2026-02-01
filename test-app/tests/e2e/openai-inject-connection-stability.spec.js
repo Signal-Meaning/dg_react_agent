@@ -13,34 +13,23 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
 import {
   skipIfNoOpenAIProxy,
+  setupTestPageWithOpenAIProxy,
   establishConnectionViaText,
   sendTextMessage,
   waitForAgentResponseEnhanced,
 } from './helpers/test-helpers.js';
 
-const OPENAI_PROXY_ENDPOINT = process.env.VITE_OPENAI_PROXY_ENDPOINT || '';
-
 test.describe('OpenAI injectUserMessage (issue #380)', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(() => {
     skipIfNoOpenAIProxy('Requires VITE_OPENAI_PROXY_ENDPOINT to run against real OpenAI proxy');
   });
 
   test('should receive agent response after first text message (real OpenAI proxy)', async ({ page }) => {
-    const testUrl = buildUrlWithParams(BASE_URL, {
-      connectionMode: 'proxy',
-      proxyEndpoint: OPENAI_PROXY_ENDPOINT,
-    });
-    await page.goto(testUrl);
-    await page.waitForLoadState('networkidle');
-    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
-
+    await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
-
     await sendTextMessage(page, 'hi');
-
     // Expected: an agent reply is delivered. When the bug is present, the connection
     // closes before the reply and no response appears, so this times out and the test fails.
     await waitForAgentResponseEnhanced(page, { timeout: 15000 });

@@ -14,9 +14,10 @@ E2E tests run in a **real browser** against the **test-app** with **VITE_OPENAI_
 
 ## Test File(s)
 
-- **Existing**: `test-app/tests/e2e/openai-inject-connection-stability.spec.js` (single test: inject “hi”, expect agent response).
-- **Reuse**: Prefer existing specs—e.g. `text-session-flow.spec.js`, `backend-proxy-mode.spec.js`, `dual-channel-text-and-microphone.spec.js`, `function-calling-e2e.spec.js`, `issue-351-function-call-proxy-mode.spec.js`—run with `VITE_OPENAI_PROXY_ENDPOINT` (and a setup helper that points the app at the OpenAI proxy). Same test file, different proxy endpoint.
-- **New/expanded**: Add new specs only when no existing test covers the behavior (e.g. a dedicated `openai-proxy-e2e.spec.js` for OpenAI-only cases if desired).
+- **Existing**: `test-app/tests/e2e/openai-inject-connection-stability.spec.js` (single test: inject “hi”, expect agent response). Now uses `setupTestPageWithOpenAIProxy`.
+- **OpenAI proxy suite**: `test-app/tests/e2e/openai-proxy-e2e.spec.js` – connection, single message, multi-turn, reconnection, basic audio, simple function calling. Uses `setupTestPageWithOpenAIProxy` and `skipIfNoOpenAIProxy()`; all tests skip when `VITE_OPENAI_PROXY_ENDPOINT` is not set.
+- **Reuse**: Prefer existing specs—e.g. `text-session-flow.spec.js`, `backend-proxy-mode.spec.js`, `dual-channel-text-and-microphone.spec.js`, `function-calling-e2e.spec.js`—run with `VITE_OPENAI_PROXY_ENDPOINT` via `setupTestPageWithOpenAIProxy` (or URL param `proxyEndpoint`) to run the same flows against the OpenAI proxy.
+- **Helpers**: `setupTestPageWithOpenAIProxy(page)` and `getOpenAIProxyParams()` in `test-app/tests/e2e/helpers/test-helpers.js` and `test-helpers.mjs`.
 
 Use **VITE_OPENAI_PROXY_ENDPOINT** (and optional skip when unset) so these run only when the OpenAI proxy is available; same pattern as existing OpenAI E2E.
 
@@ -33,11 +34,12 @@ Use **VITE_OPENAI_PROXY_ENDPOINT** (and optional skip when unset) so these run o
 
 ### 3. Basic audio test
 
-- **Send recorded audio, receive audio response shown as text in Message Bubble**: Test sends pre-recorded audio (e.g. via `loadAndSendAudioSample` from `test-app/tests/e2e/fixtures/audio-helpers.js`) to the agent; agent responds with audio that is translated to text and shown in the Message Bubble (`[data-testid="agent-response"]`). Assert that an agent response appears after the audio input (e.g. `waitForAgentResponse`). **Reuse**: Run the same flow as in `dual-channel-text-and-microphone.spec.js` or `simple-mic-test.spec.js` (or equivalent) with the app pointed at the OpenAI proxy (`VITE_OPENAI_PROXY_ENDPOINT`). No new test file required if an existing audio test is parameterized by proxy endpoint or run twice (Deepgram proxy, then OpenAI proxy).
+- **Send recorded audio; assert agent response appears in the test-app element with `data-testid="agent-response"`**: Test sends pre-recorded audio (e.g. via `loadAndSendAudioSample` from `test-app/tests/e2e/fixtures/audio-helpers.js`) to the agent; the agent’s response (audio translated to text) must appear in the element identified by `[data-testid="agent-response"]`. In the test-app that element is the main agent-response display; in other UIs (e.g. voice-commerce) the same content is shown in a Message Bubble. Assert using `waitForAgentResponse` and the `[data-testid="agent-response"]` selector. **Reuse**: Run the same flow as in `dual-channel-text-and-microphone.spec.js` or `simple-mic-test.spec.js` (or equivalent) with the app pointed at the OpenAI proxy (`VITE_OPENAI_PROXY_ENDPOINT`). No new test file required if an existing audio test is parameterized by proxy endpoint or run twice (Deepgram proxy, then OpenAI proxy).
+- **Current status**: The OpenAI proxy does **not** yet implement the audio input path (component sends binary; proxy must convert to base64 and send `input_audio_buffer.append` / `commit` per [API-DISCONTINUITIES.md](./API-DISCONTINUITIES.md)). The basic audio E2E test is **skipped** in `openai-proxy-e2e.spec.js` until the proxy implements this path.
 
 ### 4. Simple function calling test
 
-- **Trigger client-side function call and see response in UI**: Connect with a session that includes tools/functions; send a message that triggers a function call; assert that the function is invoked (e.g. callback or DOM) and that the agent’s follow-up response appears in the Message Bubble. **Reuse**: Run the same flow as in `function-calling-e2e.spec.js` or `issue-351-function-call-proxy-mode.spec.js` with the app pointed at the OpenAI proxy. Same test file, different proxy endpoint (e.g. `setupTestPageWithOpenAIProxy` or URL param).
+- **Trigger client-side function call; assert response in the test-app element with `data-testid="agent-response"`**: Connect with a session that includes tools/functions; send a message that triggers a function call; assert that the function is invoked (e.g. callback or DOM) and that the agent’s follow-up response appears in the element with `[data-testid="agent-response"]` (in voice-commerce that is a Message Bubble). **Reuse**: Run the same flow as in `function-calling-e2e.spec.js` or `issue-351-function-call-proxy-mode.spec.js` with the app pointed at the OpenAI proxy. Same test file, different proxy endpoint (e.g. `setupTestPageWithOpenAIProxy` or URL param).
 
 ### 5. Multi-turn
 
@@ -69,5 +71,5 @@ Use **VITE_OPENAI_PROXY_ENDPOINT** (and optional skip when unset) so these run o
 
 - All E2E tests in the OpenAI proxy suite pass when the proxy is running and `VITE_OPENAI_PROXY_ENDPOINT` is set.
 - The existing openai-inject-connection-stability test remains and passes.
-- At least: connection, single message, **basic audio** (send recorded audio → agent audio response → text in Message Bubble), **simple function calling**, multi-turn, and reconnection are covered by E2E tests (reused where possible; tests need not be new).
+- At least: connection, single message, **basic audio** (send recorded audio → agent response text appears in `[data-testid="agent-response"]`; in voice-commerce that is a Message Bubble), **simple function calling** (response in `[data-testid="agent-response"]`), multi-turn, and reconnection are covered by E2E tests (reused where possible; tests need not be new).
 - Where possible, the same test files run against both Deepgram and OpenAI proxies by pointing the environment at the other proxy.
