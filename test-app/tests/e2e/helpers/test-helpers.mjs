@@ -38,6 +38,18 @@ function getProxyConfig() {
 }
 
 /**
+ * Params for Deepgram proxy (used by tests that target the Deepgram proxy).
+ * Prefer VITE_DEEPGRAM_PROXY_ENDPOINT; same default as mock proxy server.
+ * @returns {Record<string, string>} connectionMode and proxyEndpoint
+ */
+export function getDeepgramProxyParams() {
+  return {
+    connectionMode: 'proxy',
+    proxyEndpoint: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy',
+  };
+}
+
+/**
  * Safely build a URL with query parameters
  * Prevents URL injection by properly constructing URLs
  * Automatically adds proxy configuration if USE_PROXY_MODE env var is set

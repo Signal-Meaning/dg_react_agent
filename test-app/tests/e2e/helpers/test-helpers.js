@@ -40,6 +40,27 @@ export function skipIfNoRealAPI(reason = 'Requires real Deepgram API key') {
 }
 
 /**
+ * Check if an external OpenAI proxy endpoint is configured for E2E tests.
+ * Used for tests that reproduce OpenAI upstream behavior (e.g. issue #380).
+ * @returns {boolean} True if VITE_OPENAI_PROXY_ENDPOINT is set and non-empty
+ */
+export function hasOpenAIProxyEndpoint() {
+  const endpoint = process.env.VITE_OPENAI_PROXY_ENDPOINT;
+  return typeof endpoint === 'string' && endpoint.trim().length > 0;
+}
+
+/**
+ * Skip test if OpenAI proxy endpoint is not configured.
+ * Use for E2E tests that require real OpenAI proxy (e.g. connection stability after injectUserMessage).
+ * @param {string} reason - Optional reason for skipping
+ */
+export function skipIfNoOpenAIProxy(reason = 'Requires VITE_OPENAI_PROXY_ENDPOINT for OpenAI proxy E2E tests') {
+  if (!hasOpenAIProxyEndpoint()) {
+    test.skip(true, reason);
+  }
+}
+
+/**
  * Common test selectors
  */
 const SELECTORS = {
@@ -68,6 +89,19 @@ const SELECTORS = {
  */
 async function setupTestPage(page, timeout = 10000) {
   await page.goto('http://localhost:5173');
+  await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
+}
+
+/**
+ * Navigate to the test app with Deepgram proxy (VITE_DEEPGRAM_PROXY_ENDPOINT).
+ * Use for E2E tests that target the Deepgram proxy (e.g. text-session-flow).
+ * @param {import('@playwright/test').Page} page
+ * @param {number} timeout - Timeout in ms (default: 10000)
+ */
+async function setupTestPageWithDeepgramProxy(page, timeout = 10000) {
+  const { buildUrlWithParams, BASE_URL, getDeepgramProxyParams } = await import('./test-helpers.mjs');
+  const url = buildUrlWithParams(BASE_URL, getDeepgramProxyParams());
+  await page.goto(url);
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
 }
 
@@ -1292,9 +1326,10 @@ async function writeTranscriptToFile(transcript, options = {}) {
 }
 
 export {
-  // hasRealAPIKey and skipIfNoRealAPI are already exported inline above
+  // hasRealAPIKey, skipIfNoRealAPI, hasOpenAIProxyEndpoint, skipIfNoOpenAIProxy are already exported inline above
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
+  setupTestPageWithDeepgramProxy, // Navigate to test app with Deepgram proxy (VITE_DEEPGRAM_PROXY_ENDPOINT)
   waitForConnection, // Wait for connection to be established
   waitForSettingsApplied, // Wait for agent settings to be applied (SettingsApplied received from server)
   setupConnectionStateTracking, // Setup connection state tracking via DOM elements (data-testid attributes)

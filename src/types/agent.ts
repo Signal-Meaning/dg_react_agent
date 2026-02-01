@@ -1,6 +1,12 @@
 /**
  * Types related to the Deepgram Voice Agent API
  * Based on the VA-API Spec README.md
+ *
+ * Proxy contract: Outgoing (Settings, InjectUserMessage, FunctionCallResponse, etc.)
+ * and incoming (SettingsApplied, ConversationText, AgentThinking, etc.) message types
+ * define what any backend proxy must accept and emit. See
+ * docs/issues/ISSUE-381/API-DISCONTINUITIES.md for the full contract and mapping to
+ * other backends (e.g. OpenAI Realtime).
  */
 
 /**

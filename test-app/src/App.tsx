@@ -154,7 +154,7 @@ function App() {
     return {
       // Default to proxy mode (direct mode is deprecated - only bug fixes, no new features)
       connectionMode: (connectionModeParam === 'direct' ? 'direct' : 'proxy') as 'direct' | 'proxy',
-      proxyEndpoint: proxyEndpointParam || import.meta.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy',
+      proxyEndpoint: proxyEndpointParam || import.meta.env.VITE_OPENAI_PROXY_ENDPOINT || import.meta.env.VITE_DEEPGRAM_PROXY_ENDPOINT || import.meta.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/openai',
       proxyAuthToken: proxyAuthTokenParam || '',
     };
   }, []);

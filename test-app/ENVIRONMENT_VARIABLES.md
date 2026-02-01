@@ -29,6 +29,10 @@ This document describes the environment variables that can be used to configure 
 - `VITE_AGENT_GREETING` - Agent greeting message (default: `Hello! How can I assist you today?`)
 - `VITE_AGENT_URL` - Custom agent WebSocket URL (default: `wss://agent.deepgram.com/v1/agent/converse`)
 
+### Proxy Endpoints (E2E / real API tests)
+- `VITE_DEEPGRAM_PROXY_ENDPOINT` - WebSocket URL for the Deepgram proxy (default: `ws://localhost:8080/deepgram-proxy`). Used by text-session-flow and other Deepgram proxy E2E tests.
+- `VITE_OPENAI_PROXY_ENDPOINT` - WebSocket URL for the OpenAI proxy (default: `ws://localhost:8080/openai`). When set, the openai-inject-connection-stability E2E test runs against that proxy.
+
 ## Usage
 
 Create a `.env` file in the `test-app` directory with your desired configuration:
@@ -42,6 +46,10 @@ VITE_DEEPGRAM_PROJECT_ID=your-project-id-here
 VITE_TRANSCRIPTION_MODEL=nova-2
 VITE_TRANSCRIPTION_LANGUAGE=en-GB
 VITE_AGENT_VOICE=aura-2-luna-en
+
+# Optional - proxy endpoints for E2E tests (set in test-app/.env)
+# VITE_DEEPGRAM_PROXY_ENDPOINT=ws://localhost:8080/deepgram-proxy
+# VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai
 ```
 
 ## Notes

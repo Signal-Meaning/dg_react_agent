@@ -1,5 +1,11 @@
 /**
  * Types related to connections and endpoints
+ *
+ * Proxy contract: When the component connects to a proxy (e.g. OpenAI Realtime proxy)
+ * instead of Deepgram directly, the proxy must speak the same protocol the component
+ * expects: Deepgram Voice Agent message types (Settings, SettingsApplied,
+ * InjectUserMessage, ConversationText, etc.). See docs/issues/ISSUE-381/API-DISCONTINUITIES.md
+ * for the full contract and translation requirements.
  */
 
 /**

@@ -104,6 +104,8 @@ export default defineConfig({
         VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
         VITE_DEEPGRAM_PROJECT_ID: process.env.VITE_DEEPGRAM_PROJECT_ID || '',
         VITE_BASE_URL: process.env.VITE_BASE_URL || 'http://localhost:5173',
+        VITE_DEEPGRAM_PROXY_ENDPOINT: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy',
+        VITE_OPENAI_PROXY_ENDPOINT: process.env.VITE_OPENAI_PROXY_ENDPOINT || 'ws://localhost:8080/openai',
       },
     },
     // Always start proxy server for E2E tests (required for backend-proxy-mode tests)

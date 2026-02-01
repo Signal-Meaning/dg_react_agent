@@ -12,8 +12,7 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  setupTestPage,
-
+  setupTestPageWithDeepgramProxy,
   waitForSettingsApplied,
   establishConnectionViaText,
   sendMessageAndWaitForResponse,
@@ -28,7 +27,7 @@ test.describe('Text Session Flow', () => {
   test('should auto-connect and re-establish connection when WebSocket is closed', async ({ page }) => {
     console.log('🧪 Testing auto-connect when WebSocket is closed');
     
-    await setupTestPage(page);
+    await setupTestPageWithDeepgramProxy(page);
     await establishConnectionViaText(page);
     console.log('✅ Initial connection established');
     
@@ -57,7 +56,7 @@ test.describe('Text Session Flow', () => {
   test('should handle rapid message exchange within idle timeout', async ({ page }) => {
     console.log('🧪 Testing rapid message exchange within 10-second idle timeout');
     
-    await setupTestPage(page);
+    await setupTestPageWithDeepgramProxy(page);
     await establishConnectionViaText(page);
     console.log('✅ Initial connection established');
     
@@ -90,7 +89,7 @@ test.describe('Text Session Flow', () => {
     console.log('🧪 Testing initial connection flow with settings and first message');
     
     await installWebSocketCapture(page);
-    await setupTestPage(page);
+    await setupTestPageWithDeepgramProxy(page);
     
     // Trigger connection via text input using fixture
     await establishConnectionViaText(page);
@@ -136,7 +135,7 @@ test.describe('Text Session Flow', () => {
   test('should maintain connection through sequential messages', async ({ page }) => {
     console.log('🧪 Testing sequential message exchange with state tracking');
     
-    await setupTestPage(page);
+    await setupTestPageWithDeepgramProxy(page);
     await establishConnectionViaText(page);
     console.log('✅ Initial connection established');
     
