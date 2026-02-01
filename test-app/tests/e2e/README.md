@@ -4,6 +4,8 @@
 
 These E2E tests use **REAL Deepgram WebSocket connections**, not mocks. This provides authentic integration testing but requires a valid Deepgram API key.
 
+**Backend matrix:** Some specs assume **Deepgram** only (e.g. CLIENT_MESSAGE_TIMEOUT, Deepgram proxy); others are **OpenAI-proxy-only** (Issue #381). See [E2E-BACKEND-MATRIX.md](./E2E-BACKEND-MATRIX.md) for which specs to run with which backend.
+
 ## Setup
 
 ### 1. Get a Deepgram API Key
@@ -28,6 +30,10 @@ VITE_DEEPGRAM_VOICE=aura-asteria-en
 ```bash
 # Run all E2E tests (foreground, blocks terminal)
 npm run test:e2e
+
+# Run all E2E tests and capture output to a file (recommended for long runs)
+# Output is printed and saved to e2e-run.log in the project root
+npm run test:e2e:log
 
 # Run all E2E tests in background (monitorable, for long test runs)
 npm run test:e2e:background

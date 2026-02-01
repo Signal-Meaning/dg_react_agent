@@ -8,6 +8,7 @@
  */
 
 import http from 'http';
+import type { Server as HttpsServer } from 'https';
 import path from 'path';
 // Use require so we get CJS WebSocket; Server is on WebSocket.Server in ws/index.js
 // Under Jest/ts-jest the default export may not have .Server, so load Server from lib
@@ -47,8 +48,8 @@ const INPUT_AUDIO_COMMIT_DEBOUNCE_MS = 200;
 let connectionCounter = 0;
 
 export interface OpenAIProxyServerOptions {
-  /** HTTP server to attach WebSocket to (or we create one) */
-  server?: http.Server;
+  /** HTTP or HTTPS server to attach WebSocket to (or we create one) */
+  server?: http.Server | HttpsServer;
   /** Path for WebSocket upgrade (e.g. '/openai') */
   path: string;
   /** Upstream OpenAI Realtime WebSocket URL (or mock) */
@@ -65,7 +66,7 @@ export interface OpenAIProxyServerOptions {
  */
 export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
   wss: InstanceType<typeof WebSocketServer>;
-  server: http.Server;
+  server: http.Server | HttpsServer;
 } {
   const server =
     options.server ??
