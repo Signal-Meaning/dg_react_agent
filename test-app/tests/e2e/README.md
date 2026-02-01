@@ -53,6 +53,27 @@ npx playwright test --grep "Idle Timeout"   # Idle timeout specific tests
 npx playwright test --grep "Microphone"     # All microphone tests
 ```
 
+### Using a pre-started dev server
+
+If you already run the test-app dev server (e.g. `npm run dev` in test-app), Playwright will try to start it again by default and fail with "Port 5173 is already in use". Use a **preconfigured server** instead:
+
+1. Start the dev server yourself (from project root or test-app):
+   ```bash
+   cd test-app && npm run dev
+   ```
+2. Run Playwright with `E2E_USE_EXISTING_SERVER=1` so it does not start the webServer:
+   ```bash
+   E2E_USE_EXISTING_SERVER=1 npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js
+   ```
+   (Run from **project root**.)
+
+If the app uses **HTTPS** (e.g. `HTTPS=true` in test-app/.env), set the base URL when running Playwright:
+   ```bash
+   E2E_USE_EXISTING_SERVER=1 VITE_BASE_URL=https://localhost:5173 npx playwright test ...
+   ```
+
+**Note:** Safari may refuse self-signed HTTPS for localhost. For manual browsing use Chrome, or trust the self-signed cert in Keychain. Playwright runs in Chromium by default, so E2E tests are unaffected.
+
 ### Running Tests in Background (Monitorable Mode)
 
 For comprehensive test runs (all 217 tests, takes 2-3 hours), use background mode:

@@ -28,6 +28,9 @@ module.exports = defineConfig({
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: process.env.VITE_BASE_URL || 'http://localhost:5173',
 
+    /* Accept self-signed HTTPS (e.g. Vite with HTTPS=true) when using existing server */
+    ignoreHTTPSErrors: true,
+
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
     
@@ -78,14 +81,18 @@ module.exports = defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'npm run dev',
-    cwd: './test-app',
-    url: 'http://localhost:5173', // Vite default port
-    reuseExistingServer: true, // Always reuse existing server
-    timeout: 120 * 1000,
-  },
+  /* Run your local dev server before starting the tests (omit when using a pre-started server) */
+  ...(process.env.E2E_USE_EXISTING_SERVER === '1' || process.env.E2E_USE_EXISTING_SERVER === 'true'
+    ? {}
+    : {
+        webServer: {
+          command: 'npm run dev',
+          cwd: './test-app',
+          url: process.env.VITE_BASE_URL || 'http://localhost:5173',
+          reuseExistingServer: true,
+          timeout: 120 * 1000,
+        },
+      }),
 
   /* 
    * IMPORTANT: E2E Tests Require Real Deepgram API Key
