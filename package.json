@@ -64,6 +64,8 @@
     "@babel/core": "^7.28.4",
     "@babel/preset-env": "^7.28.3",
     "@babel/preset-react": "^7.27.1",
+    "@opentelemetry/api-logs": "^0.52.0",
+    "@opentelemetry/sdk-logs": "^0.52.0",
     "@playwright/test": "^1.55.1",
     "@rollup/plugin-commonjs": "^22.0.0",
     "@rollup/plugin-node-resolve": "^13.3.0",

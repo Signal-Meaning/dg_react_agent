@@ -3,6 +3,7 @@
  *
  * Listens on a path (e.g. /openai); accepts component protocol (Settings, InjectUserMessage);
  * translates to OpenAI Realtime and forwards to upstream; translates upstream events back to component.
+ * Logging uses OpenTelemetry (see scripts/openai-proxy/logger.ts) when OPENAI_PROXY_DEBUG=1.
  * See docs/issues/ISSUE-381/API-DISCONTINUITIES.md.
  */
 
@@ -25,9 +26,24 @@ import {
   mapErrorToComponentError,
   binaryToInputAudioBufferAppend,
 } from './translator';
+import {
+  initProxyLogger,
+  emitLog,
+  SeverityNumber,
+  ATTR_CONNECTION_ID,
+  ATTR_DIRECTION,
+  ATTR_MESSAGE_TYPE,
+  ATTR_ERROR_CODE,
+  ATTR_ERROR_MESSAGE,
+  ATTR_UPSTREAM_CLOSE_CODE,
+  ATTR_UPSTREAM_CLOSE_REASON,
+} from './logger';
 
 /** Debounce delay (ms) after last binary chunk before sending commit + response.create */
 const INPUT_AUDIO_COMMIT_DEBOUNCE_MS = 200;
+
+/** Connection counter for stable short ids in logs */
+let connectionCounter = 0;
 
 export interface OpenAIProxyServerOptions {
   /** HTTP server to attach WebSocket to (or we create one) */
@@ -59,9 +75,18 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
 
   const wss = new WebSocketServer({ server, path: options.path });
   const debug = options.debug === true;
+  if (debug) initProxyLogger();
 
   wss.on('connection', (clientWs: WebSocket) => {
-    if (debug) console.log('[openai-proxy] client connected');
+    const connId = `c${++connectionCounter}`;
+    if (debug) {
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'client connected',
+        attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'client' },
+      });
+    }
     const upstream =
       options.upstreamHeaders && Object.keys(options.upstreamHeaders).length > 0
         ? new WebSocket(options.upstreamUrl, { headers: options.upstreamHeaders })
@@ -75,7 +100,14 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       audioCommitTimer = setTimeout(() => {
         audioCommitTimer = null;
         if (hasPendingAudio && upstream.readyState === WebSocket.OPEN) {
-          if (debug) console.log('[openai-proxy] client → upstream: input_audio_buffer.commit + response.create');
+          if (debug) {
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: 'input_audio_buffer.commit + response.create',
+              attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'client→upstream' },
+            });
+          }
           upstream.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
           upstream.send(JSON.stringify({ type: 'response.create' }));
           hasPendingAudio = false;
@@ -84,12 +116,35 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     };
 
     upstream.on('error', (err) => {
-      if (debug) console.error('[openai-proxy] upstream error:', (err as Error).message);
+      if (debug) {
+        emitLog({
+          severityNumber: SeverityNumber.ERROR,
+          severityText: 'ERROR',
+          body: (err as Error).message,
+          attributes: {
+            [ATTR_CONNECTION_ID]: connId,
+            [ATTR_DIRECTION]: 'upstream',
+            [ATTR_ERROR_MESSAGE]: (err as Error).message,
+          },
+        });
+      }
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
       clientWs.close();
     });
     upstream.on('close', (code, reason) => {
-      if (debug) console.log('[openai-proxy] upstream closed', code, reason?.toString());
+      if (debug) {
+        emitLog({
+          severityNumber: SeverityNumber.INFO,
+          severityText: 'INFO',
+          body: 'upstream closed',
+          attributes: {
+            [ATTR_CONNECTION_ID]: connId,
+            [ATTR_DIRECTION]: 'upstream',
+            [ATTR_UPSTREAM_CLOSE_CODE]: code,
+            [ATTR_UPSTREAM_CLOSE_REASON]: reason?.toString() ?? '',
+          },
+        });
+      }
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
     });
 
@@ -98,7 +153,18 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       try {
         const text = raw.toString('utf8');
         const msg = JSON.parse(text) as { type?: string; content?: string };
-        if (debug) console.log('[openai-proxy] client → upstream:', msg.type || '(binary)');
+        if (debug) {
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: 'client → upstream',
+            attributes: {
+              [ATTR_CONNECTION_ID]: connId,
+              [ATTR_DIRECTION]: 'client→upstream',
+              [ATTR_MESSAGE_TYPE]: msg.type ?? '(binary)',
+            },
+          });
+        }
         if (msg.type === 'Settings') {
           const sessionUpdate = mapSettingsToSessionUpdate(msg as Parameters<typeof mapSettingsToSessionUpdate>[0]);
           upstream.send(JSON.stringify(sessionUpdate));
@@ -111,7 +177,18 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         }
       } catch {
         if (raw.length > 0) {
-          if (debug) console.log('[openai-proxy] client → upstream: input_audio_buffer.append');
+          if (debug) {
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: 'input_audio_buffer.append',
+              attributes: {
+                [ATTR_CONNECTION_ID]: connId,
+                [ATTR_DIRECTION]: 'client→upstream',
+                [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.append',
+              },
+            });
+          }
           const appendEvent = binaryToInputAudioBufferAppend(raw);
           upstream.send(JSON.stringify(appendEvent));
           hasPendingAudio = true;
@@ -130,7 +207,14 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     });
 
     upstream.on('open', () => {
-      if (debug) console.log('[openai-proxy] upstream open');
+      if (debug) {
+        emitLog({
+          severityNumber: SeverityNumber.INFO,
+          severityText: 'INFO',
+          body: 'upstream open',
+          attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'upstream' },
+        });
+      }
       while (clientMessageQueue.length > 0) {
         const raw = clientMessageQueue.shift();
         if (raw) forwardClientMessage(raw);
@@ -148,7 +232,18 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           transcript?: string;
           error?: { message?: string; code?: string };
         };
-        if (debug) console.log('[openai-proxy] upstream → client:', msg.type || '(binary)');
+        if (debug) {
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: 'upstream → client',
+            attributes: {
+              [ATTR_CONNECTION_ID]: connId,
+              [ATTR_DIRECTION]: 'upstream→client',
+              [ATTR_MESSAGE_TYPE]: msg.type ?? '(binary)',
+            },
+          });
+        }
         if (msg.type === 'session.updated' || msg.type === 'session.created') {
           const settingsApplied = mapSessionUpdatedToSettingsApplied(msg as Parameters<typeof mapSessionUpdatedToSettingsApplied>[0]);
           clientWs.send(JSON.stringify(settingsApplied));
@@ -161,7 +256,20 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           );
           clientWs.send(JSON.stringify(conversationText));
         } else if (msg.type === 'error') {
-          if (debug) console.error('[openai-proxy] upstream error event:', msg.error?.message ?? msg);
+          if (debug) {
+            emitLog({
+              severityNumber: SeverityNumber.ERROR,
+              severityText: 'ERROR',
+              body: msg.error?.message ?? String(msg),
+              attributes: {
+                [ATTR_CONNECTION_ID]: connId,
+                [ATTR_DIRECTION]: 'upstream→client',
+                [ATTR_MESSAGE_TYPE]: 'error',
+                [ATTR_ERROR_CODE]: msg.error?.code ?? '',
+                [ATTR_ERROR_MESSAGE]: msg.error?.message ?? '',
+              },
+            });
+          }
           const componentError = mapErrorToComponentError(msg as Parameters<typeof mapErrorToComponentError>[0]);
           clientWs.send(JSON.stringify(componentError));
         } else {

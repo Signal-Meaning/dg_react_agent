@@ -29,7 +29,7 @@ Run the proxy from the **project root** (the repo root where `package.json` and 
    npm run openai-proxy
    ```
    The script loads `.env` from the project root and `test-app/.env`, so you can put `OPENAI_API_KEY=sk-...` in either file. Listens on `http://localhost:8080/openai` by default. Use `OPENAI_PROXY_PORT` and `OPENAI_REALTIME_URL` to override.  
-   To see client/upstream activity, run with `OPENAI_PROXY_DEBUG=1` (e.g. `OPENAI_PROXY_DEBUG=1 npm run openai-proxy`). If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
+   To see client/upstream activity, run with `OPENAI_PROXY_DEBUG=1` (e.g. `OPENAI_PROXY_DEBUG=1 npm run openai-proxy`). When debug is on, the proxy uses **OpenTelemetry** logging (`scripts/openai-proxy/logger.ts`): each log is an OTel LogRecord with `SeverityNumber`, `body`, and attributes (`connection_id`, `direction`, `message_type`, `error.code`, etc.) so logs can be correlated per connection and exported to OTLP/collectors. If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
 
 2. Run OpenAI proxy E2E tests (test-app must be served; Playwright starts it via `webServer`):
    ```bash
