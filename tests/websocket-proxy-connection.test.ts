@@ -38,7 +38,13 @@ class MockWebSocket {
 
   private messageQueue: Array<{ data: string | ArrayBuffer; type: string }> = [];
 
+  /** Last URL/protocols passed to constructor (for assertions – proxy mode should have no protocols) */
+  static lastUrl: string | null = null;
+  static lastProtocols: string | string[] | undefined = undefined;
+
   constructor(url: string, protocols?: string | string[]) {
+    MockWebSocket.lastUrl = url;
+    MockWebSocket.lastProtocols = protocols;
     this.url = url;
     this.protocol = Array.isArray(protocols) ? protocols[0] : protocols || '';
     
@@ -105,6 +111,8 @@ describe('WebSocket Proxy Connection', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     eventListener = null;
+    MockWebSocket.lastUrl = null;
+    MockWebSocket.lastProtocols = undefined;
   });
 
   afterEach(() => {
@@ -123,14 +131,12 @@ describe('WebSocket Proxy Connection', () => {
     };
 
     manager = new WebSocketManager(options);
-    
-    // Verify WebSocket was created with proxy endpoint
-    // Note: We can't directly access the WebSocket instance, but we can verify
-    // the manager was created with the correct URL
     expect(manager).toBeDefined();
-    
-    // Connect and verify
     manager.connect();
+
+    // Proxy mode must use exact URL and no protocols (backend handles auth)
+    expect(MockWebSocket.lastUrl).toBe(proxyEndpoint);
+    expect(MockWebSocket.lastProtocols).toBeUndefined();
     
     // Wait for connection
     return new Promise<void>((resolve) => {
@@ -141,6 +147,19 @@ describe('WebSocket Proxy Connection', () => {
         }
       });
     });
+  });
+
+  it('should create WebSocket with exact OpenAI proxy URL and no subprotocol in proxy mode', () => {
+    const openaiProxyUrl = 'wss://localhost:8080/openai';
+    const options: WebSocketManagerOptions = {
+      url: openaiProxyUrl,
+      apiKey: '',
+      service: 'agent',
+    };
+    manager = new WebSocketManager(options);
+    manager.connect();
+    expect(MockWebSocket.lastUrl).toBe(openaiProxyUrl);
+    expect(MockWebSocket.lastProtocols).toBeUndefined();
   });
 
   it('should include authentication token in proxy connection when provided', () => {

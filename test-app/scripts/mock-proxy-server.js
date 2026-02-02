@@ -237,10 +237,11 @@ function setSecurityHeaders(res) {
 }
 
 // --- Deepgram proxy (when API key present) ---
+// Use noServer: true so we can route upgrade by path in a single handler (avoids /openai being rejected by Deepgram's path check).
 let wssDeepgram = null;
 if (hasDeepgram) {
   wssDeepgram = new WebSocketServer({
-  server,
+  noServer: true,
   path: PROXY_PATH,
   verifyClient: (info) => {
     // Validate Origin header (CORS)
@@ -701,7 +702,8 @@ async function attachOpenAIForwarder() {
   await waitForPort(OPENAI_INTERNAL_PORT);
   const targetUrl = `${wsScheme}://127.0.0.1:${OPENAI_INTERNAL_PORT}/openai`;
   const upstreamOptions = useHttps ? { rejectUnauthorized: false } : {};
-  wssOpenAI = new WebSocketServer({ server, path: '/openai', noServer: false });
+  // Use noServer: true so upgrade is routed by path in a single handler (avoids /openai hitting Deepgram first and getting 400).
+  wssOpenAI = new WebSocketServer({ noServer: true, path: '/openai' });
   wssOpenAI.on('connection', (clientWs, req) => {
     const upstream = new WebSocket(targetUrl, upstreamOptions);
     upstream.on('open', () => {
@@ -719,7 +721,7 @@ async function attachOpenAIForwarder() {
   });
 }
 
-// Start server (spawn OpenAI subprocess if needed, attach forwarder, then listen)
+// Start server (spawn OpenAI subprocess if needed, attach forwarder, route upgrade by path, then listen)
 (async () => {
   if (hasOpenAI) {
     const { spawn } = await import('child_process');
@@ -732,6 +734,23 @@ async function attachOpenAIForwarder() {
       process.exit(1);
     }
   }
+  // Single upgrade handler so /openai is not rejected by Deepgram's path check (which would send 400).
+  server.on('upgrade', (req, socket, head) => {
+    const pathname = (req.url && req.url.indexOf('?') !== -1)
+      ? req.url.slice(0, req.url.indexOf('?'))
+      : (req.url || '/');
+    if (pathname === '/openai' && wssOpenAI) {
+      wssOpenAI.handleUpgrade(req, socket, head, (ws) => {
+        wssOpenAI.emit('connection', ws, req);
+      });
+    } else if (pathname === PROXY_PATH && wssDeepgram) {
+      wssDeepgram.handleUpgrade(req, socket, head, (ws) => {
+        wssDeepgram.emit('connection', ws, req);
+      });
+    } else {
+      socket.destroy();
+    }
+  });
   server.listen(PROXY_PORT, () => {
     console.log(`✅ Mock Backend Proxy Server running on port ${PROXY_PORT}`);
     if (hasDeepgram) {

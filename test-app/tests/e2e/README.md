@@ -60,26 +60,41 @@ npx playwright test --grep "Microphone"     # All microphone tests
 - **Helpers:** `test-app/tests/e2e/helpers/app-paths.mjs` exports `APP_ROOT` (`/`), `APP_TEST_MODE`, `APP_DEBUG`, and `pathWithQuery(params)` for query strings. Use `page.goto(APP_ROOT)` or `page.goto(pathWithQuery({ 'test-mode': 'true' }))`.
 - **Specs:** Import `APP_ROOT`, `APP_TEST_MODE`, `APP_DEBUG`, or `pathWithQuery` from `./helpers/app-paths.mjs` and use them for all `page.goto(...)` calls. For CORS/Origin assertions, use the app origin from `BASE_URL` in `test-helpers.mjs` (e.g. `new URL(BASE_URL).origin`).
 
+### When does Playwright start the dev server and proxy?
+
+Only **`E2E_USE_EXISTING_SERVER`** controls whether Playwright starts them:
+
+- **`E2E_USE_EXISTING_SERVER=1`** (or `true`): Playwright does **not** start the dev server or the proxy. It runs `globalSetup`, which checks that the app is reachable (and, when `USE_PROXY_MODE` is set, that the proxy is reachable). You must start the server(s) yourself before running tests.
+- **Otherwise**: Playwright starts both (`npm run dev` and `npm run test:proxy:server`), waits for them to be ready, then runs tests.
+
+**`USE_PROXY_MODE`** is separate: it only controls whether the Deepgram setup uses the proxy (and, when using existing server, whether globalSetup also checks that the proxy is reachable). It does **not** control whether Playwright starts the servers.
+
+**`USE_REAL_APIS`**: When set to `true`, these tests expect **real** API keys (e.g. `OPENAI_API_KEY` or `VITE_OPENAI_API_KEY` in `test-app/.env`) so the proxy can call real upstreams. Include it in commands for openai-proxy and other proxy E2E that hit real APIs (see examples below).
+
 ### Using a pre-started dev server
 
 If you already run the test-app dev server (e.g. `npm run dev` in test-app), Playwright will try to start it again by default and fail with "Port 5173 is already in use". Use a **preconfigured server** instead:
 
 1. **Start the dev server first** (required). If you run with `E2E_USE_EXISTING_SERVER=1` but nothing is serving the app, every test will fail with `net::ERR_EMPTY_RESPONSE` at the app URL.
+
+   **When a test fails**, open the last run’s report or trace to inspect:
+   - **HTML report** (screenshots, error context, test list): from `test-app`, run `npx playwright show-report`.
+   - **Trace** (network, console, DOM, steps): traces are recorded on first failure (`trace: 'retain-on-first-failure'`). From `test-app`, run `npx playwright show-trace test-results/…/trace.zip` (path is printed in the report), or open the trace from the HTML report.
    ```bash
    cd test-app && npm run dev
    ```
-   For proxy-mode tests, also start the proxy (in another terminal):
+   For proxy-mode tests, also start the proxy (in another terminal). The proxy must use the same scheme as the app: if `HTTPS=true` in `.env`, the proxy serves **wss** and the app will connect to `wss://localhost:8080/openai`. If the proxy is not running when you use `E2E_USE_EXISTING_SERVER=1` and `USE_PROXY_MODE=true`, globalSetup will fail with a clear "proxy not reachable" message.
    ```bash
    cd test-app && npm run test:proxy:server
    ```
 2. Run Playwright with `E2E_USE_EXISTING_SERVER=1` so it does not start the webServer:
    ```bash
-   # From test-app:
-   E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e
+   # From test-app (real APIs = keys in test-app/.env):
+   USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e
    ```
    Or from **project root**:
    ```bash
-   E2E_USE_EXISTING_SERVER=1 npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js
+   USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js --config=test-app/tests/playwright.config.mjs
    ```
    When `E2E_USE_EXISTING_SERVER=1` is set, a startup check verifies the app is reachable and exits with a clear error if not.
 
@@ -92,12 +107,124 @@ If the app uses **HTTPS** (e.g. `HTTPS=true` in test-app/.env), set the base URL
 
 ### Port, scheme, and backend (E2E environment)
 
-- **Proxy port:** Playwright and helpers default to **port 8080** (`proxyBase` in `playwright.config.mjs`). If you start the proxy on a different port (e.g. `PROXY_PORT=8081`), set the same port in the **environment you use to run Playwright**:
-  - `VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8081/openai` and/or
-  - `VITE_DEEPGRAM_PROXY_ENDPOINT=ws://localhost:8081/deepgram-proxy`
-  Otherwise the app will try 8080 and connection will never become "connected".
-- **Scheme:** If the app is served over **HTTPS** (`HTTPS=true`), use **wss://** for proxy URLs. If HTTP, use **ws://**. Mismatch (e.g. https app + ws proxy without matching config) can cause connection failures.
-- **Backend matrix:** The full suite includes both **Deepgram-only** and **OpenAI-proxy-only** specs. Running everything with the default backend (OpenAI) runs Deepgram-only specs against the OpenAI proxy and can produce wrong-backend or timeout failures. See [E2E-BACKEND-MATRIX.md](./E2E-BACKEND-MATRIX.md) and run backend-specific specs when diagnosing failures.
+- **Proxy port:** Playwright and helpers default to **port 8080**. If you start the proxy on a different port (e.g. `PROXY_PORT=8081`), set `VITE_OPENAI_PROXY_ENDPOINT` and/or `VITE_DEEPGRAM_PROXY_ENDPOINT` in the same env as Playwright so the app uses that port. Otherwise connection will never become "connected".
+- **Scheme:** If the app is **HTTPS** (`HTTPS=true`), the proxy must serve **wss**. If the app is HTTP, the proxy must serve **ws**. Mismatch causes connection failures (connection never becomes "connected").
+- **Backend matrix:** The full suite includes both **Deepgram-only** and **OpenAI-proxy-only** specs. See [E2E-BACKEND-MATRIX.md](./E2E-BACKEND-MATRIX.md) and run backend-specific specs when diagnosing failures.
+
+### Scheme best practices (app, proxy, test URL must match)
+
+1. **Single source of truth:** Use **one** value for HTTPS for the whole run. Set `HTTPS=true` (or `1`) in `test-app/.env` so that:
+   - The **dev server** (Vite) serves the app over HTTPS.
+   - The **proxy** (`npm run test:proxy:server`) loads `.env` and serves **wss** on 8080 when started from `test-app`.
+   - The **E2E helpers** (`test-helpers.mjs`) read `process.env.HTTPS` and build proxy URLs with **wss** when HTTPS is true.
+
+2. **Start the proxy from test-app** so it loads `.env`:
+   ```bash
+   cd test-app && npm run test:proxy:server
+   ```
+   If you start the proxy from elsewhere or with different env, scheme can diverge (e.g. proxy on ws, app on https → connection fails).
+
+3. **Verify alignment before running E2E:**
+   - **Proxy startup log:** Must show `wss://localhost:8080/...` when using HTTPS. If it shows `ws://`, the proxy is not using the same scheme as the app.
+   - **E2E scheme test:** Run `HTTPS=true npm run test:e2e -- scheme-config-validation.spec.js` (with `E2E_USE_EXISTING_SERVER=1` if the dev server is already up). It asserts the test helper builds wss URLs when HTTPS=true.
+   - **Proxy integration test:** `npm test -- mock-proxy-server-integration` includes a test that the proxy prints `wss://` when started with `HTTPS=true`.
+
+4. **If `page.goto` fails with `net::ERR_CERT_AUTHORITY_INVALID` (app URL https://localhost:5173):**  
+   The config sets `ignoreHTTPSErrors: true` and Chromium args `--ignore-certificate-errors` / `--allow-insecure-localhost`. If it still fails, **run E2E over HTTP** so there is no TLS:
+   - In `test-app/.env`, set `HTTPS=` (empty) or remove the line, then **restart** the dev server and proxy so they serve `http`/`ws`.
+   - Run the test; if `HTTPS=` is already unset in `.env`, the test will use `http`/`ws` automatically. To force http for this run without editing `.env`, add **`E2E_USE_HTTP=1`**:
+     ```bash
+     USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npx playwright test openai-proxy-e2e.spec.js -g "1. Connection" --trace on
+     ```
+     (Or prefix with `E2E_USE_HTTP=1` if your servers are on HTTP but `.env` still has `HTTPS=true`.)
+
+5. **If connection never becomes "connected":**
+   - **When using HTTP (HTTPS disabled):** Restart **both** the dev server and the proxy after changing `.env` so they serve `http`/`ws`. Run the test with **`E2E_USE_HTTP=1`** so the test uses `http://localhost:5173` and `ws://localhost:8080/openai`. Check the proxy terminal for errors (e.g. `[Proxy] OpenAI forwarder upstream error`).
+   - Confirm the proxy was started with the same HTTPS as the app (check proxy startup log for `wss://` when app is https).
+   - Confirm port: app proxy URL must match proxy port (default 8080).
+   - **OpenAI proxy only:** The proxy spawns an OpenAI subprocess (run.ts on port 8081) that connects to api.openai.com. Ensure `OPENAI_API_KEY` (or `VITE_OPENAI_API_KEY`) is set in `test-app/.env` and valid; if the upstream rejects the connection (e.g. 400), the component will never reach "connected". Check the proxy terminal for upstream errors (e.g. `[Proxy] OpenAI forwarder upstream error`).
+   - Browser may reject self-signed cert for `wss://localhost:8080`; Playwright’s `ignoreHTTPSErrors` applies to the page; if wss still fails, the proxy’s TLS cert may need to be accepted by the browser context.
+
+### Diagnosing why connection never becomes "connected"
+
+Use these in order; each gives a LOC (this README) and the exact command(s).
+
+1. **See the browser-side WebSocket error**  
+   By the time you open DevTools manually, the test has often already run and the error is gone. Use one of these so the error is capturable:
+
+   **1a. Trace (recommended – no timing, no code change)**  
+   Run with `--trace on`. After the test fails, open the trace; the trace viewer shows Console and Network for the whole run, so you can see the WebSocket error after the fact.  
+   **Command (from `test-app`):**
+   ```bash
+   USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npx playwright test openai-proxy-e2e.spec.js -g "1. Connection" --trace on
+   ```
+   When it fails, the output will show the path to the trace zip (e.g. `test-results/.../trace.zip`). Open it:
+   ```bash
+   npx playwright show-trace test-results/openai-proxy-e2e-OpenAI-Pr-32dce--proxy-and-receive-settings-chromium/trace.zip
+   ```
+   (Use the path from your run.) In the trace viewer: **Console** tab for errors; **Network** tab and filter by "WS" or the proxy URL to see the WebSocket request and response.
+
+   **1b. Pause before the connection (so DevTools is ready)**  
+   Add a temporary `await page.pause()` in the spec *before* the line that triggers the connection, so the run stops with the page loaded and the Inspector open. Then open DevTools in the browser, then resume.  
+   In `openai-proxy-e2e.spec.js`, in the test "1. Connection – connect through OpenAI proxy and receive settings", add after `setupTestPageWithOpenAIProxy(page)` and *before* `establishConnectionViaText(page, 30000)`:
+   ```js
+   await page.pause();  // remove after debugging
+   ```
+   **Command (from `test-app`):**
+   ```bash
+   USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npx playwright test openai-proxy-e2e.spec.js -g "1. Connection"
+   ```
+   When it pauses: (1) Click the browser window Playwright opened. (2) Open DevTools (F12 or Cmd+Option+I). (3) Open **Console** and **Network** (filter by "WS" or "localhost:8080"). (4) In the Playwright Inspector, click **Resume**. The test will focus the text input, the app will try to connect, and the WebSocket error will appear in Console/Network. Remove `await page.pause()` when done.
+
+   **1c. Debug mode (open DevTools before first step)**  
+   Run with `--debug`. When the Inspector appears, *do not* click Step or Resume yet. First: focus the **browser** window → open DevTools (Console + Network, filter WS) → then in the Inspector, click **Step** repeatedly until the step that runs "focus" on the text input (that triggers the connection). Watch Console/Network when that step runs.  
+   **Command (from `test-app`):**
+   ```bash
+   USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npx playwright test openai-proxy-e2e.spec.js -g "1. Connection" --debug
+   ```
+
+2. **Confirm the app is using the right proxy URL**  
+   After navigation, assert the displayed proxy URL (e.g. the test-app span that shows `→ wss://localhost:8080/openai`). Add a temporary assertion in the spec or run once in headed mode and check the UI.  
+   **Command (headed, from `test-app`):**
+   ```bash
+   USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npx playwright test openai-proxy-e2e.spec.js -g "1. Connection" --headed
+   ```
+   Check the on-screen proxy URL (e.g. "→ wss://localhost:8080/openai") before the connection times out.
+
+3. **Capture proxy-side output**  
+   Start the proxy with output tee'd to a file; run the single E2E test in another terminal; then inspect the proxy log for `[Proxy] OpenAI forwarder upstream error` or other messages.  
+   **Commands:**  
+   Terminal 1 (from `test-app`):
+   ```bash
+   npm run test:proxy:server 2>&1 | tee /tmp/proxy.log
+   ```
+   Terminal 2 (from `test-app`):
+   ```bash
+   USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js -g "1. Connection"
+   ```
+   Then:
+   ```bash
+   grep -E '\[Proxy\]|openai|upstream|error' /tmp/proxy.log
+   ```
+
+4. **Optional: integration test that proxy accepts a Node WebSocket**  
+   Add a test that starts the mock-proxy (with `OPENAI_API_KEY` and `HTTPS=true`), opens a Node WebSocket to `wss://127.0.0.1:8080/openai`, and expects either `open` or error containing `400`. If this passes but E2E fails, the issue is likely browser-specific (e.g. TLS).  
+   **Location:** e.g. `test-app/tests/mock-proxy-server-integration.test.js` or a new integration spec; no one-off command (run via `npm test` or `npm run test:e2e`).
+
+5. **Ship despite E2E: minimal run + unit/integration**  
+   Use the minimal run (1 test) as the standard proxy/connection check; rely on unit (`npm test -- websocket-proxy-connection` from repo root) and integration tests; document openai-proxy-e2e as environment-dependent and optionally skip in CI.  
+   **Minimal run command (from `test-app`):** see "Limiting test count" below (README ~132–141).
+
+### Limiting test count (verify failure condition only)
+
+To avoid running the full suite when you only need to confirm the proxy/connection failure:
+
+- **Minimal (1 test):**  
+  `USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js -g "1. Connection"`
+- **One spec (9 tests):**  
+  `USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js`
+
+If the single "1. Connection" test fails, the same failure condition is present; run the full suite only when you need full coverage. See also `docs/issues/ISSUE-383/E2E-SUMMARY-REPORT.md` ("Limiting tests to verify the failure condition").
 
 ### Isolating regression vs environment
 
@@ -105,13 +232,13 @@ To tell connection/timeout failures apart from environment (port, scheme, backen
 
 1. **Run only OpenAI proxy E2E** (from `test-app`):
    ```bash
-   E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js
+   USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js
    ```
    If this passes, the OpenAI connection path is likely fine; full-suite failures may be backend matrix or port/scheme.
 
 2. **Run only one Deepgram proxy spec** (from `test-app`):
    ```bash
-   E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true E2E_BACKEND=deepgram npm run test:e2e -- deepgram-backend-proxy-mode.spec.js
+   USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true E2E_BACKEND=deepgram npm run test:e2e -- deepgram-backend-proxy-mode.spec.js
    ```
    If this passes, the Deepgram connection path is likely fine.
 

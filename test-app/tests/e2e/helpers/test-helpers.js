@@ -3,10 +3,16 @@
  * 
  * Shared utilities for Playwright E2E tests to promote DRY principles
  * and consistent testing patterns across the test suite.
+ * Load test-app/.env so skip checks (e.g. USE_REAL_APIS + OPENAI_API_KEY) see keys when run in workers.
  */
 import { expect, test } from '@playwright/test';
+import dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
 
 /**
  * Check if real Deepgram API key is available for testing
@@ -40,23 +46,40 @@ export function skipIfNoRealAPI(reason = 'Requires real Deepgram API key') {
 }
 
 /**
- * Check if an external OpenAI proxy endpoint is configured for E2E tests.
- * Used for tests that reproduce OpenAI upstream behavior (e.g. issue #380).
- * @returns {boolean} True if VITE_OPENAI_PROXY_ENDPOINT is set and non-empty
+ * Check if OpenAI proxy E2E tests should run (endpoint configured or defaulted).
+ * When USE_PROXY_MODE=true and E2E_BACKEND is not 'deepgram', the default
+ * OpenAI proxy (from getOpenAIProxyParams()) is used, so we treat as available.
+ * @returns {boolean} True if VITE_OPENAI_PROXY_ENDPOINT is set or default applies
  */
 export function hasOpenAIProxyEndpoint() {
   const endpoint = process.env.VITE_OPENAI_PROXY_ENDPOINT;
-  return typeof endpoint === 'string' && endpoint.trim().length > 0;
+  if (typeof endpoint === 'string' && endpoint.trim().length > 0) return true;
+  // With USE_PROXY_MODE and default backend (OpenAI), run OpenAI proxy E2E using default endpoint
+  if (process.env.USE_PROXY_MODE === 'true' || process.env.USE_PROXY_MODE === '1') {
+    if (process.env.E2E_BACKEND === 'deepgram') return false;
+    return true;
+  }
+  return false;
 }
 
 /**
  * Skip test if OpenAI proxy endpoint is not configured.
- * Use for E2E tests that require real OpenAI proxy (e.g. connection stability after injectUserMessage).
+ * When USE_REAL_APIS=true, also requires OPENAI_API_KEY or VITE_OPENAI_API_KEY so the proxy can call real OpenAI.
  * @param {string} reason - Optional reason for skipping
  */
 export function skipIfNoOpenAIProxy(reason = 'Requires VITE_OPENAI_PROXY_ENDPOINT for OpenAI proxy E2E tests') {
   if (!hasOpenAIProxyEndpoint()) {
     test.skip(true, reason);
+    return;
+  }
+  if (process.env.USE_REAL_APIS === 'true' || process.env.USE_REAL_APIS === '1') {
+    const key = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    if (!key || typeof key !== 'string' || key.trim() === '') {
+      test.skip(
+        true,
+        'USE_REAL_APIS=true requires OPENAI_API_KEY or VITE_OPENAI_API_KEY in test-app/.env so the proxy can call real OpenAI'
+      );
+    }
   }
 }
 
@@ -114,9 +137,11 @@ async function setupTestPage(page, timeout = 10000) {
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
 async function setupTestPageWithDeepgramProxy(page, timeout = 10000) {
-  const { getDeepgramProxyParams } = await import('./test-helpers.mjs');
+  const { getDeepgramProxyParams, BASE_URL } = await import('./test-helpers.mjs');
   const { pathWithQuery } = await import('./app-paths.mjs');
-  await page.goto(pathWithQuery(getDeepgramProxyParams()));
+  const pathPart = pathWithQuery(getDeepgramProxyParams());
+  const url = pathPart.startsWith('http') ? pathPart : BASE_URL + pathPart;
+  await page.goto(url);
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
 }
 
@@ -129,26 +154,40 @@ async function setupTestPageWithDeepgramProxy(page, timeout = 10000) {
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
 async function setupTestPageWithOpenAIProxy(page, timeout = 10000) {
-  const { getOpenAIProxyParams } = await import('./test-helpers.mjs');
+  const { getOpenAIProxyParams, BASE_URL } = await import('./test-helpers.mjs');
   const { pathWithQuery } = await import('./app-paths.mjs');
-  await page.goto(pathWithQuery(getOpenAIProxyParams()));
+  const pathPart = pathWithQuery(getOpenAIProxyParams());
+  const url = pathPart.startsWith('http') ? pathPart : BASE_URL + pathPart;
+  await page.goto(url);
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
 }
 
 /**
  * Wait for connection to be established (auto-connect)
+ * On timeout, throws an error that includes the current connection status to aid debugging.
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 5000)
  */
 async function waitForConnection(page, timeout = 5000) {
-  // Wait for connection status to show "connected"
-  await page.waitForFunction(
-    () => {
-      const connectionStatus = document.querySelector('[data-testid="connection-status"]');
-      return connectionStatus && connectionStatus.textContent === 'connected';
-    },
-    { timeout }
-  );
+  try {
+    await page.waitForFunction(
+      () => {
+        const connectionStatus = document.querySelector('[data-testid="connection-status"]');
+        return connectionStatus && connectionStatus.textContent === 'connected';
+      },
+      { timeout }
+    );
+  } catch (err) {
+    const currentStatus = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="connection-status"]');
+      return el ? el.textContent?.trim() || '(empty)' : '(element not found)';
+    }).catch(() => '(unable to read)');
+    const msg = err?.message || String(err);
+    throw new Error(
+      `${msg}. Current connection-status: "${currentStatus}". ` +
+      'If "closed" or "error": check proxy is running (npm run test:proxy:server), OPENAI_API_KEY is set and valid, and proxy/OpenAI upstream logs for errors.'
+    );
+  }
 }
 
 /**
@@ -984,18 +1023,33 @@ async function establishConnectionViaText(page, timeout = 30000) {
   await textInput.waitFor({ state: 'visible', timeout: 10000 });
   await textInput.focus();
   console.log('✅ Text input focused - auto-connect should trigger');
-  
+
   // Wait for connection status element to appear (component may be initializing)
   await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
-  
+
+  const readConnectionStatus = async () => {
+    return page.evaluate(() => {
+      const el = document.querySelector('[data-testid="connection-status"]');
+      return el ? el.textContent?.trim() || '(empty)' : '(element not found)';
+    }).catch(() => '(unable to read)');
+  };
+
   // Wait for connection to transition from "closed" to "connecting" to "connected"
-  await page.waitForFunction(() => {
-    const statusEl = document.querySelector('[data-testid="connection-status"]');
-    if (!statusEl) return false;
-    const status = statusEl.textContent?.toLowerCase() || '';
-    return status !== 'closed';
-  }, { timeout: 10000 });
-  
+  try {
+    await page.waitForFunction(() => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      if (!statusEl) return false;
+      const status = statusEl.textContent?.toLowerCase() || '';
+      return status !== 'closed';
+    }, { timeout: 10000 });
+  } catch (err) {
+    const currentStatus = await readConnectionStatus();
+    throw new Error(
+      `Connection stayed "closed" after focusing text input. Current connection-status: ${currentStatus}. ` +
+      'Check proxy is running on the same scheme as the app (ws when HTTP, wss when HTTPS), OPENAI_API_KEY in test-app/.env, and proxy terminal for errors.'
+    );
+  }
+
   // Now wait for connection to be fully established
   await waitForConnection(page, timeout);
 }

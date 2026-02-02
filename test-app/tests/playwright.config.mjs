@@ -8,8 +8,10 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
-// Respect HTTPS=true from .env (Vite and proxy serve https/wss when HTTPS=true)
-const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
+// Respect HTTPS from .env (Vite and proxy use it when started). Test uses same scheme so baseURL matches server.
+// E2E_USE_HTTP=1 overrides .env for this run only: force http/ws (e.g. to avoid cert errors). Redundant if HTTPS is already unset in .env.
+const forceHttp = process.env.E2E_USE_HTTP === '1' || process.env.E2E_USE_HTTP === 'true';
+const useHttps = !forceHttp && (process.env.HTTPS === 'true' || process.env.HTTPS === '1');
 // When HTTPS=true, baseURL must be https so webServer readiness and tests hit the right URL
 const baseURL = useHttps
   ? (process.env.VITE_BASE_URL?.startsWith('https') ? process.env.VITE_BASE_URL : 'https://localhost:5173')
@@ -18,9 +20,6 @@ const wsScheme = useHttps ? 'wss' : 'ws';
 const proxyBase = `${wsScheme}://localhost:8080`;
 console.log('Playwright baseURL:', baseURL);
 console.log('Playwright HTTPS:', useHttps, '| proxy endpoints:', `${proxyBase}/deepgram-proxy`, `${proxyBase}/openai`);
-if (useHttps) {
-  console.log('Tip: If you see "Port 5173 is already in use", start the dev server and proxy manually in two terminals, then run with E2E_USE_EXISTING_SERVER=1');
-}
 const ENABLE_AUDIO = process.env.PW_ENABLE_AUDIO === 'true';
 console.log('PW_ENABLE_AUDIO:', ENABLE_AUDIO);
 
@@ -53,15 +52,15 @@ export default defineConfig({
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. Respects HTTPS=true. */
     baseURL,
-    /* Accept self-signed cert when HTTPS=true (Vite and proxy use self-signed) */
-    ...(useHttps && { ignoreHTTPSErrors: true }),
+    /* Accept self-signed cert when using HTTPS (Vite and proxy use self-signed). Always true so E2E works when baseURL is https. */
+    ignoreHTTPSErrors: true,
 
     /* Add delay between tests to reduce resource contention in full test runs */
     /* This helps when running all tests together where API may be slower */
     actionTimeout: 30000, // 30 seconds for actions
 
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: 'on-first-retry',
+    /* Collect trace on first failure so you can inspect with npx playwright show-trace. See https://playwright.dev/docs/trace-viewer */
+    trace: 'retain-on-first-failure',
     
     /* Record video on failure - disabled by default */
     video: 'off',
@@ -75,6 +74,8 @@ export default defineConfig({
     /* Mute microphone for automated tests to prevent ambient noise interference */
     launchOptions: {
       args: [
+        '--ignore-certificate-errors', // Accept self-signed certs (Vite/proxy on https://localhost)
+        '--allow-insecure-localhost', // Allow invalid cert for localhost (Chromium)
         '--use-fake-ui-for-media-stream',
         '--use-fake-device-for-media-stream',
         // Only mute/disable audio when PW_ENABLE_AUDIO is not explicitly enabled
@@ -91,23 +92,22 @@ export default defineConfig({
   projects: process.env.CI ? [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], ignoreHTTPSErrors: true },
     }
   ] : [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], ignoreHTTPSErrors: true },
     },
     /* Add more browsers locally if needed */
   ],
 
   /* Run your local dev server (and optionally proxy) before starting the tests.
-   * When you run the server in advance (outside Playwright), set E2E_USE_EXISTING_SERVER=1
-   * or USE_PROXY_MODE=true so Playwright does not start webServer; globalSetup verifies the app is reachable. */
+   * Only E2E_USE_EXISTING_SERVER controls whether Playwright starts them:
+   *   - E2E_USE_EXISTING_SERVER=1: do not start; globalSetup verifies app (and proxy if USE_PROXY_MODE) are reachable.
+   *   - Otherwise: start webServer (dev server + proxy) and wait for readiness. */
   ...(process.env.E2E_USE_EXISTING_SERVER === '1' ||
-    process.env.E2E_USE_EXISTING_SERVER === 'true' ||
-    process.env.USE_PROXY_MODE === 'true' ||
-    process.env.USE_PROXY_MODE === '1'
+    process.env.E2E_USE_EXISTING_SERVER === 'true'
     ? { globalSetup: './e2e-check-existing-server.mjs' }
     : {
         webServer: [

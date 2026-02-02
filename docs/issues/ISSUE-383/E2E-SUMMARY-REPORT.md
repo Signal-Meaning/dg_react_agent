@@ -1,6 +1,17 @@
 # E2E Test Run Summary (Issue #383)
 
-Summary of E2E test runs with HTTPS and existing-server configuration. Updated from the **latest rerun** (e2e-proxy-run2.log overwritten).
+Summary of E2E test runs with HTTPS and existing-server configuration. Updated from **run4** log review (`/tmp/e2e-proxy-run4.log`).
+
+## Limiting tests to verify the failure condition
+
+To avoid running the full suite (234 tests, ~18 min) when you only need to confirm whether the proxy/connection failure is present, run a **minimal set**:
+
+| Goal | Command (from `test-app`) | Tests |
+|------|---------------------------|--------|
+| **Minimal (1 test)** – fastest | `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js -g "1. Connection"` | 1 |
+| **One spec (9 tests)** | `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js` | 9 |
+
+If the single "1. Connection" test fails (e.g. connection-status never "connected"), the same failure condition is present; no need to run more. Use the full suite only when you need full coverage.
 
 ## Run configuration
 
@@ -11,93 +22,139 @@ Summary of E2E test runs with HTTPS and existing-server configuration. Updated f
 | Proxy endpoints | `wss://localhost:8080/deepgram-proxy`, `wss://localhost:8080/openai` |
 | PW_ENABLE_AUDIO | `false` |
 | Mode | Existing server (dev server and proxy started manually; `E2E_USE_EXISTING_SERVER=1` and `USE_PROXY_MODE=true`) |
-| Command | `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e` (from `test-app`) |
+| Command | `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e 2>&1 \| tee /tmp/e2e-proxy-run4.log` (from `test-app`) |
 
-## Results (latest rerun – e2e-proxy-run2.log)
+## Results (run4 – e2e-proxy-run4.log)
 
 | Outcome | Count |
 |--------|--------|
-| **Passed** | 34 |
-| **Failed** | 148 |
-| **Skipped** | 51 |
-| **Total** | 233 |
-| **Run time** | ~21.8 minutes |
+| **Passed** | 62 |
+| **Failed** | 151 |
+| **Skipped** | 21 |
+| **Total** | 234 |
+| **Run time** | ~17.6 minutes |
 
-After the baseURL/relative-URL refactor, **34 tests pass** (up from 23 when many specs used hardcoded `http://localhost:5173`). Navigation now uses `APP_ROOT` / `pathWithQuery` so the app loads over HTTPS. The **latest rerun** produced the same counts (34 / 148 / 51).
+## "Connected" state – no mapping from OpenAI API
+
+The component sets **connection-status to "connected"** when the **browser WebSocket fires `onopen`** (`WebSocketManager.ts`: `this.ws.onopen` → `this.updateState('connected')`). There is no protocol message or OpenAI API event required; it is the same for Deepgram direct, Deepgram proxy, and OpenAI proxy.
+
+Tests that demonstrate this:
+
+- **Direct Deepgram** (e.g. `agent-options-resend-issue311`): Log shows `Agent state event: connected`, `Agent WebSocket connected`, `Welcome message received - dual mode connection established`. So when the WebSocket to `wss://agent.deepgram.com/v1/agent/converse` opens, the component correctly shows "connected".
+
+So the remaining proxy-path failures are not due to a misunderstanding of "connected" vs OpenAI API expectations; they are due to the **WebSocket to the proxy never opening successfully** (or closing before the test asserts), so the component never reaches "connected".
+
+## Where to look for proxy-side errors
+
+The Playwright log (e.g. `/tmp/e2e-proxy-run4.log`) contains **browser and test output only**. It does **not** contain output from the **proxy process** (`npm run test:proxy:server`), which runs in a separate terminal.
+
+To see proxy-side messages such as:
+
+- **`[Proxy] OpenAI forwarder upstream error:`** – upstream from mock-proxy to run.ts (8081) or from run.ts to api.openai.com failed
+- **`[Proxy] OpenAI subprocess error:`** / **`exited with code`** – OpenAI proxy subprocess (run.ts) crashed or exited
+- **`[Proxy] Rejecting connection:`** – Deepgram proxy rejected (e.g. origin or auth)
+
+**Check the terminal where you started the proxy** (`cd test-app && npm run test:proxy:server`). That terminal’s stdout/stderr is where those messages appear. They are not in the Playwright tee'd log.
+
+## Log findings from run4
+
+1. **Invalid frame header**  
+   The log shows multiple:
+   - `WebSocket connection to 'wss://localhost:8080/deepgram-proxy?…service=transcription' failed: Invalid frame header`
+   - `WebSocket connection to 'wss://localhost:8080/deepgram-proxy?service=agent' failed: Invalid frame header`  
+   So when tests use the **Deepgram proxy** path, the browser’s WebSocket often fails with **Invalid frame header**. That usually means the server responded with something that is not a valid WebSocket upgrade/frame (e.g. HTTP error body, or TLS/protocol mismatch). So proxy/Deepgram-path failures in run4 are consistent with the proxy (or something in front of it) not completing a valid WebSocket handshake for those URLs.
+
+2. **Connection-status "closed"**  
+   Many failures include:
+   - `Current connection-status: "closed". If "closed" or "error": check proxy is running…`  
+   So the component never reached "connected" for those tests; the WebSocket to the proxy either never opened or closed immediately.
+
+3. **No "[Proxy] OpenAI forwarder upstream error" in the Playwright log**  
+   That message is emitted by the **proxy process** (mock-proxy-server.js). It does not appear in the Playwright log because the proxy runs in a different process/terminal. To diagnose OpenAI proxy upstream failures, watch the **proxy terminal** while running E2E.
+
+4. **OpenAI proxy E2E (openai-proxy-e2e.spec.js)**  
+   All 9 tests in this file failed in run4 (e.g. "1. Connection – connect through OpenAI proxy and receive settings", "1b. Greeting – …", "2. Single message – …", etc.). Failures are the same pattern: connection-status never becomes "connected" within the timeout.
 
 ## Root cause of past vs current failures
 
 ### Past: net::ERR_EMPTY_RESPONSE (addressed by refactor)
 
-Previously, most failures were **`page.goto: net::ERR_EMPTY_RESPONSE at http://localhost:5173/`** because specs/helpers hardcoded `http://localhost:5173` while the server was HTTPS-only. That is fixed: specs and helpers use relative paths from `app-paths.mjs`, so Playwright’s baseURL (https when `HTTPS=true`) is used.
+Previously, many failures were **`page.goto: net::ERR_EMPTY_RESPONSE at http://localhost:5173/`** because specs/helpers hardcoded `http://localhost:5173` while the server was HTTPS-only. That is fixed: specs and helpers use relative paths from `app-paths.mjs`, so Playwright’s baseURL (https when `HTTPS=true`) is used.
 
-### Current: connection / timeout failures
+### Current: connection / Invalid frame header
 
-Remaining failures in the latest run are mainly:
+Remaining failures in run4 are mainly:
 
-1. **Connection never becomes "connected"** – `page.waitForFunction` (e.g. in `waitForConnection` / `MicrophoneHelpers.waitForMicrophoneReady`) times out (30s); `[data-testid="connection-status"]` stays `"closed"`. Affects specs that require a live agent/proxy connection (e.g. `user-stopped-speaking-*`, `deepgram-ux-protocol`, `real-user-workflows`, `strict-mode-behavior`, `transcription-config-test`).
-2. **expect(connection-status).toContainText('connected')** – Same idea: mic click or text focus does not lead to connection within the timeout; status remains `"closed"`.
-3. **Test / afterEach timeout (60s)** – Some `declarative-props-api` tests (or their afterEach) wait for connection or audio state and hit the 60s test timeout.
+1. **WebSocket to proxy fails with "Invalid frame header"** – for `wss://localhost:8080/deepgram-proxy` (transcription and agent). Suggests the proxy (or TLS) is not returning a valid WebSocket upgrade/frames to the browser.
+2. **Connection never becomes "connected"** – `waitForConnection` (or similar) times out; `[data-testid="connection-status"]` stays `"closed"`. Same underlying cause when the WebSocket to the proxy never opens.
+3. **OpenAI proxy E2E** – all 9 tests fail with connection timeout; no proxy-side output in the Playwright log, so proxy terminal must be checked for `[Proxy] OpenAI forwarder upstream error` or subprocess errors.
 
-These are consistent with: proxy/API not establishing quickly enough in the test environment, or tests that need a real backend and not fully passing under current proxy/HTTPS setup.
-
-### Findings from latest rerun (e2e-proxy-run2.log)
-
-- **WebSocket handshake failure:** Logs show `WebSocket connection to 'ws://localhost:8080/deepgram-proxy?...service=transcription' failed: Connection closed before receiving a handshake response`. The app is connecting to the **transcription** path on the Deepgram proxy; the connection is closed before handshake completes.
-- **Component error:** Console shows `Error code: connection_start_failed` from the component when the WebSocket fails.
-- **Scheme (addressed):** The browser was using `ws://` for the proxy URL while the app was served over **https**. **Correction applied:** `test-helpers.mjs` now derives proxy scheme from `HTTPS` (wss when HTTPS=true, ws when HTTP). Proxy endpoint defaults use the same scheme as Playwright’s `proxyBase`. Validated by `test-app/tests/e2e/scheme-config-validation.spec.js`.
-- **Backend matrix:** The full suite runs both Deepgram-only and OpenAI-proxy-only specs; many failing specs are Deepgram-only. Run backend-specific specs when diagnosing (see README “Isolating regression vs environment”).
-
-### Refactored code (baseURL and scheme)
+## Refactored code (baseURL and scheme)
 
 - **`test-app/tests/e2e/helpers/app-paths.mjs`** – `APP_ROOT`, `APP_TEST_MODE`, `APP_DEBUG`, `pathWithQuery(params)` for relative navigation.
 - **`test-app/tests/e2e/helpers/test-helpers.mjs`** – Proxy endpoint defaults use **wss** when `HTTPS=true`, **ws** when HTTP (same as Playwright `proxyBase`). Re-exports `APP_ROOT` and `pathWithQuery`. `getProxyConfig()`, `getDeepgramProxyParams()`, `getOpenAIProxyParams()` all use scheme-aware defaults.
-- **Helpers** – `setupTestPage()` uses `APP_ROOT` / `pathWithQuery(getProxyConfig())`; `audio-mocks.js` uses `pathWithQuery({ ...getProxyConfig(), ... })`.
-- **Specs** – All E2E specs use **relative navigation**: `page.goto(APP_ROOT)` or `page.goto(pathWithQuery(params))`. No hardcoded full URLs for navigation. Specs that need proxy params use `getDeepgramProxyParams().proxyEndpoint` (or OpenAI) so scheme matches. CORS/origin still use `BASE_URL` where needed.
-- **Scheme validation** – `test-app/tests/e2e/scheme-config-validation.spec.js` asserts proxy endpoint scheme matches app scheme (wss when HTTPS, ws when HTTP). Run with `HTTPS=true npm run test:e2e -- scheme-config-validation`.
+- **Helpers** – `setupTestPage()` uses `APP_ROOT` / `pathWithQuery(getProxyConfig())`; specs use `pathWithQuery(getDeepgramProxyParams())` or `pathWithQuery(getOpenAIProxyParams())` for proxy-mode tests.
+- **Scheme validation** – `test-app/tests/e2e/scheme-config-validation.spec.js` asserts test helper proxy URL scheme (wss when HTTPS, ws when HTTP). Proxy server must be started with same HTTPS (see `test-app/tests/e2e/README.md` "Scheme best practices").
 
-## Reporter error
+## Unit and integration tests that improve chances of finding the defect
 
-After the run, the JUnit reporter threw:
+These tests help catch regressions that would otherwise only show up as E2E "connection-status closed":
 
-```
-Error in reporter RangeError: Maximum call stack size exceeded
-    at JUnitReporter._addTestCase (.../playwright/lib/reporters/junit.js:176:17)
-    at JUnitReporter._buildTestSuite (.../playwright/lib/reporters/junit.js:109:18)
-    ...
-```
+1. **Unit (component): WebSocket proxy URL and no protocols**  
+   **File:** `tests/websocket-proxy-connection.test.ts`  
+   - **Added:** Assertions that when `WebSocketManager` is created with a proxy URL and empty `apiKey`, the mock WebSocket is constructed with that **exact URL** and **no protocols** (no second argument).  
+   - **Catches:** Component building the wrong URL or adding Deepgram token protocol in proxy mode (which would break OpenAI proxy).  
+   - **Run:** `npm test -- websocket-proxy-connection` (from repo root).
 
-This is a known class of issue with large runs and the JUnit reporter (e.g. deep or numerous test suites). It does not change the pass/fail counts above.
+2. **E2E (scheme): E2E helper proxy URL scheme**  
+   **File:** `test-app/tests/e2e/scheme-config-validation.spec.js`  
+   - Asserts that `getOpenAIProxyParams()` / `getDeepgramProxyParams()` return **wss** when `HTTPS=true` and **ws** when `HTTPS=false`.  
+   - **Catches:** E2E helper passing wrong scheme so the app connects to ws when proxy serves wss (or vice versa).  
+   - **Run:** `E2E_USE_EXISTING_SERVER=1 npm run test:e2e -- scheme-config-validation.spec.js` (from `test-app`).
 
-## Recommendations (corrections first; tests should demonstrably pass)
+3. **Integration: OpenAI proxy server with mock upstream**  
+   **File:** `tests/integration/openai-proxy-integration.test.ts`  
+   - Starts the OpenAI proxy (run.ts) with a mock upstream and asserts client→proxy→upstream message flow.  
+   - **Catches:** Proxy server bugs (translation, forwarding); does not cover the mock-proxy-server.js forwarder or browser TLS.
 
-1. **Use baseURL everywhere** ✅ *Done*
-   - All navigation uses `APP_ROOT` or `pathWithQuery(params)` from `test-helpers.mjs` / `app-paths.mjs`. No hardcoded `http://localhost:5173` or full-URL `page.goto()`. Playwright’s baseURL (http or https) is always applied.
+4. **Integration: Mock proxy server startup**  
+   **File:** `test-app/tests/mock-proxy-server-integration.test.js`  
+   - Asserts proxy exits when no API key, starts when key set, and prints **wss://** when `HTTPS=true`.  
+   - **Catches:** Proxy not starting or wrong scheme in startup log.  
+   - **Run:** `npm test -- mock-proxy-server-integration` (from `test-app`).
 
-2. **Run with existing server** – You are already doing this (dev server and proxy started manually; `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true`).
+**Optional (not added):** An integration test that starts the full mock-proxy (with OpenAI subprocess), then opens a Node WebSocket to `wss://127.0.0.1:8080/openai`, and expects either `open` or error containing `400`. That would reproduce "Invalid frame header" or connection failure in CI but is heavier (spawn proxy + run.ts, port/timeout handling).
 
-3. **Scheme matching** ✅ *Done*
-   - Proxy endpoint defaults in `test-helpers.mjs` use **wss** when `HTTPS=true`, **ws** when HTTP. Same as Playwright’s `proxyBase`. **Test:** `scheme-config-validation.spec.js` asserts proxy scheme matches app scheme. Run: `HTTPS=true npm run test:e2e -- scheme-config-validation` (and with HTTPS=false for ws).
+## Recommendations
 
-4. **JUnit reporter** – To be addressed once most tests are passing (e.g. in CI). Not blocking for current corrections.
+1. **Use baseURL everywhere** ✅ *Done*  
+   Navigation uses `APP_ROOT` or `pathWithQuery(params)`. Playwright’s baseURL (http or https) is always applied.
 
-## Passing tests (34)
+2. **Run with existing server**  
+   Dev server and proxy started manually; use `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true` so Playwright does not start them.
 
-In the latest run (e2e-proxy-run2), 34 tests passed. These include:
+3. **Scheme matching** ✅ *Done*  
+   Proxy endpoint defaults use **wss** when `HTTPS=true`. Start the proxy from `test-app` so it loads `.env` (HTTPS=true) and serves wss.
 
-- Tests that use relative URLs (`APP_ROOT`, `APP_TEST_MODE`, `pathWithQuery`) and load the app over HTTPS.
-- Protocol-validation mock-mode tests (e.g. mocked WebSocket when no API key).
-- Other specs that complete within timeouts without requiring a live agent connection.
+4. **Diagnosing proxy failures**  
+   - **Playwright log:** Browser errors (e.g. "Invalid frame header", connection-status "closed").  
+   - **Proxy terminal:** Run `npm run test:proxy:server` in a separate terminal and watch for `[Proxy] OpenAI forwarder upstream error`, `[Proxy] OpenAI subprocess error`, or Deepgram rejections. That output is not in the Playwright log.
 
-This confirms that:
+## Passing tests (62 in run4)
 
-- Playwright loads the app over HTTPS when navigation uses baseURL (via app-paths).
-- Existing-server + HTTPS + wss proxy configuration works for E2E when specs/helpers use the refactored navigation.
+Run4 had 62 passed tests. These include:
+
+- Specs that use direct Deepgram (e.g. agent-options-resend, api-key-validation, audio-interruption-timing, scheme-config-validation, baseurl-test).
+- Protocol-validation and mock-mode tests that do not require a live proxy connection.
+- API key security / bundle inspection tests.
+
+This confirms that when the WebSocket opens (e.g. direct to Deepgram), the component correctly reaches "connected" and tests that rely on it can pass. Proxy-path failures are tied to the WebSocket to `wss://localhost:8080/...` failing (Invalid frame header or connection never open).
 
 ## Source
 
-- **Latest run:** `/tmp/e2e-proxy-run2.log` (overwritten by latest rerun; command: `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e` from `test-app`, output piped to `tee`).
+- **Run4 log:** `/tmp/e2e-proxy-run4.log`  
+- **Command:** `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e 2>&1 | tee /tmp/e2e-proxy-run4.log` (from `test-app`).
 
 ---
 
-*Updated from E2E run output (Issue #383).*
+*Updated from E2E run4 log review (Issue #383).*

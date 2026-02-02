@@ -3,7 +3,15 @@
  * 
  * Shared utilities for Playwright E2E tests to promote DRY principles
  * and consistent testing patterns across the test suite.
+ * Load test-app/.env so workers have HTTPS and VITE_* (config dotenv runs in main process only).
  */
+
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
 
 import { APP_ROOT, pathWithQuery } from './app-paths.mjs';
 
@@ -16,7 +24,9 @@ export { APP_ROOT, pathWithQuery };
  * Can be overridden via PLAYWRIGHT_BASE_URL environment variable.
  * Matches the baseURL configured in playwright.config.mjs.
  */
-const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
+/** E2E_USE_HTTP=1 forces http/ws to avoid cert errors; must match dev server & proxy (start them with HTTP). */
+const forceHttp = process.env.E2E_USE_HTTP === '1' || process.env.E2E_USE_HTTP === 'true';
+const useHttps = !forceHttp && (process.env.HTTPS === 'true' || process.env.HTTPS === '1');
 /** WebSocket scheme for proxy: wss when app is HTTPS, ws when HTTP. Must match Playwright proxyBase. */
 const wsScheme = useHttps ? 'wss' : 'ws';
 const proxyHost = 'localhost:8080';
