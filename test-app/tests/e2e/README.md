@@ -147,6 +147,8 @@ If the app uses **HTTPS** (e.g. `HTTPS=true` in test-app/.env), set the base URL
 
 ### Diagnosing why connection never becomes "connected"
 
+The OpenAI proxy **"1. Connection"** test is now passing: the mock proxy routes upgrade by path (`/openai` vs `/deepgram-proxy`) so `ws://localhost:8080/openai?service=agent` is no longer rejected with 400. If connection issues recur (e.g. after env or proxy changes), use the steps below.
+
 Use these in order; each gives a LOC (this README) and the exact command(s).
 
 1. **See the browser-side WebSocket error**  

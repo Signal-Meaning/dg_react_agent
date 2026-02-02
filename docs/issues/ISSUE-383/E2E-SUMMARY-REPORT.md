@@ -1,6 +1,15 @@
 # E2E Test Run Summary (Issue #383)
 
-Summary of E2E test runs with HTTPS and existing-server configuration. Updated from **run4** log review (`/tmp/e2e-proxy-run4.log`).
+Summary of E2E test runs with HTTPS and existing-server configuration. Updated from **run4** log review and **post–proxy fix** runs.
+
+## Current status: OpenAI proxy E2E passing
+
+**All 9 tests** in `openai-proxy-e2e.spec.js` now pass (~46s) when the mock proxy is running with the path-routing fix (single `server.on('upgrade')` that dispatches by pathname so `/openai?service=agent` is handled by the OpenAI server, not rejected with 400 by the Deepgram listener). Run with dev server and proxy started, and `USE_REAL_APIS=true` so the worker sees API keys:
+
+- **Minimal:** `E2E_USE_HTTP=1 USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js -g "1. Connection"`
+- **Full spec (9 tests):** `E2E_USE_HTTP=1 USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js`
+
+(Use `E2E_USE_HTTP=1` when running over HTTP to avoid cert issues; omit if using HTTPS and certs are accepted.)
 
 ## Limiting tests to verify the failure condition
 
@@ -8,8 +17,8 @@ To avoid running the full suite (234 tests, ~18 min) when you only need to confi
 
 | Goal | Command (from `test-app`) | Tests |
 |------|---------------------------|--------|
-| **Minimal (1 test)** – fastest | `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js -g "1. Connection"` | 1 |
-| **One spec (9 tests)** | `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js` | 9 |
+| **Minimal (1 test)** – fastest | `E2E_USE_HTTP=1 USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js -g "1. Connection"` | 1 |
+| **One spec (9 tests)** | `E2E_USE_HTTP=1 USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js` | 9 |
 
 If the single "1. Connection" test fails (e.g. connection-status never "connected"), the same failure condition is present; no need to run more. Use the full suite only when you need full coverage.
 
@@ -73,7 +82,7 @@ To see proxy-side messages such as:
    That message is emitted by the **proxy process** (mock-proxy-server.js). It does not appear in the Playwright log because the proxy runs in a different process/terminal. To diagnose OpenAI proxy upstream failures, watch the **proxy terminal** while running E2E.
 
 4. **OpenAI proxy E2E (openai-proxy-e2e.spec.js)**  
-   All 9 tests in this file failed in run4 (e.g. "1. Connection – connect through OpenAI proxy and receive settings", "1b. Greeting – …", "2. Single message – …", etc.). Failures are the same pattern: connection-status never becomes "connected" within the timeout.
+   In run4, all 9 tests in this file failed (connection-status never "connected"). **After the proxy fix** (single upgrade handler routing by path), all 9 tests pass: 1. Connection, 1b. Greeting, 2. Single message, 3. Multi-turn, 4. Reconnection, 5. Basic audio, 6. Simple function calling, 7. Reconnection with context, 8. Error handling.
 
 ## Root cause of past vs current failures
 
@@ -87,7 +96,7 @@ Remaining failures in run4 are mainly:
 
 1. **WebSocket to proxy fails with "Invalid frame header"** – for `wss://localhost:8080/deepgram-proxy` (transcription and agent). Suggests the proxy (or TLS) is not returning a valid WebSocket upgrade/frames to the browser.
 2. **Connection never becomes "connected"** – `waitForConnection` (or similar) times out; `[data-testid="connection-status"]` stays `"closed"`. Same underlying cause when the WebSocket to the proxy never opens.
-3. **OpenAI proxy E2E** – all 9 tests fail with connection timeout; no proxy-side output in the Playwright log, so proxy terminal must be checked for `[Proxy] OpenAI forwarder upstream error` or subprocess errors.
+3. **OpenAI proxy E2E** – *Fixed.* All 9 tests now pass after the proxy path-routing fix. For any future connection timeout, proxy terminal must be checked for `[Proxy] OpenAI forwarder upstream error` or subprocess errors (not in the Playwright log).
 
 ## Refactored code (baseURL and scheme)
 
@@ -155,6 +164,20 @@ This confirms that when the WebSocket opens (e.g. direct to Deepgram), the compo
 - **Run4 log:** `/tmp/e2e-proxy-run4.log`  
 - **Command:** `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e 2>&1 | tee /tmp/e2e-proxy-run4.log` (from `test-app`).
 
+## OpenAI proxy E2E – test list (all passing)
+
+| # | Test | Description |
+|---|------|-------------|
+| 1 | Connection | Connect through OpenAI proxy and receive settings |
+| 1b | Greeting | Proxy injects greeting; component shows greeting-sent |
+| 2 | Single message | Inject user message, receive agent response in Message Bubble |
+| 3 | Multi-turn | Sequential messages, second agent response appears |
+| 4 | Reconnection | Disconnect then send, app reconnects and user receives response |
+| 5 | Basic audio | Send recorded audio; assert agent response in [data-testid="agent-response"] |
+| 6 | Simple function calling | Trigger function call; assert response in agent-response |
+| 7 | Reconnection with context | Disconnect, reconnect; proxy sends context |
+| 8 | Error handling | Wrong proxy URL shows closed/error and does not hang |
+
 ---
 
-*Updated from E2E run4 log review (Issue #383).*
+*Updated from E2E run4 log review and post–proxy fix runs (Issue #383).*
