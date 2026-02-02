@@ -16,7 +16,7 @@ E2E tests run in a **real browser** against the **test-app** with **VITE_OPENAI_
 
 - **Existing**: `test-app/tests/e2e/openai-inject-connection-stability.spec.js` (single test: inject “hi”, expect agent response). Now uses `setupTestPageWithOpenAIProxy`.
 - **OpenAI proxy suite**: `test-app/tests/e2e/openai-proxy-e2e.spec.js` – connection, **greeting** (1b: proxy injects greeting; component shows greeting-sent), single message, multi-turn, reconnection, basic audio, simple function calling. Uses `setupTestPageWithOpenAIProxy` and `skipIfNoOpenAIProxy()`; all tests skip when `VITE_OPENAI_PROXY_ENDPOINT` is not set.
-- **Reuse**: Prefer existing specs—e.g. `text-session-flow.spec.js`, `backend-proxy-mode.spec.js`, `dual-channel-text-and-microphone.spec.js`, `function-calling-e2e.spec.js`—run with `VITE_OPENAI_PROXY_ENDPOINT` via `setupTestPageWithOpenAIProxy` (or URL param `proxyEndpoint`) to run the same flows against the OpenAI proxy.
+- **Reuse**: Prefer existing specs—e.g. `deepgram-text-session-flow.spec.js`, `deepgram-backend-proxy-mode.spec.js`, `dual-channel-text-and-microphone.spec.js`, `function-calling-e2e.spec.js`—run with `VITE_OPENAI_PROXY_ENDPOINT` via `setupTestPageWithOpenAIProxy` (or URL param `proxyEndpoint`) to run the same flows against the OpenAI proxy.
 - **Helpers**: `setupTestPageWithOpenAIProxy(page)` and `getOpenAIProxyParams()` in `test-app/tests/e2e/helpers/test-helpers.js` and `test-helpers.mjs`.
 
 Use **VITE_OPENAI_PROXY_ENDPOINT** (and optional skip when unset) so these run only when the OpenAI proxy is available; same pattern as existing OpenAI E2E.
@@ -62,7 +62,7 @@ Use **VITE_OPENAI_PROXY_ENDPOINT** (and optional skip when unset) so these run o
 
 ### 8. Parity with Deepgram proxy E2E
 
-- **Same flows as Deepgram**: Where applicable, mirror the structure of `text-session-flow.spec.js` and `backend-proxy-mode.spec.js` for the OpenAI proxy: connection, settings, first message, sequential messages, disconnect/reconnect. This gives a “comprehensive” OpenAI proxy E2E suite and ensures the component works with both backends.
+- **Same flows as Deepgram**: Where applicable, mirror the structure of `deepgram-text-session-flow.spec.js` and `deepgram-backend-proxy-mode.spec.js` for the OpenAI proxy: connection, settings, first message, sequential messages, disconnect/reconnect. This gives a “comprehensive” OpenAI proxy E2E suite and ensures the component works with both backends.
 
 ## Implementation Notes
 
@@ -70,6 +70,10 @@ Use **VITE_OPENAI_PROXY_ENDPOINT** (and optional skip when unset) so these run o
 - **Skip when proxy not set**: Use `skipIfNoOpenAIProxy()` (or equivalent) so E2E that require the OpenAI proxy are skipped when `VITE_OPENAI_PROXY_ENDPOINT` is not set (e.g. in CI without an OpenAI proxy).
 - **Timeout**: Use timeouts that allow for real API latency (e.g. 15–30s for agent response).
 - **Existing component tests**: Run the full component test suite with the OpenAI backend (e.g. by pointing the test app at the OpenAI proxy). All existing tests must pass; add new E2E only for new behaviors.
+
+## Missing OpenAI E2E tests
+
+See **[MISSING-OPENAI-E2E-TESTS.md](./MISSING-OPENAI-E2E-TESTS.md)** for candidates that are (1) representative of Deepgram coverage we don’t yet have for OpenAI, or (2) compelled by the OpenAI Realtime API. Recommended next: **Instructions / session instructions** E2E (TDD). Others (server close, SettingsApplied, idle after greeting, transcript-absent) are optional or deferred.
 
 ## Acceptance
 

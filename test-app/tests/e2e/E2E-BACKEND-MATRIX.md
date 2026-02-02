@@ -31,14 +31,14 @@ These specs assume **Deepgram** backend behavior (e.g. Deepgram server timeouts,
 
 | Spec | Why Deepgram-only |
 |------|--------------------|
-| `client-message-timeout.spec.js` | Assumes **CLIENT_MESSAGE_TIMEOUT** from Deepgram; "Waiting for Deepgram server timeout (~60s)". Skips when `VITE_OPENAI_PROXY_ENDPOINT` is set. |
-| `text-session-flow.spec.js` | Uses `setupTestPageWithDeepgramProxy`; real Deepgram API. |
-| `backend-proxy-mode.spec.js` | Expects `deepgram-proxy` endpoint. Skips when `VITE_OPENAI_PROXY_ENDPOINT` is set. |
-| `callback-test.spec.js` | onTranscriptUpdate, onUserStartedSpeaking, onUserStoppedSpeaking rely on Deepgram transcript/VAD events. Skips those tests when `VITE_OPENAI_PROXY_ENDPOINT` is set. |
+| `deepgram-client-message-timeout.spec.js` | Assumes **CLIENT_MESSAGE_TIMEOUT** from Deepgram; "Waiting for Deepgram server timeout (~60s)". Skips when `VITE_OPENAI_PROXY_ENDPOINT` is set. |
+| `deepgram-text-session-flow.spec.js` | Uses `setupTestPageWithDeepgramProxy`; real Deepgram API. |
+| `deepgram-backend-proxy-mode.spec.js` | Expects `deepgram-proxy` endpoint. Skips when `VITE_OPENAI_PROXY_ENDPOINT` is set. |
+| `deepgram-callback-test.spec.js` | onTranscriptUpdate, onUserStartedSpeaking, onUserStoppedSpeaking rely on Deepgram transcript/VAD events. Skips those tests when `VITE_OPENAI_PROXY_ENDPOINT` is set. |
 | `declarative-props-api.spec.js` | Function-call test runs with OpenAI proxy; proxy sends **FunctionCallRequest** on `response.function_call_arguments.done` and maps **FunctionCallResponse** → `conversation.item.create` (function_call_output). |
 | `context-retention-agent-usage.spec.js` | Context test runs with OpenAI proxy; proxy maps **Settings.agent.context.messages** → sequence of **conversation.item.create** (OpenAI does not send context in session.update). |
 | `context-retention-with-function-calling.spec.js` | Same as above; proxy handles both function-call path and context on reconnect. |
-| `backend-proxy-authentication.spec.js` | Deepgram proxy auth. |
+| `deepgram-backend-proxy-authentication.spec.js` | Deepgram proxy auth. |
 | `api-key-security-proxy-mode.spec.js` | Deepgram proxy; validates no direct Deepgram connection. |
 | `issue-373-idle-timeout-during-function-calls.spec.js` | Real Deepgram API key; proxy endpoint Deepgram. |
 | `issue-351-function-call-proxy-mode.spec.js` | Real Deepgram API; Deepgram proxy. |
@@ -46,9 +46,9 @@ These specs assume **Deepgram** backend behavior (e.g. Deepgram server timeouts,
 | `context-retention-with-function-calling.spec.js` | Requires real Deepgram API key. |
 | `context-retention-agent-usage.spec.js` | Requires real Deepgram API key; "Deepgram may send greeting...". |
 | `dual-channel-text-and-microphone.spec.js` | Real Deepgram API; proxy mode Deepgram. |
-| `vad-configuration-optimization.spec.js` | VAD requires real Deepgram API. |
-| `manual-vad-workflow.spec.js` | Real Deepgram APIs for VAD. |
-| `greeting-idle-timeout.spec.js` | Uses deepgramRef / connection close after idle. |
+| `deepgram-vad-configuration-optimization.spec.js` | VAD requires real Deepgram API. |
+| `deepgram-manual-vad-workflow.spec.js` | Real Deepgram APIs for VAD. |
+| `deepgram-greeting-idle-timeout.spec.js` | Uses deepgramRef / connection close after idle. |
 | `agent-state-transitions.spec.js` | "AgentThinking message is sent by Deepgram". |
 | `audio-odd-length-buffer.spec.js` | Uses deepgramRef, getAudioContext. |
 | `component-remount-reconnection.spec.js` | Uses deepgramRef. |
@@ -56,8 +56,8 @@ These specs assume **Deepgram** backend behavior (e.g. Deepgram server timeouts,
 | `component-remount-detection.spec.js` | Component logs. |
 | `strict-mode-behavior.spec.js` | DeepgramVoiceInteraction init logs. |
 | `audio-interruption-timing.spec.js` | deepgramRef.interruptAgent. |
-| `vad-redundancy-and-agent-timeout.spec.js` | deepgramRef; mock AgentThinking. |
-| `interim-transcript-validation.spec.js` | "Deepgram sends word-by-word final transcripts". |
+| `deepgram-vad-redundancy-and-agent-timeout.spec.js` | deepgramRef; mock AgentThinking. |
+| `deepgram-interim-transcript-validation.spec.js` | "Deepgram sends word-by-word final transcripts". |
 | `greeting-audio-timing.spec.js` | deepgramRef.current.start. |
 | (Others with deepgramRef / skipIfNoRealAPI / Deepgram proxy) | Same pattern. |
 

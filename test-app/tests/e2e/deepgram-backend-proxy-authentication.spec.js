@@ -19,7 +19,7 @@
  * To run:
  *   1. Start mock proxy server: npm run test:proxy:server
  *   2. In another terminal: npm run test:e2e:proxy
- *   3. Or with proxy mode: USE_PROXY_MODE=true npm run test:e2e -- backend-proxy-authentication
+ *   3. Or with proxy mode: USE_PROXY_MODE=true npm run test:e2e -- deepgram-backend-proxy-authentication
  * 
  * ⚠️ NOTE: These tests require real APIs and will be skipped in CI environments.
  *    They must be run locally with a valid Deepgram API key.
@@ -35,7 +35,7 @@ test.describe('Backend Proxy Authentication', () => {
   test.beforeEach(async ({ page }) => {
     // Skip all tests in CI - these tests require real APIs and proxy server
     // Reason: These security tests require real Deepgram API connections and cannot run in CI
-    // Action: Run these tests locally with: USE_PROXY_MODE=true npm run test:e2e -- backend-proxy-authentication
+    // Action: Run these tests locally with: USE_PROXY_MODE=true npm run test:e2e -- deepgram-backend-proxy-authentication
     if (process.env.CI) {
       test.skip(true, 'These tests require real APIs and cannot run in CI. Run locally instead.');
       return;

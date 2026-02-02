@@ -62,7 +62,7 @@ export function skipIfNoOpenAIProxy(reason = 'Requires VITE_OPENAI_PROXY_ENDPOIN
 
 /**
  * Skip test when OpenAI proxy is configured (VITE_OPENAI_PROXY_ENDPOINT).
- * Use for E2E tests that target Deepgram-only behavior (e.g. backend-proxy-mode expects
+ * Use for E2E tests that target Deepgram-only behavior (e.g. deepgram-backend-proxy-mode expects
  * deepgram-proxy, transcript/VAD callbacks, agent-wording or context assertions).
  * @param {string} reason - Optional reason for skipping
  */
@@ -106,7 +106,7 @@ async function setupTestPage(page, timeout = 10000) {
 
 /**
  * Navigate to the test app with Deepgram proxy (VITE_DEEPGRAM_PROXY_ENDPOINT).
- * Use for E2E tests that target the Deepgram proxy (e.g. text-session-flow).
+ * Use for E2E tests that target the Deepgram proxy (e.g. deepgram-text-session-flow).
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 10000)
  */

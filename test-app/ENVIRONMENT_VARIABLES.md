@@ -30,7 +30,7 @@ This document describes the environment variables that can be used to configure 
 - `VITE_AGENT_URL` - Custom agent WebSocket URL (default: `wss://agent.deepgram.com/v1/agent/converse`)
 
 ### Proxy Endpoints (E2E / real API tests)
-- `VITE_DEEPGRAM_PROXY_ENDPOINT` - WebSocket URL for the Deepgram proxy (default: `ws://localhost:8080/deepgram-proxy`). Used by text-session-flow and other Deepgram proxy E2E tests.
+- `VITE_DEEPGRAM_PROXY_ENDPOINT` - WebSocket URL for the Deepgram proxy (default: `ws://localhost:8080/deepgram-proxy`). Used by deepgram-text-session-flow and other Deepgram proxy E2E tests.
 - `VITE_OPENAI_PROXY_ENDPOINT` - WebSocket URL for the OpenAI proxy (default: `ws://localhost:8080/openai`). When set, the openai-inject-connection-stability E2E test runs against that proxy.
 
 ## Usage

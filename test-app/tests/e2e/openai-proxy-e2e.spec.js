@@ -1,7 +1,7 @@
 /**
  * OpenAI Proxy E2E Suite (Issue #381)
  *
- * Reuses the same flows as text-session-flow and related specs, pointed at the
+ * Reuses the same flows as deepgram-text-session-flow and related specs, pointed at the
  * OpenAI Realtime proxy (VITE_OPENAI_PROXY_ENDPOINT). Tests are skipped when
  * VITE_OPENAI_PROXY_ENDPOINT is not set.
  *

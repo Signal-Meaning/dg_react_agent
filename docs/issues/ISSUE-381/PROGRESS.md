@@ -57,8 +57,8 @@ When running the **full** E2E suite with `VITE_OPENAI_PROXY_ENDPOINT` set:
 | context-retention "verify context format" | ✅ Pass | Same setup. |
 | declarative-props (Deepgram function-call) | ⏭️ Skip | skipIfOpenAIProxy; OpenAI flow covered by openai-proxy-e2e "Simple function calling" + integration test. |
 | context-retention-with-function-calling | ✅ Pass | Passes when proxy is running and real API sends response.function_call_arguments.done. Test asserts client received FunctionCallRequest and handler invoked (requestCount > 0); context retention after reconnect verified. |
-| backend-proxy-mode (Deepgram) | ⏭️ Skip | Deepgram-only; skipIfOpenAIProxy. |
-| callback-test (Deepgram transcript/VAD) | ⏭️ Skip | Deepgram-only; skipIfOpenAIProxy for those tests. |
+| deepgram-backend-proxy-mode (Deepgram) | ⏭️ Skip | Deepgram-only; skipIfOpenAIProxy. |
+| deepgram-callback-test (Deepgram transcript/VAD) | ⏭️ Skip | Deepgram-only; skipIfOpenAIProxy for those tests. |
 
 **Backend selection:** Test-app defaults to OpenAI (`proxyEndpoint` default in App.tsx). For E2E runs use env: `E2E_BACKEND=openai` (default) or `E2E_BACKEND=deepgram`. URL is built with `connectionMode` + `proxyEndpoint` query params (the “URL input” the app reads). context-retention-with-function-calling runs with OpenAI only (skips when `E2E_BACKEND=deepgram`).
 
@@ -73,7 +73,7 @@ When running the **full** E2E suite with `VITE_OPENAI_PROXY_ENDPOINT` set:
 3. **OpenAI proxy E2E suite** – 9 tests; connection, messaging, reconnection, basic audio, function calling, error handling covered.
 4. **Context retention E2E** – Both tests pass against OpenAI proxy (setup + test app optimistic user message).
 5. **Declarative-props function-call** – Skip when OpenAI; when run (e.g. Deepgram), test requires real function call (no fake pass).
-6. **Backend/callback skips** – backend-proxy-mode and transcript/VAD callback tests skip when OpenAI proxy.
+6. **Backend/callback skips** – deepgram-backend-proxy-mode and deepgram-callback-test (transcript/VAD) skip when OpenAI proxy.
 7. **Context retention with function calling** – E2E passes when proxy is running and real API sends `response.function_call_arguments.done`; test asserts FCR received, handler invoked, and context retained after reconnect.
 8. **Greeting (Issue #381)** – Proxy uses component-provided `agent.greeting` from Settings: after **session.updated**, injects greeting via **conversation.item.create** (upstream) and **ConversationText** (component). Unit tests (2) and integration test (1); translator `mapGreetingToConversationItemCreate` / `mapGreetingToConversationText`; server stores greeting on Settings and injects after session.updated. E2E: openai-proxy-e2e includes a test that asserts `[data-testid="greeting-sent"]` after connection (validates greeting is sent to the component).
 

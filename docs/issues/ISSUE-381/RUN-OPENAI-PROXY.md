@@ -17,6 +17,8 @@
 | **HTTPS** | Test-app dev server | Set to `0` when Playwright starts the test-app so the app is served over HTTP (avoids TLS issues in Chromium). Does not affect the proxy. |
 | **VITE_BASE_URL** | Test-app | Base URL for the test-app (default `http://localhost:5173`). Override if you run the app on a different host/port. |
 
+**Safety – real API E2E:** Run OpenAI proxy E2E only when **OPENAI_API_KEY** is set (truthy). The proxy will not start without it. Do not run real-API E2E in environments where the key is unset or a placeholder (e.g. CI without secrets).
+
 **Note:** The test-app defaults to the OpenAI proxy when `VITE_OPENAI_PROXY_ENDPOINT` is set (e.g. by Playwright env). See [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md) for backend selection and Deepgram-only specs.
 
 ---

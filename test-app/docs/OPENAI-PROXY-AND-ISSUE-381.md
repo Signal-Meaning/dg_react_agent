@@ -22,7 +22,7 @@ The test app and the repo support an **OpenAI Realtime proxy** as an alternative
 ### 2. **E2E backend env**
 
 - **`E2E_BACKEND`** (e.g. `openai` or `deepgram`) controls which backend the E2E suite uses.
-- Default is OpenAI when the proxy URL is set. Some specs **skip** when `E2E_BACKEND=deepgram` (e.g. context-retention-with-function-calling); others skip when the OpenAI proxy is in use (Deepgram-only specs: backend-proxy-mode, callback-test). See [E2E-PRIORITY-RUN-LIST.md](../../docs/issues/ISSUE-381/E2E-PRIORITY-RUN-LIST.md).
+- Default is OpenAI when the proxy URL is set. Some specs **skip** when `E2E_BACKEND=deepgram` (e.g. context-retention-with-function-calling); others skip when the OpenAI proxy is in use (Deepgram-only specs: deepgram-backend-proxy-mode, deepgram-callback-test). See [E2E-PRIORITY-RUN-LIST.md](../../docs/issues/ISSUE-381/E2E-PRIORITY-RUN-LIST.md).
 
 ### 3. **Optimistic user message in context retention**
 

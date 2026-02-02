@@ -134,7 +134,7 @@ The monitor displays:
 - **`lazy-initialization-e2e.spec.js`** - Lazy initialization behavior (no auto-connect, Issue #206)
 
 ### Security & Authentication Tests
-- **`backend-proxy-authentication.spec.js`** - Backend proxy authentication and security tests (11 tests)
+- **`deepgram-backend-proxy-authentication.spec.js`** - Backend proxy authentication and security tests (11 tests)
   - Basic authentication (Issue #242)
   - Invalid token rejection (Issue #363)
   - Token expiration handling (Issue #363)
