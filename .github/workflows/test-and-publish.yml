@@ -363,7 +363,7 @@ jobs:
       # Create GitHub Release (and tag) when triggered by push to release/v* or workflow_dispatch (not when trigger is release:published)
       - name: Create GitHub Release
         if: success() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v')))
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.5.0
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: v${{ steps.version.outputs.version }}
