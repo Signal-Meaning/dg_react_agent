@@ -8,10 +8,10 @@
 
 - [x] **Tests passing**
   - [x] Run: `npm test` — passed
-  - [ ] **E2E in proxy mode** (OpenAI proxy is the default; release must validate proxy support):
-    - [ ] Start proxy: `npm run test:proxy:server` (from `test-app/`) — ensure port 8080 is free (e.g. stop OpenAI proxy if running)
-    - [ ] Run: `E2E_USE_HTTP=1 USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e` (from `test-app`)
-    - [ ] Confirm **0 failures** (210 passed, 24 skipped). Deepgram-only specs skip when OpenAI proxy; see `test-app/tests/e2e/README.md` (Backend matrix).
+  - [x] **E2E in proxy mode** (OpenAI proxy is the default; release must validate proxy support):
+    - [x] Start proxy: `npm run test:proxy:server` (from `test-app/`) — ensure port 8080 is free (e.g. stop OpenAI proxy if running)
+    - [x] Run: `E2E_USE_HTTP=1 USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e` (from `test-app`)
+    - [x] Confirm **0 failures** (210 passed, 24 skipped). Deepgram-only specs skip when OpenAI proxy; see `test-app/tests/e2e/README.md` (Backend matrix).
     - **OpenAI proxy E2E:** All 9 tests in `openai-proxy-e2e.spec.js` now pass (proxy path-routing fix). Run: `E2E_USE_HTTP=1 USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js` (from `test-app`).
     - **Port/scheme:** If proxy runs on a different port, set `VITE_OPENAI_PROXY_ENDPOINT` / `VITE_DEEPGRAM_PROXY_ENDPOINT` in the same env as Playwright. See `test-app/tests/e2e/README.md` (Port, scheme, and backend).
     - **Isolating failures:** Run only OpenAI proxy E2E: `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js`. Run only one Deepgram spec: `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true E2E_BACKEND=deepgram npm run test:e2e -- deepgram-backend-proxy-mode.spec.js`. See README “Isolating regression vs environment”.
