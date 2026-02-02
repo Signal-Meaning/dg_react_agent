@@ -15,7 +15,7 @@ E2E tests run in a **real browser** against the **test-app** with **VITE_OPENAI_
 ## Test File(s)
 
 - **Existing**: `test-app/tests/e2e/openai-inject-connection-stability.spec.js` (single test: inject “hi”, expect agent response). Now uses `setupTestPageWithOpenAIProxy`.
-- **OpenAI proxy suite**: `test-app/tests/e2e/openai-proxy-e2e.spec.js` – connection, single message, multi-turn, reconnection, basic audio, simple function calling. Uses `setupTestPageWithOpenAIProxy` and `skipIfNoOpenAIProxy()`; all tests skip when `VITE_OPENAI_PROXY_ENDPOINT` is not set.
+- **OpenAI proxy suite**: `test-app/tests/e2e/openai-proxy-e2e.spec.js` – connection, **greeting** (1b: proxy injects greeting; component shows greeting-sent), single message, multi-turn, reconnection, basic audio, simple function calling. Uses `setupTestPageWithOpenAIProxy` and `skipIfNoOpenAIProxy()`; all tests skip when `VITE_OPENAI_PROXY_ENDPOINT` is not set.
 - **Reuse**: Prefer existing specs—e.g. `text-session-flow.spec.js`, `backend-proxy-mode.spec.js`, `dual-channel-text-and-microphone.spec.js`, `function-calling-e2e.spec.js`—run with `VITE_OPENAI_PROXY_ENDPOINT` via `setupTestPageWithOpenAIProxy` (or URL param `proxyEndpoint`) to run the same flows against the OpenAI proxy.
 - **Helpers**: `setupTestPageWithOpenAIProxy(page)` and `getOpenAIProxyParams()` in `test-app/tests/e2e/helpers/test-helpers.js` and `test-helpers.mjs`.
 
@@ -28,6 +28,10 @@ Use **VITE_OPENAI_PROXY_ENDPOINT** (and optional skip when unset) so these run o
 - **Connect through OpenAI proxy**: Load app with `proxyEndpoint= VITE_OPENAI_PROXY_ENDPOINT`. Assert connection status becomes “connected” within timeout.
 - **Settings/session**: After connection, assert that the component has received session/settings (e.g. DOM or callback indicates “ready” or “settings applied”) so that injectUserMessage is allowed.
 
+### 1b. Greeting (Issue #381) — **Done**
+
+- **Proxy injects greeting; component shows greeting-sent**: After connection, the proxy sends the component-provided `agent.greeting` (from Settings) as **ConversationText** (assistant) after **session.updated**. The test-app marks greeting as sent (`[data-testid="greeting-sent"]`). E2E test "1b. Greeting" in openai-proxy-e2e.spec.js asserts this selector appears within 10s after establishConnectionViaText.
+
 ### 2. Single message (existing + strengthen)
 
 - **Inject user message, receive agent response**: Send one text message (e.g. “hi”) via the text input (injectUserMessage flow). Assert that an agent response appears in the UI within a reasonable timeout (e.g. 15s). This is the current openai-inject-connection-stability test; keep it and ensure it stays green.
@@ -35,7 +39,7 @@ Use **VITE_OPENAI_PROXY_ENDPOINT** (and optional skip when unset) so these run o
 ### 3. Basic audio test
 
 - **Send recorded audio; assert agent response appears in the test-app element with `data-testid="agent-response"`**: Test sends pre-recorded audio (e.g. via `loadAndSendAudioSample` from `test-app/tests/e2e/fixtures/audio-helpers.js`) to the agent; the agent’s response (audio translated to text) must appear in the element identified by `[data-testid="agent-response"]`. In the test-app that element is the main agent-response display; in other UIs (e.g. voice-commerce) the same content is shown in a Message Bubble. Assert using `waitForAgentResponse` and the `[data-testid="agent-response"]` selector. **Reuse**: Run the same flow as in `dual-channel-text-and-microphone.spec.js` or `simple-mic-test.spec.js` (or equivalent) with the app pointed at the OpenAI proxy (`VITE_OPENAI_PROXY_ENDPOINT`). No new test file required if an existing audio test is parameterized by proxy endpoint or run twice (Deepgram proxy, then OpenAI proxy).
-- **Current status**: The OpenAI proxy does **not** yet implement the audio input path (component sends binary; proxy must convert to base64 and send `input_audio_buffer.append` / `commit` per [API-DISCONTINUITIES.md](./API-DISCONTINUITIES.md)). The basic audio E2E test is **skipped** in `openai-proxy-e2e.spec.js` until the proxy implements this path.
+- **Current status**: **Implemented.** The OpenAI proxy implements the audio input path (component sends binary; proxy converts to base64 and sends `input_audio_buffer.append` / `commit` per [API-DISCONTINUITIES.md](./API-DISCONTINUITIES.md)). The basic audio E2E test in `openai-proxy-e2e.spec.js` runs when the proxy is available and audio fixtures exist.
 
 ### 4. Simple function calling test
 
@@ -69,7 +73,7 @@ Use **VITE_OPENAI_PROXY_ENDPOINT** (and optional skip when unset) so these run o
 
 ## Acceptance
 
-- All E2E tests in the OpenAI proxy suite pass when the proxy is running and `VITE_OPENAI_PROXY_ENDPOINT` is set.
+- All E2E tests in the OpenAI proxy suite pass when the proxy is running and `VITE_OPENAI_PROXY_ENDPOINT` is set. **Current:** 10 tests (connection, greeting 1b, single message, multi-turn, reconnection, basic audio, simple function calling, injectUserMessage stability, error handling, reconnection with context); 9 pass, 1 flaky (reconnection with context).
 - The existing openai-inject-connection-stability test remains and passes.
-- At least: connection, single message, **basic audio** (send recorded audio → agent response text appears in `[data-testid="agent-response"]`; in voice-commerce that is a Message Bubble), **simple function calling** (response in `[data-testid="agent-response"]`), multi-turn, and reconnection are covered by E2E tests (reused where possible; tests need not be new).
+- At least: connection, **greeting** (proxy injects greeting → component shows `[data-testid="greeting-sent"]`), single message, **basic audio** (send recorded audio → agent response text appears in `[data-testid="agent-response"]`), **simple function calling** (response in `[data-testid="agent-response"]`), multi-turn, and reconnection are covered by E2E tests (reused where possible; tests need not be new).
 - Where possible, the same test files run against both Deepgram and OpenAI proxies by pointing the environment at the other proxy.

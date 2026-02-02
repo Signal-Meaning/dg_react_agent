@@ -15,6 +15,8 @@ import {
   mapFunctionCallArgumentsDoneToConversationText,
   mapFunctionCallResponseToConversationItemCreate,
   mapContextMessageToConversationItemCreate,
+  mapGreetingToConversationItemCreate,
+  mapGreetingToConversationText,
   mapErrorToComponentError,
   binaryToInputAudioBufferAppend,
 } from '../scripts/openai-proxy/translator';
@@ -253,6 +255,29 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       const out = mapContextMessageToConversationItemCreate('assistant', 'Hi there!');
       expect(out.item.role).toBe('assistant');
       expect(out.item.content[0].text).toBe('Hi there!');
+    });
+  });
+
+  describe('6a. Greeting (Issue #381 – after session.updated, inject as assistant message)', () => {
+    it('maps greeting string to conversation.item.create (assistant message)', () => {
+      const out = mapGreetingToConversationItemCreate('Hello! How can I assist you today?');
+      expect(out).toEqual({
+        type: 'conversation.item.create',
+        item: {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'input_text', text: 'Hello! How can I assist you today?' }],
+        },
+      });
+    });
+
+    it('maps greeting string to ConversationText (assistant) for component', () => {
+      const out = mapGreetingToConversationText('Hi there!');
+      expect(out).toEqual({
+        type: 'ConversationText',
+        role: 'assistant',
+        content: 'Hi there!',
+      });
     });
   });
 

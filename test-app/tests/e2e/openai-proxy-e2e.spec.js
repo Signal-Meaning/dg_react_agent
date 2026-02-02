@@ -45,6 +45,12 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     }
   });
 
+  test('1b. Greeting – proxy injects greeting; component shows greeting-sent (Issue #381)', async ({ page }) => {
+    await setupTestPageWithOpenAIProxy(page);
+    await establishConnectionViaText(page, 30000);
+    await page.waitForSelector('[data-testid="greeting-sent"]', { timeout: 10000 });
+  });
+
   test('2. Single message – inject user message, receive agent response in Message Bubble', async ({ page }) => {
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);

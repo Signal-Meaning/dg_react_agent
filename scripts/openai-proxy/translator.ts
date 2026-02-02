@@ -14,6 +14,8 @@ export interface ComponentSettings {
     speak?: { provider?: { voice?: string } };
     /** Conversation context for session continuity (Deepgram: in Settings; OpenAI: via conversation.item.create) */
     context?: { messages?: Array<{ type?: string; role: 'user' | 'assistant'; content: string }> };
+    /** Optional greeting; proxy injects as initial assistant message after session.updated (Issue #381) */
+    greeting?: string;
   };
 }
 
@@ -50,6 +52,26 @@ export function mapContextMessageToConversationItemCreate(role: 'user' | 'assist
   return {
     type: 'conversation.item.create',
     item: { type: 'message', role, content: [{ type: 'input_text', text: content ?? '' }] },
+  };
+}
+
+/**
+ * Map greeting string → OpenAI conversation.item.create (assistant message).
+ * Used after session.updated to inject component-provided greeting into OpenAI conversation (Issue #381).
+ */
+export function mapGreetingToConversationItemCreate(greeting: string): OpenAIConversationItemCreate {
+  return mapContextMessageToConversationItemCreate('assistant', greeting ?? '');
+}
+
+/**
+ * Map greeting string → component ConversationText (assistant).
+ * Sent to component after session.updated so UI shows greeting (Issue #381).
+ */
+export function mapGreetingToConversationText(greeting: string): ComponentConversationText {
+  return {
+    type: 'ConversationText',
+    role: 'assistant',
+    content: greeting ?? '',
   };
 }
 

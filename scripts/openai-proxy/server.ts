@@ -28,6 +28,8 @@ import {
   mapFunctionCallArgumentsDoneToConversationText,
   mapFunctionCallResponseToConversationItemCreate,
   mapContextMessageToConversationItemCreate,
+  mapGreetingToConversationItemCreate,
+  mapGreetingToConversationText,
   mapErrorToComponentError,
   binaryToInputAudioBufferAppend,
 } from './translator';
@@ -99,6 +101,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     const clientMessageQueue: Buffer[] = [];
     let audioCommitTimer: ReturnType<typeof setTimeout> | null = null;
     let hasPendingAudio = false;
+    /** Greeting from Settings; injected after session.updated (Issue #381) */
+    let storedGreeting: string | undefined;
 
     const scheduleAudioCommit = () => {
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
@@ -182,6 +186,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               upstream.send(JSON.stringify(itemCreate));
             }
           }
+          const g = settings.agent?.greeting;
+          storedGreeting = typeof g === 'string' && g.trim().length > 0 ? g : undefined;
         } else if (msg.type === 'FunctionCallResponse') {
           const itemCreate = mapFunctionCallResponseToConversationItemCreate(
             msg as Parameters<typeof mapFunctionCallResponseToConversationItemCreate>[0]
@@ -275,6 +281,19 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         if (msg.type === 'session.updated' || msg.type === 'session.created') {
           const settingsApplied = mapSessionUpdatedToSettingsApplied(msg as Parameters<typeof mapSessionUpdatedToSettingsApplied>[0]);
           clientWs.send(JSON.stringify(settingsApplied));
+          if (storedGreeting) {
+            upstream.send(JSON.stringify(mapGreetingToConversationItemCreate(storedGreeting)));
+            clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting)));
+            if (debug) {
+              emitLog({
+                severityNumber: SeverityNumber.INFO,
+                severityText: 'INFO',
+                body: 'greeting injected',
+                attributes: { [ATTR_CONNECTION_ID]: connId },
+              });
+            }
+            storedGreeting = undefined;
+          }
         } else if (msg.type === 'response.output_text.done') {
           const m = msg as { type: string; text?: string };
           if (debug || (m.text && m.text.trim().startsWith('Function call:'))) {

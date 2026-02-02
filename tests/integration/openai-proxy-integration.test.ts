@@ -403,4 +403,46 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     });
     client.on('error', done);
   });
+
+  /**
+   * Greeting (Issue #381): When Settings includes agent.greeting, after session.updated the proxy
+   * sends SettingsApplied, then injects the greeting as ConversationText (assistant) to the client
+   * and as conversation.item.create (assistant) to upstream.
+   */
+  it('injects agent.greeting as ConversationText and conversation.item.create after session.updated', (done) => {
+    mockReceived.length = 0;
+    receivedConversationItems.length = 0;
+    const greeting = 'Hello! How can I help you today?';
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: { think: { prompt: 'Hi' }, greeting },
+      }));
+    });
+    client.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string };
+      if (msg.type === 'SettingsApplied') {
+        // After SettingsApplied we expect proxy to send ConversationText (assistant, greeting)
+        // and to send conversation.item.create (assistant, greeting) to upstream.
+      }
+      if (msg.type === 'ConversationText' && msg.role === 'assistant' && msg.content === greeting) {
+        expect(msg.content).toBe(greeting);
+        // Defer so upstream (mock) has processed proxy's conversation.item.create
+        setImmediate(() => {
+          const greetingItem = receivedConversationItems.find(
+            (m) => m.item?.type === 'message' && m.item?.role === 'assistant'
+          );
+          expect(greetingItem).toBeDefined();
+          const textContent = greetingItem?.item && 'content' in greetingItem.item && Array.isArray(greetingItem.item.content)
+            ? greetingItem.item.content[0]?.text
+            : undefined;
+          expect(textContent).toBe(greeting);
+          client.close();
+          done();
+        });
+      }
+    });
+    client.on('error', done);
+  });
 });

@@ -9,7 +9,7 @@
 
 ## Progress overview
 
-**[→ PROGRESS.md](./PROGRESS.md)** — Single overview of progress against Issue #381: phase status, test counts (unit 32, integration 11, E2E), what’s done vs remaining, and links to all other docs.
+**[→ PROGRESS.md](./PROGRESS.md)** — Single overview of progress against Issue #381: phase status, test counts (unit 28, integration 12, E2E), what’s done vs remaining, and links to all other docs.
 
 **[→ RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md)** — Phase 5: environment variables, how to run the proxy, and how to run unit, integration, and E2E tests.
 
@@ -17,8 +17,8 @@
 
 ## Progress (2026-02-02) — detail
 
-- **Proxy unit tests** (`tests/openai-proxy.test.ts`): 32 tests. All translator mappings covered. Run: `npm run test -- tests/openai-proxy.test.ts`.
-- **Proxy integration tests** (`tests/integration/openai-proxy-integration.test.ts`): 11 tests. Function-call round-trip, FCR then CT order, transcript-only path (no FCR), transcript then .done order, user echo, context in Settings. Run: `npm run test -- tests/integration/openai-proxy-integration.test.ts`. See [INTEGRATION-TEST-PLAN.md](./INTEGRATION-TEST-PLAN.md).
+- **Proxy unit tests** (`tests/openai-proxy.test.ts`): 28 tests. All translator mappings covered (incl. greeting). Run: `npm run test -- tests/openai-proxy.test.ts`.
+- **Proxy integration tests** (`tests/integration/openai-proxy-integration.test.ts`): 12 tests. Function-call round-trip, FCR then CT order, transcript-only path (no FCR), transcript then .done order, user echo, context in Settings, **greeting** (agent.greeting → ConversationText + conversation.item.create after session.updated). Run: `npm run test -- tests/integration/openai-proxy-integration.test.ts`. See [INTEGRATION-TEST-PLAN.md](./INTEGRATION-TEST-PLAN.md).
 - **E2E – context retention**: context-retention-agent-usage and context-retention-with-function-calling **pass** when running against OpenAI proxy (proxy running; real API sends `response.function_call_arguments.done` for the function-calling spec). Test app adds user message optimistically in `handleTextSubmit`; context retained after reconnect.
 - **E2E – declarative-props (Deepgram function-call)**: Tests **skip** when OpenAI proxy; when run (e.g. Deepgram), they require a real function call. OpenAI flow covered by openai-proxy-e2e “Simple function calling” and integration tests.
 - **E2E – Deepgram-only specs**: backend-proxy-mode (Deepgram), callback-test (Deepgram transcript/VAD) skip when OpenAI proxy. See [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md).
@@ -66,12 +66,12 @@ Use this checklist to confirm the issue is complete before closing.
   **Done**: Short "Proxy contract" comment (and link to [API-DISCONTINUITIES.md](./API-DISCONTINUITIES.md)) in `src/types/connection.ts` and `src/types/agent.ts`.
 
 - [x] **Phase 1 – Unit tests and proxy core logic**  
-  Unit tests for translation (Settings → session.update, InjectUserMessage → conversation.item.create, server events → SettingsApplied / ConversationText / Error) pass.  
-  **Done**: 32 tests in `tests/openai-proxy.test.ts`. **Ref**: [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md#phase-1).
+  Unit tests for translation (Settings → session.update, InjectUserMessage → conversation.item.create, server events → SettingsApplied / ConversationText / Error, greeting) pass.  
+  **Done**: 28 tests in `tests/openai-proxy.test.ts`. **Ref**: [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md#phase-1).
 
 - [x] **Phase 2 – Integration tests and WebSocket server**  
-  Proxy runs as a WebSocket server; integration tests (session bootstrap, InjectUserMessage round-trip, component contract) pass.  
-  **Done**: 11 tests in `tests/integration/openai-proxy-integration.test.ts` (function-call round-trip, transcript-only path, user echo, context in Settings). **Ref**: [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md#phase-2).
+  Proxy runs as a WebSocket server; integration tests (session bootstrap, InjectUserMessage round-trip, component contract, greeting injection) pass.  
+  **Done**: 12 tests in `tests/integration/openai-proxy-integration.test.ts` (function-call round-trip, transcript-only path, user echo, context in Settings, greeting). **Ref**: [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md#phase-2).
 
 - [x] **Phase 3 – E2E tests and full stack**  
   Test-app works end-to-end with the OpenAI proxy; E2E suite (connection, single message, multi-turn, reconnection, basic audio, function calling, error handling) passes when `VITE_OPENAI_PROXY_ENDPOINT` is set.  
@@ -85,6 +85,6 @@ Use this checklist to confirm the issue is complete before closing.
   [RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md) describes proxy env, how to run the proxy, and how to run unit, integration, and E2E tests; CI runs proxy unit and integration tests in existing Jest job.  
   **Ref**: [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md#phase-5).
 
-- [ ] **Greeting**  
-  The component is provided a greeting (e.g. in agent options) and sends it in **Settings**. The proxy must **use** that greeting: after session is ready, inject the component-provided greeting as an initial assistant message (e.g. via **conversation.item.create**) so the component receives it.  
-  **Ref**: [API-DISCONTINUITIES.md](./API-DISCONTINUITIES.md) section 6 (Greeting).
+- [x] **Greeting**  
+  The component is provided a greeting (e.g. in agent options) and sends it in **Settings**. The proxy **uses** that greeting: after **session.updated**, injects the greeting via **conversation.item.create** (upstream) and **ConversationText** (component).  
+  **Done**: Translator `mapGreetingToConversationItemCreate` / `mapGreetingToConversationText`; server stores `agent.greeting` on Settings and injects after session.updated. Unit + integration tests; E2E validates greeting-sent when connecting through proxy. **Ref**: [API-DISCONTINUITIES.md](./API-DISCONTINUITIES.md) section 6 (Greeting).

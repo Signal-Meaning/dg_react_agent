@@ -1,8 +1,10 @@
 # E2E Tests: Priority Run List (OpenAI Proxy Change)
 
-**Scope:** This document covers **only the OpenAI proxy E2E suite** — 9 tests in 2 spec files (openai-proxy-e2e.spec.js, openai-inject-connection-stability.spec.js). The repo has many other E2E specs (Deepgram-only or backend-agnostic); those are run separately and are described in [E2E-BACKEND-MATRIX.md](../../test-app/tests/e2e/E2E-BACKEND-MATRIX.md) and in `test-app/tests/e2e/`.
+**Scope:** This document covers **only the OpenAI proxy E2E suite** — **10 tests** in 2 spec files (openai-proxy-e2e.spec.js, openai-inject-connection-stability.spec.js), plus context-retention-with-function-calling when run with the proxy. The repo has many other E2E specs (Deepgram-only or backend-agnostic); those are run separately and are described in [E2E-BACKEND-MATRIX.md](../../test-app/tests/e2e/E2E-BACKEND-MATRIX.md) and in `test-app/tests/e2e/`.
 
-Run these 8 tests **one at a time** in this order when validating the OpenAI proxy change (Issue #381). Tests are ordered from **most likely to fail** (new/changed behavior) to **least likely** (existing flows).
+**Note on `e2e-remaining-run.log`:** That file is from a **previous full E2E run** (interrupted). The **priority list** in this document is the source of truth for validating the OpenAI proxy (Issue #381). You can ignore or archive the log; run the Tier 1 + Tier 2 + Greeting tests below to validate the proxy.
+
+Run these tests **one at a time** in the order below when validating the OpenAI proxy change (Issue #381). Tests are ordered from **most likely to fail** (new/changed behavior) to **least likely** (existing flows).
 
 **Prerequisites:**
 - **OpenAI proxy running:** `npm run openai-proxy` (from project root). The proxy is **HTTP** by default (`ws://localhost:8080/openai`). Restart the proxy if you restarted the dev server or changed env.
@@ -24,6 +26,7 @@ Run these 8 tests **one at a time** in this order when validating the OpenAI pro
 | 2 | Simple function calling | `test-app/tests/e2e/openai-proxy-e2e.spec.js` | pass |
 | 3 | injectUserMessage connection stability | `test-app/tests/e2e/openai-inject-connection-stability.spec.js` | pass |
 | 4 | Connection | `test-app/tests/e2e/openai-proxy-e2e.spec.js` | pass |
+| 4b | **Greeting** | `test-app/tests/e2e/openai-proxy-e2e.spec.js` | pass (proxy injects greeting; component shows greeting-sent) |
 | 5 | Single message | `test-app/tests/e2e/openai-proxy-e2e.spec.js` | pass |
 | 6 | Multi-turn | `test-app/tests/e2e/openai-proxy-e2e.spec.js` | pass |
 | 7 | Reconnection | `test-app/tests/e2e/openai-proxy-e2e.spec.js` | pass |
@@ -31,7 +34,7 @@ Run these 8 tests **one at a time** in this order when validating the OpenAI pro
 | 9 | Reconnection with context | `test-app/tests/e2e/openai-proxy-e2e.spec.js` | flaky (passed on retry) |
 | 10 | Context retention with function calling | `test-app/tests/e2e/context-retention-with-function-calling.spec.js` | pass (proxy running; API sends function_call_arguments.done) |
 
-**Summary:** 10 run, 9 passed, 1 flaky. context-retention-with-function-calling passes when proxy is running and real API sends `response.function_call_arguments.done`.
+**Summary:** Priority list **complete**. 10 run (incl. Greeting 4b), 9 passed, 1 flaky. context-retention-with-function-calling passes when proxy is running and real API sends `response.function_call_arguments.done`. Greeting (1b) validates proxy injects `agent.greeting` as ConversationText after session.updated; component shows `[data-testid="greeting-sent"]`.
 
 ---
 
@@ -88,6 +91,7 @@ Same spec; connection, messaging, and reconnection. Failures here indicate regre
 | # | Spec | Test (grep) | Why |
 |---|------|-------------|-----|
 | 4 | `openai-proxy-e2e.spec.js` | `Connection` | Connect + settings; baseline |
+| 4b | `openai-proxy-e2e.spec.js` | `1b. Greeting` | Proxy injects greeting after session.updated; component shows greeting-sent (Issue #381) |
 | 5 | `openai-proxy-e2e.spec.js` | `Single message` | One user message → one agent response |
 | 6 | `openai-proxy-e2e.spec.js` | `Multi-turn` | Sequential messages and responses |
 | 7 | `openai-proxy-e2e.spec.js` | `Reconnection` | Disconnect then send; reconnects and gets response |
@@ -97,6 +101,9 @@ Same spec; connection, messaging, and reconnection. Failures here indicate regre
 ```bash
 # 4. Connection
 HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js --grep "Connection"
+
+# 4b. Greeting (proxy injects greeting; component shows greeting-sent)
+HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js --grep "1b. Greeting"
 
 # 5. Single message
 HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js --grep "Single message"
@@ -115,7 +122,7 @@ HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright tes
 
 ## Tier 3: Run full OpenAI proxy suite
 
-Once Tier 1 and 2 pass, run the full OpenAI proxy suite in one go (9 tests):
+Once Tier 1 and 2 pass, run the full OpenAI proxy suite in one go (10 tests, incl. Greeting):
 
 ```bash
 HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js test-app/tests/e2e/openai-inject-connection-stability.spec.js
@@ -197,7 +204,7 @@ These are the **remaining** E2E specs (all except the 8 OpenAI-proxy tests above
 
 **Summary (partial run):** From the interrupted run (~80 of 218 tests): **8 passed**, **47 not run**; with post-fix targeted runs: **context-retention-agent-usage** (2 tests) **pass**, **declarative-props function-call** **skip** when OpenAI, **context-retention-with-function-calling** **pass** when proxy is running and real API sends `response.function_call_arguments.done`. VAD specs (52–60) can be deferred.
 
-**Remaining pass status:** Full run with the OpenAI proxy was started; it was interrupted (timeout) after ~80 tests. Results above are from `docs/issues/ISSUE-381/e2e-remaining-run.log`. **Passed (8):** agent-state-transitions, agent-options-resend-issue311, audio-odd-length-buffer, component-remount-reconnection, component-remount-customer-scenario, component-remount-detection, api-key-validation, baseurl-test. **Skipped when OpenAI proxy:** backend-proxy-mode, callback-test (transcript/VAD), **declarative-props** (function-call tests — skip when OpenAI; use openai-proxy-e2e "Simple function calling" for OpenAI). **Targeted run (post proxy fixes, 2026-02-02):** **context-retention-agent-usage** — **pass** (setupTestPageWithOpenAIProxy when env set; test app optimistic user message in handleTextSubmit + dedupe in handleUserMessage). **context-retention "verify context format"** — pass. **declarative-props function-call** — **skip** when OpenAI proxy; when run (e.g. Deepgram), test requires real function call (no fake pass). **context-retention-with-function-calling** — **pass** when proxy is running and real API sends `response.function_call_arguments.done` (FCR received, handler invoked, context retained after reconnect). **openai-proxy-e2e test 9 (Reconnection with context)** — flaky (passed on retry). Proxy unit (32) and integration (11) tests: function-call round-trip, transcript-only path, user echo, context in Settings. To run full E2E pass: `HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npm run test:e2e:log`.
+**Remaining pass status:** The **priority list** (Tier 1 + Tier 2 + Greeting) is **complete** and is the source of truth for Issue #381. The file `e2e-remaining-run.log` is from an earlier full E2E run (interrupted); ignore or archive it. **OpenAI proxy suite (10 tests):** Connection, Greeting (1b), Single message, Multi-turn, Reconnection, Error handling, Basic audio, Simple function calling, injectUserMessage stability, Reconnection with context (flaky). **Context retention:** context-retention-agent-usage and context-retention-with-function-calling **pass** when proxy running. **Skipped when OpenAI:** backend-proxy-mode, callback-test (transcript/VAD), declarative-props (function-call — use openai-proxy-e2e "Simple function calling"). Proxy unit (28) and integration (12) tests include greeting. To run full OpenAI proxy suite: `HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js test-app/tests/e2e/openai-inject-connection-stability.spec.js`.
 
 ---
 
@@ -242,12 +249,13 @@ Investigation order: **1 → 2 → 3 → 4 → 5** (declarative-props first, the
 
 ---
 
-## Quick reference: all Tier 1 + 2 + new test in order
+## Quick reference: all Tier 1 + 2 + Greeting in order
 
 1. Basic audio  
 2. Simple function calling  
 3. injectUserMessage connection stability  
 4. Connection  
+4b. **Greeting** (1b. Greeting – proxy injects greeting; component shows greeting-sent)  
 5. Single message  
 6. Multi-turn  
 7. Reconnection  
