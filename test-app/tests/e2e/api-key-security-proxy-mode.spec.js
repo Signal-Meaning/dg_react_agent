@@ -21,10 +21,10 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
+import { pathWithQuery, getDeepgramProxyParams } from './helpers/test-helpers.mjs';
 import { setupTestPage, waitForConnection } from './helpers/test-helpers.js';
 
-const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
+const PROXY_ENDPOINT = getDeepgramProxyParams().proxyEndpoint;
 // Proxy mode is now the default for e2e tests
 // Only skip if explicitly set to false
 const IS_PROXY_MODE = process.env.USE_PROXY_MODE !== 'false';
@@ -134,7 +134,7 @@ test.describe('API Key Security - Proxy Mode', () => {
 
   test.describe('Bundle Inspection', () => {
     test('should not contain API key in JavaScript bundle source', async ({ page }) => {
-      const testUrl = buildUrlWithParams(BASE_URL, {
+      const testUrl = pathWithQuery({
         connectionMode: 'proxy',
         proxyEndpoint: PROXY_ENDPOINT
       });
@@ -164,7 +164,7 @@ test.describe('API Key Security - Proxy Mode', () => {
     });
 
     test('should not expose API key in environment variable references', async ({ page }) => {
-      const testUrl = buildUrlWithParams(BASE_URL, {
+      const testUrl = pathWithQuery({
         connectionMode: 'proxy',
         proxyEndpoint: PROXY_ENDPOINT
       });
@@ -194,7 +194,7 @@ test.describe('API Key Security - Proxy Mode', () => {
 
   test.describe('Network Request Inspection', () => {
     test('should not include API key in WebSocket connection URLs', async ({ page }) => {
-      const testUrl = buildUrlWithParams(BASE_URL, {
+      const testUrl = pathWithQuery({
         connectionMode: 'proxy',
         proxyEndpoint: PROXY_ENDPOINT
       });
@@ -252,7 +252,7 @@ test.describe('API Key Security - Proxy Mode', () => {
     });
 
     test('should not include API key in WebSocket protocol array', async ({ page }) => {
-      const testUrl = buildUrlWithParams(BASE_URL, {
+      const testUrl = pathWithQuery({
         connectionMode: 'proxy',
         proxyEndpoint: PROXY_ENDPOINT
       });
@@ -308,7 +308,7 @@ test.describe('API Key Security - Proxy Mode', () => {
     });
 
     test('should connect to proxy endpoint, not Deepgram endpoint', async ({ page }) => {
-      const testUrl = buildUrlWithParams(BASE_URL, {
+      const testUrl = pathWithQuery({
         connectionMode: 'proxy',
         proxyEndpoint: PROXY_ENDPOINT
       });
@@ -339,7 +339,7 @@ test.describe('API Key Security - Proxy Mode', () => {
 
   test.describe('DOM and Source Code Inspection', () => {
     test('should not expose API key in DOM elements', async ({ page }) => {
-      const testUrl = buildUrlWithParams(BASE_URL, {
+      const testUrl = pathWithQuery({
         connectionMode: 'proxy',
         proxyEndpoint: PROXY_ENDPOINT
       });
@@ -370,7 +370,7 @@ test.describe('API Key Security - Proxy Mode', () => {
     });
 
     test('should not expose API key in React DevTools state', async ({ page }) => {
-      const testUrl = buildUrlWithParams(BASE_URL, {
+      const testUrl = pathWithQuery({
         connectionMode: 'proxy',
         proxyEndpoint: PROXY_ENDPOINT
       });
@@ -410,7 +410,7 @@ test.describe('API Key Security - Proxy Mode', () => {
 
   test.describe('Console and Log Inspection', () => {
     test('should not log API key to console', async ({ page }) => {
-      const testUrl = buildUrlWithParams(BASE_URL, {
+      const testUrl = pathWithQuery({
         connectionMode: 'proxy',
         proxyEndpoint: PROXY_ENDPOINT
       });
@@ -455,7 +455,7 @@ test.describe('API Key Security - Proxy Mode', () => {
     });
 
     test('should not expose API key in error messages', async ({ page }) => {
-      const testUrl = buildUrlWithParams(BASE_URL, {
+      const testUrl = pathWithQuery({
         connectionMode: 'proxy',
         proxyEndpoint: 'ws://localhost:9999/invalid-proxy' // Invalid endpoint to trigger errors
       });
@@ -495,7 +495,7 @@ test.describe('API Key Security - Proxy Mode', () => {
 
   test.describe('Proxy Backend Validation', () => {
     test('should verify proxy endpoint is used instead of direct Deepgram connection', async ({ page }) => {
-      const testUrl = buildUrlWithParams(BASE_URL, {
+      const testUrl = pathWithQuery({
         connectionMode: 'proxy',
         proxyEndpoint: PROXY_ENDPOINT
       });
@@ -550,7 +550,7 @@ test.describe('API Key Security - Proxy Mode', () => {
     });
 
     test('should verify connection mode indicator shows proxy mode', async ({ page }) => {
-      const testUrl = buildUrlWithParams(BASE_URL, {
+      const testUrl = pathWithQuery({
         connectionMode: 'proxy',
         proxyEndpoint: PROXY_ENDPOINT
       });

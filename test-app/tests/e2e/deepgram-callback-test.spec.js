@@ -1,10 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
 import { getVADState } from './fixtures/vad-helpers.js';
-import { 
-  BASE_URL, 
-  buildUrlWithParams
-} from './helpers/test-helpers.mjs';
+import { pathWithQuery } from './helpers/test-helpers.mjs';
 import {
   MicrophoneHelpers,
   sendTextMessage,
@@ -37,8 +34,8 @@ test.describe('Callback Test Suite', () => {
     // This ensures permissions are available when the page loads
     await context.grantPermissions(['microphone']);
     
-    // Navigate to test app using BASE_URL constant
-    await page.goto(buildUrlWithParams(BASE_URL, { 'test-mode': 'true' }));
+    // Navigate using relative path so baseURL (http/https) is applied
+    await page.goto(pathWithQuery({ 'test-mode': 'true' }));
 
     // Capture console logs for debugging (simplified approach)
     page.on('console', msg => {

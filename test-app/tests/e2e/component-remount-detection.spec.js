@@ -13,10 +13,7 @@
 import { test, expect } from '@playwright/test';
 import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
-import { 
-  BASE_URL,
-  buildUrlWithParams
-} from './helpers/test-helpers.mjs';
+import { pathWithQuery } from './helpers/test-helpers.mjs';
 
 test.describe('Component Remount Detection (Issue #276)', () => {
   
@@ -69,7 +66,7 @@ test.describe('Component Remount Detection (Issue #276)', () => {
     });
     
     // Navigate to test app first (MicrophoneHelpers will also navigate, but we need to set up console logging first)
-    await page.goto(buildUrlWithParams(BASE_URL, { 'test-mode': 'true' }));
+    await page.goto(pathWithQuery({ 'test-mode': 'true' }));
     
     // Use MicrophoneHelpers for reliable microphone activation and connection
     // This handles: component ready, mic click, connection, greeting

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
-import { BASE_URL, buildUrlWithParams } from './helpers/test-helpers.mjs';
+import { APP_ROOT, pathWithQuery } from './helpers/test-helpers.mjs';
 
 /**
  * E2E Tests for WebSocket Connection Validation
@@ -27,7 +27,7 @@ import { BASE_URL, buildUrlWithParams } from './helpers/test-helpers.mjs';
 
 test.describe('WebSocket Connection Validation', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     
     // Wait for component to initialize
@@ -93,7 +93,7 @@ test.describe('WebSocket Connection Validation', () => {
 
   test('should handle WebSocket connection errors gracefully', async ({ page }) => {
     // Try to connect without API key (should handle gracefully)
-    await page.goto(buildUrlWithParams(BASE_URL, { 'test-mode': 'true' }));
+    await page.goto(pathWithQuery({ 'test-mode': 'true' }));
     await page.waitForLoadState('networkidle');
     
     // The component should still render even without valid API key

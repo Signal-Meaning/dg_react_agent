@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { BASE_URL, buildUrlWithParams } from './helpers/test-helpers.mjs';
+import { APP_ROOT, pathWithQuery } from './helpers/test-helpers.mjs';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
 
 /**
@@ -23,7 +23,7 @@ import { MicrophoneHelpers } from './helpers/test-helpers.js';
 
 test.describe('Microphone Control', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     
     // Note: Component doesn't connect without a valid API key
@@ -155,7 +155,7 @@ test.describe('Microphone Control', () => {
 
   test('should handle microphone control via props', async ({ page }) => {
     // Navigate to test page with microphoneEnabled=true (if test app supports URL params)
-    await page.goto(buildUrlWithParams(BASE_URL, { microphoneEnabled: 'true' }));
+    await page.goto(pathWithQuery({ microphoneEnabled: 'true' }));
     await page.waitForLoadState('networkidle');
     
     // Wait for component to be ready (lazy initialization)
@@ -195,7 +195,7 @@ test.describe('Microphone Control', () => {
     await context.grantPermissions(['microphone']);
     
     // Navigate and wait for component ready
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true', { timeout: 5000 });
     

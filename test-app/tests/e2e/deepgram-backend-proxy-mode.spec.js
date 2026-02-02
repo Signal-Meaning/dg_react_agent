@@ -24,10 +24,10 @@
 
 import { test, expect } from '@playwright/test';
 import { sendTextMessage, waitForConnection } from '../utils/test-helpers';
-import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
+import { pathWithQuery, getProxyConfig, getDeepgramProxyParams } from './helpers/test-helpers.mjs';
 import { skipIfOpenAIProxy } from './helpers/test-helpers.js';
 
-const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
+const PROXY_ENDPOINT = getDeepgramProxyParams().proxyEndpoint;
 const IS_PROXY_MODE = process.env.USE_PROXY_MODE === 'true';
 
 test.describe('Backend Proxy Mode', () => {
@@ -109,9 +109,8 @@ test.describe('Backend Proxy Mode', () => {
   });
 
   test('should connect through configured endpoint (proxy or direct)', async ({ page }) => {
-    // buildUrlWithParams automatically adds proxy config if USE_PROXY_MODE is set
-    // If not set, it will use direct mode (no proxy params)
-    const testUrl = buildUrlWithParams(BASE_URL);
+    const proxyConfig = getProxyConfig();
+    const testUrl = Object.keys(proxyConfig).length ? pathWithQuery(proxyConfig) : pathWithQuery();
     await page.goto(testUrl);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
@@ -136,9 +135,8 @@ test.describe('Backend Proxy Mode', () => {
   });
 
   test('should work with agent responses (proxy or direct mode)', async ({ page }) => {
-    // buildUrlWithParams automatically adds proxy config if USE_PROXY_MODE is set
-    // If not set, it will use direct mode (no proxy params)
-    const testUrl = buildUrlWithParams(BASE_URL);
+    const proxyConfig = getProxyConfig();
+    const testUrl = Object.keys(proxyConfig).length ? pathWithQuery(proxyConfig) : pathWithQuery();
     await page.goto(testUrl);
     await page.waitForLoadState('networkidle');
     
@@ -271,8 +269,8 @@ test.describe('Backend Proxy Mode', () => {
   });
 
   test('should handle reconnection (proxy or direct mode)', async ({ page }) => {
-    // buildUrlWithParams automatically adds proxy config if USE_PROXY_MODE is set
-    const testUrl = buildUrlWithParams(BASE_URL);
+    const proxyConfig = getProxyConfig();
+    const testUrl = Object.keys(proxyConfig).length ? pathWithQuery(proxyConfig) : pathWithQuery();
     await page.goto(testUrl);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
@@ -306,7 +304,7 @@ test.describe('Backend Proxy Mode', () => {
     }
     // Configure component via URL query parameters with invalid endpoint
     const invalidEndpoint = 'ws://localhost:9999/invalid-proxy';
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    const testUrl = pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: invalidEndpoint
     });

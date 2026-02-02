@@ -5,6 +5,11 @@
  * and consistent testing patterns across the test suite.
  */
 
+import { APP_ROOT, pathWithQuery } from './app-paths.mjs';
+
+/** Re-export for navigation: use page.goto(APP_ROOT) or page.goto(pathWithQuery(params)) so baseURL is applied */
+export { APP_ROOT, pathWithQuery };
+
 /**
  * Base URL for test app navigation (full URL for Origin/headers only).
  * For page.goto() use relative paths from app-paths.mjs so Playwright's baseURL is applied.
@@ -12,17 +17,22 @@
  * Matches the baseURL configured in playwright.config.mjs.
  */
 const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
+/** WebSocket scheme for proxy: wss when app is HTTPS, ws when HTTP. Must match Playwright proxyBase. */
+const wsScheme = useHttps ? 'wss' : 'ws';
+const proxyHost = 'localhost:8080';
+
 export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL
   || (useHttps ? 'https://localhost:5173' : (process.env.VITE_BASE_URL || 'http://localhost:5173'));
 
 /**
- * Get proxy configuration from environment variables
+ * Get proxy configuration from environment variables.
+ * Proxy endpoint scheme matches app scheme (wss when HTTPS, ws when HTTP).
  * @returns {Record<string, string>} Proxy configuration params or empty object
  */
 export function getProxyConfig() {
   // Check if proxy mode is enabled via environment variable
   if (process.env.USE_PROXY_MODE === 'true') {
-    const proxyEndpoint = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
+    const proxyEndpoint = process.env.VITE_PROXY_ENDPOINT || process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || `${wsScheme}://${proxyHost}/deepgram-proxy`;
     const proxyAuthToken = process.env.VITE_PROXY_AUTH_TOKEN || '';
     
     const config = {
@@ -47,20 +57,20 @@ export function getProxyConfig() {
 export function getDeepgramProxyParams() {
   return {
     connectionMode: 'proxy',
-    proxyEndpoint: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy',
+    proxyEndpoint: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || process.env.VITE_PROXY_ENDPOINT || `${wsScheme}://${proxyHost}/deepgram-proxy`,
   };
 }
 
 /**
  * Params for OpenAI proxy (used by tests that target the OpenAI Realtime proxy).
- * Uses VITE_OPENAI_PROXY_ENDPOINT; default ws://localhost:8080/openai.
+ * Uses VITE_OPENAI_PROXY_ENDPOINT; default scheme matches app (wss when HTTPS, ws when HTTP).
  * See docs/issues/ISSUE-381/E2E-TEST-PLAN.md.
  * @returns {Record<string, string>} connectionMode and proxyEndpoint
  */
 export function getOpenAIProxyParams() {
   return {
     connectionMode: 'proxy',
-    proxyEndpoint: process.env.VITE_OPENAI_PROXY_ENDPOINT || 'ws://localhost:8080/openai',
+    proxyEndpoint: process.env.VITE_OPENAI_PROXY_ENDPOINT || `${wsScheme}://${proxyHost}/openai`,
   };
 }
 

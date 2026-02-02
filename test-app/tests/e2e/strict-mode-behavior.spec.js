@@ -17,7 +17,7 @@
 
 import { test, expect } from '@playwright/test';
 import { SELECTORS } from './helpers/test-helpers.js';
-import { BASE_URL, buildUrlWithParams } from './helpers/test-helpers.mjs';
+import { APP_ROOT, pathWithQuery } from './helpers/test-helpers.mjs';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
 
 test.describe('StrictMode Behavior Validation', () => {
@@ -43,7 +43,7 @@ test.describe('StrictMode Behavior Validation', () => {
     });
     
     // Navigate to test app (with StrictMode enabled in main.tsx)
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 10000 });
     
     // Use proper microphone activation sequence (Issue #188)
@@ -115,7 +115,7 @@ test.describe('StrictMode Behavior Validation', () => {
     });
     
     // Enable debug mode to see component initialization logs
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    const testUrl = pathWithQuery({
       'test-mode': 'true',
       'debug': 'true'
     });
@@ -167,7 +167,7 @@ test.describe('StrictMode Behavior Validation', () => {
       }
     });
     
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 10000 });
     
     // Establish connection
@@ -199,7 +199,7 @@ test.describe('StrictMode Behavior Validation', () => {
   test('should maintain connection stability during multiple StrictMode cycles', async ({ page }) => {
     console.log('🔄 Testing connection stability across multiple StrictMode cycles...');
     
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 10000 });
     
     // Use proper microphone activation sequence (Issue #188)
@@ -241,7 +241,7 @@ test.describe('StrictMode Behavior Validation', () => {
     // 1. Mount → Cleanup → Mount (simulating unmount/remount)
     // This test verifies connections remain stable through this cycle
     
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 10000 });
     
     // Wait for component ready

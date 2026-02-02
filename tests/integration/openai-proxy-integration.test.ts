@@ -142,6 +142,23 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('error', done);
   });
 
+  /**
+   * OpenAI proxy → connected: client connecting to the proxy reaches open state.
+   * The component sets connection-status "connected" on WebSocket onopen; this test asserts
+   * the proxy accepts the connection so a real client (e.g. the component) would see open
+   * and thus show "connected". Catches regressions in the connection path for the OpenAI provider.
+   */
+  it('client connecting to OpenAI proxy reaches open state (component connection-status "connected")', (done) => {
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      expect(client.readyState).toBe(WebSocket.OPEN);
+      client.close();
+      done();
+    });
+    client.on('error', (err) => done(err));
+  });
+
+
   it('translates Settings to session.update and session.updated to SettingsApplied', (done) => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {

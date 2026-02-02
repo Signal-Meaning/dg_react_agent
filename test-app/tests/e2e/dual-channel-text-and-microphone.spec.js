@@ -29,7 +29,7 @@ import {
   skipIfNoRealAPI,
   writeTranscriptToFile
 } from './helpers/test-helpers.js';
-import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
+import { pathWithQuery, getDeepgramProxyParams } from './helpers/test-helpers.mjs';
 import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
 
 /**
@@ -707,7 +707,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     
     skipIfNoRealAPI('Requires real Deepgram API key for dual channel tests');
     
-    const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
+    const PROXY_ENDPOINT = getDeepgramProxyParams().proxyEndpoint;
     
     // Verify proxy server is running
     const proxyRunning = await page.evaluate(async (endpoint) => {
@@ -738,12 +738,10 @@ test.describe('Dual Channel - Text and Microphone', () => {
       return;
     }
     
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    await page.goto(pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT
-    });
-    
-    await page.goto(testUrl);
+    }));
     await page.waitForLoadState('networkidle');
     await context.grantPermissions(['microphone']);
     

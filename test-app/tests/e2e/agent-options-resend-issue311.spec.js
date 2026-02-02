@@ -17,8 +17,7 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  BASE_URL,
-  buildUrlWithParams
+  pathWithQuery
 } from './helpers/test-helpers.mjs';
 import {
   hasRealAPIKey,
@@ -70,7 +69,7 @@ test.describe('Agent Options Re-send Test - Issue #311', () => {
     
     // Navigate to test app with closure-issue-test page
     // This page allows us to update agentOptions dynamically
-    await page.goto(buildUrlWithParams(BASE_URL, { 
+    await page.goto(pathWithQuery({ 
       'test-mode': 'true',
       'debug': 'true',
       'test-page': 'closure-issue', // Use closure issue test page
@@ -229,7 +228,7 @@ test.describe('Agent Options Re-send Test - Issue #311', () => {
     });
     
     // Navigate to test app
-    await page.goto(buildUrlWithParams(BASE_URL, { 
+    await page.goto(pathWithQuery({ 
       'test-mode': 'true',
       'debug': 'true',
     }));

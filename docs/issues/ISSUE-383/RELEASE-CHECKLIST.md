@@ -12,6 +12,8 @@
     - [ ] Start proxy: `npm run test:proxy:server` (from `test-app/`) — ensure port 8080 is free (e.g. stop OpenAI proxy if running)
     - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e`
     - [ ] Confirm all E2E tests pass in proxy mode before release
+    - **Port/scheme:** If proxy runs on a different port, set `VITE_OPENAI_PROXY_ENDPOINT` / `VITE_DEEPGRAM_PROXY_ENDPOINT` in the same env as Playwright. See `test-app/tests/e2e/README.md` (Port, scheme, and backend).
+    - **Isolating failures:** Run only OpenAI proxy E2E: `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js`. Run only one Deepgram spec: `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true E2E_BACKEND=deepgram npm run test:e2e -- deepgram-backend-proxy-mode.spec.js`. See README “Isolating regression vs environment”.
 - [x] **Lint clean**
   - [x] Run: `npm run lint` — passed (4 warnings, 0 errors)
 
@@ -79,6 +81,7 @@
 
 ## Important notes
 
+- **OpenAI proxy → connected:** Integration test `tests/integration/openai-proxy-integration.test.ts` includes “client connecting to OpenAI proxy reaches open state (component connection-status ‘connected’)” to catch regressions in the OpenAI connection path without E2E.
 - **Principal emphasis**: This release supports the **OpenAI Realtime proxy** (Issue #381). Make release title and description clear about proxy support.
 - **Version**: v0.7.11 (patch). No breaking changes.
 - Package publishes to **GitHub Package Registry**.

@@ -17,8 +17,8 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  BASE_URL,
-  buildUrlWithParams
+  pathWithQuery,
+  getDeepgramProxyParams
 } from './helpers/test-helpers.mjs';
 import {
   skipIfNoRealAPI,
@@ -28,7 +28,7 @@ import {
 } from './helpers/test-helpers.js';
 
 const IS_PROXY_MODE = process.env.USE_PROXY_MODE === 'true';
-const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
+const PROXY_ENDPOINT = getDeepgramProxyParams().proxyEndpoint;
 
 test.describe('Issue #351: FunctionCallRequest Callback in Proxy Mode', () => {
   test.beforeEach(async ({ page, context }) => {
@@ -135,7 +135,7 @@ test.describe('Issue #351: FunctionCallRequest Callback in Proxy Mode', () => {
     
     // Navigate to test app with proxy mode and debug enabled
     // Use buildUrlWithParams which handles proxy mode configuration
-    const testUrl = buildUrlWithParams(BASE_URL, { 
+    const testUrl = pathWithQuery({ 
       'test-mode': 'true',
       'enable-function-calling': 'true',
       'debug': 'true'

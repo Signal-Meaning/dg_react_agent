@@ -15,12 +15,12 @@
 
 import { test, expect } from '@playwright/test';
 import { MicrophoneHelpers, setupConnectionStateTracking, waitForConnection } from './helpers/test-helpers.js';
-import { BASE_URL } from './helpers/test-helpers.mjs';
+import { APP_ROOT } from './helpers/test-helpers.mjs';
 
 test.describe('Lazy Initialization E2E Tests', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to test app
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     
     // Wait for component to be ready
@@ -58,7 +58,7 @@ test.describe('Lazy Initialization E2E Tests', () => {
     });
     
     // Navigate to a fresh page to capture initialization logs
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     
     // Wait for component to mount (but NOT for onReady callback)
@@ -129,7 +129,7 @@ test.describe('Lazy Initialization E2E Tests', () => {
     });
     
     // Navigate fresh and wait for component but NOT for handleReady to call start()
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
@@ -214,7 +214,7 @@ test.describe('Lazy Initialization E2E Tests', () => {
     console.log('🔍 Testing start() with both service flags...');
     
     // Navigate fresh and wait for component
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
@@ -255,7 +255,7 @@ test.describe('Lazy Initialization E2E Tests', () => {
     console.log('🔍 Testing injectUserMessage() lazy creation...');
     
     // Navigate fresh and wait for component
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
@@ -364,7 +364,7 @@ test.describe('Lazy Initialization E2E Tests', () => {
     console.log('🔍 Testing lazy initialization via microphone activation...');
     
     // Navigate fresh and wait for component
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
@@ -397,7 +397,7 @@ test.describe('Lazy Initialization E2E Tests', () => {
     console.log('🔍 Testing startAudioCapture() lazy creation...');
     
     // Navigate fresh and wait for component
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
@@ -465,7 +465,7 @@ test.describe('Lazy Initialization E2E Tests', () => {
     console.log('🔍 Testing microphone activation with agent already connected...');
     
     // Navigate fresh and wait for component
-    await page.goto(BASE_URL);
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     

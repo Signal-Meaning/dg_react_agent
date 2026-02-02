@@ -17,10 +17,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { 
-  BASE_URL,
-  buildUrlWithParams
-} from './helpers/test-helpers.mjs';
+import { pathWithQuery } from './helpers/test-helpers.mjs';
 
 test.describe('Component Remount - Customer Scenario (Issue #769)', () => {
   
@@ -130,7 +127,7 @@ test.describe('Component Remount - Customer Scenario (Issue #769)', () => {
     });
     
     // Navigate to test app
-    await page.goto(buildUrlWithParams(BASE_URL, { 'test-mode': 'true', 'debug': 'true' }));
+    await page.goto(pathWithQuery({ 'test-mode': 'true', 'debug': 'true' }));
     
     // Wait for component to mount initially
     await page.waitForTimeout(2000);

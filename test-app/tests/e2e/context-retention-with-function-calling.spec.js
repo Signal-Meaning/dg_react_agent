@@ -33,7 +33,7 @@ import {
   waitForFunctionCall,
   waitForConnection
 } from './helpers/test-helpers.js';
-import { buildUrlWithParams, BASE_URL, getOpenAIProxyParams, getE2EBackend } from './helpers/test-helpers.mjs';
+import { pathWithQuery, getOpenAIProxyParams, getE2EBackend } from './helpers/test-helpers.mjs';
 
 test.describe('Context Retention with Function Calling (Issue #362)', () => {
   
@@ -131,8 +131,7 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     // Step 1: Setup and establish connection with function calling enabled
     // Backend is OpenAI for this spec (we skip when E2E_BACKEND=deepgram). URL params = proxyEndpoint + connectionMode (the "URL input" the app reads).
     const fcParams = { 'enable-function-calling': 'true' };
-    const url = buildUrlWithParams(BASE_URL, { ...getOpenAIProxyParams(), ...fcParams });
-    await page.goto(url);
+    await page.goto(pathWithQuery({ ...getOpenAIProxyParams(), ...fcParams }));
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
     // Wait for connection mode to be set (proxy mode)

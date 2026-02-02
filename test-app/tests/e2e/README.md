@@ -90,6 +90,33 @@ If the app uses **HTTPS** (e.g. `HTTPS=true` in test-app/.env), set the base URL
 
 **Note:** Safari may refuse self-signed HTTPS for localhost. For manual browsing use Chrome, or trust the self-signed cert in Keychain. Playwright runs in Chromium by default, so E2E tests are unaffected.
 
+### Port, scheme, and backend (E2E environment)
+
+- **Proxy port:** Playwright and helpers default to **port 8080** (`proxyBase` in `playwright.config.mjs`). If you start the proxy on a different port (e.g. `PROXY_PORT=8081`), set the same port in the **environment you use to run Playwright**:
+  - `VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8081/openai` and/or
+  - `VITE_DEEPGRAM_PROXY_ENDPOINT=ws://localhost:8081/deepgram-proxy`
+  Otherwise the app will try 8080 and connection will never become "connected".
+- **Scheme:** If the app is served over **HTTPS** (`HTTPS=true`), use **wss://** for proxy URLs. If HTTP, use **ws://**. Mismatch (e.g. https app + ws proxy without matching config) can cause connection failures.
+- **Backend matrix:** The full suite includes both **Deepgram-only** and **OpenAI-proxy-only** specs. Running everything with the default backend (OpenAI) runs Deepgram-only specs against the OpenAI proxy and can produce wrong-backend or timeout failures. See [E2E-BACKEND-MATRIX.md](./E2E-BACKEND-MATRIX.md) and run backend-specific specs when diagnosing failures.
+
+### Isolating regression vs environment
+
+To tell connection/timeout failures apart from environment (port, scheme, backend):
+
+1. **Run only OpenAI proxy E2E** (from `test-app`):
+   ```bash
+   E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js
+   ```
+   If this passes, the OpenAI connection path is likely fine; full-suite failures may be backend matrix or port/scheme.
+
+2. **Run only one Deepgram proxy spec** (from `test-app`):
+   ```bash
+   E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true E2E_BACKEND=deepgram npm run test:e2e -- deepgram-backend-proxy-mode.spec.js
+   ```
+   If this passes, the Deepgram connection path is likely fine.
+
+3. **Interpret:** OpenAI-only pass + Deepgram-only pass → environment (e.g. wrong backend when running full suite). Either-only fail → possible regression in that provider’s connection path.
+
 ### Running Tests in Background (Monitorable Mode)
 
 For comprehensive test runs (all 217 tests, takes 2-3 hours), use background mode:

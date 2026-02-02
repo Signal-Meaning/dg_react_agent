@@ -12,10 +12,7 @@
 
 import { test, expect } from '@playwright/test';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
-import { 
-  BASE_URL,
-  buildUrlWithParams
-} from './helpers/test-helpers.mjs';
+import { pathWithQuery } from './helpers/test-helpers.mjs';
 
 test.describe('Component Remount Detection During Reconnection (Issue #357)', () => {
   
@@ -68,7 +65,7 @@ test.describe('Component Remount Detection During Reconnection (Issue #357)', ()
     });
     
     // Navigate to test app
-    await page.goto(buildUrlWithParams(BASE_URL, { 'test-mode': 'true' }));
+    await page.goto(pathWithQuery({ 'test-mode': 'true' }));
     
     // Use MicrophoneHelpers for reliable microphone activation and connection
     const micResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {

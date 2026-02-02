@@ -16,8 +16,7 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  BASE_URL,
-  buildUrlWithParams
+  pathWithQuery
 } from './helpers/test-helpers.mjs';
 import {
   skipIfNoRealAPI,
@@ -133,7 +132,7 @@ test.describe('Function Calling E2E Tests', () => {
     });
     
     // Step 2: Navigate to test app with function calling enabled and debug mode
-    await page.goto(buildUrlWithParams(BASE_URL, { 
+    await page.goto(pathWithQuery({ 
       'test-mode': 'true',
       'enable-function-calling': 'true',
       'debug': 'true'  // Enable debug mode to see full Settings message
@@ -422,7 +421,7 @@ test.describe('Function Calling E2E Tests', () => {
     // It's a simpler test that doesn't require function execution
     
     // Navigate with function calling enabled via URL parameters
-    await page.goto(buildUrlWithParams(BASE_URL, { 
+    await page.goto(pathWithQuery({ 
       'test-mode': 'true',
       'enable-function-calling': 'true',
       'function-type': 'standard',
@@ -696,7 +695,7 @@ test.describe('Function Calling E2E Tests', () => {
     });
     
     // Navigate with minimal function type
-    await page.goto(buildUrlWithParams(BASE_URL, { 
+    await page.goto(pathWithQuery({ 
       'test-mode': 'true',
       'enable-function-calling': 'true',
       'function-type': 'minimal',
@@ -925,7 +924,7 @@ test.describe('Function Calling E2E Tests', () => {
     await installWebSocketCapture(page);
     
     // Navigate with minimal-with-required function type
-    await page.goto(buildUrlWithParams(BASE_URL, { 
+    await page.goto(pathWithQuery({ 
       'test-mode': 'true',
       'enable-function-calling': 'true',
       'function-type': 'minimal-with-required',
@@ -1038,7 +1037,7 @@ test.describe('Function Calling E2E Tests', () => {
       console.log('🧪 [TDD] Testing function call tracker element exists...');
       skipIfNoRealAPI('Requires real Deepgram API key');
       
-      await page.goto(buildUrlWithParams(BASE_URL, { 
+      await page.goto(pathWithQuery({ 
         'test-mode': 'true',
         'enable-function-calling': 'true'
       }));
@@ -1065,7 +1064,7 @@ test.describe('Function Calling E2E Tests', () => {
         }
       });
       
-      await page.goto(buildUrlWithParams(BASE_URL, { 
+      await page.goto(pathWithQuery({ 
         'test-mode': 'true',
         'enable-function-calling': 'true'
       }));
@@ -1119,7 +1118,7 @@ test.describe('Function Calling E2E Tests', () => {
         }
       });
       
-      await page.goto(buildUrlWithParams(BASE_URL, { 
+      await page.goto(pathWithQuery({ 
         'test-mode': 'true',
         'enable-function-calling': 'true',
         'debug': 'true'
@@ -1330,7 +1329,7 @@ test.describe('Function Calling E2E Tests', () => {
         }
       });
       
-      await page.goto(buildUrlWithParams(BASE_URL, { 
+      await page.goto(pathWithQuery({ 
         'test-mode': 'true',
         'enable-function-calling': 'true'
       }));

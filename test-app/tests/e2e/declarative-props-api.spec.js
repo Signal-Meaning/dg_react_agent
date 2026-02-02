@@ -309,8 +309,8 @@ test.describe('Declarative Props API - Issue #305', () => {
       // Navigate with function calling enabled
       let url = '/?test-mode=true&enable-function-calling=true';
       if (hasOpenAIProxyEndpoint()) {
-        const { buildUrlWithParams, BASE_URL, getOpenAIProxyParams } = await import('./helpers/test-helpers.mjs');
-        url = buildUrlWithParams(BASE_URL, { ...getOpenAIProxyParams(), 'test-mode': 'true', 'enable-function-calling': 'true' });
+        const { pathWithQuery, getOpenAIProxyParams } = await import('./helpers/test-helpers.mjs');
+        url = pathWithQuery({ ...getOpenAIProxyParams(), 'test-mode': 'true', 'enable-function-calling': 'true' });
       }
       await page.goto(url);
       

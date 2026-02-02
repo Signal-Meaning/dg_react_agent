@@ -112,10 +112,9 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   test('6. Simple function calling – trigger function call; assert response in [data-testid="agent-response"]', async ({ page }) => {
-    const { buildUrlWithParams, BASE_URL, getOpenAIProxyParams } = await import('./helpers/test-helpers.mjs');
+    const { pathWithQuery, getOpenAIProxyParams } = await import('./helpers/test-helpers.mjs');
     const params = { ...getOpenAIProxyParams(), 'test-mode': 'true', 'enable-function-calling': 'true' };
-    const url = buildUrlWithParams(BASE_URL, params);
-    await page.goto(url);
+    await page.goto(pathWithQuery(params));
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     await establishConnectionViaText(page, 30000);
     await sendTextMessage(page, "What time is it?");
@@ -140,10 +139,9 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   test('8. Error handling – wrong proxy URL shows closed/error and does not hang', async ({ page }) => {
-    const { buildUrlWithParams, BASE_URL } = await import('./helpers/test-helpers.mjs');
+    const { pathWithQuery } = await import('./helpers/test-helpers.mjs');
     const wrongProxyUrl = 'ws://localhost:99999/openai';
-    const url = buildUrlWithParams(BASE_URL, { connectionMode: 'proxy', proxyEndpoint: wrongProxyUrl });
-    await page.goto(url);
+    await page.goto(pathWithQuery({ connectionMode: 'proxy', proxyEndpoint: wrongProxyUrl }));
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     const textInput = page.locator('[data-testid="text-input"]');
     await textInput.waitFor({ state: 'visible', timeout: 5000 });

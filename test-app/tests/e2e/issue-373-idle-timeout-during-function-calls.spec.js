@@ -31,10 +31,10 @@ import {
   waitForSettingsApplied,
   setupFunctionCallingTest,
 } from './helpers/test-helpers.js';
-import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
+import { pathWithQuery, getDeepgramProxyParams } from './helpers/test-helpers.mjs';
 
 // Proxy mode configuration - use proxy backend with real APIs
-const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
+const PROXY_ENDPOINT = getDeepgramProxyParams().proxyEndpoint;
 const IS_PROXY_MODE = process.env.USE_PROXY_MODE !== 'false'; // Default to true
 
 test.describe('Issue #373: Idle Timeout During Function Calls', () => {
@@ -143,7 +143,7 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
     });
     
     // Setup test page with proxy mode and real APIs
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    const testUrl = pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT,
       'enable-function-calling': 'true',
@@ -367,7 +367,7 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
     });
     
     // Setup test page with proxy mode and real APIs
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    const testUrl = pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT,
       'enable-function-calling': 'true',
@@ -531,7 +531,7 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
     });
     
     // Setup test page with proxy mode and real APIs
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    const testUrl = pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT,
       'enable-function-calling': 'true',
@@ -666,7 +666,7 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
     });
     
     // Setup test page with proxy mode and real APIs
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    const testUrl = pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT,
       'enable-function-calling': 'true',
