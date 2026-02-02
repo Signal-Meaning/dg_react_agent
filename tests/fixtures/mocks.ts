@@ -18,6 +18,8 @@ export const createMockWebSocketManager = () => ({
   sendCloseStream: jest.fn(),
   close: jest.fn(),
   getState: jest.fn().mockReturnValue('connected'),
+  // WebSocket readyState (0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED). Component uses this to decide when to send Settings.
+  getReadyState: jest.fn().mockReturnValue(1), // OPEN
   
   // Post-fork additions (may need verification)
   isConnected: jest.fn().mockReturnValue(true),

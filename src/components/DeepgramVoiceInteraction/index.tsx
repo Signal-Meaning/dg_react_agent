@@ -834,8 +834,7 @@ function DeepgramVoiceInteraction(
               // Wait for WebSocket to be fully OPEN before sending Settings (Issue #329)
               // React StrictMode can cause timing issues where state is 'connected' but WebSocket isn't fully OPEN yet
               const checkAndSend = () => {
-                const wsManager = agentManagerRef.current as any;
-                const wsState = wsManager?.ws?.readyState;
+                const wsState = agentManagerRef.current?.getReadyState() ?? undefined;
                 const wsStateName = wsState === 0 ? 'CONNECTING' : 
                                     wsState === 1 ? 'OPEN' : 
                                     wsState === 2 ? 'CLOSING' : 
@@ -1886,12 +1885,10 @@ function DeepgramVoiceInteraction(
     }
     
     // Check WebSocket state directly from manager before sending
-    const wsManager = agentManagerRef.current as any;
-    const ws = wsManager?.ws;
-    const wsState = ws?.readyState;
+    const wsState = agentManagerRef.current?.getReadyState() ?? null;
     
     // Only send if WebSocket is actually OPEN
-    if (!ws || wsState !== 1) {
+    if (wsState !== 1) {
       if (debug) {
         const wsStateName = wsState === 0 ? 'CONNECTING' : 
                             wsState === 1 ? 'OPEN' : 

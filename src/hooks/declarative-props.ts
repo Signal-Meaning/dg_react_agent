@@ -5,7 +5,7 @@ import { useEffect, useRef, MutableRefObject } from 'react';
  * @param callback - Callback function to store
  * @returns Ref containing the latest callback
  */
-export function useCallbackRef<T extends (...args: any[]) => any>(
+export function useCallbackRef<T extends (...args: unknown[]) => unknown>(
   callback: T | undefined
 ): MutableRefObject<T | undefined> {
   const callbackRef = useRef<T | undefined>(callback);

@@ -913,6 +913,14 @@ export class WebSocketManager {
   /**
    * Gets the current connection state
    */
+  /**
+   * Returns the underlying WebSocket readyState (0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)
+   * or null if no socket. Used by callers that need to check socket openness before sending.
+   */
+  public getReadyState(): number | null {
+    return this.ws === null ? null : this.ws.readyState;
+  }
+
   public getState(): ConnectionState {
     return this.connectionState;
   }
