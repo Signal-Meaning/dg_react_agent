@@ -363,14 +363,17 @@ jobs:
       # Create GitHub Release (and tag) when triggered by push to release/v* or workflow_dispatch (not when trigger is release:published)
       - name: Create GitHub Release
         if: success() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v')))
-        uses: softprops/action-gh-release@v2.5.0
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: v${{ steps.version.outputs.version }}
-          body_path: docs/releases/v${{ steps.version.outputs.version }}/RELEASE-NOTES.md
-          generate_release_notes: false
-          draft: false
-          make_latest: true
-          skip_if_tag_exists: true
+        run: |
+          VER="v${{ steps.version.outputs.version }}"
+          if gh release view "$VER" --repo $GITHUB_REPOSITORY 2>/dev/null; then
+            echo "Release $VER already exists, skipping."
+            exit 0
+          fi
+          NOTES="docs/releases/$VER/RELEASE-NOTES.md"
+          if [ -f "$NOTES" ]; then
+            gh release create "$VER" --title "$VER" --notes-file "$NOTES" --repo $GITHUB_REPOSITORY
+          else
+            gh release create "$VER" --title "$VER" --notes "Release $VER" --repo $GITHUB_REPOSITORY
+          fi
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
