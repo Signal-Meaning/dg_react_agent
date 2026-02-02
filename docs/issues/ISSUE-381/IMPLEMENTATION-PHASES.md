@@ -77,18 +77,19 @@ Phased implementation so that **tests come first** and each phase ends with a gr
 
 ---
 
-## Phase 5: Documentation and CI
+## Phase 5: Documentation and CI ✅
 
 **Goal**: Docs and CI reflect the new proxy and tests.
 
-1. Update **ENVIRONMENT_VARIABLES.md** (and any README or dev guide) to describe:
-   - `VITE_OPENAI_PROXY_ENDPOINT`
-   - How to run the OpenAI proxy (e.g. same server as Deepgram on `/openai`)
-   - How to run unit, integration, and E2E tests for the OpenAI proxy
-2. Update **CI** (if applicable) to:
-   - Run unit and integration tests for the OpenAI proxy
-   - Optionally run OpenAI E2E tests when the proxy is available (or skip with a clear message)
-3. **Checkpoint**: New contributors can follow docs to run and test the OpenAI proxy; CI is green and meaningful for this feature.
+1. **Document env and run** – **[RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md)** describes:
+   - Environment variables: `OPENAI_API_KEY`, `OPENAI_PROXY_PORT`, `OPENAI_REALTIME_URL`, `OPENAI_PROXY_DEBUG`, `VITE_OPENAI_PROXY_ENDPOINT`, `E2E_BACKEND`, `HTTPS`, `VITE_BASE_URL`
+   - How to run the proxy: `npm run openai-proxy` from project root
+   - How to run unit tests: `npm run test -- tests/openai-proxy.test.ts`
+   - How to run integration tests: `npm run test -- tests/integration/openai-proxy-integration.test.ts`
+   - How to run E2E: `HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright test ...` (full commands in doc)
+   - CI: unit and integration run in existing Jest job; E2E optional (proxy + API key)
+2. **CI**: Unit and integration tests for the OpenAI proxy run in the existing Jest job (no extra env). E2E requires proxy + `OPENAI_API_KEY`; doc describes optional CI job or manual/scheduled run.
+3. **Checkpoint**: New contributors can follow [RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md) to run and test the OpenAI proxy; CI runs proxy unit and integration tests.
 
 ---
 
@@ -100,6 +101,6 @@ Phased implementation so that **tests come first** and each phase ends with a gr
 | 2 | Integration tests + WebSocket server | Integration tests green |
 | 3 | E2E tests + full stack | OpenAI E2E suite green ✅ |
 | 4 | Component tests with OpenAI backend | No regressions; suite green |
-| 5 | Documentation + CI | Docs and CI updated; all checkpoints green |
+| 5 | Documentation + CI | [RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md); Jest runs proxy tests ✅ |
 
 Each phase follows **test first (RED)** then **implementation (GREEN)** then **refactor**. Do not move to the next phase until the current phase’s checkpoint is met.
