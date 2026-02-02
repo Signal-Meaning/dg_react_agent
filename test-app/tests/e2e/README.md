@@ -4,6 +4,8 @@
 
 These E2E tests use **REAL Deepgram WebSocket connections**, not mocks. This provides authentic integration testing but requires a valid Deepgram API key.
 
+**Backend matrix:** Some specs assume **Deepgram** only (e.g. CLIENT_MESSAGE_TIMEOUT, Deepgram proxy); others are **OpenAI-proxy-only** (Issue #381). See [E2E-BACKEND-MATRIX.md](./E2E-BACKEND-MATRIX.md) for which specs to run with which backend.
+
 ## Setup
 
 ### 1. Get a Deepgram API Key
@@ -29,6 +31,10 @@ VITE_DEEPGRAM_VOICE=aura-asteria-en
 # Run all E2E tests (foreground, blocks terminal)
 npm run test:e2e
 
+# Run all E2E tests and capture output to a file (recommended for long runs)
+# Output is printed and saved to e2e-run.log in the project root
+npm run test:e2e:log
+
 # Run all E2E tests in background (monitorable, for long test runs)
 npm run test:e2e:background
 
@@ -46,6 +52,27 @@ npx playwright test --grep "Timeout"        # All timeout-related tests
 npx playwright test --grep "Idle Timeout"   # Idle timeout specific tests
 npx playwright test --grep "Microphone"     # All microphone tests
 ```
+
+### Using a pre-started dev server
+
+If you already run the test-app dev server (e.g. `npm run dev` in test-app), Playwright will try to start it again by default and fail with "Port 5173 is already in use". Use a **preconfigured server** instead:
+
+1. Start the dev server yourself (from project root or test-app):
+   ```bash
+   cd test-app && npm run dev
+   ```
+2. Run Playwright with `E2E_USE_EXISTING_SERVER=1` so it does not start the webServer:
+   ```bash
+   E2E_USE_EXISTING_SERVER=1 npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js
+   ```
+   (Run from **project root**.)
+
+If the app uses **HTTPS** (e.g. `HTTPS=true` in test-app/.env), set the base URL when running Playwright:
+   ```bash
+   E2E_USE_EXISTING_SERVER=1 VITE_BASE_URL=https://localhost:5173 npx playwright test ...
+   ```
+
+**Note:** Safari may refuse self-signed HTTPS for localhost. For manual browsing use Chrome, or trust the self-signed cert in Keychain. Playwright runs in Chromium by default, so E2E tests are unaffected.
 
 ### Running Tests in Background (Monitorable Mode)
 
@@ -107,7 +134,7 @@ The monitor displays:
 - **`lazy-initialization-e2e.spec.js`** - Lazy initialization behavior (no auto-connect, Issue #206)
 
 ### Security & Authentication Tests
-- **`backend-proxy-authentication.spec.js`** - Backend proxy authentication and security tests (11 tests)
+- **`deepgram-backend-proxy-authentication.spec.js`** - Backend proxy authentication and security tests (11 tests)
   - Basic authentication (Issue #242)
   - Invalid token rejection (Issue #363)
   - Token expiration handling (Issue #363)

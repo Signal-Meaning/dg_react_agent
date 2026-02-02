@@ -1,9 +1,13 @@
 /**
  * Context Retention with Function Calling E2E Test - Issue #362
- * 
+ *
  * This test validates that context retention works correctly when function calling is enabled.
  * This tests the hypothesis that function calling might interfere with context processing.
- * 
+ *
+ * Backend: Intended to run with OpenAI proxy (E2E_BACKEND=openai or unset).
+ * Use E2E_BACKEND=deepgram to run against Deepgram; this spec skips when backend is Deepgram
+ * so the FunctionCallRequest investigation is unambiguous (OpenAI proxy only).
+ *
  * Test Flow:
  * 1. Setup function calling (get_current_datetime - client-side function)
  * 2. Establish connection (function should be included in Settings)
@@ -13,11 +17,8 @@
  * 6. Reconnect agent (context should be sent in Settings message with function)
  * 7. Ask: "Provide a summary of our conversation to this point."
  * 8. Verify agent response references "time" from context
- * 
- * This test should FAIL if function calling interferes with context processing.
- * This test should PASS when context retention works correctly with function calling.
- * 
- * Related: Issue #362, Customer Issue #587
+ *
+ * Related: Issue #362, Customer Issue #587, Issue #381 (OpenAI proxy)
  */
 
 import { test, expect } from '@playwright/test';
@@ -32,14 +33,20 @@ import {
   waitForFunctionCall,
   waitForConnection
 } from './helpers/test-helpers.js';
-import { setupTestPage } from './helpers/test-helpers.mjs';
+import { buildUrlWithParams, BASE_URL, getOpenAIProxyParams, getE2EBackend } from './helpers/test-helpers.mjs';
 
 test.describe('Context Retention with Function Calling (Issue #362)', () => {
   
   test('should retain context when disconnecting and reconnecting with function calling enabled', async ({ page }) => {
-    skipIfNoRealAPI('Requires real Deepgram API key');
-    
-    console.log('🧪 Testing context retention with function calling - agent should use context after reconnection');
+    skipIfNoRealAPI('Requires real API key');
+    // Run with OpenAI proxy for this investigation (FunctionCallRequest capture); skip when Deepgram backend
+    if (getE2EBackend() === 'deepgram') {
+      test.skip(true, 'This spec targets OpenAI proxy (FunctionCallRequest / context retention); use E2E_BACKEND=openai or unset');
+    }
+    // First agent response can take up to 60s; reconnect + recall add more; default 30s test timeout is too short
+    test.setTimeout(120000);
+
+    console.log('🧪 Testing context retention with function calling (backend=%s) - agent should use context after reconnection', getE2EBackend());
     
     // Setup function calling BEFORE navigation
     // Using client-side function (no endpoint) - we can handle it via window.handleFunctionCall
@@ -64,10 +71,16 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
         }
       ];
       
+      // Store FunctionCallRequest messages for verification (must be before handler so handler can push)
+      window.functionCallRequests = [];
+      window.functionCallResponses = [];
+
       // Store function handler for client-side execution
       window.handleFunctionCall = (request, sendResponse) => {
+        if (!window.functionCallRequests) window.functionCallRequests = [];
+        window.functionCallRequests.push(request);
         console.log(`[FUNCTION] Executing function: ${request.name}`, request.arguments);
-        
+
         if (request.name === 'get_current_datetime') {
           let args = {};
           try {
@@ -75,7 +88,7 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
           } catch (e) {
             console.warn('[FUNCTION] Failed to parse function arguments:', e);
           }
-          
+
           const timezone = args.timezone || 'UTC';
           const now = new Date();
           const result = {
@@ -94,31 +107,33 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
             timezone: timezone,
             timestamp: now.getTime()
           };
-          
+
           const response = {
             id: request.id,
             result: result
           };
-          
+
           sendResponse(response);
+          if (!window.functionCallResponses) window.functionCallResponses = [];
+          window.functionCallResponses.push(response);
           return response;
         }
-        
-        return { id: request.id, result: { success: false, error: 'Unknown function' } };
+
+        const errResponse = { id: request.id, result: { success: false, error: 'Unknown function' } };
+        sendResponse(errResponse);
+        return errResponse;
       };
-      
-      // Store FunctionCallRequest messages for verification
-      window.functionCallRequests = [];
-      window.functionCallResponses = [];
     });
     
     // Install WebSocket capture to verify context is sent
     await installWebSocketCapture(page);
     
     // Step 1: Setup and establish connection with function calling enabled
-    await setupTestPage(page, {
-      'enable-function-calling': 'true'
-    });
+    // Backend is OpenAI for this spec (we skip when E2E_BACKEND=deepgram). URL params = proxyEndpoint + connectionMode (the "URL input" the app reads).
+    const fcParams = { 'enable-function-calling': 'true' };
+    const url = buildUrlWithParams(BASE_URL, { ...getOpenAIProxyParams(), ...fcParams });
+    await page.goto(url);
+    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
     // Wait for connection mode to be set (proxy mode)
     await page.waitForFunction(() => {
@@ -185,18 +200,14 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     await textInput.press('Enter');
     
     // Wait for function call to be triggered (client-side function)
-    // For client-side functions, component calls window.handleFunctionCall
+    // Use same timeout as agent response wait so we don't give up before backend responds
     console.log('⏳ Waiting for function call to be triggered (client-side function)...');
-    let functionCallDetected = false;
-    
-    try {
-      const functionCallResult = await waitForFunctionCall(page, { timeout: 30000 });
-      if (functionCallResult && functionCallResult.count > 0) {
-        functionCallDetected = true;
-        console.log(`✅ Function call detected: ${functionCallResult.lastCall}`);
-      }
-    } catch (e) {
-      console.log('⚠️  No function call detected within timeout, continuing...');
+    const functionCallResult = await waitForFunctionCall(page, { timeout: 60000 });
+    const functionCallDetected = functionCallResult && functionCallResult.count > 0;
+    if (functionCallDetected) {
+      console.log(`✅ Function call detected (count: ${functionCallResult.count})`);
+    } else {
+      console.log('⚠️ No function call detected within 60s, will verify from first agent response');
     }
     
     // Wait for agent response after function call (or just response if no function call)
@@ -214,16 +225,67 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     );
     
     const firstResponse = await page.locator('[data-testid="agent-response"]').textContent();
-    
+
     console.log('✅ First message sent and agent responded');
     console.log(`📝 First agent response: ${firstResponse?.substring(0, 150)}${firstResponse?.length > 150 ? '...' : ''}`);
     console.log(`📝 Function call detected: ${functionCallDetected}`);
-    
+
     // Verify we got a response (not just waiting message)
     expect(firstResponse).toBeTruthy();
     expect(firstResponse).not.toBe('(Waiting for agent response...)');
     expect(firstResponse.length).toBeGreaterThan(0);
-    
+
+    // Demonstrate function-call path: backend requested a function call; handler should have been invoked
+    const isFunctionCallResponse = firstResponse.trim().startsWith('Function call: get_current_datetime');
+    if (isFunctionCallResponse) {
+      // 1) Verify the client received FunctionCallRequest (proxy sent it and WebSocket delivered it)
+      const wsDataAfterResponse = await getCapturedWebSocketData(page);
+      const received = wsDataAfterResponse.received || [];
+      const receivedFunctionCallRequests = received.filter(m => m.type === 'FunctionCallRequest');
+      if (receivedFunctionCallRequests.length === 0) {
+        // Diagnostic: log what we did receive so we can chase the lead (unit/integration then E2E)
+        const receivedTypes = received.map(m => m.type);
+        console.log('[E2E diagnostic] Received message types:', receivedTypes);
+        console.log('[E2E diagnostic] Received count:', received.length);
+        if (received.length > 0) {
+          console.log('[E2E diagnostic] First 3 received:', received.slice(0, 3).map(m => ({ type: m.type, contentPreview: typeof m.data?.content === 'string' ? m.data.content.slice(0, 80) : m.data?.content ?? '(none)' })));
+        }
+      }
+      expect(
+        receivedFunctionCallRequests.length,
+        'Client must receive FunctionCallRequest when UI shows "Function call: get_current_datetime". Check proxy sends it and WebSocket capture records received messages. See [E2E diagnostic] logs for received types.'
+      ).toBeGreaterThan(0);
+
+      // 2) Allow time for handler to run (React/WebSocket ordering; handler may be async)
+      await page.waitForTimeout(1000);
+      // Poll briefly for handler invocation in case callback is delayed
+      let requestCount = 0;
+      let responseCount = 0;
+      for (let i = 0; i < 6; i++) {
+        const counts = await page.evaluate(() => ({
+          requestCount: (window.functionCallRequests || []).length,
+          responseCount: (window.functionCallResponses || []).length
+        }));
+        requestCount = counts.requestCount;
+        responseCount = counts.responseCount;
+        if (requestCount > 0 && responseCount > 0) break;
+        await page.waitForTimeout(500);
+      }
+      const trackerCount = await page.evaluate(() => parseInt(document.querySelector('[data-testid="function-call-tracker"]')?.textContent || '0', 10));
+
+      expect(
+        requestCount,
+        'FunctionCallRequest was received by the client but the component did not invoke the handler (requestCount=0). The component must call onFunctionCallRequest when it receives a FunctionCallRequest so window.handleFunctionCall runs and pushes to functionCallRequests.'
+      ).toBeGreaterThan(0);
+      expect(
+        responseCount,
+        'Handler should have been invoked and called sendResponse, pushing to functionCallResponses.'
+      ).toBeGreaterThan(0);
+      console.log(`✅ Function call path verified: ${requestCount} request(s), ${responseCount} response(s), tracker=${trackerCount}`);
+    } else if (!functionCallDetected) {
+      console.log('⚠️ First response was not a function-call message; context retention will still be verified');
+    }
+
     // Check if it's a greeting (Issue #238) - log warning but don't fail
     const isGreeting = firstResponse.toLowerCase().includes("hello") ||
                       firstResponse.toLowerCase().includes("how can i assist") ||

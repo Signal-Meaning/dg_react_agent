@@ -154,7 +154,7 @@ function App() {
     return {
       // Default to proxy mode (direct mode is deprecated - only bug fixes, no new features)
       connectionMode: (connectionModeParam === 'direct' ? 'direct' : 'proxy') as 'direct' | 'proxy',
-      proxyEndpoint: proxyEndpointParam || import.meta.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy',
+      proxyEndpoint: proxyEndpointParam || import.meta.env.VITE_OPENAI_PROXY_ENDPOINT || import.meta.env.VITE_DEEPGRAM_PROXY_ENDPOINT || import.meta.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/openai',
       proxyAuthToken: proxyAuthTokenParam || '',
     };
   }, []);
@@ -334,7 +334,17 @@ function App() {
     const loadInstructions = async () => {
       try {
         setInstructionsLoading(true);
-        
+
+        // E2E-only override: when set, use this instruction for "response content reflects instructions" test
+        const e2eInstructions = import.meta.env.VITE_E2E_INSTRUCTIONS;
+        if (e2eInstructions && typeof e2eInstructions === 'string' && e2eInstructions.trim()) {
+          setLoadedInstructions(e2eInstructions.trim());
+          addLog(`Using E2E instruction override (VITE_E2E_INSTRUCTIONS): ${e2eInstructions.substring(0, 50)}...`);
+          setInstructionsLoading(false);
+          hasLoadedInstructions.current = true;
+          return;
+        }
+
         // Use the instructions-loader utility which handles:
         // 1. Environment variable override (VITE_DEEPGRAM_INSTRUCTIONS)
         // 2. File loading (instructions.txt)
@@ -545,12 +555,12 @@ function App() {
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
     setUserMessage(message.text);
     addLog(`User message from server: ${message.text}`);
-    // Track user messages in conversation history
-    setConversationHistory(prev => [...prev, {
-      role: 'user',
-      content: message.text,
-      timestamp: Date.now()
-    }]);
+    // Track user messages in conversation history (dedupe if we already added optimistically in handleTextSubmit)
+    setConversationHistory(prev => {
+      const last = prev[prev.length - 1];
+      if (last?.role === 'user' && last?.content === message.text) return prev;
+      return [...prev, { role: 'user', content: message.text, timestamp: Date.now() }];
+    });
   }, [addLog]);
   
   const handleAgentStateChange = useCallback((state: AgentState) => {
@@ -742,8 +752,13 @@ function App() {
       addLog(`Sending text message: ${textInput}`);
       setUserMessage(textInput);
       
+      // Optimistic update: add user message to conversationHistory so context on reconnect includes it
+      // (Backend may echo ConversationText role=user; we dedupe in handleUserMessage to avoid double-add)
+      const messageToSend = textInput;
+      setConversationHistory(prev => [...prev, { role: 'user', content: messageToSend, timestamp: Date.now() }]);
+      
       if (deepgramRef.current) {
-        await deepgramRef.current.injectUserMessage(textInput);
+        await deepgramRef.current.injectUserMessage(messageToSend);
         addLog('Text message sent to Deepgram agent');
       } else {
         addLog('Error: DeepgramVoiceInteraction ref not available');

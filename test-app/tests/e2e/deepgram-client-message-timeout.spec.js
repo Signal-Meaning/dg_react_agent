@@ -1,16 +1,18 @@
 /**
  * CLIENT_MESSAGE_TIMEOUT Error Tests
- * 
- * These tests verify that CLIENT_MESSAGE_TIMEOUT errors are properly handled
- * when they occur from Deepgram's server.
- * 
+ *
+ * **DEEPGRAM-ONLY:** These tests assume Deepgram backend behavior (CLIENT_MESSAGE_TIMEOUT
+ * from Deepgram's server, "Waiting for Deepgram server timeout (~60s)").
+ * They are skipped when VITE_OPENAI_PROXY_ENDPOINT is set (OpenAI proxy run).
+ * See test-app/tests/e2e/E2E-BACKEND-MATRIX.md.
+ *
  * Scenarios tested:
  * 1. Function call response timeout - handler doesn't respond, Deepgram times out
  * 2. Server idle timeout - Deepgram's server timeout fires before component timeout
  */
 
 import { test, expect } from '@playwright/test';
-import { 
+import {
   SELECTORS,
   setupTestPage,
   establishConnectionViaText,
@@ -19,8 +21,18 @@ import {
 } from './helpers/test-helpers.js';
 import { skipIfNoRealAPI } from './helpers/test-helpers.js';
 
+function skipIfOpenAIProxy(reason = 'CLIENT_MESSAGE_TIMEOUT is Deepgram-only; skip when using OpenAI proxy') {
+  if (process.env.VITE_OPENAI_PROXY_ENDPOINT) {
+    test.skip(true, reason);
+  }
+}
+
 test.describe('CLIENT_MESSAGE_TIMEOUT Error Handling', () => {
-  
+
+  test.beforeEach(() => {
+    skipIfOpenAIProxy();
+  });
+
   test.afterEach(async ({ page }) => {
     // Clean up
     try {

@@ -38,6 +38,53 @@ function getProxyConfig() {
 }
 
 /**
+ * Params for Deepgram proxy (used by tests that target the Deepgram proxy).
+ * Prefer VITE_DEEPGRAM_PROXY_ENDPOINT; same default as mock proxy server.
+ * @returns {Record<string, string>} connectionMode and proxyEndpoint
+ */
+export function getDeepgramProxyParams() {
+  return {
+    connectionMode: 'proxy',
+    proxyEndpoint: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy',
+  };
+}
+
+/**
+ * Params for OpenAI proxy (used by tests that target the OpenAI Realtime proxy).
+ * Uses VITE_OPENAI_PROXY_ENDPOINT; default ws://localhost:8080/openai.
+ * See docs/issues/ISSUE-381/E2E-TEST-PLAN.md.
+ * @returns {Record<string, string>} connectionMode and proxyEndpoint
+ */
+export function getOpenAIProxyParams() {
+  return {
+    connectionMode: 'proxy',
+    proxyEndpoint: process.env.VITE_OPENAI_PROXY_ENDPOINT || 'ws://localhost:8080/openai',
+  };
+}
+
+/**
+ * Backend for E2E test runs: 'openai' | 'deepgram'.
+ * Test-app defaults to OpenAI (see App.tsx proxyEndpoint default).
+ * Use E2E_BACKEND=openai or E2E_BACKEND=deepgram to choose; unset/default uses OpenAI.
+ * URL is built with connectionMode + proxyEndpoint query params (the "URL input" the app reads).
+ * @returns {'openai' | 'deepgram'}
+ */
+export function getE2EBackend() {
+  const backend = process.env.E2E_BACKEND;
+  if (backend === 'deepgram') return 'deepgram';
+  return 'openai';
+}
+
+/**
+ * Proxy params for the selected E2E backend (openai or deepgram).
+ * Use for specs that support both; for OpenAI-only specs use getOpenAIProxyParams() and skip when E2E_BACKEND=deepgram.
+ * @returns {Record<string, string>} connectionMode and proxyEndpoint
+ */
+export function getBackendProxyParams() {
+  return getE2EBackend() === 'deepgram' ? getDeepgramProxyParams() : getOpenAIProxyParams();
+}
+
+/**
  * Safely build a URL with query parameters
  * Prevents URL injection by properly constructing URLs
  * Automatically adds proxy configuration if USE_PROXY_MODE env var is set

@@ -11,7 +11,8 @@ import {
   waitForAudioPlaybackStart,
   waitForAgentGreeting,
   getAudioPlayingStatus,
-  setupAudioSendingPrerequisites
+  setupAudioSendingPrerequisites,
+  skipIfOpenAIProxy
 } from './helpers/test-helpers.js';
 
 /**
@@ -63,6 +64,7 @@ test.describe('Callback Test Suite', () => {
   });
 
   test('should test onTranscriptUpdate callback with existing audio sample', async ({ page, context }) => {
+    skipIfOpenAIProxy('onTranscriptUpdate relies on Deepgram transcript events; skip when using OpenAI proxy');
     console.log('🧪 Testing onTranscriptUpdate callback with existing audio sample...');
     
     // Use setupAudioSendingPrerequisites helper for audio-sending tests
@@ -102,6 +104,7 @@ test.describe('Callback Test Suite', () => {
   });
 
   test('should test onUserStartedSpeaking callback with existing audio sample', async ({ page, context }) => {
+    skipIfOpenAIProxy('onUserStartedSpeaking relies on Deepgram VAD events; skip when using OpenAI proxy');
     console.log('🧪 Testing onUserStartedSpeaking callback with existing audio sample...');
     
     // Use setupAudioSendingPrerequisites helper for audio-sending tests
@@ -143,6 +146,7 @@ test.describe('Callback Test Suite', () => {
   });
 
   test('should test onUserStoppedSpeaking callback with existing audio sample', async ({ page, context }) => {
+    skipIfOpenAIProxy('onUserStoppedSpeaking relies on Deepgram VAD events; skip when using OpenAI proxy');
     console.log('🧪 Testing onUserStoppedSpeaking callback with existing audio sample...');
     
     // Use setupAudioSendingPrerequisites helper for audio-sending tests

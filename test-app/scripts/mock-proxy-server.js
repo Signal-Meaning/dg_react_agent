@@ -10,8 +10,8 @@
  *   or
  *   npm run test:proxy:server
  * 
- * Environment Variables:
- *   - DEEPGRAM_API_KEY: Deepgram API key (required)
+ * Environment Variables (from test-app/.env when run via npm run test:proxy:server):
+ *   - DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY: Deepgram API key (required)
  *   - PROXY_PORT: Port to run proxy on (default: 8080)
  *   - PROXY_PATH: WebSocket path (default: /deepgram-proxy)
  */
@@ -21,6 +21,12 @@ import http from 'http';
 import url from 'url';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+// Load test-app/.env so VITE_DEEPGRAM_API_KEY (and DEEPGRAM_API_KEY) are available when run via npm run test:proxy:server
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 // Configuration
 const RAW_DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;

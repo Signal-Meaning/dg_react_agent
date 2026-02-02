@@ -28,7 +28,9 @@ import {
   installWebSocketCapture,
   getCapturedWebSocketData,
   skipIfNoRealAPI,
-  waitForConnection
+  waitForConnection,
+  hasOpenAIProxyEndpoint,
+  setupTestPageWithOpenAIProxy
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/test-helpers.mjs';
 
@@ -43,7 +45,12 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     await installWebSocketCapture(page);
     
     // Step 1: Setup and establish connection
-    await setupTestPage(page);
+    // When running against OpenAI proxy, use proxy URL so app connects to proxy and receives user echo (ConversationText) for conversationHistory
+    if (hasOpenAIProxyEndpoint()) {
+      await setupTestPageWithOpenAIProxy(page);
+    } else {
+      await setupTestPage(page);
+    }
     
     // Wait for connection mode to be set (proxy mode)
     await page.waitForFunction(() => {
@@ -334,7 +341,11 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     console.log('🧪 Testing context format in Settings message');
     
     await installWebSocketCapture(page);
-    await setupTestPage(page);
+    if (hasOpenAIProxyEndpoint()) {
+      await setupTestPageWithOpenAIProxy(page);
+    } else {
+      await setupTestPage(page);
+    }
     
     // Send first message to establish conversation
     // Wait for text input and focus to trigger auto-connect
