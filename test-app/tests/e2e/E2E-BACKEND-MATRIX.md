@@ -57,8 +57,10 @@ These specs assume **Deepgram** backend behavior (e.g. Deepgram server timeouts,
 | `strict-mode-behavior.spec.js` | DeepgramVoiceInteraction init logs. |
 | `audio-interruption-timing.spec.js` | deepgramRef.interruptAgent. |
 | `deepgram-vad-redundancy-and-agent-timeout.spec.js` | deepgramRef; mock AgentThinking. |
-| `deepgram-interim-transcript-validation.spec.js` | "Deepgram sends word-by-word final transcripts". |
+| `deepgram-interim-transcript-validation.spec.js` | "Deepgram sends word-by-word final transcripts". Skips when OpenAI proxy. |
+| `deepgram-extended-silence-idle-timeout.spec.js` | VAD/speech detection and idle timeout flow (was `extended-silence-idle-timeout.spec.js`). Skips when OpenAI proxy. |
 | `greeting-audio-timing.spec.js` | deepgramRef.current.start. |
+| `function-calling-e2e.spec.js` | Test **"Deepgram: should test minimal function definition for SettingsApplied issue"** is Deepgram-only; skips when OpenAI proxy. Other tests may run with either backend. |
 | (Others with deepgramRef / skipIfNoRealAPI / Deepgram proxy) | Same pattern. |
 
 **Recommendation:** When running a full E2E pass with **real APIs**, either:

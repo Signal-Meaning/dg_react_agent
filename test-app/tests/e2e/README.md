@@ -109,7 +109,7 @@ If the app uses **HTTPS** (e.g. `HTTPS=true` in test-app/.env), set the base URL
 
 - **Proxy port:** Playwright and helpers default to **port 8080**. If you start the proxy on a different port (e.g. `PROXY_PORT=8081`), set `VITE_OPENAI_PROXY_ENDPOINT` and/or `VITE_DEEPGRAM_PROXY_ENDPOINT` in the same env as Playwright so the app uses that port. Otherwise connection will never become "connected".
 - **Scheme:** If the app is **HTTPS** (`HTTPS=true`), the proxy must serve **wss**. If the app is HTTP, the proxy must serve **ws**. Mismatch causes connection failures (connection never becomes "connected").
-- **Backend matrix:** The full suite includes both **Deepgram-only** and **OpenAI-proxy-only** specs. See [E2E-BACKEND-MATRIX.md](./E2E-BACKEND-MATRIX.md) and run backend-specific specs when diagnosing failures.
+- **Backend matrix:** The full suite includes both **Deepgram-only** and **OpenAI-proxy-only** specs. See [E2E-BACKEND-MATRIX.md](./E2E-BACKEND-MATRIX.md) and run backend-specific specs when diagnosing failures. With **USE_PROXY_MODE=true** (OpenAI proxy default), the full run is **210 passed, 24 skipped** (0 failures): three Deepgram-only specs skip via `skipIfOpenAIProxy`—`deepgram-interim-transcript-validation.spec.js`, `deepgram-extended-silence-idle-timeout.spec.js` (renamed from `extended-silence-idle-timeout.spec.js`), and the test **"Deepgram: should test minimal function definition for SettingsApplied issue"** in `function-calling-e2e.spec.js`.
 
 ### Scheme best practices (app, proxy, test URL must match)
 

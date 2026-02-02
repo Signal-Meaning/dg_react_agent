@@ -20,6 +20,7 @@ import {
 } from './helpers/test-helpers.mjs';
 import {
   skipIfNoRealAPI,
+  skipIfOpenAIProxy,
   setupTestPage,
   waitForConnection,
   waitForSettingsApplied,
@@ -660,7 +661,8 @@ test.describe('Function Calling E2E Tests', () => {
     console.log('🎉 Settings message verification test completed');
   });
 
-  test('should test minimal function definition for SettingsApplied issue', async ({ page, context }) => {
+  test('Deepgram: should test minimal function definition for SettingsApplied issue', async ({ page, context }) => {
+    skipIfOpenAIProxy('Test targets Deepgram SettingsApplied / function definition; skip when using OpenAI proxy');
     console.log('🧪 Testing minimal function definition to isolate SettingsApplied issue...');
     
     // Grant microphone permissions

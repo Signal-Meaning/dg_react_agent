@@ -14,11 +14,13 @@ import { getVADState } from './fixtures/vad-helpers.js';
 import { pathWithQuery } from './helpers/test-helpers.mjs';
 import {
   setupAudioSendingPrerequisites,
+  skipIfOpenAIProxy,
   SELECTORS
 } from './helpers/test-helpers.js';
 
 test.describe('Interim Transcript Validation', () => {
   test.beforeEach(async ({ page, context }) => {
+    skipIfOpenAIProxy('Interim/final transcripts are Deepgram-only; skip when using OpenAI proxy');
     // Grant microphone permissions before navigation (same pattern as callback-test.spec.js)
     await context.grantPermissions(['microphone']);
     
