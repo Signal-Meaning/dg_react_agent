@@ -5,6 +5,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { APP_ROOT } from './helpers/app-paths.mjs';
 
 test.describe('React Error Detection', () => {
   
@@ -12,7 +13,6 @@ test.describe('React Error Detection', () => {
     const errors = [];
     const warnings = [];
     
-    // Capture all console messages
     page.on('console', msg => {
       if (msg.type() === 'error') {
         errors.push(msg.text());
@@ -21,8 +21,7 @@ test.describe('React Error Detection', () => {
       }
     });
     
-    // Navigate to test app
-    await page.goto('http://localhost:5173');
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(5000);
     

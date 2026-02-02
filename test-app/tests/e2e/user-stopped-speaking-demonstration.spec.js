@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
+import { APP_ROOT } from './helpers/app-paths.mjs';
 import { setupVADTestingEnvironment } from '../utils/audio-stream-mocks';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
@@ -65,8 +66,7 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
       }
     });
     
-    // Navigate to test app
-    await page.goto('http://localhost:5173');
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     
     console.log('✅ Test app loaded');
@@ -218,11 +218,9 @@ test.describe('onUserStoppedSpeaking Demonstration', () => {
       }
     });
     
-    // Navigate to test app
-    await page.goto('http://localhost:5173');
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     
-    // Use proper microphone setup with fixtures (same pattern as passing tests)
     console.log('🎤 Enabling microphone...');
     const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
       skipGreetingWait: true,

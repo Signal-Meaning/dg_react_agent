@@ -95,25 +95,28 @@ const SELECTORS = {
 };
 
 /**
- * Navigate to the test app and wait for it to load
+ * Navigate to the test app and wait for it to load.
+ * Uses relative path so Playwright's baseURL (http or https from config) is applied.
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
 async function setupTestPage(page, timeout = 10000) {
-  await page.goto('http://localhost:5173');
+  const { APP_ROOT } = await import('./app-paths.mjs');
+  await page.goto(APP_ROOT);
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
 }
 
 /**
  * Navigate to the test app with Deepgram proxy (VITE_DEEPGRAM_PROXY_ENDPOINT).
  * Use for E2E tests that target the Deepgram proxy (e.g. deepgram-text-session-flow).
+ * Uses relative path so baseURL (http/https) from config is applied.
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
 async function setupTestPageWithDeepgramProxy(page, timeout = 10000) {
-  const { buildUrlWithParams, BASE_URL, getDeepgramProxyParams } = await import('./test-helpers.mjs');
-  const url = buildUrlWithParams(BASE_URL, getDeepgramProxyParams());
-  await page.goto(url);
+  const { getDeepgramProxyParams } = await import('./test-helpers.mjs');
+  const { pathWithQuery } = await import('./app-paths.mjs');
+  await page.goto(pathWithQuery(getDeepgramProxyParams()));
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
 }
 
@@ -121,13 +124,14 @@ async function setupTestPageWithDeepgramProxy(page, timeout = 10000) {
  * Navigate to the test app with OpenAI proxy (VITE_OPENAI_PROXY_ENDPOINT).
  * Use for E2E tests that target the OpenAI Realtime proxy (Issue #381).
  * Skip with skipIfNoOpenAIProxy() when VITE_OPENAI_PROXY_ENDPOINT is not set.
+ * Uses relative path so baseURL (http/https) from config is applied.
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
 async function setupTestPageWithOpenAIProxy(page, timeout = 10000) {
-  const { buildUrlWithParams, BASE_URL, getOpenAIProxyParams } = await import('./test-helpers.mjs');
-  const url = buildUrlWithParams(BASE_URL, getOpenAIProxyParams());
-  await page.goto(url);
+  const { getOpenAIProxyParams } = await import('./test-helpers.mjs');
+  const { pathWithQuery } = await import('./app-paths.mjs');
+  await page.goto(pathWithQuery(getOpenAIProxyParams()));
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
 }
 

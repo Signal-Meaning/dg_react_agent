@@ -5,6 +5,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { APP_ROOT } from './helpers/app-paths.mjs';
 
 test.describe('JavaScript Error Tests', () => {
   
@@ -12,7 +13,6 @@ test.describe('JavaScript Error Tests', () => {
     const errors = [];
     const warnings = [];
     
-    // Capture console errors and warnings
     page.on('console', msg => {
       if (msg.type() === 'error') {
         errors.push(msg.text());
@@ -21,13 +21,11 @@ test.describe('JavaScript Error Tests', () => {
       }
     });
     
-    // Capture page errors
     page.on('pageerror', error => {
       errors.push(`Page error: ${error.message}`);
     });
     
-    // Navigate to test app
-    await page.goto('http://localhost:5173');
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(5000); // Wait longer for component to load
     

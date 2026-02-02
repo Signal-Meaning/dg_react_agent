@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { APP_ROOT } from './helpers/app-paths.mjs';
 import { MicrophoneHelpers } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
 
@@ -28,8 +29,7 @@ test.describe('onUserStoppedSpeaking Callback Verification', () => {
       }
     });
     
-    // Navigate to test app
-    await page.goto('http://localhost:5173');
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     
     console.log('✅ Test app loaded');

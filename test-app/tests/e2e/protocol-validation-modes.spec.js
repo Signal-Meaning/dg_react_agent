@@ -7,6 +7,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { APP_TEST_MODE } from './helpers/app-paths.mjs';
 import {
   installMockWebSocket,
 } from './helpers/test-helpers.js';
@@ -16,13 +17,11 @@ test.use({ browserName: 'chromium' });
 
 test.describe('Protocol Validation - Mock API Mode', () => {
   test('should work with mocked WebSocket when no API key provided', async ({ page, context }) => {
-    // Use test mode to simulate missing API key
     await page.addInitScript(() => {
       window.testApiKey = 'missing';
     });
     
-    // Navigate to test mode
-    await page.goto('http://localhost:5173/?test-mode=true');
+    await page.goto(APP_TEST_MODE);
     await page.waitForLoadState('networkidle');
     
     // Install mock WebSocket to prevent real API calls
@@ -60,11 +59,9 @@ test.describe('Protocol Validation - Mock Mode', () => {
       window.testApiKey = 'missing';
     });
     
-    // Navigate to test mode
-    await page.goto('http://localhost:5173/?test-mode=true');
+    await page.goto(APP_TEST_MODE);
     await page.waitForLoadState('networkidle');
     
-    // Install mock WebSocket
     await installMockWebSocket(page, context);
     
     // Wait for the error state to load (this is the expected behavior for missing API key)

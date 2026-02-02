@@ -26,7 +26,8 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
+import { pathWithQuery } from './helpers/app-paths.mjs';
+import { BASE_URL } from './helpers/test-helpers.mjs';
 
 const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
 const IS_PROXY_MODE = process.env.USE_PROXY_MODE === 'true';
@@ -85,13 +86,11 @@ test.describe('Backend Proxy Authentication', () => {
   test('should include auth token in proxy connection when provided', async ({ page }) => {
     const authToken = 'test-jwt-token-123';
     
-    // Configure component via URL query parameters
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    await page.goto(pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT,
       proxyAuthToken: authToken
-    });
-    await page.goto(testUrl);
+    }));
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 
@@ -110,12 +109,10 @@ test.describe('Backend Proxy Authentication', () => {
   });
 
   test('should work without auth token (optional authentication)', async ({ page }) => {
-    // Configure component via URL query parameters (no auth token)
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    await page.goto(pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT
-    });
-    await page.goto(testUrl);
+    }));
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 
@@ -133,13 +130,11 @@ test.describe('Backend Proxy Authentication', () => {
   test('should reject invalid authentication token', async ({ page }) => {
     const invalidToken = 'invalid-token-123';
     
-    // Configure component with invalid token
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    await page.goto(pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT,
       proxyAuthToken: invalidToken
-    });
-    await page.goto(testUrl);
+    }));
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 
@@ -178,13 +173,11 @@ test.describe('Backend Proxy Authentication', () => {
   test('should reject malformed authentication token', async ({ page }) => {
     const malformedToken = 'malformed-token';
     
-    // Configure component with malformed token
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    await page.goto(pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT,
       proxyAuthToken: malformedToken
-    });
-    await page.goto(testUrl);
+    }));
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 
@@ -221,13 +214,11 @@ test.describe('Backend Proxy Authentication', () => {
   test('should handle token expiration gracefully', async ({ page }) => {
     const expiredToken = 'expired-token-123';
     
-    // Configure component with expired token
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    await page.goto(pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT,
       proxyAuthToken: expiredToken
-    });
-    await page.goto(testUrl);
+    }));
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 
@@ -261,15 +252,13 @@ test.describe('Backend Proxy Authentication', () => {
   });
 
   test('should handle connection closure due to token expiration during session', async ({ page }) => {
-    // First, establish a connection with a valid token
     const validToken = 'valid-token-123';
     
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    await page.goto(pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT,
       proxyAuthToken: validToken
-    });
-    await page.goto(testUrl);
+    }));
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 
@@ -311,19 +300,18 @@ test.describe('Backend Proxy Authentication', () => {
 
   test('should handle CORS preflight requests with security headers', async ({ page }) => {
     const proxyHttpUrl = PROXY_ENDPOINT.replace('ws://', 'http://').replace('wss://', 'https://');
+    const appOrigin = new URL(BASE_URL).origin;
     
-    // Make an OPTIONS request (CORS preflight)
     const response = await page.request.fetch(proxyHttpUrl, {
       method: 'OPTIONS',
       headers: {
-        'Origin': 'http://localhost:5173',
+        'Origin': appOrigin,
         'Access-Control-Request-Method': 'GET'
       }
     });
     
-    // Verify CORS headers are present for valid origin
     const headers = response.headers();
-    expect(headers['access-control-allow-origin']).toBe('http://localhost:5173');
+    expect(headers['access-control-allow-origin']).toBe(appOrigin);
     expect(headers['access-control-allow-credentials']).toBe('true');
     
     // Verify security headers are also present
@@ -368,12 +356,10 @@ test.describe('Backend Proxy Authentication', () => {
       };
     }, blockedOrigin);
     
-    // Configure component via URL query parameters
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    await page.goto(pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT
-    });
-    await page.goto(testUrl);
+    }));
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 
@@ -386,14 +372,10 @@ test.describe('Backend Proxy Authentication', () => {
   });
 
   test('should set security headers in WebSocket upgrade responses', async ({ page }) => {
-    // This test verifies security headers are set during WebSocket upgrade
-    // We can verify this by checking the connection is established with proper headers
-    
-    const testUrl = buildUrlWithParams(BASE_URL, {
+    await page.goto(pathWithQuery({
       connectionMode: 'proxy',
       proxyEndpoint: PROXY_ENDPOINT
-    });
-    await page.goto(testUrl);
+    }));
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
 

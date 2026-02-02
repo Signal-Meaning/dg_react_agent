@@ -168,8 +168,8 @@ test.describe('Echo Cancellation Detection and Configuration', () => {
     // Grant permissions before navigation
     await context.grantPermissions(['microphone', 'camera']);
     
-    // Navigate with custom constraints
-    await page.goto(`http://localhost:5173?audioConstraints=${constraintsParam}`);
+    const { pathWithQuery } = await import('./helpers/app-paths.mjs');
+    await page.goto(pathWithQuery({ audioConstraints: constraintsParam }));
     await page.waitForLoadState('networkidle');
     
     // Track getUserMedia calls (set up after navigation but before enabling mic)

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
+import { APP_DEBUG } from './helpers/app-paths.mjs';
 import { setupVADTestingEnvironment } from '../utils/audio-stream-mocks';
 import { setupAudioSendingPrerequisites, assertConnectionState, waitForAgentGreeting } from './helpers/test-helpers';
 import { getIdleState, waitForIdleConditions } from './fixtures/idle-timeout-helpers';
@@ -11,8 +12,7 @@ test.describe('Extended Silence Idle Timeout Test', () => {
   test('should demonstrate connection closure with >10 seconds of silence', async ({ page, context }) => {
     console.log('🧪 Testing connection closure with extended silence (>10 seconds)...');
     
-    // Navigate to test app with debug mode enabled
-    await page.goto('http://localhost:5173?debug=true');
+    await page.goto(APP_DEBUG);
     await page.waitForLoadState('networkidle');
     
     // Setup all audio sending prerequisites in one call

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { APP_ROOT } from './helpers/app-paths.mjs';
 import { setupTestPage, waitForConnection } from './helpers/test-helpers';
 
 test.describe('Logging Behavior Tests', () => {
@@ -6,7 +7,6 @@ test.describe('Logging Behavior Tests', () => {
   test('should log event log entries to console', async ({ page }) => {
     console.log('🧪 Testing console logging synchronization...');
     
-    // Track console logs
     const consoleLogs = [];
     page.on('console', msg => {
       if (msg.type() === 'log') {
@@ -14,8 +14,7 @@ test.describe('Logging Behavior Tests', () => {
       }
     });
     
-    // Navigate to the running test app
-    await page.goto('http://localhost:5173/');
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     
     // Wait for component to initialize
@@ -89,11 +88,9 @@ test.describe('Logging Behavior Tests', () => {
       }
     });
     
-    // Navigate to the running test app
-    await page.goto('http://localhost:5173/');
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     
-    // Wait for component to initialize
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
     // Enable microphone to trigger transcription
@@ -147,11 +144,9 @@ test.describe('Logging Behavior Tests', () => {
       }
     });
     
-    // Navigate to the running test app
-    await page.goto('http://localhost:5173/');
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     
-    // Wait for component to initialize
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
     // Send a text message to trigger user message logging
@@ -200,11 +195,9 @@ test.describe('Logging Behavior Tests', () => {
       }
     });
     
-    // Navigate to the running test app
-    await page.goto('http://localhost:5173/');
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
     
-    // Wait for component to initialize
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
     // Wait for initial logs to be generated

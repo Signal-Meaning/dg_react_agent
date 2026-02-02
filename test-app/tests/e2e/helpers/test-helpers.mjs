@@ -6,11 +6,10 @@
  */
 
 /**
- * Base URL for test app navigation
- * Can be overridden via PLAYWRIGHT_BASE_URL environment variable
- * Respects HTTPS=true (Vite serves https when HTTPS=true)
- * Falls back to VITE_BASE_URL or default localhost URL
- * Matches the baseURL configured in playwright.config.mjs
+ * Base URL for test app navigation (full URL for Origin/headers only).
+ * For page.goto() use relative paths from app-paths.mjs so Playwright's baseURL is applied.
+ * Can be overridden via PLAYWRIGHT_BASE_URL environment variable.
+ * Matches the baseURL configured in playwright.config.mjs.
  */
 const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
 export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL
@@ -20,7 +19,7 @@ export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL
  * Get proxy configuration from environment variables
  * @returns {Record<string, string>} Proxy configuration params or empty object
  */
-function getProxyConfig() {
+export function getProxyConfig() {
   // Check if proxy mode is enabled via environment variable
   if (process.env.USE_PROXY_MODE === 'true') {
     const proxyEndpoint = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
@@ -137,13 +136,16 @@ const SELECTORS = {
 };
 
 /**
- * Navigate to the test app and wait for it to load
- * Automatically uses proxy mode if USE_PROXY_MODE env var is set
+ * Navigate to the test app and wait for it to load.
+ * Uses relative path so Playwright's baseURL (http or https from config) is applied.
+ * Automatically uses proxy mode if USE_PROXY_MODE env var is set.
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 10000)
  */
 async function setupTestPage(page, timeout = 10000) {
-  const url = buildUrlWithParams(BASE_URL);
+  const { APP_ROOT, pathWithQuery } = await import('./app-paths.mjs');
+  const params = getProxyConfig();
+  const url = Object.keys(params).length ? pathWithQuery(params) : APP_ROOT;
   await page.goto(url);
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
 }

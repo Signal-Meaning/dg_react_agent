@@ -9,6 +9,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { APP_ROOT } from './helpers/app-paths.mjs';
 import { MicrophoneHelpers, establishConnectionViaText } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks.js';
 import { waitForIdleTimeout } from './fixtures/idle-timeout-helpers';
@@ -16,7 +17,7 @@ import { waitForIdleTimeout } from './fixtures/idle-timeout-helpers';
 test.describe('Fixed Microphone Functionality Tests', () => {
   
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:5173');
+    await page.goto(APP_ROOT);
     await page.waitForLoadState('networkidle');
   });
   

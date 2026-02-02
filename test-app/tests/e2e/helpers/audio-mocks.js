@@ -158,23 +158,23 @@ async function setupAudioMocks(page) {
 }
 
 /**
- * Sets up a test page with audio mocks and navigates to the test app
+ * Sets up a test page with audio mocks and navigates to the test app.
+ * Uses relative path so Playwright's baseURL (http or https from config) is applied.
  * @param {import('@playwright/test').Page} page - The Playwright page instance
  */
 async function setupTestPage(page) {
   await setupAudioMocks(page);
   
-  // Import buildUrlWithParams to automatically add proxy config if USE_PROXY_MODE is set
-  const { buildUrlWithParams, BASE_URL } = await import('./test-helpers.mjs');
+  const { getProxyConfig } = await import('./test-helpers.mjs');
+  const { pathWithQuery } = await import('./app-paths.mjs');
   
-  // Build URL with proxy config if USE_PROXY_MODE env var is set, plus test-mode and debug
-  const testUrl = buildUrlWithParams(BASE_URL, {
+  const params = {
+    ...getProxyConfig(),
     'test-mode': 'true',
     debug: 'true'
-  });
+  };
   
-  // Navigate to test app with proper configuration
-  await page.goto(testUrl);
+  await page.goto(pathWithQuery(params));
   await page.waitForLoadState('networkidle');
   
   // Wait for component to initialize

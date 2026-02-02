@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { APP_ROOT } from './helpers/app-paths.mjs';
 import { setupConnectionStateTracking, MicrophoneHelpers } from './helpers/test-helpers.js';
 
 test.describe('Transcription Configuration Test', () => {
   test('should verify transcription service is properly configured', async ({ page }) => {
     console.log('🔍 Testing transcription service configuration...');
     
-    // Navigate to test app
-    await page.goto('http://localhost:5173');
+    await page.goto(APP_ROOT);
     
     // Use proper microphone setup with fixtures (same pattern as passing tests)
     const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {

@@ -8,6 +8,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { pathWithQuery } from './helpers/app-paths.mjs';
 import { MicrophoneHelpers, skipIfNoRealAPI } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
 import { getVADState } from './fixtures/vad-helpers.js';
@@ -32,7 +33,7 @@ test.describe('VAD Configuration Optimization', () => {
       // Set the utterance_end_ms parameter before loading page
       // Note: Environment variables need to be set before page load
       // Since we can't modify env vars dynamically, we'll set them via URL params or localStorage
-      await page.goto(`http://localhost:5173?utterance_end_ms=${utteranceEndMs}`);
+      await page.goto(pathWithQuery({ utterance_end_ms: String(utteranceEndMs) }));
       await page.waitForLoadState('networkidle');
       await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
       
@@ -137,8 +138,7 @@ test.describe('VAD Configuration Optimization', () => {
     // Test with optimized utterance_end_ms (based on previous test)
     const optimizedUtteranceEndMs = 3000;
     
-    // Navigate to page and set configuration
-    await page.goto(`http://localhost:5173?utterance_end_ms=${optimizedUtteranceEndMs}`);
+    await page.goto(pathWithQuery({ utterance_end_ms: String(optimizedUtteranceEndMs) }));
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
@@ -227,7 +227,7 @@ test.describe('VAD Configuration Optimization', () => {
     
     // Use optimized configuration
     const optimizedUtteranceEndMs = 3000;
-    await page.goto(`http://localhost:5173?utterance_end_ms=${optimizedUtteranceEndMs}`);
+    await page.goto(pathWithQuery({ utterance_end_ms: String(optimizedUtteranceEndMs) }));
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     

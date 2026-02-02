@@ -53,11 +53,18 @@ npx playwright test --grep "Idle Timeout"   # Idle timeout specific tests
 npx playwright test --grep "Microphone"     # All microphone tests
 ```
 
+### E2E navigation: use baseURL (relative URLs)
+
+**Do not hardcode `http://localhost:5173` in specs or helpers.** The app may run over HTTPS when `HTTPS=true` in `test-app/.env`. Playwright’s `baseURL` is set in `playwright.config.mjs` (http or https). Use relative paths so navigation always matches the server:
+
+- **Helpers:** `test-app/tests/e2e/helpers/app-paths.mjs` exports `APP_ROOT` (`/`), `APP_TEST_MODE`, `APP_DEBUG`, and `pathWithQuery(params)` for query strings. Use `page.goto(APP_ROOT)` or `page.goto(pathWithQuery({ 'test-mode': 'true' }))`.
+- **Specs:** Import `APP_ROOT`, `APP_TEST_MODE`, `APP_DEBUG`, or `pathWithQuery` from `./helpers/app-paths.mjs` and use them for all `page.goto(...)` calls. For CORS/Origin assertions, use the app origin from `BASE_URL` in `test-helpers.mjs` (e.g. `new URL(BASE_URL).origin`).
+
 ### Using a pre-started dev server
 
 If you already run the test-app dev server (e.g. `npm run dev` in test-app), Playwright will try to start it again by default and fail with "Port 5173 is already in use". Use a **preconfigured server** instead:
 
-1. **Start the dev server first** (required). If you run with `E2E_USE_EXISTING_SERVER=1` but nothing is serving the app, every test will fail with `net::ERR_EMPTY_RESPONSE at http://localhost:5173`.
+1. **Start the dev server first** (required). If you run with `E2E_USE_EXISTING_SERVER=1` but nothing is serving the app, every test will fail with `net::ERR_EMPTY_RESPONSE` at the app URL.
    ```bash
    cd test-app && npm run dev
    ```

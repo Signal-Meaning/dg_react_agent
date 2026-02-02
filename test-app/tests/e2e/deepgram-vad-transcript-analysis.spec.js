@@ -6,14 +6,14 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { APP_TEST_MODE } from './helpers/app-paths.mjs';
 import { setupConnectionStateTracking, MicrophoneHelpers, waitForTranscript } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
 import { getVADState } from './fixtures/vad-helpers.js';
 
 test.describe('VAD Transcript Analysis', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to test app
-    await page.goto('http://localhost:5173?test-mode=true');
+    await page.goto(APP_TEST_MODE);
     
     // Set up test environment
     await page.evaluate(() => {
