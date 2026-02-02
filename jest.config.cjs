@@ -16,8 +16,9 @@ module.exports = {
   // Exclude websocket-connectivity test in CI (requires real API key)
   // Use testPathIgnorePatterns for more reliable exclusion
   // Pattern matches any path containing websocket-connectivity.test.js
+  // In CI: exclude websocket-connectivity (real API) and e2e-helpers-scheme (dynamic import of ESM fails without --experimental-vm-modules)
   testPathIgnorePatterns: process.env.CI === 'true'
-    ? ['/node_modules/', '/dist/', '.*websocket-connectivity\\.test\\.js.*']
+    ? ['/node_modules/', '/dist/', '.*websocket-connectivity\\.test\\.js.*', '.*e2e-helpers-scheme\\.test\\.js.*']
     : ['/node_modules/', '/dist/'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
