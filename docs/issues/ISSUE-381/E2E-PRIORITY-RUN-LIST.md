@@ -170,11 +170,11 @@ These are the **remaining** E2E specs (all except the 13 tests in the tracking t
 | 8 | `issue-373-idle-timeout-during-function-calls.spec.js` | Both (expandable) | — | — | Idle timeout during function calls | not run |
 | 9 | `context-retention-with-function-calling.spec.js` | Both (expandable) | — | — | Context retention + function calling | pass |
 | 10 | `context-retention-agent-usage.spec.js` | Both (expandable) | — | — | Context retention; agent greeting | pass |
-| 11 | `function-calling-e2e.spec.js` | Both (expandable) | — | — | Function calling E2E | not run |
-| 12 | `idle-timeout-behavior.spec.js` | Both (expandable) | — | — | Idle timeout behavior | not run |
+| 11 | `function-calling-e2e.spec.js` | Both (expandable) | — | — | Function calling E2E | pass (8 tests; run with --timeout=120000 --global-timeout=600000) |
+| 12 | `idle-timeout-behavior.spec.js` | Both (expandable) | — | — | Idle timeout behavior | mixed (1 pass; several fail e.g. Issue #262) |
 | 13 | `idle-timeout-during-agent-speech.spec.js` | Both (expandable) | — | — | Idle timeout during agent speech | not run |
 | 14 | `deepgram-greeting-idle-timeout.spec.js` | Deepgram-only | 2 | Uses `deepgramRef` and Deepgram-specific connection close after idle; OpenAI has different idle/close semantics. | Greeting + idle; deepgramRef/close | not run |
-| 15 | `extended-silence-idle-timeout.spec.js` | Both (expandable) | — | — | Extended silence; idle timeout | not run |
+| 15 | `extended-silence-idle-timeout.spec.js` | Both (expandable) | — | — | Extended silence; idle timeout | fail (speech detection / audio path) |
 | 16 | `suspended-audiocontext-idle-timeout.spec.js` | Both (expandable) | — | — | Suspended AudioContext + idle timeout | not run |
 | 17 | `text-idle-timeout-suspended-audio.spec.js` | Both (expandable) | — | — | Text session; idle timeout; suspended audio | not run |
 | 18 | `agent-state-transitions.spec.js` | Both (expandable) | — | — | AgentThinking / state transitions | pass |
@@ -197,13 +197,13 @@ These are the **remaining** E2E specs (all except the 13 tests in the tracking t
 | 35 | `strict-mode-behavior.spec.js` | Both (expandable) | — | — | Strict mode behavior | not run |
 | 36 | `lazy-initialization-e2e.spec.js` | Both (expandable) | — | — | Lazy initialization E2E | not run |
 | 37 | `declarative-props-api.spec.js` | Both (expandable) | — | — | Declarative props (function-call callback); skips when OpenAI | skip (OpenAI) |
-| 38 | `protocol-validation-modes.spec.js` | Both (expandable) | — | — | Protocol validation modes | not run |
+| 38 | `protocol-validation-modes.spec.js` | Both (expandable) | — | — | Protocol validation modes | pass |
 | 39 | `transcription-config-test.spec.js` | Both (expandable) | — | — | Transcription config | not run |
-| 40 | `deepgram-instructions-file.spec.js` | Deepgram-only | — | Tests Deepgram instructions-file upload/path; OpenAI uses a different instructions mechanism (e.g. session instructions), not file-based. | Instructions file | not run |
+| 40 | `instructions-e2e.spec.js` | Both (expandable) | — | — | Instructions pipeline (load, preview, VA integration); runs for Deepgram or OpenAI by env | not run |
 | 41 | `deepgram-callback-test.spec.js` | Deepgram-only | 6 | onTranscriptUpdate, onUserStartedSpeaking, onUserStoppedSpeaking depend on Deepgram transcript and VAD events; OpenAI does not send equivalent events (would require proxy to synthesize; not implemented). | Callbacks; transcript/VAD (audio path ≈ test 6) | skip (OpenAI) |
 | 42 | `user-stopped-speaking-callback.spec.js` | Both (expandable) | — | — | User stopped speaking callback | not run |
 | 43 | `user-stopped-speaking-demonstration.spec.js` | Both (expandable) | — | — | User stopped speaking demo | not run |
-| 44 | `page-content.spec.js` | Both (expandable) | — | — | Page content | not run |
+| 44 | `page-content.spec.js` | Both (expandable) | — | — | Page content | pass |
 | 45 | `api-key-validation.spec.js` | Both (expandable) | — | — | API key validation | pass |
 | 46 | `baseurl-test.spec.js` | Both (expandable) | — | — | Base URL | pass |
 | 47 | `real-user-workflows.spec.js` | Both (expandable) | — | — | Real user workflows | not run |
@@ -266,6 +266,8 @@ HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright tes
 ---
 
 **Summary (partial run):** From the interrupted run (~80 of 218 tests): **8 passed**, **47 not run**; with post-fix targeted runs: **context-retention-agent-usage** (2 tests) **pass**, **declarative-props function-call** **skip** when OpenAI, **context-retention-with-function-calling** **pass** when proxy is running and real API sends `response.function_call_arguments.done`. VAD specs (52–60) can be deferred.
+
+**Suggested assortment (5 remaining specs) run:** **protocol-validation-modes** (2 tests) and **page-content** (2 tests) **pass**. **function-calling-e2e**: **pass** (8 tests, ~25.5s when run in isolation with `--timeout=120000 --global-timeout=600000`). **idle-timeout-behavior**: 1 test passed (“Idle timeout works correctly after agent finishes”); several failed (e.g. Issue #262 “IdleTimeoutService should start timeout countdown”, UtteranceEnd, realistic timing). **extended-silence-idle-timeout**: **fail** (speech detection / audio path with OpenAI proxy). Result column in Remaining E2E table updated for orders 11, 12, 15, 38, 44.
 
 **Remaining pass status:** The **priority list** is **tests 1–13** in **Tiers 1–4** (see above); status is updated in place in each Tier table. The file `e2e-remaining-run.log` is from an earlier full E2E run (interrupted); ignore or archive it. **Tests 1–10** (OpenAI proxy suite) and **11–13** (context retention) **pass** when proxy running. **Skipped when OpenAI:** deepgram-backend-proxy-mode, deepgram-callback-test (transcript/VAD), declarative-props (function-call — use test 7 "Simple function calling"). Deepgram-only specs are renamed with `deepgram-` prefix; run the **Corresponding Test** (1–13) when using the OpenAI proxy. Proxy unit (28) and integration (12) tests include greeting. To run all 13: see "Run all 13 tests" under Tier 4.
 

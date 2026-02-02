@@ -40,6 +40,7 @@
 | [INTEGRATION-TEST-PLAN.md](./INTEGRATION-TEST-PLAN.md) | Integration tests: proxy WebSocket behavior and component integration |
 | [E2E-TEST-PLAN.md](./E2E-TEST-PLAN.md) | E2E test suite: connection, inject, multi-turn, reconnection, settings, errors |
 | [MISSING-OPENAI-E2E-TESTS.md](./MISSING-OPENAI-E2E-TESTS.md) | Missing OpenAI E2E tests: candidates representative of Deepgram or compelled by the OpenAI API |
+| [INSTRUCTIONS-E2E-PROPOSAL.md](./INSTRUCTIONS-E2E-PROPOSAL.md) | Instructions E2E: step-by-step proposal (one test that asserts agent response reflects instructions; TDD order) |
 
 ---
 

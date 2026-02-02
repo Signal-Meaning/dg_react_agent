@@ -334,7 +334,17 @@ function App() {
     const loadInstructions = async () => {
       try {
         setInstructionsLoading(true);
-        
+
+        // E2E-only override: when set, use this instruction for "response content reflects instructions" test
+        const e2eInstructions = import.meta.env.VITE_E2E_INSTRUCTIONS;
+        if (e2eInstructions && typeof e2eInstructions === 'string' && e2eInstructions.trim()) {
+          setLoadedInstructions(e2eInstructions.trim());
+          addLog(`Using E2E instruction override (VITE_E2E_INSTRUCTIONS): ${e2eInstructions.substring(0, 50)}...`);
+          setInstructionsLoading(false);
+          hasLoadedInstructions.current = true;
+          return;
+        }
+
         // Use the instructions-loader utility which handles:
         // 1. Environment variable override (VITE_DEEPGRAM_INSTRUCTIONS)
         // 2. File loading (instructions.txt)

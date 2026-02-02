@@ -33,6 +33,9 @@ This document describes the environment variables that can be used to configure 
 - `VITE_DEEPGRAM_PROXY_ENDPOINT` - WebSocket URL for the Deepgram proxy (default: `ws://localhost:8080/deepgram-proxy`). Used by deepgram-text-session-flow and other Deepgram proxy E2E tests.
 - `VITE_OPENAI_PROXY_ENDPOINT` - WebSocket URL for the OpenAI proxy (default: `ws://localhost:8080/openai`). When set, the openai-inject-connection-stability E2E test runs against that proxy.
 
+### E2E Instructions Override
+- `VITE_E2E_INSTRUCTIONS` - When set, the test-app uses this string as instructions instead of loading from file/env. Used only by the “response content reflects instructions” E2E test in `instructions-e2e.spec.js` (e.g. set to a BANANA instruction and run with `--grep "response content reflects"`). See [INSTRUCTIONS-E2E-PROPOSAL.md](../docs/issues/ISSUE-381/INSTRUCTIONS-E2E-PROPOSAL.md).
+
 ## Usage
 
 Create a `.env` file in the `test-app` directory with your desired configuration:

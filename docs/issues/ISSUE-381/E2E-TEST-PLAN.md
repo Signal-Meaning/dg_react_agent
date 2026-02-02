@@ -73,7 +73,7 @@ Use **VITE_OPENAI_PROXY_ENDPOINT** (and optional skip when unset) so these run o
 
 ## Missing OpenAI E2E tests
 
-See **[MISSING-OPENAI-E2E-TESTS.md](./MISSING-OPENAI-E2E-TESTS.md)** for candidates that are (1) representative of Deepgram coverage we don’t yet have for OpenAI, or (2) compelled by the OpenAI Realtime API. Recommended next: **Instructions / session instructions** E2E (TDD). Others (server close, SettingsApplied, idle after greeting, transcript-absent) are optional or deferred.
+See **[MISSING-OPENAI-E2E-TESTS.md](./MISSING-OPENAI-E2E-TESTS.md)** for candidates that are (1) representative of Deepgram coverage we don’t yet have for OpenAI, or (2) compelled by the OpenAI Realtime API. Recommended next: **Instructions / session instructions** E2E (TDD). **Elaboration:** [INSTRUCTIONS-E2E-PROPOSAL.md](./INSTRUCTIONS-E2E-PROPOSAL.md) explains the proposal step-by-step (one E2E that asserts response reflects instructions; TDD order; how to set instructions for the test). Others (server close, SettingsApplied, idle after greeting, transcript-absent) are optional or deferred.
 
 ## Acceptance
 

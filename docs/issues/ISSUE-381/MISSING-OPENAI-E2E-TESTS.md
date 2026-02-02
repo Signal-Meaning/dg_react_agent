@@ -22,12 +22,12 @@ No additional OpenAI-only test is required for these; run the Corresponding Test
 
 ## Missing OpenAI tests (candidates)
 
-### 1. Instructions / session instructions (recommended)
+### 1. Instructions (loading, preview, integration) — **revised for both backends**
 
-- **Deepgram analogue:** deepgram-instructions-file (file-based instructions).
-- **Gap:** OpenAI uses session instructions (text in `session.update`), not file upload. We don’t have an E2E that asserts instructions are applied (e.g. agent response reflects instructions).
-- **Proposed test:** In `openai-proxy-e2e.spec.js` (or small dedicated spec): connect with `agent.instructions` (or equivalent) in Settings; send a prompt that should reflect those instructions; assert agent response content reflects them (e.g. keyword or phrasing). Proxy already forwards Settings → `session.update`; add assertion on response content.
-- **Status:** **Recommended.** Compelled by OpenAI API (session instructions are first-class). TDD: add failing E2E first, then ensure proxy/app pass.
+- **Spec:** `instructions-e2e.spec.js`. The test is about the **instructions pipeline** (load, preview, VA integration), not about files: it asserts that instructions are loaded (from whatever source the test-app uses), shown in the UI, and passed to the VA so the agent responds. Same tests run for Deepgram or OpenAI.
+- **Revision:** The spec now runs for **either** Deepgram or OpenAI: it uses `setupTestPageWithOpenAIProxy` when `VITE_OPENAI_PROXY_ENDPOINT` is set, else `setupTestPageWithDeepgramProxy`. Same tests, same assertions; backend is chosen by env. No “Why Deepgram-only” — we can and did revise it.
+- **Optional stronger test:** Add one E2E that asserts **response content** reflects instructions (e.g. specific instruction “answer with BANANA”; assert reply contains “BANANA”). See [INSTRUCTIONS-E2E-PROPOSAL.md](./INSTRUCTIONS-E2E-PROPOSAL.md).
+- **Status:** **Done.** Spec renamed to `instructions-e2e.spec.js` and revised to run for both backends.
 
 ### 2. No API key in browser (proxy mode) (covered by assortment)
 
@@ -67,11 +67,11 @@ No additional OpenAI-only test is required for these; run the Corresponding Test
 
 | Candidate | Priority | Action |
 |-----------|----------|--------|
-| Instructions / session instructions | Recommended | Add E2E (TDD: fail first, then implement). |
+| Instructions (loading, preview, integration) | Done | Revised existing spec → `instructions-e2e.spec.js`; runs for Deepgram or OpenAI by env. Optional: add content-assertion test (see INSTRUCTIONS-E2E-PROPOSAL). |
 | No API key in browser | — | Run api-key-security-proxy-mode in assortment; extend if Deepgram-only. |
 | Server-side close / reconnect | Optional | Add only if needed for flakiness or clarity. |
 | SettingsApplied / ordering | Optional | Prefer integration test. |
 | Idle after greeting | Deferred | Rely on tests 2 and 5. |
 | Transcript callbacks absent | Deferred | Add only if regressions appear. |
 
-**Next steps:** Implement “Instructions / session instructions” E2E per TDD; run the [Suggested assortment](./E2E-PRIORITY-RUN-LIST.md#assortment-run-both-expandable-specs-against-openai-peace-of-mind) and update the Remaining E2E table Result column.
+**Next steps:** Run [instructions-e2e.spec.js](../../test-app/tests/e2e/instructions-e2e.spec.js) with OpenAI proxy (and with Deepgram) to confirm both backends pass; optionally add content-assertion test per [INSTRUCTIONS-E2E-PROPOSAL.md](./INSTRUCTIONS-E2E-PROPOSAL.md). Run the [Suggested assortment](./E2E-PRIORITY-RUN-LIST.md#assortment-run-both-expandable-specs-against-openai-peace-of-mind) and update the Remaining E2E table Result column.
