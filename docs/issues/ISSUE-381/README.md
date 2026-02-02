@@ -7,15 +7,34 @@
 
 ---
 
+## Progress overview
+
+**[→ PROGRESS.md](./PROGRESS.md)** — Single overview of progress against Issue #381: phase status, test counts (unit 32, integration 7, E2E), what’s done vs remaining, and links to all other docs.
+
+---
+
+## Progress (2026-02-01) — detail
+
+- **Proxy unit tests** (`tests/openai-proxy.test.ts`): 32 tests. Expanded with multiple-tools mapping and function-call arguments edge case. All translator mappings covered (Settings → session.update with tools, InjectUserMessage, FunctionCallRequest/Response, context, audio, error).
+- **Proxy integration tests** (`tests/integration/openai-proxy-integration.test.ts`): 7 tests. Added (1) **function-call round-trip** — mock sends `response.function_call_arguments.done`, client receives FunctionCallRequest, client sends FunctionCallResponse, proxy sends `conversation.item.create` (function_call_output) to upstream; (2) **user echo** — client sends InjectUserMessage, client receives ConversationText (role user) with same content; (3) **context in Settings** — client sends Settings with `agent.context.messages`, upstream receives session.update and N conversation.item.create. See [INTEGRATION-TEST-PLAN.md](./INTEGRATION-TEST-PLAN.md) sections 7–9.
+- **E2E – context retention**: Both context-retention-agent-usage tests **pass** when running against OpenAI proxy. Fixes: (1) tests use `setupTestPageWithOpenAIProxy` when `VITE_OPENAI_PROXY_ENDPOINT` is set; (2) test app adds user message to conversationHistory optimistically in `handleTextSubmit` (with dedupe in `handleUserMessage` for server echo).
+- **E2E – declarative-props function-call**: Tests now **skip** when OpenAI proxy (`skipIfOpenAIProxy`); when run (e.g. Deepgram), they **require** a real function call to pass (no fake pass on “handler is set”). OpenAI function-call flow is covered by openai-proxy-e2e “Simple function calling” and by the new integration test above.
+- **E2E – remaining**: context-retention-with-function-calling still fails when OpenAI does not trigger a function call in time; declarative-props function-call tests skip when OpenAI. Backend-proxy-mode and callback-test (transcript/VAD) skip when OpenAI proxy. See [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md).
+
+---
+
 ## Documents
 
 | Document | Purpose |
 |----------|---------|
+| **[PROGRESS.md](./PROGRESS.md)** | **Progress overview** — phase status, test counts, done vs remaining, links to all below |
+| [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md) | E2E run order, commands, remaining specs when running with OpenAI proxy |
+| [API-DISCONTINUITIES.md](./API-DISCONTINUITIES.md) | Component vs OpenAI Realtime protocol; discontinuities and proxy mapping |
+| [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md) | Phased implementation: tests first (RED), then implementation (GREEN), then refactor |
 | [TDD-OVERVIEW.md](./TDD-OVERVIEW.md) | TDD workflow (Red–Green–Refactor), test-first rules, and order of work |
 | [UNIT-TEST-PLAN.md](./UNIT-TEST-PLAN.md) | Unit tests for the OpenAI proxy: write failing tests first, then implement |
 | [INTEGRATION-TEST-PLAN.md](./INTEGRATION-TEST-PLAN.md) | Integration tests: proxy WebSocket behavior and component integration |
 | [E2E-TEST-PLAN.md](./E2E-TEST-PLAN.md) | E2E test suite: connection, inject, multi-turn, reconnection, settings, errors |
-| [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md) | Phased implementation: tests first (RED), then implementation (GREEN), then refactor |
 
 ---
 

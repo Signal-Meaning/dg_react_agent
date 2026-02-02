@@ -12,6 +12,8 @@ export interface ComponentSettings {
   agent?: {
     think?: { provider?: { model?: string }; prompt?: string; functions?: Array<{ name: string; description?: string; parameters?: unknown }> };
     speak?: { provider?: { voice?: string } };
+    /** Conversation context for session continuity (Deepgram: in Settings; OpenAI: via conversation.item.create) */
+    context?: { messages?: Array<{ type?: string; role: 'user' | 'assistant'; content: string }> };
   };
 }
 
@@ -34,10 +36,41 @@ export interface ComponentInjectUserMessage {
   content: string;
 }
 
-/** OpenAI client event: conversation.item.create (user text) */
+/** OpenAI client event: conversation.item.create (user or assistant message) */
 export interface OpenAIConversationItemCreate {
   type: 'conversation.item.create';
-  item: { type: 'message'; role: 'user'; content: Array<{ type: 'input_text'; text: string }> };
+  item: { type: 'message'; role: 'user' | 'assistant'; content: Array<{ type: 'input_text'; text: string }> };
+}
+
+/**
+ * Map a component context message (History item) → OpenAI conversation.item.create.
+ * OpenAI does not send context in session.update; context is populated via conversation.item.create.
+ */
+export function mapContextMessageToConversationItemCreate(role: 'user' | 'assistant', content: string): OpenAIConversationItemCreate {
+  return {
+    type: 'conversation.item.create',
+    item: { type: 'message', role, content: [{ type: 'input_text', text: content ?? '' }] },
+  };
+}
+
+/** Component message: FunctionCallRequest (incoming from proxy to client) */
+export interface ComponentFunctionCallRequest {
+  type: 'FunctionCallRequest';
+  functions: Array<{ id: string; name: string; arguments: string; client_side: boolean }>;
+}
+
+/** Component message: FunctionCallResponse (outgoing from client to proxy) */
+export interface ComponentFunctionCallResponse {
+  type: 'FunctionCallResponse';
+  id: string;
+  name: string;
+  content: string;
+}
+
+/** OpenAI client event: conversation.item.create (function_call_output) */
+export interface OpenAIConversationItemCreateFunctionCallOutput {
+  type: 'conversation.item.create';
+  item: { type: 'function_call_output'; call_id: string; output: string };
 }
 
 /** Component message: SettingsApplied (incoming) */
@@ -160,9 +193,24 @@ export function mapOutputAudioTranscriptDoneToConversationText(
 }
 
 /**
+ * Map OpenAI response.function_call_arguments.done → component FunctionCallRequest.
+ * So the component invokes onFunctionCallRequest and can return a result within ~1s for the backend.
+ */
+export function mapFunctionCallArgumentsDoneToFunctionCallRequest(
+  event: OpenAIFunctionCallArgumentsDone
+): ComponentFunctionCallRequest {
+  const callId = event.call_id ?? '';
+  const name = event.name ?? 'function';
+  const args = event.arguments ?? '';
+  return {
+    type: 'FunctionCallRequest',
+    functions: [{ id: callId, name, arguments: args, client_side: true }],
+  };
+}
+
+/**
  * Map OpenAI response.function_call_arguments.done → component ConversationText (assistant).
- * So the app can show that a function was requested (e.g. "Function call: get_current_time()").
- * The component/test-app only update [data-testid="agent-response"] from ConversationText.
+ * Optional: so the app can show that a function was requested (e.g. "Function call: get_current_time()").
  */
 export function mapFunctionCallArgumentsDoneToConversationText(
   event: OpenAIFunctionCallArgumentsDone
@@ -174,6 +222,19 @@ export function mapFunctionCallArgumentsDoneToConversationText(
     type: 'ConversationText',
     role: 'assistant',
     content,
+  };
+}
+
+/**
+ * Map component FunctionCallResponse → OpenAI conversation.item.create (function_call_output).
+ * Required so the backend receives the function result and can continue the response.
+ */
+export function mapFunctionCallResponseToConversationItemCreate(
+  msg: ComponentFunctionCallResponse
+): OpenAIConversationItemCreateFunctionCallOutput {
+  return {
+    type: 'conversation.item.create',
+    item: { type: 'function_call_output', call_id: msg.id, output: msg.content ?? '' },
   };
 }
 

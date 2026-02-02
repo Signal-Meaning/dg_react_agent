@@ -61,6 +61,18 @@ export function skipIfNoOpenAIProxy(reason = 'Requires VITE_OPENAI_PROXY_ENDPOIN
 }
 
 /**
+ * Skip test when OpenAI proxy is configured (VITE_OPENAI_PROXY_ENDPOINT).
+ * Use for E2E tests that target Deepgram-only behavior (e.g. backend-proxy-mode expects
+ * deepgram-proxy, transcript/VAD callbacks, agent-wording or context assertions).
+ * @param {string} reason - Optional reason for skipping
+ */
+export function skipIfOpenAIProxy(reason = 'Deepgram-only test; skip when using OpenAI proxy') {
+  if (hasOpenAIProxyEndpoint()) {
+    test.skip(true, reason);
+  }
+}
+
+/**
  * Common test selectors
  */
 const SELECTORS = {
@@ -1068,16 +1080,18 @@ async function waitForFunctionCall(page, options = {}) {
       };
     });
     
-    if (result.count >= expectedCount) {
+    // Success: either DOM tracker or handler-recorded window.functionCallRequests
+    const effectiveCount = Math.max(result.count || 0, result.windowRequestsCount || 0);
+    if (effectiveCount >= expectedCount) {
       return {
-        count: result.count,
+        count: effectiveCount,
         info: result
       };
     }
-    
+
     await page.waitForTimeout(200);
   }
-  
+
   // Timeout - return current state for diagnostics
   const finalResult = await page.evaluate(() => {
     const tracker = document.querySelector('[data-testid="function-call-tracker"]');
@@ -1340,7 +1354,7 @@ async function writeTranscriptToFile(transcript, options = {}) {
 }
 
 export {
-  // hasRealAPIKey, skipIfNoRealAPI, hasOpenAIProxyEndpoint, skipIfNoOpenAIProxy are already exported inline above
+  // hasRealAPIKey, skipIfNoRealAPI, hasOpenAIProxyEndpoint, skipIfNoOpenAIProxy, skipIfOpenAIProxy are already exported inline above
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   setupTestPageWithDeepgramProxy, // Navigate to test app with Deepgram proxy (VITE_DEEPGRAM_PROXY_ENDPOINT)

@@ -25,6 +25,8 @@
 import { test, expect } from '@playwright/test';
 import {
   skipIfNoRealAPI,
+  hasOpenAIProxyEndpoint,
+  skipIfOpenAIProxy,
 } from './helpers/test-helpers.js';
 
 test.describe('Declarative Props API - Issue #305', () => {
@@ -301,9 +303,16 @@ test.describe('Declarative Props API - Issue #305', () => {
     
     test('should handle function call response via callback return value', async ({ page }) => {
       skipIfNoRealAPI();
+      // Skip when OpenAI proxy: function call timing is backend-dependent; openai-proxy-e2e "Simple function calling" covers that flow
+      skipIfOpenAIProxy('Function call timing unreliable against OpenAI proxy; use openai-proxy-e2e "Simple function calling" for OpenAI.');
       
       // Navigate with function calling enabled
-      await page.goto('/?test-mode=true&enable-function-calling=true');
+      let url = '/?test-mode=true&enable-function-calling=true';
+      if (hasOpenAIProxyEndpoint()) {
+        const { buildUrlWithParams, BASE_URL, getOpenAIProxyParams } = await import('./helpers/test-helpers.mjs');
+        url = buildUrlWithParams(BASE_URL, { ...getOpenAIProxyParams(), 'test-mode': 'true', 'enable-function-calling': 'true' });
+      }
+      await page.goto(url);
       
       await page.waitForSelector('[data-testid="deepgram-component"]', { timeout: 5000 }).catch(() => {});
       
@@ -356,55 +365,22 @@ test.describe('Declarative Props API - Issue #305', () => {
         window.__testUserMessageSet = true;
       });
       
-      // Wait for function call request to be received OR timeout (agent may not call function)
-      // If function call happens, verify return value pattern works
-      // Increased timeout for full test runs where API may be slower
-      try {
-        await page.waitForFunction(
-          () => window.__testFunctionCallRequestReceived === true || window.__testFunctionCallResponseSent === true,
-          { timeout: 45000 }
-        );
-        
-        // If we got here, either request was received or response was sent
-        // Verify response was sent (component processed the return value)
-        const responseSent = await page.evaluate(() => {
-          return window.__testFunctionCallResponseSent || false;
-        });
-        
-        // If function call was received, response should have been sent
-        const requestReceived = await page.evaluate(() => {
-          return window.__testFunctionCallRequestReceived || false;
-        });
-        
-        if (requestReceived) {
-          // Function call happened - verify return value pattern worked
-          expect(responseSent).toBe(true);
-        } else {
-          // Response was sent but we didn't track request - still valid
-          expect(responseSent).toBe(true);
-        }
-      } catch (error) {
-        // Timeout - agent didn't call the function
-        // This is acceptable - the test verifies the handler setup is correct
-        // The return value pattern will be tested when a function call actually happens
-        console.log('⚠️ Function call not received within timeout - this is acceptable');
-        console.log('   The handler is set up correctly and will work when a function call occurs');
-        
-        // Verify handler is set up correctly (if page is still available)
-        try {
-          const handlerSet = await page.evaluate(() => {
-            return typeof window.__testFunctionCallHandler === 'function';
-          });
-          expect(handlerSet).toBe(true);
-        } catch (e) {
-          // Page might be closed - that's okay, test still passes
-          console.log('   Page closed after timeout - handler setup verified before timeout');
-        }
-      }
+      // Wait for function call request to be received (test requires a real function call to validate return-value pattern)
+      await page.waitForFunction(
+        () => window.__testFunctionCallRequestReceived === true || window.__testFunctionCallResponseSent === true,
+        { timeout: 45000 }
+      );
+      
+      const responseSent = await page.evaluate(() => window.__testFunctionCallResponseSent || false);
+      const requestReceived = await page.evaluate(() => window.__testFunctionCallRequestReceived || false);
+      
+      expect(requestReceived).toBe(true);
+      expect(responseSent).toBe(true);
     });
     
     test('should handle async function call response via Promise return', async ({ page }) => {
       skipIfNoRealAPI();
+      skipIfOpenAIProxy('Function call timing unreliable against OpenAI proxy; use openai-proxy-e2e "Simple function calling" for OpenAI.');
       
       // Navigate with function calling enabled
       await page.goto('/?test-mode=true&enable-function-calling=true');
@@ -460,40 +436,17 @@ test.describe('Declarative Props API - Issue #305', () => {
         window.__testUserMessageSet = true;
       });
       
-      // Wait for async function call response to be sent OR timeout
-      try {
-        await page.waitForFunction(
-          () => window.__testFunctionCallRequestReceived === true || window.__testFunctionCallResponseSent === true,
-          { timeout: 25000 }
-        );
-        
-        // Verify response was sent
-        const responseSent = await page.evaluate(() => {
-          return window.__testFunctionCallResponseSent || false;
-        });
-        
-        const requestReceived = await page.evaluate(() => {
-          return window.__testFunctionCallRequestReceived || false;
-        });
-        
-        if (requestReceived) {
-          // Function call happened - verify return value pattern worked
-          expect(responseSent).toBe(true);
-        } else {
-          // Response was sent but we didn't track request - still valid
-          expect(responseSent).toBe(true);
-        }
-      } catch (error) {
-        // Timeout - agent didn't call the function
-        // This is acceptable - verify handler setup
-        console.log('⚠️ Function call not received within timeout - this is acceptable');
-        console.log('   The async handler is set up correctly and will work when a function call occurs');
-        
-        const handlerSet = await page.evaluate(() => {
-          return typeof window.__testFunctionCallHandler === 'function';
-        });
-        expect(handlerSet).toBe(true);
-      }
+      // Wait for function call (test requires a real function call to validate async return-value pattern)
+      await page.waitForFunction(
+        () => window.__testFunctionCallRequestReceived === true || window.__testFunctionCallResponseSent === true,
+        { timeout: 25000 }
+      );
+      
+      const responseSent = await page.evaluate(() => window.__testFunctionCallResponseSent || false);
+      const requestReceived = await page.evaluate(() => window.__testFunctionCallRequestReceived || false);
+      
+      expect(requestReceived).toBe(true);
+      expect(responseSent).toBe(true);
     });
   });
   

@@ -10,6 +10,9 @@
  * 
  * To run in direct mode:
  *   npm run test:e2e (without USE_PROXY_MODE)
+ *
+ * OpenAI proxy variant: openai-proxy-e2e.spec.js covers Connection, Single message, Multi-turn,
+ * Reconnection, Basic audio, Simple function calling when VITE_OPENAI_PROXY_ENDPOINT is set.
  * 
  * Test scenarios:
  * 1. Connection through proxy endpoint (or direct)
@@ -22,12 +25,16 @@
 import { test, expect } from '@playwright/test';
 import { sendTextMessage, waitForConnection } from '../utils/test-helpers';
 import { buildUrlWithParams, BASE_URL } from './helpers/test-helpers.mjs';
+import { skipIfOpenAIProxy } from './helpers/test-helpers.js';
 
 const PROXY_ENDPOINT = process.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy';
 const IS_PROXY_MODE = process.env.USE_PROXY_MODE === 'true';
 
 test.describe('Backend Proxy Mode', () => {
   test.beforeEach(async ({ page }) => {
+    // Skip when using OpenAI proxy; this spec expects Deepgram proxy (VITE_PROXY_ENDPOINT / deepgram-proxy)
+    skipIfOpenAIProxy('Backend Proxy Mode expects Deepgram proxy; skip when VITE_OPENAI_PROXY_ENDPOINT is set');
+
     // If running in proxy mode, verify proxy server is available
     if (IS_PROXY_MODE) {
       // Skip in CI if proxy server is not available

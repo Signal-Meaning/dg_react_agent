@@ -55,3 +55,7 @@ For each behavior below:
 
 - All unit tests for the OpenAI proxy pass.
 - Every public behavior of the proxy module is covered by at least one test that was written before the implementation that made it pass.
+
+## Status (2026-02-01)
+
+**Implemented:** `tests/openai-proxy.test.ts` — 32 tests. Covers session/config (including multiple tools), InjectUserMessage, session.updated → SettingsApplied, response.output_text.done / output_audio_transcript.done / function_call_arguments.done → ConversationText or FunctionCallRequest, FunctionCallResponse → conversation.item.create (function_call_output), context message → conversation.item.create, error mapping, binary → input_audio_buffer.append, edge cases (minimal Settings, undefined content, function-call with non-empty arguments). Run: `npm run test -- tests/openai-proxy.test.ts`.

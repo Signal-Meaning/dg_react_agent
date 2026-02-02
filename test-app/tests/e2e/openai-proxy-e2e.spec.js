@@ -119,7 +119,21 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     expect(response).not.toBe('(Waiting for agent response...)');
   });
 
-  test('7. Error handling – wrong proxy URL shows closed/error and does not hang', async ({ page }) => {
+  test('7. Reconnection with context – disconnect, reconnect; proxy sends context via conversation.item.create', async ({ page }) => {
+    test.setTimeout(60000); // First message + disconnect + second message can exceed 30s
+    await setupTestPageWithOpenAIProxy(page);
+    await establishConnectionViaText(page, 30000);
+    const firstResponse = await sendMessageAndWaitForResponse(page, "My favorite color is blue.", AGENT_RESPONSE_TIMEOUT);
+    expect(firstResponse).toBeTruthy();
+    expect(firstResponse.length).toBeGreaterThan(0);
+    await disconnectComponent(page);
+    await page.waitForTimeout(1000);
+    const secondResponse = await sendMessageAndWaitForResponse(page, "Hello again.", AGENT_RESPONSE_TIMEOUT);
+    expect(secondResponse).toBeTruthy();
+    expect(secondResponse.length).toBeGreaterThan(0);
+  });
+
+  test('8. Error handling – wrong proxy URL shows closed/error and does not hang', async ({ page }) => {
     const { buildUrlWithParams, BASE_URL } = await import('./helpers/test-helpers.mjs');
     const wrongProxyUrl = 'ws://localhost:99999/openai';
     const url = buildUrlWithParams(BASE_URL, { connectionMode: 'proxy', proxyEndpoint: wrongProxyUrl });

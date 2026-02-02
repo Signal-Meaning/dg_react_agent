@@ -24,7 +24,10 @@ import {
   mapSessionUpdatedToSettingsApplied,
   mapOutputTextDoneToConversationText,
   mapOutputAudioTranscriptDoneToConversationText,
+  mapFunctionCallArgumentsDoneToFunctionCallRequest,
   mapFunctionCallArgumentsDoneToConversationText,
+  mapFunctionCallResponseToConversationItemCreate,
+  mapContextMessageToConversationItemCreate,
   mapErrorToComponentError,
   binaryToInputAudioBufferAppend,
 } from './translator';
@@ -168,12 +171,35 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           });
         }
         if (msg.type === 'Settings') {
-          const sessionUpdate = mapSettingsToSessionUpdate(msg as Parameters<typeof mapSettingsToSessionUpdate>[0]);
+          const settings = msg as Parameters<typeof mapSettingsToSessionUpdate>[0];
+          const sessionUpdate = mapSettingsToSessionUpdate(settings);
           upstream.send(JSON.stringify(sessionUpdate));
-        } else if (msg.type === 'InjectUserMessage') {
-          const itemCreate = mapInjectUserMessageToConversationItemCreate(msg as Parameters<typeof mapInjectUserMessageToConversationItemCreate>[0]);
+          const contextMessages = settings.agent?.context?.messages;
+          if (contextMessages?.length) {
+            for (const m of contextMessages) {
+              const role = (m.role === 'user' || m.role === 'assistant') ? m.role : 'user';
+              const itemCreate = mapContextMessageToConversationItemCreate(role, m.content ?? '');
+              upstream.send(JSON.stringify(itemCreate));
+            }
+          }
+        } else if (msg.type === 'FunctionCallResponse') {
+          const itemCreate = mapFunctionCallResponseToConversationItemCreate(
+            msg as Parameters<typeof mapFunctionCallResponseToConversationItemCreate>[0]
+          );
           upstream.send(JSON.stringify(itemCreate));
           upstream.send(JSON.stringify({ type: 'response.create' }));
+        } else if (msg.type === 'InjectUserMessage') {
+          const injectMsg = msg as Parameters<typeof mapInjectUserMessageToConversationItemCreate>[0];
+          const itemCreate = mapInjectUserMessageToConversationItemCreate(injectMsg);
+          upstream.send(JSON.stringify(itemCreate));
+          upstream.send(JSON.stringify({ type: 'response.create' }));
+          // Echo user message to client so the app can add it to conversationHistory (context on reconnect)
+          const userEcho: { type: 'ConversationText'; role: 'user'; content: string } = {
+            type: 'ConversationText',
+            role: 'user',
+            content: injectMsg.content ?? '',
+          };
+          clientWs.send(JSON.stringify(userEcho));
         } else {
           upstream.send(raw);
         }
@@ -250,14 +276,27 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           const settingsApplied = mapSessionUpdatedToSettingsApplied(msg as Parameters<typeof mapSessionUpdatedToSettingsApplied>[0]);
           clientWs.send(JSON.stringify(settingsApplied));
         } else if (msg.type === 'response.output_text.done') {
+          const m = msg as { type: string; text?: string };
+          if (debug || (m.text && m.text.trim().startsWith('Function call:'))) {
+            console.log(`[proxy ${connId}] upstream→client: ${msg.type}${m.text?.startsWith('Function call:') ? ' (transcript-like)' : ''}`);
+          }
           const conversationText = mapOutputTextDoneToConversationText(msg as Parameters<typeof mapOutputTextDoneToConversationText>[0]);
           clientWs.send(JSON.stringify(conversationText));
         } else if (msg.type === 'response.output_audio_transcript.done') {
+          const m = msg as { type: string; transcript?: string };
+          if (debug || (m.transcript && m.transcript.trim().startsWith('Function call:'))) {
+            console.log(`[proxy ${connId}] upstream→client: ${msg.type}${m.transcript?.startsWith('Function call:') ? ' (transcript-like)' : ''}`);
+          }
           const conversationText = mapOutputAudioTranscriptDoneToConversationText(
             msg as Parameters<typeof mapOutputAudioTranscriptDoneToConversationText>[0]
           );
           clientWs.send(JSON.stringify(conversationText));
         } else if (msg.type === 'response.function_call_arguments.done') {
+          console.log(`[proxy ${connId}] upstream→client: ${msg.type} → sending FunctionCallRequest + ConversationText`);
+          const functionCallRequest = mapFunctionCallArgumentsDoneToFunctionCallRequest(
+            msg as Parameters<typeof mapFunctionCallArgumentsDoneToFunctionCallRequest>[0]
+          );
+          clientWs.send(JSON.stringify(functionCallRequest));
           const conversationText = mapFunctionCallArgumentsDoneToConversationText(
             msg as Parameters<typeof mapFunctionCallArgumentsDoneToConversationText>[0]
           );

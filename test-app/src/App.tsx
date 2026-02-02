@@ -545,12 +545,12 @@ function App() {
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
     setUserMessage(message.text);
     addLog(`User message from server: ${message.text}`);
-    // Track user messages in conversation history
-    setConversationHistory(prev => [...prev, {
-      role: 'user',
-      content: message.text,
-      timestamp: Date.now()
-    }]);
+    // Track user messages in conversation history (dedupe if we already added optimistically in handleTextSubmit)
+    setConversationHistory(prev => {
+      const last = prev[prev.length - 1];
+      if (last?.role === 'user' && last?.content === message.text) return prev;
+      return [...prev, { role: 'user', content: message.text, timestamp: Date.now() }];
+    });
   }, [addLog]);
   
   const handleAgentStateChange = useCallback((state: AgentState) => {
@@ -742,8 +742,13 @@ function App() {
       addLog(`Sending text message: ${textInput}`);
       setUserMessage(textInput);
       
+      // Optimistic update: add user message to conversationHistory so context on reconnect includes it
+      // (Backend may echo ConversationText role=user; we dedupe in handleUserMessage to avoid double-add)
+      const messageToSend = textInput;
+      setConversationHistory(prev => [...prev, { role: 'user', content: messageToSend, timestamp: Date.now() }]);
+      
       if (deepgramRef.current) {
-        await deepgramRef.current.injectUserMessage(textInput);
+        await deepgramRef.current.injectUserMessage(messageToSend);
         addLog('Text message sent to Deepgram agent');
       } else {
         addLog('Error: DeepgramVoiceInteraction ref not available');

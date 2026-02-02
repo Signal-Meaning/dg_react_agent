@@ -19,7 +19,7 @@ Phased implementation so that **tests come first** and each phase ends with a gr
 4. **REFACTOR**: Clean up module structure and naming.
 5. **Checkpoint**: All new unit tests pass; no regression in existing tests.
 
-**Done**: `tests/openai-proxy.test.ts` (12 tests) and `scripts/openai-proxy/translator.ts` (pure mappers: Settings → session.update, InjectUserMessage → conversation.item.create, session.updated → SettingsApplied, response.output_text.done → ConversationText, error → Error). Run: `npm run test -- tests/openai-proxy.test.ts`.
+**Done**: `tests/openai-proxy.test.ts` (32 tests) and `scripts/openai-proxy/translator.ts`. Covers Settings → session.update (including tools), InjectUserMessage, FunctionCallRequest/Response ↔ conversation.item.create (function_call_output), context → conversation.item.create, session.updated → SettingsApplied, response.output_text.done / output_audio_transcript.done / function_call_arguments.done → ConversationText or FunctionCallRequest, error → Error, binary → input_audio_buffer.append. Edge cases: multiple tools, function-call with non-empty arguments. Run: `npm run test -- tests/openai-proxy.test.ts`.
 
 ---
 
@@ -39,7 +39,7 @@ Phased implementation so that **tests come first** and each phase ends with a gr
 4. **REFACTOR**: Improve server structure and error handling.
 5. **Checkpoint**: All integration tests pass; unit tests still pass.
 
-**Done**: `tests/integration/openai-proxy-integration.test.ts` (3 tests, `@jest-environment node`) and `scripts/openai-proxy/server.ts` (WebSocket server that buffers client messages until upstream is open, then forwards with translation). Mock upstream in test; proxy uses translator from Phase 1. Run: `npm run test -- tests/integration/openai-proxy-integration.test.ts`.
+**Done**: `tests/integration/openai-proxy-integration.test.ts` (7 tests, `@jest-environment node`) and `scripts/openai-proxy/server.ts`. Tests: listen + upgrade, Settings → session.update → SettingsApplied, InjectUserMessage → conversation.item.create + response.create → ConversationText (assistant), binary → input_audio_buffer.append + commit + response.create, **function-call round-trip** (mock sends function_call_arguments.done → client gets FunctionCallRequest → client sends FunctionCallResponse → upstream gets function_call_output), **user echo** (InjectUserMessage → client gets ConversationText role user), **context in Settings** (agent.context.messages → upstream gets N conversation.item.create). Mock upstream in test; proxy uses translator from Phase 1. Run: `npm run test -- tests/integration/openai-proxy-integration.test.ts`.
 
 ---
 

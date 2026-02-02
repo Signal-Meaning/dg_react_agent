@@ -11,7 +11,10 @@ import {
   mapSessionUpdatedToSettingsApplied,
   mapOutputTextDoneToConversationText,
   mapOutputAudioTranscriptDoneToConversationText,
+  mapFunctionCallArgumentsDoneToFunctionCallRequest,
   mapFunctionCallArgumentsDoneToConversationText,
+  mapFunctionCallResponseToConversationItemCreate,
+  mapContextMessageToConversationItemCreate,
   mapErrorToComponentError,
   binaryToInputAudioBufferAppend,
 } from '../scripts/openai-proxy/translator';
@@ -58,6 +61,26 @@ describe('OpenAI proxy translator (Issue #381)', () => {
         description: 'Get current time',
         parameters: { type: 'object' },
       });
+    });
+
+    it('maps multiple functions to session.update tools (OpenAI API shape)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            functions: [
+              { name: 'get_time', description: 'Get time', parameters: { type: 'object' } },
+              { name: 'get_weather', description: 'Get weather', parameters: { type: 'object', properties: { city: { type: 'string' } } } },
+            ],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.tools).toHaveLength(2);
+      expect(out.session.tools![0].name).toBe('get_time');
+      expect(out.session.tools![1].name).toBe('get_weather');
+      expect(out.session.tools![1].parameters).toEqual({ type: 'object', properties: { city: { type: 'string' } } });
     });
   });
 
@@ -116,6 +139,43 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.content).toBe('');
     });
 
+    it('maps response.function_call_arguments.done to FunctionCallRequest so component invokes callback', () => {
+      const event = {
+        type: 'response.function_call_arguments.done' as const,
+        call_id: 'call_abc',
+        name: 'get_current_time',
+        arguments: '{}',
+      };
+      const out = mapFunctionCallArgumentsDoneToFunctionCallRequest(event);
+      expect(out).toEqual({
+        type: 'FunctionCallRequest',
+        functions: [{ id: 'call_abc', name: 'get_current_time', arguments: '{}', client_side: true }],
+      });
+    });
+
+    it('maps response.function_call_arguments.done with missing call_id to empty id', () => {
+      const event = { type: 'response.function_call_arguments.done' as const, name: 'get_time' };
+      const out = mapFunctionCallArgumentsDoneToFunctionCallRequest(event);
+      expect(out.functions[0].id).toBe('');
+      expect(out.functions[0].name).toBe('get_time');
+    });
+
+    it('maps response.function_call_arguments.done with non-empty arguments to FunctionCallRequest', () => {
+      const event = {
+        type: 'response.function_call_arguments.done' as const,
+        call_id: 'call_xyz',
+        name: 'get_weather',
+        arguments: '{"city":"Boston"}',
+      };
+      const out = mapFunctionCallArgumentsDoneToFunctionCallRequest(event);
+      expect(out.functions[0]).toEqual({
+        id: 'call_xyz',
+        name: 'get_weather',
+        arguments: '{"city":"Boston"}',
+        client_side: true,
+      });
+    });
+
     it('maps response.function_call_arguments.done to ConversationText (assistant) for UI', () => {
       const event = {
         type: 'response.function_call_arguments.done' as const,
@@ -158,7 +218,45 @@ describe('OpenAI proxy translator (Issue #381)', () => {
     });
   });
 
-  describe('5. Input audio (binary → input_audio_buffer.append)', () => {
+  describe('5. Function call response (FunctionCallResponse → conversation.item.create)', () => {
+    it('maps FunctionCallResponse to conversation.item.create with function_call_output', () => {
+      const msg = {
+        type: 'FunctionCallResponse' as const,
+        id: 'call_abc',
+        name: 'get_current_time',
+        content: '{"time":"12:00"}',
+      };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out).toEqual({
+        type: 'conversation.item.create',
+        item: { type: 'function_call_output', call_id: 'call_abc', output: '{"time":"12:00"}' },
+      });
+    });
+
+    it('handles empty content as empty output string', () => {
+      const msg = { type: 'FunctionCallResponse' as const, id: 'call_1', name: 'fn', content: '' };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.item.output).toBe('');
+    });
+  });
+
+  describe('6. Context (context message → conversation.item.create)', () => {
+    it('maps user context message to conversation.item.create', () => {
+      const out = mapContextMessageToConversationItemCreate('user', 'hello');
+      expect(out).toEqual({
+        type: 'conversation.item.create',
+        item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'hello' }] },
+      });
+    });
+
+    it('maps assistant context message to conversation.item.create', () => {
+      const out = mapContextMessageToConversationItemCreate('assistant', 'Hi there!');
+      expect(out.item.role).toBe('assistant');
+      expect(out.item.content[0].text).toBe('Hi there!');
+    });
+  });
+
+  describe('7. Input audio (binary → input_audio_buffer.append)', () => {
     it('maps binary buffer to input_audio_buffer.append with base64 audio', () => {
       const pcm = Buffer.from([0x00, 0x00, 0xff, 0xff]); // 4 bytes PCM
       const out = binaryToInputAudioBufferAppend(pcm);
@@ -174,7 +272,7 @@ describe('OpenAI proxy translator (Issue #381)', () => {
     });
   });
 
-  describe('4. Edge cases', () => {
+  describe('8. Edge cases', () => {
     it('mapSettingsToSessionUpdate does not throw on minimal Settings', () => {
       expect(() => mapSettingsToSessionUpdate({ type: 'Settings' })).not.toThrow();
     });
