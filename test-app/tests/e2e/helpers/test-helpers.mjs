@@ -8,10 +8,13 @@
 /**
  * Base URL for test app navigation
  * Can be overridden via PLAYWRIGHT_BASE_URL environment variable
+ * Respects HTTPS=true (Vite serves https when HTTPS=true)
  * Falls back to VITE_BASE_URL or default localhost URL
- * Matches the baseURL configured in playwright.config.js
+ * Matches the baseURL configured in playwright.config.mjs
  */
-export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || process.env.VITE_BASE_URL || 'http://localhost:5173';
+const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
+export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL
+  || (useHttps ? 'https://localhost:5173' : (process.env.VITE_BASE_URL || 'http://localhost:5173'));
 
 /**
  * Get proxy configuration from environment variables

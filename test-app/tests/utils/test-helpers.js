@@ -5,6 +5,10 @@
  * to reduce code duplication across test files.
  */
 
+const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL
+  || (useHttps ? 'https://localhost:5173' : (process.env.VITE_BASE_URL || 'http://localhost:5173'));
+
 /**
  * Sets up test mode with a specific API key scenario
  * @param {import('@playwright/test').Page} page - Playwright page object
@@ -15,7 +19,7 @@ async function setupTestMode(page, apiKeyScenario) {
     window.testApiKey = scenario;
   }, apiKeyScenario);
 
-  await page.goto('http://localhost:5173/?test-mode=true');
+  await page.goto(`${BASE_URL}/?test-mode=true`);
   await page.waitForLoadState('networkidle');
 }
 

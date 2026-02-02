@@ -6,14 +6,14 @@
 
 ## Pre-Release
 
-- [ ] **Tests passing**
-  - [ ] Run: `npm test`
+- [x] **Tests passing**
+  - [x] Run: `npm test` — passed
   - [ ] **E2E in proxy mode** (OpenAI proxy is the default; release must validate proxy support):
-    - [ ] Start proxy: `npm run test:proxy:server` (from `test-app/`)
+    - [ ] Start proxy: `npm run test:proxy:server` (from `test-app/`) — ensure port 8080 is free (e.g. stop OpenAI proxy if running)
     - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e`
     - [ ] Confirm all E2E tests pass in proxy mode before release
-- [ ] **Lint clean**
-  - [ ] Run: `npm run lint`
+- [x] **Lint clean**
+  - [x] Run: `npm run lint` — passed (4 warnings, 0 errors)
 
 ---
 

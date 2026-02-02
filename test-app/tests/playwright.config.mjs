@@ -6,8 +6,10 @@ import dotenv from 'dotenv';
 // Load from test-app/.env (primary location for test app configuration)
 dotenv.config({ path: '.env' });
 
-// Debug: Log the baseURL being used
-console.log('Playwright baseURL:', process.env.VITE_BASE_URL || 'http://localhost:5173');
+// Respect HTTPS=true from .env (Vite serves https when HTTPS=true)
+const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
+const baseURL = process.env.VITE_BASE_URL || (useHttps ? 'https://localhost:5173' : 'http://localhost:5173');
+console.log('Playwright baseURL:', baseURL);
 const ENABLE_AUDIO = process.env.PW_ENABLE_AUDIO === 'true';
 console.log('PW_ENABLE_AUDIO:', ENABLE_AUDIO);
 
@@ -38,8 +40,8 @@ export default defineConfig({
   ],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.VITE_BASE_URL || 'http://localhost:5173',
+    /* Base URL to use in actions like `await page.goto('/')`. Respects HTTPS=true. */
+    baseURL,
     
     /* Add delay between tests to reduce resource contention in full test runs */
     /* This helps when running all tests together where API may be slower */
@@ -86,49 +88,46 @@ export default defineConfig({
     /* Add more browsers locally if needed */
   ],
 
-  /* Run your local dev server before starting the tests */
-  webServer: [
-    {
-      command: 'npm run dev',
-      // When running from test-app directory, cwd should be '.' (current directory)
-      // The config is at test-app/tests/playwright.config.mjs, so from test-app/ we need '.'
-      cwd: '.', // Run from test-app directory (where package.json is)
-      url: 'http://localhost:5173', // Vite default port
-      reuseExistingServer: true, // Always reuse existing server
-      timeout: 120 * 1000,
-      // Output server logs for debugging in CI
-      stdout: process.env.CI ? 'pipe' : 'ignore',
-      stderr: process.env.CI ? 'pipe' : 'ignore',
-      // Pass environment variables to the dev server (Vite needs VITE_* vars)
-      env: {
-        VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
-        VITE_DEEPGRAM_PROJECT_ID: process.env.VITE_DEEPGRAM_PROJECT_ID || '',
-        VITE_BASE_URL: process.env.VITE_BASE_URL || 'http://localhost:5173',
-        VITE_DEEPGRAM_PROXY_ENDPOINT: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy',
-        VITE_OPENAI_PROXY_ENDPOINT: process.env.VITE_OPENAI_PROXY_ENDPOINT || 'ws://localhost:8080/openai',
-      },
-    },
-    // Always start proxy server for E2E tests (required for backend-proxy-mode tests)
-    // The proxy server is a test dependency, not a runtime dependency
-    {
-      command: 'npm run test:proxy:server',
-      cwd: '.', // Run from test-app directory
-      port: 8080, // Proxy server port
-      reuseExistingServer: true,
-      timeout: 10000,
-      // Enable logging temporarily to debug proxy server startup
-      stdout: 'pipe',
-      stderr: 'pipe',
-      env: {
-        // Use VITE_DEEPGRAM_API_KEY as primary source (matches test-app/.env)
-        // Fall back to DEEPGRAM_API_KEY if VITE_* not available
-        DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || process.env.DEEPGRAM_API_KEY || '',
-        VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '', // Also pass VITE_* for proxy server fallback
-        PROXY_PORT: '8080',
-        PROXY_PATH: '/deepgram-proxy',
-      },
-    },
-  ],
+  /* Run your local dev server (and optionally proxy) before starting the tests.
+   * Set E2E_USE_EXISTING_SERVER=1 when dev server and proxy are already running.
+   * With existing server, globalSetup verifies the app is reachable to avoid 44× ERR_EMPTY_RESPONSE. */
+  ...(process.env.E2E_USE_EXISTING_SERVER === '1' || process.env.E2E_USE_EXISTING_SERVER === 'true'
+    ? { globalSetup: './e2e-check-existing-server.mjs' }
+    : {
+        webServer: [
+          {
+            command: 'npm run dev',
+            cwd: '.',
+            url: baseURL,
+            reuseExistingServer: true,
+            timeout: 120 * 1000,
+            stdout: process.env.CI ? 'pipe' : 'ignore',
+            stderr: process.env.CI ? 'pipe' : 'ignore',
+            env: {
+              VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
+              VITE_DEEPGRAM_PROJECT_ID: process.env.VITE_DEEPGRAM_PROJECT_ID || '',
+              VITE_BASE_URL: process.env.VITE_BASE_URL || baseURL,
+              VITE_DEEPGRAM_PROXY_ENDPOINT: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy',
+              VITE_OPENAI_PROXY_ENDPOINT: process.env.VITE_OPENAI_PROXY_ENDPOINT || 'ws://localhost:8080/openai',
+            },
+          },
+          {
+            command: 'npm run test:proxy:server',
+            cwd: '.',
+            port: 8080,
+            reuseExistingServer: true,
+            timeout: 10000,
+            stdout: 'pipe',
+            stderr: 'pipe',
+            env: {
+              DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || process.env.DEEPGRAM_API_KEY || '',
+              VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
+              PROXY_PORT: '8080',
+              PROXY_PATH: '/deepgram-proxy',
+            },
+          },
+        ],
+      }),
 
   /* 
    * IMPORTANT: E2E Tests Require Real Deepgram API Key

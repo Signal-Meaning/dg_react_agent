@@ -57,15 +57,24 @@ npx playwright test --grep "Microphone"     # All microphone tests
 
 If you already run the test-app dev server (e.g. `npm run dev` in test-app), Playwright will try to start it again by default and fail with "Port 5173 is already in use". Use a **preconfigured server** instead:
 
-1. Start the dev server yourself (from project root or test-app):
+1. **Start the dev server first** (required). If you run with `E2E_USE_EXISTING_SERVER=1` but nothing is serving the app, every test will fail with `net::ERR_EMPTY_RESPONSE at http://localhost:5173`.
    ```bash
    cd test-app && npm run dev
    ```
+   For proxy-mode tests, also start the proxy (in another terminal):
+   ```bash
+   cd test-app && npm run test:proxy:server
+   ```
 2. Run Playwright with `E2E_USE_EXISTING_SERVER=1` so it does not start the webServer:
+   ```bash
+   # From test-app:
+   E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e
+   ```
+   Or from **project root**:
    ```bash
    E2E_USE_EXISTING_SERVER=1 npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js
    ```
-   (Run from **project root**.)
+   When `E2E_USE_EXISTING_SERVER=1` is set, a startup check verifies the app is reachable and exits with a clear error if not.
 
 If the app uses **HTTPS** (e.g. `HTTPS=true` in test-app/.env), set the base URL when running Playwright:
    ```bash
