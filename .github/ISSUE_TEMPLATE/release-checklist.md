@@ -39,16 +39,10 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
   - [ ] Run: `npm update`
   - [ ] Review and update any outdated dependencies
 
-#### Build and Package
-- [ ] **Clean Build**: Clean previous builds
-  - [ ] Run: `npm run clean`
-- [ ] **Build Package**: Create production build
-  - [ ] Run: `npm run build`
-- [ ] **Validate Package**: Ensure package is valid
-  - [ ] Run: `npm run validate`
-- [ ] **Test Package**: Test package installation
-  - [ ] Run: `npm run package:local`
-  - [ ] Verify package can be installed and imported
+#### Build and Package (CI performs build — no local build required)
+- [ ] **Do not run build/package locally for release.** CI builds and validates when you create the GitHub release (see Package Publishing below).
+- [ ] **Optional local validation only**: If you want to verify build locally before pushing:
+  - [ ] Run: `npm run clean` then `npm run build` then `npm run validate` (or `npm run package:local`). Do **not** commit any `.tgz` or `dist/` — they are gitignored; CI will build from source.
 
 #### Documentation
 - [ ] **Create Release Documentation**: Follow the established structure
@@ -87,7 +81,7 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
 - [ ] **Publish to GitHub Registry**: Publish package to GitHub Package Registry
   - [ ] **Preferred**: Use CI build (validated CI build)
     - Create GitHub release to trigger `.github/workflows/test-and-publish.yml`
-    - CI workflow will: test (mock APIs only), build, validate, and publish
+    - CI workflow will: test (mock APIs only), **build in CI**, validate package, and publish. No local build required.
     - Test job runs first: linting, mock tests, build, package validation
     - Publish job only runs if test job succeeds
     - **All non-skipped tests must pass** before publishing
@@ -125,9 +119,8 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
 - [ ] **Update Main Branch**: Merge release branch to main
   - [ ] Merge: `release/vX.X.X` → `main`
   - [ ] Push: `git push origin main`
-- [ ] **Clean Up**: Clean up release artifacts
-  - [ ] Remove: Local `.tgz` files
-  - [ ] Remove: Build artifacts if needed
+- [ ] **Clean Up**: Clean up release artifacts (only if you ran optional local package)
+  - [ ] If you ran `npm run package:local` locally: remove any `.tgz` in repo root, or leave (they are gitignored)
 - [ ] **Announcement**: Announce release (if applicable)
   - [ ] Update: Any external documentation
   - [ ] Notify: Relevant teams or users
@@ -142,14 +135,14 @@ The following GitHub Actions workflows will be triggered automatically:
    - Tests package installation from tarball
 
 2. **Test and Publish Workflow** (`.github/workflows/test-and-publish.yml`):
-   - Runs on GitHub release creation
+   - Runs on GitHub release creation (or workflow_dispatch)
    - **Test Job**: Runs first and includes:
      - Linting (`npm run lint`)
      - Tests with mock APIs only (`npm run test:mock` - no real API calls)
-     - Build (`npm run build`)
+     - **Build in CI** (`npm run build`)
      - Package validation (`npm run package:local`)
    - **Publish Job**: Only runs if test job succeeds
-     - Publishes to GitHub Package Registry
+     - **Builds again in CI** and publishes to GitHub Package Registry
    - Verifies package installation
    - **All non-skipped tests must pass** before publishing
 

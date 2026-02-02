@@ -28,13 +28,11 @@ This is a patch release for version vX.X.X of the Deepgram Voice Interaction Rea
 - [ ] **Linting Clean**: No linting errors
   - [ ] Run: `npm run lint`
 
-#### Version & Build
+#### Version & Build (CI performs build — no local build required)
 - [ ] **Bump Version**: Update to vX.X.X
   - [ ] Run: `npm version patch`
-- [ ] **Build Package**: Create production build
-  - [ ] Run: `npm run build`
-- [ ] **Test Package**: Verify package works
-  - [ ] Run: `npm run package:local`
+- [ ] **Do not run build/package locally for release.** CI builds and validates when you create the GitHub release (see Publish below).
+- [ ] **Optional**: Run `npm run build` or `npm run package:local` locally to verify; do **not** commit any `.tgz` (gitignored).
 
 #### Documentation
 - [ ] **⚠️ CRITICAL: Create Release Documentation BEFORE Publishing** ⚠️
@@ -57,7 +55,7 @@ This is a patch release for version vX.X.X of the Deepgram Voice Interaction Rea
 - [ ] **Publish**: Publish to GitHub Registry
   - [ ] **⚠️ Documentation must be committed to release branch BEFORE creating GitHub release** ⚠️
   - [ ] **Preferred**: Use CI build (create GitHub release to trigger `.github/workflows/test-and-publish.yml`)
-    - Create GitHub release (this triggers CI publish workflow)
+    - Create GitHub release (this triggers CI; CI builds from source and publishes)
     - **Monitor CI workflow**: Wait for CI build to complete successfully
       - Check GitHub Actions workflow status
       - Verify all CI checks pass

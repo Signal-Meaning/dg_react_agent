@@ -11,7 +11,7 @@ This directory contains GitHub issue templates for the Deepgram Voice Interactio
 - Complete release process checklist
 - Pre-release preparation steps
 - Version management
-- Build and package validation
+- CI build and package validation (no local build required)
 - Comprehensive documentation requirements
 - Git operations and tagging
 - Package publishing to GitHub Registry

@@ -133,7 +133,7 @@ npm run release:issue 1.0.0 major
 #### Release Checklist Template (Minor/Major)
 - Complete pre-release preparation
 - Version management and dependency updates
-- Build and package validation
+- CI build and package validation (no local build required)
 - Comprehensive documentation requirements
 - Git operations and tagging
 - Package publishing to GitHub Registry
@@ -170,7 +170,7 @@ Each release includes a comprehensive checklist to ensure all steps are complete
 3. **Follow the Process**: Work through each section systematically:
    - **Pre-Release Preparation**: Code review, testing, linting
    - **Version Management**: Bump version, update dependencies
-   - **Build and Package**: Clean, build, validate, test package
+   - **Build and Package**: CI builds and validates when you create the GitHub release (no local build required)
    - **Documentation**: Create all required documentation files
    - **Git Operations**: Commit, branch, tag
    - **Package Publishing**: Publish to GitHub Registry
