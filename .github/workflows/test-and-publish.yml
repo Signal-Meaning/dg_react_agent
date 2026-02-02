@@ -154,7 +154,7 @@ jobs:
     needs: [test-jest] # test-e2e temporarily disabled
     if: success() && (github.event_name == 'release' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v')))
     permissions:
-      contents: read
+      contents: write   # read + write for creating release tag and GitHub Release
       packages: write
       id-token: write
       
@@ -359,3 +359,18 @@ jobs:
           # Clean up
           cd ..
           rm -rf test-install
+
+      # Create GitHub Release (and tag) when triggered by push to release/v* or workflow_dispatch (not when trigger is release:published)
+      - name: Create GitHub Release
+        if: success() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v')))
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body_path: docs/releases/v${{ steps.version.outputs.version }}/RELEASE-NOTES.md
+          generate_release_notes: false
+          draft: false
+          make_latest: true
+          skip_if_tag_exists: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
