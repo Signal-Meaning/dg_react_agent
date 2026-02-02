@@ -151,6 +151,27 @@ describe('Mock Proxy Server - Query Parameter Forwarding', () => {
   });
 });
 
+/**
+ * WebSocket scheme: ws vs wss when HTTPS is enabled (mock-proxy-server.js useHttps/wsScheme).
+ */
+function getWsScheme(env) {
+  return (env.HTTPS === 'true' || env.HTTPS === '1') ? 'wss' : 'ws';
+}
+
+describe('Mock Proxy Server - WebSocket scheme (HTTPS)', () => {
+  it('should use ws when HTTPS is not set', () => {
+    expect(getWsScheme({})).toBe('ws');
+    expect(getWsScheme({ HTTPS: '' })).toBe('ws');
+    expect(getWsScheme({ HTTPS: '0' })).toBe('ws');
+    expect(getWsScheme({ HTTPS: 'false' })).toBe('ws');
+  });
+
+  it('should use wss when HTTPS=true or HTTPS=1', () => {
+    expect(getWsScheme({ HTTPS: 'true' })).toBe('wss');
+    expect(getWsScheme({ HTTPS: '1' })).toBe('wss');
+  });
+});
+
 describe('Mock Proxy Server - Integration', () => {
   it('should correctly process transcription connection request', () => {
     const reqUrl = 'ws://localhost:8080/deepgram-proxy?service=transcription&model=nova-3&language=en-US&smart_format=true&interim_results=true&diarize=true&channels=1&vad_events=true&utterance_end_ms=1000&sample_rate=16000&encoding=linear16';

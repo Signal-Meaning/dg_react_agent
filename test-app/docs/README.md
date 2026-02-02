@@ -11,6 +11,7 @@ This documentation directory contains comprehensive guides and examples for inte
 
 ### Core Documentation
 
+- **[Proxy Server: Purpose, Design, Operation, and Tests](./PROXY-SERVER.md)** - Complete explanation of the test-app proxy server: purpose, design, operation, and tests (Deepgram + OpenAI on one port)
 - **[Transcript DOM Structure](./TRANSCRIPT-DOM-STRUCTURE.md)** - How the test-app displays transcribed speech in the DOM for E2E testing
 - **[OpenAI Proxy and Issue #381](./OPENAI-PROXY-AND-ISSUE-381.md)** - OpenAI Realtime proxy backend, test-app and proxy improvements, env, and E2E with the proxy
 

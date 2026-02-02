@@ -1,32 +1,40 @@
 /**
- * Mock Backend Proxy Server - Issue #242
- * 
- * A simple Node.js WebSocket proxy server for E2E testing.
- * This server accepts WebSocket connections from the frontend and
- * proxies them to Deepgram, adding the API key server-side.
- * 
+ * Mock Backend Proxy Server - Issue #242, #381
+ *
+ * Single WebSocket proxy server for E2E testing. Hosts one or both:
+ *   - /deepgram-proxy: proxies to Deepgram (when DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY present)
+ *   - /openai: proxies to OpenAI Realtime via subprocess (when OPENAI_API_KEY present)
+ *
+ * At least one of DEEPGRAM_API_KEY or OPENAI_API_KEY must be set.
+ *
  * Usage:
  *   node test-app/scripts/mock-proxy-server.js
  *   or
  *   npm run test:proxy:server
- * 
+ *
  * Environment Variables (from test-app/.env when run via npm run test:proxy:server):
- *   - DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY: Deepgram API key (required)
+ *   - DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY: Deepgram API key (optional if OPENAI_API_KEY set)
+ *   - OPENAI_API_KEY: OpenAI API key for /openai (optional if Deepgram key set)
  *   - PROXY_PORT: Port to run proxy on (default: 8080)
- *   - PROXY_PATH: WebSocket path (default: /deepgram-proxy)
+ *   - PROXY_PATH: Deepgram WebSocket path (default: /deepgram-proxy)
  */
 
 import { WebSocket, WebSocketServer } from 'ws';
 import http from 'http';
+import https from 'https';
 import url from 'url';
 import fs from 'fs';
 import path from 'path';
+import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 // Load test-app/.env so VITE_DEEPGRAM_API_KEY (and DEEPGRAM_API_KEY) are available when run via npm run test:proxy:server
+// Skip when SKIP_DOTENV=1 (used by integration tests to assert "at least one key required")
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+if (process.env.SKIP_DOTENV !== '1') {
+  dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+}
 
 // Configuration
 const RAW_DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
@@ -75,8 +83,11 @@ function normalizeApiKeyForWebSocket(apiKey) {
 const DEEPGRAM_API_KEY = normalizeApiKeyForWebSocket(RAW_DEEPGRAM_API_KEY);
 const PROXY_PORT = parseInt(process.env.PROXY_PORT || '8080', 10);
 const PROXY_PATH = process.env.PROXY_PATH || '/deepgram-proxy';
+const OPENAI_INTERNAL_PORT = 8081; // subprocess for /openai
 const DEEPGRAM_AGENT_URL = 'wss://agent.deepgram.com/v1/agent/converse';
 const DEBUG_LOG_PATH = path.join(process.cwd(), '.cursor', 'debug.log');
+const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
+const wsScheme = useHttps ? 'wss' : 'ws';
 
 // Log API key status at startup (for debugging authentication issues)
 if (DEEPGRAM_API_KEY) {
@@ -116,12 +127,14 @@ function debugLog(location, message, data, hypothesisId) {
   }
 }
 
-if (!DEEPGRAM_API_KEY || DEEPGRAM_API_KEY.trim() === '') {
-  console.error('❌ Error: DEEPGRAM_API_KEY environment variable is required');
-  console.error('   Set it in your .env file or as an environment variable');
-  console.error('   Checked: DEEPGRAM_API_KEY, VITE_DEEPGRAM_API_KEY');
-  console.error('   DEEPGRAM_API_KEY value:', process.env.DEEPGRAM_API_KEY ? 'SET' : 'NOT SET');
-  console.error('   VITE_DEEPGRAM_API_KEY value:', process.env.VITE_DEEPGRAM_API_KEY ? 'SET' : 'NOT SET');
+const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY || '').trim();
+const hasDeepgram = DEEPGRAM_API_KEY && DEEPGRAM_API_KEY.trim() !== '';
+const hasOpenAI = OPENAI_API_KEY.length > 0;
+
+if (!hasDeepgram && !hasOpenAI) {
+  console.error('❌ Error: At least one of DEEPGRAM_API_KEY or OPENAI_API_KEY is required');
+  console.error('   Set DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY for /deepgram-proxy');
+  console.error('   Set OPENAI_API_KEY or VITE_OPENAI_API_KEY for /openai (default proxy for test-app)');
   process.exit(1);
 }
 
@@ -131,8 +144,8 @@ if (!DEEPGRAM_API_KEY.startsWith('test') && DEEPGRAM_API_KEY.length < 40) {
   console.warn(`[Proxy]    API key preview: ${DEEPGRAM_API_KEY.substring(0, 10)}...`);
 }
 
-// Create HTTP server for WebSocket upgrade
-const server = http.createServer((req, res) => {
+// Create HTTP or HTTPS server for WebSocket upgrade (HTTPS when HTTPS=true for wss://)
+const requestHandler = (req, res) => {
   // Handle OPTIONS requests (CORS preflight)
   if (req.method === 'OPTIONS') {
     const origin = req.headers.origin;
@@ -157,7 +170,17 @@ const server = http.createServer((req, res) => {
   // Default handler (WebSocket upgrade is handled by WebSocketServer)
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('Not Found');
-});
+};
+
+let server;
+if (useHttps) {
+  const require = createRequire(import.meta.url);
+  const selfsigned = require('selfsigned');
+  const pems = selfsigned.generate([{ name: 'commonName', value: 'localhost' }], { keySize: 2048, days: 365 });
+  server = https.createServer({ key: pems.private, cert: pems.cert }, requestHandler);
+} else {
+  server = http.createServer(requestHandler);
+}
 
 // Helper function to validate authentication token
 // For testing purposes, we reject tokens that start with "invalid-" or "expired-"
@@ -213,8 +236,10 @@ function setSecurityHeaders(res) {
   }
 }
 
-// Create WebSocket server
-const wss = new WebSocketServer({ 
+// --- Deepgram proxy (when API key present) ---
+let wssDeepgram = null;
+if (hasDeepgram) {
+  wssDeepgram = new WebSocketServer({
   server,
   path: PROXY_PATH,
   verifyClient: (info) => {
@@ -255,11 +280,15 @@ const wss = new WebSocketServer({
 });
 
 console.log(`🚀 Mock Backend Proxy Server starting...`);
-console.log(`   Proxy endpoint: ws://localhost:${PROXY_PORT}${PROXY_PATH}`);
-console.log(`   Deepgram endpoint: ${DEEPGRAM_AGENT_URL}`);
-console.log(`   API Key: ${DEEPGRAM_API_KEY.substring(0, 10)}...`);
+if (hasDeepgram) {
+  console.log(`   Deepgram: ${wsScheme}://localhost:${PROXY_PORT}${PROXY_PATH} → ${DEEPGRAM_AGENT_URL}`);
+  console.log(`   API Key: ${DEEPGRAM_API_KEY.substring(0, 8)}...`);
+}
+if (hasOpenAI) {
+  console.log(`   OpenAI:   ${wsScheme}://localhost:${PROXY_PORT}/openai (subprocess on ${OPENAI_INTERNAL_PORT})`);
+}
 
-wss.on('connection', (clientWs, req) => {
+wssDeepgram.on('connection', (clientWs, req) => {
   const clientIp = req.socket.remoteAddress;
   console.log(`[Proxy] New client connection from ${clientIp}`);
   
@@ -627,33 +656,118 @@ wss.on('connection', (clientWs, req) => {
     }
   });
 });
+} // end if (hasDeepgram)
 
-// Start server
-server.listen(PROXY_PORT, () => {
-  console.log(`✅ Mock Backend Proxy Server running on port ${PROXY_PORT}`);
-  console.log(`   WebSocket endpoint: ws://localhost:${PROXY_PORT}${PROXY_PATH}`);
-  console.log(`\n   To use in test-app, set:`);
-  console.log(`   VITE_PROXY_ENDPOINT=ws://localhost:${PROXY_PORT}${PROXY_PATH}`);
-  console.log(`\n   Press Ctrl+C to stop\n`);
-});
+// --- OpenAI proxy (when API key present): spawn subprocess on OPENAI_INTERNAL_PORT, forward /openai on main port ---
+let openaiChild = null;
+let wssOpenAI = null;
+
+function spawnOpenAIProxy(spawnFn) {
+  const repoRoot = path.resolve(__dirname, '..', '..');
+  openaiChild = spawnFn('npx', ['tsx', 'scripts/openai-proxy/run.ts'], {
+    cwd: repoRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      OPENAI_PROXY_PORT: String(OPENAI_INTERNAL_PORT),
+      OPENAI_API_KEY,
+    },
+  });
+  openaiChild.stdout?.on('data', (d) => process.stdout.write(d));
+  openaiChild.stderr?.on('data', (d) => process.stderr.write(d));
+  openaiChild.on('error', (err) => console.error('[Proxy] OpenAI subprocess error:', err));
+  openaiChild.on('exit', (code, sig) => {
+    if (code != null && code !== 0) console.error('[Proxy] OpenAI subprocess exited with code', code);
+    if (sig) console.error('[Proxy] OpenAI subprocess killed:', sig);
+  });
+}
+
+async function waitForPort(port, timeoutMs = 15000) {
+  const net = (await import('net')).default;
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const tryConnect = () => {
+      const s = net.connect(port, '127.0.0.1', () => { s.destroy(); resolve(); });
+      s.on('error', () => {
+        if (Date.now() - start > timeoutMs) reject(new Error(`Port ${port} not ready in ${timeoutMs}ms`));
+        else setTimeout(tryConnect, 200);
+      });
+    };
+    tryConnect();
+  });
+}
+
+async function attachOpenAIForwarder() {
+  await waitForPort(OPENAI_INTERNAL_PORT);
+  const targetUrl = `${wsScheme}://127.0.0.1:${OPENAI_INTERNAL_PORT}/openai`;
+  const upstreamOptions = useHttps ? { rejectUnauthorized: false } : {};
+  wssOpenAI = new WebSocketServer({ server, path: '/openai', noServer: false });
+  wssOpenAI.on('connection', (clientWs, req) => {
+    const upstream = new WebSocket(targetUrl, upstreamOptions);
+    upstream.on('open', () => {
+      clientWs.on('message', (data, isBinary) => upstream.send(data, { binary: isBinary }));
+      upstream.on('message', (data, isBinary) => clientWs.send(data, { binary: isBinary }));
+      clientWs.on('close', () => upstream.close());
+      upstream.on('close', () => clientWs.close());
+      clientWs.on('error', () => upstream.close());
+      upstream.on('error', () => clientWs.close());
+    });
+    upstream.on('error', (err) => {
+      console.error('[Proxy] OpenAI forwarder upstream error:', err.message);
+      clientWs.close();
+    });
+  });
+}
+
+// Start server (spawn OpenAI subprocess if needed, attach forwarder, then listen)
+(async () => {
+  if (hasOpenAI) {
+    const { spawn } = await import('child_process');
+    spawnOpenAIProxy(spawn);
+    try {
+      await attachOpenAIForwarder();
+    } catch (err) {
+      console.error('[Proxy] Failed to start OpenAI forwarder:', err.message);
+      if (openaiChild) openaiChild.kill('SIGTERM');
+      process.exit(1);
+    }
+  }
+  server.listen(PROXY_PORT, () => {
+    console.log(`✅ Mock Backend Proxy Server running on port ${PROXY_PORT}`);
+    if (hasDeepgram) {
+      console.log(`   Deepgram: ${wsScheme}://localhost:${PROXY_PORT}${PROXY_PATH}`);
+    }
+    if (hasOpenAI) {
+      console.log(`   OpenAI:   ${wsScheme}://localhost:${PROXY_PORT}/openai (default for test-app)`);
+    }
+    console.log(`\n   To use in test-app:`);
+    if (hasOpenAI) {
+      console.log(`   VITE_OPENAI_PROXY_ENDPOINT=${wsScheme}://localhost:${PROXY_PORT}/openai  (default)`);
+    }
+    if (hasDeepgram) {
+      console.log(`   VITE_DEEPGRAM_PROXY_ENDPOINT=${wsScheme}://localhost:${PROXY_PORT}${PROXY_PATH}`);
+    }
+    console.log(`\n   Press Ctrl+C to stop\n`);
+  });
+})();
 
 // Graceful shutdown
-process.on('SIGINT', () => {
+function doShutdown() {
   console.log('\n[Proxy] Shutting down...');
-  wss.close(() => {
+  const closeServer = () => {
+    if (openaiChild) {
+      openaiChild.kill('SIGTERM');
+      openaiChild = null;
+    }
     server.close(() => {
       console.log('[Proxy] Server closed');
       process.exit(0);
     });
-  });
-});
-
-process.on('SIGTERM', () => {
-  console.log('\n[Proxy] Shutting down...');
-  wss.close(() => {
-    server.close(() => {
-      console.log('[Proxy] Server closed');
-      process.exit(0);
-    });
-  });
-});
+  };
+  let pending = 0;
+  if (wssDeepgram) { pending++; wssDeepgram.close(() => { pending--; if (pending === 0) closeServer(); }); }
+  if (wssOpenAI) { pending++; wssOpenAI.close(() => { pending--; if (pending === 0) closeServer(); }); }
+  if (pending === 0) closeServer();
+}
+process.on('SIGINT', doShutdown);
+process.on('SIGTERM', doShutdown);

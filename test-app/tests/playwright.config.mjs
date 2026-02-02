@@ -1,15 +1,26 @@
 // @ts-check
 import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Load environment variables from .env file
-// Load from test-app/.env (primary location for test app configuration)
-dotenv.config({ path: '.env' });
+// Load test-app/.env so HTTPS and proxy settings are available regardless of cwd
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
-// Respect HTTPS=true from .env (Vite serves https when HTTPS=true)
+// Respect HTTPS=true from .env (Vite and proxy serve https/wss when HTTPS=true)
 const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
-const baseURL = process.env.VITE_BASE_URL || (useHttps ? 'https://localhost:5173' : 'http://localhost:5173');
+// When HTTPS=true, baseURL must be https so webServer readiness and tests hit the right URL
+const baseURL = useHttps
+  ? (process.env.VITE_BASE_URL?.startsWith('https') ? process.env.VITE_BASE_URL : 'https://localhost:5173')
+  : (process.env.VITE_BASE_URL || 'http://localhost:5173');
+const wsScheme = useHttps ? 'wss' : 'ws';
+const proxyBase = `${wsScheme}://localhost:8080`;
 console.log('Playwright baseURL:', baseURL);
+console.log('Playwright HTTPS:', useHttps, '| proxy endpoints:', `${proxyBase}/deepgram-proxy`, `${proxyBase}/openai`);
+if (useHttps) {
+  console.log('Tip: If you see "Port 5173 is already in use", start the dev server and proxy manually in two terminals, then run with E2E_USE_EXISTING_SERVER=1');
+}
 const ENABLE_AUDIO = process.env.PW_ENABLE_AUDIO === 'true';
 console.log('PW_ENABLE_AUDIO:', ENABLE_AUDIO);
 
@@ -42,7 +53,9 @@ export default defineConfig({
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. Respects HTTPS=true. */
     baseURL,
-    
+    /* Accept self-signed cert when HTTPS=true (Vite and proxy use self-signed) */
+    ...(useHttps && { ignoreHTTPSErrors: true }),
+
     /* Add delay between tests to reduce resource contention in full test runs */
     /* This helps when running all tests together where API may be slower */
     actionTimeout: 30000, // 30 seconds for actions
@@ -89,9 +102,12 @@ export default defineConfig({
   ],
 
   /* Run your local dev server (and optionally proxy) before starting the tests.
-   * Set E2E_USE_EXISTING_SERVER=1 when dev server and proxy are already running.
-   * With existing server, globalSetup verifies the app is reachable to avoid 44× ERR_EMPTY_RESPONSE. */
-  ...(process.env.E2E_USE_EXISTING_SERVER === '1' || process.env.E2E_USE_EXISTING_SERVER === 'true'
+   * When you run the server in advance (outside Playwright), set E2E_USE_EXISTING_SERVER=1
+   * or USE_PROXY_MODE=true so Playwright does not start webServer; globalSetup verifies the app is reachable. */
+  ...(process.env.E2E_USE_EXISTING_SERVER === '1' ||
+    process.env.E2E_USE_EXISTING_SERVER === 'true' ||
+    process.env.USE_PROXY_MODE === 'true' ||
+    process.env.USE_PROXY_MODE === '1'
     ? { globalSetup: './e2e-check-existing-server.mjs' }
     : {
         webServer: [
@@ -101,14 +117,17 @@ export default defineConfig({
             url: baseURL,
             reuseExistingServer: true,
             timeout: 120 * 1000,
+            ...(useHttps && { ignoreHTTPSErrors: true }),
             stdout: process.env.CI ? 'pipe' : 'ignore',
-            stderr: process.env.CI ? 'pipe' : 'ignore',
+            stderr: 'pipe', // always show so "Port 5173 is already in use" etc. is visible without CI=1
             env: {
+              ...process.env,
+              HTTPS: useHttps ? 'true' : 'false',
               VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
               VITE_DEEPGRAM_PROJECT_ID: process.env.VITE_DEEPGRAM_PROJECT_ID || '',
               VITE_BASE_URL: process.env.VITE_BASE_URL || baseURL,
-              VITE_DEEPGRAM_PROXY_ENDPOINT: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || 'ws://localhost:8080/deepgram-proxy',
-              VITE_OPENAI_PROXY_ENDPOINT: process.env.VITE_OPENAI_PROXY_ENDPOINT || 'ws://localhost:8080/openai',
+              VITE_DEEPGRAM_PROXY_ENDPOINT: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || `${proxyBase}/deepgram-proxy`,
+              VITE_OPENAI_PROXY_ENDPOINT: process.env.VITE_OPENAI_PROXY_ENDPOINT || `${proxyBase}/openai`,
             },
           },
           {
@@ -120,6 +139,8 @@ export default defineConfig({
             stdout: 'pipe',
             stderr: 'pipe',
             env: {
+              ...process.env,
+              HTTPS: useHttps ? 'true' : 'false',
               DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || process.env.DEEPGRAM_API_KEY || '',
               VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
               PROXY_PORT: '8080',
