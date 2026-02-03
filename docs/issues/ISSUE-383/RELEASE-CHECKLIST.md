@@ -65,18 +65,18 @@
   - [ ] Title: `v0.7.11`
   - [ ] Description: from `CHANGELOG.md` (emphasize OpenAI proxy support)
   - [ ] Target: `release/v0.7.11` (or `main` if merged)
-- [ ] **Post-release**
-  - [ ] Merge `release/v0.7.11` → `main`
-  - [ ] `git push origin main`
+- [x] **Post-release**
+  - [x] Merge `release/v0.7.11` → `main`
+  - [x] `git push origin main`
 
 ---
 
 ## Completion criteria
 
-- [ ] Package published to GitHub Package Registry
-- [ ] GitHub release created
-- [ ] CHANGELOG.md updated with all changes since v0.7.10
-- [ ] All tests passing (unit, integration, E2E in proxy mode)
+- [x] Package published to GitHub Package Registry
+- [x] GitHub release created
+- [x] CHANGELOG.md updated with all changes since v0.7.10
+- [x] All tests passing (unit, integration, E2E in proxy mode)
 
 ---
 
