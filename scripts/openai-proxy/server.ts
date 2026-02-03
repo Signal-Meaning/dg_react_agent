@@ -103,6 +103,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let hasPendingAudio = false;
     /** Greeting from Settings; injected after session.updated (Issue #381) */
     let storedGreeting: string | undefined;
+    /** Issue #388: send response.create only after upstream sends conversation.item.added or conversation.item.done */
+    let pendingResponseCreateAfterItemAdded = false;
 
     const scheduleAudioCommit = () => {
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
@@ -198,7 +200,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           const injectMsg = msg as Parameters<typeof mapInjectUserMessageToConversationItemCreate>[0];
           const itemCreate = mapInjectUserMessageToConversationItemCreate(injectMsg);
           upstream.send(JSON.stringify(itemCreate));
-          upstream.send(JSON.stringify({ type: 'response.create' }));
+          // Issue #388: wait for conversation.item.added or conversation.item.done before response.create
+          pendingResponseCreateAfterItemAdded = true;
           // Echo user message to client so the app can add it to conversationHistory (context on reconnect)
           const userEcho: { type: 'ConversationText'; role: 'user'; content: string } = {
             type: 'ConversationText',
@@ -337,6 +340,13 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           const componentError = mapErrorToComponentError(msg as Parameters<typeof mapErrorToComponentError>[0]);
           clientWs.send(JSON.stringify(componentError));
+        } else if (msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
+          // Issue #388: send response.create only after upstream confirms the item was added
+          if (pendingResponseCreateAfterItemAdded) {
+            pendingResponseCreateAfterItemAdded = false;
+            upstream.send(JSON.stringify({ type: 'response.create' }));
+          }
+          clientWs.send(raw);
         } else {
           clientWs.send(raw);
         }

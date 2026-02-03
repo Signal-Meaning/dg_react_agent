@@ -25,7 +25,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   let proxyServer: http.Server;
   let proxyPort: number;
   const PROXY_PATH = '/openai';
-  const mockReceived: Array<{ type: string }> = [];
+  const mockReceived: Array<{ type: string; at?: number }> = [];
+  /** When > 0, mock sends conversation.item.added this many ms after receiving conversation.item.create (user). Issue #388: proxy must send response.create only after item.added. */
+  let mockDelayItemAddedForInjectUserMessageMs = 0;
   /** When true, mock sends response.function_call_arguments.done after session.updated (for function-call test) */
   let mockSendFunctionCallAfterSession = false;
   /** When true, mock sends only response.output_audio_transcript.done with "Function call: ..." after session.updated (no .done event) */
@@ -48,10 +50,27 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockWss.on('connection', (socket: import('ws')) => {
       socket.on('message', (data: Buffer) => {
         try {
-          const msg = JSON.parse(data.toString()) as { type?: string; item?: { type?: string; call_id?: string; output?: string; role?: string } };
-          if (msg.type) mockReceived.push({ type: msg.type });
+          const msg = JSON.parse(data.toString()) as { type?: string; item?: { type?: string; role?: string; content?: Array<{ type?: string }>; call_id?: string; output?: string } };
+          if (msg.type) mockReceived.push({ type: msg.type, at: Date.now() });
           if (msg.type === 'conversation.item.create') {
             receivedConversationItems.push({ type: msg.type, item: msg.item });
+            // Issue #388: proxy sends response.create only after conversation.item.added. Mock must send item.added for user messages.
+            const isUserMessage = msg.item?.type === 'message' && msg.item?.role === 'user';
+            if (isUserMessage) {
+              const delay = mockDelayItemAddedForInjectUserMessageMs;
+              const sendItemAdded = () => {
+                try {
+                  socket.send(JSON.stringify({
+                    type: 'conversation.item.added',
+                    item: { id: 'item_mock_1', type: 'message', status: 'completed', role: 'user', content: msg.item?.content ?? [{ type: 'input_text', text: 'hi' }] },
+                  }));
+                } catch {
+                  // ignore
+                }
+              };
+              if (delay > 0) setTimeout(sendItemAdded, delay);
+              else sendItemAdded();
+            }
           }
           if (msg.type === 'session.update') {
             socket.send(JSON.stringify({ type: 'session.updated', session: { type: 'realtime' } }));
@@ -385,6 +404,44 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     });
     client.on('error', done);
   });
+
+  /**
+   * Issue #388 (TDD red): Proxy must send response.create only AFTER receiving conversation.item.added
+   * from upstream for the user message. OpenAI Realtime API expects "after adding the user message"
+   * before response.create. Current proxy sends both immediately; this test fails until the proxy waits.
+   */
+  it('Issue #388: sends response.create only after receiving conversation.item.added from upstream for InjectUserMessage', (done) => {
+    mockDelayItemAddedForInjectUserMessageMs = 100;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString()) as { type?: string };
+      if (msg.type === 'SettingsApplied') {
+        mockReceived.length = 0;
+        client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'hi' }));
+      }
+      if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+        try {
+          const lastItemCreateIndex = mockReceived.map((m) => m.type).lastIndexOf('conversation.item.create');
+          const responseCreateIndex = mockReceived.findIndex((m) => m.type === 'response.create');
+          expect(lastItemCreateIndex).toBeGreaterThanOrEqual(0);
+          expect(responseCreateIndex).toBeGreaterThanOrEqual(0);
+          expect(responseCreateIndex).toBeGreaterThan(lastItemCreateIndex);
+          const itemCreate = mockReceived[lastItemCreateIndex];
+          const responseCreate = mockReceived[responseCreateIndex];
+          const delayMs = (responseCreate.at ?? 0) - (itemCreate.at ?? 0);
+          expect(delayMs).toBeGreaterThanOrEqual(50);
+        } finally {
+          mockDelayItemAddedForInjectUserMessageMs = 0;
+          client.close();
+          done();
+        }
+      }
+    });
+    client.on('error', done);
+  }, 5000);
 
   it('sends Settings.agent.context.messages as conversation.item.create to upstream', (done) => {
     mockReceived.length = 0;
