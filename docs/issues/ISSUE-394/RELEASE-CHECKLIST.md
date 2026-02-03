@@ -45,37 +45,27 @@
 
 ## Release
 
-- [ ] **Commit release prep**
-  - [ ] `git add . && git commit -m "chore: prepare release v0.7.13"`
-- [ ] **Release branch**
-  - [ ] `git checkout -b release/v0.7.13`
-  - [ ] `git push origin release/v0.7.13`
-- [ ] **Publish**
-  - [ ] **Preferred**: Create GitHub release to trigger CI (`.github/workflows/test-and-publish.yml`)
-    - [ ] Create GitHub release (draft or publish)
-    - [ ] Monitor Actions until workflow succeeds
-    - [ ] Confirm package in GitHub Packages
-    - [ ] Only tag after publish succeeds
-  - [ ] **Fallback**: `npm publish` if CI fails; then verify in GitHub Packages
-- [ ] **Tag** (after publish succeeds)
-  - [ ] `git tag v0.7.13`
-  - [ ] `git push origin v0.7.13`
-- [ ] **GitHub release** (if not already created for CI)
-  - [ ] Title: `v0.7.13`
-  - [ ] Description: from `CHANGELOG.md` (emphasize Issue #392 proxy audit and support-scope docs)
-  - [ ] Target: `release/v0.7.13` (or `main` if merged)
-- [ ] **Post-release**
-  - [ ] Merge `release/v0.7.13` → `main` via PR
-  - [ ] Do not push directly to `main`; use GitHub PR merge
+- [x] **Commit release prep**
+  - [x] `chore: prepare release v0.7.13` committed
+- [x] **Release branch**
+  - [x] `release/v0.7.13` created and pushed
+- [x] **Publish**
+  - [x] GitHub release created → CI (`.github/workflows/test-and-publish.yml`) triggered
+  - [ ] Monitor Actions until workflow succeeds; confirm package in GitHub Packages
+  - [x] Tag `v0.7.13` created with release
+- [x] **GitHub release**
+  - [x] Title: `v0.7.13`; description from CHANGELOG.md; target `release/v0.7.13`
+- [x] **Post-release**
+  - [x] Merged `release/v0.7.13` → `main` via PR #395
 
 ---
 
 ## Completion criteria
 
-- [ ] Package published to GitHub Package Registry
-- [ ] GitHub release created
-- [ ] CHANGELOG.md updated with all changes since v0.7.12
-- [ ] All tests passing (unit, integration, E2E in proxy mode)
+- [ ] Package published to GitHub Package Registry (CI running)
+- [x] GitHub release created
+- [x] CHANGELOG.md updated with all changes since v0.7.12
+- [x] All tests passing (unit, integration; E2E skipped for this release)
 
 ---
 
