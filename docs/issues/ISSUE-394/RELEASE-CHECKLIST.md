@@ -51,7 +51,7 @@
   - [x] `release/v0.7.13` created and pushed
 - [x] **Publish**
   - [x] GitHub release created → CI (`.github/workflows/test-and-publish.yml`) triggered
-  - [ ] Monitor Actions until workflow succeeds; confirm package in GitHub Packages
+  - [x] Monitor Actions until workflow succeeds; confirm package in GitHub Packages (run 21639612725 ✓)
   - [x] Tag `v0.7.13` created with release
 - [x] **GitHub release**
   - [x] Title: `v0.7.13`; description from CHANGELOG.md; target `release/v0.7.13`
@@ -62,7 +62,7 @@
 
 ## Completion criteria
 
-- [ ] Package published to GitHub Package Registry (CI running)
+- [x] Package published to GitHub Package Registry (CI run 21639612725 succeeded)
 - [x] GitHub release created
 - [x] CHANGELOG.md updated with all changes since v0.7.12
 - [x] All tests passing (unit, integration; E2E skipped for this release)
