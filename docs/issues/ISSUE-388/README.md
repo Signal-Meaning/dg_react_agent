@@ -27,6 +27,9 @@ After upgrading to 0.7.11, the proxy/send/onUserMessage contract works. **What s
 | [README.md](./README.md) | This file — summary, what \"resolved\" means, objectives |
 | [RESOLUTION-PLAN.md](./RESOLUTION-PLAN.md) | Real-API-first, why unit tests passed without change, mock explanation, test list |
 | [OPENAI-REALTIME-API-REVIEW.md](./OPENAI-REALTIME-API-REVIEW.md) | OpenAI Realtime API review: event order, session lifecycle, keep-alive; proxy gap (wait for conversation.item.added before response.create) |
+| [PROXY-OWNERSHIP-DECISION.md](./PROXY-OWNERSHIP-DECISION.md) | We own both proxies (OpenAI + Deepgram); production-ready, supported production backend |
+| [RESPONSE-TO-VOICE-COMMERCE-PROOF.md](./RESPONSE-TO-VOICE-COMMERCE-PROOF.md) | Response to customer proof that component tests don't cover upstream close; use our supported production proxy |
+| [../ISSUE-392/README.md](../ISSUE-392/README.md) | Issue #392: Production-ready proxy code (quality and coverage) — scope, deliverables, audit |
 
 ## Acceptance criteria (resolution)
 
