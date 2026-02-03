@@ -1,10 +1,10 @@
-# Shared preliminary steps for Test and Publish workflow: checkout, setup Node, install deps, build.
-# Use from test-jest (no registry) or publish (with registry for npm publish).
-name: 'Prelim: checkout, Node, install, build'
-description: 'Checkout code, setup Node.js, npm ci, npm run build. Optional registry for publish job.'
+# Shared preliminary steps for Test and Publish workflow: setup Node, install deps, build.
+# Caller must run actions/checkout first so this local action can be loaded.
+name: 'Prelim: Node, install, build'
+description: 'Setup Node.js, npm ci, npm run build. Optional registry for publish job.'
 inputs:
   ref:
-    description: 'Ref to checkout (branch, tag, or SHA). Defaults to workflow ref.'
+    description: 'Unused; kept for workflow compatibility. Caller runs checkout.'
     required: false
     default: ''
   node-version:
@@ -27,11 +27,6 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ inputs.ref }}
-
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:

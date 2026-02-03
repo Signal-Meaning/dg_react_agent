@@ -36,8 +36,13 @@ jobs:
       contents: read
     
     steps:
-      - name: Prelim (checkout, Node, install, build)
-        uses: ./.github/actions/prelim
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+      
+      - name: Prelim (Node, install, build)
+        uses: Signal-Meaning/dg_react_agent/.github/actions/prelim@${{ github.sha }}
         with:
           ref: ${{ inputs.branch || github.ref }}
         
@@ -153,8 +158,13 @@ jobs:
       id-token: write
       
     steps:
-      - name: Prelim (checkout, Node, install, build)
-        uses: ./.github/actions/prelim
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+      
+      - name: Prelim (Node, install, build)
+        uses: Signal-Meaning/dg_react_agent/.github/actions/prelim@${{ github.sha }}
         with:
           ref: ${{ inputs.branch || github.ref }}
           registry-url: 'https://npm.pkg.github.com'
