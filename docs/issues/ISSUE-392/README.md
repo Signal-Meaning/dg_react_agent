@@ -19,9 +19,9 @@ Ensure proxy **code** (OpenAI, Deepgram) meets a production-ready bar for **qual
 
 For each proxy (OpenAI, Deepgram), "production ready" means **code** bar only:
 
-- [ ] **Protocol and behavior** match the reference implementation and docs (e.g. OpenAI: `response.create` only after `conversation.item.added` per Issue #388).
-- [ ] **Test coverage:** Unit and/or integration tests cover the proxy behavior (e.g. ordering, translation); E2E canary exists for the injectUserMessage → agent reply flow where applicable.
-- [ ] **Code quality:** Maintainable, documented (in-repo), no known correctness gaps; reference implementation is the contract for anyone integrating (us or 3pp).
+- [x] **Protocol and behavior** match the reference implementation and docs (e.g. OpenAI: `response.create` only after `conversation.item.added` per Issue #388).
+- [x] **Test coverage:** Unit and/or integration tests cover the proxy behavior (e.g. ordering, translation); E2E canary exists for the injectUserMessage → agent reply flow where applicable.
+- [x] **Code quality:** Maintainable, documented (in-repo), no known correctness gaps; reference implementation is the contract for anyone integrating (us or 3pp).
 
 **Out of scope for this team:** Hosting, endpoint URLs, auth docs for a hosted service, runbooks, SLAs, support ownership.
 
@@ -34,26 +34,28 @@ For each proxy (OpenAI, Deepgram), "production ready" means **code** bar only:
 
 ## Deliverables (checklist)
 
+**Audit report:** [AUDIT-REPORT.md](./AUDIT-REPORT.md) (2026-02-03).
+
 ### 1. OpenAI proxy code
 
-- [ ] **Audit:** Confirm `scripts/openai-proxy/` meets production-ready code bar (protocol, ordering per Issue #388, tests).
-- [ ] **Coverage:** Unit tests (`tests/openai-proxy.test.ts`) and integration test (`tests/integration/openai-proxy-integration.test.ts`) cover key behavior; E2E canary `openai-inject-connection-stability.spec.js` passes with real proxy. Add tests only if audit finds gaps.
-- [ ] **Docs:** In-repo docs (e.g. OPENAI-REALTIME-API-REVIEW.md, scripts/openai-proxy/README.md) describe event order and usage for integrators.
+- [x] **Audit:** Confirm `scripts/openai-proxy/` meets production-ready code bar (protocol, ordering per Issue #388, tests).
+- [x] **Coverage:** Unit tests (`tests/openai-proxy.test.ts`) and integration test (`tests/integration/openai-proxy-integration.test.ts`) cover key behavior; E2E canary `openai-inject-connection-stability.spec.js` passes with real proxy. Add tests only if audit finds gaps.
+- [x] **Docs:** In-repo docs (e.g. OPENAI-REALTIME-API-REVIEW.md, scripts/openai-proxy/README.md) describe event order and usage for integrators.
 
 ### 2. Deepgram proxy code
 
-- [ ] **Audit:** Confirm test-app mock proxy (and any Deepgram integration paths) meet production-ready code bar; tests and coverage adequate.
-- [ ] **Gaps:** Address or ticket any gaps found (no hosting or endpoint docs in scope).
+- [x] **Audit:** Confirm test-app mock proxy (and any Deepgram integration paths) meet production-ready code bar; tests and coverage adequate.
+- [x] **Gaps:** Address or ticket any gaps found (no hosting or endpoint docs in scope). Optional process/startup test gaps documented in PROXY-SERVER-TEST-COVERAGE.md; not blocking.
 
 ### 3. Documentation and scope clarity
 
-- [ ] Update [PROXY-OWNERSHIP-DECISION.md](../ISSUE-388/PROXY-OWNERSHIP-DECISION.md) if needed: we own proxy **code** and integration contract; we do not host or document endpoints/auth/SLAs.
-- [ ] Ensure [RESPONSE-TO-VOICE-COMMERCE-PROOF.md](../ISSUE-388/RESPONSE-TO-VOICE-COMMERCE-PROOF.md) and any customer-facing wording align: point to **reference implementation** and event-ordering requirements for integrators; no "use our hosted production proxy" unless another team provides it.
+- [x] Update [PROXY-OWNERSHIP-DECISION.md](../ISSUE-388/PROXY-OWNERSHIP-DECISION.md) if needed: we own proxy **code** and integration contract; we do not host or document endpoints/auth/SLAs. Follow-up link now points to Issue #392.
+- [x] Ensure [RESPONSE-TO-VOICE-COMMERCE-PROOF.md](../ISSUE-388/RESPONSE-TO-VOICE-COMMERCE-PROOF.md) and any customer-facing wording align: point to **reference implementation** and event-ordering requirements for integrators; no "use our hosted production proxy" unless another team provides it.
 
 ### 4. Repo and CI
 
-- [ ] CI: existing proxy integration and E2E tests pass.
-- [ ] Reference implementation is the single source of truth for protocol/ordering; no drift.
+- [x] CI: existing proxy integration and E2E tests pass.
+- [x] Reference implementation is the single source of truth for protocol/ordering; no drift.
 
 ## References
 

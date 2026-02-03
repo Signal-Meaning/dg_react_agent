@@ -13,7 +13,12 @@
 - **We focus on** integration with third parties via the proxy (and direct) API. We do **not** document endpoints, auth, or usage for a **hosted** production backend unless another team provides and owns that backend.
 - **Reference implementations** in the repo remain the source of truth for protocol and ordering.
 
+## Support scope for proxies
+
+- **We do not support third-party proxy implementations.** We provide reference proxy **code** and the integration contract (protocol, event order). We do not provide technical support, debugging, or SLAs for proxy implementations built or operated by others (including customer-built proxies or third-party hosted proxy services).
+- **For hosted proxy services or support,** customers should adopt third-party proxy implementations or vendors. Anyone needing a hosted production proxy, runbooks, or vendor support for proxy operation should use a third-party offering that implements the same interface and protocol (e.g. the contract described in OPENAI-REALTIME-API-REVIEW.md and scripts/openai-proxy/README.md).
+
 ## Follow-up
 
-- **This team:** Ensure proxy code meets production-ready bar (quality, coverage); see [PROXY-PRODUCTION-TICKET.md](./PROXY-PRODUCTION-TICKET.md).
+- **This team:** Ensure proxy code meets production-ready bar (quality, coverage); see [Issue #392](../ISSUE-392/README.md).
 - **If a hosted production proxy is provided:** That is owned by another team; we keep reference implementation aligned with the contract so integrators can rely on it.

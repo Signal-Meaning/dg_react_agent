@@ -54,7 +54,12 @@ Backend proxy support has been comprehensively validated and is production-ready
 
 For detailed validation results, see the [validation documentation](../issues/ISSUE-345/ISSUE-345-VALIDATION-REPORT.md).
 
+## Support scope
+
+We provide **reference proxy code** and the **interface contract** (protocol, event order). We do **not** support third-party proxy implementations: we do not provide technical support, debugging, or SLAs for proxies built or operated by others. For hosted proxy services or support, customers should adopt third-party proxy implementations or vendors that implement the same contract. See [Proxy ownership and support scope](../issues/ISSUE-388/PROXY-OWNERSHIP-DECISION.md#support-scope-for-proxies) for the full statement.
+
 ## Related Documentation
 
 - [API Reference](../API-REFERENCE.md) - Component API documentation with proxy mode examples
 - [Issue #242 Tracking](../issues/ISSUE-242-BACKEND-PROXY-SUPPORT.md) - Complete feature tracking document
+- [Proxy ownership decision](../issues/ISSUE-388/PROXY-OWNERSHIP-DECISION.md) - What we own (code, contract) and support scope for proxies
