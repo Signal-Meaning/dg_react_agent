@@ -42,7 +42,7 @@ jobs:
           ref: ${{ inputs.branch || github.ref }}
       
       - name: Prelim (Node, install, build)
-        uses: Signal-Meaning/dg_react_agent/.github/actions/prelim@${{ github.sha }}
+        uses: Signal-Meaning/dg_react_agent/.github/actions/prelim@main
         with:
           ref: ${{ inputs.branch || github.ref }}
         
@@ -164,7 +164,7 @@ jobs:
           ref: ${{ inputs.branch || github.ref }}
       
       - name: Prelim (Node, install, build)
-        uses: Signal-Meaning/dg_react_agent/.github/actions/prelim@${{ github.sha }}
+        uses: Signal-Meaning/dg_react_agent/.github/actions/prelim@main
         with:
           ref: ${{ inputs.branch || github.ref }}
           registry-url: 'https://npm.pkg.github.com'
