@@ -308,4 +308,31 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.item.content[0].text).toBe('');
     });
   });
+
+  /**
+   * Issue #388: Proxy must send response.create only after receiving conversation.item.added
+   * (or conversation.item.done) from upstream for the user message. This helper encodes the rule;
+   * the proxy server should use equivalent logic. Integration test asserts timing (TDD red until fixed).
+   */
+  describe('Issue #388: proxy event order (InjectUserMessage → response.create)', () => {
+    function maySendResponseCreateAfterInjectUserMessage(upstreamTypesReceived: string[]): boolean {
+      return upstreamTypesReceived.some(
+        (t) => t === 'conversation.item.added' || t === 'conversation.item.done'
+      );
+    }
+
+    it('must not send response.create until upstream sent conversation.item.added or conversation.item.done', () => {
+      expect(maySendResponseCreateAfterInjectUserMessage([])).toBe(false);
+      expect(maySendResponseCreateAfterInjectUserMessage(['session.updated'])).toBe(false);
+      expect(maySendResponseCreateAfterInjectUserMessage(['response.created'])).toBe(false);
+    });
+
+    it('may send response.create after conversation.item.added', () => {
+      expect(maySendResponseCreateAfterInjectUserMessage(['conversation.item.added'])).toBe(true);
+    });
+
+    it('may send response.create after conversation.item.done', () => {
+      expect(maySendResponseCreateAfterInjectUserMessage(['conversation.item.done'])).toBe(true);
+    });
+  });
 });
