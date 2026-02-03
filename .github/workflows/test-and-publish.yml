@@ -280,12 +280,12 @@ jobs:
           PUBLISH_VERSION="${{ steps.version.outputs.version }}"
           FORCE_PUBLISH="${{ inputs.force }}"
           
-          # Check if version already exists and force is not enabled
+          # If version already exists and force is not enabled: warn, skip publish, continue (so release step can run)
           if [ "${{ steps.check_version.outputs.version_exists }}" == "true" ] && [ "$FORCE_PUBLISH" != "true" ]; then
-            echo "❌ Version $PUBLISH_VERSION already exists in registry"
-            echo "❌ Publishing blocked to prevent overwriting existing version"
-            echo "💡 To force publish, set 'force' input to 'true' (use with caution)"
-            exit 1
+            echo "⚠️ Version $PUBLISH_VERSION already exists in registry"
+            echo "⚠️ Skipping publish; continuing so Create GitHub Release can run."
+            echo "💡 To overwrite, set 'force' input to 'true' (use with caution)"
+            exit 0
           fi
           
           if [ "${{ steps.check_version.outputs.version_exists }}" == "true" ] && [ "$FORCE_PUBLISH" == "true" ]; then
