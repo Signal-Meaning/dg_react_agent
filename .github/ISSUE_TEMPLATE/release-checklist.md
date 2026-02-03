@@ -116,9 +116,11 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
   - [ ] Add: `vX.X.X` label to `release/vX.X.X` branch
 
 #### Post-Release
-- [ ] **Update Main Branch**: Merge release branch to main
-  - [ ] Merge: `release/vX.X.X` → `main`
-  - [ ] Push: `git push origin main`
+- [ ] **Update Main Branch**: Merge release branch to main **via Pull Request** (required — do not push directly to `main`)
+  - [ ] Open a PR: `release/vX.X.X` → `main` (e.g. "Merge release/vX.X.X into main")
+  - [ ] Get review/approval if branch protection requires it
+  - [ ] Merge the PR (squash or merge commit per repo policy)
+  - [ ] **Do not** `git push origin main` from a local merge — use the GitHub PR merge so branch protection is satisfied
 - [ ] **Clean Up**: Clean up release artifacts (only if you ran optional local package)
   - [ ] If you ran `npm run package:local` locally: remove any `.tgz` in repo root, or leave (they are gitignored)
 - [ ] **Announcement**: Announce release (if applicable)
@@ -179,6 +181,7 @@ Follow the established documentation structure in `docs/releases/`:
 3. **Testing**: All tests must pass before release
 4. **Documentation**: Comprehensive documentation is required
 5. **Breaking Changes**: Must be clearly documented in MIGRATION.md
+6. **Merge to main via PR**: Branch protection may require changes through a pull request. Do **not** push a local merge directly to `main`; open a PR from `release/vX.X.X` to `main` and merge the PR.
 
 ### 🔗 Related Documentation
 
