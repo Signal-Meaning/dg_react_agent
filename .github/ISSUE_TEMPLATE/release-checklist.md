@@ -11,6 +11,8 @@ CLI Usage:
 gh issue create --template release-checklist.md --title "Release vX.X.X: Complete Release Process and Documentation" --label "release,documentation,priority:high" --body "Replace vX.X.X with actual version number"
 -->
 
+**Use this template for every new release.** Create a new issue from this template (or copy its checklist); do **not** copy from old release folders (e.g. `docs/releases/v0.4.0/RELEASE-CHECKLIST.md`). Those files are archival only and may be outdated; this template is the source of truth.
+
 ## 🚀 Release vX.X.X - Complete Release Process
 
 ### Overview
