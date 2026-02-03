@@ -7,6 +7,11 @@ on:
     types: [published]
   workflow_dispatch:
     inputs:
+      test_only:
+        description: 'Run only test-jest (skip publish). Use this to validate workflow/action changes without publishing.'
+        required: false
+        type: boolean
+        default: false
       version:
         description: 'Version to publish (leave empty to use package.json version)'
         required: false
@@ -31,24 +36,13 @@ jobs:
       contents: read
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Prelim (checkout, Node, install, build)
+        uses: ./.github/actions/prelim
         with:
           ref: ${{ inputs.branch || github.ref }}
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          
-      - name: Install dependencies
-        run: npm ci
         
       - name: Run linting
         run: npm run lint
-        
-      - name: Build package
-        run: npm run build
         
       - name: Run Jest tests (mock only)
         run: npm run test:mock
@@ -152,59 +146,35 @@ jobs:
     name: Publish Package
     runs-on: ubuntu-latest
     needs: [test-jest] # test-e2e temporarily disabled
-    if: success() && (github.event_name == 'release' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v')))
+    if: success() && (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.test_only != true) || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v')))
     permissions:
       contents: write   # read + write for creating release tag and GitHub Release
       packages: write
       id-token: write
       
     steps:
-      - name: Determine version and branch
-        id: vars
-        run: |
-          # For workflow_dispatch, we need to checkout first to read package.json
-          # But we'll use the branch input if provided
-          echo "version=placeholder" >> $GITHUB_OUTPUT
-          echo "branch=${{ inputs.branch || 'placeholder' }}" >> $GITHUB_OUTPUT
-      
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Prelim (checkout, Node, install, build)
+        uses: ./.github/actions/prelim
         with:
           ref: ${{ inputs.branch || github.ref }}
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@signal-meaning'
+          token: ${{ secrets.NPM_TOKEN }}
       
-      - name: Determine version (after checkout)
+      - name: Determine version
         id: version
         run: |
-          # Determine version - use input if provided, otherwise read from package.json
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
           else
             VERSION=$(node -p "require('./package.json').version")
           fi
-          
-          # Determine branch name for display
           BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
-          
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
           echo "📦 Version: $VERSION"
           echo "🌿 Branch: $BRANCH_NAME"
-        
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@signal-meaning'
-          token: ${{ secrets.NPM_TOKEN }}
-          always-auth: true
-          
-      - name: Install dependencies
-        run: npm ci
-        
-      - name: Build package
-        run: npm run build
-        
+      
       - name: Verify npm configuration
         run: |
           # setup-node@v4 automatically configures authentication

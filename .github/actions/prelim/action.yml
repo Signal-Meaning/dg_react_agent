@@ -1,0 +1,49 @@
+# Shared preliminary steps for Test and Publish workflow: checkout, setup Node, install deps, build.
+# Use from test-jest (no registry) or publish (with registry for npm publish).
+name: 'Prelim: checkout, Node, install, build'
+description: 'Checkout code, setup Node.js, npm ci, npm run build. Optional registry for publish job.'
+inputs:
+  ref:
+    description: 'Ref to checkout (branch, tag, or SHA). Defaults to workflow ref.'
+    required: false
+    default: ''
+  node-version:
+    description: 'Node.js version'
+    required: false
+    default: '20'
+  registry-url:
+    description: 'npm registry URL (e.g. for GitHub Packages). If set, configures scope and auth.'
+    required: false
+    default: ''
+  scope:
+    description: 'npm scope (e.g. @signal-meaning). Used when registry-url is set.'
+    required: false
+    default: ''
+  token:
+    description: 'Token for registry auth. Used when registry-url is set.'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        registry-url: ${{ inputs.registry-url }}
+        scope: ${{ inputs.scope }}
+        token: ${{ inputs.token }}
+
+    - name: Install dependencies
+      run: npm ci
+      shell: bash
+
+    - name: Build package
+      run: npm run build
+      shell: bash
