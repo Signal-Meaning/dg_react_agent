@@ -162,10 +162,11 @@ Each release includes a comprehensive checklist to ensure all steps are complete
 
 ### Using the Release Checklist
 
-1. **Create Release Issue**: Use the "Release Checklist" issue template when creating a new release issue
+1. **Create Release Issue**: Use the **"Release Checklist" GitHub issue template** when creating a new release issue
    - Go to GitHub Issues → "New Issue" → Select "Release Checklist" template
    - This automatically includes the complete checklist with proper labels
-2. **Locate the Checklist**: Find the `RELEASE-CHECKLIST.md` file in the version-specific directory (e.g., `docs/releases/v0.4.0/RELEASE-CHECKLIST.md`)
+   - **Use this template as the source of truth.** Do not copy from old release folders (e.g. `docs/releases/v0.4.0/RELEASE-CHECKLIST.md`); those files are archival only and may be outdated.
+2. **Work from the issue**: The checklist lives in the issue you created from the template. Optionally copy it into a version-specific doc (e.g. `docs/issues/ISSUE-NNN/RELEASE-CHECKLIST.md`) if you are tracking a release in an issue folder.
 
 3. **Follow the Process**: Work through each section systematically:
    - **Pre-Release Preparation**: Code review, testing, linting
