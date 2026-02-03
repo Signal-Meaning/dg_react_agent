@@ -2,6 +2,18 @@
 
 **Priority:** Resolution is defined by **real APIs and no mocks** — the E2E test that uses a real OpenAI proxy must pass (agent response received after first text message). Unit tests with mocks support the contract and give fast feedback but do not prove the product works with real upstream.
 
+**Status:** Resolved. E2E with real OpenAI proxy passes; proxy fix (wait for `conversation.item.added` before `response.create`) is implemented and covered by integration + E2E tests.
+
+---
+
+## 0. Progress (what we did)
+
+- **Root cause (from API review):** The proxy was sending `response.create` immediately after `conversation.item.create` on `InjectUserMessage`. The OpenAI Realtime API expects the client to wait for upstream confirmation (e.g. `conversation.item.added` or `conversation.item.done`) before sending `response.create`; sending too early could contribute to upstream closing with code 1000 before replying.
+- **Proxy fix:** `scripts/openai-proxy/server.ts` — on `InjectUserMessage`, the proxy now only sends `conversation.item.create` to upstream and sets a flag; it sends `response.create` only when the upstream sends `conversation.item.added` or `conversation.item.done`. No other behavior (e.g. audio commit, `FunctionCallResponse`) was changed.
+- **Integration test:** `tests/integration/openai-proxy-integration.test.ts` — “Issue #388: sends response.create only after receiving conversation.item.added from upstream for InjectUserMessage”. Mock upstream sends `conversation.item.added` 100 ms after receiving user `conversation.item.create`; test asserts `response.create` is sent after that (order in `mockReceived` and delay ≥ 50 ms). The shared mock was updated to always send `conversation.item.added` for user messages (immediate when delay is 0, delayed when 100 ms) so both this test and “translates InjectUserMessage to … ConversationText” pass; the Issue #388 test clears `mockReceived` on `SettingsApplied` (just before sending `InjectUserMessage`) to avoid cross-test message pollution.
+- **E2E:** `openai-inject-connection-stability.spec.js` — “should receive agent response after first text message (real OpenAI proxy)” — **passes** when run with real proxy (`VITE_OPENAI_PROXY_ENDPOINT`, dev server + proxy running). Resolution criterion met.
+- **Regression:** Required Jest (`openai-proxy-integration`, `openai-proxy.test`, `issue-380-inject`) and proxy-surface E2E (`openai-proxy-e2e.spec.js` + `openai-inject-connection-stability.spec.js`) have been run and pass.
+
 ---
 
 ## 1. Definition of “defect resolved”
@@ -59,7 +71,16 @@ The customer’s repro used a mock of the browser’s **raw** `WebSocket` (with 
 
 ## 4. Acceptance checklist
 
-- [ ] **E2E with real OpenAI proxy passes:** `openai-inject-connection-stability.spec.js` — “should receive agent response after first text message” — green when run with `VITE_OPENAI_PROXY_ENDPOINT` and real proxy. **This is the resolution criterion.**
+- [x] **E2E with real OpenAI proxy passes:** `openai-inject-connection-stability.spec.js` — “should receive agent response after first text message” — green when run with `VITE_OPENAI_PROXY_ENDPOINT` and real proxy. **This is the resolution criterion.**
 - [x] Unit tests: closing mock and #388 tests implemented; “closed” reported, no utterance when closed, utterance when we simulate reply; skipped test for “reply within 10 s with closing mock”.
+- [x] Integration test: “Issue #388: sends response.create only after receiving conversation.item.added from upstream” — passes; mock sends item.added for user messages; test clears `mockReceived` before InjectUserMessage to avoid cross-test pollution.
 - [x] Docs: ISSUE-388 README and this RESOLUTION-PLAN; draft files removed.
-- [x] **OpenAI Realtime API review:** [OPENAI-REALTIME-API-REVIEW.md](./OPENAI-REALTIME-API-REVIEW.md) — event order (wait for conversation.item.added before response.create), session lifecycle, keep-alive; proxy fix recommended.
+- [x] **OpenAI Realtime API review:** [OPENAI-REALTIME-API-REVIEW.md](./OPENAI-REALTIME-API-REVIEW.md) — event order (wait for conversation.item.added before response.create), session lifecycle, keep-alive; proxy fix implemented.
+
+---
+
+## 5. Next steps (post-resolution)
+
+- **Merge and release:** Land the proxy fix and tests on the target branch; run full regression (required Jest + proxy-surface E2E) before release. Pre-release / full E2E suite can be run when release is kicked off.
+- **Optional (product):** Document or investigate OpenAI Realtime API close code 1000 and session lifecycle if needed for support; consider keep-alive / reconnection / session-extend for multi-turn or long sessions.
+- **No further code change required** for this defect; resolution is confirmed by the canary E2E test and supporting integration/unit tests.

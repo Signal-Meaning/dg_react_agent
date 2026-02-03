@@ -54,11 +54,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           if (msg.type) mockReceived.push({ type: msg.type, at: Date.now() });
           if (msg.type === 'conversation.item.create') {
             receivedConversationItems.push({ type: msg.type, item: msg.item });
-            // Issue #388: when delay is set, send conversation.item.added after delay so we can assert proxy waits
+            // Issue #388: proxy sends response.create only after conversation.item.added. Mock must send item.added for user messages.
             const isUserMessage = msg.item?.type === 'message' && msg.item?.role === 'user';
-            if (isUserMessage && mockDelayItemAddedForInjectUserMessageMs > 0) {
+            if (isUserMessage) {
               const delay = mockDelayItemAddedForInjectUserMessageMs;
-              setTimeout(() => {
+              const sendItemAdded = () => {
                 try {
                   socket.send(JSON.stringify({
                     type: 'conversation.item.added',
@@ -67,7 +67,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                 } catch {
                   // ignore
                 }
-              }, delay);
+              };
+              if (delay > 0) setTimeout(sendItemAdded, delay);
+              else sendItemAdded();
             }
           }
           if (msg.type === 'session.update') {
@@ -410,7 +412,6 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    */
   it('Issue #388: sends response.create only after receiving conversation.item.added from upstream for InjectUserMessage', (done) => {
     mockDelayItemAddedForInjectUserMessageMs = 100;
-    mockReceived.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
@@ -418,17 +419,19 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string };
       if (msg.type === 'SettingsApplied') {
+        mockReceived.length = 0;
         client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'hi' }));
       }
       if (msg.type === 'ConversationText' && msg.role === 'assistant') {
         try {
-          const itemCreate = mockReceived.find((m) => m.type === 'conversation.item.create');
-          const responseCreate = mockReceived.find((m) => m.type === 'response.create');
-          expect(itemCreate).toBeDefined();
-          expect(responseCreate).toBeDefined();
-          expect(itemCreate!.at).toBeDefined();
-          expect(responseCreate!.at).toBeDefined();
-          const delayMs = (responseCreate!.at ?? 0) - (itemCreate!.at ?? 0);
+          const lastItemCreateIndex = mockReceived.map((m) => m.type).lastIndexOf('conversation.item.create');
+          const responseCreateIndex = mockReceived.findIndex((m) => m.type === 'response.create');
+          expect(lastItemCreateIndex).toBeGreaterThanOrEqual(0);
+          expect(responseCreateIndex).toBeGreaterThanOrEqual(0);
+          expect(responseCreateIndex).toBeGreaterThan(lastItemCreateIndex);
+          const itemCreate = mockReceived[lastItemCreateIndex];
+          const responseCreate = mockReceived[responseCreateIndex];
+          const delayMs = (responseCreate.at ?? 0) - (itemCreate.at ?? 0);
           expect(delayMs).toBeGreaterThanOrEqual(50);
         } finally {
           mockDelayItemAddedForInjectUserMessageMs = 0;
