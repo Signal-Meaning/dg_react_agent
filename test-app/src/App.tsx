@@ -1145,7 +1145,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           }}>
             Current mode: <strong data-testid="connection-mode">{connectionMode}</strong>
             {connectionMode === 'proxy' && (
-              <span> → {proxyEndpoint || 'Not set'}</span>
+              <span> → <strong data-testid="connection-proxy-endpoint">{proxyEndpoint || 'Not set'}</strong></span>
             )}
           </p>
         </div>
