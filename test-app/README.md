@@ -15,6 +15,10 @@ This is a comprehensive demonstration app for the Deepgram Voice Interaction Rea
    ```
 4. Start the development server: `npm run dev`
 
+### If `localhost` doesn't work in the browser
+
+If you can reach the app at `http://127.0.0.1:5173` but not at `http://localhost:5173`, your system may be resolving `localhost` to IPv6 (`::1`) instead of IPv4. Use **`http://127.0.0.1:5173`** as a workaround, or fix resolution by ensuring `/etc/hosts` has `127.0.0.1 localhost` (on macOS/Linux, edit with `sudo nano /etc/hosts`). The dev server also prints a reminder when it starts.
+
 ## Component Modes
 
 The Deepgram Voice Interaction component supports three operating modes, all demonstrated in this application:

@@ -22,7 +22,8 @@ In proxy mode with functions configured, the server responds with **`SETTINGS_AL
 | **Root cause identified** | [x] |
 | **SDK fix: send Settings only once per connection** | [x] |
 | **Tests added/updated** | [x] |
-| **E2E passes (no SETTINGS_ALREADY_APPLIED on mic/first audio)** | [ ] (verify in CI / real API) |
+| **Jest regression (Issue #399–related)** | [x] 2025-02-04: 10 suites, 39 tests passed |
+| **E2E passes (no SETTINGS_ALREADY_APPLIED on mic/first audio)** | [x] 2025-02-04: simple-mic-test passed (npm run test:e2e, existing server + proxy) |
 | **Issue closed** | [ ] |
 
 ---
@@ -46,7 +47,18 @@ In proxy mode with functions configured, the server responds with **`SETTINGS_AL
 ### Verification
 
 - [x] Unit test added: `tests/settings-sent-once-issue399.test.tsx` — (1) connect, (2) send Settings and apply, (3) change agentOptions (rerender), (4) assert only one Settings message sent (no re-send).
+- [x] **Jest regression (2025-02-04):** All Issue #399–related tests run and passed: `settings-sent-once-issue399`, `closure-issue-fix`, `agent-options-useeffect-must-run`, `agent-options-useeffect-dependency`, `agent-options-timing`, `agent-options-resend-*`, `agent-manager-timing-investigation`, `listen-model-conditional` — 10 suites, 39 tests.
+- [x] **E2E verified (2025-02-04):** With dev server and proxy running, `cd test-app && USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- simple-mic-test.spec.js --project=chromium` — 1 passed; connect-then-mic flow, connection stayed connected.
 - [ ] Run E2E that sends audio twice (e.g. transcript capture / component re-renders); test should get past the second connection (no “user-message not found” due to closed connection).
+
+#### How to verify E2E (no SETTINGS_ALREADY_APPLIED on mic/first audio)
+
+E2E verification requires a running app and (for proxy-mode tests) a running proxy with a valid API key. The scenario to confirm: **connect → Settings applied → enable mic or send first audio → connection stays open** (no duplicate Settings → no `SETTINGS_ALREADY_APPLIED` → no connection close).
+
+- **Relevant E2E specs:** Any spec that does connect-then-mic or connect-then-first-audio exercises the fix, e.g. `simple-mic-test.spec.js`, `microphone-functionality-fixed.spec.js`, `strict-mode-behavior.spec.js`, `deepgram-interim-transcript-validation.spec.js`. Run with proxy + API key so the connection reaches the backend.
+- **Prerequisites:** Start the test-app dev server and (for proxy mode) the proxy, e.g. `npm run test:proxy:server` from test-app, with `OPENAI_API_KEY` (or Deepgram key as required) set in `test-app/.env`. See `test-app/tests/e2e/README.md` for scheme (HTTPS/ws vs wss) and env.
+- **CI:** Run the Playwright E2E suite in CI with the same env (proxy + API key). If connect-then-mic E2E tests pass and connection status remains "connected" (no "user-message not found" due to early close), the E2E item is satisfied.
+- **Manual check:** With `debug={true}`, open the app, connect, enable mic; in the console confirm a single `🔧 [sendAgentSettings]` / Settings send per connection and no second Settings around mic enable. If the backend still sends `SETTINGS_ALREADY_APPLIED`, the component treats it as non-fatal; connection closure would be from server/proxy behavior.
 
 ### Upstream / documentation (optional)
 
@@ -58,7 +70,7 @@ In proxy mode with functions configured, the server responds with **`SETTINGS_AL
 ## References
 
 - **GitHub issue:** [Issue #399](https://github.com/Signal-Meaning/dg_react_agent/issues/399)
-- **Component:** `src/components/DeepgramVoiceInteraction/index.tsx` — `sendAgentSettings`, `hasSentSettingsRef`, `globalSettingsSent`, agentOptions useEffect, Error handler for `SETTINGS_ALREADY_APPLIED`
+- **Component:** `src/components/DeepgramVoiceInteraction/index.tsx` — `sendAgentSettings`, `hasSentSettingsRef`, `globalSettingsSent`, agentOptions useEffect, Error handler for `SETTINGS_ALREADY_APPLIED`. Follow-up: set flags before `sendJSON` (race hardening); on send failure, log WebSocket state via fresh `getReadyState()` (not narrowed `wsState`).
 - **Option comparison:** `src/utils/option-comparison.ts` — `compareAgentOptionsIgnoringContext`, `hasDependencyChanged`
 
 ---

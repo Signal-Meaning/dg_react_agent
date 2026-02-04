@@ -1892,29 +1892,34 @@ function DeepgramVoiceInteraction(
       }
       return; // Don't mark as sent if we can't actually send
     }
-    
+
+    // Issue #399 follow-up: Set flags BEFORE sendJSON to close race when connection state
+    // handler runs multiple times (e.g. duplicate 'connected' events). Any re-entrant or
+    // concurrent call to sendAgentSettings will then see flags true and skip.
+    hasSentSettingsRef.current = true;
+    windowWithGlobals.globalSettingsSent = true;
+
     const sendResult = agentManagerRef.current.sendJSON(settingsMessage);
-    if (sendResult) {
-      // CRITICAL FIX: Set flags immediately when Settings is sent (not wait for SettingsApplied)
-      // This prevents React StrictMode from sending Settings twice when component remounts
-      // before SettingsApplied is received
-      hasSentSettingsRef.current = true;
-      windowWithGlobals.globalSettingsSent = true;
+    if (!sendResult) {
+      // Send failed - reset flags so a retry or later path can send
+      hasSentSettingsRef.current = false;
+      windowWithGlobals.globalSettingsSent = false;
       if (debug) {
-        console.log('🔧 [sendAgentSettings] Flags set immediately after successful send (StrictMode protection)');
-      }
-    } else {
-      if (debug) {
-        const wsStateName = wsState === 0 ? 'CONNECTING' : 
-                            wsState === 1 ? 'OPEN' : 
-                            wsState === 2 ? 'CLOSING' : 
-                            wsState === 3 ? 'CLOSED' : 'UNKNOWN';
+        const stateAtFail = agentManagerRef.current?.getReadyState() ?? null;
+        const wsStateName = stateAtFail === 0 ? 'CONNECTING' :
+                            stateAtFail === 1 ? 'OPEN' :
+                            stateAtFail === 2 ? 'CLOSING' :
+                            stateAtFail === 3 ? 'CLOSED' : 'UNKNOWN';
         console.error('❌ [Protocol] Settings message send FAILED (sendJSON returned false)');
-        console.error('❌ [Protocol] WebSocket state at send time:', wsState, `(${wsStateName})`);
+        console.error('❌ [Protocol] WebSocket state at send time:', stateAtFail, `(${wsStateName})`);
       }
-      return; // Don't mark as sent if send failed
+      return;
     }
-    
+
+    if (debug) {
+      console.log('🔧 [sendAgentSettings] Flags set before send (Issue #399 race protection)');
+    }
+
     // Mark settings as sent for welcome-first behavior
     dispatch({ type: 'SETTINGS_SENT', sent: true });
   };
