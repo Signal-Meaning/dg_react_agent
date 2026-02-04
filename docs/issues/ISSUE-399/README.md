@@ -23,7 +23,7 @@ In proxy mode with functions configured, the server responds with **`SETTINGS_AL
 | **SDK fix: send Settings only once per connection** | [x] |
 | **Tests added/updated** | [x] |
 | **Jest regression (Issue #399–related)** | [x] 2025-02-04: 10 suites, 39 tests passed |
-| **E2E passes (no SETTINGS_ALREADY_APPLIED on mic/first audio)** | [ ] (verify in CI / real API) |
+| **E2E passes (no SETTINGS_ALREADY_APPLIED on mic/first audio)** | [x] 2025-02-04: simple-mic-test passed (npm run test:e2e, existing server + proxy) |
 | **Issue closed** | [ ] |
 
 ---
@@ -48,6 +48,7 @@ In proxy mode with functions configured, the server responds with **`SETTINGS_AL
 
 - [x] Unit test added: `tests/settings-sent-once-issue399.test.tsx` — (1) connect, (2) send Settings and apply, (3) change agentOptions (rerender), (4) assert only one Settings message sent (no re-send).
 - [x] **Jest regression (2025-02-04):** All Issue #399–related tests run and passed: `settings-sent-once-issue399`, `closure-issue-fix`, `agent-options-useeffect-must-run`, `agent-options-useeffect-dependency`, `agent-options-timing`, `agent-options-resend-*`, `agent-manager-timing-investigation`, `listen-model-conditional` — 10 suites, 39 tests.
+- [x] **E2E verified (2025-02-04):** With dev server and proxy running, `cd test-app && USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- simple-mic-test.spec.js --project=chromium` — 1 passed; connect-then-mic flow, connection stayed connected.
 - [ ] Run E2E that sends audio twice (e.g. transcript capture / component re-renders); test should get past the second connection (no “user-message not found” due to closed connection).
 
 #### How to verify E2E (no SETTINGS_ALREADY_APPLIED on mic/first audio)
