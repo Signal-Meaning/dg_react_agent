@@ -4,21 +4,11 @@
  */
 
 /**
- * Agent Options Re-send After Connection Test - Issue #311
+ * Agent Options Re-send After Connection Test - Issue #311, Issue #399
  * 
- * This test reproduces the EXACT customer scenario that's failing:
- * 1. Component renders without functions
- * 2. Connection is established (agentManager exists)
- * 3. Settings is sent (without functions)
- * 4. agentOptions is updated with functions (new reference)
- * 5. Component should detect change AND agentManager should exist
- * 6. Settings should be re-sent with functions
- * 
- * This test SHOULD FAIL if:
- * - agentManager doesn't exist when change is detected
- * - Settings is not re-sent when agentOptions changes after connection
- * 
- * Issue #311: Component not re-sending Settings when agentOptions changes after connection
+ * Issue #399: Settings are sent only once per connection. We do NOT re-send when
+ * agentOptions changes (avoids SETTINGS_ALREADY_APPLIED and connection close).
+ * These tests now assert that Settings is not re-sent after agentOptions change.
  */
 
 import React from 'react';
@@ -31,9 +21,6 @@ import {
   setupComponentAndConnect,
   createSettingsCapture,
   verifySettingsStructure,
-  verifySettingsHasFunctions,
-  findSettingsWithFunctions,
-  assertSettingsWithFunctions,
   clearCapturedSettings,
   MOCK_API_KEY,
   waitFor,
@@ -70,9 +57,7 @@ describe('Agent Options Re-send After Connection - Issue #311', () => {
     jest.clearAllMocks();
   });
 
-  test('should re-send Settings when agentOptions changes AFTER connection is established', async () => {
-    // This is the EXACT customer scenario that's failing
-    // NOTE: Add .only to run this test individually: test.only(...)
+  test('should NOT re-send Settings when agentOptions changes AFTER connection (Issue #399)', async () => {
     
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
@@ -140,33 +125,16 @@ describe('Agent Options Re-send After Connection - Issue #311', () => {
       await new Promise(resolve => setTimeout(resolve, 300));
     });
     
-    // Step 6: Wait for Settings to be re-sent
-    // If agentManager exists, Settings will be re-sent. If not, this will timeout.
-    // This behavior-based check proves agentManager exists when agentOptions changes.
-    await waitFor(() => {
-      return capturedSettings.length > 0;
-    }, { timeout: 5000 });
-    
-    // Step 7: Verify Settings was re-sent with functions
-    // This assertion proves agentManager existed when agentOptions changed
-    // If agentManager was null, Settings would not have been re-sent
-    const reSentSettings = capturedSettings.filter(s => 
-      s.agent?.think?.functions && s.agent.think.functions.length > 0
+    // Issue #399: Settings sent only once per connection — do NOT re-send when agentOptions changes
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
     );
-    
-    expect(reSentSettings.length).toBeGreaterThan(0);
-    const firstReSent = reSentSettings[0];
-    assertSettingsWithFunctions(firstReSent, 'after agentOptions change');
-    verifySettingsHasFunctions(firstReSent, 1);
-    expect(firstReSent.agent.think.functions[0].name).toBe('test_function');
+    expect(settingsCalls.length).toBe(1);
+    expect(capturedSettings.length).toBe(0);
   });
   
-  test('should verify agentManager exists when agentOptions changes after connection', async () => {
-    // This test specifically checks the root cause: agentManager must exist
-    // NOTE: Add .only to run this test individually: test.only(...)
-    
+  test('should NOT re-send Settings when agentOptions changes after connection (Issue #399)', async () => {
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-    
     const initialOptions = createAgentOptions({ functions: undefined });
     const { rerender } = render(
       <DeepgramVoiceInteraction
@@ -176,17 +144,9 @@ describe('Agent Options Re-send After Connection - Issue #311', () => {
       />
     );
 
-    // Establish connection
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    
-    // Wait for connection to be fully established
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 200));
-    });
-    
-    // Verify agentManager exists (via mock)
-    expect(mockWebSocketManager.sendJSON).toBeDefined();
-    
+    clearCapturedSettings(capturedSettings);
+
     // Update agentOptions
     const updatedOptions = createAgentOptions({
       functions: [{
@@ -206,18 +166,16 @@ describe('Agent Options Re-send After Connection - Issue #311', () => {
       );
     });
     
-    // Wait for Settings to be re-sent (if agentManager exists, this will succeed)
-    // This behavior-based check proves agentManager exists when agentOptions changes
-    await waitFor(() => {
-      expect(capturedSettings.length).toBeGreaterThan(0);
-    }, { timeout: 2000 });
-    
-    // Verify Settings was re-sent with functions
-    // This assertion proves agentManager existed when agentOptions changed
-    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
-    
-    assertSettingsWithFunctions(settingsWithFunctions, 'when agentOptions changes after connection');
-    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+
+    // Issue #399: Settings sent only once per connection
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
+    );
+    expect(settingsCalls.length).toBe(1);
+    expect(capturedSettings.length).toBe(0);
   });
 });
 

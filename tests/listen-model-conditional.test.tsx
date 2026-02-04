@@ -536,26 +536,12 @@ describe('Issue #299: Listen Model Conditional Inclusion', () => {
         );
       });
 
-      // Give React time to process the state change and trigger useEffect
       await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 400));
       });
 
-      // Wait for new Settings to be sent with listenModel
-      await waitFor(() => {
-        const settingsWithListen = capturedSettings.find(
-          msg => msg.type === 'Settings' && msg.agent?.listen?.provider?.model === 'nova-3'
-        );
-        return settingsWithListen !== undefined;
-      }, { timeout: 5000 });
-
-      // Verify new Settings includes listen provider
-      const newSettings = capturedSettings.find(
-        msg => msg.type === 'Settings' && msg.agent?.listen?.provider?.model === 'nova-3'
-      );
-      expect(newSettings).toBeDefined();
-      expect(newSettings?.agent.listen).toBeDefined();
-      expect(newSettings?.agent.listen.provider.model).toBe('nova-3');
+      // Issue #399: Settings sent only once per connection — no re-send when agentOptions changes
+      expect(mockWebSocketManager.sendJSON.mock.calls.length).toBe(0);
     });
 
     it('should handle removing listenModel after initial connection (voice to text-only mode)', async () => {
@@ -629,23 +615,13 @@ describe('Issue #299: Listen Model Conditional Inclusion', () => {
         );
       });
 
-      // Give React time to process the state change and trigger useEffect
       await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 400));
       });
 
-      // Wait for new Settings to be sent
-      await waitFor(() => {
-        return capturedSettings.length > initialSettingsCount;
-      }, { timeout: 5000 });
-
-      // Note: Currently the component will still include listen provider with default model
-      // This test documents the current behavior. Once the bug is fixed, this test should
-      // verify that the new Settings does NOT include listen provider.
-      const newSettings = capturedSettings.slice(initialSettingsCount).find(msg => msg.type === 'Settings');
-      expect(newSettings).toBeDefined();
-      // Currently fails because of the bug - once fixed, this should pass:
-      // expect(newSettings?.agent.listen).toBeUndefined();
+      // Issue #399: Settings sent only once per connection — no re-send when agentOptions changes
+      expect(capturedSettings.length).toBe(initialSettingsCount);
+      expect(mockWebSocketManager.sendJSON.mock.calls.length).toBe(0);
     });
   });
 });

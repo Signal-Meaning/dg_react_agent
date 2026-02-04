@@ -4,18 +4,19 @@
  */
 
 /**
- * Agent Options Re-send Deep Comparison Tests - Issue #311
+ * Agent Options Re-send Deep Comparison Tests - Issue #311, Issue #399
  * 
- * Behavior-based tests: Verify deep comparison logic by checking actual Settings messages sent,
- * not log messages.
+ * Behavior-based tests: Verify deep comparison logic by checking actual Settings messages sent.
+ * 
+ * Issue #399: Settings are sent only once per connection. We do NOT re-send when agentOptions
+ * changes (avoids SETTINGS_ALREADY_APPLIED and connection close). The tests below that previously
+ * expected re-send now assert no re-send.
  * 
  * Test scenarios:
- * 1. Verify Settings re-sent when functions are added (new reference)
- * 2. Verify Settings NOT re-sent when object is mutated (same reference)
- * 3. Verify Settings re-sent when functions array changes
- * 4. Verify Settings re-sent when agentOptions reference changes
- * 
- * Issue #311: Component not re-sending Settings when agentOptions changes after connection
+ * 1. When functions are added (new reference): do NOT re-send (Issue #399)
+ * 2. When object is mutated (same reference): do NOT re-send (unchanged)
+ * 3. When functions array changes: do NOT re-send (Issue #399)
+ * 4. When agentOptions reference changes: do NOT re-send (Issue #399)
  */
 
 import React from 'react';
@@ -27,9 +28,6 @@ import {
   createAgentOptions,
   setupComponentAndConnect,
   createSettingsCapture,
-  verifySettingsHasFunctions,
-  findSettingsWithFunctions,
-  assertSettingsWithFunctions,
   clearCapturedSettings,
   MOCK_API_KEY,
   type CapturedSettings,
@@ -65,12 +63,8 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     jest.clearAllMocks();
   });
 
-  test('should detect change when functions are added (new reference)', async () => {
-    // Behavior-based test: Verify Settings re-sent when functions are added
-    
+  test('should NOT re-send Settings when functions are added (Issue #399: send only once per connection)', async () => {
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-    
-    // Initial render without functions
     const initialOptions = createAgentOptions({ functions: undefined });
     const { rerender } = render(
       <DeepgramVoiceInteraction
@@ -80,17 +74,11 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
       />
     );
 
-    // Setup connection and wait for first Settings
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    
-    // Verify first Settings does NOT have functions
     const firstSettings = capturedSettings[0];
     expect(firstSettings.agent?.think?.functions).toBeUndefined();
-    
-    // Clear captured settings
+
     clearCapturedSettings(capturedSettings);
-    
-    // Update agentOptions with functions (new reference)
     const updatedOptions = createAgentOptions({
       functions: [{
         name: 'test_function',
@@ -98,8 +86,7 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
         parameters: { type: 'object', properties: {} }
       }]
     });
-    
-    // Re-render with updated agentOptions
+
     await act(async () => {
       rerender(
         <DeepgramVoiceInteraction
@@ -109,18 +96,16 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
         />
       );
     });
-    
-    // Wait for Settings to be re-sent
-    await waitFor(() => {
-      expect(capturedSettings.length).toBeGreaterThan(0);
-    }, { timeout: 2000 });
-    
-    // Verify Settings was re-sent with functions
-    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
-    
-    assertSettingsWithFunctions(settingsWithFunctions, 'when functions are added');
-    verifySettingsHasFunctions(settingsWithFunctions, 1);
-    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test_function');
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+
+    // Issue #399: Settings sent only once per connection — no re-send when agentOptions changes
+    expect(capturedSettings.length).toBe(0);
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
+    );
+    expect(settingsCalls.length).toBe(1);
   });
 
   test('should NOT detect change when object is mutated (same reference)', async () => {
@@ -171,12 +156,8 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     expect(capturedSettings.length).toBe(0);
   });
 
-  test('should detect change when functions array changes', async () => {
-    // Behavior-based test: Verify Settings re-sent when functions array content changes
-    
+  test('should NOT re-send Settings when functions array changes (Issue #399)', async () => {
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-    
-    // Initial render with one function
     const initialOptions = createAgentOptions({
       functions: [{
         name: 'function1',
@@ -184,7 +165,6 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
         parameters: { type: 'object', properties: {} }
       }]
     });
-    
     const { rerender } = render(
       <DeepgramVoiceInteraction
         ref={ref}
@@ -194,19 +174,15 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     );
 
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    
-    // Clear captured settings
     clearCapturedSettings(capturedSettings);
-    
-    // Update with different function (new reference)
     const updatedOptions = createAgentOptions({
       functions: [{
-        name: 'function2', // Different function
+        name: 'function2',
         description: 'Second function',
         parameters: { type: 'object', properties: {} }
       }]
     });
-    
+
     await act(async () => {
       rerender(
         <DeepgramVoiceInteraction
@@ -216,35 +192,20 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
         />
       );
     });
-    
-    // Wait for Settings to be re-sent
-    await waitFor(() => {
-      expect(capturedSettings.length).toBeGreaterThan(0);
-    }, { timeout: 2000 });
-    
-    // Settings should be re-sent with new function
-    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
-    expect(settingsWithFunctions).toBeDefined();
-    // Find the one with function2 (could be multiple Settings sent)
-    const settingsWithNewFunction = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions?.some(f => f.name === 'function2')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+
+    // Issue #399: Settings sent only once per connection — no re-send
+    expect(capturedSettings.length).toBe(0);
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
     );
-    
-    expect(settingsWithNewFunction).toBeDefined();
-    if (settingsWithNewFunction?.agent?.think?.functions) {
-      expect(settingsWithNewFunction.agent.think.functions.find(f => f.name === 'function2')?.name).toBe('function2');
-    } else {
-      throw new Error('Settings with function2 not found');
-    }
+    expect(settingsCalls.length).toBe(1);
   });
 
-  test('should verify Settings re-sent when agentOptions reference changes', async () => {
-    // Behavior-based test: Verify Settings re-sent when reference changes
-    // This proves useEffect runs when dependency changes
-    
+  test('should NOT re-send Settings when agentOptions reference changes (Issue #399)', async () => {
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-    
     const initialOptions = createAgentOptions({ functions: undefined });
     const { rerender } = render(
       <DeepgramVoiceInteraction
@@ -255,11 +216,7 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
     );
 
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    
-    // Clear captured settings
     clearCapturedSettings(capturedSettings);
-    
-    // Update with new reference
     const updatedOptions = createAgentOptions({
       functions: [{
         name: 'test',
@@ -267,7 +224,7 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
         parameters: { type: 'object', properties: {} }
       }]
     });
-    
+
     await act(async () => {
       rerender(
         <DeepgramVoiceInteraction
@@ -277,17 +234,15 @@ describe('Agent Options Re-send Deep Comparison - Issue #311', () => {
         />
       );
     });
-    
-    // Wait for Settings to be re-sent
-    await waitFor(() => {
-      expect(capturedSettings.length).toBeGreaterThan(0);
-    }, { timeout: 2000 });
-    
-    // Verify Settings was re-sent with functions
-    // This proves useEffect ran and detected the change
-    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
-    
-    assertSettingsWithFunctions(settingsWithFunctions, 'when agentOptions reference changes');
-    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+
+    // Issue #399: Settings sent only once per connection — no re-send when reference changes
+    expect(capturedSettings.length).toBe(0);
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
+    );
+    expect(settingsCalls.length).toBe(1);
   });
 });

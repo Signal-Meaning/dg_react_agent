@@ -19,10 +19,10 @@ In proxy mode with functions configured, the server responds with **`SETTINGS_AL
 
 | Item | Status |
 |------|--------|
-| **Root cause identified** | [ ] |
-| **SDK fix: send Settings only once per connection** | [ ] |
-| **Tests added/updated** | [ ] |
-| **E2E passes (no SETTINGS_ALREADY_APPLIED on mic/first audio)** | [ ] |
+| **Root cause identified** | [x] |
+| **SDK fix: send Settings only once per connection** | [x] |
+| **Tests added/updated** | [x] |
+| **E2E passes (no SETTINGS_ALREADY_APPLIED on mic/first audio)** | [ ] (verify in CI / real API) |
 | **Issue closed** | [ ] |
 
 ---
@@ -39,13 +39,13 @@ In proxy mode with functions configured, the server responds with **`SETTINGS_AL
 
 ### SDK / component
 
-- [ ] Ensure for a given WebSocket connection, Settings are sent only once (after connect, before any audio).
-- [ ] Do not re-send Settings when the user enables the microphone or when the first audio chunk is sent.
-- [ ] If re-send on `agentOptions` change is required, consider: only re-send when content actually changed in ways that affect Settings (e.g. functions, model, prompt), and/or avoid re-send when server has already applied Settings for this connection (e.g. Deepgram may not support mid-session Settings update; document or skip).
+- [x] Ensure for a given WebSocket connection, Settings are sent only once (after connect, before any audio).
+- [x] Do not re-send Settings when the user enables the microphone or when the first audio chunk is sent.
+- [x] **Done:** Re-send on `agentOptions` change is disabled (Issue #399). When `agentOptions` changes after Settings have been sent for this connection, we skip re-send and log in debug mode. See `src/components/DeepgramVoiceInteraction/index.tsx` (agentOptions useEffect).
 
 ### Verification
 
-- [ ] Add or run a test that: (1) connects, (2) sends Settings and waits for apply, (3) enables the microphone (or sends first audio chunk), (4) asserts no `SETTINGS_ALREADY_APPLIED` is received and connection remains open and can receive transcripts/responses.
+- [x] Unit test added: `tests/settings-sent-once-issue399.test.tsx` — (1) connect, (2) send Settings and apply, (3) change agentOptions (rerender), (4) assert only one Settings message sent (no re-send).
 - [ ] Run E2E that sends audio twice (e.g. transcript capture / component re-renders); test should get past the second connection (no “user-message not found” due to closed connection).
 
 ### Upstream / documentation (optional)
@@ -65,8 +65,7 @@ In proxy mode with functions configured, the server responds with **`SETTINGS_AL
 
 ## Conclusion
 
-*(To be filled when issue is resolved.)*
-
-- **Resolution:** …
-- **PR:** …
-- **Release:** …
+- **Resolution:** SDK no longer re-sends Settings when `agentOptions` changes after the first Settings has been sent for that connection. The agentOptions useEffect still runs and updates `agentOptionsRef.current`, but it no longer resets `hasSentSettingsRef` / `globalSettingsSent` or calls `sendAgentSettings()`. This avoids the server responding with `SETTINGS_ALREADY_APPLIED` and closing the connection.
+- **Branch:** `davidrmcgee/issue399`
+- **PR:** (to be opened)
+- **Release:** (after merge)

@@ -66,9 +66,7 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
     jest.clearAllMocks();
   });
 
-  test('should verify Settings re-send works after remount when agentOptions changes', async () => {
-    // Behavior-based test: Verify that after remount, changing agentOptions
-    // correctly triggers Settings re-send
+  test('should NOT re-send Settings after remount when agentOptions changes (Issue #399)', async () => {
     
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     const initialOptions = createAgentOptions({ functions: undefined });
@@ -132,16 +130,16 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
       );
     });
     
-    // Wait for Settings to be re-sent
-    await waitFor(() => {
-      expect(capturedSettings.length).toBeGreaterThan(0);
-    }, { timeout: 2000 });
-    
-    // Verify Settings was re-sent with functions
-    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
-    
-    assertSettingsWithFunctions(settingsWithFunctions, 'after remount when agentOptions changes');
-    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+
+    // Issue #399: Settings sent only once per connection — no re-send when agentOptions changes
+    expect(capturedSettings.length).toBe(0);
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
+    );
+    expect(settingsCalls.length).toBeGreaterThanOrEqual(1);
   });
 
   // Issue #333: Settings not sent on new connection after remount
@@ -240,14 +238,9 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
     expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
   });
 
-  test('should verify Settings re-send works on second change after remount', async () => {
-    // Behavior-based test: Verify that after remount, the SECOND agentOptions change
-    // correctly triggers Settings re-send
-    
+  test('should NOT re-send Settings on second change after remount (Issue #399)', async () => {
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     const initialOptions = createAgentOptions({ functions: undefined });
-    
-    // First render
     const { unmount } = render(
       <DeepgramVoiceInteraction
         key="mount-1"
@@ -256,16 +249,12 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
         agentOptions={initialOptions}
       />
     );
-    
-    // Establish connection
+
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    
-    // Force remount
     await act(async () => {
       unmount();
     });
-    
-    // Remount
+
     const { rerender } = render(
       <DeepgramVoiceInteraction
         key="mount-2"
@@ -274,23 +263,14 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
         agentOptions={initialOptions}
       />
     );
-    
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise((r) => setTimeout(r, 300));
     });
-    
-    // Re-establish connection
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    
-    // First change after remount
+
     const firstChangeOptions = createAgentOptions({
-      functions: [{
-        name: 'first',
-        description: 'First',
-        parameters: { type: 'object', properties: {} }
-      }]
+      functions: [{ name: 'first', description: 'First', parameters: { type: 'object', properties: {} } }]
     });
-    
     await act(async () => {
       rerender(
         <DeepgramVoiceInteraction
@@ -301,26 +281,14 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
         />
       );
     });
-    
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise((r) => setTimeout(r, 300));
     });
-    
-    // Re-establish connection after first change
-    await setupComponentAndConnect(ref, mockWebSocketManager);
-    
-    // Clear Settings for second change
+
     clearCapturedSettings(capturedSettings);
-    
-    // Second change after remount (should trigger re-send)
     const secondChangeOptions = createAgentOptions({
-      functions: [{
-        name: 'second',
-        description: 'Second',
-        parameters: { type: 'object', properties: {} }
-      }]
+      functions: [{ name: 'second', description: 'Second', parameters: { type: 'object', properties: {} } }]
     });
-    
     await act(async () => {
       rerender(
         <DeepgramVoiceInteraction
@@ -331,24 +299,15 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
         />
       );
     });
-    
-    // Wait for Settings to be re-sent
-    await waitFor(() => {
-      expect(capturedSettings.length).toBeGreaterThan(0);
-    }, { timeout: 2000 });
-    
-    // Verify Settings was re-sent with second change functions
-    // Find the one with 'second' function name (could be multiple Settings sent)
-    const settingsWithSecond = capturedSettings.find(s => 
-      s.type === 'Settings' &&
-      s.agent?.think?.functions?.some(f => f.name === 'second')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+
+    // Issue #399: Settings sent only once per connection — no re-send on second change
+    expect(capturedSettings.length).toBe(0);
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
     );
-    
-    expect(settingsWithSecond).toBeDefined();
-    if (settingsWithSecond?.agent?.think?.functions) {
-      expect(settingsWithSecond.agent.think.functions.find(f => f.name === 'second')?.name).toBe('second');
-    } else {
-      throw new Error('Settings with second function not found');
-    }
+    expect(settingsCalls.length).toBeGreaterThanOrEqual(1);
   });
 });

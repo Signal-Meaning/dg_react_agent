@@ -16,7 +16,7 @@
  */
 
 import React from 'react';
-import { render, act, waitFor } from '@testing-library/react';
+import { render, act } from '@testing-library/react';
 import { DeepgramVoiceInteractionHandle } from '../src/types';
 import { createMockWebSocketManager, createMockAudioManager } from './fixtures/mocks';
 import {
@@ -24,8 +24,6 @@ import {
   createAgentOptions,
   setupComponentAndConnect,
   createSettingsCapture,
-  findSettingsWithFunctions,
-  assertSettingsWithFunctions,
   clearCapturedSettings,
   MOCK_API_KEY,
   type CapturedSettings,
@@ -61,12 +59,8 @@ describe('Agent Manager Timing Investigation - Issue #311', () => {
     jest.clearAllMocks();
   });
 
-  test('should re-send Settings when agentOptions changes after connection', async () => {
-    // Behavior-based test: Verify that Settings are re-sent when agentOptions changes
-    // This proves that agentManager exists and is working correctly
-    
+  test('should NOT re-send Settings when agentOptions changes after connection (Issue #399)', async () => {
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-    
     const initialOptions = createAgentOptions({ functions: undefined });
     const { rerender } = render(
       <DeepgramVoiceInteraction
@@ -76,22 +70,14 @@ describe('Agent Manager Timing Investigation - Issue #311', () => {
       />
     );
 
-    // Clear captured Settings before connection
     clearCapturedSettings(capturedSettings);
-    
-    // Establish connection (this should create the agent manager)
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    
-    // Verify initial Settings was sent (proves agentManager was created)
     expect(capturedSettings.length).toBeGreaterThan(0);
     const initialSettings = capturedSettings[capturedSettings.length - 1];
     expect(initialSettings.type).toBe('Settings');
     expect(initialSettings.agent?.think?.functions).toBeUndefined();
-    
-    // Clear captured Settings before updating agentOptions
-    const initialSettingsCount = capturedSettings.length;
-    
-    // Update agentOptions with functions
+
+    clearCapturedSettings(capturedSettings);
     const updatedOptions = createAgentOptions({
       functions: [{
         name: 'test',
@@ -99,7 +85,7 @@ describe('Agent Manager Timing Investigation - Issue #311', () => {
         parameters: { type: 'object', properties: {} }
       }]
     });
-    
+
     await act(async () => {
       rerender(
         <DeepgramVoiceInteraction
@@ -109,22 +95,16 @@ describe('Agent Manager Timing Investigation - Issue #311', () => {
         />
       );
     });
-    
-    // Wait for Settings to be re-sent
-    await waitFor(() => {
-      expect(capturedSettings.length).toBeGreaterThan(initialSettingsCount);
-    }, { timeout: 2000 });
-    
-    // Verify Settings was re-sent with functions
-    const reSentSettings = capturedSettings.slice(initialSettingsCount);
-    expect(reSentSettings.length).toBeGreaterThan(0);
-    
-    const settingsWithFunctions = findSettingsWithFunctions(reSentSettings);
-    
-    // This assertion proves agentManager existed when agentOptions changed
-    // If agentManager was null, Settings would not have been re-sent
-    assertSettingsWithFunctions(settingsWithFunctions, 'when agentOptions changes after connection');
-    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+
+    // Issue #399: Settings sent only once per connection
+    expect(capturedSettings.length).toBe(0);
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
+    );
+    expect(settingsCalls.length).toBe(1);
   });
   
   test('should verify agentManager is created during connection', async () => {

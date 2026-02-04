@@ -26,8 +26,6 @@ import {
   createAgentOptions,
   setupComponentAndConnect,
   createSettingsCapture,
-  findSettingsWithFunctions,
-  assertSettingsWithFunctions,
   clearCapturedSettings,
   MOCK_API_KEY,
   type CapturedSettings,
@@ -174,16 +172,18 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     });
     
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise((r) => setTimeout(r, 400));
     });
-    
-    // Should send Settings with functions (from the re-send after connection)
-    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
-    
-    expect(settingsWithFunctions).toBeDefined();
+
+    // Issue #399: Settings sent only once per connection — no re-send after agentOptions change
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
+    );
+    expect(settingsCalls.length).toBe(1);
+    expect(capturedSettings.length).toBe(0);
   });
 
-  test('should handle rapid successive agentOptions changes', async () => {
+  test('should handle rapid successive agentOptions changes without re-sending (Issue #399)', async () => {
     // Edge case: What if agentOptions changes multiple times rapidly?
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     
@@ -226,14 +226,18 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     });
     
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise((r) => setTimeout(r, 400));
     });
-    
-    // Should have re-sent Settings (at least once)
-    expect(capturedSettings.length).toBeGreaterThan(0);
+
+    // Issue #399: Settings sent only once per connection — no re-send on rapid changes
+    expect(capturedSettings.length).toBe(0);
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
+    );
+    expect(settingsCalls.length).toBe(1);
   });
 
-  test('should verify useMemo pattern works correctly', async () => {
+  test('should NOT re-send Settings with useMemo pattern (Issue #399)', async () => {
     // This test verifies that the customer's useMemo pattern works
     // (matching TestComponentWithFunctions pattern)
     
@@ -287,36 +291,22 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
       await new Promise(resolve => setTimeout(resolve, 200));
     });
     
-    // Establish connection after functions are added
-    // This is required because the component needs to be connected before it can re-send Settings
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    
-    // Clear previous Settings to only capture the re-send
     clearCapturedSettings(capturedSettings);
-    
-    // Trigger another change to test re-send after connection
-    // Update hasFunctions again to trigger agentOptions change
     await act(async () => {
-      // We can't directly update state, so we'll update the component with new initialHasFunctions
-      // Actually, let's just wait a bit more and check if the Settings was already sent with functions
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise((r) => setTimeout(r, 400));
     });
-    
-    // Check if Settings was sent with functions (either initial or re-sent)
-    // This test verifies the useMemo pattern the customer is using
-    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
-    
-    // Note: This might fail if there's a timing issue
-    // But it helps us understand if the pattern itself works
-    expect(settingsWithFunctions).toBeDefined();
+
+    // Issue #399: Settings sent only once per connection
+    expect(capturedSettings.length).toBe(0);
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
+    );
+    expect(settingsCalls.length).toBe(1);
   });
 
-  test('should verify comparison correctly detects change', async () => {
-    // Behavior-based test: Verify that comparison correctly detects change
-    // by checking that Settings are re-sent with the new functions
-    
+  test('should NOT re-send Settings when comparison detects change (Issue #399)', async () => {
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-    
     const initialOptions = createAgentOptions({ functions: undefined });
     const { rerender } = render(
       <DeepgramVoiceInteraction
@@ -327,10 +317,7 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
     );
 
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    
-    // Clear captured settings
     clearCapturedSettings(capturedSettings);
-    
     const updatedOptions = createAgentOptions({
       functions: [{
         name: 'test',
@@ -338,7 +325,7 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
         parameters: { type: 'object', properties: {} }
       }]
     });
-    
+
     await act(async () => {
       rerender(
         <DeepgramVoiceInteraction
@@ -348,18 +335,16 @@ describe('Agent Options Re-send Edge Cases - Issue #311', () => {
         />
       );
     });
-    
-    // Wait for Settings to be re-sent
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((r) => setTimeout(r, 500));
     });
-    
-    // Verify Settings was re-sent with functions
-    // This proves the comparison correctly detected the change
-    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
-    
-    assertSettingsWithFunctions(settingsWithFunctions, 'when comparison correctly detects change');
-    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
+
+    // Issue #399: Settings sent only once per connection
+    expect(capturedSettings.length).toBe(0);
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
+    );
+    expect(settingsCalls.length).toBe(1);
   });
 });
 
