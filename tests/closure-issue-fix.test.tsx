@@ -31,7 +31,6 @@ import {
   verifySettingsStructure,
   verifySettingsHasFunctions,
   verifySettingsNoFunctions,
-  waitFor,
   MOCK_API_KEY,
 } from './utils/component-test-helpers';
 import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
@@ -160,248 +159,142 @@ describe('Closure Issue Fix Tests - Issue #307', () => {
         );
       });
 
-      // Wait for component to detect change and re-send Settings
-      // The component should detect agentOptions change and re-send Settings
-      await waitFor(() => {
-        return capturedSettings.length > 0;
-      }, { timeout: 5000 });
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 400));
+      });
 
-      // Verify that Settings was re-sent with functions
-      const settingsWithFunctions = capturedSettings.find(s => 
-        s.agent?.think?.functions && s.agent.think.functions.length > 0
+      // Issue #399: Settings sent only once per connection — no re-send when agentOptions changes
+      expect(capturedSettings.length).toBe(0);
+      const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+        (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
       );
-      
-      expect(settingsWithFunctions).toBeDefined();
-      if (settingsWithFunctions) {
-        verifySettingsHasFunctions(settingsWithFunctions, 1);
-        expect(settingsWithFunctions.agent.think.functions[0].name).toBe('get_time');
-      }
+      expect(settingsCalls.length).toBe(1);
     });
 
-    it('should use latest agentOptions value from ref when sendAgentSettings is called', async () => {
-      // This test verifies that sendAgentSettings uses agentOptionsRef.current
-      // instead of the closure value, ensuring it always has the latest functions
-      
+    it('should send Settings only once when agentOptions changes (Issue #399)', async () => {
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-      
-      // Start with functions
       const functions1: AgentFunction[] = [
-        {
-          name: 'function1',
-          description: 'First function',
-          parameters: { type: 'object', properties: {} }
-        }
+        { name: 'function1', description: 'First function', parameters: { type: 'object', properties: {} } }
       ];
-      
       let agentOptions = createAgentOptions({ functions: functions1 });
-      
       const { rerender } = render(
-        <DeepgramVoiceInteraction
-          ref={ref}
-          apiKey={MOCK_API_KEY}
-          agentOptions={agentOptions}
-        />
+        <DeepgramVoiceInteraction ref={ref} apiKey={MOCK_API_KEY} agentOptions={agentOptions} />
       );
 
       await setupComponentAndConnect(ref, mockWebSocketManager);
-
-      // Verify first Settings has function1
       const firstSettings = capturedSettings[0];
       verifySettingsHasFunctions(firstSettings, 1);
       expect(firstSettings.agent.think.functions[0].name).toBe('function1');
 
-      // Clear and update to different function
       capturedSettings.length = 0;
-      
       const functions2: AgentFunction[] = [
-        {
-          name: 'function2',
-          description: 'Second function',
-          parameters: { type: 'object', properties: {} }
-        }
+        { name: 'function2', description: 'Second function', parameters: { type: 'object', properties: {} } }
       ];
-
       agentOptions = createAgentOptions({ functions: functions2 });
-
       await act(async () => {
         rerender(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={agentOptions}
-          />
+          <DeepgramVoiceInteraction ref={ref} apiKey={MOCK_API_KEY} agentOptions={agentOptions} />
         );
       });
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 400));
+      });
 
-      // Wait for re-sent Settings
-      await waitFor(() => {
-        return capturedSettings.length > 0;
-      }, { timeout: 5000 });
-
-      // Verify re-sent Settings has function2 (latest value from ref)
-      const secondSettings = capturedSettings.find(s => 
-        s.agent?.think?.functions && s.agent.think.functions.length > 0
+      // Issue #399: Settings sent only once per connection
+      expect(capturedSettings.length).toBe(0);
+      const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+        (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
       );
-      
-      expect(secondSettings).toBeDefined();
-      if (secondSettings) {
-        verifySettingsHasFunctions(secondSettings, 1);
-        expect(secondSettings.agent.think.functions[0].name).toBe('function2');
-      }
+      expect(settingsCalls.length).toBe(1);
     });
 
-    it('should include functions even when sendAgentSettings is called from callback with stale closure', async () => {
-      // This test verifies that sendAgentSettings uses the ref value, not closure value
-      // Even if called from a callback set up before functions were added
-      // 
-      // Note: The component only re-sends Settings when agentOptions changes (via useEffect),
-      // not on connection state changes. This test verifies the ref fix works when re-send
-      // is triggered by agentOptions change.
-      
+    it('should not re-send Settings when agentOptions gains functions after connection (Issue #399)', async () => {
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-      
-      // Start without functions
       let agentOptions = createAgentOptions({ functions: undefined });
-      
       const { rerender } = render(
-        <DeepgramVoiceInteraction
-          ref={ref}
-          apiKey={MOCK_API_KEY}
-          agentOptions={agentOptions}
-        />
+        <DeepgramVoiceInteraction ref={ref} apiKey={MOCK_API_KEY} agentOptions={agentOptions} />
       );
 
-      // Setup connection (this may set up callbacks with closure)
       await setupComponentAndConnect(ref, mockWebSocketManager);
-
-      // Verify first Settings has no functions
       const firstSettings = capturedSettings[0];
       expect(firstSettings.agent?.think?.functions).toBeUndefined();
 
-      // Clear captured settings to track re-sent message
       capturedSettings.length = 0;
-
-      // Now add functions (simulating the customer's scenario)
       const functions: AgentFunction[] = [
         {
           name: 'search_products',
           description: 'Search for products',
           parameters: {
             type: 'object',
-            properties: {
-              query: { type: 'string', description: 'Search query' }
-            },
+            properties: { query: { type: 'string', description: 'Search query' } },
             required: ['query']
           }
         }
       ];
-
       agentOptions = createAgentOptions({ functions });
-
-      // Update component with new agentOptions - this should trigger re-send via useEffect
       await act(async () => {
         rerender(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={agentOptions}
-          />
+          <DeepgramVoiceInteraction ref={ref} apiKey={MOCK_API_KEY} agentOptions={agentOptions} />
         );
       });
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 400));
+      });
 
-      // Wait for component to detect change and re-send Settings
-      await waitFor(() => {
-        return capturedSettings.length > 0;
-      }, { timeout: 5000 });
-
-      // Verify Settings includes functions (from ref, not stale closure)
-      const settingsWithFunctions = capturedSettings.find(s => 
-        s.agent?.think?.functions && s.agent.think.functions.length > 0
+      // Issue #399: Settings sent only once per connection
+      expect(capturedSettings.length).toBe(0);
+      const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+        (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
       );
-      
-      expect(settingsWithFunctions).toBeDefined();
-      if (settingsWithFunctions) {
-        verifySettingsHasFunctions(settingsWithFunctions, 1);
-        expect(settingsWithFunctions.agent.think.functions[0].name).toBe('search_products');
-      }
+      expect(settingsCalls.length).toBe(1);
     });
   });
 
   describe('Multiple agentOptions updates', () => {
-    it('should always use latest agentOptions value for multiple updates', async () => {
+    it('should send Settings only once despite multiple agentOptions updates (Issue #399)', async () => {
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-      
-      // Start with function1
       const functions1: AgentFunction[] = [
         { name: 'func1', description: 'Function 1', parameters: { type: 'object', properties: {} } }
       ];
       let agentOptions = createAgentOptions({ functions: functions1 });
-      
       const { rerender } = render(
-        <DeepgramVoiceInteraction
-          ref={ref}
-          apiKey={MOCK_API_KEY}
-          agentOptions={agentOptions}
-        />
+        <DeepgramVoiceInteraction ref={ref} apiKey={MOCK_API_KEY} agentOptions={agentOptions} />
       );
 
       await setupComponentAndConnect(ref, mockWebSocketManager);
+      expect(capturedSettings[0].agent.think.functions[0].name).toBe('func1');
 
-      // Update to function2
       capturedSettings.length = 0;
-      const functions2: AgentFunction[] = [
-        { name: 'func2', description: 'Function 2', parameters: { type: 'object', properties: {} } }
-      ];
-      agentOptions = createAgentOptions({ functions: functions2 });
-
+      agentOptions = createAgentOptions({
+        functions: [{ name: 'func2', description: 'Function 2', parameters: { type: 'object', properties: {} } }]
+      });
       await act(async () => {
         rerender(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={agentOptions}
-          />
+          <DeepgramVoiceInteraction ref={ref} apiKey={MOCK_API_KEY} agentOptions={agentOptions} />
         );
       });
-
-      await waitFor(() => capturedSettings.length > 0, { timeout: 5000 });
-
-      // Update to function3
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 400));
+      });
       capturedSettings.length = 0;
-      const functions3: AgentFunction[] = [
-        { name: 'func3', description: 'Function 3', parameters: { type: 'object', properties: {} } }
-      ];
-      agentOptions = createAgentOptions({ functions: functions3 });
-
+      agentOptions = createAgentOptions({
+        functions: [{ name: 'func3', description: 'Function 3', parameters: { type: 'object', properties: {} } }]
+      });
       await act(async () => {
         rerender(
-          <DeepgramVoiceInteraction
-            ref={ref}
-            apiKey={MOCK_API_KEY}
-            agentOptions={agentOptions}
-          />
+          <DeepgramVoiceInteraction ref={ref} apiKey={MOCK_API_KEY} agentOptions={agentOptions} />
         );
       });
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 400));
+      });
 
-      // Wait for re-sent Settings (may take a moment for useEffect to detect change)
-      await waitFor(() => capturedSettings.length > 0, { timeout: 5000 });
-
-      // Verify latest Settings has func3
-      // Note: If no Settings captured, the re-send logic might not have triggered
-      // This could happen if the comparison logic doesn't detect the change
-      if (capturedSettings.length > 0) {
-        const latestSettings = capturedSettings[capturedSettings.length - 1];
-        expect(latestSettings).toBeDefined();
-        verifySettingsHasFunctions(latestSettings, 1);
-        expect(latestSettings.agent.think.functions[0].name).toBe('func3');
-      } else {
-        // If no Settings captured, verify that at least the ref has the latest value
-        // This confirms the ref is updated even if re-send doesn't trigger
-        // The core fix (using ref) is working, re-send logic is separate
-        console.warn('No Settings captured for third update - re-send logic may not have triggered');
-        // For now, we'll skip this assertion as the core fix (ref usage) is verified by other tests
-        // The re-send logic is tested in agent-options-timing.test.tsx
-      }
+      // Issue #399: Settings sent only once per connection
+      expect(capturedSettings.length).toBe(0);
+      const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+        (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
+      );
+      expect(settingsCalls.length).toBe(1);
     });
   });
 });

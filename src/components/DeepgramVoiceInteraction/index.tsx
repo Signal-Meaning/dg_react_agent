@@ -1321,16 +1321,12 @@ function DeepgramVoiceInteraction(
               const hasSentSettingsBefore = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
               
               if (isConnected && hasSentSettingsBefore) {
-                // Reset the flags to allow re-sending Settings
-                hasSentSettingsRef.current = false;
-                windowWithGlobals.globalSettingsSent = false;
-                
-                // Re-send Settings with updated agentOptions
-                // agentOptionsRef.current is already up-to-date (maintained by separate useEffect)
+                // Issue #399: Do NOT re-send Settings after they have been sent for this connection.
+                // Re-sending causes the server to respond with SETTINGS_ALREADY_APPLIED and close the connection.
+                // Settings are sent only once per connection.
                 if (props.debug) {
-                  log('agentOptions changed while connected - re-sending Settings with updated options (after manager recreation)');
+                  log('agentOptions changed while connected - skipping re-send (Issue #399: send Settings only once per connection)');
                 }
-                sendAgentSettings();
               } else if (shouldLogDiagnostics) {
                 console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] Re-send still blocked after delay:', {
                   isConnected,
@@ -1364,7 +1360,7 @@ function DeepgramVoiceInteraction(
     }
     
     if (agentOptionsChanged && agentOptions && agentManagerRef.current) {
-      // Issue #307: Update ref before re-sending to ensure latest value is used
+      // Issue #307: Keep ref up-to-date for any future use
       agentOptionsRef.current = agentOptions;
       
       const connectionState = agentManagerRef.current.getState();
@@ -1372,15 +1368,12 @@ function DeepgramVoiceInteraction(
       const hasSentSettingsBefore = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
       
       if (isConnected && hasSentSettingsBefore) {
-        // Reset the flags to allow re-sending Settings
-        hasSentSettingsRef.current = false;
-        windowWithGlobals.globalSettingsSent = false;
-        
-        // Re-send Settings with updated agentOptions
+        // Issue #399: Do NOT re-send Settings after they have been sent for this connection.
+        // Re-sending causes the server to respond with SETTINGS_ALREADY_APPLIED and close the connection.
+        // Settings are sent only once per connection.
         if (props.debug) {
-          log('agentOptions changed while connected - re-sending Settings with updated options');
+          log('agentOptions changed while connected - skipping re-send (Issue #399: send Settings only once per connection)');
         }
-        sendAgentSettings();
       } else if (shouldLogDiagnostics) {
         // Issue #311: Log why re-send was blocked (use console.log directly for diagnostics)
         console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] Re-send blocked:', {

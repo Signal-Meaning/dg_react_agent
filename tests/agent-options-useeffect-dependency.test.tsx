@@ -18,7 +18,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { render, act, waitFor } from '@testing-library/react';
+import { render, act } from '@testing-library/react';
 import { DeepgramVoiceInteractionHandle, AgentOptions } from '../src/types';
 import { createMockWebSocketManager, createMockAudioManager } from './fixtures/mocks';
 import {
@@ -26,8 +26,6 @@ import {
   createAgentOptions,
   setupComponentAndConnect,
   createSettingsCapture,
-  findSettingsWithFunctions,
-  assertSettingsWithFunctions,
   clearCapturedSettings,
   MOCK_API_KEY,
   type CapturedSettings,
@@ -131,12 +129,8 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
     delete (window as any).__testRenderCount;
   });
 
-  test('should verify Settings re-sent when agentOptions reference changes', async () => {
-    // Behavior-based test: Verify Settings re-sent when reference changes
-    // This proves useEffect runs when dependency changes
-    
+  test('should NOT re-send Settings when agentOptions reference changes (Issue #399)', async () => {
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-    
     const initialOptions = createAgentOptions({ functions: undefined });
     const { rerender } = render(
       <DeepgramVoiceInteraction
@@ -147,11 +141,7 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
     );
 
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    
-    // Clear captured settings
     clearCapturedSettings(capturedSettings);
-    
-    // Update with new reference
     const updatedOptions = createAgentOptions({
       functions: [{
         name: 'test',
@@ -159,7 +149,7 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
         parameters: { type: 'object', properties: {} }
       }]
     });
-    
+
     await act(async () => {
       rerender(
         <DeepgramVoiceInteraction
@@ -169,19 +159,16 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
         />
       );
     });
-    
-    // Wait for Settings to be re-sent
-    // If useEffect doesn't run, Settings won't be re-sent
-    await waitFor(() => {
-      expect(capturedSettings.length).toBeGreaterThan(0);
-    }, { timeout: 2000 });
-    
-    // Verify Settings was re-sent with functions
-    // This proves useEffect ran and detected the change
-    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
-    
-    assertSettingsWithFunctions(settingsWithFunctions, 'when agentOptions reference changes');
-    expect(settingsWithFunctions.agent.think.functions[0].name).toBe('test');
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+
+    // Issue #399: Settings sent only once per connection
+    expect(capturedSettings.length).toBe(0);
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
+    );
+    expect(settingsCalls.length).toBe(1);
   });
 
   test('should verify Settings NOT re-sent when reference is the same', async () => {
@@ -225,40 +212,24 @@ describe('Agent Options useEffect Dependency - Issue #311', () => {
     expect(capturedSettings.length).toBe(0);
   });
 
-  test('should verify useMemo creates new reference when dependency changes', async () => {
-    // Behavior-based test: Verify useMemo creates new references
-    // by checking that Settings are re-sent when dependency changes
-    
+  test('should NOT re-send Settings when useMemo creates new reference (Issue #399)', async () => {
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-    
     render(<TestComponentWithReferenceTracking ref={ref} />);
-    
-    // Wait for component to initialize and establish connection
     await setupComponentAndConnect(ref, mockWebSocketManager);
-    
-    // Clear captured settings
     clearCapturedSettings(capturedSettings);
-    
-    // Wait for hasFunctions to change (triggers useMemo to create new reference)
+
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise((r) => setTimeout(r, 400));
     });
-    
-    // Check if reference changed (via window variable)
+
     const referenceChangeCount = (window as any).__testReferenceChangeCount || 0;
-    
-    // useMemo should create new reference when hasFunctions changes
-    // This verifies the customer's pattern works
     expect(referenceChangeCount).toBeGreaterThanOrEqual(1);
-    
-    // Verify Settings was re-sent (proves useEffect ran when reference changed)
-    await waitFor(() => {
-      expect(capturedSettings.length).toBeGreaterThan(0);
-    }, { timeout: 2000 });
-    
-    // Verify Settings has functions (proves new reference was detected)
-    const settingsWithFunctions = findSettingsWithFunctions(capturedSettings);
-    
-    expect(settingsWithFunctions).toBeDefined();
+
+    // Issue #399: Settings sent only once per connection — no re-send when reference changes
+    expect(capturedSettings.length).toBe(0);
+    const settingsCalls = mockWebSocketManager.sendJSON.mock.calls.filter(
+      (call: unknown[]) => call[0] && (call[0] as { type?: string }).type === 'Settings'
+    );
+    expect(settingsCalls.length).toBe(1);
   });
 });
