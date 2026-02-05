@@ -10,7 +10,7 @@
 
 - [x] **Tests passing**
   - [x] Run: `npm test` — all pass (76 suites, 813 tests)
-  - [ ] **E2E in proxy mode** (recommended; run locally when ready)
+  - [ ] **E2E in proxy mode** (skipped for this release)
     - [ ] Start proxy: `cd test-app && npm run test:proxy:server`
     - [ ] Run: `cd test-app && USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e`
     - [ ] Confirm 0 failures (or document any authorized skips)
@@ -44,21 +44,21 @@
 
 ## Release
 
-- [ ] **Commit release prep**
-  - [ ] `git add . && git commit -m "chore: prepare release v0.7.17"`
-- [ ] **Release branch**
-  - [ ] Create: `git checkout -b release/v0.7.17` (from current branch or main)
-  - [ ] Push: `git push origin release/v0.7.17`
-- [ ] **Publish**
-  - [ ] Create GitHub release to trigger CI (`.github/workflows/test-and-publish.yml`)
-  - [ ] Monitor Actions until workflow succeeds; confirm package in GitHub Packages
-  - [ ] Tag created with release (e.g. `gh release create v0.7.17`)
-- [ ] **Tag release**
-  - [ ] Verify package published to GitHub Packages (after CI completes)
-  - [ ] Tag: `v0.7.17` (created with GitHub release)
-  - [ ] Push: tag pushed with release
-- [ ] **GitHub release**
-  - [ ] Title: `v0.7.17`; description from CHANGELOG.md; target `release/v0.7.17`
+- [x] **Commit release prep**
+  - [x] `git add . && git commit -m "chore: prepare release v0.7.17"`
+- [x] **Release branch**
+  - [x] Create: `git checkout -b release/v0.7.17` (from current branch or main)
+  - [x] Push: `git push origin release/v0.7.17`
+- [x] **Publish**
+  - [x] Create GitHub release to trigger CI (`.github/workflows/test-and-publish.yml`) — [v0.7.17](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.7.17)
+  - [x] Monitor Actions until workflow succeeds; confirm package in GitHub Packages
+  - [x] Tag created with release
+- [x] **Tag release**
+  - [x] Verify package published to GitHub Packages (CI completed successfully)
+  - [x] Tag: `v0.7.17` (created with GitHub release)
+  - [x] Push: tag pushed with release
+- [x] **GitHub release**
+  - [x] Title: `v0.7.17`; description from CHANGELOG.md; target `release/v0.7.17`
 - [ ] **Post-release**
   - [ ] Merge `release/v0.7.17` → `main` (e.g. via PR)
   - [ ] Push: `git push origin main`
@@ -67,10 +67,10 @@
 
 ## Completion criteria
 
-- [ ] Package published to GitHub Package Registry (CI workflow — monitor Actions)
-- [ ] GitHub release created
-- [ ] CHANGELOG.md updated (include tests in package for v0.7.17)
-- [ ] All tests passing
+- [x] Package published to GitHub Package Registry (CI workflow completed)
+- [x] GitHub release created — [v0.7.17](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.7.17)
+- [x] CHANGELOG.md updated (include tests in package for v0.7.17)
+- [x] All tests passing
 
 ---
 
