@@ -8,37 +8,37 @@
 
 ## Pre-Release
 
-- [ ] **Tests passing**
-  - [ ] Run: `npm test` — all pass
-  - [ ] **E2E in proxy mode** (recommended)
+- [x] **Tests passing**
+  - [x] Run: `npm test` — all pass (76 suites, 813 tests)
+  - [ ] **E2E in proxy mode** (recommended; run locally when ready)
     - [ ] Start proxy: `cd test-app && npm run test:proxy:server`
     - [ ] Run: `cd test-app && USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e`
     - [ ] Confirm 0 failures (or document any authorized skips)
-- [ ] **Lint clean**
-  - [ ] Run: `npm run lint` — 0 errors
+- [x] **Lint clean**
+  - [x] Run: `npm run lint` — 0 errors
 
 ---
 
 ## Version & build
 
-- [ ] **Bump version to v0.7.17**
-  - [ ] Run: `npm version patch --no-git-tag-version`
-- [ ] **Build** (optional locally; CI builds on release)
-  - [ ] Do not run build/package locally for release; CI builds when GitHub release is created.
+- [x] **Bump version to v0.7.17**
+  - [x] Run: `npm version patch --no-git-tag-version`
+- [x] **Build** (optional locally; CI builds on release)
+  - [x] Do not run build/package locally for release; CI builds when GitHub release is created.
 
 ---
 
 ## Documentation
 
-- [ ] **Create release docs before publishing**
-  - [ ] Create: `docs/releases/v0.7.17/`
-  - [ ] Create: `CHANGELOG.md` (Keep a Changelog format; lead with Issue #405 – include `tests/` in published package)
-  - [ ] Create: `PACKAGE-STRUCTURE.md` from `docs/releases/PACKAGE-STRUCTURE.template.md` (replace vX.X.X / X.X.X with v0.7.17 / 0.7.17)
-  - [ ] Create: `RELEASE-NOTES.md` (optional but standard)
-- [ ] **Validate release docs**
-  - [ ] Run: `npm run validate:release-docs 0.7.17` — must pass
-- [ ] **Update version** references in docs
-- [ ] **Do not proceed to Release until docs are complete**
+- [x] **Create release docs before publishing**
+  - [x] Create: `docs/releases/v0.7.17/`
+  - [x] Create: `CHANGELOG.md` (Keep a Changelog format; lead with Issue #405 – include `tests/` in published package)
+  - [x] Create: `PACKAGE-STRUCTURE.md` from `docs/releases/PACKAGE-STRUCTURE.template.md` (replace vX.X.X / X.X.X with v0.7.17 / 0.7.17)
+  - [x] Create: `RELEASE-NOTES.md` (optional but standard)
+- [x] **Validate release docs**
+  - [x] Run: `npm run validate:release-docs 0.7.17` — passed
+- [x] **Update version** references in docs
+- [x] **Do not proceed to Release until docs are complete**
 
 ---
 
