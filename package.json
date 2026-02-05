@@ -8,11 +8,12 @@
   "files": [
     "dist",
     "src",
+    "tests",
     "README.md",
     "DEVELOPMENT.md",
-    "docs/",
-    "scripts/",
-    "test-app/"
+    "docs",
+    "scripts",
+    "test-app"
   ],
   "scripts": {
     "build": "rollup -c",
