@@ -105,6 +105,10 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let storedGreeting: string | undefined;
     /** Issue #388: send response.create only after upstream sends conversation.item.added or conversation.item.done */
     let pendingResponseCreateAfterItemAdded = false;
+    /** Issue #406: have we sent SettingsApplied to the client? Used to send clear Error when upstream closes before session ready. */
+    let hasSentSettingsApplied = false;
+    /** Issue #406: defer context (conversation.item.create) until after session.updated to avoid upstream close. */
+    const pendingContextItems: string[] = [];
 
     const scheduleAudioCommit = () => {
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
@@ -185,7 +189,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             for (const m of contextMessages) {
               const role = (m.role === 'user' || m.role === 'assistant') ? m.role : 'user';
               const itemCreate = mapContextMessageToConversationItemCreate(role, m.content ?? '');
-              upstream.send(JSON.stringify(itemCreate));
+              pendingContextItems.push(JSON.stringify(itemCreate));
             }
           }
           const g = settings.agent?.greeting;
@@ -282,6 +286,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           });
         }
         if (msg.type === 'session.updated' || msg.type === 'session.created') {
+          hasSentSettingsApplied = true;
+          for (const itemJson of pendingContextItems) {
+            upstream.send(itemJson);
+          }
+          pendingContextItems.length = 0;
           const settingsApplied = mapSessionUpdatedToSettingsApplied(msg as Parameters<typeof mapSessionUpdatedToSettingsApplied>[0]);
           clientWs.send(JSON.stringify(settingsApplied));
           if (storedGreeting) {
@@ -355,8 +364,34 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       }
     });
 
-    upstream.on('close', () => {
+    upstream.on('close', (code: number, reason?: Buffer) => {
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
+      // Issue #406: if upstream closed before we sent SettingsApplied, notify the client so the host sees a clear error instead of only "connection closed"
+      if (!hasSentSettingsApplied && clientWs.readyState === WebSocket.OPEN) {
+        const reasonStr = reason && reason.length > 0 ? reason.toString() : '';
+        const description = `Upstream closed before session ready (code ${code}${reasonStr ? `, reason: ${reasonStr}` : ''}). Session may not have been applied.`;
+        try {
+          clientWs.send(JSON.stringify({
+            type: 'Error',
+            description,
+            code: 'upstream_closed_before_session_ready',
+          }));
+        } catch {
+          // ignore send errors (client may already be closing)
+        }
+        if (debug) {
+          emitLog({
+            severityNumber: SeverityNumber.WARN,
+            severityText: 'WARN',
+            body: description,
+            attributes: {
+              [ATTR_CONNECTION_ID]: connId,
+              [ATTR_UPSTREAM_CLOSE_CODE]: code,
+              [ATTR_UPSTREAM_CLOSE_REASON]: reasonStr,
+            },
+          });
+        }
+      }
       clientWs.close();
     });
     clientWs.on('close', () => {

@@ -163,6 +163,21 @@ async function setupTestPageWithOpenAIProxy(page, timeout = 10000) {
 }
 
 /**
+ * Navigate to the test app with the backend selected by E2E_BACKEND (openai or deepgram).
+ * Use for E2E tests that run/pass for either proxy (Issue #406 readiness contract).
+ * @param {import('@playwright/test').Page} page
+ * @param {number} timeout - Timeout in ms (default: 10000)
+ */
+async function setupTestPageForBackend(page, timeout = 10000) {
+  const { getBackendProxyParams, BASE_URL } = await import('./test-helpers.mjs');
+  const { pathWithQuery } = await import('./app-paths.mjs');
+  const pathPart = pathWithQuery(getBackendProxyParams());
+  const url = pathPart.startsWith('http') ? pathPart : BASE_URL + pathPart;
+  await page.goto(url);
+  await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
+}
+
+/**
  * Wait for connection to be established (auto-connect)
  * On timeout, throws an error that includes the current connection status to aid debugging.
  * @param {import('@playwright/test').Page} page
@@ -1417,6 +1432,7 @@ export {
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   setupTestPageWithDeepgramProxy, // Navigate to test app with Deepgram proxy (VITE_DEEPGRAM_PROXY_ENDPOINT)
   setupTestPageWithOpenAIProxy, // Navigate to test app with OpenAI proxy (VITE_OPENAI_PROXY_ENDPOINT) – Issue #381
+  setupTestPageForBackend, // Navigate to test app with E2E_BACKEND proxy (openai or deepgram) – Issue #406
   waitForConnection, // Wait for connection to be established
   waitForSettingsApplied, // Wait for agent settings to be applied (SettingsApplied received from server)
   setupConnectionStateTracking, // Setup connection state tracking via DOM elements (data-testid attributes)

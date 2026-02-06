@@ -17,6 +17,7 @@ import {
   skipIfNoOpenAIProxy,
   setupTestPageWithOpenAIProxy,
   establishConnectionViaText,
+  waitForSettingsApplied,
   sendTextMessage,
   waitForAgentResponseEnhanced,
 } from './helpers/test-helpers.js';
@@ -29,6 +30,7 @@ test.describe('OpenAI injectUserMessage (issue #380)', () => {
   test('should receive agent response after first text message (real OpenAI proxy)', async ({ page }) => {
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, 'hi');
     // Expected: an agent reply is delivered. When the bug is present, the connection
     // closes before the reply and no response appears, so this times out and the test fails.

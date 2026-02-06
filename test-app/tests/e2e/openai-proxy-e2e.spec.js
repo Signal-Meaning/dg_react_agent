@@ -5,6 +5,10 @@
  * OpenAI Realtime proxy (VITE_OPENAI_PROXY_ENDPOINT). Tests are skipped when
  * VITE_OPENAI_PROXY_ENDPOINT is not set.
  *
+ * Readiness contract (Issue #406): We enforce the component–OpenAI contract. The component
+ * requires connection + Settings applied before the first user message. Every test that
+ * sends a message waits for waitForSettingsApplied after establishConnectionViaText.
+ *
  * Behaviors: connection, single message, multi-turn, reconnection, basic audio,
  * simple function calling. See docs/issues/ISSUE-381/E2E-TEST-PLAN.md.
  *
@@ -38,22 +42,22 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await establishConnectionViaText(page, 30000);
     const state = await getAgentState(page);
     expect(state).toBeDefined();
-    try {
-      await waitForSettingsApplied(page, 5000);
-    } catch {
-      // Settings applied is optional; connection ready is the main assertion
-    }
+    // Component and test app require Settings applied before first message (Issue #406).
+    // Enforce actual behavior: connection + Settings applied = ready for messages.
+    await waitForSettingsApplied(page, 15000);
   });
 
   test('1b. Greeting – proxy injects greeting; component shows greeting-sent (Issue #381)', async ({ page }) => {
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
     await page.waitForSelector('[data-testid="greeting-sent"]', { timeout: 10000 });
   });
 
   test('2. Single message – inject user message, receive agent response in Message Bubble', async ({ page }) => {
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, 'hi');
     await waitForAgentResponseEnhanced(page, { timeout: AGENT_RESPONSE_TIMEOUT });
     const response = await page.locator('[data-testid="agent-response"]').textContent();
@@ -64,6 +68,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   test('3. Multi-turn – sequential messages, second agent response appears', async ({ page }) => {
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
     const r1 = await sendMessageAndWaitForResponse(page, "Hello, I need help.", AGENT_RESPONSE_TIMEOUT);
     expect(r1).toBeTruthy();
     expect(r1.length).toBeGreaterThan(0);
@@ -75,6 +80,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   test('4. Reconnection – disconnect then send, app reconnects and user receives response', async ({ page }) => {
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
     await sendMessageAndWaitForResponse(page, "First message.", AGENT_RESPONSE_TIMEOUT);
     await disconnectComponent(page);
     const secondResponse = await sendMessageAndWaitForResponse(page, "Second after disconnect.", AGENT_RESPONSE_TIMEOUT);
@@ -88,6 +94,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await context.grantPermissions(['microphone']);
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, 'Hello.');
     await waitForAgentResponse(page, null, AGENT_RESPONSE_TIMEOUT);
     const hasSample = await page.evaluate(async () => {
@@ -117,6 +124,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await page.goto(pathWithQuery(params));
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, "What time is it?");
     await waitForAgentResponseEnhanced(page, { timeout: AGENT_RESPONSE_TIMEOUT });
     const response = await page.locator('[data-testid="agent-response"]').textContent();
@@ -128,6 +136,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     test.setTimeout(60000); // First message + disconnect + second message can exceed 30s
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
     const firstResponse = await sendMessageAndWaitForResponse(page, "My favorite color is blue.", AGENT_RESPONSE_TIMEOUT);
     expect(firstResponse).toBeTruthy();
     expect(firstResponse.length).toBeGreaterThan(0);

@@ -71,6 +71,10 @@ type TranscriptHistoryEntry = {
   timestamp: number;
 };
 
+/** Issue #406: sessionStorage key for conversation restore after refresh (test-app only). */
+const CONVERSATION_STORAGE_KEY = 'dg_voice_conversation';
+const MAX_STORED_MESSAGES = 50;
+
 function App() {
   // Fail-fast check for required API key
   const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
@@ -109,13 +113,38 @@ function App() {
   const [loadedInstructions, setLoadedInstructions] = useState<string>('');
   const [instructionsLoading, setInstructionsLoading] = useState(true);
   
-  // Conversation history for context management
+  // Conversation history for context management (Issue #406: restore from sessionStorage so conversation survives refresh)
   const [conversationHistory, setConversationHistory] = useState<Array<{
     role: ConversationRole;
     content: string;
     timestamp: number;
-  }>>([]);
-  
+  }>>(() => {
+    try {
+      if (typeof sessionStorage === 'undefined') return [];
+      const raw = sessionStorage.getItem(CONVERSATION_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as Array<{ role: string; content: string; timestamp: number }>;
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (m): m is { role: ConversationRole; content: string; timestamp: number } =>
+          (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && typeof m.timestamp === 'number'
+      );
+    } catch {
+      return [];
+    }
+  });
+
+  // Issue #406: persist conversation to sessionStorage so it survives full page refresh (OpenAI and Deepgram)
+  useEffect(() => {
+    try {
+      if (typeof sessionStorage === 'undefined') return;
+      const toStore = conversationHistory.slice(-MAX_STORED_MESSAGES);
+      sessionStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(toStore));
+    } catch {
+      // ignore
+    }
+  }, [conversationHistory]);
+
   // Expose conversation history to window for E2E testing (Issue #362)
   useEffect(() => {
     const testWindow = window as TestWindow;
@@ -1357,6 +1386,36 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       <div style={{ marginTop: '20px', border: '1px solid #ccc', padding: '10px' }}>
         <h3>User Message from Server</h3>
         <pre data-testid="user-message">{userMessage || '(No user messages from server yet...)'}</pre>
+      </div>
+
+      {/* Issue #406: Conversation history (persisted to sessionStorage, restored after refresh) */}
+      <div data-testid="conversation-history" style={{ marginTop: '20px', border: '1px solid #ccc', padding: '10px' }}>
+        <h3>Conversation History</h3>
+        <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+          {conversationHistory.length === 0 ? (
+            <p>(No messages yet)</p>
+          ) : (
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {conversationHistory.map((msg, index) => (
+                <li
+                  key={`${index}-${msg.timestamp}`}
+                  data-testid={`conversation-message-${index}`}
+                  data-role={msg.role}
+                  style={{
+                    padding: '6px 8px',
+                    marginBottom: '4px',
+                    backgroundColor: msg.role === 'user' ? '#2d3748' : '#1a365d',
+                    borderRadius: '4px',
+                    fontSize: '0.9em'
+                  }}
+                >
+                  <span style={{ fontWeight: 'bold', marginRight: '8px' }}>{msg.role}:</span>
+                  <span>{msg.content}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
       
       {/* Text Input for Text-Only Mode */}

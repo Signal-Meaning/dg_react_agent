@@ -36,6 +36,13 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   let mockSendOutputTextOnlyAfterSession = false;
   /** When true, mock sends output_audio_transcript.done then response.function_call_arguments.done after session.updated */
   let mockSendTranscriptThenFunctionCallAfterSession = false;
+  /**
+   * Issue #406: when true, mock delays sending session.updated and asserts that no conversation.item.create
+   * is received before session.updated was sent (catches proxy sending context before session.updated).
+   */
+  let mockEnforceSessionBeforeContext = false;
+  /** Protocol errors detected by mock (e.g. conversation.item.create before session.updated). Tests assert this is empty. */
+  const protocolErrors: Error[] = [];
   /** Records conversation.item.create payloads for assertions */
   const receivedConversationItems: Array<{ type: string; item?: { type?: string; call_id?: string; output?: string; role?: string } }> = [];
 
@@ -48,11 +55,16 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockPort = (mockUpstreamServer.address() as { port: number }).port;
     mockWss = new WebSocketServer({ server: mockUpstreamServer });
     mockWss.on('connection', (socket: import('ws')) => {
+      /** Issue #406: per-connection; true after we have sent session.updated (used when mockEnforceSessionBeforeContext). */
+      let sessionUpdatedSent = false;
       socket.on('message', (data: Buffer) => {
         try {
           const msg = JSON.parse(data.toString()) as { type?: string; item?: { type?: string; role?: string; content?: Array<{ type?: string }>; call_id?: string; output?: string } };
           if (msg.type) mockReceived.push({ type: msg.type, at: Date.now() });
           if (msg.type === 'conversation.item.create') {
+            if (mockEnforceSessionBeforeContext && !sessionUpdatedSent) {
+              protocolErrors.push(new Error('conversation.item.create received before session.updated was sent (protocol: context must follow session.updated)'));
+            }
             receivedConversationItems.push({ type: msg.type, item: msg.item });
             // Issue #388: proxy sends response.create only after conversation.item.added. Mock must send item.added for user messages.
             const isUserMessage = msg.item?.type === 'message' && msg.item?.role === 'user';
@@ -73,7 +85,15 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             }
           }
           if (msg.type === 'session.update') {
-            socket.send(JSON.stringify({ type: 'session.updated', session: { type: 'realtime' } }));
+            const sendSessionUpdated = () => {
+              socket.send(JSON.stringify({ type: 'session.updated', session: { type: 'realtime' } }));
+              sessionUpdatedSent = true;
+            };
+            if (mockEnforceSessionBeforeContext) {
+              setTimeout(sendSessionUpdated, 50);
+            } else {
+              sendSessionUpdated();
+            }
             if (mockSendTranscriptThenFunctionCallAfterSession) {
               mockSendTranscriptThenFunctionCallAfterSession = false;
               socket.send(JSON.stringify({
@@ -443,9 +463,15 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('error', done);
   }, 5000);
 
+  /**
+   * Issue #406: Proxy must send conversation.item.create (context) only after receiving session.updated.
+   * Mock enforces this by delaying session.updated; if proxy sends context before waiting, protocol error is recorded.
+   */
   it('sends Settings.agent.context.messages as conversation.item.create to upstream', (done) => {
     mockReceived.length = 0;
     receivedConversationItems.length = 0;
+    protocolErrors.length = 0;
+    mockEnforceSessionBeforeContext = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
       client.send(JSON.stringify({
@@ -464,6 +490,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string };
       if (msg.type === 'SettingsApplied') {
+        expect(protocolErrors).toHaveLength(0);
+        mockEnforceSessionBeforeContext = false;
         expect(mockReceived.map((m) => m.type)).toContain('session.update');
         const itemCreates = receivedConversationItems.filter((m) => m.type === 'conversation.item.create');
         expect(itemCreates.length).toBe(2);
@@ -475,8 +503,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         done();
       }
     });
-    client.on('error', done);
-  });
+    client.on('error', (err) => {
+      mockEnforceSessionBeforeContext = false;
+      done(err);
+    });
+  }, 8000);
 
   /**
    * Greeting (Issue #381): When Settings includes agent.greeting, after session.updated the proxy
