@@ -57,6 +57,15 @@ export const APPROVED_COMPONENT_METHOD_ADDITIONS = {
     usage: 'test-app/tests/e2e/function-calling-e2e.spec.js',
     note: 'Part of function calling feature. Documented in API-REFERENCE.md and used in E2E tests.',
   },
+  'getConversationHistory': {
+    addedIn: 'v0.7.18',
+    issue: 'Issue #406',
+    rationale: 'Returns the current conversation history when conversationStorage is provided. Enables the host app to drive UI and context from component-owned persistence (see docs/CONVERSATION-STORAGE.md).',
+    breaking: false,
+    confirmed: true,
+    usage: 'test-app/src/App.tsx (Conversation History UI and agentOptions.context)',
+    note: 'Part of conversation storage feature. Documented in CONVERSATION-STORAGE.md.',
+  },
 
 } as const;
 
