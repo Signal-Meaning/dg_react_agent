@@ -45,3 +45,35 @@ Run OpenAI proxy E2E tests (test-app must be served; Playwright starts it via `w
    VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npm run test:e2e -- openai-proxy-e2e
    ```
    Tests are skipped when `VITE_OPENAI_PROXY_ENDPOINT` is not set.
+
+## CLI (Issue #414)
+
+A CLI script sends text to the proxy and prints (and optionally plays) agent responses. Useful for quick proxy testing without the test-app UI.
+
+**1. Start the backend** (from repo root, either):
+
+- Test-app backend (recommended): `cd test-app && npm run backend`
+- Standalone proxy: `npx tsx scripts/openai-proxy/run.ts`
+
+**2. Run the CLI** (from repo root, or from test-app):
+
+```bash
+# From repo root:
+npx tsx scripts/openai-proxy/cli.ts --text "Hello, what's the weather?"
+npm run openai-proxy:cli -- --text "Hello"
+
+# From test-app (e.g. after starting backend there): same script name
+npm run openai-proxy:cli -- --text "Hello"
+
+# From stdin
+echo "Hello" | npx tsx scripts/openai-proxy/cli.ts
+
+# Custom URL (default: ws://127.0.0.1:8080/openai)
+npx tsx scripts/openai-proxy/cli.ts --url ws://127.0.0.1:8080/openai --text "Hi"
+# Text-only (no TTS playback)
+npx tsx scripts/openai-proxy/cli.ts --text-only --text "Hi"
+# Usage
+npx tsx scripts/openai-proxy/cli.ts --help
+```
+
+- **Integration tests**: `npm test -- tests/integration/openai-proxy-cli.test.ts`

@@ -25,6 +25,7 @@
     "test:mock": "jest",
     "test:real": "RUN_REAL_API_TESTS=true jest",
     "api:fetch-spec": "npx tsx tests/api-baseline/fetch-official-specs.ts",
+    "openai-proxy:cli": "npx tsx scripts/openai-proxy/cli.ts",
     "api:validate": "jest tests/voice-agent-api-validation.test.tsx",
     "test:e2e": "playwright test",
     "test:e2e:log": "playwright test 2>&1 | tee e2e-run.log",
