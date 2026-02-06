@@ -391,7 +391,7 @@ When running comprehensive test passes, reports are generated in `test-results/c
 - ✅ Security headers validation
 - ✅ API key security (not exposed to frontend)
 
-See `docs/TEST-COVERAGE-PROXY-MODE.md` for detailed coverage analysis.
+See [TEST-COVERAGE-PROXY-MODE.md](./TEST-COVERAGE-PROXY-MODE.md) in this directory for detailed coverage analysis.
 
 ## References
 

@@ -66,5 +66,6 @@ We provide **reference proxy code** and the **interface contract** (protocol, ev
 ## Related Documentation
 
 - [API Reference](../API-REFERENCE.md) - Component API documentation with proxy mode examples
+- [Conversation storage](../CONVERSATION-STORAGE.md) - Who owns persistence logic (component) vs storage implementation (application); test-app demonstrates with localStorage
 - [Issue #242 Tracking](../issues/ISSUE-242-BACKEND-PROXY-SUPPORT.md) - Complete feature tracking document
 - [Proxy ownership decision](../issues/ISSUE-388/PROXY-OWNERSHIP-DECISION.md) - What we own (code, contract) and support scope for proxies

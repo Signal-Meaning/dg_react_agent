@@ -322,4 +322,4 @@ AudioTestHelpers.clearAudioCache();
 - [VAD Events and Timeout Behavior](../docs/VAD-EVENTS-AND-TIMEOUT-BEHAVIOR.md)
 - [Issue #44 VAD Events Proposal](../docs/ISSUE-44-VAD-Events-Proposal.md)
 - [Issue #38 VAD Events Proposal](../docs/ISSUE-38-VAD-Events-Proposal.md)
-- [Playwright Testing Plan](../docs/PLAYWRIGHT_TESTING_PLAN.md)
+- [Playwright Testing Plan](./docs/PLAYWRIGHT_TESTING_PLAN.md)
