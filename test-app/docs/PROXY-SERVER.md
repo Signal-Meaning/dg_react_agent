@@ -1,8 +1,8 @@
 # Proxy Server: Purpose, Design, Operation, and Tests
 
 **Last updated:** February 2026  
-**Implementation:** `test-app/scripts/mock-proxy-server.js`  
-**Run command:** `npm run test:proxy:server` (from `test-app/`)
+**Implementation:** `test-app/scripts/backend-server.js`  
+**Run command:** `npm run backend` (from `test-app/`)
 
 This document explains the test-app proxy server: why it exists, how it is designed, how to run and configure it, and how it is tested.
 
@@ -24,7 +24,7 @@ The proxy server exists to support **E2E and integration testing** of the Deepgr
 ### When is it used?
 
 - **E2E tests** – Playwright runs the test-app; the app connects to `ws://localhost:8080/...` (or the configured proxy URL). The proxy is started separately or by Playwright’s `webServer` (see [Operation](#3-operation)).
-- **Manual testing** – Run `npm run test:proxy:server` in one terminal and the test-app in another to exercise proxy mode.
+- **Manual testing** – Run `npm run backend` in one terminal and the test-app in another to exercise proxy mode.
 - **CI** – The same proxy can serve both Deepgram and OpenAI E2E runs when both API keys are present.
 
 ---
@@ -50,7 +50,7 @@ The proxy server exists to support **E2E and integration testing** of the Deepgr
 ```
 
 - **One process, one port (8080).**  
-- **Deepgram path** – Implemented in `mock-proxy-server.js`: accepts client WebSocket, opens a second WebSocket to Deepgram with the API key (token subprotocol), and forwards messages both ways. Service type (agent vs transcription) comes from the query parameter `service`.  
+- **Deepgram path** – Implemented in `backend-server.js`: accepts client WebSocket, opens a second WebSocket to Deepgram with the API key (token subprotocol), and forwards messages both ways. Service type (agent vs transcription) comes from the query parameter `service`.  
 - **OpenAI path** – Implemented by spawning the existing **OpenAI Realtime proxy** (`scripts/openai-proxy/run.ts`) on an internal port (8081). The main server attaches a WebSocket server on path `/openai` that **forwards** each client connection to `ws://127.0.0.1:8081/openai`. The subprocess does the protocol translation (component protocol ↔ OpenAI Realtime).
 
 ### API key rules
@@ -79,13 +79,13 @@ From the **test-app** directory:
 
 ```bash
 cd test-app
-npm run test:proxy:server
+npm run backend
 ```
 
 Or from the repo root:
 
 ```bash
-node test-app/scripts/mock-proxy-server.js
+node test-app/scripts/backend-server.js
 ```
 
 The server binds to **port 8080** (or `PROXY_PORT`) and logs which endpoints are active.
@@ -147,7 +147,7 @@ The proxy server is covered by **unit**, **integration**, and **E2E** tests. The
 
 ### 4.1 Unit tests (Deepgram routing)
 
-**File:** `test-app/tests/mock-proxy-server.test.js`
+**File:** `test-app/tests/unit/backend-server.test.js`
 
 **What they do:**  
 Test **inlined helpers** that mirror the Deepgram logic in the server:
@@ -159,10 +159,10 @@ Test **inlined helpers** that mirror the Deepgram logic in the server:
 **What they do not do:**  
 They do **not** start the server or open WebSocket connections to `/deepgram-proxy` or `/openai`.
 
-**Run (from repo root):**
+**Run (from test-app):**
 
 ```bash
-npm test -- mock-proxy-server
+npm test -- backend-server
 ```
 
 ### 4.2 Integration tests (proxy process)
@@ -170,7 +170,7 @@ npm test -- mock-proxy-server
 **File:** `test-app/tests/mock-proxy-server-integration.test.js`
 
 **What they do:**  
-Spawn the real `mock-proxy-server.js` with controlled env (using `SKIP_DOTENV=1` so `.env` is not loaded):
+Spawn the real `backend-server.js` with controlled env (using `SKIP_DOTENV=1` so `.env` is not loaded):
 
 1. **At least one key required** – Neither Deepgram nor OpenAI key set → process must exit with code 1 and stderr containing “at least one of DEEPGRAM_API_KEY or OPENAI_API_KEY is required”.
 2. **Starts with Deepgram key** – Only `DEEPGRAM_API_KEY` set → process stays up until SIGTERM (no immediate exit).
@@ -181,7 +181,7 @@ These tests assert that the server’s **startup and key checks** behave correct
 **Run (from repo root):**
 
 ```bash
-npm test -- mock-proxy-server-integration
+npm test -- backend-server-integration
 ```
 
 ### 4.3 E2E tests (test-app + proxy)
@@ -206,7 +206,7 @@ E2E tests do **not** start the proxy server logic themselves; they assume it is 
 ```bash
 cd test-app
 # Terminal 1:
-npm run test:proxy:server
+npm run backend
 # Terminal 2:
 USE_PROXY_MODE=true npm run test:e2e
 ```

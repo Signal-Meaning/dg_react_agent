@@ -19,6 +19,10 @@ This directory contains comprehensive documentation for implementing and using b
 - **[Python/FastAPI Implementation](./IMPLEMENTATION-FASTAPI.md)** - Complete guide for implementing backend proxy with Python and FastAPI
 - **[Python/Django Implementation](./IMPLEMENTATION-DJANGO.md)** - Complete guide for implementing backend proxy with Python and Django
 
+## Test-app backend (single server)
+
+The test-app uses **one backend server** that hosts both Deepgram and OpenAI proxies (and can host function endpoints). Run it with `cd test-app && npm run backend`. See [Architecture](./ARCHITECTURE.md) for DRY validation and structure.
+
 ## Quick Start
 
 1. **Read the Interface Contract** - Understand what your backend must implement

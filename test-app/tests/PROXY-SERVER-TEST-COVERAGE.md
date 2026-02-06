@@ -1,6 +1,6 @@
 # Proxy Server Test Coverage
 
-**Target**: `test-app/scripts/mock-proxy-server.js` (run via `npm run test:proxy:server`)
+**Target**: `test-app/scripts/backend-server.js` (run via `npm run backend`)
 
 ## Requirements (implemented behavior)
 
@@ -16,13 +16,13 @@
 
 | Location | What it tests |
 |----------|----------------|
-| `test-app/tests/mock-proxy-server.test.js` | **Deepgram only**: Inlined helpers for service type detection, endpoint routing (agent vs transcription), query param forwarding. Does **not** start the server or hit `/deepgram-proxy` or `/openai`. |
+| `test-app/tests/unit/backend-server.test.js` | **Deepgram only**: Inlined helpers for service type detection, endpoint routing (agent vs transcription), query param forwarding. Does **not** start the server or hit `/deepgram-proxy` or `/openai`. |
 
 ### Integration (proxy server process)
 
 | Location | What it tests |
 |----------|----------------|
-| `test-app/tests/mock-proxy-server-integration.test.js` | **API key requirement**: Spawns `mock-proxy-server.js` with `SKIP_DOTENV=1` and (1) neither key → exit code 1 and error message; (2) only `DEEPGRAM_API_KEY` → process stays up until SIGTERM; (3) only `OPENAI_API_KEY` → process stays up until SIGTERM. |
+| `test-app/tests/mock-proxy-server-integration.test.js` | **API key requirement**: Spawns `backend-server.js` with `SKIP_DOTENV=1` and (1) neither key → exit code 1 and error message; (2) only `DEEPGRAM_API_KEY` → process stays up until SIGTERM; (3) only `OPENAI_API_KEY` → process stays up until SIGTERM. |
 
 ### E2E (test-app + proxy)
 
@@ -45,12 +45,12 @@ E2E tests assume the proxy is started separately; they do not assert that the pr
 
 ```bash
 # Unit (Deepgram routing helpers)
-npm test -- mock-proxy-server
+npm test -- backend-server
 
 # Integration (API key requirement; from repo root so Jest finds test-app/tests)
-npm test -- mock-proxy-server-integration
+npm test -- backend-server-integration
 
 # E2E (start proxy first)
-cd test-app && npm run test:proxy:server   # then in another terminal:
+cd test-app && npm run backend   # then in another terminal:
 USE_PROXY_MODE=true npm run test:e2e
 ```

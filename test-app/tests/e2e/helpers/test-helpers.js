@@ -200,7 +200,7 @@ async function waitForConnection(page, timeout = 5000) {
     const msg = err?.message || String(err);
     throw new Error(
       `${msg}. Current connection-status: "${currentStatus}". ` +
-      'If "closed" or "error": check proxy is running (npm run test:proxy:server), OPENAI_API_KEY is set and valid, and proxy/OpenAI upstream logs for errors.'
+      'If "closed" or "error": check backend is running (cd test-app && npm run backend), OPENAI_API_KEY is set and valid, and proxy/OpenAI upstream logs for errors.'
     );
   }
 }

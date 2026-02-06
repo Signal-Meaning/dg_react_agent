@@ -43,7 +43,7 @@
 
 | Item | Details |
 |------|---------|
-| **Reference** | `test-app/scripts/mock-proxy-server.js` — WebSocket proxy for Deepgram (agent + transcription). |
+| **Reference** | `test-app/scripts/backend-server.js` — Backend server for Deepgram (agent + transcription) and OpenAI proxy. |
 | **Behavior** | Passthrough: client ↔ Deepgram Voice Agent API (or transcription). No protocol translation; adds API key via subprotocol, validates origin/auth, forwards query params. Message queuing (Issue #329) until Deepgram/client ready. |
 | **Path routing** | Single `server.on('upgrade')` by pathname: `/openai` → OpenAI subprocess forwarder, `PROXY_PATH` (e.g. `/deepgram-proxy`) → Deepgram. |
 
@@ -51,7 +51,7 @@
 
 | Test | Location | What it covers |
 |------|----------|----------------|
-| Unit (Deepgram routing) | `test-app/tests/mock-proxy-server.test.js` | Service type detection, endpoint routing (agent vs transcription), query param forwarding. Does not start server. |
+| Unit (Deepgram routing) | `test-app/tests/unit/backend-server.test.js` | Service type detection, endpoint routing (agent vs transcription), query param forwarding. Does not start server. |
 | Integration | `test-app/tests/mock-proxy-server-integration.test.js` | API key requirement: neither key → exit 1; only Deepgram or only OpenAI → process stays up. |
 | E2E | `deepgram-backend-proxy-mode.spec.js`, `deepgram-backend-proxy-authentication.spec.js`, `api-key-security-proxy-mode.spec.js` | Test-app with proxy; proxy assumed running. |
 

@@ -60,7 +60,7 @@ async function check() {
   console.error('[E2E] Last error:', detail);
   console.error('\n[E2E] Start the dev server first, then run tests:');
   console.error('  Terminal 1: cd test-app && npm run dev');
-  console.error('  Terminal 2: cd test-app && npm run test:proxy:server   # if using proxy mode');
+  console.error('  Terminal 2: cd test-app && npm run backend   # if using proxy mode');
   console.error('  Terminal 3: cd test-app && E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e\n');
   process.exit(1);
 }
@@ -128,7 +128,7 @@ async function checkProxy() {
     console.error('\n[E2E] USE_PROXY_MODE is set but the proxy is not reachable on port', port + '.');
     console.error('[E2E] Error:', detail);
     console.error('\n[E2E] Start the proxy in a separate terminal (same HTTPS as app):');
-    console.error('  cd test-app && npm run test:proxy:server');
+    console.error('  cd test-app && npm run backend');
     if (useHttps) {
       console.error('  Ensure test-app/.env has HTTPS=true so the proxy serves wss:// (required when app uses https).');
     }

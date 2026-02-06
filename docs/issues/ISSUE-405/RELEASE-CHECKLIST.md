@@ -11,7 +11,7 @@
 - [x] **Tests passing**
   - [x] Run: `npm test` — all pass (76 suites, 813 tests)
   - [ ] **E2E in proxy mode** (skipped for this release)
-    - [ ] Start proxy: `cd test-app && npm run test:proxy:server`
+    - [ ] Start backend: `cd test-app && npm run backend`
     - [ ] Run: `cd test-app && USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e`
     - [ ] Confirm 0 failures (or document any authorized skips)
 - [x] **Lint clean**

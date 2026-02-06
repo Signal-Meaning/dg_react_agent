@@ -12,12 +12,12 @@
  * 5. Proxy Backend Validation - Verify proxy server keeps API keys server-side
  * 
  * To run:
- *   1. Start mock proxy server: npm run test:proxy:server
+ *   1. Start mock proxy server: npm run backend
  *   2. Set USE_PROXY_MODE=true: USE_PROXY_MODE=true npm run test:e2e -- api-key-security-proxy-mode
  * 
  * Requirements:
  * - Real Deepgram API key (VITE_DEEPGRAM_API_KEY) - for proxy server
- * - Proxy server running (npm run test:proxy:server)
+ * - Proxy server running (npm run backend)
  */
 
 import { test, expect } from '@playwright/test';
@@ -100,7 +100,7 @@ test.describe('API Key Security - Proxy Mode', () => {
     }, PROXY_ENDPOINT);
     
     if (!proxyRunning) {
-      test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run test:proxy:server`);
+      test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run backend`);
       return;
     }
     

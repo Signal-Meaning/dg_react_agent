@@ -17,7 +17,7 @@
  *   - Security headers validation
  * 
  * To run:
- *   1. Start mock proxy server: npm run test:proxy:server
+ *   1. Start mock proxy server: npm run backend
  *   2. In another terminal: npm run test:e2e:proxy
  *   3. Or with proxy mode: USE_PROXY_MODE=true npm run test:e2e -- deepgram-backend-proxy-authentication
  * 
@@ -46,7 +46,7 @@ test.describe('Backend Proxy Authentication', () => {
     if (IS_PROXY_MODE) {
       // Verify proxy server is running before proceeding with tests
       // Reason: Tests require proxy server to be running to validate proxy functionality
-      // Action: Start proxy server with: npm run test:proxy:server
+      // Action: Start proxy server with: npm run backend
       // Use page.evaluate to check from browser context (WebSocket is available there)
       const proxyRunning = await page.evaluate(async (endpoint) => {
         return new Promise((resolve) => {
@@ -75,7 +75,7 @@ test.describe('Backend Proxy Authentication', () => {
       }, PROXY_ENDPOINT);
       
       if (!proxyRunning) {
-        test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run test:proxy:server`);
+        test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run backend`);
         return;
       }
     }

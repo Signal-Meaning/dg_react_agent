@@ -1,15 +1,14 @@
 /**
- * Unit tests for Mock Backend Proxy Server
+ * Unit tests for backend server (Deepgram proxy logic)
  * 
- * Tests that the proxy server correctly:
+ * Tests that the server correctly:
  * 1. Detects service type from query parameters
  * 2. Routes agent connections to agent endpoint
  * 3. Routes transcription connections to transcription endpoint
  * 4. Forwards query parameters correctly (excluding service and token)
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import url from 'url';
+const url = require('url');
 
 // Mock the proxy server logic for testing
 function detectServiceType(reqUrl) {
@@ -43,7 +42,7 @@ function forwardQueryParams(reqUrl, targetUrl) {
   return targetUrlObj.toString();
 }
 
-describe('Mock Proxy Server - Service Type Detection', () => {
+describe('Backend server - Service Type Detection', () => {
   it('should detect agent service from query parameter', () => {
     const reqUrl = 'ws://localhost:8080/deepgram-proxy?service=agent';
     const serviceType = detectServiceType(reqUrl);
@@ -77,7 +76,7 @@ describe('Mock Proxy Server - Service Type Detection', () => {
   });
 });
 
-describe('Mock Proxy Server - Endpoint Routing', () => {
+describe('Backend server - Endpoint Routing', () => {
   it('should route agent service to agent endpoint', () => {
     const serviceType = 'agent';
     const targetUrl = getTargetEndpoint(serviceType);
@@ -91,7 +90,7 @@ describe('Mock Proxy Server - Endpoint Routing', () => {
   });
 });
 
-describe('Mock Proxy Server - Query Parameter Forwarding', () => {
+describe('Backend server - Query Parameter Forwarding', () => {
   it('should forward transcription query parameters to Deepgram', () => {
     const reqUrl = 'ws://localhost:8080/deepgram-proxy?service=transcription&model=nova-3&language=en-US&smart_format=true';
     const serviceType = detectServiceType(reqUrl);
@@ -152,7 +151,7 @@ describe('Mock Proxy Server - Query Parameter Forwarding', () => {
   });
 });
 
-describe('Mock Proxy Server - Integration', () => {
+describe('Backend server - Integration', () => {
   it('should correctly process transcription connection request', () => {
     const reqUrl = 'ws://localhost:8080/deepgram-proxy?service=transcription&model=nova-3&language=en-US&smart_format=true&interim_results=true&diarize=true&channels=1&vad_events=true&utterance_end_ms=1000&sample_rate=16000&encoding=linear16';
     

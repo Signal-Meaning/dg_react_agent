@@ -7,7 +7,7 @@
  *
  * This repo does NOT run an OpenAI proxy. VITE_OPENAI_PROXY_ENDPOINT must point to an
  * external proxy (e.g. a backend that speaks the component's protocol and proxies to OpenAI).
- * Our proxy is Deepgram-only: test-app/scripts/mock-proxy-server.js → ws://localhost:8080/deepgram-proxy.
+ * Backend server: test-app/scripts/backend-server.js → ws://localhost:8080/deepgram-proxy and /openai.
  *
  * Run with external OpenAI proxy: VITE_OPENAI_PROXY_ENDPOINT=ws://your-proxy-host/path npm run test:e2e -- openai-inject-connection-stability
  */

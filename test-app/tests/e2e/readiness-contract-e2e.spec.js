@@ -4,8 +4,9 @@
  * Asserts the component–backend contract: connection + Settings applied before
  * the first user message. Runs for either proxy (OpenAI or Deepgram) based on
  * E2E_BACKEND. Use the matching proxy for the selected backend:
- * - E2E_BACKEND=openai (default): OpenAI proxy (e.g. npm run openai-proxy)
- * - E2E_BACKEND=deepgram: Deepgram proxy (e.g. npm run test:proxy:server)
+ * - E2E_BACKEND=openai (default): OpenAI proxy (via backend server)
+ * - E2E_BACKEND=deepgram: Deepgram proxy (via backend server)
+ * Backend: cd test-app && npm run backend
  *
  * Run: USE_PROXY_MODE=true npm run test:e2e -- readiness-contract-e2e
  * Or:  E2E_BACKEND=deepgram USE_PROXY_MODE=true npm run test:e2e -- readiness-contract-e2e

@@ -131,7 +131,7 @@ export default defineConfig({
             },
           },
           {
-            command: 'npm run test:proxy:server',
+            command: 'npm run backend',
             cwd: '.',
             port: 8080,
             reuseExistingServer: true,

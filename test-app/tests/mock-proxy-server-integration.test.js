@@ -1,17 +1,17 @@
 /**
- * Integration tests for Mock Backend Proxy Server (mock-proxy-server.js).
+ * Integration tests for backend server (backend-server.js).
  *
  * Exercises requirements:
  * - At least one of DEEPGRAM_API_KEY or OPENAI_API_KEY is required (server exits 1 when neither set).
  *
  * Run: npm test -- mock-proxy-server-integration
- * (from repo root; Jest picks up test-app/tests/**)
+ * (from test-app; or from repo root if Jest picks up test-app/tests/**)
  */
 
 const path = require('path');
 const { spawn } = require('child_process');
 
-const scriptPath = path.resolve(__dirname, '..', 'scripts', 'mock-proxy-server.js');
+const scriptPath = path.resolve(__dirname, '..', 'scripts', 'backend-server.js');
 const testAppDir = path.resolve(__dirname, '..');
 
 function runProxyServer(env = {}) {
