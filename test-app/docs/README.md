@@ -14,6 +14,7 @@ This documentation directory contains comprehensive guides and examples for inte
 - **[Proxy Server: Purpose, Design, Operation, and Tests](./PROXY-SERVER.md)** - Complete explanation of the test-app proxy server: purpose, design, operation, and tests (Deepgram + OpenAI on one port)
 - **[Transcript DOM Structure](./TRANSCRIPT-DOM-STRUCTURE.md)** - How the test-app displays transcribed speech in the DOM for E2E testing
 - **[OpenAI Proxy and Issue #381](./OPENAI-PROXY-AND-ISSUE-381.md)** - OpenAI Realtime proxy backend, test-app and proxy improvements, env, and E2E with the proxy
+- **Conversation storage** - See [Conversation storage (docs)](../../docs/CONVERSATION-STORAGE.md). The component is intended to own persistence *logic*; the application provides the storage implementation (so conversations can use encrypted or custom storage). The **test-app demonstrates** this pattern using **localStorage** as the storage medium (key `dg_voice_conversation`, last 50 messages). When the component gains an injected storage interface, the test-app will provide a localStorage-backed implementation.
 
 ### Current Release
 

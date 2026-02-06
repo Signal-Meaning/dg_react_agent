@@ -29,7 +29,7 @@ The component speaks **Deepgram Voice Agent protocol** over a single WebSocket. 
 | **KeepAlive** | `{ type: 'KeepAlive' }` | Keep connection alive |
 | **CloseStream** | `{ type: 'CloseStream' }` | End stream |
 
-**Critical:** The component **requires** that **Settings** is sent and confirmed (**SettingsApplied** received) before it will send **InjectUserMessage**. The proxy must honor this ordering.
+**Critical:** The component **requires** that **Settings** is sent and confirmed (**SettingsApplied** received) before it will send **InjectUserMessage**. The proxy must honor this ordering. This is the **readiness contract** that applies to all proxies (Deepgram and translation proxies); see [Component–Proxy Contract](../../BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md).
 
 ### 1.2 Incoming (proxy → component)
 

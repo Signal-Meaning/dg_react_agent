@@ -8,6 +8,7 @@ This directory contains comprehensive documentation for implementing and using b
 
 ### Core Documentation
 
+- **[Component–Proxy Contract](./COMPONENT-PROXY-CONTRACT.md)** - Big picture: one component protocol, multiple backends (Deepgram or translation proxy); readiness contract (SettingsApplied before first user message) applies to all
 - **[Interface Contract](./INTERFACE-CONTRACT.md)** - Specification of the backend proxy interface contract that developers must implement
 - **[Security Best Practices](./SECURITY-BEST-PRACTICES.md)** - Security guidelines and best practices for backend proxy implementation
 - **[Migration Guide](./MIGRATION-GUIDE.md)** - Step-by-step guide for migrating from direct connection to proxy mode
@@ -26,6 +27,10 @@ This directory contains comprehensive documentation for implementing and using b
 4. **Update Your Frontend** - Use `proxyEndpoint` prop instead of `apiKey`
 
 ## Key Concepts
+
+### Component–Proxy Contract (All Proxies)
+
+The component speaks **one protocol** (Deepgram Voice Agent message types). Whether the proxy talks to Deepgram directly or to another service (e.g. OpenAI via a translation layer), the **readiness contract** is the same: the component must receive **SettingsApplied** before sending the first user message, and the proxy must send it and keep the connection open. See [Component–Proxy Contract](./COMPONENT-PROXY-CONTRACT.md).
 
 ### Interface Contract, Not New Service
 
@@ -61,5 +66,6 @@ We provide **reference proxy code** and the **interface contract** (protocol, ev
 ## Related Documentation
 
 - [API Reference](../API-REFERENCE.md) - Component API documentation with proxy mode examples
+- [Conversation storage](../CONVERSATION-STORAGE.md) - Who owns persistence logic (component) vs storage implementation (application); test-app demonstrates with localStorage
 - [Issue #242 Tracking](../issues/ISSUE-242-BACKEND-PROXY-SUPPORT.md) - Complete feature tracking document
 - [Proxy ownership decision](../issues/ISSUE-388/PROXY-OWNERSHIP-DECISION.md) - What we own (code, contract) and support scope for proxies
