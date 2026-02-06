@@ -481,9 +481,8 @@ function App() {
   // Event handlers - memoized with useCallback
   const handleReady = useCallback((ready: boolean) => {
     setIsReady(ready);
-    addLog(`Component is ${ready ? 'ready' : 'not ready'}`);
-    // Note: Connections start lazily when needed (e.g., when microphone is activated)
-  }, [addLog]); // Depends on addLog
+    // Component logs ready state; no redundant addLog here
+  }, []);
 
   // Handle SettingsApplied event via callback (replaces getState() polling)
   const handleSettingsApplied = useCallback(() => {
@@ -492,9 +491,9 @@ function App() {
     if (!hasShownGreetingRef.current) {
       setGreetingSent(true);
       hasShownGreetingRef.current = true;
-      addLog('Greeting marked sent (SettingsApplied received via callback)');
+      // Component logs SettingsApplied; no redundant addLog here
     }
-  }, [addLog]);
+  }, []);
   
   const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
     // Use the simplified top-level transcript field (normalized by component)
@@ -565,21 +564,21 @@ function App() {
   
   const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
     setAgentResponse(utterance.text);
-    addLog(`Agent said: ${utterance.text}`);
     setConversationForDisplay(deepgramRef.current?.getConversationHistory() ?? []);
-  }, [addLog]);
+    // Component logs agent output; no redundant addLog here
+  }, []);
   
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
     setUserMessage(message.text);
-    addLog(`User message from server: ${message.text}`);
     setConversationForDisplay(deepgramRef.current?.getConversationHistory() ?? []);
-  }, [addLog]);
+    // Component logs user message echo; no redundant addLog here
+  }, []);
   
   const handleAgentStateChange = useCallback((state: AgentState) => {
     const prevState = agentState; // Capture previous state for comparison
     setAgentState(state);
     setIsSleeping(state === 'sleeping');
-    addLog(`Agent state changed: ${state}`); // General log
+    // Component logs state transitions; no redundant addLog here
     
     // Specific sleep cycle logging
     if (state === 'sleeping' && prevState !== 'sleeping') {
@@ -590,7 +589,7 @@ function App() {
       // This case might indicate an unnecessary update, but log it for now
       sleepLogApp(`State remained sleeping (received update).`);
     }
-  }, [addLog, sleepLogApp, agentState]); // Depends on addLog, sleepLogApp, and agentState
+  }, [sleepLogApp, agentState]);
 
   // Heuristic: mark greeting as sent when agent begins speaking before any user message has been sent
   useEffect(() => {
@@ -622,26 +621,22 @@ function App() {
       addLog('⚠️ [BUG DETECTED] Audio playing while muted - Issue #223!');
     }
     
-    if (isPlaying) {
-      addLog('Audio playback: started');
-    } else {
-      addLog('Audio playback: stopped - Agent playback completed');
-    }
-  }, [addLog, ttsMuted]); // Include ttsMuted in dependencies
+    // Component logs playback state; no redundant addLog for started/stopped
+  }, [ttsMuted]);
   
   const handleConnectionStateChange = useCallback((service: ServiceType, state: ConnectionState) => {
     setConnectionStates(prev => ({
       ...prev,
       [service]: state
     }));
-    addLog(`${service} connection state: ${state}`);
+    // Component logs connection state; no redundant addLog here
     // Reset hasSentSettings mirror on agent disconnect/stop for clean reconnect assertions
     if (service === 'agent' && state === 'closed') {
       setHasSentSettingsDom(false);
     }
     // Connection states are now tracked via DOM elements (data-testid attributes)
     // Tests can read connection state directly from the DOM without callbacks
-  }, [addLog]); // Depends on addLog
+  }, []);
   
   const handleError = useCallback((error: DeepgramError) => {
     addLog(`Error (${error.service}): ${error.message}`);
@@ -764,14 +759,14 @@ function App() {
         return;
       }
       
-      // Send text message to real Deepgram agent
+      // Send text message to agent
       addLog(`Sending text message: ${textInput}`);
       setUserMessage(textInput);
       
       const messageToSend = textInput;
       if (deepgramRef.current) {
         await deepgramRef.current.injectUserMessage(messageToSend);
-        addLog('Text message sent to Deepgram agent');
+        // Component logs send success; no redundant addLog here
         // Sync from ref (component appends on server echo; optimistic update so UI shows message immediately)
         setConversationForDisplay(prev => {
           const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
@@ -792,9 +787,8 @@ function App() {
 
   const handleAgentSpeaking = useCallback(() => {
     // Note: agentSpeaking state is updated by handlePlaybackStateChange when playback actually starts
-    // This callback only logs - state management is handled by onPlaybackStateChange
-    addLog('Agent started speaking');
-  }, [addLog]);
+    // Component logs playback/state; no redundant addLog here
+  }, []);
 
   // Control functions
   const startInteraction = async () => {
@@ -822,23 +816,18 @@ function App() {
   // (removed unused interruptAgent helper)
   
   // Toggle mute button - simple switch: click to mute, click again to unmute
+  // Issue #410: Do not call ref methods inside setState updater (causes "Cannot update component while rendering another")
   const handleMuteToggle = useCallback(() => {
-    setTtsMuted(prevMuted => {
-      const newMuted = !prevMuted;
-      if (newMuted) {
-        addLog('🔇 Agent audio blocked');
-        if (deepgramRef.current) {
-          deepgramRef.current.interruptAgent();
-        }
-      } else {
-        addLog('🔊 Agent audio allowed');
-        if (deepgramRef.current) {
-          deepgramRef.current.allowAgent();
-        }
-      }
-      return newMuted;
-    });
-  }, [addLog]);
+    const nextMuted = !ttsMuted;
+    setTtsMuted(nextMuted);
+    if (nextMuted) {
+      addLog('🔇 Agent audio blocked');
+      if (deepgramRef.current) deepgramRef.current.interruptAgent();
+    } else {
+      addLog('🔊 Agent audio allowed');
+      if (deepgramRef.current) deepgramRef.current.allowAgent();
+    }
+  }, [addLog, ttsMuted]);
   
   const updateContext = () => {
     // Define the possible instruction prompts
