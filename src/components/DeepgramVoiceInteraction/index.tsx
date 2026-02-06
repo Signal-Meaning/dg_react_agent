@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useReducer, useRef } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useReducer, useRef, useState } from 'react';
 import {
   AgentState,
   AgentOptions,
@@ -11,7 +11,8 @@ import {
   UpdateInstructionsPayload,
   FunctionCallRequest,
   FunctionCallResponse,
-  ConnectionState
+  ConnectionState,
+  ConversationMessage,
 } from '../../types';
 import { WebSocketManager, WebSocketEvent } from '../../utils/websocket/WebSocketManager';
 import { AudioManager, AudioEvent } from '../../utils/audio/AudioManager';
@@ -143,7 +144,16 @@ function DeepgramVoiceInteraction(
     interruptAgent: interruptAgentProp,
     onAgentInterrupted,
     startAudioCapture: startAudioCaptureProp,
+    conversationStorage,
+    conversationStorageKey,
   } = props;
+
+  const DEFAULT_CONVERSATION_STORAGE_KEY = 'dg_conversation';
+  const CONVERSATION_STORAGE_KEY = conversationStorageKey ?? DEFAULT_CONVERSATION_STORAGE_KEY;
+  const MAX_CONVERSATION_STORED = 50;
+
+  // Issue #406: conversation history for persistence when conversationStorage is provided
+  const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
 
   // Internal state
   const [state, dispatch] = useReducer(stateReducer, initialState);
@@ -163,6 +173,32 @@ function DeepgramVoiceInteraction(
   // We use this to avoid closing connections during StrictMode cleanup
   const isMountedRef = useRef(true);
   const mountIdRef = useRef<string>('0');
+
+  // Issue #406: Restore conversation from storage on mount when conversationStorage is provided
+  useEffect(() => {
+    if (!conversationStorage) return;
+    conversationStorage.getItem(CONVERSATION_STORAGE_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw) as Array<{ role?: string; content?: string; timestamp?: number }>;
+        if (!Array.isArray(parsed)) return;
+        const valid: ConversationMessage[] = parsed.filter(
+          (m): m is ConversationMessage =>
+            (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
+        ).map((m) => ({ role: m.role as ConversationMessage['role'], content: m.content!, timestamp: m.timestamp }));
+        setConversationHistory(valid);
+      } catch {
+        // ignore invalid stored data
+      }
+    }).catch(() => { /* ignore */ });
+  }, [conversationStorage, CONVERSATION_STORAGE_KEY]);
+
+  // Issue #406: Persist conversation when it changes (and storage is provided)
+  useEffect(() => {
+    if (!conversationStorage || conversationHistory.length === 0) return;
+    const toStore = conversationHistory.slice(-MAX_CONVERSATION_STORED);
+    conversationStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(toStore)).catch(() => { /* ignore */ });
+  }, [conversationStorage, CONVERSATION_STORAGE_KEY, conversationHistory]);
   
   // Issue #769: Track component remounts for debugging
   // This ref persists across re-renders but resets on actual remount
@@ -2164,6 +2200,11 @@ function DeepgramVoiceInteraction(
       }
       const content = typeof data.content === 'string' ? data.content : '';
       
+      // Issue #406: Append to conversation history when storage is provided (persist via useEffect)
+      if (conversationStorage && (data.role === 'user' || data.role === 'assistant')) {
+        setConversationHistory((prev) => [...prev, { role: data.role as ConversationMessage['role'], content, timestamp: Date.now() }]);
+      }
+      
       // If we receive ConversationText, this means the agent is actively responding
       
       if (data.role === 'assistant') {
@@ -3592,6 +3633,8 @@ function DeepgramVoiceInteraction(
       }
       return audioManagerRef.current?.getAudioContext() || undefined;
     },
+    // Issue #406: Expose conversation history (restored + new messages when conversationStorage provided)
+    getConversationHistory: () => conversationHistory,
   }));
 
   // Render nothing (headless component)

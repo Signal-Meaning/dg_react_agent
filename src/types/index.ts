@@ -8,7 +8,7 @@
 import type { ConnectionState, ServiceType, EndpointConfig, DeepgramError } from './connection';
 import type { TranscriptionOptions, TranscriptResponse } from './transcription';
 // Import AgentState specifically because DeepgramVoiceInteractionProps uses it directly
-import type { AgentState, AgentOptions, UpdateInstructionsPayload } from './agent';
+import type { AgentState, AgentOptions, UpdateInstructionsPayload, ConversationMessage } from './agent';
 
 // Re-export all types from specific files
 export * from './agent';
@@ -89,6 +89,16 @@ export interface FunctionCallResponse {
   id: string;
   result?: unknown; // Function execution result
   error?: string; // Error message if function failed
+}
+
+/**
+ * Optional storage for conversation persistence (Issue #406).
+ * Application provides the implementation (e.g. localStorage wrapper); component owns when/what to persist.
+ * @see docs/CONVERSATION-STORAGE.md
+ */
+export interface ConversationStorage {
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
 }
 
 /**
@@ -364,6 +374,20 @@ export interface DeepgramVoiceInteractionProps {
    * @see Issue #305
    */
   startAudioCapture?: boolean;
+
+  /**
+   * Optional conversation storage (Issue #406). When provided, the component persists
+   * conversation messages and restores on mount. Application owns the implementation
+   * (e.g. localStorage, encrypted storage). Key used for getItem/setItem.
+   * @see docs/CONVERSATION-STORAGE.md
+   */
+  conversationStorage?: ConversationStorage;
+
+  /**
+   * Storage key for conversation persistence. Used only when conversationStorage is provided.
+   * @default 'dg_conversation'
+   */
+  conversationStorageKey?: string;
 }
 
 /**
@@ -454,4 +478,10 @@ export interface DeepgramVoiceInteractionHandle {
    * @param content - The function result as a JSON string
    */
   sendFunctionCallResponse: (id: string, name: string, content: string) => void;
+
+  /**
+   * Get the current conversation history (Issue #406). When conversationStorage is provided,
+   * this includes restored messages plus any new messages from ConversationText.
+   */
+  getConversationHistory: () => ConversationMessage[];
 }

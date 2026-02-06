@@ -12,7 +12,8 @@ import {
   ConversationRole,
   AudioConstraints,
   FunctionCallRequest,
-  FunctionCallResponse
+  FunctionCallResponse,
+  ConversationStorage
 } from '../../src/types';
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 import { ClosureIssueTestPage } from './closure-issue-test-page';
@@ -71,9 +72,17 @@ type TranscriptHistoryEntry = {
   timestamp: number;
 };
 
-/** Issue #406: sessionStorage key for conversation restore after refresh (test-app only). */
+/** Issue #406: Storage key for conversation (component persists via conversationStorage). */
 const CONVERSATION_STORAGE_KEY = 'dg_voice_conversation';
-const MAX_STORED_MESSAGES = 50;
+
+/** Issue #406: localStorage-backed ConversationStorage for the component (test-app uses component storage + getConversationHistory). */
+const localStorageConversationStorage: ConversationStorage = {
+  getItem: (key: string) => Promise.resolve(typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null),
+  setItem: (key: string, value: string) => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
+    return Promise.resolve();
+  },
+};
 
 function App() {
   // Fail-fast check for required API key
@@ -113,43 +122,22 @@ function App() {
   const [loadedInstructions, setLoadedInstructions] = useState<string>('');
   const [instructionsLoading, setInstructionsLoading] = useState(true);
   
-  // Conversation history for context management (Issue #406: restore from sessionStorage so conversation survives refresh)
-  const [conversationHistory, setConversationHistory] = useState<Array<{
-    role: ConversationRole;
-    content: string;
-    timestamp: number;
-  }>>(() => {
-    try {
-      if (typeof sessionStorage === 'undefined') return [];
-      const raw = sessionStorage.getItem(CONVERSATION_STORAGE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as Array<{ role: string; content: string; timestamp: number }>;
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter(
-        (m): m is { role: ConversationRole; content: string; timestamp: number } =>
-          (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && typeof m.timestamp === 'number'
-      );
-    } catch {
-      return [];
-    }
-  });
+  // Issue #406: Conversation for display and context — synced from component ref (component owns persistence via conversationStorage)
+  const [conversationForDisplay, setConversationForDisplay] = useState<Array<{ role: ConversationRole; content: string; timestamp?: number }>>([]);
 
-  // Issue #406: persist conversation to sessionStorage so it survives full page refresh (OpenAI and Deepgram)
+  // Sync conversation from component after it restores from storage (ref may not have data until restore completes)
   useEffect(() => {
-    try {
-      if (typeof sessionStorage === 'undefined') return;
-      const toStore = conversationHistory.slice(-MAX_STORED_MESSAGES);
-      sessionStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(toStore));
-    } catch {
-      // ignore
-    }
-  }, [conversationHistory]);
+    const t = setTimeout(() => {
+      setConversationForDisplay(deepgramRef.current?.getConversationHistory() ?? []);
+    }, 300);
+    return () => clearTimeout(t);
+  }, []);
 
   // Expose conversation history to window for E2E testing (Issue #362)
   useEffect(() => {
     const testWindow = window as TestWindow;
-    testWindow.__testConversationHistory = conversationHistory;
-  }, [conversationHistory]);
+    testWindow.__testConversationHistory = conversationForDisplay;
+  }, [conversationForDisplay]);
   
   // Auto-connect dual mode state
   const [micEnabled, setMicEnabled] = useState(false);
@@ -464,16 +452,16 @@ function App() {
       greeting: import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?',
       // Include functions if function calling is enabled
       functions: functions,
-      // Pass conversation history as context in Deepgram API format
-      context: conversationHistory.length > 0 ? {
-        messages: conversationHistory.map(message => ({
+      // Pass conversation history as context (from component ref via conversationForDisplay)
+      context: conversationForDisplay.length > 0 ? {
+        messages: conversationForDisplay.map(message => ({
           type: "History",
           role: message.role,
           content: message.content
         }))
       } : undefined
     };
-  }, [loadedInstructions, conversationHistory, urlParamsString]); // Include urlParamsString to recompute when URL params change
+  }, [loadedInstructions, conversationForDisplay, urlParamsString]); // Include urlParamsString to recompute when URL params change
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
@@ -573,23 +561,13 @@ function App() {
   const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
     setAgentResponse(utterance.text);
     addLog(`Agent said: ${utterance.text}`);
-    // Track agent messages in conversation history
-    setConversationHistory(prev => [...prev, {
-      role: 'assistant',
-      content: utterance.text,
-      timestamp: Date.now()
-    }]);
-  }, [addLog]); // Depends on addLog
+    setConversationForDisplay(deepgramRef.current?.getConversationHistory() ?? []);
+  }, [addLog]);
   
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
     setUserMessage(message.text);
     addLog(`User message from server: ${message.text}`);
-    // Track user messages in conversation history (dedupe if we already added optimistically in handleTextSubmit)
-    setConversationHistory(prev => {
-      const last = prev[prev.length - 1];
-      if (last?.role === 'user' && last?.content === message.text) return prev;
-      return [...prev, { role: 'user', content: message.text, timestamp: Date.now() }];
-    });
+    setConversationForDisplay(deepgramRef.current?.getConversationHistory() ?? []);
   }, [addLog]);
   
   const handleAgentStateChange = useCallback((state: AgentState) => {
@@ -612,13 +590,13 @@ function App() {
   // Heuristic: mark greeting as sent when agent begins speaking before any user message has been sent
   useEffect(() => {
     if (hasShownGreetingRef.current) return;
-    const noUserMessagesYet = conversationHistory.every(m => m.role !== 'user');
+    const noUserMessagesYet = conversationForDisplay.every(m => m.role !== 'user');
     if (agentState === 'speaking' && noUserMessagesYet) {
       setGreetingSent(true);
       hasShownGreetingRef.current = true;
       addLog('Greeting detected (heuristic): marked greeting-sent for tests');
     }
-  }, [agentState, conversationHistory, addLog]);
+  }, [agentState, conversationForDisplay, addLog]);
   
   // Handler for audio playing status - now also manages agent speaking/silent state
   const handlePlaybackStateChange = useCallback((isPlaying: boolean) => {
@@ -781,14 +759,16 @@ function App() {
       addLog(`Sending text message: ${textInput}`);
       setUserMessage(textInput);
       
-      // Optimistic update: add user message to conversationHistory so context on reconnect includes it
-      // (Backend may echo ConversationText role=user; we dedupe in handleUserMessage to avoid double-add)
       const messageToSend = textInput;
-      setConversationHistory(prev => [...prev, { role: 'user', content: messageToSend, timestamp: Date.now() }]);
-      
       if (deepgramRef.current) {
         await deepgramRef.current.injectUserMessage(messageToSend);
         addLog('Text message sent to Deepgram agent');
+        // Sync from ref (component appends on server echo; optimistic update so UI shows message immediately)
+        setConversationForDisplay(prev => {
+          const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
+          if (fromRef.length > prev.length) return fromRef;
+          return [...prev, { role: 'user' as const, content: messageToSend, timestamp: Date.now() }];
+        });
       } else {
         addLog('Error: DeepgramVoiceInteraction ref not available');
       }
@@ -1053,6 +1033,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         interruptAgent={declarativeInterruptAgent}
         onAgentInterrupted={handleAgentInterrupted}
         startAudioCapture={declarativeStartAudioCapture}
+        conversationStorage={localStorageConversationStorage}
+        conversationStorageKey={CONVERSATION_STORAGE_KEY}
         />
       </div>
       
@@ -1388,17 +1370,17 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <pre data-testid="user-message">{userMessage || '(No user messages from server yet...)'}</pre>
       </div>
 
-      {/* Issue #406: Conversation history (persisted to sessionStorage, restored after refresh) */}
+      {/* Issue #406: Conversation history (from component conversationStorage + getConversationHistory()) */}
       <div data-testid="conversation-history" style={{ marginTop: '20px', border: '1px solid #ccc', padding: '10px' }}>
         <h3>Conversation History</h3>
         <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-          {conversationHistory.length === 0 ? (
+          {conversationForDisplay.length === 0 ? (
             <p>(No messages yet)</p>
           ) : (
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {conversationHistory.map((msg, index) => (
+              {conversationForDisplay.map((msg, index) => (
                 <li
-                  key={`${index}-${msg.timestamp}`}
+                  key={`${index}-${msg.timestamp ?? index}`}
                   data-testid={`conversation-message-${index}`}
                   data-role={msg.role}
                   style={{

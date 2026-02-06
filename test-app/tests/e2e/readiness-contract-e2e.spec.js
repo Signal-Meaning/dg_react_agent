@@ -35,4 +35,25 @@ test.describe('Readiness contract – connection + Settings applied then send (I
     expect(response).toBeTruthy();
     expect(response).not.toBe('(Waiting for agent response...)');
   });
+
+  test('conversation state is reloaded after page refresh (Issue #406)', async ({ page }) => {
+    await setupTestPageForBackend(page);
+    await establishConnectionViaText(page, CONNECTION_TIMEOUT);
+    await waitForSettingsApplied(page, SETTINGS_TIMEOUT);
+    const uniqueMessage = `E2E reload test ${Date.now()}`;
+    await sendTextMessage(page, uniqueMessage);
+    await waitForAgentResponseEnhanced(page, { timeout: RESPONSE_TIMEOUT });
+
+    const history = page.locator('[data-testid="conversation-history"]');
+    await expect(history).toBeVisible();
+    await expect(history.locator(`text=${uniqueMessage}`).first()).toBeVisible({ timeout: 5000 });
+
+    await page.reload();
+    await establishConnectionViaText(page, CONNECTION_TIMEOUT);
+    await waitForSettingsApplied(page, SETTINGS_TIMEOUT);
+
+    const historyAfterReload = page.locator('[data-testid="conversation-history"]');
+    await expect(historyAfterReload).toBeVisible({ timeout: 10000 });
+    await expect(historyAfterReload.locator(`text=${uniqueMessage}`).first()).toBeVisible({ timeout: 5000 });
+  });
 });
