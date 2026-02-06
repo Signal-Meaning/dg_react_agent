@@ -65,6 +65,12 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             if (mockEnforceSessionBeforeContext && !sessionUpdatedSent) {
               protocolErrors.push(new Error('conversation.item.create received before session.updated was sent (protocol: context must follow session.updated)'));
             }
+            // OpenAI Realtime API: assistant messages must use content type output_text, not input_text
+            const role = msg.item?.role;
+            const content0 = msg.item?.content?.[0];
+            if (role === 'assistant' && content0?.type === 'input_text') {
+              protocolErrors.push(new Error("conversation.item.create for assistant must use content type 'output_text', got 'input_text' (OpenAI Realtime API)"));
+            }
             receivedConversationItems.push({ type: msg.type, item: msg.item });
             // Issue #388: proxy sends response.create only after conversation.item.added. Mock must send item.added for user messages.
             const isUserMessage = msg.item?.type === 'message' && msg.item?.role === 'user';
@@ -517,6 +523,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   it('injects agent.greeting as ConversationText and conversation.item.create after session.updated', (done) => {
     mockReceived.length = 0;
     receivedConversationItems.length = 0;
+    protocolErrors.length = 0;
     const greeting = 'Hello! How can I help you today?';
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
@@ -539,10 +546,13 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             (m) => m.item?.type === 'message' && m.item?.role === 'assistant'
           );
           expect(greetingItem).toBeDefined();
-          const textContent = greetingItem?.item && 'content' in greetingItem.item && Array.isArray(greetingItem.item.content)
-            ? greetingItem.item.content[0]?.text
+          const content0 = greetingItem?.item && 'content' in greetingItem.item && Array.isArray(greetingItem.item.content)
+            ? greetingItem.item.content[0]
             : undefined;
-          expect(textContent).toBe(greeting);
+          expect(content0?.text).toBe(greeting);
+          // OpenAI Realtime API: assistant messages must use output_text, not input_text
+          expect(content0).toHaveProperty('type', 'output_text');
+          expect(protocolErrors).toHaveLength(0);
           client.close();
           done();
         });

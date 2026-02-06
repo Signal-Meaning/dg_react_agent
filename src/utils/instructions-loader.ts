@@ -57,7 +57,14 @@ export async function loadInstructionsFromFile(filePath?: string): Promise<strin
     // Fallback to default instructions
     return getDefaultInstructions();
   } catch (error) {
-    console.warn('Failed to load instructions from file, using default:', error);
+    // Issue #410: browser gets calm message; sync loader (loadInstructionsFromFileSync) uses same pattern
+    const isBrowser = typeof window !== 'undefined';
+    const isFileReadError = error instanceof Error && error.message?.includes('File reading not supported');
+    if (isBrowser && isFileReadError) {
+      console.log('Using default instructions (file load not available in browser).');
+    } else {
+      console.warn('Failed to load instructions from file, using default:', error);
+    }
     return getDefaultInstructions();
   }
 }
@@ -149,7 +156,13 @@ export function loadInstructionsFromFileSync(filePath?: string): string {
     // Fallback to default instructions
     return getDefaultInstructions();
   } catch (error) {
-    console.warn('Failed to load instructions from file, using default:', error);
+    const isBrowser = typeof window !== 'undefined';
+    const isFileReadError = error instanceof Error && error.message?.includes('File reading not supported');
+    if (isBrowser && isFileReadError) {
+      console.log('Using default instructions (file load not available in browser).');
+    } else {
+      console.warn('Failed to load instructions from file, using default:', error);
+    }
     return getDefaultInstructions();
   }
 }

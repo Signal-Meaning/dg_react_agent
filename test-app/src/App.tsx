@@ -148,6 +148,9 @@ function App() {
   // Greeting status indicator for E2E tests
   const [greetingSent, setGreetingSent] = useState(false);
   const hasShownGreetingRef = useRef(false);
+  /** Avoid retry storm on text focus when backend is down: skip start() if we failed recently */
+  const lastAgentStartFailureRef = useRef<number>(0);
+  const AGENT_START_COOLDOWN_MS = 5000;
   
   // TTS mute state
   const [ttsMuted, setTtsMuted] = useState(false);
@@ -167,11 +170,13 @@ function App() {
     const connectionModeParam = urlParams?.get('connectionMode');
     const proxyEndpointParam = urlParams?.get('proxyEndpoint');
     const proxyAuthTokenParam = urlParams?.get('proxyAuthToken');
-    
+    // Default proxy URL: match page scheme (wss when https), use 127.0.0.1 to avoid IPv6 localhost issues
+    const defaultScheme = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const defaultProxyEndpoint = `${defaultScheme}://127.0.0.1:8080/openai`;
     return {
       // Default to proxy mode (direct mode is deprecated - only bug fixes, no new features)
       connectionMode: (connectionModeParam === 'direct' ? 'direct' : 'proxy') as 'direct' | 'proxy',
-      proxyEndpoint: proxyEndpointParam || import.meta.env.VITE_OPENAI_PROXY_ENDPOINT || import.meta.env.VITE_DEEPGRAM_PROXY_ENDPOINT || import.meta.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/openai',
+      proxyEndpoint: proxyEndpointParam || import.meta.env.VITE_OPENAI_PROXY_ENDPOINT || import.meta.env.VITE_DEEPGRAM_PROXY_ENDPOINT || import.meta.env.VITE_PROXY_ENDPOINT || defaultProxyEndpoint,
       proxyAuthToken: proxyAuthTokenParam || '',
     };
   }, []);
@@ -476,9 +481,8 @@ function App() {
   // Event handlers - memoized with useCallback
   const handleReady = useCallback((ready: boolean) => {
     setIsReady(ready);
-    addLog(`Component is ${ready ? 'ready' : 'not ready'}`);
-    // Note: Connections start lazily when needed (e.g., when microphone is activated)
-  }, [addLog]); // Depends on addLog
+    // Component logs ready state; no redundant addLog here
+  }, []);
 
   // Handle SettingsApplied event via callback (replaces getState() polling)
   const handleSettingsApplied = useCallback(() => {
@@ -487,9 +491,9 @@ function App() {
     if (!hasShownGreetingRef.current) {
       setGreetingSent(true);
       hasShownGreetingRef.current = true;
-      addLog('Greeting marked sent (SettingsApplied received via callback)');
+      // Component logs SettingsApplied; no redundant addLog here
     }
-  }, [addLog]);
+  }, []);
   
   const handleTranscriptUpdate = useCallback((transcript: TranscriptResponse) => {
     // Use the simplified top-level transcript field (normalized by component)
@@ -560,21 +564,21 @@ function App() {
   
   const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
     setAgentResponse(utterance.text);
-    addLog(`Agent said: ${utterance.text}`);
     setConversationForDisplay(deepgramRef.current?.getConversationHistory() ?? []);
-  }, [addLog]);
+    // Component logs agent output; no redundant addLog here
+  }, []);
   
   const handleUserMessage = useCallback((message: UserMessageResponse) => {
     setUserMessage(message.text);
-    addLog(`User message from server: ${message.text}`);
     setConversationForDisplay(deepgramRef.current?.getConversationHistory() ?? []);
-  }, [addLog]);
+    // Component logs user message echo; no redundant addLog here
+  }, []);
   
   const handleAgentStateChange = useCallback((state: AgentState) => {
     const prevState = agentState; // Capture previous state for comparison
     setAgentState(state);
     setIsSleeping(state === 'sleeping');
-    addLog(`Agent state changed: ${state}`); // General log
+    // Component logs state transitions; no redundant addLog here
     
     // Specific sleep cycle logging
     if (state === 'sleeping' && prevState !== 'sleeping') {
@@ -585,7 +589,7 @@ function App() {
       // This case might indicate an unnecessary update, but log it for now
       sleepLogApp(`State remained sleeping (received update).`);
     }
-  }, [addLog, sleepLogApp, agentState]); // Depends on addLog, sleepLogApp, and agentState
+  }, [sleepLogApp, agentState]);
 
   // Heuristic: mark greeting as sent when agent begins speaking before any user message has been sent
   useEffect(() => {
@@ -617,30 +621,30 @@ function App() {
       addLog('⚠️ [BUG DETECTED] Audio playing while muted - Issue #223!');
     }
     
-    if (isPlaying) {
-      addLog('Audio playback: started');
-    } else {
-      addLog('Audio playback: stopped - Agent playback completed');
-    }
-  }, [addLog, ttsMuted]); // Include ttsMuted in dependencies
+    // Component logs playback state; no redundant addLog for started/stopped
+  }, [ttsMuted]);
   
   const handleConnectionStateChange = useCallback((service: ServiceType, state: ConnectionState) => {
     setConnectionStates(prev => ({
       ...prev,
       [service]: state
     }));
-    addLog(`${service} connection state: ${state}`);
+    // Component logs connection state; no redundant addLog here
     // Reset hasSentSettings mirror on agent disconnect/stop for clean reconnect assertions
     if (service === 'agent' && state === 'closed') {
       setHasSentSettingsDom(false);
     }
     // Connection states are now tracked via DOM elements (data-testid attributes)
     // Tests can read connection state directly from the DOM without callbacks
-  }, [addLog]); // Depends on addLog
+  }, []);
   
   const handleError = useCallback((error: DeepgramError) => {
     addLog(`Error (${error.service}): ${error.message}`);
-    console.error('Deepgram error:', error);
+    // Skip console.error for connection failures to avoid duplicate noise (browser already logs WebSocket failure)
+    const isConnectionError = error.code === 'websocket_error' || (error.message?.toLowerCase().includes('connection') ?? false);
+    if (!isConnectionError) {
+      console.error(`Error (${error.service}):`, error);
+    }
   }, [addLog]); // Depends on addLog
 
   // VAD event handlers - clearly marked by source
@@ -755,14 +759,14 @@ function App() {
         return;
       }
       
-      // Send text message to real Deepgram agent
+      // Send text message to agent
       addLog(`Sending text message: ${textInput}`);
       setUserMessage(textInput);
       
       const messageToSend = textInput;
       if (deepgramRef.current) {
         await deepgramRef.current.injectUserMessage(messageToSend);
-        addLog('Text message sent to Deepgram agent');
+        // Component logs send success; no redundant addLog here
         // Sync from ref (component appends on server echo; optimistic update so UI shows message immediately)
         setConversationForDisplay(prev => {
           const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
@@ -783,9 +787,8 @@ function App() {
 
   const handleAgentSpeaking = useCallback(() => {
     // Note: agentSpeaking state is updated by handlePlaybackStateChange when playback actually starts
-    // This callback only logs - state management is handled by onPlaybackStateChange
-    addLog('Agent started speaking');
-  }, [addLog]);
+    // Component logs playback/state; no redundant addLog here
+  }, []);
 
   // Control functions
   const startInteraction = async () => {
@@ -813,23 +816,18 @@ function App() {
   // (removed unused interruptAgent helper)
   
   // Toggle mute button - simple switch: click to mute, click again to unmute
+  // Issue #410: Do not call ref methods inside setState updater (causes "Cannot update component while rendering another")
   const handleMuteToggle = useCallback(() => {
-    setTtsMuted(prevMuted => {
-      const newMuted = !prevMuted;
-      if (newMuted) {
-        addLog('🔇 Agent audio blocked');
-        if (deepgramRef.current) {
-          deepgramRef.current.interruptAgent();
-        }
-      } else {
-        addLog('🔊 Agent audio allowed');
-        if (deepgramRef.current) {
-          deepgramRef.current.allowAgent();
-        }
-      }
-      return newMuted;
-    });
-  }, [addLog]);
+    const nextMuted = !ttsMuted;
+    setTtsMuted(nextMuted);
+    if (nextMuted) {
+      addLog('🔇 Agent audio blocked');
+      if (deepgramRef.current) deepgramRef.current.interruptAgent();
+    } else {
+      addLog('🔊 Agent audio allowed');
+      if (deepgramRef.current) deepgramRef.current.allowAgent();
+    }
+  }, [addLog, ttsMuted]);
   
   const updateContext = () => {
     // Define the possible instruction prompts
@@ -1435,14 +1433,33 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
 
               // Ensure agent connection is started on user gesture (gate start behind focus)
               // Per issue #206: text input focus should start only agent service
-              try {
-                const isConnected = connectionStates.agent === 'connected';
-                if (!isConnected) {
+              const isConnected = connectionStates.agent === 'connected';
+              const now = Date.now();
+              const recentlyFailed = (now - lastAgentStartFailureRef.current) < AGENT_START_COOLDOWN_MS;
+              if (isConnected) {
+                // already connected, nothing to do
+              } else if (connectionStates.agent === 'connecting') {
+                // attempt already in progress
+              } else if (!isConnected && (connectionStates.agent === 'error' || connectionStates.agent === 'closed') && recentlyFailed) {
+                const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+                addLog(isHttps
+                  ? 'Agent connection unavailable. Start the backend with HTTPS=true (cd test-app && HTTPS=true npm run backend) and try again.'
+                  : 'Agent connection unavailable. Start the backend (e.g. cd test-app && npm run backend) and try again.');
+              } else {
+                try {
                   addLog('Starting agent connection on text focus gesture');
                   await deepgramRef.current?.start?.({ agent: true, transcription: false });
+                } catch (e) {
+                  lastAgentStartFailureRef.current = now;
+                  const msg = e instanceof Error ? e.message : String(e);
+                  const isConnectionFailure = msg.includes('WebSocket') || msg.includes('connection');
+                  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+                  addLog(isConnectionFailure
+                    ? (isHttps
+                      ? 'Could not connect to agent. Start the backend with HTTPS=true (cd test-app && HTTPS=true npm run backend) so wss:// matches this page.'
+                      : 'Could not connect to agent. Start the backend (e.g. cd test-app && npm run backend) and focus again.')
+                    : `⚠️ Failed to start agent on focus: ${msg}`);
                 }
-              } catch (e) {
-                addLog(`⚠️ Failed to start agent on focus: ${e instanceof Error ? e.message : String(e)}`);
               }
             }}
             onKeyDown={(e) => {

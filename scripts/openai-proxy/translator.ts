@@ -38,20 +38,27 @@ export interface ComponentInjectUserMessage {
   content: string;
 }
 
+/** OpenAI Realtime API: user message content uses input_text, assistant uses output_text (API rejects input_text for assistant). */
+export type OpenAIMessageContentItem =
+  | { type: 'input_text'; text: string }
+  | { type: 'output_text'; text: string };
+
 /** OpenAI client event: conversation.item.create (user or assistant message) */
 export interface OpenAIConversationItemCreate {
   type: 'conversation.item.create';
-  item: { type: 'message'; role: 'user' | 'assistant'; content: Array<{ type: 'input_text'; text: string }> };
+  item: { type: 'message'; role: 'user' | 'assistant'; content: Array<OpenAIMessageContentItem> };
 }
 
 /**
  * Map a component context message (History item) → OpenAI conversation.item.create.
  * OpenAI does not send context in session.update; context is populated via conversation.item.create.
+ * Per OpenAI Realtime API: user messages use content type input_text; assistant messages use output_text.
  */
 export function mapContextMessageToConversationItemCreate(role: 'user' | 'assistant', content: string): OpenAIConversationItemCreate {
+  const contentType = role === 'user' ? 'input_text' : 'output_text';
   return {
     type: 'conversation.item.create',
-    item: { type: 'message', role, content: [{ type: 'input_text', text: content ?? '' }] },
+    item: { type: 'message', role, content: [{ type: contentType, text: content ?? '' }] },
   };
 }
 
