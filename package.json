@@ -98,6 +98,7 @@
     "rollup-plugin-raw": "^0.0.1",
     "rollup-plugin-terser": "^7.0.2",
     "selfsigned": "^2.4.1",
+    "speaker": "^0.5.4",
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.6",

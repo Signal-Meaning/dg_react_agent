@@ -76,4 +76,6 @@ npx tsx scripts/openai-proxy/cli.ts --text-only --text "Hi"
 npx tsx scripts/openai-proxy/cli.ts --help
 ```
 
+**Audio playback (omit `--text-only`):** The CLI streams agent TTS to your system speaker using the `speaker` package (PCM 24 kHz mono 16-bit from the OpenAI Realtime API). If `speaker` is not available (e.g. missing system audio libraries), the CLI falls back to text-only and prints a short message to stderr.
+
 - **Integration tests**: `npm test -- tests/integration/openai-proxy-cli.test.ts`

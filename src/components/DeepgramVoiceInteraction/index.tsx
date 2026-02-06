@@ -17,6 +17,8 @@ import {
 } from '../../types';
 import { WebSocketManager, WebSocketEvent } from '../../utils/websocket/WebSocketManager';
 import { AudioManager, AudioEvent } from '../../utils/audio/AudioManager';
+import type { IAudioPlaybackSink } from '../../utils/audio/AudioPlaybackSink';
+import { WebAudioPlaybackSink } from '../../utils/audio/WebAudioPlaybackSink';
 import {
   VoiceInteractionState,
   initialState,
@@ -263,7 +265,8 @@ function DeepgramVoiceInteraction(
   const transcriptionManagerRef = useRef<WebSocketManager | null>(null);
   const agentManagerRef = useRef<WebSocketManager | null>(null);
   const audioManagerRef = useRef<AudioManager | null>(null);
-  
+  const agentAudioSinkRef = useRef<IAudioPlaybackSink | null>(null);
+
   // Guard to prevent race conditions between explicit stop() and connection close handler
   // Fix for issue #239: Prevents double-stopping audio when both paths try to stop
   const isStoppingAudioRef = useRef<boolean>(false);
@@ -1227,6 +1230,7 @@ function DeepgramVoiceInteraction(
         if (audioManagerRef.current) {
           audioManagerRef.current.dispose();
           audioManagerRef.current = null;
+          agentAudioSinkRef.current = null;
         }
         
         // Reset state only on true unmount
@@ -2661,15 +2665,17 @@ function DeepgramVoiceInteraction(
       }
     }
     
-    log('Passing buffer to AudioManager.queueAudio()');
+    log('Passing buffer to playback sink (AudioManager.queueAudio)');
     if (props.debug) console.log('🎵 [AUDIO] Audio context state:', audioManagerRef.current?.getAudioContext?.()?.state);
-    audioManagerRef.current!.queueAudio(data)
-      .then(() => {
-        log('Successfully queued audio buffer for playback');
-      })
-      .catch((error: Error) => {
-        log('Error queueing audio:', error);
-      });
+    const sink = agentAudioSinkRef.current ?? (audioManagerRef.current ? new WebAudioPlaybackSink(audioManagerRef.current) : null);
+    if (sink) {
+      if (!agentAudioSinkRef.current) agentAudioSinkRef.current = sink;
+      sink.write(data);
+    } else if (audioManagerRef.current) {
+      audioManagerRef.current.queueAudio(data)
+        .then(() => log('Successfully queued audio buffer for playback'))
+        .catch((error: Error) => log('Error queueing audio:', error));
+    }
   };
 
   // Send audio data to WebSockets - conditionally route based on configuration
@@ -3364,6 +3370,7 @@ function DeepgramVoiceInteraction(
 
     // Initialize AudioManager
     await audioManagerRef.current.initialize();
+    agentAudioSinkRef.current = new WebAudioPlaybackSink(audioManagerRef.current);
     log('AudioManager initialized');
   };
 

@@ -111,4 +111,42 @@ describe('OpenAI proxy CLI (Issue #414)', () => {
     expect(code).toBe(0);
     expect(stdout + stderr).toMatch(/usage|Usage|--help|--url|--text/);
   }, 5000);
+
+  it('when not --text-only, receives response.output_audio.delta/done and still prints agent text', async () => {
+    // Server that sends OpenAI-style audio events then ConversationText (as real proxy would)
+    const server = http.createServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    const wss = new WebSocketServer({ server, path: '/openai' });
+    wss.on('connection', (socket: import('ws')) => {
+      socket.on('message', (data: Buffer) => {
+        try {
+          const msg = JSON.parse(data.toString()) as { type?: string; content?: string };
+          if (msg.type === 'Settings') {
+            socket.send(JSON.stringify({ type: 'SettingsApplied' }));
+          }
+          if (msg.type === 'InjectUserMessage') {
+            socket.send(JSON.stringify({ type: 'ConversationText', role: 'user', content: msg.content ?? '' }));
+            // Send fake PCM chunk (base64) and done, then transcript (OpenAI proxy forwards these)
+            const fakePcm = Buffer.alloc(320, 0).toString('base64'); // 10ms at 16kHz mono 16-bit
+            socket.send(JSON.stringify({ type: 'response.output_audio.delta', delta: fakePcm }));
+            socket.send(JSON.stringify({ type: 'response.output_audio.done' }));
+            socket.send(JSON.stringify({ type: 'ConversationText', role: 'assistant', content: 'Heard you.' }));
+          }
+        } catch {
+          // ignore
+        }
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, r));
+    const port = (server.address() as { port: number }).port;
+    const url = `ws://127.0.0.1:${port}/openai`;
+    const { stdout, code } = await runCli(['--url', url, '--text', 'hi']);
+
+    expect(code).toBe(0);
+    expect(stdout).toContain('Heard you.');
+    wss.close();
+    await new Promise<void>((r) => server.close(r));
+  }, 15000);
 });

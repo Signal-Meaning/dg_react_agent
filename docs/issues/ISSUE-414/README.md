@@ -50,9 +50,11 @@ Add or extend a script that integrates with the OpenAI proxy to send command-lin
 - **Docs:** `scripts/openai-proxy/README.md` – "CLI (Issue #414)" section: how to run backend then CLI, examples, `npm run openai-proxy:cli`.
 - **npm script:** `openai-proxy:cli` in `package.json` for `npm run openai-proxy:cli -- --text "..."`.
 
-### Remaining
+### Audio playback (done)
 
-- Optional: play agent TTS audio when not `--text-only` (e.g. write to temp file and play with system player, or stream to speaker). Current implementation is text-only; playback can be added later.
+- When not using `--text-only`, the CLI streams agent TTS to the system speaker via the **speaker** package (Node writable stream). It handles `response.output_audio.delta` (base64 PCM) and `response.output_audio.done`; PCM is 24 kHz mono 16-bit per the OpenAI Realtime API. If `speaker` is unavailable, the CLI falls back to text-only and logs to stderr.
+- **Why a different lib than the test-app?** The test-app (and component) use the **Web Audio API** (`AudioContext`, `createAudioBuffer` / `playAudioBuffer` in `src/utils/audio/`) in the browser. The CLI runs in **Node.js**, where there is no `AudioContext`; the **speaker** package is the Node equivalent for streaming PCM to the system output. Same format (PCM 24 kHz 16-bit), different environment.
+- **Dependency:** `speaker` in devDependencies (optional at runtime: CLI still works with `--text-only` if speaker fails to load).
 
 ---
 
