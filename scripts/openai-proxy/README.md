@@ -24,16 +24,23 @@
 
 ## Running the proxy (E2E)
 
-Run the proxy from the **project root** (the repo root where `package.json` and `node_modules` are). `npm run openai-proxy` runs from there by default.
+**Canonical:** Run the **test-app backend** (one server for both Deepgram and OpenAI proxies):
 
-1. Start the proxy (requires `OPENAI_API_KEY` in `.env`, `test-app/.env`, or the environment):
-   ```bash
-   npm run openai-proxy
-   ```
-   The script loads `.env` from the project root and `test-app/.env`, so you can put `OPENAI_API_KEY=sk-...` in either file. Listens on `http://localhost:8080/openai` by default. Use `OPENAI_PROXY_PORT` and `OPENAI_REALTIME_URL` to override.  
-   To see client/upstream activity, run with `OPENAI_PROXY_DEBUG=1` (e.g. `OPENAI_PROXY_DEBUG=1 npm run openai-proxy`). When debug is on, the proxy uses **OpenTelemetry** logging (`scripts/openai-proxy/logger.ts`): each log is an OTel LogRecord with `SeverityNumber`, `body`, and attributes (`connection_id`, `direction`, `message_type`, `error.code`, etc.) so logs can be correlated per connection and exported to OTLP/collectors. If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
+```bash
+cd test-app && npm run backend
+```
 
-2. Run OpenAI proxy E2E tests (test-app must be served; Playwright starts it via `webServer`):
+That starts the backend server which hosts `/openai` (and `/deepgram-proxy`). The OpenAI proxy logic in this directory is used by that backend (e.g. via subprocess or in-process). Do not run a separate OpenAI-only process from the repo root for normal test-app usage.
+
+**Standalone (optional):** For integration tests or when you need only the OpenAI proxy on its own HTTP server, from the **project root**:
+
+```bash
+npx tsx scripts/openai-proxy/run.ts
+```
+
+Requires `OPENAI_API_KEY` in `.env`, `test-app/.env`, or the environment. The script loads `.env` from the project root and `test-app/.env`. Listens on `http://localhost:8080/openai` by default. Use `OPENAI_PROXY_PORT` and `OPENAI_REALTIME_URL` to override. To see client/upstream activity, run with `OPENAI_PROXY_DEBUG=1`. When debug is on, the proxy uses **OpenTelemetry** logging (`scripts/openai-proxy/logger.ts`). If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
+
+Run OpenAI proxy E2E tests (test-app must be served; Playwright starts it via `webServer`):
    ```bash
    VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npm run test:e2e -- openai-proxy-e2e
    ```

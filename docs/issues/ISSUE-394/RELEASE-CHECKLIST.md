@@ -11,7 +11,7 @@
 - [x] **Tests passing**
   - [x] Run: `npm test` — all pass (use `CI=true npm test` to match CI; excludes e2e-helpers-scheme which needs --experimental-vm-modules)
   - [x] **E2E in proxy mode** — **Skipped for this release (authorized).** No code changes in v0.7.13; E2E will run in CI/CD workflow only.
-    - [x] ~~Start proxy: `npm run test:proxy:server` (from `test-app/`)~~ — skipped
+    - [x] ~~Start backend: `cd test-app && npm run backend`~~ — skipped
     - [x] ~~Run: `E2E_USE_HTTP=1 USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e` (from `test-app`)~~ — skipped
     - [x] ~~Confirm **0 failures**.~~ — rely on CI
     - **OpenAI proxy E2E:** run in CI or locally when needed; see `test-app/tests/e2e/README.md`.

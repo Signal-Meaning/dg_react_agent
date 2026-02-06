@@ -734,7 +734,7 @@ test.describe('Dual Channel - Text and Microphone', () => {
     }, PROXY_ENDPOINT);
     
     if (!proxyRunning) {
-      test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run test:proxy:server`);
+      test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run backend`);
       return;
     }
     

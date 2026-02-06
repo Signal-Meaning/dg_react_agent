@@ -8,11 +8,11 @@
  *
  * Run from the project root (repo root where package.json and node_modules are).
  *
- * Usage:
- *   npm run openai-proxy   (loads OPENAI_API_KEY from .env or test-app/.env)
- *   OPENAI_API_KEY=sk-... npm run openai-proxy
- *   OPENAI_PROXY_PORT=9090 npm run openai-proxy
- *   HTTPS=true npm run openai-proxy   (serve over https:// with self-signed cert)
+ * Usage (standalone; for test-app use "cd test-app && npm run backend" instead):
+ *   npx tsx scripts/openai-proxy/run.ts   (loads OPENAI_API_KEY from .env or test-app/.env)
+ *   OPENAI_API_KEY=sk-... npx tsx scripts/openai-proxy/run.ts
+ *   OPENAI_PROXY_PORT=9090 npx tsx scripts/openai-proxy/run.ts
+ *   HTTPS=true npx tsx scripts/openai-proxy/run.ts   (serve over https:// with self-signed cert)
  *
  * Then run E2E with:
  *   VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npm run test:e2e -- openai-proxy-e2e

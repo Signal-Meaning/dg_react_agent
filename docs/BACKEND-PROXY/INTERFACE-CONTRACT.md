@@ -143,11 +143,11 @@ const deepgramWs = new WebSocket(deepgramUrl, ['token', apiKey]);
 
 ## Testing
 
-Use the mock proxy server in `test-app/scripts/mock-proxy-server.js` as a reference implementation:
+Use the backend server in `test-app/scripts/backend-server.js` as a reference implementation:
 
 ```bash
 cd test-app
-npm run test:proxy:server
+npm run backend
 ```
 
 This provides a working example of the interface contract.

@@ -9,7 +9,7 @@
 - [x] **Tests passing**
   - [x] Run: `npm test` — passed
   - [x] **E2E in proxy mode** (OpenAI proxy is the default; release must validate proxy support):
-    - [x] Start proxy: `npm run test:proxy:server` (from `test-app/`) — ensure port 8080 is free (e.g. stop OpenAI proxy if running)
+    - [x] Start backend: `cd test-app && npm run backend` — ensure port 8080 is free
     - [x] Run: `E2E_USE_HTTP=1 USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e` (from `test-app`)
     - [x] Confirm **0 failures** (210 passed, 24 skipped). Deepgram-only specs skip when OpenAI proxy; see `test-app/tests/e2e/README.md` (Backend matrix).
     - **OpenAI proxy E2E:** All 9 tests in `openai-proxy-e2e.spec.js` now pass (proxy path-routing fix). Run: `E2E_USE_HTTP=1 USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js` (from `test-app`).

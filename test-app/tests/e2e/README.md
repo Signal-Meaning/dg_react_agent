@@ -65,7 +65,7 @@ npx playwright test --grep "Microphone"     # All microphone tests
 Only **`E2E_USE_EXISTING_SERVER`** controls whether Playwright starts them:
 
 - **`E2E_USE_EXISTING_SERVER=1`** (or `true`): Playwright does **not** start the dev server or the proxy. It runs `globalSetup`, which checks that the app is reachable (and, when `USE_PROXY_MODE` is set, that the proxy is reachable). You must start the server(s) yourself before running tests.
-- **Otherwise**: Playwright starts both (`npm run dev` and `npm run test:proxy:server`), waits for them to be ready, then runs tests.
+- **Otherwise**: Playwright starts both (`npm run dev` and `npm run backend`), waits for them to be ready, then runs tests.
 
 **`USE_PROXY_MODE`** is separate: it only controls whether the Deepgram setup uses the proxy (and, when using existing server, whether globalSetup also checks that the proxy is reachable). It does **not** control whether Playwright starts the servers.
 
@@ -85,7 +85,7 @@ If you already run the test-app dev server (e.g. `npm run dev` in test-app), Pla
    ```
    For proxy-mode tests, also start the proxy (in another terminal). The proxy must use the same scheme as the app: if `HTTPS=true` in `.env`, the proxy serves **wss** and the app will connect to `wss://localhost:8080/openai`. If the proxy is not running when you use `E2E_USE_EXISTING_SERVER=1` and `USE_PROXY_MODE=true`, globalSetup will fail with a clear "proxy not reachable" message.
    ```bash
-   cd test-app && npm run test:proxy:server
+   cd test-app && npm run backend
    ```
 2. Run Playwright with `E2E_USE_EXISTING_SERVER=1` so it does not start the webServer:
    ```bash
@@ -115,12 +115,12 @@ If the app uses **HTTPS** (e.g. `HTTPS=true` in test-app/.env), set the base URL
 
 1. **Single source of truth:** Use **one** value for HTTPS for the whole run. Set `HTTPS=true` (or `1`) in `test-app/.env` so that:
    - The **dev server** (Vite) serves the app over HTTPS.
-   - The **proxy** (`npm run test:proxy:server`) loads `.env` and serves **wss** on 8080 when started from `test-app`.
+   - The **proxy** (`npm run backend`) loads `.env` and serves **wss** on 8080 when started from `test-app`.
    - The **E2E helpers** (`test-helpers.mjs`) read `process.env.HTTPS` and build proxy URLs with **wss** when HTTPS is true.
 
 2. **Start the proxy from test-app** so it loads `.env`:
    ```bash
-   cd test-app && npm run test:proxy:server
+   cd test-app && npm run backend
    ```
    If you start the proxy from elsewhere or with different env, scheme can diverge (e.g. proxy on ws, app on https → connection fails).
 
@@ -198,7 +198,7 @@ Use these in order; each gives a LOC (this README) and the exact command(s).
    **Commands:**  
    Terminal 1 (from `test-app`):
    ```bash
-   npm run test:proxy:server 2>&1 | tee /tmp/proxy.log
+   npm run backend 2>&1 | tee /tmp/proxy.log
    ```
    Terminal 2 (from `test-app`):
    ```bash

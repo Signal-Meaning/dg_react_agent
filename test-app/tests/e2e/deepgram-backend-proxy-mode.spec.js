@@ -5,7 +5,7 @@
  * These tests work in both direct and proxy modes based on environment configuration.
  * 
  * To run in proxy mode:
- *   1. Start mock proxy server: npm run test:proxy:server
+ *   1. Start mock proxy server: npm run backend
  *   2. Set USE_PROXY_MODE=true: USE_PROXY_MODE=true npm run test:e2e
  * 
  * To run in direct mode:
@@ -47,7 +47,7 @@ test.describe('Backend Proxy Mode', () => {
       
       // Verify proxy server is running before proceeding with tests
       // Reason: Tests require proxy server to be running to validate proxy functionality
-      // Action: Start proxy server with: npm run test:proxy:server
+      // Action: Start proxy server with: npm run backend
       // Use page.evaluate to check from browser context (WebSocket is available there)
       const proxyRunning = await page.evaluate(async (endpoint) => {
         return new Promise((resolve) => {
@@ -76,7 +76,7 @@ test.describe('Backend Proxy Mode', () => {
       }, PROXY_ENDPOINT);
       
       if (!proxyRunning) {
-        test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run test:proxy:server`);
+        test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run backend`);
         return;
       }
     }

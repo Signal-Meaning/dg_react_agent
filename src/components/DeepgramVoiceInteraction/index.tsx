@@ -13,6 +13,7 @@ import {
   FunctionCallResponse,
   ConnectionState,
   ConversationMessage,
+  ServiceType,
 } from '../../types';
 import { WebSocketManager, WebSocketEvent } from '../../utils/websocket/WebSocketManager';
 import { AudioManager, AudioEvent } from '../../utils/audio/AudioManager';
@@ -2681,10 +2682,11 @@ function DeepgramVoiceInteraction(
     }
     
     // Send to transcription service if configured and connected
-    const transcriptionState = transcriptionManagerRef.current?.getState();
-      if (transcriptionState === 'connected') {
+    const transcriptionManager = transcriptionManagerRef.current;
+    const transcriptionState = transcriptionManager?.getState();
+      if (transcriptionState === 'connected' && transcriptionManager) {
         if (props.debug) console.log('🎵 [TRANSCRIPTION] Sending audio data to transcription service for VAD events');
-        transcriptionManagerRef.current.sendBinary(data);
+        transcriptionManager.sendBinary(data);
       } else {
         if (props.debug) console.log('🎵 [TRANSCRIPTION] Transcription service not connected, state:', transcriptionState);
       }
@@ -2871,13 +2873,26 @@ function DeepgramVoiceInteraction(
       log('Start method completed successfully');
     } catch (error) {
       log('Error within start method:', error);
+      // Report the service that actually failed (agent vs transcription) so logs and UX are correct
+      const errStr = error instanceof Error ? error.message : String(error);
+      const config = configRef.current;
+      const wantedAgent = options !== undefined ? (options.agent === true) : !!config.agentOptions;
+      const wantedTranscription = options !== undefined ? (options.transcription === true) : !!config.transcriptionOptions;
+      const failedService: ServiceType =
+        errStr.includes('agent') ? 'agent'
+        : errStr.includes('transcription') ? 'transcription'
+        : wantedAgent && !wantedTranscription ? 'agent'
+        : wantedTranscription ? 'transcription'
+        : 'agent';
       handleError({
-        service: 'transcription',
+        service: failedService,
         code: 'start_error',
         message: 'Failed to start voice interaction',
         details: error,
       });
-      dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
+      // Keep component "ready" on connection failure so user can retry (e.g. start backend and focus again)
+      // Only internal/configuration errors should flip ready to false; connection errors are often transient
+      // dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
       throw error;
     }
   };

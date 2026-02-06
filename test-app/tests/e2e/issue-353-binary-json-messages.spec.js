@@ -10,13 +10,13 @@
  * because ArrayBuffer works fine in jsdom. Blob tests require real browser APIs, so they're here.
  * 
  * To run:
- *   1. Start mock proxy server: npm run test:proxy:server
+ *   1. Start mock proxy server: npm run backend
  *   2. Run test: USE_PROXY_MODE=true npm run test:e2e -- issue-353-binary-json-messages
  * 
  * Requirements:
  * - Real Deepgram API key (VITE_DEEPGRAM_API_KEY)
  * - Real OpenAI API key (VITE_OPENAI_API_KEY) for think provider
- * - Proxy server running (npm run test:proxy:server)
+ * - Proxy server running (npm run backend)
  */
 
 import { test, expect } from '@playwright/test';
@@ -69,7 +69,7 @@ test.describe('Issue #353: Binary JSON Message Handling', () => {
     }, PROXY_ENDPOINT);
     
     if (!proxyRunning) {
-      test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run test:proxy:server`);
+      test.skip(true, `Proxy server is not running at ${PROXY_ENDPOINT}. Start it with: npm run backend`);
       return;
     }
     

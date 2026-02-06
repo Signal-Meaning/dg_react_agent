@@ -24,7 +24,7 @@ The proxy translates between the **component protocol** (e.g. Settings, InjectUs
 |------|--------|
 | **`scripts/openai-proxy/server.ts`** | WebSocket server: accepts component protocol, translates to OpenAI client events, forwards to upstream, translates upstream events back to component. Handles **event ordering**: on `InjectUserMessage` it sends `conversation.item.create` to upstream and sends `response.create` **only after** upstream sends `conversation.item.added` or `conversation.item.done` (required by the OpenAI API so the connection stays open). Also handles binary audio (e.g. `input_audio_buffer.append`), greeting injection after session.updated, and FunctionCallRequest/FunctionCallResponse mapping. |
 | **`scripts/openai-proxy/translator.ts`** | Pure mapping functions: component messages ↔ OpenAI Realtime events (e.g. Settings → session.update, InjectUserMessage → conversation.item.create, response.output_text.done → ConversationText, response.function_call_arguments.done → FunctionCallRequest). |
-| **`scripts/openai-proxy/run.ts`** | Entry point to run the proxy (loads env, starts HTTP server, attaches WebSocket at a path). Use `npm run openai-proxy` from the package root. |
+| **`scripts/openai-proxy/run.ts`** | Standalone entry to run the OpenAI proxy (loads env, starts HTTP server, attaches WebSocket at a path). Canonical run: `cd test-app && npm run backend` (single backend hosts both proxies). |
 | **`scripts/openai-proxy/logger.ts`** | Optional OpenTelemetry-style logging when `OPENAI_PROXY_DEBUG=1`. |
 | **`scripts/openai-proxy/README.md`** | Translator exports, server behavior, and how to run the proxy. |
 
@@ -38,7 +38,7 @@ For Deepgram-backed flows, the test-app includes a **mock proxy server** that fo
 
 | Location | Purpose |
 |----------|--------|
-| **`test-app/scripts/mock-proxy-server.js`** | Single server that can expose `/deepgram-proxy` (Deepgram) and/or `/openai` (forwards to the OpenAI proxy subprocess). Used for E2E and local testing. |
+| **`test-app/scripts/backend-server.js`** | Single backend server that exposes `/deepgram-proxy` (Deepgram pass-through) and `/openai` (forwards to OpenAI proxy subprocess). Run: `cd test-app && npm run backend`. |
 | **`test-app/docs/PROXY-SERVER.md`** | Design, operation, and usage of the mock proxy server. |
 
 ---

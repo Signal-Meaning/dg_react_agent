@@ -1,21 +1,21 @@
 /**
- * Mock Backend Proxy Server - Issue #242, #381
+ * Backend server for test-app - Issue #242, #381
  *
- * Single WebSocket proxy server for E2E testing. Hosts one or both:
- *   - /deepgram-proxy: proxies to Deepgram (when DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY present)
- *   - /openai: proxies to OpenAI Realtime via subprocess (when OPENAI_API_KEY present)
+ * Single HTTP(S) server that hosts both proxy endpoints (and can host function endpoints for testing):
+ *   - /deepgram-proxy: pass-through to Deepgram Voice Agent (and optionally transcription) API
+ *   - /openai: OpenAI Realtime translation proxy (spawns scripts/openai-proxy/run.ts; no duplicate proxy logic)
+ *
+ * One implementation per proxy (DRY). See docs/BACKEND-PROXY/ARCHITECTURE.md.
  *
  * At least one of DEEPGRAM_API_KEY or OPENAI_API_KEY must be set.
  *
- * Usage:
- *   node test-app/scripts/mock-proxy-server.js
- *   or
- *   npm run test:proxy:server
+ * Usage (canonical):
+ *   cd test-app && npm run backend
  *
- * Environment Variables (from test-app/.env when run via npm run test:proxy:server):
+ * Environment Variables (from test-app/.env):
  *   - DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY: Deepgram API key (optional if OPENAI_API_KEY set)
  *   - OPENAI_API_KEY: OpenAI API key for /openai (optional if Deepgram key set)
- *   - PROXY_PORT: Port to run proxy on (default: 8080)
+ *   - PROXY_PORT: Port to run on (default: 8080)
  *   - PROXY_PATH: Deepgram WebSocket path (default: /deepgram-proxy)
  */
 
@@ -29,7 +29,7 @@ import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
-// Load test-app/.env so VITE_DEEPGRAM_API_KEY (and DEEPGRAM_API_KEY) are available when run via npm run test:proxy:server
+// Load test-app/.env so VITE_DEEPGRAM_API_KEY (and DEEPGRAM_API_KEY) are available when run via npm run backend
 // Skip when SKIP_DOTENV=1 (used by integration tests to assert "at least one key required")
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 if (process.env.SKIP_DOTENV !== '1') {
@@ -280,7 +280,7 @@ if (hasDeepgram) {
   }
 });
 
-console.log(`🚀 Mock Backend Proxy Server starting...`);
+console.log(`🚀 Backend server starting...`);
 if (hasDeepgram) {
   console.log(`   Deepgram: ${wsScheme}://localhost:${PROXY_PORT}${PROXY_PATH} → ${DEEPGRAM_AGENT_URL}`);
   console.log(`   API Key: ${DEEPGRAM_API_KEY.substring(0, 8)}...`);
@@ -752,7 +752,7 @@ async function attachOpenAIForwarder() {
     }
   });
   server.listen(PROXY_PORT, () => {
-    console.log(`✅ Mock Backend Proxy Server running on port ${PROXY_PORT}`);
+    console.log(`✅ Backend server running on port ${PROXY_PORT}`);
     if (hasDeepgram) {
       console.log(`   Deepgram: ${wsScheme}://localhost:${PROXY_PORT}${PROXY_PATH}`);
     }
