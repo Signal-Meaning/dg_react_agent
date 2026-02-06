@@ -467,13 +467,15 @@ function DeepgramVoiceInteraction(
       // Debug-level logging - can occur during idle disconnects when server timeout fires
       log('⚠️ [Agent] CLIENT_MESSAGE_TIMEOUT (may occur during idle disconnects):', error);
     } else {
-      // Error-level logging for unexpected errors
-      console.log('🚨 [ERROR] Deepgram error received:', error);
-      console.log('🚨 [ERROR] Error service:', error.service);
-      console.log('🚨 [ERROR] Error code:', error.code);
-      console.log('🚨 [ERROR] Error message:', error.message);
-      console.log('🚨 [ERROR] Error details:', error.details);
       log('Error:', error);
+      // Verbose error dump only when debug is enabled to avoid console spam (e.g. connection failures)
+      if (props.debug) {
+        console.log(`🚨 [ERROR] Error (${error.service}):`, error);
+        console.log('🚨 [ERROR] Error service:', error.service);
+        console.log('🚨 [ERROR] Error code:', error.code);
+        console.log('🚨 [ERROR] Error message:', error.message);
+        console.log('🚨 [ERROR] Error details:', error.details);
+      }
     }
     
     dispatch({ type: 'ERROR', message: error.message });
@@ -2873,26 +2875,28 @@ function DeepgramVoiceInteraction(
       log('Start method completed successfully');
     } catch (error) {
       log('Error within start method:', error);
-      // Report the service that actually failed (agent vs transcription) so logs and UX are correct
       const errStr = error instanceof Error ? error.message : String(error);
-      const config = configRef.current;
-      const wantedAgent = options !== undefined ? (options.agent === true) : !!config.agentOptions;
-      const wantedTranscription = options !== undefined ? (options.transcription === true) : !!config.transcriptionOptions;
-      const failedService: ServiceType =
-        errStr.includes('agent') ? 'agent'
-        : errStr.includes('transcription') ? 'transcription'
-        : wantedAgent && !wantedTranscription ? 'agent'
-        : wantedTranscription ? 'transcription'
-        : 'agent';
-      handleError({
-        service: failedService,
-        code: 'start_error',
-        message: 'Failed to start voice interaction',
-        details: error,
-      });
+      // WebSocketManager already emits an error event (websocket_error) when connect() fails;
+      // skip duplicate handleError here to avoid double-reporting the same failure to the host
+      const isConnectionError = errStr.includes('WebSocket connection error') || errStr.includes('WebSocket');
+      if (!isConnectionError) {
+        const config = configRef.current;
+        const wantedAgent = options !== undefined ? (options.agent === true) : !!config.agentOptions;
+        const wantedTranscription = options !== undefined ? (options.transcription === true) : !!config.transcriptionOptions;
+        const failedService: ServiceType =
+          errStr.includes('agent') ? 'agent'
+          : errStr.includes('transcription') ? 'transcription'
+          : wantedAgent && !wantedTranscription ? 'agent'
+          : wantedTranscription ? 'transcription'
+          : 'agent';
+        handleError({
+          service: failedService,
+          code: 'start_error',
+          message: 'Failed to start voice interaction',
+          details: error,
+        });
+      }
       // Keep component "ready" on connection failure so user can retry (e.g. start backend and focus again)
-      // Only internal/configuration errors should flip ready to false; connection errors are often transient
-      // dispatch({ type: 'READY_STATE_CHANGE', isReady: false });
       throw error;
     }
   };

@@ -148,6 +148,9 @@ function App() {
   // Greeting status indicator for E2E tests
   const [greetingSent, setGreetingSent] = useState(false);
   const hasShownGreetingRef = useRef(false);
+  /** Avoid retry storm on text focus when backend is down: skip start() if we failed recently */
+  const lastAgentStartFailureRef = useRef<number>(0);
+  const AGENT_START_COOLDOWN_MS = 5000;
   
   // TTS mute state
   const [ttsMuted, setTtsMuted] = useState(false);
@@ -167,11 +170,13 @@ function App() {
     const connectionModeParam = urlParams?.get('connectionMode');
     const proxyEndpointParam = urlParams?.get('proxyEndpoint');
     const proxyAuthTokenParam = urlParams?.get('proxyAuthToken');
-    
+    // Default proxy URL: match page scheme (wss when https), use 127.0.0.1 to avoid IPv6 localhost issues
+    const defaultScheme = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const defaultProxyEndpoint = `${defaultScheme}://127.0.0.1:8080/openai`;
     return {
       // Default to proxy mode (direct mode is deprecated - only bug fixes, no new features)
       connectionMode: (connectionModeParam === 'direct' ? 'direct' : 'proxy') as 'direct' | 'proxy',
-      proxyEndpoint: proxyEndpointParam || import.meta.env.VITE_OPENAI_PROXY_ENDPOINT || import.meta.env.VITE_DEEPGRAM_PROXY_ENDPOINT || import.meta.env.VITE_PROXY_ENDPOINT || 'ws://localhost:8080/openai',
+      proxyEndpoint: proxyEndpointParam || import.meta.env.VITE_OPENAI_PROXY_ENDPOINT || import.meta.env.VITE_DEEPGRAM_PROXY_ENDPOINT || import.meta.env.VITE_PROXY_ENDPOINT || defaultProxyEndpoint,
       proxyAuthToken: proxyAuthTokenParam || '',
     };
   }, []);
@@ -640,7 +645,11 @@ function App() {
   
   const handleError = useCallback((error: DeepgramError) => {
     addLog(`Error (${error.service}): ${error.message}`);
-    console.error('Deepgram error:', error);
+    // Skip console.error for connection failures to avoid duplicate noise (browser already logs WebSocket failure)
+    const isConnectionError = error.code === 'websocket_error' || (error.message?.toLowerCase().includes('connection') ?? false);
+    if (!isConnectionError) {
+      console.error(`Error (${error.service}):`, error);
+    }
   }, [addLog]); // Depends on addLog
 
   // VAD event handlers - clearly marked by source
@@ -1435,14 +1444,33 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
 
               // Ensure agent connection is started on user gesture (gate start behind focus)
               // Per issue #206: text input focus should start only agent service
-              try {
-                const isConnected = connectionStates.agent === 'connected';
-                if (!isConnected) {
+              const isConnected = connectionStates.agent === 'connected';
+              const now = Date.now();
+              const recentlyFailed = (now - lastAgentStartFailureRef.current) < AGENT_START_COOLDOWN_MS;
+              if (isConnected) {
+                // already connected, nothing to do
+              } else if (connectionStates.agent === 'connecting') {
+                // attempt already in progress
+              } else if (!isConnected && (connectionStates.agent === 'error' || connectionStates.agent === 'closed') && recentlyFailed) {
+                const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+                addLog(isHttps
+                  ? 'Agent connection unavailable. Start the backend with HTTPS=true (cd test-app && HTTPS=true npm run backend) and try again.'
+                  : 'Agent connection unavailable. Start the backend (e.g. cd test-app && npm run backend) and try again.');
+              } else {
+                try {
                   addLog('Starting agent connection on text focus gesture');
                   await deepgramRef.current?.start?.({ agent: true, transcription: false });
+                } catch (e) {
+                  lastAgentStartFailureRef.current = now;
+                  const msg = e instanceof Error ? e.message : String(e);
+                  const isConnectionFailure = msg.includes('WebSocket') || msg.includes('connection');
+                  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+                  addLog(isConnectionFailure
+                    ? (isHttps
+                      ? 'Could not connect to agent. Start the backend with HTTPS=true (cd test-app && HTTPS=true npm run backend) so wss:// matches this page.'
+                      : 'Could not connect to agent. Start the backend (e.g. cd test-app && npm run backend) and focus again.')
+                    : `⚠️ Failed to start agent on focus: ${msg}`);
                 }
-              } catch (e) {
-                addLog(`⚠️ Failed to start agent on focus: ${e instanceof Error ? e.message : String(e)}`);
               }
             }}
             onKeyDown={(e) => {

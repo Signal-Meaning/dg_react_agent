@@ -251,22 +251,29 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       });
     });
 
-    it('maps assistant context message to conversation.item.create', () => {
+    it('maps assistant context message to conversation.item.create with output_text (OpenAI API requires output_text for assistant)', () => {
       const out = mapContextMessageToConversationItemCreate('assistant', 'Hi there!');
       expect(out.item.role).toBe('assistant');
-      expect(out.item.content[0].text).toBe('Hi there!');
+      expect(out.item.content[0]).toEqual({ type: 'output_text', text: 'Hi there!' });
+    });
+
+    it('uses input_text for user and output_text for assistant per OpenAI Realtime API', () => {
+      const userOut = mapContextMessageToConversationItemCreate('user', 'hello');
+      expect(userOut.item.content[0].type).toBe('input_text');
+      const assistantOut = mapContextMessageToConversationItemCreate('assistant', 'hi back');
+      expect(assistantOut.item.content[0].type).toBe('output_text');
     });
   });
 
   describe('6a. Greeting (Issue #381 – after session.updated, inject as assistant message)', () => {
-    it('maps greeting string to conversation.item.create (assistant message)', () => {
+    it('maps greeting string to conversation.item.create (assistant message with output_text)', () => {
       const out = mapGreetingToConversationItemCreate('Hello! How can I assist you today?');
       expect(out).toEqual({
         type: 'conversation.item.create',
         item: {
           type: 'message',
           role: 'assistant',
-          content: [{ type: 'input_text', text: 'Hello! How can I assist you today?' }],
+          content: [{ type: 'output_text', text: 'Hello! How can I assist you today?' }],
         },
       });
     });
