@@ -102,7 +102,7 @@ describe('AudioUtils createAudioBuffer() - Issue #340 Fix', () => {
       // Should create buffer with 500 samples (1000 bytes / 2)
       expect(audioContext.createBuffer).toHaveBeenCalledWith(1, 500, 24000);
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Audio buffer had odd length (1001 bytes)')
+        expect.stringContaining('Odd length (1001 bytes)')
       );
     });
 
@@ -116,7 +116,7 @@ describe('AudioUtils createAudioBuffer() - Issue #340 Fix', () => {
       // Should truncate to 0 bytes, which should return undefined (empty buffer)
       expect(result).toBeUndefined();
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Audio buffer had odd length (1 bytes)')
+        expect.stringContaining('Odd length (1 bytes)')
       );
     });
 
@@ -134,7 +134,7 @@ describe('AudioUtils createAudioBuffer() - Issue #340 Fix', () => {
       expect(result).toBeDefined();
       expect(audioContext.createBuffer).toHaveBeenCalledWith(1, 1, 24000);
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Audio buffer had odd length (3 bytes)')
+        expect.stringContaining('Odd length (3 bytes)')
       );
     });
 
@@ -152,7 +152,7 @@ describe('AudioUtils createAudioBuffer() - Issue #340 Fix', () => {
       expect(result).toBeDefined();
       expect(audioContext.createBuffer).toHaveBeenCalledWith(1, 499, 24000);
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Audio buffer had odd length (999 bytes)')
+        expect.stringContaining('Odd length (999 bytes)')
       );
     });
 
@@ -220,7 +220,7 @@ describe('AudioUtils createAudioBuffer() - Issue #340 Fix', () => {
       // Should truncate to 1MB = 524,288 samples
       expect(audioContext.createBuffer).toHaveBeenCalledWith(1, 524288, 24000);
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Audio buffer had odd length (1048577 bytes)')
+        expect.stringContaining('Odd length (1048577 bytes)')
       );
     });
   });
