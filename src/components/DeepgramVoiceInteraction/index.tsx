@@ -469,6 +469,8 @@ function DeepgramVoiceInteraction(
     if (isClientMessageTimeout) {
       // Debug-level logging - can occur during idle disconnects when server timeout fires
       log('⚠️ [Agent] CLIENT_MESSAGE_TIMEOUT (may occur during idle disconnects):', error);
+    } else if (error.recoverable) {
+      log('Recoverable error (e.g. post-response server error):', error.message);
     } else {
       log('Error:', error);
       // Verbose error dump only when debug is enabled to avoid console spam (e.g. connection failures)
@@ -480,8 +482,11 @@ function DeepgramVoiceInteraction(
         console.log('🚨 [ERROR] Error details:', error.details);
       }
     }
-    
-    dispatch({ type: 'ERROR', message: error.message });
+
+    // Don't set state.error for recoverable errors (e.g. OpenAI error after successful turn)
+    if (!error.recoverable) {
+      dispatch({ type: 'ERROR', message: error.message });
+    }
     onError?.(error);
   };
 
@@ -2523,12 +2528,20 @@ function DeepgramVoiceInteraction(
           // Intentionally omit the misleading description
         };
       }
-      
+
+      // Known OpenAI Realtime API behavior: server sometimes sends an error event after a successful response
+      // (see e.g. https://community.openai.com/t/realtime-api-the-server-had-an-error-while-processing-your-request/978856).
+      // When we're already idle (e.g. just finished playback), treat as recoverable so the host can show a soft message.
+      const isOpenAIPostResponseError =
+        errorMessage.includes('The server had an error while processing your request') &&
+        stateRef.current.agentState === 'idle';
+
       handleError({
         service: 'agent',
         code: errorCode,
         message: finalErrorMessage,
         details: errorDetails,
+        ...(isOpenAIPostResponseError && { recoverable: true }),
       });
       return;
     }

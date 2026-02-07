@@ -114,6 +114,12 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 - **Tools**: Playwright, real Deepgram API (when available)
 - **Example**: Testing full function calling flow from connection to execution
 
+### Test run order and strategy
+
+- **Real APIs first, then mocks** — When API keys are available, run integration and E2E tests against the real upstream first (e.g. `USE_REAL_OPENAI=1 npm test -- tests/integration/openai-proxy-integration.test.ts`); then run the same or complementary tests with mocks. Location: `tests/integration/` (e.g. `openai-proxy-integration.test.ts`).
+- **Then E2E** — Run E2E tests (`test-app/tests/e2e/`) with real backend/APIs when configured, then extended E2E as needed.
+- **CI always runs mocks** — In CI, run only mock-based integration and E2E (no real API keys); keep CI fast and deterministic. See `docs/development/TEST-STRATEGY.md`.
+
 ### Test Utilities
 
 - **MicrophoneHelpers**: Use for consistent microphone testing in E2E tests

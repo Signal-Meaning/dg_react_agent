@@ -639,13 +639,19 @@ function App() {
   }, []);
   
   const handleError = useCallback((error: DeepgramError) => {
+    // Recoverable: e.g. OpenAI sends "server had an error" after a successful response (known API behavior)
+    if (error.recoverable) {
+      addLog(`Warning (${error.service}): ${error.message} You can continue or reconnect.`);
+      if (isDebugMode) console.warn(`Recoverable error (${error.service}):`, error);
+      return;
+    }
     addLog(`Error (${error.service}): ${error.message}`);
     // Skip console.error for connection failures to avoid duplicate noise (browser already logs WebSocket failure)
     const isConnectionError = error.code === 'websocket_error' || (error.message?.toLowerCase().includes('connection') ?? false);
     if (!isConnectionError) {
       console.error(`Error (${error.service}):`, error);
     }
-  }, [addLog]); // Depends on addLog
+  }, [addLog, isDebugMode]);
 
   // VAD event handlers - clearly marked by source
   const handleUserStartedSpeaking = useCallback(() => {

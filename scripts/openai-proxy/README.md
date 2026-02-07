@@ -40,6 +40,12 @@ npx tsx scripts/openai-proxy/run.ts
 
 Requires `OPENAI_API_KEY` in `.env`, `test-app/.env`, or the environment. The script loads `.env` from the project root and `test-app/.env`. Listens on `http://localhost:8080/openai` by default. Use `OPENAI_PROXY_PORT` and `OPENAI_REALTIME_URL` to override. To see client/upstream activity, run with `OPENAI_PROXY_DEBUG=1`. When debug is on, the proxy uses **OpenTelemetry** logging (`scripts/openai-proxy/logger.ts`). If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
 
+**Greeting-text-only (diagnostic):** Set `OPENAI_PROXY_GREETING_TEXT_ONLY=1` so the proxy sends the greeting to the client only (UI shows it) and does not send `conversation.item.create` (greeting) to OpenAI. If the error stops, the greeting injection was the cause. (Testing showed the error can persist without it, so the trigger may be elsewhere.)
+
+**Minimal session (diagnostic):** If the error persists without greeting injection, try `OPENAI_PROXY_MINIMAL_SESSION=1`. The proxy will send a minimal `session.update` to upstream (instructions: `''`, model: `gpt-realtime`, no tools) instead of the full payload from the client. If the error stops, the cause is likely the session payload (instructions, model, or tools). From test-app: `OPENAI_PROXY_MINIMAL_SESSION=1 npm run backend` or add to `test-app/.env`.
+
+**"The server had an error while processing your request":** This message is sent by the OpenAI Realtime API (see [community reports](https://community.openai.com/t/realtime-api-the-server-had-an-error-while-processing-your-request/978856)) and often arrives *after* a successful response (e.g. after TTS playback). The CLI may not see it because it exits on first ConversationText. The component marks such errors as **recoverable** when the agent is already idle (so the test-app shows a warning and you can continue or reconnect).
+
 Run OpenAI proxy E2E tests (test-app must be served; Playwright starts it via `webServer`):
    ```bash
    VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npm run test:e2e -- openai-proxy-e2e

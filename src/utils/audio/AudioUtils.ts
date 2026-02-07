@@ -14,14 +14,14 @@ export function createAudioBuffer(
   data: ArrayBuffer, 
   sampleRate: number = 24000
 ): AudioBuffer | undefined {
-  // Issue #340: Validate and fix odd-length buffers before creating Int16Array
-  // PCM16 audio format requires 2 bytes per sample, so buffer length must be even
+  // PCM16 = 2 bytes per sample; odd length cannot be viewed as Int16Array without losing a byte.
+  // AudioManager.queueAudio now carries the odd byte into the next chunk to avoid truncation buzz.
+  // This truncation is a fallback for other callers; dropping a byte misaligns the stream and can cause buzzing.
   let processedData = data;
   if (data.byteLength % 2 !== 0) {
-    // Truncate to even length (remove last byte)
     processedData = data.slice(0, data.byteLength - 1);
     console.warn(
-      `Audio buffer had odd length (${data.byteLength} bytes), truncated to even length (${processedData.byteLength} bytes)`
+      `Audio buffer had odd length (${data.byteLength} bytes), truncated to even length (${processedData.byteLength} bytes) — may cause buzz if streamed`
     );
   }
 

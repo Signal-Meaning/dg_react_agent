@@ -166,6 +166,8 @@ export class AudioManager {
   // Improved audio playback variables
   private startTimeRef = { current: 0 };
   private analyzer: AnalyserNode | null = null;
+  /** Carry one byte across PCM chunks when upstream sends odd-length data; avoids truncation and stream misalignment (buzz). */
+  private pendingPcmByte: number | null = null;
   // private analyzerData: Uint8Array | null = null; // Unused for now
   private currentSource: AudioBufferSourceNode | null = null;
   private activeSourceNodes: AudioBufferSourceNode[] = []; // Track all active/scheduled sources
@@ -514,14 +516,34 @@ export class AudioManager {
     }
     
     try {
-      this.log(`Processing audio data (${data.byteLength} bytes)...`);
+      // PCM16 = 2 bytes per sample. Odd-length chunks would be truncated by createAudioBuffer, misaligning the stream and causing buzz.
+      // Carry the odd byte into the next chunk instead of dropping it.
+      let chunk = new Uint8Array(data);
+      if (this.pendingPcmByte !== null) {
+        const combined = new Uint8Array(1 + chunk.length);
+        combined[0] = this.pendingPcmByte;
+        combined.set(chunk, 1);
+        this.pendingPcmByte = null;
+        chunk = combined;
+      }
+      if (chunk.length % 2 !== 0) {
+        this.pendingPcmByte = chunk[chunk.length - 1];
+        chunk = chunk.subarray(0, chunk.length - 1);
+      }
+      if (chunk.length === 0) {
+        this.log('[queueAudio] No even-length PCM after carry');
+        return;
+      }
+      const toProcess = new ArrayBuffer(chunk.length);
+      new Uint8Array(toProcess).set(chunk);
+
+      this.log(`Processing audio data (${data.byteLength} bytes → ${toProcess.byteLength} after carry)...`);
       this.log(`[queueAudio] Before: activeSourceNodes.length = ${this.activeSourceNodes.length}, startTimeRef.current = ${this.startTimeRef.current}`);
       this.log(`[queueAudio] AudioContext state: ${this.audioContext.state}`);
-      
-      // Create an audio buffer from the raw data
+
       const buffer = createAudioBuffer(
-        this.audioContext, 
-        data, 
+        this.audioContext,
+        toProcess,
         this.options.outputSampleRate!
       );
       
@@ -666,9 +688,10 @@ export class AudioManager {
       }
     });
     
-    // Clear the active sources array
+    // Clear the active sources array and carried PCM byte (fresh stream next time)
     const count = this.activeSourceNodes.length;
     this.activeSourceNodes = [];
+    this.pendingPcmByte = null;
     this.log(`🧹 Cleared ${count} active sources from tracking array`);
     
     // Also clear current source reference

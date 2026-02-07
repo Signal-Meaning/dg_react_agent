@@ -665,12 +665,15 @@ interface EndpointConfig {
 
 ### Error Types
 
+The canonical type for agent errors is **VoiceAgentError** (used for both Deepgram Voice Agent and OpenAI proxy). **DeepgramError** is a deprecated alias for backward compatibility.
+
 ```tsx
-interface DeepgramError {
+interface VoiceAgentError {
   service: ServiceType;
   message: string;
-  code?: string;
+  code: string;
   details?: unknown;
+  recoverable?: boolean;  // when true, error occurred after a successful turn (e.g. OpenAI post-response)
 }
 ```
 

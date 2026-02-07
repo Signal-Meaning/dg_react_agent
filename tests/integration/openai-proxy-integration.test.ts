@@ -4,11 +4,24 @@
  * Proxy as WebSocket server: real WebSocket connections, mock OpenAI upstream.
  * See docs/issues/ISSUE-381/INTEGRATION-TEST-PLAN.md.
  *
+ * Why the "server had an error" (OpenAI) is not seen here: the upstream is a mock we control.
+ * We never send an `error` event from the mock. The real OpenAI API sometimes sends that
+ * error after a successful response; the test-app sees it because it talks to the real API
+ * via the proxy. Integration tests verify translation and protocol, not live API behavior.
+ *
+ * Real upstream: set USE_REAL_OPENAI=1 and OPENAI_API_KEY to run a subset of tests
+ * against the live OpenAI Realtime API. See docs/development/TEST-STRATEGY.md.
+ *
  * @jest-environment node
  */
 
-import http from 'http';
 import path from 'path';
+// Load root .env and test-app/.env so OPENAI_API_KEY is available when running with USE_REAL_OPENAI=1
+import dotenv from 'dotenv';
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), 'test-app', '.env') });
+
+import http from 'http';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const WebSocket = require('ws');
 // Load WebSocketServer from ws package (Jest resolve may not expose ws/lib/*)
@@ -18,9 +31,14 @@ import {
   createOpenAIProxyServer,
 } from '../../scripts/openai-proxy/server';
 
+/** When true, proxy uses real OpenAI Realtime URL and auth; mock is not started. Requires OPENAI_API_KEY. */
+const useRealOpenAI = process.env.USE_REAL_OPENAI === '1' && !!process.env.OPENAI_API_KEY?.trim();
+/** Use for tests that require the mock upstream (exact payloads, mockReceived, etc.); skipped when USE_REAL_OPENAI=1. */
+const itMockOnly = useRealOpenAI ? it.skip : it;
+
 describe('OpenAI proxy integration (Issue #381)', () => {
-  let mockUpstreamServer: http.Server;
-  let mockWss: InstanceType<typeof WebSocketServer>;
+  let mockUpstreamServer: http.Server | null = null;
+  let mockWss: InstanceType<typeof WebSocketServer> | null = null;
   let mockPort: number;
   let proxyServer: http.Server;
   let proxyPort: number;
@@ -36,6 +54,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   let mockSendOutputTextOnlyAfterSession = false;
   /** When true, mock sends output_audio_transcript.done then response.function_call_arguments.done after session.updated */
   let mockSendTranscriptThenFunctionCallAfterSession = false;
+  /** When true, mock sends response.output_audio.delta (base64 PCM) then .done before response.output_text.done (so client receives binary PCM from proxy). */
+  let mockSendOutputAudioBeforeText = false;
   /**
    * Issue #406: when true, mock delays sending session.updated and asserts that no conversation.item.create
    * is received before session.updated was sent (catches proxy sending context before session.updated).
@@ -47,14 +67,34 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   const receivedConversationItems: Array<{ type: string; item?: { type?: string; call_id?: string; output?: string; role?: string } }> = [];
 
   beforeAll(async () => {
+    proxyServer = http.createServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolve) => proxyServer.listen(0, () => resolve()));
+    proxyPort = (proxyServer.address() as { port: number }).port;
+
+    if (useRealOpenAI) {
+      const apiKey = process.env.OPENAI_API_KEY!.trim();
+      const upstreamUrl = process.env.OPENAI_REALTIME_URL ?? 'wss://api.openai.com/v1/realtime?model=gpt-realtime';
+      createOpenAIProxyServer({
+        server: proxyServer,
+        path: PROXY_PATH,
+        upstreamUrl,
+        upstreamHeaders: { Authorization: `Bearer ${apiKey}` },
+      });
+      mockPort = 0;
+      return;
+    }
+
     mockUpstreamServer = http.createServer((_req, res) => {
       res.writeHead(404);
       res.end();
     });
-    await new Promise<void>((resolve) => mockUpstreamServer.listen(0, () => resolve()));
-    mockPort = (mockUpstreamServer.address() as { port: number }).port;
-    mockWss = new WebSocketServer({ server: mockUpstreamServer });
-    mockWss.on('connection', (socket: import('ws')) => {
+    await new Promise<void>((resolve) => mockUpstreamServer!.listen(0, () => resolve()));
+    mockPort = (mockUpstreamServer!.address() as { port: number }).port;
+    mockWss = new WebSocketServer({ server: mockUpstreamServer! });
+    mockWss!.on('connection', (socket: import('ws')) => {
       /** Issue #406: per-connection; true after we have sent session.updated (used when mockEnforceSessionBeforeContext). */
       let sessionUpdatedSent = false;
       socket.on('message', (data: Buffer) => {
@@ -147,6 +187,12 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             }
           }
           if (msg.type === 'response.create') {
+            if (mockSendOutputAudioBeforeText) {
+              mockSendOutputAudioBeforeText = false;
+              const pcmChunk = Buffer.alloc(320, 0);
+              socket.send(JSON.stringify({ type: 'response.output_audio.delta', delta: pcmChunk.toString('base64') }));
+              socket.send(JSON.stringify({ type: 'response.output_audio.done' }));
+            }
             socket.send(JSON.stringify({ type: 'response.output_text.done', text: 'Hello from mock' }));
           }
           if (msg.type === 'input_audio_buffer.commit') {
@@ -158,12 +204,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       });
     });
 
-    proxyServer = http.createServer((_req, res) => {
-      res.writeHead(404);
-      res.end();
-    });
-    await new Promise<void>((resolve) => proxyServer.listen(0, () => resolve()));
-    proxyPort = (proxyServer.address() as { port: number }).port;
+    // Proxy created with default options (no greetingTextOnly/minimalSession); matches production when those TODOs are removed.
     createOpenAIProxyServer({
       server: proxyServer,
       path: PROXY_PATH,
@@ -173,9 +214,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
 
   afterAll(async () => {
     if (mockWss) mockWss.close();
-    if (mockUpstreamServer) mockUpstreamServer.close();
+    if (mockUpstreamServer) await new Promise<void>((resolve) => mockUpstreamServer!.close(() => resolve()));
     if (proxyServer) await new Promise<void>((resolve) => proxyServer.close(() => resolve()));
-  }, 5000);
+  }, 10000);
+
+  beforeEach(() => {
+    if (useRealOpenAI) jest.useRealTimers();
+  });
+
 
   it('listens on configured path and accepts WebSocket upgrade', (done) => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
@@ -223,35 +269,74 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('error', done);
   });
 
-  it('translates InjectUserMessage to conversation.item.create + response.create and response.output_text.done to ConversationText', (done) => {
+  /**
+   * Reconnect/reload: when client sends Settings twice (e.g. test-app focus or reload), proxy must forward
+   * only the first session.update to upstream. A second session.update can cause upstream (OpenAI) to return
+   * "The server had an error while processing your request." This test reproduces the duplicate-Settings
+   * scenario and asserts the mock receives exactly one session.update.
+   */
+  itMockOnly('forwards only first Settings per connection (duplicate Settings get SettingsApplied but no second session.update)', (done) => {
+    mockReceived.length = 0;
+    let settingsAppliedCount = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
-    let gotSettingsApplied = false;
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
     });
     client.on('message', (data: Buffer) => {
-      const msg = JSON.parse(data.toString()) as { type?: string; content?: string };
+      const msg = JSON.parse(data.toString()) as { type?: string };
       if (msg.type === 'SettingsApplied') {
-        gotSettingsApplied = true;
-        client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'hi' }));
-      }
-      if (msg.type === 'ConversationText' && msg.role === 'assistant') {
-        expect(msg.content).toBe('Hello from mock');
-        client.close();
-        done();
+        settingsAppliedCount++;
+        if (settingsAppliedCount === 1) {
+          client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+        } else if (settingsAppliedCount === 2) {
+          const sessionUpdateCount = mockReceived.filter((m) => m.type === 'session.update').length;
+          expect(sessionUpdateCount).toBe(1);
+          client.close();
+          done();
+        }
       }
     });
     client.on('error', done);
   });
 
-  it('translates binary client message to input_audio_buffer.append and after debounce sends commit + response.create', (done) => {
+  it('translates InjectUserMessage to conversation.item.create + response.create and response.output_text.done to ConversationText', (done) => {
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      // Real API can send binary PCM (response.output_audio.delta); skip non-JSON
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; content?: string; role?: string };
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hello in one short sentence.' }));
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          if (useRealOpenAI) {
+            expect(typeof msg.content).toBe('string');
+            expect((msg.content ?? '').length).toBeGreaterThan(0);
+          } else {
+            expect(msg.content).toBe('Hello from mock');
+          }
+          client.close();
+          done();
+        }
+      } catch {
+        // ignore parse errors (e.g. truncated)
+      }
+    });
+    client.on('error', done);
+  }, useRealOpenAI ? 20000 : 5000);
+
+  itMockOnly('translates binary client message to input_audio_buffer.append and after debounce sends commit + response.create', (done) => {
     mockReceived.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
-      const msg = JSON.parse(data.toString()) as { type?: string };
+      const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
       if (msg.type === 'SettingsApplied') {
         client.send(Buffer.from([0x00, 0x00, 0xff, 0xff]));
       }
@@ -267,7 +352,43 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('error', done);
   }, 5000);
 
-  it('translates response.function_call_arguments.done to FunctionCallRequest and FunctionCallResponse to conversation.item.create (function_call_output)', (done) => {
+  /**
+   * Proxy must send raw PCM (binary) to the client when upstream sends response.output_audio.delta (JSON with base64).
+   * So the test-app component receives binary frames and can play TTS via handleAgentAudio → AudioManager.queueAudio.
+   */
+  itMockOnly('sends binary PCM to client when upstream sends response.output_audio.delta (test-app TTS path)', (done) => {
+    mockSendOutputAudioBeforeText = true;
+    const expectedPcmBytes = 320;
+    const receivedPcmChunks: Buffer[] = [];
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      const str = data.toString('utf8');
+      if (data.length === expectedPcmBytes && str[0] !== '{') {
+        receivedPcmChunks.push(data);
+        return;
+      }
+      try {
+        const msg = JSON.parse(str) as { type?: string; role?: string; content?: string };
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'hi' }));
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          expect(receivedPcmChunks.length).toBeGreaterThanOrEqual(1);
+          expect(receivedPcmChunks[0].length).toBe(expectedPcmBytes);
+          client.close();
+          done();
+        }
+      } catch {
+        if (data.length === expectedPcmBytes) receivedPcmChunks.push(data);
+      }
+    });
+    client.on('error', done);
+  }, 8000);
+
+  itMockOnly('translates response.function_call_arguments.done to FunctionCallRequest and FunctionCallResponse to conversation.item.create (function_call_output)', (done) => {
     receivedConversationItems.length = 0;
     mockSendFunctionCallAfterSession = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
@@ -310,7 +431,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Real OpenAI may send response.output_audio_transcript.done with "Function call: ..." before or without
    * response.function_call_arguments.done; this test asserts the proxy sends both when it gets function_call_arguments.done.
    */
-  it('sends FunctionCallRequest then ConversationText when upstream sends response.function_call_arguments.done (client receives both)', (done) => {
+  itMockOnly('sends FunctionCallRequest then ConversationText when upstream sends response.function_call_arguments.done (client receives both)', (done) => {
     mockSendFunctionCallAfterSession = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const receivedOrder: string[] = [];
@@ -337,7 +458,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Client does NOT receive FunctionCallRequest — so onFunctionCallRequest is never invoked.
    * This documents E2E behavior when real API sends function-call info only in transcript.
    */
-  it('sends only ConversationText when upstream sends only output_audio_transcript.done with "Function call: ..." (no FunctionCallRequest)', (done) => {
+  itMockOnly('sends only ConversationText when upstream sends only output_audio_transcript.done with "Function call: ..." (no FunctionCallRequest)', (done) => {
     mockSendTranscriptOnlyAfterSession = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; content?: string }> = [];
@@ -363,7 +484,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * (no response.function_call_arguments.done), proxy sends only ConversationText.
    * Client does NOT receive FunctionCallRequest.
    */
-  it('sends only ConversationText when upstream sends only output_text.done with "Function call: ..." (no FunctionCallRequest)', (done) => {
+  itMockOnly('sends only ConversationText when upstream sends only output_text.done with "Function call: ..." (no FunctionCallRequest)', (done) => {
     mockSendOutputTextOnlyAfterSession = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; content?: string }> = [];
@@ -389,7 +510,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * proxy sends ConversationText (from transcript), then FunctionCallRequest, then ConversationText (from .done).
    * Client receives CT, FCR, CT — so component gets both transcript display and function call handler.
    */
-  it('sends ConversationText then FunctionCallRequest then ConversationText when upstream sends transcript.done then function_call_arguments.done', (done) => {
+  itMockOnly('sends ConversationText then FunctionCallRequest then ConversationText when upstream sends transcript.done then function_call_arguments.done', (done) => {
     mockSendTranscriptThenFunctionCallAfterSession = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const receivedOrder: Array<{ type: string; content?: string }> = [];
@@ -436,14 +557,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * from upstream for the user message. OpenAI Realtime API expects "after adding the user message"
    * before response.create. Current proxy sends both immediately; this test fails until the proxy waits.
    */
-  it('Issue #388: sends response.create only after receiving conversation.item.added from upstream for InjectUserMessage', (done) => {
+  itMockOnly('Issue #388: sends response.create only after receiving conversation.item.added from upstream for InjectUserMessage', (done) => {
     mockDelayItemAddedForInjectUserMessageMs = 100;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
-      const msg = JSON.parse(data.toString()) as { type?: string };
+      const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
       if (msg.type === 'SettingsApplied') {
         mockReceived.length = 0;
         client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'hi' }));
@@ -473,7 +594,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Issue #406: Proxy must send conversation.item.create (context) only after receiving session.updated.
    * Mock enforces this by delaying session.updated; if proxy sends context before waiting, protocol error is recorded.
    */
-  it('sends Settings.agent.context.messages as conversation.item.create to upstream', (done) => {
+  itMockOnly('sends Settings.agent.context.messages as conversation.item.create to upstream', (done) => {
     mockReceived.length = 0;
     receivedConversationItems.length = 0;
     protocolErrors.length = 0;
@@ -520,7 +641,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * sends SettingsApplied, then injects the greeting as ConversationText (assistant) to the client
    * and as conversation.item.create (assistant) to upstream.
    */
-  it('injects agent.greeting as ConversationText and conversation.item.create after session.updated', (done) => {
+  itMockOnly('injects agent.greeting as ConversationText and conversation.item.create after session.updated', (done) => {
     mockReceived.length = 0;
     receivedConversationItems.length = 0;
     protocolErrors.length = 0;

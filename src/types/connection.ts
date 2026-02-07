@@ -36,29 +36,39 @@ export interface EndpointConfig {
 }
 
 /**
- * Error object structure
+ * Error object for the voice agent path (Deepgram Voice Agent or OpenAI proxy).
+ * Used by the component for all agent-side errors (WebSocket, API, timeout, etc.).
  */
-export interface DeepgramError {
+export interface VoiceAgentError {
   /**
    * Which service generated the error
    */
   service: ServiceType;
-  
+
   /**
    * Error code (e.g., "connection_failed", "auth_error")
    */
   code: string;
-  
+
   /**
    * Human-readable error message
    */
   message: string;
-  
+
   /**
    * Additional error details (original error, etc.)
    */
   details?: unknown;
+
+  /**
+   * When true, the error occurred after a successful turn (e.g. OpenAI sends an error after response completes).
+   * Hosts can treat this as non-fatal: log or show a soft message and allow the user to continue or reconnect.
+   */
+  recoverable?: boolean;
 }
+
+/** @deprecated Use VoiceAgentError. Kept for backward compatibility. */
+export type DeepgramError = VoiceAgentError;
 
 /**
  * Connection options for Deepgram services

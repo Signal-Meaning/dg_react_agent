@@ -13,6 +13,7 @@
  *   OPENAI_API_KEY=sk-... npx tsx scripts/openai-proxy/run.ts
  *   OPENAI_PROXY_PORT=9090 npx tsx scripts/openai-proxy/run.ts
  *   HTTPS=true npx tsx scripts/openai-proxy/run.ts   (serve over https:// with self-signed cert)
+ *   OPENAI_PROXY_GREETING_TEXT_ONLY=1 npx tsx scripts/openai-proxy/run.ts   (greeting to client only; see README)
  *
  * Then run E2E with:
  *   VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npm run test:e2e -- openai-proxy-e2e
@@ -41,8 +42,11 @@ if (!apiKey || apiKey.trim().length === 0) {
 }
 
 const debug = process.env.OPENAI_PROXY_DEBUG === '1' || process.env.OPENAI_PROXY_DEBUG === 'true';
+// TODO: Not expected to keep. Diagnostic options for upstream error investigation.
+const greetingTextOnly = process.env.OPENAI_PROXY_GREETING_TEXT_ONLY === '1' || process.env.OPENAI_PROXY_GREETING_TEXT_ONLY === 'true';
+const minimalSession = process.env.OPENAI_PROXY_MINIMAL_SESSION === '1' || process.env.OPENAI_PROXY_MINIMAL_SESSION === 'true';
 
-let server: ReturnType<typeof createOpenAIProxyServer>['server'];
+let server: ReturnType<typeof createOpenAIProxyServer>['server'] | undefined = undefined;
 if (useHttps) {
   const { generate: generateSelfSigned } = require('selfsigned') as { generate: (attrs: Array<{ name: string; value: string }>, options: { keySize: number; days: number }) => { cert: string; private: string } };
   const pems = generateSelfSigned([{ name: 'commonName', value: 'localhost' }], { keySize: 2048, days: 365 });
@@ -61,6 +65,8 @@ const { server: proxyServer } = createOpenAIProxyServer({
   upstreamUrl,
   upstreamHeaders: { Authorization: `Bearer ${apiKey.trim()}` },
   debug,
+  greetingTextOnly,
+  minimalSession,
 });
 
 const scheme = useHttps ? 'https' : 'http';

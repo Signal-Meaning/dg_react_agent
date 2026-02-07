@@ -63,6 +63,16 @@ export interface OpenAIProxyServerOptions {
   upstreamHeaders?: Record<string, string>;
   /** Log connections and message types to stdout (set OPENAI_PROXY_DEBUG=1 when running) */
   debug?: boolean;
+  /**
+   * TODO: Not expected to keep. When true, send greeting to client only (ConversationText for UI); do not send conversation.item.create (greeting) to upstream.
+   * Use when upstream errors after greeting injection (e.g. OPENAI_PROXY_GREETING_TEXT_ONLY=1). Integration tests leave this false.
+   */
+  greetingTextOnly?: boolean;
+  /**
+   * TODO: Not expected to keep. When true, send a minimal session.update to upstream (instructions: '', no tools) to isolate whether a rich payload triggers upstream errors.
+   * Client still receives SettingsApplied; only the payload sent to upstream is minimal. Integration tests leave this false.
+   */
+  minimalSession?: boolean;
 }
 
 /**
@@ -82,6 +92,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
 
   const wss = new WebSocketServer({ server, path: options.path });
   const debug = options.debug === true;
+  const greetingTextOnly = options.greetingTextOnly === true;
+  const minimalSession = options.minimalSession === true;
   if (debug) initProxyLogger();
 
   wss.on('connection', (clientWs: WebSocket) => {
@@ -109,6 +121,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let hasSentSettingsApplied = false;
     /** Issue #406: defer context (conversation.item.create) until after session.updated to avoid upstream close. */
     const pendingContextItems: string[] = [];
+    /** TODO: Not expected to keep. Only forward the first Settings per connection; duplicate Settings (e.g. on reconnect/reload) must not send a second session.update or upstream can error. */
+    let hasForwardedSessionUpdate = false;
 
     const scheduleAudioCommit = () => {
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
@@ -181,8 +195,19 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           });
         }
         if (msg.type === 'Settings') {
+          if (hasForwardedSessionUpdate) {
+            // Duplicate Settings (e.g. test-app reload/reconnect): do not send second session.update to upstream.
+            // Send SettingsApplied so the client does not block waiting.
+            if (clientWs.readyState === WebSocket.OPEN) {
+              clientWs.send(JSON.stringify(mapSessionUpdatedToSettingsApplied()));
+            }
+            return;
+          }
+          hasForwardedSessionUpdate = true;
           const settings = msg as Parameters<typeof mapSettingsToSessionUpdate>[0];
-          const sessionUpdate = mapSettingsToSessionUpdate(settings);
+          const sessionUpdate = minimalSession
+            ? { type: 'session.update' as const, session: { type: 'realtime' as const, model: 'gpt-realtime', instructions: '' } }
+            : mapSettingsToSessionUpdate(settings);
           upstream.send(JSON.stringify(sessionUpdate));
           const contextMessages = settings.agent?.context?.messages;
           if (contextMessages?.length) {
@@ -271,6 +296,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           type?: string;
           text?: string;
           transcript?: string;
+          delta?: string;
           error?: { message?: string; code?: string };
         };
         if (debug) {
@@ -294,15 +320,27 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           const settingsApplied = mapSessionUpdatedToSettingsApplied(msg as Parameters<typeof mapSessionUpdatedToSettingsApplied>[0]);
           clientWs.send(JSON.stringify(settingsApplied));
           if (storedGreeting) {
-            upstream.send(JSON.stringify(mapGreetingToConversationItemCreate(storedGreeting)));
-            clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting)));
-            if (debug) {
-              emitLog({
-                severityNumber: SeverityNumber.INFO,
-                severityText: 'INFO',
-                body: 'greeting injected',
-                attributes: { [ATTR_CONNECTION_ID]: connId },
-              });
+            if (greetingTextOnly) {
+              clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting)));
+              if (debug) {
+                emitLog({
+                  severityNumber: SeverityNumber.INFO,
+                  severityText: 'INFO',
+                  body: 'greeting sent to client only (not upstream)',
+                  attributes: { [ATTR_CONNECTION_ID]: connId },
+                });
+              }
+            } else {
+              upstream.send(JSON.stringify(mapGreetingToConversationItemCreate(storedGreeting)));
+              clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting)));
+              if (debug) {
+                emitLog({
+                  severityNumber: SeverityNumber.INFO,
+                  severityText: 'INFO',
+                  body: 'greeting injected',
+                  attributes: { [ATTR_CONNECTION_ID]: connId },
+                });
+              }
             }
             storedGreeting = undefined;
           }
@@ -349,6 +387,15 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           const componentError = mapErrorToComponentError(msg as Parameters<typeof mapErrorToComponentError>[0]);
           clientWs.send(JSON.stringify(componentError));
+        } else if (msg.type === 'response.output_audio.delta') {
+          // Component expects raw PCM (binary frame) for playback; upstream sends JSON with base64 delta.
+          const delta = msg.delta;
+          if (delta && typeof delta === 'string') {
+            const pcm = Buffer.from(delta, 'base64');
+            if (pcm.length > 0) clientWs.send(pcm);
+          }
+        } else if (msg.type === 'response.output_audio.done') {
+          // No client message needed for playback; component just queues chunks. Skip forwarding.
         } else if (msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
           // Issue #388: send response.create only after upstream confirms the item was added
           if (pendingResponseCreateAfterItemAdded) {

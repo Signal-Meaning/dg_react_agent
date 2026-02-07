@@ -305,6 +305,8 @@ export class WebSocketManager {
             console.log(`🔌 [WebSocketManager.connect] Created WebSocket with token protocol (direct mode)`);
           }
         }
+        // Ensure binary frames (e.g. TTS PCM from proxy) are delivered as ArrayBuffer for synchronous handling
+        this.ws.binaryType = 'arraybuffer';
         
         // Log socket readyState
         this.log('Initial readyState:', this.ws.readyState);

@@ -112,50 +112,63 @@ function run(url: string, message: string, textOnly: boolean): Promise<void> {
     });
 
     ws.on('message', (data: Buffer) => {
-      try {
-        const msg = JSON.parse(data.toString()) as {
-          type?: string;
-          role?: string;
-          content?: string;
-          delta?: string;
-          description?: string;
-        };
-        if (msg.type === 'SettingsApplied') {
-          ws.send(JSON.stringify({ type: 'InjectUserMessage', content: message }));
-        }
-        if (msg.type === 'response.output_audio.delta' && msg.delta && audioSink) {
-          receivedAnyAudioDelta = true;
-          const buf = Buffer.from(msg.delta, 'base64');
-          if (buf.length > 0) audioSink.write(buf);
-        }
-        if (msg.type === 'response.output_audio.done') {
-          if (audioSink && receivedAnyAudioDelta) {
-            waitingForSinkClose = true;
-            audioSink.end(() => {
-              if (waitingForSinkClose) {
-                clearTimeout(timeout);
-                done();
-              }
-            });
-          } else {
-            clearTimeout(timeout);
-            done();
+      // Proxy sends raw PCM as binary frames (not JSON delta); JSON messages start with '{'
+      const isLikelyJson = data.length > 0 && data[0] === 0x7b; // '{'
+      if (isLikelyJson) {
+        try {
+          const msg = JSON.parse(data.toString()) as {
+            type?: string;
+            role?: string;
+            content?: string;
+            delta?: string;
+            description?: string;
+          };
+          if (msg.type === 'SettingsApplied') {
+            ws.send(JSON.stringify({ type: 'InjectUserMessage', content: message }));
           }
-        }
-        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
-          process.stdout.write((msg.content ?? '') + '\n');
-          if (!waitingForSinkClose && (!audioSink || !receivedAnyAudioDelta)) {
-            clearTimeout(timeout);
-            done();
+          if (msg.type === 'response.output_audio.done') {
+            if (audioSink && receivedAnyAudioDelta) {
+              waitingForSinkClose = true;
+              audioSink.end(() => {
+                if (waitingForSinkClose) {
+                  clearTimeout(timeout);
+                  done();
+                }
+              });
+            } else {
+              clearTimeout(timeout);
+              done();
+            }
           }
+          if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+            process.stdout.write((msg.content ?? '') + '\n');
+            if (!waitingForSinkClose && (!audioSink || !receivedAnyAudioDelta)) {
+              clearTimeout(timeout);
+              done();
+            } else if (audioSink && receivedAnyAudioDelta && !waitingForSinkClose) {
+              // Proxy does not forward response.output_audio.done; end sink when we have transcript
+              waitingForSinkClose = true;
+              audioSink.end(() => {
+                if (waitingForSinkClose) {
+                  clearTimeout(timeout);
+                  done();
+                }
+              });
+            }
+          }
+          if (msg.type === 'Error') {
+            clearTimeout(timeout);
+            process.stderr.write((msg.description ?? 'Unknown error') + '\n');
+            done(new Error(msg.description ?? 'Unknown error'));
+          }
+        } catch {
+          // not JSON, fall through to binary handling
         }
-        if (msg.type === 'Error') {
-          clearTimeout(timeout);
-          process.stderr.write((msg.description ?? 'Unknown error') + '\n');
-          done(new Error(msg.description ?? 'Unknown error'));
-        }
-      } catch {
-        // ignore non-JSON (e.g. binary)
+      }
+      // Binary PCM from proxy (response.output_audio.delta is sent as raw PCM, not JSON)
+      if (!isLikelyJson && Buffer.isBuffer(data) && data.length > 0 && audioSink) {
+        receivedAnyAudioDelta = true;
+        audioSink.write(data);
       }
     });
 

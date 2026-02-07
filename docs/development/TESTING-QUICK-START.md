@@ -2,6 +2,10 @@
 
 This guide helps new developers quickly understand how to test voice interaction features in the `dg_react_agent` library.
 
+## Test run order (strategy)
+
+Run tests in this order: **(1) integration tests (mocks)** first, **(2) E2E** next, **(3) extended E2E** last. When real APIs are requested, integration tests can also be run against the real upstream. See `docs/development/TEST-STRATEGY.md` and `.cursorrules` (Testing Guidelines).
+
 ## 🎯 Testing Philosophy: Real First, Then Mock
 
 **Always start with real audio + real Deepgram services, then add mocks for edge cases.**

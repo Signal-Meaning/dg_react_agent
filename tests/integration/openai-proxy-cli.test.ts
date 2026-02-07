@@ -113,7 +113,7 @@ describe('OpenAI proxy CLI (Issue #414)', () => {
   }, 5000);
 
   it('when not --text-only, receives response.output_audio.delta/done and still prints agent text', async () => {
-    // Server that sends OpenAI-style audio events then ConversationText (as real proxy would)
+    // Mock server: sends JSON delta/done then ConversationText. Real proxy sends binary PCM for delta; this mock uses JSON for simplicity; test asserts on transcript only.
     const server = http.createServer((_req, res) => {
       res.writeHead(404);
       res.end();

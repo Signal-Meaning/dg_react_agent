@@ -2,6 +2,12 @@
 
 Integration tests target **the proxy as a WebSocket server** and its **contract with the dg_react_agent component**: real WebSocket connections, but optionally a mocked OpenAI upstream.
 
+## Test run order and real upstream
+
+- **Run order:** Integration tests (with mocks) are run **first** in the project’s test strategy, then E2E, then extended E2E. See `docs/development/TEST-STRATEGY.md`.
+- **Default:** Tests use a **mock** upstream so they are fast and require no API keys.
+- **Real upstream:** When real APIs are requested (e.g. env + flag), the same tests can be run against the **real** OpenAI upstream to validate live API behavior; the proxy is pointed at the real Realtime URL instead of the mock.
+
 ## TDD Approach
 
 1. **RED**: Write an integration test that connects to the proxy, sends a client event, and asserts the proxy’s response or downstream behavior. Run and see it fail (e.g. proxy not implemented or wrong path).
@@ -67,6 +73,7 @@ Integration tests target **the proxy as a WebSocket server** and its **contract 
 - **Mock upstream**: Implement a small WebSocket server that simulates OpenAI Realtime (sends `session.created`, `response.output_text.done`, etc.) so integration tests do not depend on the live OpenAI API.
 - **Real WebSocket**: Use real TCP/WebSocket for the proxy; avoid mocking the WebSocket layer in integration tests so we validate the actual server behavior.
 - Run integration tests in CI; keep them reasonably fast (e.g. short timeouts, single connection per test where possible).
+- **Real upstream mode**: When running against the real API (e.g. when requested via env/flag), use the same test file or a parallel suite with the proxy’s `upstreamUrl` set to the real OpenAI Realtime URL; no change to test logic, only to the upstream target.
 
 ## Acceptance
 
