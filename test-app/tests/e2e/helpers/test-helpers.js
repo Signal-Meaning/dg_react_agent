@@ -439,11 +439,70 @@ async function installWebSocketCapture(page) {
         } catch (e) {
           // Binary data
           window.capturedReceivedMessages = window.capturedReceivedMessages || [];
+          const size = event.data.byteLength || event.data.length;
           window.capturedReceivedMessages.push({
             timestamp: new Date().toISOString(),
             type: 'binary',
-            size: event.data.byteLength || event.data.length
+            size
           });
+          // Store TTS chunks for E2E (Issue #414: quality check + boundary diagnostic). OpenAI sends small deltas first then large; use large chunks for quality.
+          if (size > 0 && event.data instanceof ArrayBuffer) {
+            try {
+              window.__ttsChunksForQuality = window.__ttsChunksForQuality || [];
+              window.__ttsChunksBase64List = window.__ttsChunksBase64List || [];
+              window.__ttsChunkSizes = window.__ttsChunkSizes || [];
+              const maxChunksStored = 30;
+              if (window.__ttsChunksBase64List.length < maxChunksStored) {
+                const bytes = new Uint8Array(event.data);
+                let binary = '';
+                const chunkSize = 0x8000;
+                for (let i = 0; i < bytes.length; i += chunkSize) {
+                  binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+                }
+                window.__ttsChunksBase64List.push(btoa(binary));
+                window.__ttsChunkSizes.push(bytes.length);
+                window.__ttsChunksForQuality.push(bytes);
+                // Legacy: first 5 chunks combined (for boundary diagnostic; may be small chunks)
+                const maxChunksLegacy = 5;
+                const maxBytes = 4096;
+                if (window.__ttsChunksForQuality.length <= maxChunksLegacy) {
+                  const total = window.__ttsChunksForQuality.reduce((n, c) => n + c.length, 0);
+                  if (window.__ttsChunksForQuality.length >= 3 || total >= maxBytes) {
+                    const combined = new Uint8Array(total);
+                    let off = 0;
+                    for (const c of window.__ttsChunksForQuality) {
+                      combined.set(c, off);
+                      off += c.length;
+                    }
+                    let combinedBinary = '';
+                    for (let i = 0; i < combined.length; i += chunkSize) {
+                      combinedBinary += String.fromCharCode.apply(null, combined.subarray(i, i + chunkSize));
+                    }
+                    window.__ttsFirstChunkBase64 = btoa(combinedBinary);
+                  }
+                }
+                // TTS-sized PCM: first 3 chunks with size >= minTtsChunkSize (1000), for audio-quality assertion
+                const minTtsChunkSize = 1000;
+                const largeIndices = (window.__ttsChunkSizes || []).map((s, i) => (s >= minTtsChunkSize ? i : -1)).filter(i => i >= 0);
+                const firstThreeLarge = largeIndices.slice(0, 3);
+                if (firstThreeLarge.length >= 3) {
+                  const combinedLarge = new Uint8Array(firstThreeLarge.reduce((sum, i) => sum + window.__ttsChunksForQuality[i].length, 0));
+                  let off = 0;
+                  for (const i of firstThreeLarge) {
+                    combinedLarge.set(window.__ttsChunksForQuality[i], off);
+                    off += window.__ttsChunksForQuality[i].length;
+                  }
+                  let combinedLargeBinary = '';
+                  for (let i = 0; i < combinedLarge.length; i += chunkSize) {
+                    combinedLargeBinary += String.fromCharCode.apply(null, combinedLarge.subarray(i, i + chunkSize));
+                  }
+                  window.__ttsFirstLargeChunkBase64 = btoa(combinedLargeBinary);
+                }
+              }
+            } catch (err) {
+              console.warn('[WS CAPTURE] Failed to store TTS chunks for quality check:', err);
+            }
+          }
         }
       });
       
@@ -464,6 +523,153 @@ async function getCapturedWebSocketData(page) {
     sent: window.capturedSentMessages || [],
     received: window.capturedReceivedMessages || []
   }));
+}
+
+/**
+ * Get the first TTS binary chunk as base64 (stored by WebSocket capture for Issue #414 audio-quality check).
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string|null>}
+ */
+async function getTtsFirstChunkBase64(page) {
+  return await page.evaluate(() => window.__ttsFirstChunkBase64 || null);
+}
+
+/**
+ * Get first 3 TTS chunks with size >= 1000 bytes as concatenated base64 (Issue #414).
+ * OpenAI sends small deltas first then large; use this for audio-quality assertion so we analyze actual TTS PCM.
+ */
+async function getTtsFirstLargeChunkBase64(page) {
+  return await page.evaluate(() => window.__ttsFirstLargeChunkBase64 || null);
+}
+
+/**
+ * Get per-chunk base64 list (first N chunks) for boundary diagnostic (Issue #414).
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string[]>}
+ */
+async function getTtsChunksBase64List(page) {
+  return await page.evaluate(() => window.__ttsChunksBase64List || []);
+}
+
+/**
+ * Return true if base64-decoded payload looks like JSON (object with string 'type').
+ * Used to catch proxy sending JSON as binary (Issue #414 integration coverage).
+ * @param {string} base64
+ * @returns {boolean}
+ */
+function isFirstBinaryChunkLikelyJson(base64) {
+  if (!base64 || typeof base64 !== 'string') return false;
+  try {
+    const buf = Buffer.from(base64, 'base64');
+    const text = buf.toString('utf8');
+    const parsed = JSON.parse(text);
+    return typeof parsed === 'object' && parsed !== null && typeof parsed.type === 'string';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Compute boundary info between consecutive PCM chunks for comparison (test-app vs CLI).
+ * For 16-bit LE: odd-length chunk's last byte is low byte of next sample; prepending to next chunk keeps continuity.
+ * @param {string[]} chunksBase64 - Array of base64-encoded chunk payloads
+ * @returns {{ chunkLengths: number[], boundaries: Array<{ afterChunk: number, chunkALen: number, chunkBLen: number, lastBytesA: number[], firstBytesB: number[], lastSampleLE?: number, firstSampleLE?: number, carriedPlusFirst?: number }> }}
+ */
+function getChunkBoundaryInfo(chunksBase64) {
+  const chunkLengths = chunksBase64.map((b64) => Buffer.from(b64, 'base64').length);
+  const boundaries = [];
+  for (let i = 0; i + 1 < chunksBase64.length; i++) {
+    const bufA = Buffer.from(chunksBase64[i], 'base64');
+    const bufB = Buffer.from(chunksBase64[i + 1], 'base64');
+    const lastBytesA = bufA.length >= 2 ? [bufA[bufA.length - 2], bufA[bufA.length - 1]] : bufA.length === 1 ? [bufA[0]] : [];
+    const firstBytesB = bufB.length >= 2 ? [bufB[0], bufB[1]] : bufB.length >= 1 ? [bufB[0]] : [];
+    const lastSampleLE = bufA.length >= 2 ? bufA.readInt16LE(bufA.length - 2) : undefined;
+    const firstSampleLE = bufB.length >= 2 ? bufB.readInt16LE(0) : undefined;
+    let carriedPlusFirst;
+    if (bufA.length % 2 === 1 && bufB.length >= 1) {
+      const u = bufA.readUInt8(bufA.length - 1) | (bufB.readUInt8(0) << 8);
+      carriedPlusFirst = u > 0x7fff ? u - 0x10000 : u;
+    } else {
+      carriedPlusFirst = undefined;
+    }
+    boundaries.push({
+      afterChunk: i,
+      chunkALen: bufA.length,
+      chunkBLen: bufB.length,
+      lastBytesA,
+      firstBytesB,
+      lastSampleLE,
+      firstSampleLE,
+      carriedPlusFirst,
+    });
+  }
+  return { chunkLengths, boundaries };
+}
+
+/**
+ * Decode base64 PCM (16-bit LE, per OpenAI Realtime API) and compute metrics.
+ * Tries both little-endian and big-endian; passes only if LE is clearly more speech-like (lower ZCR).
+ * Used to detect buzzing/hissing: wrong endianness yields noise-like ZCR; ZCR=0 on a long segment is non-speech.
+ * @param {string} base64 - Base64-encoded PCM (one or more chunks concatenated)
+ * @returns {{ rms: number, peak: number, zcr: number, sampleCount: number, speechLike: boolean, message: string }}
+ */
+function analyzePCMChunkBase64(base64) {
+  const buf = Buffer.from(base64, 'base64');
+  const numSamples = Math.floor(buf.length / 2);
+  if (numSamples === 0) {
+    return { rms: 0, peak: 0, zcr: 0, sampleCount: 0, speechLike: false, message: 'No samples (chunk too short or empty)' };
+  }
+
+  function decodeAndMetrics(littleEndian) {
+    const samples = [];
+    for (let i = 0; i < numSamples; i++) {
+      const v = littleEndian ? buf.readInt16LE(i * 2) : buf.readInt16BE(i * 2);
+      samples.push(v / 32768);
+    }
+    let sumSq = 0;
+    let peak = 0;
+    let zc = 0;
+    for (let i = 0; i < samples.length; i++) {
+      const s = samples[i];
+      sumSq += s * s;
+      if (Math.abs(s) > peak) peak = Math.abs(s);
+      if (i > 0 && (samples[i - 1] >= 0) !== (s >= 0)) zc++;
+    }
+    const rms = Math.sqrt(sumSq / samples.length);
+    const zcr = (samples.length - 1) > 0 ? zc / (samples.length - 1) : 0;
+    return { rms, peak, zcr };
+  }
+
+  const le = decodeAndMetrics(true);
+  const be = decodeAndMetrics(false);
+
+  // Use LE metrics for the main check (API specifies LE)
+  const { rms, peak, zcr } = le;
+
+  // Speech-like thresholds (Issue #414)
+  const RMS_MIN = 0.004;
+  const RMS_MAX = 0.75;
+  const PEAK_MAX = 1.0; // Allow full-scale; 0.99 was too strict for real TTS (Issue #414)
+  const ZCR_MAX = 0.45;
+  // For longer segments, require some zero crossings (ZCR=0 suggests wrong decode or non-speech)
+  const ZCR_MIN = numSamples >= 200 ? 0.01 : 0;
+
+  const okRms = rms >= RMS_MIN && rms <= RMS_MAX;
+  const okPeak = peak <= PEAK_MAX;
+  const okZcr = zcr >= ZCR_MIN && zcr <= ZCR_MAX;
+  // If LE looks like noise (high ZCR) but BE looks more structured (lower ZCR), stream may be BE → playback wrong
+  const beMoreSpeechLike = be.zcr < zcr && be.zcr <= ZCR_MAX && be.rms >= RMS_MIN && be.rms <= RMS_MAX;
+  const speechLike = okRms && okPeak && okZcr && !beMoreSpeechLike;
+  const reason = !okZcr
+    ? (zcr < ZCR_MIN ? `zcr=${zcr.toFixed(4)} too low (expected ≥${ZCR_MIN} for ${numSamples} samples)` : `zcr=${zcr.toFixed(4)} too high (expected ≤${ZCR_MAX})`)
+    : beMoreSpeechLike
+      ? `stream may be big-endian (BE zcr=${be.zcr.toFixed(4)} more speech-like than LE zcr=${zcr.toFixed(4)})`
+      : null;
+  const message = speechLike
+    ? `TTS audio appears speech-like (rms=${rms.toFixed(4)}, peak=${peak.toFixed(4)}, zcr=${zcr.toFixed(4)}, n=${numSamples})`
+    : `TTS audio appears to be buzzing/hissing or invalid. ${reason || `rms=${rms.toFixed(4)} (expected ${RMS_MIN}-${RMS_MAX}), peak=${peak.toFixed(4)} (expected ≤${PEAK_MAX}), zcr=${zcr.toFixed(4)} (expected ${ZCR_MIN}-${ZCR_MAX}).`}`;
+
+  return { rms, peak, zcr, sampleCount: numSamples, speechLike, message };
 }
 
 /**
@@ -1458,6 +1664,12 @@ export {
   sendTextMessage, // Send a text message through the UI and wait for input to clear
   installWebSocketCapture, // Install WebSocket message capture in browser context for testing
   getCapturedWebSocketData, // Retrieve captured WebSocket messages and their counts
+  getTtsFirstChunkBase64, // Get first TTS binary chunk as base64 for audio-quality check (Issue #414)
+  getTtsFirstLargeChunkBase64, // First 3 chunks >= 1000 bytes (actual TTS PCM; use for quality assertion)
+  getTtsChunksBase64List, // Get per-chunk base64 list for boundary diagnostic (Issue #414)
+  isFirstBinaryChunkLikelyJson, // True if first binary chunk decodes to JSON with type (catches JSON sent as binary)
+  getChunkBoundaryInfo, // Boundary bytes between consecutive chunks (compare test-app vs CLI)
+  analyzePCMChunkBase64, // Analyze PCM chunk (RMS/peak/ZCR) to detect buzzing/hissing
   pollForBinaryWebSocketMessages, // Poll for binary WebSocket messages with logging
   installMockWebSocket, // Replace global WebSocket with mock implementation for testing
   assertConnectionHealthy, // Assert that connection status and ready state are both healthy

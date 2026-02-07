@@ -1,42 +1,54 @@
 /**
  * Audio processing utilities for smooth real-time audio playback
+ *
+ * Format and conversion follow:
+ * - OpenAI Realtime API: session.audio.output.format is {"type":"audio/pcm","rate":24000};
+ *   response.output_audio.delta carries base64-encoded PCM in that format.
+ *   https://platform.openai.com/docs/api-reference/realtime-server-events/response/output_audio/delta
+ *   Realtime guide input_audio_buffer.append uses 16-bit PCM little-endian (setInt16(..., true));
+ *   output uses the same session format. https://platform.openai.com/docs/guides/realtime-conversations
+ * - Web Audio API: AudioBuffer stores "non-interleaved IEEE 754 32-bit linear PCM" in range -1 to +1.
+ *   https://webaudio.github.io/web-audio-api/#dom-audiobuffer-getchanneldata
  */
 
 /**
- * Creates an AudioBuffer from raw Linear16 PCM data
- * @param audioContext The Web Audio API AudioContext
- * @param data ArrayBuffer containing Linear16 PCM audio data
- * @param sampleRate Sample rate of the audio data (default: 24000Hz)
- * @returns AudioBuffer ready for playback
+ * Creates an AudioBuffer from raw 16-bit PCM data conforming to OpenAI Realtime output format
+ * (audio/pcm, rate 24000, 16-bit signed integer, little-endian).
+ *
+ * @param audioContext The Web Audio API AudioContext (sample rate must match data, e.g. 24000 for Realtime output)
+ * @param data ArrayBuffer containing 16-bit little-endian PCM (2 bytes per sample)
+ * @param sampleRate Sample rate of the audio data (default 24000 per Realtime API)
+ * @returns AudioBuffer ready for playback, or undefined if data is empty
  */
 export function createAudioBuffer(
   audioContext: AudioContext, 
   data: ArrayBuffer, 
   sampleRate: number = 24000
 ): AudioBuffer | undefined {
-  // PCM16 = 2 bytes per sample; odd length cannot be viewed as Int16Array without losing a byte.
-  // AudioManager.queueAudio now carries the odd byte into the next chunk to avoid truncation buzz.
-  // This truncation is a fallback for other callers; dropping a byte misaligns the stream and can cause buzzing.
+  // PCM16 = 2 bytes per sample. Do NOT drop bytes in the streaming path — AudioManager.queueAudio carries the odd byte
+  // into the next chunk; callers in the playback pipeline must pass even-length data. Truncation here is only a last-resort
+  // fallback for non-streaming callers; dropping a byte misaligns the stream and causes buzzing.
   let processedData = data;
   if (data.byteLength % 2 !== 0) {
     processedData = data.slice(0, data.byteLength - 1);
     console.warn(
-      `Audio buffer had odd length (${data.byteLength} bytes), truncated to even length (${processedData.byteLength} bytes) — may cause buzz if streamed`
+      `[createAudioBuffer] Odd length (${data.byteLength} bytes) — truncated to even; avoid in streaming path (use carry in queueAudio)`
     );
   }
 
-  const audioDataView = new Int16Array(processedData);
-  if (audioDataView.length === 0) {
+  const numSamples = processedData.byteLength / 2;
+  if (numSamples === 0) {
     console.error("Received audio data is empty.");
     return undefined;
   }
 
-  const buffer = audioContext.createBuffer(1, audioDataView.length, sampleRate);
+  const buffer = audioContext.createBuffer(1, numSamples, sampleRate);
   const channelData = buffer.getChannelData(0);
+  const view = new DataView(processedData);
 
-  // Convert linear16 PCM to float [-1, 1]
-  for (let i = 0; i < audioDataView.length; i++) {
-    channelData[i] = audioDataView[i] / 32768;
+  // 16-bit little-endian PCM (per Realtime API) → Float32 in [-1, 1] (per Web Audio API AudioBuffer)
+  for (let i = 0; i < numSamples; i++) {
+    channelData[i] = view.getInt16(i * 2, true) / 32768;
   }
 
   return buffer;

@@ -123,6 +123,10 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     const pendingContextItems: string[] = [];
     /** TODO: Not expected to keep. Only forward the first Settings per connection; duplicate Settings (e.g. on reconnect/reload) must not send a second session.update or upstream can error. */
     let hasForwardedSessionUpdate = false;
+    /** Issue #414: TTS chunk boundary diagnostic (set OPENAI_PROXY_TTS_BOUNDARY_DEBUG=1 to log same format as test-app E2E). */
+    let ttsChunkLengths: number[] = [];
+    let lastTtsChunk: Buffer | null = null;
+    const ttsBoundaryDebug = process.env.OPENAI_PROXY_TTS_BOUNDARY_DEBUG === '1';
 
     const scheduleAudioCommit = () => {
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
@@ -392,9 +396,37 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           const delta = msg.delta;
           if (delta && typeof delta === 'string') {
             const pcm = Buffer.from(delta, 'base64');
-            if (pcm.length > 0) clientWs.send(pcm);
+            if (pcm.length > 0) {
+              if (ttsBoundaryDebug && lastTtsChunk !== null) {
+                const bufA = lastTtsChunk;
+                const bufB = pcm;
+                const lastBytesA = bufA.length >= 2 ? [bufA[bufA.length - 2], bufA[bufA.length - 1]] : (bufA.length === 1 ? [bufA[0]] : []);
+                const firstBytesB = bufB.length >= 2 ? [bufB[0], bufB[1]] : (bufB.length === 1 ? [bufB[0]] : []);
+                const lastSampleLE = bufA.length >= 2 ? bufA.readInt16LE(bufA.length - 2) : undefined;
+                const firstSampleLE = bufB.length >= 2 ? bufB.readInt16LE(0) : undefined;
+                let carriedPlusFirst: number | undefined;
+                if (bufA.length % 2 === 1 && bufB.length >= 1) {
+                  const u = bufA.readUInt8(bufA.length - 1) | (bufB.readUInt8(0) << 8);
+                  carriedPlusFirst = u > 0x7fff ? u - 0x10000 : u;
+                }
+                console.log(
+                  `[TTS BOUNDARY PROXY] Boundary after chunk ${ttsChunkLengths.length - 1}: chunk lengths ${bufA.length}, ${bufB.length}; ` +
+                    `last 2 bytes of A: [${lastBytesA.join(', ')}] (LE sample: ${lastSampleLE ?? 'n/a'}); ` +
+                    `first 2 bytes of B: [${firstBytesB.join(', ')}] (LE sample: ${firstSampleLE ?? 'n/a'})` +
+                    (carriedPlusFirst !== undefined ? `; carried+first as LE sample: ${carriedPlusFirst}` : '')
+                );
+              }
+              ttsChunkLengths.push(pcm.length);
+              lastTtsChunk = pcm;
+              clientWs.send(pcm);
+            }
           }
         } else if (msg.type === 'response.output_audio.done') {
+          if (ttsBoundaryDebug && ttsChunkLengths.length > 0) {
+            console.log(`[TTS BOUNDARY PROXY] Chunk lengths (first ${Math.min(ttsChunkLengths.length, 10)}): ${ttsChunkLengths.slice(0, 10).join(', ')}${ttsChunkLengths.length > 10 ? '...' : ''}`);
+          }
+          ttsChunkLengths = [];
+          lastTtsChunk = null;
           // No client message needed for playback; component just queues chunks. Skip forwarding.
         } else if (msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
           // Issue #388: send response.create only after upstream confirms the item was added
@@ -402,12 +434,15 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             pendingResponseCreateAfterItemAdded = false;
             upstream.send(JSON.stringify({ type: 'response.create' }));
           }
-          clientWs.send(raw);
+          // Issue #414: send as text so component routes as message, not binary (audio)
+          clientWs.send(text);
         } else {
-          clientWs.send(raw);
+          // Issue #414: send as text so component routes as message, not binary (audio)
+          clientWs.send(text);
         }
       } catch {
-        clientWs.send(raw);
+        // Issue #414: forward as text so JSON is not routed to audio pipeline
+        clientWs.send(raw.toString('utf8'));
       }
     });
 

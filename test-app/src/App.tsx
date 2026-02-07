@@ -230,6 +230,8 @@ function App() {
   const [recoverableAgentErrorCount, setRecoverableAgentErrorCount] = useState(0);
   /** Count of all agent errors (recoverable or not). Tests assert this stays 0 so we fail on any upstream error. */
   const [agentErrorCount, setAgentErrorCount] = useState(0);
+  /** Count of agent audio chunks passed to handleAgentAudio (Issue #414 diagnostic). */
+  const [agentAudioChunkCount, setAgentAudioChunkCount] = useState(0);
 
   // Helper to add logs - memoized
   const addLog = useCallback((message: string) => {
@@ -802,6 +804,10 @@ function App() {
   }, [textInput, addLog]);
 
 
+  const handleAgentAudioChunk = useCallback(() => {
+    setAgentAudioChunkCount((c) => c + 1);
+  }, []);
+
   const handleAgentSpeaking = useCallback(() => {
     // Note: agentSpeaking state is updated by handlePlaybackStateChange when playback actually starts
     // Component logs playback/state; no redundant addLog here
@@ -845,6 +851,33 @@ function App() {
       if (deepgramRef.current) deepgramRef.current.allowAgent();
     }
   }, [addLog, ttsMuted]);
+
+  /** Issue #414: Play a short tone via the component's AudioContext to verify the same output path as TTS. */
+  const handlePlayTestTone = useCallback(() => {
+    const ctx = deepgramRef.current?.getAudioContext?.();
+    if (!ctx) {
+      addLog('Play test tone: No AudioContext yet. Connect and send a message first so the component creates it.');
+      return;
+    }
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(() => playTestTone(ctx)).catch((e) => addLog(`Test tone: resume failed: ${e}`));
+    } else {
+      playTestTone(ctx);
+    }
+    function playTestTone(audioContext: AudioContext) {
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, audioContext.currentTime);
+      osc.connect(gain);
+      gain.connect(audioContext.destination);
+      gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+      osc.start(audioContext.currentTime);
+      osc.stop(audioContext.currentTime + 0.2);
+      addLog('Play test tone: played 440 Hz for 0.2s via component AudioContext.');
+    }
+  }, [addLog]);
   
   const updateContext = () => {
     // Define the possible instruction prompts
@@ -1036,6 +1069,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         onUserStoppedSpeaking={handleUserStoppedSpeaking}
         onUtteranceEnd={handleUtteranceEnd}
         onAgentSpeaking={handleAgentSpeaking}
+        onAgentAudioChunk={handleAgentAudioChunk}
         onIdleTimeoutActiveChange={handleIdleTimeoutActiveChange}
         audioConstraints={memoizedAudioConstraints} // Issue #243: Echo cancellation configuration
         debug={isDebugMode} // Enable debug only when debug mode is explicitly enabled
@@ -1061,6 +1095,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         {greetingSent && <span data-testid="greeting-sent" style={{ opacity: 0 }}>true</span>}
         <span data-testid="recoverable-agent-error-count" aria-hidden="true">{recoverableAgentErrorCount}</span>
         <span data-testid="agent-error-count" aria-hidden="true">{agentErrorCount}</span>
+        <span data-testid="agent-audio-chunks-received" aria-hidden="true">{agentAudioChunkCount}</span>
         
         {/* API Key Status Indicator */}
         {(() => {
@@ -1254,6 +1289,15 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           data-testid="tts-mute-button"
         >
           {ttsMuted ? '🔇 Mute' : '🔊 Enable'}
+        </button>
+        <button
+          type="button"
+          onClick={handlePlayTestTone}
+          style={{ padding: '10px 20px', pointerEvents: 'auto' }}
+          title="Play a short tone using the same AudioContext as TTS (Issue #414). Connect and send a message first if button has no effect."
+          data-testid="play-test-tone-button"
+        >
+          Play test tone
         </button>
         <button 
           onClick={updateContext}

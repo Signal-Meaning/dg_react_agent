@@ -21,6 +21,12 @@ import {
   waitForAgentResponseEnhanced,
   installWebSocketCapture,
   getCapturedWebSocketData,
+  getTtsFirstChunkBase64,
+  getTtsFirstLargeChunkBase64,
+  getTtsChunksBase64List,
+  isFirstBinaryChunkLikelyJson,
+  getChunkBoundaryInfo,
+  analyzePCMChunkBase64,
   getAudioDiagnostics,
   getComponentAudioContextState,
   waitForAudioPlaybackStart,
@@ -63,6 +69,7 @@ test.describe('OpenAI proxy TTS diagnostic (Issue #414)', () => {
     const diagnostics = await getAudioDiagnostics(page);
     const componentCtxState = await getComponentAudioContextState(page);
     const audioPlayingEl = await page.locator('[data-testid="audio-playing-status"]').textContent();
+    const agentAudioChunksReceived = parseInt(await page.locator('[data-testid="agent-audio-chunks-received"]').textContent() || '0', 10);
 
     // Diagnostic output
     console.log('[TTS DIAGNOSTIC] WebSocket received:', totalReceived, 'total,', binaryCount, 'binary');
@@ -70,6 +77,7 @@ test.describe('OpenAI proxy TTS diagnostic (Issue #414)', () => {
     console.log('[TTS DIAGNOSTIC] Component AudioContext:', componentCtxState);
     console.log('[TTS DIAGNOSTIC] audio-playing-status element:', audioPlayingEl);
     console.log('[TTS DIAGNOSTIC] playbackStarted (within wait window):', playbackStarted);
+    console.log('[TTS DIAGNOSTIC] agent-audio-chunks-received (handleAgentAudio calls):', agentAudioChunksReceived);
     if (binaryReceived.length > 0) {
       const sizes = binaryReceived.slice(0, 5).map((m) => m.size ?? '(no size)').join(', ');
       console.log('[TTS DIAGNOSTIC] First binary chunk sizes (up to 5):', sizes);
@@ -87,17 +95,66 @@ test.describe('OpenAI proxy TTS diagnostic (Issue #414)', () => {
         'If 0: proxy may not be sending PCM (response.output_audio.delta → binary), or backend not running / wrong endpoint.'
     ).toBeGreaterThanOrEqual(1);
 
-    // Assert 2: If we got binary, playback must have started (component playback path)
+    // Assert 2: First binary frame must not be JSON (proxy must send only PCM as binary; Issue #414 integration coverage)
+    const chunksBase64 = await getTtsChunksBase64List(page);
+    if (chunksBase64.length > 0) {
+      const firstBinaryIsJson = isFirstBinaryChunkLikelyJson(chunksBase64[0]);
+      expect(
+        firstBinaryIsJson,
+        'First binary frame must not be JSON (proxy must send only PCM as binary). If true, text/JSON was sent as binary and is being routed to audio.'
+      ).toBe(false);
+    }
+
+    // Assert 3: Component must receive binary in handleAgentAudio (routing from WebSocketManager)
+    expect(
+      agentAudioChunksReceived,
+      `Expected handleAgentAudio to be called for each binary frame. WebSocket received ${binaryCount} binary; component received ${agentAudioChunksReceived}.`
+    ).toBeGreaterThanOrEqual(binaryCount > 0 ? 1 : 0);
+    if (binaryCount > 0 && agentAudioChunksReceived < binaryCount) {
+      console.log(
+        `[TTS DIAGNOSTIC] Note: binary frames ${binaryCount} vs handleAgentAudio calls ${agentAudioChunksReceived} (some binary may be routed as message by WebSocketManager)`
+      );
+    }
+
+    // Assert 4: If we got binary, playback must have started (component playback path)
     expect(
       binaryCount < 1 || playbackStarted,
       `Received ${binaryCount} binary TTS chunks but audio-playing-status never became true. ` +
         'Component playback path (handleAgentAudio → sink/queueAudio) is not running.'
     ).toBeTruthy();
 
-    // Assert 3: AudioContext must be runnable (running, suspended, or not yet created)
+    // Assert 5: AudioContext must be runnable (running, suspended, or not yet created)
     expect(
       [diagnostics.state, componentCtxState].some((s) => s === 'running' || s === 'suspended' || s === 'no-context'),
       `AudioContext state: diagnostics.state=${diagnostics.state}, componentCtx=${componentCtxState}`
     ).toBeTruthy();
+
+    // Boundary diagnostic (Issue #414): log bytes at chunk boundaries for comparison with CLI (run before Assert 6 so we get output even when test fails)
+    const chunksBase64ForBoundary = await getTtsChunksBase64List(page);
+    if (chunksBase64ForBoundary.length >= 2) {
+      const { chunkLengths, boundaries } = getChunkBoundaryInfo(chunksBase64ForBoundary);
+      console.log('[TTS DIAGNOSTIC] Chunk lengths (first ' + chunkLengths.length + '):', chunkLengths.join(', '));
+      boundaries.forEach((b) => {
+        console.log(
+          `[TTS DIAGNOSTIC] Boundary after chunk ${b.afterChunk}: chunk lengths ${b.chunkALen}, ${b.chunkBLen}; ` +
+            `last 2 bytes of A: [${b.lastBytesA.join(', ')}] (LE sample: ${b.lastSampleLE ?? 'n/a'}); ` +
+            `first 2 bytes of B: [${b.firstBytesB.join(', ')}] (LE sample: ${b.firstSampleLE ?? 'n/a'})` +
+            (b.carriedPlusFirst !== undefined ? `; carried+first as LE sample: ${b.carriedPlusFirst}` : '')
+        );
+      });
+    }
+
+    // Assert 6: TTS PCM (first 3 large chunks, >=1000 bytes each) must look like speech (Issue #414: OpenAI sends small deltas first, then large)
+    const firstLargeBase64 = await getTtsFirstLargeChunkBase64(page);
+    const fallbackBase64 = await getTtsFirstChunkBase64(page);
+    const chunkBase64 = firstLargeBase64 || fallbackBase64;
+    if (binaryCount > 0 && chunkBase64) {
+      const analysis = analyzePCMChunkBase64(chunkBase64);
+      console.log('[TTS DIAGNOSTIC] Audio quality:', analysis.message + (firstLargeBase64 ? ' (TTS-sized chunks)' : ' (fallback: first chunks)'));
+      expect(
+        analysis.speechLike,
+        analysis.message + ' (Decoded as 16-bit LE PCM per OpenAI Realtime API; non–speech-like metrics suggest wrong format or endianness.)'
+      ).toBeTruthy();
+    }
   });
 });

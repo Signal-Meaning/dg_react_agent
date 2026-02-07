@@ -704,11 +704,18 @@ async function attachOpenAIForwarder() {
   const upstreamOptions = useHttps ? { rejectUnauthorized: false } : {};
   // Use noServer: true so upgrade is routed by path in a single handler (avoids /openai hitting Deepgram first and getting 400).
   wssOpenAI = new WebSocketServer({ noServer: true, path: '/openai' });
+  const openaiForwarderBoundaryDebug = process.env.OPENAI_PROXY_TTS_BOUNDARY_DEBUG === '1';
   wssOpenAI.on('connection', (clientWs, req) => {
     const upstream = new WebSocket(targetUrl, upstreamOptions);
     upstream.on('open', () => {
       clientWs.on('message', (data, isBinary) => upstream.send(data, { binary: isBinary }));
-      upstream.on('message', (data, isBinary) => clientWs.send(data, { binary: isBinary }));
+      upstream.on('message', (data, isBinary) => {
+        if (openaiForwarderBoundaryDebug && isBinary) {
+          const len = data?.byteLength ?? data?.length;
+          if (len != null) console.log(`[TTS BOUNDARY FORWARDER] 8080←8081 binary size: ${len}`);
+        }
+        clientWs.send(data, { binary: isBinary });
+      });
       clientWs.on('close', () => upstream.close());
       upstream.on('close', () => clientWs.close());
       clientWs.on('error', () => upstream.close());

@@ -135,6 +135,7 @@ function DeepgramVoiceInteraction(
     onPlaybackStateChange,
     onError,
     onAgentSpeaking,
+    onAgentAudioChunk,
     onSettingsApplied,
     onFunctionCallRequest,
     debug,
@@ -2628,6 +2629,7 @@ function DeepgramVoiceInteraction(
 
   // Handle agent audio - only relevant if agent is configured
   const handleAgentAudio = async (data: ArrayBuffer) => {
+    onAgentAudioChunk?.(data?.byteLength ?? 0);
     if (props.debug) {
       console.log('🎵 [AUDIO EVENT] handleAgentAudio received buffer bytes=', data?.byteLength);
     }

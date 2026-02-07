@@ -5,10 +5,12 @@
  * - Browser: Web Audio API (AudioManager.queueAudio)
  * - Node: system output via the speaker package (CLI)
  *
- * Format is typically PCM 24 kHz mono 16-bit (e.g. OpenAI Realtime, Deepgram).
+ * Format matches OpenAI Realtime API session.audio.output.format: type "audio/pcm", rate 24000,
+ * 16-bit signed integer, little-endian, mono. See:
+ * https://platform.openai.com/docs/api-reference/realtime-server-events/response/output_audio/delta
  */
 
-/** PCM format used for agent TTS streaming (e.g. OpenAI Realtime output_audio). */
+/** PCM format for agent TTS streaming (OpenAI Realtime output: audio/pcm, 24 kHz, 16-bit LE, mono). */
 export const PCM_STREAM_FORMAT = {
   sampleRate: 24000,
   channels: 1,

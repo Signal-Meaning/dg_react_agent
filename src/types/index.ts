@@ -247,6 +247,12 @@ export interface DeepgramVoiceInteractionProps {
   onAgentSpeaking?: () => void;
 
   /**
+   * Called when the component receives a binary agent audio chunk (e.g. TTS PCM).
+   * Used for diagnostics (Issue #414) to verify handleAgentAudio is invoked. Not required for playback.
+   */
+  onAgentAudioChunk?: (bytes: number) => void;
+
+  /**
    * VAD (Voice Activity Detection) Event Callbacks
    */
   

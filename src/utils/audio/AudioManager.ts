@@ -155,6 +155,8 @@ const DEFAULT_OPTIONS: Partial<AudioManagerOptions> = {
 export class AudioManager {
   private options: Omit<AudioManagerOptions, 'processorUrl'>; // processorUrl is no longer needed
   private audioContext: AudioContext | null = null;
+  /** Dedicated playback context at outputSampleRate (default 24000). Per OpenAI Realtime API session.audio.output.format.rate. Main context stays 16 kHz for mic; 24k→16k resampling caused buzzing (Issue #414). */
+  private playbackContext: AudioContext | null = null;
   private workletNode: AudioWorkletNode | null = null;
   private microphoneStream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
@@ -487,37 +489,37 @@ export class AudioManager {
    * Queues audio data for playback using precise timing
    * @param data ArrayBuffer containing audio data (Linear16 PCM expected)
    */
+  /**
+   * Returns the 24 kHz playback context (Issue #414). TTS is 24 kHz; using the main 16 kHz context caused resampling buzz.
+   */
+  private getOrCreatePlaybackContext(): AudioContext {
+    if (this.playbackContext) return this.playbackContext;
+    const rate = this.options.outputSampleRate ?? 24000;
+    this.playbackContext = new AudioContext({ sampleRate: rate, latencyHint: 'interactive' });
+    this.log(`[queueAudio] Created dedicated playback AudioContext at ${rate} Hz`);
+    return this.playbackContext;
+  }
+
   public async queueAudio(data: ArrayBuffer): Promise<void> {
     this.log(`🎵 [queueAudio] Received audio data: ${data.byteLength} bytes`);
     
-    if (!this.isInitialized) {
-      this.log('AudioManager not initialized, initializing now...');
-      await this.initialize();
-      this.log('AudioManager initialized from queueAudio');
-    }
+    const ctx = this.getOrCreatePlaybackContext();
     
-    // Check if audioContext is available AFTER initialization
-    if (!this.audioContext) {
-      this.log('ERROR: AudioContext is null after initialization! isInitialized:', this.isInitialized);
-      throw new Error('AudioContext not available for audio playback - initialization may have failed silently');
-    }
-    
-    // Attempt to resume the AudioContext if it's suspended. Do not fail if user gesture has not occurred yet;
-    // allow scheduling so playback can start once the context is resumed by user interaction (e.g., text focus).
-    if (this.audioContext.state === 'suspended') {
-      this.log('AudioContext suspended, attempting resume for playback...');
+    // Attempt to resume the playback context if it's suspended.
+    if (ctx.state === 'suspended') {
+      this.log('Playback AudioContext suspended, attempting resume...');
       try {
-        await this.audioContext.resume();
-        this.log('AudioContext resumed successfully');
+        await ctx.resume();
+        this.log('Playback AudioContext resumed successfully');
       } catch (e) {
-        this.log('AudioContext resume failed (likely no user gesture yet) — scheduling to play after resume');
-        // Continue without throwing; scheduling below will take effect once context is resumed.
+        this.log('Playback AudioContext resume failed (likely no user gesture yet) — scheduling to play after resume');
       }
     }
     
     try {
-      // PCM16 = 2 bytes per sample. Odd-length chunks would be truncated by createAudioBuffer, misaligning the stream and causing buzz.
-      // Carry the odd byte into the next chunk instead of dropping it.
+      // PCM16 = 2 bytes per sample, little-endian (Realtime API). Do NOT drop bytes here — causes stream misalignment and buzzing (Issue #414).
+      // Odd-length chunks: the last byte is the low byte of the first sample of the next chunk. Carry it and prepend to the next chunk
+      // so the first sample of the combined buffer is correct; otherwise we corrupt sample boundaries and get hissing/clicking.
       let chunk = new Uint8Array(data);
       if (this.pendingPcmByte !== null) {
         const combined = new Uint8Array(1 + chunk.length);
@@ -539,10 +541,10 @@ export class AudioManager {
 
       this.log(`Processing audio data (${data.byteLength} bytes → ${toProcess.byteLength} after carry)...`);
       this.log(`[queueAudio] Before: activeSourceNodes.length = ${this.activeSourceNodes.length}, startTimeRef.current = ${this.startTimeRef.current}`);
-      this.log(`[queueAudio] AudioContext state: ${this.audioContext.state}`);
+      this.log(`[queueAudio] Playback AudioContext state: ${ctx.state}`);
 
       const buffer = createAudioBuffer(
-        this.audioContext,
+        ctx,
         toProcess,
         this.options.outputSampleRate!
       );
@@ -553,17 +555,16 @@ export class AudioManager {
       
       this.log(`[queueAudio] Created audio buffer (${buffer.duration.toFixed(3)}s)`);
       
-      // Play the buffer with precise timing
+      // Play the buffer with precise timing (use playback context)
       const source = playAudioBuffer(
-        this.audioContext, 
-        buffer, 
-        this.startTimeRef, 
-        this.analyzer || undefined
+        ctx,
+        buffer,
+        this.startTimeRef,
+        undefined
       );
       this.log(`[queueAudio] Scheduled source to start at ${this.startTimeRef.current - buffer.duration} (duration: ${buffer.duration})`);
       
-      // Connect to audio output
-      source.connect(this.audioContext.destination);
+      // playAudioBuffer already connected source to ctx.destination; do not connect again (double connection = 2x volume → clipping/buzz)
       
       // Add to active sources array for tracking
       this.activeSourceNodes.push(source);
@@ -573,8 +574,7 @@ export class AudioManager {
       this.currentSource = source;
       
       // Add fallback timeout for suspended AudioContext
-      // If the AudioContext is suspended, the audio won't play and onended won't fire
-      if (this.audioContext.state === 'suspended') {
+      if (ctx.state === 'suspended') {
         this.log(`⚠️ AudioContext is suspended - adding fallback timeout for ${buffer.duration}s`);
         setTimeout(() => {
           this.log(`[fallback] Audio should have finished playing (duration: ${buffer.duration}s)`);
@@ -635,7 +635,8 @@ export class AudioManager {
       };
       
       this.log(`[queueAudio] After: activeSourceNodes.length = ${this.activeSourceNodes.length}, startTimeRef.current = ${this.startTimeRef.current}`);
-      this.log(`Audio scheduled to play at ${this.startTimeRef.current?.toFixed?.(3) || 'undefined'}s, current time: ${this.audioContext?.currentTime?.toFixed?.(3) || 'N/A'}s, active sources: ${this.activeSourceNodes.length}`);
+      const ctxTime = (this.playbackContext?.currentTime ?? this.audioContext?.currentTime)?.toFixed?.(3) ?? 'N/A';
+      this.log(`Audio scheduled to play at ${this.startTimeRef.current?.toFixed?.(3) || 'undefined'}s, current time: ${ctxTime}s, active sources: ${this.activeSourceNodes.length}`);
       
     } catch (error) {
       this.log('Failed to process audio:', error);
@@ -659,14 +660,15 @@ export class AudioManager {
     this.log('🚨 CLEARING AUDIO QUEUE - EMERGENCY STOP 🚨');
     this.log(`[clearAudioQueue] Before: activeSourceNodes.length = ${this.activeSourceNodes.length}, startTimeRef.current = ${this.startTimeRef.current}`);
     
-    if (!this.audioContext) {
-      this.log('❌ No audioContext available');
+    const ctx = this.playbackContext ?? this.audioContext;
+    if (!ctx) {
+      this.log('❌ No playback or main AudioContext available');
       return;
     }
     
     // Reset the timing reference to stop future scheduling
     const oldTime = this.startTimeRef.current;
-    this.startTimeRef.current = this.audioContext.currentTime;
+    this.startTimeRef.current = ctx.currentTime;
     this.log(`⏱️ Reset timing reference from ${oldTime?.toFixed?.(3) || 'undefined'}s to ${this.startTimeRef.current?.toFixed?.(3) || 'undefined'}s`);
     
     // Stop all active source nodes
@@ -715,12 +717,12 @@ export class AudioManager {
       this.log('ℹ️ Not emitting playing event since we weren\'t playing');
     }
     
-    // Try to flush the audio context
+    // Try to flush the audio context used for playback
     try {
-      if (this.audioContext.state !== 'closed') {
+      if (ctx.state !== 'closed') {
         this.log('🔄 Attempting to flush the audio context');
-        const dummy = this.audioContext.createGain();
-        dummy.connect(this.audioContext.destination);
+        const dummy = ctx.createGain();
+        dummy.connect(ctx.destination);
         dummy.disconnect();
       }
     } catch (err) {
@@ -774,6 +776,10 @@ export class AudioManager {
       // this.analyzerData = null; // Unused for now
     }
     
+    if (this.playbackContext) {
+      this.playbackContext.close?.();
+      this.playbackContext = null;
+    }
     if (this.audioContext) {
       this.audioContext.close?.();
       this.audioContext = null;
@@ -813,7 +819,7 @@ export class AudioManager {
    * Used to ensure AudioContext is ready before greeting audio arrives
    */
   public getAudioContext(): AudioContext | null {
-    return this.audioContext;
+    return this.playbackContext ?? this.audioContext;
   }
 
   /**
