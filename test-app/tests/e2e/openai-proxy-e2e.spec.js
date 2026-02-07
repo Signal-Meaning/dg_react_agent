@@ -27,6 +27,7 @@ import {
   waitForAgentResponseEnhanced,
   disconnectComponent,
   getAgentState,
+  assertNoRecoverableAgentErrors,
 } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
 
@@ -45,6 +46,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     // Component and test app require Settings applied before first message (Issue #406).
     // Enforce actual behavior: connection + Settings applied = ready for messages.
     await waitForSettingsApplied(page, 15000);
+    await assertNoRecoverableAgentErrors(page);
   });
 
   test('1b. Greeting – proxy injects greeting; component shows greeting-sent (Issue #381)', async ({ page }) => {
@@ -52,6 +54,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     await page.waitForSelector('[data-testid="greeting-sent"]', { timeout: 10000 });
+    await assertNoRecoverableAgentErrors(page);
   });
 
   test('2. Single message – inject user message, receive agent response in Message Bubble', async ({ page }) => {
@@ -63,6 +66,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const response = await page.locator('[data-testid="agent-response"]').textContent();
     expect(response).toBeTruthy();
     expect(response).not.toBe('(Waiting for agent response...)');
+    await assertNoRecoverableAgentErrors(page);
   });
 
   test('3. Multi-turn – sequential messages, second agent response appears', async ({ page }) => {
@@ -75,6 +79,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const r2 = await sendMessageAndWaitForResponse(page, "What did I just say?", AGENT_RESPONSE_TIMEOUT);
     expect(r2).toBeTruthy();
     expect(r2.length).toBeGreaterThan(0);
+    await assertNoRecoverableAgentErrors(page);
   });
 
   test('4. Reconnection – disconnect then send, app reconnects and user receives response', async ({ page }) => {
@@ -86,6 +91,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const secondResponse = await sendMessageAndWaitForResponse(page, "Second after disconnect.", AGENT_RESPONSE_TIMEOUT);
     expect(secondResponse).toBeTruthy();
     expect(secondResponse.length).toBeGreaterThan(0);
+    await assertNoRecoverableAgentErrors(page);
   });
 
   test('5. Basic audio – send recorded audio; assert agent response appears in [data-testid="agent-response"]', async ({ page, context }) => {
@@ -116,6 +122,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const response = await page.locator('[data-testid="agent-response"]').textContent();
     expect(response).toBeTruthy();
     expect(response).not.toBe('(Waiting for agent response...)');
+    await assertNoRecoverableAgentErrors(page);
   });
 
   test('6. Simple function calling – trigger function call; assert response in [data-testid="agent-response"]', async ({ page }) => {
@@ -130,6 +137,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const response = await page.locator('[data-testid="agent-response"]').textContent();
     expect(response).toBeTruthy();
     expect(response).not.toBe('(Waiting for agent response...)');
+    await assertNoRecoverableAgentErrors(page);
   });
 
   test('7. Reconnection with context – disconnect, reconnect; proxy sends context via conversation.item.create', async ({ page }) => {
@@ -145,6 +153,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const secondResponse = await sendMessageAndWaitForResponse(page, "Hello again.", AGENT_RESPONSE_TIMEOUT);
     expect(secondResponse).toBeTruthy();
     expect(secondResponse.length).toBeGreaterThan(0);
+    await assertNoRecoverableAgentErrors(page);
   });
 
   test('8. Error handling – wrong proxy URL shows closed/error and does not hang', async ({ page }) => {

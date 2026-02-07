@@ -64,6 +64,13 @@ Add or extend a script that integrates with the OpenAI proxy to send command-lin
   `VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai E2E_USE_EXISTING_SERVER=1 npx playwright test openai-proxy-tts-diagnostic`  
   (Start test-app and backend first, or let Playwright start them.)
 
+### Test-app and OpenAI voice-to-voice (text + audio) – suspected playback handling gap
+
+- **OpenAI flow has both text and audio:** With a voice-to-voice agent like OpenAI Realtime, the upstream sends both **text** (e.g. `response.output_text.done`, transcript) and **audio** (`response.output_audio.delta` / `.done`) for playback. The test-app should handle both; we may not have updated it fully for the OpenAI flow yet.
+- **Observed:** In manual testing with the test-app against the OpenAI proxy, **playback is not heard** (or at most an initiating scratch on the speaker). This suggests the **test-app may be failing to handle audio playback from the OpenAI flow correctly** (e.g. format, buffering, or component path for OpenAI binary PCM).
+- **Integration test is text-only:** The integration tests (`openai-proxy-integration.test.ts`) send `InjectUserMessage` and wait for `ConversationText` (from `response.output_text.done`). There is **no playback** in that test; it does not exercise the full voice-to-voice path. So integration tests do not verify OpenAI audio playback in the test-app.
+- **Implications:** Fixing or verifying OpenAI audio playback in the test-app is a separate track; the "server had an error" appears right after "Audio playback finished" in logs, so if playback is broken (e.g. no real audio played), the relationship between playback handling and the upstream error may be worth investigating. See [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md).
+
 ### TTS buzzing fix (odd-length PCM)
 
 - **Cause:** PCM16 is 2 bytes per sample. Upstream (e.g. OpenAI) can send chunks with an odd number of bytes. The previous code **truncated** the last byte to keep buffers even, which misaligned the sample stream and caused **buzzing** at chunk boundaries.
@@ -74,9 +81,13 @@ Add or extend a script that integrates with the OpenAI proxy to send command-lin
 
 - **Observed:** Test-app sometimes shows "The server had an error while processing your request" from the agent *after* a successful turn (e.g. right after "Audio playback finished"). Greeting-text-only and minimal-session diagnostics did not remove the error, so the trigger is not our session or greeting payload.
 - **Likely cause:** Known OpenAI Realtime API behavior: the server can send an `error` event after a successful response (see [community reports](https://community.openai.com/t/realtime-api-the-server-had-an-error-while-processing-your-request/978856)). The CLI often "succeeds" because it exits on first ConversationText and closes the connection before the error arrives.
-- **Workaround:** When the component receives this error and the agent is already **idle** (e.g. just finished playback), it passes `recoverable: true` on the error to the host. The test-app then logs a warning ("You can continue or reconnect") instead of a hard error, so the user can keep using the app or reconnect.
+- **Workaround (UI only):** When the component receives this error and the agent is already **idle** (e.g. just finished playback), it passes `recoverable: true` on the error to the host. The test-app then logs a warning ("You can continue or reconnect") instead of a hard error, so the user can keep using the app or reconnect. **Tests do not treat it as success:** both integration and E2E tests are written to **fail** when this error is encountered (see below and [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md)).
 
-- **Why integration tests don't see it:** The integration tests (`tests/integration/openai-proxy-integration.test.ts`) use a **mock** upstream WebSocket that we control. The mock only sends the events we program (e.g. `session.updated`, `response.output_text.done`). We never tell the mock to send an `error` event. The test-app, in contrast, connects to the real proxy, which connects to the **real** OpenAI API, so it receives whatever the live API sends—including the post-response error. So integration tests verify protocol translation and proxy behavior; they do not reproduce live OpenAI API behavior.
+- **Regression trap (tests fail when defect is present):**
+  - **Integration:** `tests/integration/openai-proxy-integration.test.ts` – Any test that receives a message with `type: 'Error'` from the proxy calls `done(new Error(...))`, so the test **fails**. Real-API tests wait **5s** after a successful response before finishing, so a late-arriving "server had an error" within that window causes a failure. A mock-only test *"when upstream sends error after session.updated, client receives Error (proxy forwards error)"* verifies the proxy forwards upstream errors (test **passes** when client receives the Error). With mocks we do not simulate a failing run; with real API, if the upstream sends the error within 5s, the test fails.
+  - **E2E:** `test-app/tests/e2e/` OpenAI proxy specs call `assertNoRecoverableAgentErrors(page)`, which waits 3s then asserts `agent-error-count` and `recoverable-agent-error-count` are 0. The test-app increments both when it receives any agent error (recoverable or not). So when the upstream error occurs during an E2E run, the test **fails**.
+  - **Caveat:** If the real API sends the error **after** the 5s (integration) or 3s (E2E) window, that run can still pass. Passing with real APIs means no error was received within the wait window, not that the defect is fixed.
+  - **Summary:** The workaround keeps the UI usable; the tests ensure we fail when an error is received within the wait window.
 
 ---
 

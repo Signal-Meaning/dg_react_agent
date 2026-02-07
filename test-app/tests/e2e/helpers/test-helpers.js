@@ -780,6 +780,22 @@ async function getAgentState(page) {
 }
 
 /**
+ * Assert that no upstream agent errors occurred during the test (recoverable or not).
+ * The test-app increments agentErrorCount for every agent error and recoverableAgentErrorCount
+ * only when error.recoverable is true. E2E fails if either is non-zero (regression signal).
+ * Waits 3s before asserting so late-arriving errors (e.g. OpenAI "server had an error" after
+ * response) are reflected in the DOM before we check.
+ * @param {import('@playwright/test').Page} page
+ */
+async function assertNoRecoverableAgentErrors(page) {
+  await page.waitForTimeout(3000);
+  const totalEl = page.locator('[data-testid="agent-error-count"]');
+  await expect(totalEl).toHaveText('0', { timeout: 2000 });
+  const recoverableEl = page.locator('[data-testid="recoverable-agent-error-count"]');
+  await expect(recoverableEl).toHaveText('0', { timeout: 2000 });
+}
+
+/**
  * Wait for agent state to become a specific value
  * @param {import('@playwright/test').Page} page
  * @param {string} expectedState - Expected agent state (idle, listening, thinking, speaking, etc.)
@@ -1452,6 +1468,7 @@ export {
   assertConnectionState, // Assert connection is in expected state (with automatic waiting)
   disconnectComponent, // Disconnect the component (stop button or simulate network issue)
   getAgentState, // Get current agent state from UI
+  assertNoRecoverableAgentErrors, // Assert no recoverable upstream errors (fail E2E on regression)
   waitForAgentState, // Wait for agent state to become a specific value
   getAudioDiagnostics, // Get AudioContext state and audio playing status for diagnostics
   getAudioContextState, // Get AudioContext state from window (test-app specific)

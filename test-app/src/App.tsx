@@ -226,7 +226,11 @@ function App() {
   const [declarativeAutoStartTranscription, setDeclarativeAutoStartTranscription] = useState<boolean | undefined>(undefined);
   const [declarativeInterruptAgent, setDeclarativeInterruptAgent] = useState<boolean>(false);
   const [declarativeStartAudioCapture, setDeclarativeStartAudioCapture] = useState<boolean>(false);
-  
+  /** Count of recoverable agent errors (e.g. OpenAI post-response error). Tests assert this stays 0; non-zero = regression. */
+  const [recoverableAgentErrorCount, setRecoverableAgentErrorCount] = useState(0);
+  /** Count of all agent errors (recoverable or not). Tests assert this stays 0 so we fail on any upstream error. */
+  const [agentErrorCount, setAgentErrorCount] = useState(0);
+
   // Helper to add logs - memoized
   const addLog = useCallback((message: string) => {
     const timestampedMessage = `${new Date().toISOString().substring(11, 19)} - ${message}`;
@@ -639,7 +643,14 @@ function App() {
   }, []);
   
   const handleError = useCallback((error: DeepgramError) => {
-    // Recoverable: e.g. OpenAI sends "server had an error" after a successful response (known API behavior)
+    // Count all agent errors (recoverable and non-recoverable) so E2E can fail on any upstream error.
+    if (error.service === 'agent') {
+      setAgentErrorCount((c) => c + 1);
+      if (error.recoverable) {
+        setRecoverableAgentErrorCount((c) => c + 1);
+      }
+    }
+    // Recoverable: e.g. OpenAI sends "server had an error" after a successful response. Still a regression; tests assert count stays 0.
     if (error.recoverable) {
       addLog(`Warning (${error.service}): ${error.message} You can continue or reconnect.`);
       if (isDebugMode) console.warn(`Recoverable error (${error.service}):`, error);
@@ -1048,6 +1059,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <p>Core Component State (agentState via callback): <strong data-testid="agent-state">{agentState}</strong></p>
         {/* Hidden indicator used by E2E tests to detect greeting was sent */}
         {greetingSent && <span data-testid="greeting-sent" style={{ opacity: 0 }}>true</span>}
+        <span data-testid="recoverable-agent-error-count" aria-hidden="true">{recoverableAgentErrorCount}</span>
+        <span data-testid="agent-error-count" aria-hidden="true">{agentErrorCount}</span>
         
         {/* API Key Status Indicator */}
         {(() => {

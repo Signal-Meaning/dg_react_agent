@@ -87,12 +87,17 @@ If you already run the test-app dev server (e.g. `npm run dev` in test-app), Pla
    ```bash
    cd test-app && npm run backend
    ```
-2. Run Playwright with `E2E_USE_EXISTING_SERVER=1` so it does not start the webServer:
+2. Run Playwright with `E2E_USE_EXISTING_SERVER=1` so it does not start the webServer. **Canonical command for OpenAI proxy E2E with real APIs** (run from **test-app**):
    ```bash
-   # From test-app (real APIs = keys in test-app/.env):
+   E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e openai-inject-connection-stability
+   ```
+   These tests assert **no upstream agent errors** (recoverable or not); a test fails if the app receives any agent error during the run.
+
+   To run all E2E (not just OpenAI proxy specs) with existing server:
+   ```bash
    USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e
    ```
-   Or from **project root**:
+   Or from **project root** (OpenAI proxy specs only):
    ```bash
    USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js --config=test-app/tests/playwright.config.mjs
    ```

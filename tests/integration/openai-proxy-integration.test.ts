@@ -259,14 +259,81 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }));
     });
     client.on('message', (data: Buffer) => {
-      const msg = JSON.parse(data.toString()) as { type?: string };
-      if (msg.type === 'SettingsApplied') {
-        expect(msg.type).toBe('SettingsApplied');
-        client.close();
-        done();
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string };
+        if (msg.type === 'Error') {
+          client.close();
+          done(new Error(`Upstream error (regression): ${msg.description ?? 'unknown'}`));
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          expect(msg.type).toBe('SettingsApplied');
+          client.close();
+          done();
+        }
+      } catch {
+        // ignore
       }
     });
     client.on('error', done);
+  });
+
+  /**
+   * Issue #414: When upstream sends error, proxy must forward it so the client receives type: 'Error'.
+   * Mock sends session.updated then error; we assert the client receives the Error (test passes).
+   * Real-API tests fail when they receive any Error (done(err)); this test only verifies the proxy path.
+   */
+  itMockOnly('when upstream sends error after session.updated, client receives Error (proxy forwards error)', (done) => {
+    let mockSocket: import('ws') | null = null;
+    const originalConnection = mockWss!.listeners('connection')[0] as (socket: import('ws')) => void;
+    mockWss!.removeAllListeners('connection');
+    mockWss!.on('connection', (socket: import('ws')) => {
+      mockSocket = socket;
+      originalConnection(socket);
+    });
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let finished = false;
+    let errorReceived: string | null = null;
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string };
+        if (msg.type === 'Error') {
+          if (finished) return;
+          finished = true;
+          errorReceived = msg.description ?? 'unknown';
+          expect(errorReceived).toContain('server had an error');
+          try { client.close(); } catch { /* ignore */ }
+          done();
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          setTimeout(() => {
+            mockSocket?.send(JSON.stringify({
+              type: 'error',
+              error: { message: 'The server had an error while processing your request.', code: 'server_error' },
+            }));
+          }, 50);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => done(err));
+    setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (errorReceived === null) {
+        done(new Error('Expected to receive Error from proxy (proxy may not be forwarding upstream error)'));
+      } else {
+        done();
+      }
+    }, 5000);
   });
 
   /**
@@ -301,6 +368,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
 
   it('translates InjectUserMessage to conversation.item.create + response.create and response.output_text.done to ConversationText', (done) => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
     });
@@ -308,7 +383,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       // Real API can send binary PCM (response.output_audio.delta); skip non-JSON
       if (data.length === 0 || data[0] !== 0x7b) return;
       try {
-        const msg = JSON.parse(data.toString()) as { type?: string; content?: string; role?: string };
+        const msg = JSON.parse(data.toString()) as { type?: string; content?: string; role?: string; description?: string };
+        if (msg.type === 'Error') {
+          finish(new Error(`Upstream error (regression): ${msg.description ?? 'unknown'}`));
+          return;
+        }
         if (msg.type === 'SettingsApplied') {
           client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hello in one short sentence.' }));
         }
@@ -319,15 +398,19 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           } else {
             expect(msg.content).toBe('Hello from mock');
           }
-          client.close();
-          done();
+          if (useRealOpenAI) {
+            // Real API can send error after response; wait so receiving Error fails the test (5s window)
+            setTimeout(() => finish(), 5000);
+          } else {
+            finish();
+          }
         }
       } catch {
         // ignore parse errors (e.g. truncated)
       }
     });
-    client.on('error', done);
-  }, useRealOpenAI ? 20000 : 5000);
+    client.on('error', (err) => finish(err));
+  }, useRealOpenAI ? 25000 : 5000);
 
   itMockOnly('translates binary client message to input_audio_buffer.append and after debounce sends commit + response.create', (done) => {
     mockReceived.length = 0;
@@ -534,23 +617,44 @@ describe('OpenAI proxy integration (Issue #381)', () => {
 
   it('echoes user message as ConversationText (role user) when client sends InjectUserMessage', (done) => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
     const userContent = 'My favorite color is blue';
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
-      const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string };
-      if (msg.type === 'SettingsApplied') {
-        client.send(JSON.stringify({ type: 'InjectUserMessage', content: userContent }));
-      }
-      if (msg.type === 'ConversationText' && msg.role === 'user') {
-        expect(msg.content).toBe(userContent);
-        client.close();
-        done();
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string; description?: string };
+        if (msg.type === 'Error') {
+          finish(new Error(`Upstream error (regression): ${msg.description ?? 'unknown'}`));
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: userContent }));
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'user') {
+          expect(msg.content).toBe(userContent);
+          if (useRealOpenAI) {
+            // Wait 5s so late-arriving upstream Error fails the test
+            setTimeout(() => finish(), 5000);
+          } else {
+            finish();
+          }
+        }
+      } catch {
+        // ignore
       }
     });
-    client.on('error', done);
-  });
+    client.on('error', (err) => finish(err));
+  }, useRealOpenAI ? 25000 : 5000);
 
   /**
    * Issue #388 (TDD red): Proxy must send response.create only AFTER receiving conversation.item.added

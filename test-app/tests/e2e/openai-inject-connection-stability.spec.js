@@ -20,6 +20,7 @@ import {
   waitForSettingsApplied,
   sendTextMessage,
   waitForAgentResponseEnhanced,
+  assertNoRecoverableAgentErrors,
 } from './helpers/test-helpers.js';
 
 test.describe('OpenAI injectUserMessage (issue #380)', () => {
@@ -35,5 +36,6 @@ test.describe('OpenAI injectUserMessage (issue #380)', () => {
     // Expected: an agent reply is delivered. When the bug is present, the connection
     // closes before the reply and no response appears, so this times out and the test fails.
     await waitForAgentResponseEnhanced(page, { timeout: 15000 });
+    await assertNoRecoverableAgentErrors(page);
   });
 });

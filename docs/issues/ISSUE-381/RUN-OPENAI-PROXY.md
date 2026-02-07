@@ -68,16 +68,38 @@ npm run test -- tests/integration/openai-proxy-integration.test.ts
 
 ## Run E2E tests (OpenAI proxy)
 
-**Prerequisites:** Proxy running (`npm run openai-proxy`), `OPENAI_API_KEY` set. Playwright starts the test-app by default (`webServer` in `playwright.config`).
+**Prerequisites:** Proxy running, `OPENAI_API_KEY` set (in `.env` or `test-app/.env`). E2E runs from **test-app**; Playwright uses `test-app/tests/playwright.config.mjs`.
 
-### Full OpenAI proxy suite (9 tests)
+### Canonical: OpenAI proxy E2E with real APIs (existing servers)
+
+Run from **test-app** with dev server and backend already running. This is the usual setup when you run E2E locally.
+
+1. **Terminal 1 – dev server**
+   ```bash
+   cd test-app && npm run dev
+   ```
+2. **Terminal 2 – backend (includes OpenAI proxy on port 8080)**
+   ```bash
+   cd test-app && npm run backend
+   ```
+   Ensure `OPENAI_API_KEY` (or `VITE_OPENAI_API_KEY`) is set in `test-app/.env` so the OpenAI proxy starts.
+
+3. **Terminal 3 – run tests (from test-app)**
+   ```bash
+   cd test-app && E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e openai-inject-connection-stability
+   ```
+   Tests assert **no upstream agent errors** (recoverable or not); if the app receives any agent error during a test, that test fails.
+
+### Full OpenAI proxy suite (Playwright starts servers)
+
+If you do **not** set `E2E_USE_EXISTING_SERVER=1`, Playwright starts the dev server and backend for you. Run from **project root**:
 
 ```bash
-HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js test-app/tests/e2e/openai-inject-connection-stability.spec.js
+HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js test-app/tests/e2e/openai-inject-connection-stability.spec.js --config=test-app/tests/playwright.config.mjs
 ```
 
 - Connection, single message, multi-turn, reconnection, basic audio, simple function calling, error handling, reconnection with context, injectUserMessage stability.
-- Use `HTTPS=0` so the test-app is served over HTTP (recommended). Omit if using a pre-started dev server with `E2E_USE_EXISTING_SERVER=1`.
+- Use `HTTPS=0` so the test-app is served over HTTP. Omit if using a pre-started dev server with `E2E_USE_EXISTING_SERVER=1`.
 
 ### Context retention with function calling (1 test)
 
