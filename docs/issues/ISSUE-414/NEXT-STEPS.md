@@ -5,6 +5,14 @@
 
 ---
 
+## Current stage
+
+- **E2E failure review:** Done. Three failures documented in [E2E-FAILURE-REVIEW.md](./E2E-FAILURE-REVIEW.md): (1) Greeting connect-only — no-binary assertion added for confidence. (2) Basic audio — OpenAI best practices and diagnosis plan in [OPENAI-REALTIME-AUDIO-TESTING.md](./OPENAI-REALTIME-AUDIO-TESTING.md); run trace + proxy debug to capture ~3s socket close. (3) Repro — tests 9 (no reload, session retained) and 10 (reload, session change); both assert response to "What famous people lived there?" is not greeting and not stale; behavior must be consistent in both conditions.
+- **Proxy:** §3.1 and §3.2 addressed (MIN_AUDIO_BYTES_FOR_COMMIT, responseInProgress). §3.3 (server error) and §3.4 (1005) remain; re-run with real API to observe after fixes.
+- **What comes next:** See [What comes next](#what-comes-next) at end of this doc.
+
+---
+
 ## Summary
 
 Acceptance criteria for #414 are **done** (CLI text-in, playback + text, docs). Remaining work centers on:
@@ -118,6 +126,8 @@ Each of the following appears repeatedly in E2E and manual run logs. Each should
 
 - **Main status:** [README.md](./README.md)
 - **E2E run results and command to save output:** [E2E-RUN-RESULTS.md](./E2E-RUN-RESULTS.md) — run from `test-app`, failure list, recurring errors, `tee` command
+- **E2E failure review (three failures, actions taken):** [E2E-FAILURE-REVIEW.md](./E2E-FAILURE-REVIEW.md)
+- **OpenAI Realtime audio testing (best practices, Basic Audio diagnosis, session retention):** [OPENAI-REALTIME-AUDIO-TESTING.md](./OPENAI-REALTIME-AUDIO-TESTING.md)
 - **OpenAI playback (test-tone, 24k context, double-connect fix):** [OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md](./OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md)
 - **Server error investigation:** [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md)
 - **Protocol and message ordering:** [scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md](../../scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md)
@@ -126,3 +136,13 @@ Each of the following appears repeatedly in E2E and manual run logs. Each should
 - **Multi-turn E2E conversation history:** [MULTI-TURN-E2E-CONVERSATION-HISTORY.md](./MULTI-TURN-E2E-CONVERSATION-HISTORY.md)
 - **Proxy:** `scripts/openai-proxy/` (server, translator, CLI)
 - **Tests:** `tests/integration/openai-proxy-integration.test.ts`, `test-app/tests/e2e/`
+
+---
+
+## What comes next
+
+1. **Basic Audio (test 5):** Run diagnosis per [OPENAI-REALTIME-AUDIO-TESTING.md](./OPENAI-REALTIME-AUDIO-TESTING.md) §3 (Playwright trace, proxy debug logging, optional 20 ms chunk size). Record exact upstream error and close code; align chunk/commit with recommendations and re-run.
+2. **Repro tests 9 and 10:** If test 9 fails (no reload), implement or verify session retention across disconnect/reconnect. If test 10 fails (reload), fix component/test-app so the new-session greeting is not displayed as the response to the user message "What famous people lived there?"
+3. **Greeting playback (§1):** Continue investigation: reproduce in headed browser, trace greeting path (binary → playback → audio-playing-status), fix playback or reporting so E2E can assert greeting TTS.
+4. **Re-run E2E with real APIs:** After Basic Audio diagnosis and any proxy/chunk fixes, run full OpenAI proxy E2E again; update E2E-RUN-RESULTS.md and NEXT-STEPS with pass/fail and any remaining gaps.
+5. **§3.3 / §3.4:** If "server had an error" and 1005 close persist after 3.1/3.2, treat as upstream or config (idle timeout, session config); document and adjust E2E or assertions as needed.

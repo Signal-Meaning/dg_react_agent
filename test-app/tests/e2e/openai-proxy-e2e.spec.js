@@ -255,15 +255,51 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   /**
-   * Repro: reload then send – response must not be stale (TDD failing test).
-   * 1. Have conversation: greeting, "What is the capital of France?", "Sorry, what was that?", Paris again.
-   * 2. Reload the page.
-   * 3. Focus text input (connect); then connection closes (we force with stop to simulate "connection closes with error").
-   * 4. Send "What famous people lived there?"
-   * 5. Assert: agent response must NOT be the stale "The capital of France is Paris."
-   * Bug: after reload + connection-closes-with-error, the next response is sometimes the previous answer.
+   * Session state is retained from one connection to the next unless a test stipulates otherwise.
+   * This test does NOT stipulate a session change (no reload). It verifies that after disconnect
+   * and reconnect on the same page, the next user message receives a response that reflects the
+   * prior conversation (session retained): not the greeting, not the stale Paris one-liner.
+   * See E2E-FAILURE-REVIEW.md §3 and OPENAI-REALTIME-AUDIO-TESTING.md.
    */
-  test('9. Repro – after reload and connection close, new message must not get stale response', async ({ page }) => {
+  test('9. Repro – after disconnect and reconnect (same page), session retained; response must not be stale or greeting', async ({ page }) => {
+    test.setTimeout(90000);
+    await setupTestPageWithOpenAIProxy(page);
+    await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
+
+    const r1 = await sendMessageAndWaitForResponse(page, 'What is the capital of France?', AGENT_RESPONSE_TIMEOUT);
+    expect(r1).toBeTruthy();
+    expect(r1.length).toBeGreaterThan(0);
+
+    const r2 = await sendMessageAndWaitForResponse(page, 'Sorry, what was that?', AGENT_RESPONSE_TIMEOUT);
+    expect(r2).toBeTruthy();
+    expect(r2.length).toBeGreaterThan(0);
+
+    await disconnectComponent(page);
+    await page.waitForTimeout(1000);
+
+    const response = await sendMessageAndWaitForResponse(page, 'What famous people lived there?', AGENT_RESPONSE_TIMEOUT);
+    expect(response).toBeTruthy();
+    expect(response.length).toBeGreaterThan(0);
+    console.log('[Repro test 9] Agent response to "What famous people lived there?":', JSON.stringify(response));
+    const trimmed = response.trim();
+    expect(
+      trimmed,
+      'Must not get stale Paris one-liner as response to "What famous people lived there?" (session retained)'
+    ).not.toBe('The capital of France is Paris.');
+    expect(
+      trimmed,
+      'Must not get greeting as response to "What famous people lived there?" (session retained)'
+    ).not.toBe('Hello! How can I assist you today?');
+  });
+
+  /**
+   * This test stipulates a session change (full page reload). Behavior must be consistent with the
+   * no-reload case: when the user sends "What famous people lived there?" after reload + connect,
+   * the response must not be the greeting and must not be the stale Paris one-liner. The component
+   * must not display the new-session greeting as the reply to that user message.
+   */
+  test('10. Repro – after reload (session change), response must not be stale or greeting', async ({ page }) => {
     test.setTimeout(90000);
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
@@ -286,15 +322,15 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const response = await sendMessageAndWaitForResponse(page, 'What famous people lived there?', AGENT_RESPONSE_TIMEOUT);
     expect(response).toBeTruthy();
     expect(response.length).toBeGreaterThan(0);
-    console.log('[Repro test 9] Agent response to "What famous people lived there?":', JSON.stringify(response));
+    console.log('[Repro test 10] Agent response (after reload) to "What famous people lived there?":', JSON.stringify(response));
     const trimmed = response.trim();
     expect(
       trimmed,
-      'Must not get stale Paris one-liner as response to "What famous people lived there?"'
+      'Must not get stale Paris one-liner as response after reload'
     ).not.toBe('The capital of France is Paris.');
     expect(
       trimmed,
-      'Must not get greeting as response to "What famous people lived there?"'
+      'Must not get greeting as response to user message after reload'
     ).not.toBe('Hello! How can I assist you today?');
   });
 });

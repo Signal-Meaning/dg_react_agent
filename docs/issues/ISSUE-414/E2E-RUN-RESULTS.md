@@ -39,6 +39,24 @@ Root also has `npm run test:e2e:log` which runs `playwright test 2>&1 | tee e2e-
 
 ---
 
+## 2b. OpenAI proxy E2E with real APIs (2026-02-08, after §3.1/§3.2 fixes)
+
+**Command:**
+
+```bash
+cd test-app && USE_REAL_APIS=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e openai-inject-connection-stability greeting-playback-validation openai-proxy-tts-diagnostic readiness-contract-e2e 2>&1 | tee e2e-openai-real-api.log
+```
+
+- **Result:** 15 passed, 3 failed. Time ~3.2m.
+- **Failures:**
+  1. **greeting-playback-validation.spec.js** — "connect only (no second message): greeting in conversation, no error, greeting audio played" — `assertNoRecoverableAgentErrors`: `agent-error-count` was 1 (recoverable agent error received, likely "server had an error").
+  2. **openai-proxy-e2e.spec.js** — "5. Basic audio – send recorded audio; assert agent response appears" — same: `agent-error-count` was 1 after 3s wait.
+  3. **openai-proxy-e2e.spec.js** — "9. Repro – after reload and connection close, new message must not get stale response" — got greeting "Hello! How can I assist you today?" as response to "What famous people lived there?" (stale response after reload).
+
+**Implication for §3.3:** The upstream "server had an error" (or another agent error) still occurred in at least 2 of 18 OpenAI proxy tests after the §3.1/§3.2 proxy fixes. Next: treat as upstream / session config per NEXT-STEPS §3.3; document; optionally relax E2E assertion for recoverable error when using real API.
+
+---
+
 ## 3. Failed tests (11)
 
 | # | Spec | Test | Failure |

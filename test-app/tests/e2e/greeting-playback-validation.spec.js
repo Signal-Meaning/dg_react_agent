@@ -24,6 +24,8 @@ import {
   sendTextMessage,
   waitForAgentGreeting,
   assertNoRecoverableAgentErrors,
+  installWebSocketCapture,
+  getCapturedWebSocketData,
 } from './helpers/test-helpers.js';
 
 const AGENT_PLAYBACK_TIMEOUT_MS = 25000; // Wait for playback start or first chunk after sending message
@@ -43,11 +45,17 @@ test.describe('Greeting playback validation (real APIs)', () => {
    */
   test('connect only (no second message): greeting in conversation, no error, greeting audio played', async ({ page }) => {
     test.setTimeout(60000);
-    // 0. Load app once, clear localStorage, reload so app runs with clean state (like manual "restart browser")
+    // 0. Capture WebSocket sends so we can assert no binary is sent (connect-only = no mic; binary would be wrong)
+    await installWebSocketCapture(page);
+    // Load app once, clear localStorage, reload so app runs with clean state (like manual "restart browser")
     await setupTestPageWithOpenAIProxy(page);
     await page.evaluate(() => localStorage.clear());
     await page.reload();
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    // Clear WebSocket capture so we only count sends from this connect-only flow (after reload)
+    await page.evaluate(() => {
+      if (window.capturedSentMessages) window.capturedSentMessages.length = 0;
+    });
     // 1. Click text input only (no sendTextMessage)
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
@@ -86,6 +94,16 @@ test.describe('Greeting playback validation (real APIs)', () => {
       chunks,
       'Greeting audio must play (agent-audio-chunks-received >= 1). No TTS chunks received.'
     ).toBeGreaterThanOrEqual(1);
+
+    // Supreme confidence: no binary must be sent client→proxy in connect-only flow (no mic = no sendAudioData).
+    // Any binary here would be incorrect/inadvertent and a likely culprit for upstream errors.
+    const wsData = await getCapturedWebSocketData(page);
+    const binarySends = (wsData.sent || []).filter((m) => m.type === 'binary');
+    expect(
+      binarySends,
+      'Connect-only flow must not send any binary over the WebSocket (no mic). Binary would be wrong and can cause upstream errors.'
+    ).toHaveLength(0);
+
     await assertNoRecoverableAgentErrors(page);
   });
 
