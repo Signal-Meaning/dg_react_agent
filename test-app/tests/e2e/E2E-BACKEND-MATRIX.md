@@ -12,11 +12,13 @@ Output is printed and saved to `e2e-run.log` in the project root.
 
 ## OpenAI-proxy-only (Issue #381)
 
-These specs require **VITE_OPENAI_PROXY_ENDPOINT** and the OpenAI proxy (`npm run openai-proxy`). They are skipped when that env is not set.
+These specs require **VITE_OPENAI_PROXY_ENDPOINT** and the OpenAI proxy (`npm run openai-proxy`). They are skipped when that env is not set. E2E tests are aligned with the [OpenAI proxy protocol](OPENAI-PROTOCOL-E2E.md); see that doc for protocol → test-app mapping.
 
 | Spec | Description |
 |------|-------------|
-| `openai-proxy-e2e.spec.js` | Connection, messages, multi-turn, reconnection, basic audio, function calling, error handling |
+| `openai-proxy-e2e.spec.js` | Connection, messages, multi-turn, reconnection, basic audio, function calling, error handling; protocol user echo |
+| `openai-proxy-tts-diagnostic.spec.js` | TTS binary received, wire contract (only PCM as binary), playback status |
+| `greeting-playback-validation.spec.js` | Greeting path (connect-only) and agent response TTS; session ordering |
 | `openai-inject-connection-stability.spec.js` | Connection stability after injectUserMessage (real OpenAI proxy) |
 
 ---

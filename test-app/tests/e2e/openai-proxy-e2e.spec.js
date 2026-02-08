@@ -5,6 +5,10 @@
  * OpenAI Realtime proxy (VITE_OPENAI_PROXY_ENDPOINT). Tests are skipped when
  * VITE_OPENAI_PROXY_ENDPOINT is not set.
  *
+ * Protocol: These tests abide by and reflect the OpenAI proxy protocol (SettingsApplied
+ * before first message, user echo in conversation history, etc.). See OPENAI-PROTOCOL-E2E.md
+ * and scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md.
+ *
  * Readiness contract (Issue #406): We enforce the component–OpenAI contract. The component
  * requires connection + Settings applied before the first user message. Every test that
  * sends a message waits for waitForSettingsApplied after establishConnectionViaText.
@@ -53,6 +57,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
+    await expect(page.locator('[data-testid="has-sent-settings"]')).toHaveText('true');
     await page.waitForSelector('[data-testid="greeting-sent"]', { timeout: 10000 });
     await assertNoRecoverableAgentErrors(page);
   });
@@ -69,6 +74,20 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await assertNoRecoverableAgentErrors(page);
   });
 
+  test('2b. Protocol: user message appears in conversation history (proxy sends user echo)', async ({ page }) => {
+    await setupTestPageWithOpenAIProxy(page);
+    await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
+    const userContent = 'What is the capital of France?';
+    await sendTextMessage(page, userContent);
+    await waitForAgentResponseEnhanced(page, { timeout: AGENT_RESPONSE_TIMEOUT });
+    const history = page.locator('[data-testid="conversation-history"]');
+    await expect(history).toBeVisible();
+    const userMsg = history.locator('[data-role="user"]').filter({ hasText: userContent });
+    await expect(userMsg.first()).toBeVisible({ timeout: 5000 });
+    await assertNoRecoverableAgentErrors(page);
+  });
+
   test('3. Multi-turn – sequential messages, second agent response appears', async ({ page }) => {
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
@@ -79,6 +98,19 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const r2 = await sendMessageAndWaitForResponse(page, "What did I just say?", AGENT_RESPONSE_TIMEOUT);
     expect(r2).toBeTruthy();
     expect(r2.length).toBeGreaterThan(0);
+    const history = page.locator('[data-testid="conversation-history"]');
+    const items = await history.locator('li[data-role]').all();
+    const conversationReport = await Promise.all(
+      items.map(async (el, i) => {
+        const role = await el.getAttribute('data-role');
+        const text = (await el.textContent()) || '';
+        return `${i + 1}. ${role}: ${text.trim().replace(/\s+/g, ' ').slice(0, 120)}${text.length > 120 ? '...' : ''}`;
+      })
+    );
+    console.log('[Multi-turn] Conversation history (' + items.length + ' messages):');
+    conversationReport.forEach((line) => console.log('  ' + line));
+    await expect(history.locator('[data-role="user"]')).toHaveCount(2);
+    await expect(history.locator('[data-role="assistant"]')).toHaveCount(3, { timeout: 10000 });
     await assertNoRecoverableAgentErrors(page);
   });
 

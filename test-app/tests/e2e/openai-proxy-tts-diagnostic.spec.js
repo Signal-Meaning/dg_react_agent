@@ -5,6 +5,9 @@
  * 1. Whether the client received any binary WebSocket messages (proxy → client PCM).
  * 2. AudioContext state and audio-playing-status (component playback path).
  *
+ * Protocol: Asserts wire contract — only TTS PCM as binary; no JSON as binary. See OPENAI-PROTOCOL-E2E.md
+ * and scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md.
+ *
  * Use this to find where TTS fails: no binary → proxy or WebSocket; binary but not playing → component playback.
  *
  * Run: USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-tts-diagnostic

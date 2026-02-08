@@ -9,6 +9,8 @@
  *   response with TTS. Validates playback path for **agent responses only**; does not validate
  *   greeting playback. Use a prompt that cannot be mistaken for the greeting (e.g. "What is 2 + 2?").
  *
+ * Protocol: Reflects session ordering (SettingsApplied then greeting in UI). See OPENAI-PROTOCOL-E2E.md.
+ *
  * Run: USE_PROXY_MODE=true npm run test:e2e -- greeting-playback-validation
  * With audio enabled (optional): USE_PROXY_MODE=true PW_ENABLE_AUDIO=true npm run test:e2e -- greeting-playback-validation --headed
  */
@@ -49,6 +51,7 @@ test.describe('Greeting playback validation (real APIs)', () => {
     // 1. Click text input only (no sendTextMessage)
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
+    await expect(page.locator('[data-testid="has-sent-settings"]')).toHaveText('true');
 
     // Wait for greeting path: conversation history has assistant message, no error, and at least one audio chunk
     let hasAssistantInHistory = false;
@@ -134,6 +137,10 @@ test.describe('Greeting playback validation (real APIs)', () => {
     // Wait for agent to finish (audio-playing-status false / agent idle)
     await waitForAgentGreeting(page, AGENT_FINISH_TIMEOUT_MS);
     console.log('✅ Agent playback finished');
+
+    const history = page.locator('[data-testid="conversation-history"]');
+    await expect(history.locator('[data-role="user"]').first()).toBeVisible();
+    await expect(history.locator('[data-role="assistant"]').first()).toBeVisible();
 
     const finalChunks = parseInt(
       await page.locator('[data-testid="agent-audio-chunks-received"]').textContent() || '0',
