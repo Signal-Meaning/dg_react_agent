@@ -78,8 +78,15 @@ See [E2E-BACKEND-MATRIX.md](./E2E-BACKEND-MATRIX.md) for which specs require the
 
 ---
 
-## 5. References
+## 5. Known issue: multi-turn conversation history
+
+The **multi-turn E2E test** (test 3 in `openai-proxy-e2e.spec.js`) can fail because the test-app’s conversation display syncs from `getConversationHistory()` inside `onAgentUtterance` / `onUserMessage`. The component updates state with `setConversationHistory` then invokes the callback in the same tick; the ref still returns the previous state, so the displayed history is always one message behind. See **[docs/issues/ISSUE-414/MULTI-TURN-E2E-CONVERSATION-HISTORY.md](../../docs/issues/ISSUE-414/MULTI-TURN-E2E-CONVERSATION-HISTORY.md)** for root cause and recommended fixes (e.g. component passes updated history in the callback, or exposes a ref-backed getter).
+
+---
+
+## 6. References
 
 - Protocol: [scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md](../../scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md)
 - Component–proxy contract: [docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md](../../docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md)
+- Multi-turn conversation history failure: [docs/issues/ISSUE-414/MULTI-TURN-E2E-CONVERSATION-HISTORY.md](../../docs/issues/ISSUE-414/MULTI-TURN-E2E-CONVERSATION-HISTORY.md)
 - Helpers: [helpers/test-helpers.js](./helpers/test-helpers.js) (`waitForSettingsApplied`, `assertNoRecoverableAgentErrors`, etc.)

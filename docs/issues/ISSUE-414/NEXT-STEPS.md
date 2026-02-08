@@ -48,5 +48,6 @@ Acceptance criteria for #414 are **done** (CLI text-in, playback + text, docs). 
 - **Protocol test gaps:** [PROTOCOL-TEST-GAPS.md](./PROTOCOL-TEST-GAPS.md) — missing unit/integration tests to prove protocol requirements
 - **Audio investigation:** [OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md](./OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md)
 - **Server error investigation:** [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md)
+- **Multi-turn E2E conversation history:** [MULTI-TURN-E2E-CONVERSATION-HISTORY.md](./MULTI-TURN-E2E-CONVERSATION-HISTORY.md) — root cause (stale ref when syncing in callbacks) and recommended fixes
 - **Proxy:** `scripts/openai-proxy/` (server, translator, CLI)
 - **Tests:** `tests/integration/openai-proxy-integration.test.ts`, `test-app/tests/e2e/` (OpenAI proxy specs)
