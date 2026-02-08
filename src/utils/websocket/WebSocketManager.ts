@@ -454,6 +454,8 @@ export class WebSocketManager {
         };
 
         this.ws.onclose = (event) => {
+          // Always log connection close (not gated by debug) so operators see disconnects
+          console.log(`[WebSocketManager:${this.options.service}] WebSocket closed: code=${event.code}, reason='${event.reason || ''}', wasClean=${event.wasClean}`);
           this.log(`WebSocket closed: code=${event.code}, reason='${event.reason}', wasClean=${event.wasClean}`);
           this.stopKeepalive();
           this.stopIdleTimeout();

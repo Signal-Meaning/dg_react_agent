@@ -56,9 +56,8 @@ export function useIdleTimeoutManager(
 
     // Set up timeout callback
     serviceRef.current.onTimeout(() => {
-      if (debug) {
-        console.log('🎯 [IDLE_TIMEOUT] Idle timeout reached - closing agent connection');
-      }
+      // Always log so operators see why the connection closed (not gated by debug)
+      console.log('🎯 [IDLE_TIMEOUT] Idle timeout reached - closing agent connection');
       agentManagerRef.current?.close();
     });
 

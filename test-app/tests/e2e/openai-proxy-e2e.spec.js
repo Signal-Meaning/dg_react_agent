@@ -152,6 +152,9 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const r1StillInHistory = assistantTexts.some((t) => t.includes('Paris') || (r1 && t.trim().includes(r1.trim().slice(0, 20))));
     expect(r1StillInHistory, 'Conversation history must still contain r1 after reconnect (session history requirement)').toBe(true);
     await assertNoRecoverableAgentErrors(page);
+
+    // Wait for idle timeout to close connection (default 10s; wait up to 12s) – proves component idle timeout with proxy WS
+    await expect(page.locator('[data-testid="connection-status"]')).toHaveText('closed', { timeout: 12000 });
   });
 
   test('4. Reconnection – disconnect then send, app reconnects and user receives response', async ({ page }) => {
