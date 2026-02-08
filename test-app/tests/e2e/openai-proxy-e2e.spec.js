@@ -34,7 +34,7 @@ import {
   assertNoRecoverableAgentErrors,
   SELECTORS,
 } from './helpers/test-helpers.js';
-import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
+import { loadAndSendAudioSample, loadAndSendAudioSampleAt24k, waitForVADEvents, CHUNK_20MS_16K_MONO } from './fixtures/audio-helpers.js';
 
 const AGENT_RESPONSE_TIMEOUT = 20000;
 
@@ -193,7 +193,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
       test.skip(true, 'No audio sample (hello.wav or sample_hello.json) – run with audio fixtures');
       return;
     }
-    await loadAndSendAudioSample(page, 'hello', { chunkSize: 4096 });
+    await loadAndSendAudioSample(page, 'hello', { chunkSize: CHUNK_20MS_16K_MONO });
     await waitForAgentResponse(page, null, AGENT_RESPONSE_TIMEOUT);
     const response = await page.locator('[data-testid="agent-response"]').textContent();
     expect(response).toBeTruthy();
@@ -201,10 +201,41 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await assertNoRecoverableAgentErrors(page);
   });
 
+  /**
+   * Issue #414 COMPONENT-PROXY-INTERFACE-TDD Phase 3: When using OpenAI proxy, the proxy maps
+   * input_audio_buffer.speech_started → UserStartedSpeaking and speech_stopped → UtteranceEnd.
+   * Sends 24 kHz audio (resampled from 16 kHz fixture) so OpenAI session VAD fires. See NEXT-STEPS.md §3.5.
+   */
+  test('5b. VAD (Issue #414) – send audio via OpenAI proxy; UserStartedSpeaking / UtteranceEnd appear in UI', async ({ page, context }) => {
+    await context.grantPermissions(['microphone']);
+    await setupTestPageWithOpenAIProxy(page);
+    await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
+    const hasSample = await page.evaluate(async () => {
+      try {
+        const wav = await fetch('/audio-samples/hello.wav');
+        if (wav.ok) return true;
+        const json = await fetch('/audio-samples/sample_hello.json');
+        return json.ok;
+      } catch {
+        return false;
+      }
+    }).catch(() => false);
+    if (!hasSample) {
+      test.skip(true, 'No audio sample (hello.wav or sample_hello.json) – run with audio fixtures');
+      return;
+    }
+    await loadAndSendAudioSampleAt24k(page, 'hello');
+    const vadCount = await waitForVADEvents(page, ['UserStartedSpeaking', 'UtteranceEnd'], 15000);
+    expect(vadCount, 'At least one VAD event (UserStartedSpeaking or UtteranceEnd) should appear when proxy maps OpenAI VAD').toBeGreaterThanOrEqual(1);
+    await assertNoRecoverableAgentErrors(page);
+  });
+
   test('6. Simple function calling – trigger function call; assert response in [data-testid="agent-response"]', async ({ page }) => {
-    const { pathWithQuery, getOpenAIProxyParams } = await import('./helpers/test-helpers.mjs');
+    const { pathWithQuery, getOpenAIProxyParams, BASE_URL } = await import('./helpers/test-helpers.mjs');
     const params = { ...getOpenAIProxyParams(), 'test-mode': 'true', 'enable-function-calling': 'true' };
-    await page.goto(pathWithQuery(params));
+    const pathPart = pathWithQuery(params);
+    await page.goto(pathPart.startsWith('http') ? pathPart : BASE_URL + pathPart);
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
@@ -233,9 +264,10 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   test('8. Error handling – wrong proxy URL shows closed/error and does not hang', async ({ page }) => {
-    const { pathWithQuery } = await import('./helpers/test-helpers.mjs');
+    const { pathWithQuery, BASE_URL } = await import('./helpers/test-helpers.mjs');
     const wrongProxyUrl = 'ws://localhost:99999/openai';
-    await page.goto(pathWithQuery({ connectionMode: 'proxy', proxyEndpoint: wrongProxyUrl }));
+    const pathPart = pathWithQuery({ connectionMode: 'proxy', proxyEndpoint: wrongProxyUrl });
+    await page.goto(pathPart.startsWith('http') ? pathPart : BASE_URL + pathPart);
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     const textInput = page.locator('[data-testid="text-input"]');
     await textInput.waitFor({ state: 'visible', timeout: 5000 });
@@ -319,7 +351,19 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await waitForSettingsApplied(page, 15000);
     await disconnectComponent(page);
 
-    const response = await sendMessageAndWaitForResponse(page, 'What famous people lived there?', AGENT_RESPONSE_TIMEOUT);
+    await sendMessageAndWaitForResponse(page, 'What famous people lived there?', AGENT_RESPONSE_TIMEOUT);
+    const placeholder = '(Waiting for agent response...)';
+    const greeting = 'Hello! How can I assist you today?';
+    await page.waitForFunction(
+      ({ placeholder: p, greeting: g }) => {
+        const el = document.querySelector('[data-testid="agent-response"]');
+        const text = (el?.textContent ?? '').trim();
+        return text.length > 0 && text !== p && text !== g;
+      },
+      { placeholder, greeting },
+      { timeout: AGENT_RESPONSE_TIMEOUT }
+    );
+    const response = await page.locator('[data-testid="agent-response"]').textContent();
     expect(response).toBeTruthy();
     expect(response.length).toBeGreaterThan(0);
     console.log('[Repro test 10] Agent response (after reload) to "What famous people lived there?":', JSON.stringify(response));

@@ -68,7 +68,11 @@ We already have:
 3. **Try 20 ms chunk size** in the Basic Audio test (e.g. `loadAndSendAudioSample(page, 'hello', { chunkSize: 640 })`) and see if the failure or timing changes.
 4. **Assert pipeline stages in test or logs:** After sending audio, confirm in logs or test that we see: append(s) → single commit → response.create → no error before response.done. If an error appears before that, note the exact event (e.g. “error after commit”, “error after response.create”).
 
-**Next:** Run the diagnosis (trace + proxy debug), record the exact error message and close code, and update this section with findings. Then align chunk size and commit behavior with the recommendations above and re-run the test.
+**Diagnosis (executed):**
+
+- **Proxy:** Added `audio.pending_bytes` to the commit log when `OPENAI_PROXY_DEBUG=1` so we can see bytes at commit. Upstream `error` and `close` (code/reason) were already logged.
+- **Chunk size:** Basic Audio test now uses 20 ms chunks (`CHUNK_20MS_16K_MONO = 640` in `audio-helpers.js`; `loadAndSendAudioSample(page, 'hello', { chunkSize: CHUNK_20MS_16K_MONO })`).
+- **Run:** Basic Audio test was run with trace; it **passed** (1 passed, ~7.7s). So with 20 ms chunks and current proxy, the test can pass. If failures recur, run with proxy started as `OPENAI_PROXY_DEBUG=1` and capture stdout for pipeline order (append → commit with audio.pending_bytes → response.create) and any upstream error/close.
 
 ---
 

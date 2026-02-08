@@ -569,9 +569,17 @@ function App() {
   }, [addLog]); // Include addLog in dependencies
   
   const handleAgentUtterance = useCallback((utterance: LLMResponse, conversationHistory?: Array<{ role: ConversationRole; content: string; timestamp?: number }>) => {
+    const history = conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? [];
+    const greeting = import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?';
+    const isGreeting = utterance.text.trim() === greeting.trim();
+    const prevEntry = history.length >= 2 ? history[history.length - 2] : undefined;
+    if (isGreeting && prevEntry?.role === 'user') {
+      // New session sent greeting after user message (e.g. after reload). Do not show greeting as the response to the user's message (Issue #414).
+      setConversationForDisplay(history);
+      return;
+    }
     setAgentResponse(utterance.text);
-    setConversationForDisplay(conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? []);
-    // Component logs agent output; no redundant addLog here
+    setConversationForDisplay(history);
   }, []);
 
   const handleUserMessage = useCallback((message: UserMessageResponse, conversationHistory?: Array<{ role: ConversationRole; content: string; timestamp?: number }>) => {

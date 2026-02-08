@@ -13,6 +13,12 @@
  * - Real-time streaming for better interim transcript generation
  */
 
+/** 20 ms of audio at 16 kHz 16-bit mono (OpenAI Realtime Eval recommendation). Use for Realtime API tests. */
+export const CHUNK_20MS_16K_MONO = 640;
+
+/** 20 ms of audio at 24 kHz 16-bit mono. Use for OpenAI proxy VAD E2E (session default input is 24 kHz). */
+export const CHUNK_20MS_24K_MONO = 960;
+
 /**
  * Load and send an audio sample to the Deepgram component
  * Streams audio in real-time chunks to simulate live microphone input.
@@ -168,6 +174,103 @@ export async function loadAndSendAudioSample(page, sampleName, options = {}) {
       streamOptions
     );
   }, { sample: sampleName, streamOptions: options });
+}
+
+/**
+ * Load a 16 kHz sample, resample to 24 kHz, and send to the component.
+ * Use for OpenAI proxy VAD E2E: session default input is 24 kHz, so server VAD
+ * (speech_started / speech_stopped) only fires when input matches. See NEXT-STEPS.md §3.5.
+ *
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {string} sampleName - Name of the audio sample (without format extension); must be 16 kHz
+ * @returns {Promise<void>}
+ */
+export async function loadAndSendAudioSampleAt24k(page, sampleName) {
+  await page.evaluate(async ({ sample }) => {
+    async function loadAudioSample(name) {
+      let audioBuffer;
+      try {
+        const wavResponse = await fetch(`/audio-samples/${name}.wav`);
+        if (wavResponse.ok) {
+          const wavBlob = await wavResponse.blob();
+          const wavArrayBuffer = await wavBlob.arrayBuffer();
+          const wavView = new Uint8Array(wavArrayBuffer);
+          let dataOffset = 44;
+          let dataSize = 0;
+          for (let i = 36; i < wavView.length - 4; i++) {
+            if (String.fromCharCode(wavView[i], wavView[i+1], wavView[i+2], wavView[i+3]) === 'data') {
+              const sizeView = new DataView(wavArrayBuffer, i + 4, 4);
+              dataSize = sizeView.getUint32(0, true);
+              dataOffset = i + 8;
+              break;
+            }
+          }
+          if (dataSize > 0) {
+            audioBuffer = wavArrayBuffer.slice(dataOffset, dataOffset + dataSize);
+          } else {
+            audioBuffer = wavArrayBuffer.slice(dataOffset);
+          }
+          return audioBuffer;
+        }
+      } catch {
+        // fallback to JSON
+      }
+      const jsonResponse = await fetch(`/audio-samples/sample_${name}.json`);
+      if (!jsonResponse.ok) throw new Error(`Failed to load audio sample: ${name}`);
+      const audioData = await jsonResponse.json();
+      const binaryString = atob(audioData.audioData);
+      audioBuffer = new ArrayBuffer(binaryString.length);
+      const audioView = new Uint8Array(audioBuffer);
+      for (let i = 0; i < binaryString.length; i++) {
+        audioView[i] = binaryString.charCodeAt(i);
+      }
+      return audioBuffer;
+    }
+
+    function resample16kTo24k(pcm16ArrayBuffer) {
+      const view = new Int16Array(pcm16ArrayBuffer);
+      const inputSamples = view.length;
+      const outputSamples = Math.floor(inputSamples * 24 / 16);
+      const out = new Int16Array(outputSamples);
+      for (let j = 0; j < outputSamples; j++) {
+        const srcIndex = j / 1.5;
+        const i0 = Math.floor(srcIndex);
+        const i1 = Math.min(i0 + 1, inputSamples - 1);
+        const frac = srcIndex - i0;
+        out[j] = Math.round(view[i0] + frac * (view[i1] - view[i0]));
+      }
+      return out.buffer;
+    }
+
+    async function streamAudioInRealTime(audioBuffer, sendChunk, options = {}) {
+      const { sampleRate = 24000, bytesPerSample = 2, channels = 1, chunkSize = 960 } = options;
+      const bytesPerSecond = sampleRate * bytesPerSample * channels;
+      const audioDurationSeconds = audioBuffer.byteLength / bytesPerSecond;
+      const totalChunks = Math.ceil(audioBuffer.byteLength / chunkSize);
+      const totalTimeMs = audioDurationSeconds * 1000;
+      const chunkInterval = Math.floor(totalTimeMs / totalChunks);
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * chunkSize;
+        const end = Math.min(start + chunkSize, audioBuffer.byteLength);
+        sendChunk(audioBuffer.slice(start, end));
+        if (i < totalChunks - 1) {
+          await new Promise(resolve => setTimeout(resolve, chunkInterval));
+        }
+      }
+    }
+
+    const deepgramComponent = window.deepgramRef?.current;
+    if (!deepgramComponent || !deepgramComponent.sendAudioData) {
+      throw new Error('DeepgramVoiceInteraction component not available');
+    }
+    const buffer16k = await loadAudioSample(sample);
+    const buffer24k = resample16kTo24k(buffer16k);
+    await streamAudioInRealTime(
+      buffer24k,
+      (chunk) => deepgramComponent.sendAudioData(chunk),
+      { sampleRate: 24000, bytesPerSample: 2, channels: 1, chunkSize: 960 }
+    );
+  }, { sample: sampleName });
 }
 
 /**

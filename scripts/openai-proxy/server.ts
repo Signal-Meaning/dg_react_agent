@@ -48,8 +48,8 @@ import {
 /** Debounce delay (ms) after last binary chunk before sending commit + response.create */
 const INPUT_AUDIO_COMMIT_DEBOUNCE_MS = 200;
 
-/** Minimum bytes of audio to send before commit (OpenAI: "at least 100ms of audio"). 16kHz mono 16-bit: 16000 * 0.1 * 2 = 3200. */
-const MIN_AUDIO_BYTES_FOR_COMMIT = 3200;
+/** Minimum bytes of audio to send before commit (OpenAI: "at least 100ms of audio"). Use 24kHz so both 16k and 24k clients work: 24000 * 0.1 * 2 = 4800. */
+const MIN_AUDIO_BYTES_FOR_COMMIT = 4800;
 
 /** Connection counter for stable short ids in logs */
 let connectionCounter = 0;
@@ -150,12 +150,17 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           !responseInProgress &&
           upstream.readyState === WebSocket.OPEN
         ) {
+          const bytesAtCommit = pendingAudioBytes;
           if (debug) {
             emitLog({
               severityNumber: SeverityNumber.INFO,
               severityText: 'INFO',
               body: 'input_audio_buffer.commit + response.create',
-              attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'client→upstream' },
+              attributes: {
+                [ATTR_CONNECTION_ID]: connId,
+                [ATTR_DIRECTION]: 'client→upstream',
+                'audio.pending_bytes': bytesAtCommit,
+              },
             });
           }
           upstream.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
@@ -417,6 +422,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           const componentError = mapErrorToComponentError(msg as Parameters<typeof mapErrorToComponentError>[0]);
           clientWs.send(JSON.stringify(componentError));
+        } else if (msg.type === 'input_audio_buffer.speech_started') {
+          // Issue #414 COMPONENT-PROXY-INTERFACE-TDD: map OpenAI VAD to component contract (COMPONENT-PROXY-INTERFACE-TDD.md §2.1)
+          clientWs.send(JSON.stringify({ type: 'UserStartedSpeaking' }));
+        } else if (msg.type === 'input_audio_buffer.speech_stopped') {
+          // Issue #414 COMPONENT-PROXY-INTERFACE-TDD: map to UtteranceEnd with channel and last_word_end (component contract)
+          clientWs.send(JSON.stringify({ type: 'UtteranceEnd', channel: [0, 1], last_word_end: 0 }));
         } else if (msg.type === 'response.output_audio.delta') {
           // Component expects raw PCM (binary frame) for playback; upstream sends JSON with base64 delta.
           const delta = msg.delta;

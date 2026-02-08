@@ -91,6 +91,7 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 | **response.output_audio.delta** | Decode base64 to PCM; send **binary** (raw PCM) to client only. Do not send as JSON. |
 | **response.output_audio.done** | No message to client (playback is driven by chunks). Optional: boundary debug logging. |
 | **error** | Map to **Error** (component shape); send as **text**. |
+| **input_audio_buffer.speech_started** / **speech_stopped** (and transcript if available) | Map to component transcript/VAD contract (**UserStartedSpeaking**, **UtteranceEnd**, etc.). Full mapping spec: [docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md](../../docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md) §2.1. Implemented in `server.ts`. |
 | **Any other upstream event** | Forward to client as **text** (same JSON). |
 
 ---
@@ -113,5 +114,6 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 
 - **Implementation:** `server.ts` (message handlers), `translator.ts` (mapping functions).
 - **Component contract:** [docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md](../../docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md) (readiness: SettingsApplied before first user message).
+- **Transcript and VAD mapping (OpenAI → component):** [docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md](../../docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md) §2.1 — spec for `speech_started` / `speech_stopped` → UserStartedSpeaking / UtteranceEnd.
 - **API discontinuities:** [docs/issues/ISSUE-381/API-DISCONTINUITIES.md](../../docs/issues/ISSUE-381/API-DISCONTINUITIES.md).
 - **OpenAI Realtime:** [Client events](https://platform.openai.com/docs/api-reference/realtime-client-events), [Server events](https://platform.openai.com/docs/api-reference/realtime-server-events).

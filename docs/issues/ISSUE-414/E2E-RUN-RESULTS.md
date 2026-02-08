@@ -57,6 +57,21 @@ cd test-app && USE_REAL_APIS=1 USE_PROXY_MODE=true npm run test:e2e -- openai-pr
 
 ---
 
+## 2c. OpenAI proxy E2E – plan execution run (2026-02-08)
+
+**Command:** `cd test-app && VITE_OPENAI_PROXY_ENDPOINT=ws://127.0.0.1:8080/openai npx playwright test tests/e2e/openai-proxy-e2e.spec.js`
+
+- **Result:** 9 passed, 4 failed. Time ~2.1m.
+- **Failures:**
+  1. **Test 5 (Basic audio):** `assertNoRecoverableAgentErrors` — agent-error-count 1 (upstream/recoverable error; can be flaky with real API).
+  2. **Test 6 (Function calling):** `page.goto` invalid URL — `pathWithQuery(params)` returns relative path `"/?..."`; test needs base URL (e.g. from playwright baseURL).
+  3. **Test 8 (Error handling):** Same invalid URL for `page.goto` with wrong proxy URL.
+  4. **Test 10 (Repro after reload):** Response was exact string "The capital of France is Paris." — assertion rejects that one-liner for "What famous people lived there?"; model sometimes returns it (test can be flaky).
+
+**Done this run:** Step 1 (Basic Audio 20 ms chunks, proxy commit logging), Step 2 (test 9/10 fixes: greeting-as-response fix in test-app, test 10 wait for meaningful response), Step 3 (greeting-playback spec run: connect-only still 0 TTS chunks), Step 4 (this full suite run).
+
+---
+
 ## 3. Failed tests (11)
 
 | # | Spec | Test | Failure |

@@ -448,6 +448,92 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   });
 
   /**
+   * Issue #414 COMPONENT-PROXY-INTERFACE-TDD: When upstream sends input_audio_buffer.speech_started,
+   * proxy must send to client a message with type UserStartedSpeaking (component contract). See docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md §2.1.
+   */
+  itMockOnly('when upstream sends input_audio_buffer.speech_started, client receives UserStartedSpeaking', (done) => {
+    let mockSocket: import('ws') | null = null;
+    const originalConnection = mockWss!.listeners('connection')[0] as (socket: import('ws')) => void;
+    mockWss!.removeAllListeners('connection');
+    mockWss!.on('connection', (socket: import('ws')) => {
+      mockSocket = socket;
+      originalConnection(socket);
+    });
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string };
+        if (msg.type === 'Error') {
+          client.close();
+          done(new Error(`Upstream error: ${msg.description ?? 'unknown'}`));
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          mockSocket?.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }));
+          return;
+        }
+        if (msg.type === 'UserStartedSpeaking') {
+          expect(msg.type).toBe('UserStartedSpeaking');
+          client.close();
+          done();
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => done(err));
+    setTimeout(() => done(new Error('Timeout: did not receive UserStartedSpeaking')), 5000);
+  });
+
+  /**
+   * Issue #414 COMPONENT-PROXY-INTERFACE-TDD: When upstream sends input_audio_buffer.speech_stopped,
+   * proxy must send to client UtteranceEnd with channel and last_word_end (component contract). See docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md §2.1.
+   */
+  itMockOnly('when upstream sends input_audio_buffer.speech_stopped, client receives UtteranceEnd with channel and last_word_end', (done) => {
+    let mockSocket: import('ws') | null = null;
+    const originalConnection = mockWss!.listeners('connection')[0] as (socket: import('ws')) => void;
+    mockWss!.removeAllListeners('connection');
+    mockWss!.on('connection', (socket: import('ws')) => {
+      mockSocket = socket;
+      originalConnection(socket);
+    });
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string; channel?: number[]; last_word_end?: number };
+        if (msg.type === 'Error') {
+          client.close();
+          done(new Error(`Upstream error: ${msg.description ?? 'unknown'}`));
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          mockSocket?.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
+          return;
+        }
+        if (msg.type === 'UtteranceEnd') {
+          expect(msg.type).toBe('UtteranceEnd');
+          expect(Array.isArray(msg.channel)).toBe(true);
+          expect(typeof msg.last_word_end).toBe('number');
+          client.close();
+          done();
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => done(err));
+    setTimeout(() => done(new Error('Timeout: did not receive UtteranceEnd')), 5000);
+  });
+
+  /**
    * Reconnect/reload: when client sends Settings twice (e.g. test-app focus or reload), proxy must forward
    * only the first session.update to upstream. A second session.update can cause upstream (OpenAI) to return
    * "The server had an error while processing your request." This test reproduces the duplicate-Settings
@@ -523,7 +609,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('error', (err) => finish(err));
   }, useRealOpenAI ? 25000 : 5000);
 
-  /** Issue #414: OpenAI requires ≥100ms audio before commit. Proxy must not send commit when total appended bytes < 100ms (3200 bytes at 16kHz 16-bit). */
+  /** Issue #414: OpenAI requires ≥100ms audio before commit. Proxy must not send commit when total appended bytes < 100ms (4800 bytes at 24kHz 16-bit; proxy uses 24k so both 16k and 24k clients work). */
   itMockOnly('does not send input_audio_buffer.commit when total appended audio < 100ms (Issue #414 buffer too small)', (done) => {
     mockReceived.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
@@ -555,7 +641,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
       if (msg.type === 'SettingsApplied') {
-        client.send(Buffer.alloc(3200, 0));
+        client.send(Buffer.alloc(4800, 0)); // 100ms at 24kHz 16-bit mono (proxy MIN_AUDIO_BYTES_FOR_COMMIT)
       }
       if (msg.type === 'ConversationText' && msg.role === 'assistant') {
         const types = mockReceived.map((m) => m.type);
@@ -581,8 +667,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       const msg = JSON.parse(data.toString()) as { type?: string };
       if (msg.type === 'SettingsApplied') {
         mockReceived.length = 0;
-        client.send(Buffer.alloc(3200, 0));
-        setTimeout(() => client.send(Buffer.alloc(3200, 0)), 250);
+        client.send(Buffer.alloc(4800, 0));
+        setTimeout(() => client.send(Buffer.alloc(4800, 0)), 250);
         setTimeout(() => {
           try {
             const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
