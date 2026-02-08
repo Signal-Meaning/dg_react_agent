@@ -424,9 +424,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           clientWs.send(JSON.stringify(componentError));
         } else if (msg.type === 'input_audio_buffer.speech_started') {
           // Issue #414 COMPONENT-PROXY-INTERFACE-TDD: map OpenAI VAD to component contract (COMPONENT-PROXY-INTERFACE-TDD.md §2.1)
+          if (debug) console.log(`[proxy ${connId}] upstream→client: input_audio_buffer.speech_started → UserStartedSpeaking`);
           clientWs.send(JSON.stringify({ type: 'UserStartedSpeaking' }));
         } else if (msg.type === 'input_audio_buffer.speech_stopped') {
           // Issue #414 COMPONENT-PROXY-INTERFACE-TDD: map to UtteranceEnd with channel and last_word_end (component contract)
+          if (debug) console.log(`[proxy ${connId}] upstream→client: input_audio_buffer.speech_stopped → UtteranceEnd`);
           clientWs.send(JSON.stringify({ type: 'UtteranceEnd', channel: [0, 1], last_word_end: 0 }));
         } else if (msg.type === 'response.output_audio.delta') {
           // Component expects raw PCM (binary frame) for playback; upstream sends JSON with base64 delta.

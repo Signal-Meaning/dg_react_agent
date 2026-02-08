@@ -119,10 +119,21 @@ So: **most of the “resolution” work is diagnostic and real-API/E2E.** Any ne
 
 ---
 
-## 6. References
+## 6. Progress (updates as we go)
+
+| When | What was done |
+|------|----------------|
+| Initial | Doc created; Phase A–D plan; real-API-first principle; summary of integration-testability. |
+| After commit/push | Commit pushed: VAD doc, NEXT-STEPS updates, 24k E2E fix, component/proxy tests, MIN_AUDIO_BYTES_FOR_COMMIT=4800. |
+| Phase A support | Proxy now logs explicitly when it receives and maps VAD: with `debug` on, logs `[proxy connId] upstream→client: input_audio_buffer.speech_started → UserStartedSpeaking` and same for `speech_stopped → UtteranceEnd`. So for Phase A: run proxy with debug (e.g. `OPENAI_PROXY_DEBUG=1` or backend started with debug), run E2E test 5b, then inspect proxy stdout for those lines. If they appear, upstream is sending VAD and the issue is downstream (Phase C). If they never appear, upstream is not sending VAD (Phase B). |
+
+---
+
+## 7. References
 
 - **NEXT-STEPS.md** §3.5 — Transcript / VAD and proposed next steps.
 - **COMPONENT-PROXY-INTERFACE-TDD.md** — Contract and mapping spec (§2.1); Phase 1–2 tests.
 - **Proxy integration tests:** `tests/integration/openai-proxy-integration.test.ts` (speech_started / speech_stopped → client).
 - **Component VAD tests:** `tests/component-vad-callbacks.test.tsx`.
 - **E2E test 5b:** `test-app/tests/e2e/openai-proxy-e2e.spec.js` — “5b. VAD (Issue #414)”.
+- **Proxy debug:** Start backend with debug so upstream message types are logged; VAD mapping logs `speech_started → UserStartedSpeaking` and `speech_stopped → UtteranceEnd` when hit (see §6 Progress).
