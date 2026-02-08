@@ -26,12 +26,17 @@
 
 **Summary:** The test-app’s use of `getConversationHistory()` from inside `onAgentUtterance` / `onUserMessage` runs in the same tick as the component’s `setConversationHistory`; the ref returns stale state, so the UI misses the latest message on every sync.
 
+**Fix applied:** The component now passes the updated conversation history as an optional second argument to `onAgentUtterance` and `onUserMessage` when `conversationStorage` is set. The test-app uses this value when provided, so the display stays in sync without reading from the ref.
+
 ---
 
 ## Recommended fixes (choose one)
 
-1. **Component: pass updated history in the callback (preferred)**  
-   When calling `onAgentUtterance` / `onUserMessage`, pass the **new** history (e.g. `[...conversationHistory, newEntry]`) as an optional second argument, or add a separate callback like `onConversationHistoryUpdated(history)`. The test-app then uses that value instead of calling `getConversationHistory()` from the ref.
+1. **Component: pass updated history in the callback (preferred)** ✅ **Implemented**  
+   When calling `onAgentUtterance` / `onUserMessage`, pass the **new** history (e.g. `[...conversationHistory, newEntry]`) as an optional second argument. The test-app uses that value when provided, otherwise falls back to `getConversationHistory()`.  
+   - Types: `onAgentUtterance?: (utterance, conversationHistory?: ConversationMessage[]) => void` and same for `onUserMessage`.  
+   - Component: builds `updatedHistory = [...conversationHistory, newEntry]`, calls `setConversationHistory`, then invokes the callback with `(response, updatedHistory)`.  
+   - Test-app: `handleAgentUtterance` / `handleUserMessage` use `conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? []`.
 
 2. **Component: keep latest history in a ref**  
    In the component, update a ref (e.g. `conversationHistoryRef.current = nextHistory`) synchronously when appending, and expose `getConversationHistory: () => conversationHistoryRef.current ?? []`. Then when the parent calls it from the callback, it gets the just-appended message.

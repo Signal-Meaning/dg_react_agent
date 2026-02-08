@@ -95,10 +95,20 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const r1 = await sendMessageAndWaitForResponse(page, "What is the capital of France?", AGENT_RESPONSE_TIMEOUT);
     expect(r1).toBeTruthy();
     expect(r1.length).toBeGreaterThan(0);
+    // Flaw fix: require first agent reply (r1) to appear in conversation history before second turn.
+    // Otherwise we only assert counts at the end and can pass with r1 missing (greeting + r2 only).
+    const historyAfterFirst = page.locator('[data-testid="conversation-history"]');
+    await expect(historyAfterFirst.locator('[data-role="assistant"]')).toHaveCount(2, { timeout: 5000 });
+    const assistantTextsAfterFirst = await historyAfterFirst.locator('[data-role="assistant"]').allTextContents();
+    const r1InHistory = assistantTextsAfterFirst.some((t) => t.includes('Paris') || (r1 && t.trim().includes(r1.trim().slice(0, 20))));
+    expect(r1InHistory, 'First agent response (r1) must appear in conversation history after first exchange').toBe(true);
+
     const r2 = await sendMessageAndWaitForResponse(page, "What did I just say?", AGENT_RESPONSE_TIMEOUT);
     expect(r2).toBeTruthy();
     expect(r2.length).toBeGreaterThan(0);
     const history = page.locator('[data-testid="conversation-history"]');
+    await expect(history.locator('[data-role="user"]')).toHaveCount(2);
+    await expect(history.locator('[data-role="assistant"]')).toHaveCount(3);
     const items = await history.locator('li[data-role]').all();
     const conversationReport = await Promise.all(
       items.map(async (el, i) => {
@@ -109,8 +119,38 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     );
     console.log('[Multi-turn] Conversation history (' + items.length + ' messages):');
     conversationReport.forEach((line) => console.log('  ' + line));
+    await assertNoRecoverableAgentErrors(page);
+  });
+
+  test('3b. Multi-turn after disconnect – session history preserved (disconnect WS between 3 & 4)', async ({ page }) => {
+    await setupTestPageWithOpenAIProxy(page);
+    await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
+    const r1 = await sendMessageAndWaitForResponse(page, "What is the capital of France?", AGENT_RESPONSE_TIMEOUT);
+    expect(r1).toBeTruthy();
+    expect(r1.length).toBeGreaterThan(0);
+    const historyAfterFirst = page.locator('[data-testid="conversation-history"]');
+    await expect(historyAfterFirst.locator('[data-role="assistant"]')).toHaveCount(2, { timeout: 5000 });
+    const assistantTextsAfterFirst = await historyAfterFirst.locator('[data-role="assistant"]').allTextContents();
+    const r1InHistory = assistantTextsAfterFirst.some((t) => t.includes('Paris') || (r1 && t.trim().includes(r1.trim().slice(0, 20))));
+    expect(r1InHistory, 'First agent response (r1) must appear in conversation history before disconnect').toBe(true);
+
+    await disconnectComponent(page);
+
+    const r2 = await sendMessageAndWaitForResponse(page, "What did I just say?", AGENT_RESPONSE_TIMEOUT);
+    expect(r2).toBeTruthy();
+    expect(r2.length).toBeGreaterThan(0);
+    expect(
+      r2.toLowerCase().includes('france') || r2.toLowerCase().includes('paris') || r2.toLowerCase().includes('capital'),
+      'Second response (r2) must reference first exchange – proves session history was sent on reconnect'
+    ).toBe(true);
+
+    const history = page.locator('[data-testid="conversation-history"]');
     await expect(history.locator('[data-role="user"]')).toHaveCount(2);
-    await expect(history.locator('[data-role="assistant"]')).toHaveCount(3, { timeout: 10000 });
+    await expect(history.locator('[data-role="assistant"]')).toHaveCount(3);
+    const assistantTexts = await history.locator('[data-role="assistant"]').allTextContents();
+    const r1StillInHistory = assistantTexts.some((t) => t.includes('Paris') || (r1 && t.trim().includes(r1.trim().slice(0, 20))));
+    expect(r1StillInHistory, 'Conversation history must still contain r1 after reconnect (session history requirement)').toBe(true);
     await assertNoRecoverableAgentErrors(page);
   });
 

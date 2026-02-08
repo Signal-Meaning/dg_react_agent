@@ -164,14 +164,20 @@ export interface DeepgramVoiceInteractionProps {
   onAgentStateChange?: (state: AgentState) => void; // Uses imported AgentState
   
   /**
-   * Called when the agent produces text output
+   * Called when the agent produces text output.
+   * When conversationStorage is set, the second argument is the updated conversation history
+   * (including this message) so the parent can sync display without reading stale ref state.
+   * @see docs/issues/ISSUE-414/MULTI-TURN-E2E-CONVERSATION-HISTORY.md
    */
-  onAgentUtterance?: (utterance: LLMResponse) => void;
+  onAgentUtterance?: (utterance: LLMResponse, conversationHistory?: ConversationMessage[]) => void;
   
   /**
-   * Called when a user message is received from the server (role:user in ConversationText)
+   * Called when a user message is received from the server (role:user in ConversationText).
+   * When conversationStorage is set, the second argument is the updated conversation history
+   * (including this message) so the parent can sync display without reading stale ref state.
+   * @see docs/issues/ISSUE-414/MULTI-TURN-E2E-CONVERSATION-HISTORY.md
    */
-  onUserMessage?: (message: UserMessageResponse) => void;
+  onUserMessage?: (message: UserMessageResponse, conversationHistory?: ConversationMessage[]) => void;
   
   /**
    * Called when audio playback state changes

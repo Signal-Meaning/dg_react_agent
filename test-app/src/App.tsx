@@ -57,7 +57,7 @@ declare global {
     __testGetConnectionState?: () => 'connected' | 'disconnected' | 'auto' | undefined;
     __testGetInterruptAgent?: () => boolean;
     __testGetStartAudioCapture?: () => boolean;
-    __testConversationHistory?: Array<{ role: 'user' | 'assistant'; content: string; timestamp: number }>; // Issue #362: Expose conversation history for E2E tests
+    __testConversationHistory?: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: number }>; // Issue #362: Expose conversation history for E2E tests
   }
 }
 
@@ -568,15 +568,15 @@ function App() {
     }
   }, [addLog]); // Include addLog in dependencies
   
-  const handleAgentUtterance = useCallback((utterance: LLMResponse) => {
+  const handleAgentUtterance = useCallback((utterance: LLMResponse, conversationHistory?: Array<{ role: ConversationRole; content: string; timestamp?: number }>) => {
     setAgentResponse(utterance.text);
-    setConversationForDisplay(deepgramRef.current?.getConversationHistory() ?? []);
+    setConversationForDisplay(conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? []);
     // Component logs agent output; no redundant addLog here
   }, []);
-  
-  const handleUserMessage = useCallback((message: UserMessageResponse) => {
+
+  const handleUserMessage = useCallback((message: UserMessageResponse, conversationHistory?: Array<{ role: ConversationRole; content: string; timestamp?: number }>) => {
     setUserMessage(message.text);
-    setConversationForDisplay(deepgramRef.current?.getConversationHistory() ?? []);
+    setConversationForDisplay(conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? []);
     // Component logs user message echo; no redundant addLog here
   }, []);
   

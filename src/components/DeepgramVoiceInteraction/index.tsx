@@ -158,6 +158,8 @@ function DeepgramVoiceInteraction(
 
   // Issue #406: conversation history for persistence when conversationStorage is provided
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
+  // Ref so callbacks receive up-to-date history (handleAgentMessage closure can be stale) — Issue #414
+  const conversationHistoryRef = useRef<ConversationMessage[]>([]);
 
   // Internal state
   const [state, dispatch] = useReducer(stateReducer, initialState);
@@ -203,7 +205,12 @@ function DeepgramVoiceInteraction(
     const toStore = conversationHistory.slice(-MAX_CONVERSATION_STORED);
     conversationStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(toStore)).catch(() => { /* ignore */ });
   }, [conversationStorage, CONVERSATION_STORAGE_KEY, conversationHistory]);
-  
+
+  // Keep ref in sync with state so ConversationText handler can pass full history to callbacks (Issue #414)
+  useEffect(() => {
+    conversationHistoryRef.current = conversationHistory;
+  }, [conversationHistory]);
+
   // Issue #769: Track component remounts for debugging
   // This ref persists across re-renders but resets on actual remount
   // Use this to detect if component is actually remounting vs just re-rendering
@@ -2212,38 +2219,42 @@ function DeepgramVoiceInteraction(
         console.log('💬 [AGENT EVENT] ConversationText received role=', data.role);
       }
       const content = typeof data.content === 'string' ? data.content : '';
-      
-      // Issue #406: Append to conversation history when storage is provided (persist via useEffect)
+      const timestamp = Date.now();
+      const role = data.role as ConversationMessage['role'];
+      const newEntry: ConversationMessage = { role, content, timestamp };
+
+      // Issue #406: Append to conversation history when storage is provided (persist via useEffect).
+      // Pass updated history by value to callbacks so parent can sync display without stale ref (Issue #414).
+      // Use ref for latest history so we don't pass stale closure state (handleAgentMessage can be from an old render).
+      let updatedHistory: ConversationMessage[] | undefined;
       if (conversationStorage && (data.role === 'user' || data.role === 'assistant')) {
-        setConversationHistory((prev) => [...prev, { role: data.role as ConversationMessage['role'], content, timestamp: Date.now() }]);
+        const latest = conversationHistoryRef.current;
+        updatedHistory = [...latest, newEntry];
+        conversationHistoryRef.current = updatedHistory;
+        setConversationHistory((prev) => [...prev, newEntry]);
       }
-      
-      // If we receive ConversationText, this means the agent is actively responding
-      
+
       if (data.role === 'assistant') {
         const response: LLMResponse = {
           type: 'llm',
           text: content,
           metadata: data,
         };
-        
-        onAgentUtterance?.(response);
+        onAgentUtterance?.(response, updatedHistory);
         return;
-      } 
-      else if (data.role === 'user') {
+      }
+      if (data.role === 'user') {
         const response = {
           type: 'user' as const,
           text: content,
           metadata: data,
         };
-        
         // Note: ConversationText messages are redundant for idle timeout management.
         // User text activity should be handled via:
         // 1. injectUserMessage() - triggers InjectUserMessage which resets timeout
         // 2. onUserMessage callback - application can call handleMeaningfulActivity if needed
         // We don't reset timeout here because ConversationText is a transcript, not an activity indicator.
-        
-        onUserMessage?.(response);
+        onUserMessage?.(response, updatedHistory);
         return;
       }
     }
