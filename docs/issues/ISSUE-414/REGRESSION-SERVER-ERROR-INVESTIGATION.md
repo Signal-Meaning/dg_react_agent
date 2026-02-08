@@ -141,9 +141,9 @@ These URLs were collected during the investigation. They document the protocol, 
      - **Upstream bug:** The error message ("The server had an error… You can continue or reconnect") may be a known upstream behavior that OpenAI has not resolved. Gather more evidence from community reports.
    - Ruled out so far: greeting injection (greeting-text-only didn't remove it), full session payload (minimal-session didn't remove it), all session.update audio configurations (TDD cycles 1–4).
 
-2. **Document the protocol**
-   - The OpenAI Realtime WebSocket carries both binary (PCM audio chunks from `response.output_audio.delta`) and text (JSON control/event messages). The mix of content and control elements must be documented and validated.
-   - Need to catalog: all client events the proxy sends, all server events the proxy handles, frame types (text vs binary), and the expected ordering.
+2. **Document the protocol** ✅ **Done (2026-02).**
+   - **See:** [scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md](../../scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) — catalogs client → proxy and proxy → upstream events, upstream → proxy handling, **frame types (text vs binary)**, and ordering (session.created vs session.updated, response.create after item confirmation, etc.).
+   - The OpenAI Realtime WebSocket carries both binary (PCM from `response.output_audio.delta`) and text (JSON). The proxy sends only TTS PCM as binary to the client; all other messages as text.
 
 3. **Fix the regression**
    - Change proxy and/or component behavior so that the upstream no longer sends this error after a successful turn (or document an upstream bug and a proper mitigation).

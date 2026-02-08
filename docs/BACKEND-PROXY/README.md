@@ -67,6 +67,10 @@ For detailed validation results, see the [validation documentation](../issues/IS
 
 We provide **reference proxy code** and the **interface contract** (protocol, event order). We do **not** support third-party proxy implementations: we do not provide technical support, debugging, or SLAs for proxies built or operated by others. For hosted proxy services or support, customers should adopt third-party proxy implementations or vendors that implement the same contract. See [Proxy ownership and support scope](../issues/ISSUE-388/PROXY-OWNERSHIP-DECISION.md#support-scope-for-proxies) for the full statement.
 
+## OpenAI proxy (translation layer)
+
+The test-app can use an **OpenAI Realtime** backend via a translation proxy in `scripts/openai-proxy/`. Protocol and message ordering (client ↔ proxy ↔ OpenAI) are documented in **[scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md](../../scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md)**. The same component–proxy contract (e.g. SettingsApplied before first message) applies; see [Component–Proxy Contract](./COMPONENT-PROXY-CONTRACT.md).
+
 ## Related Documentation
 
 - [API Reference](../API-REFERENCE.md) - Component API documentation with proxy mode examples

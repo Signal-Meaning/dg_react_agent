@@ -6,7 +6,7 @@
 
 - **Unit tests**: `tests/openai-proxy.test.ts` (Jest).
 - **Integration tests**: `tests/integration/openai-proxy-integration.test.ts` (Jest, `@jest-environment node`).
-- **Contract**: See `docs/issues/ISSUE-381/API-DISCONTINUITIES.md`.
+- **Contract:** [PROTOCOL-AND-MESSAGE-ORDERING.md](./PROTOCOL-AND-MESSAGE-ORDERING.md) (wire protocol and ordering); [docs/issues/ISSUE-381/API-DISCONTINUITIES.md](../../docs/issues/ISSUE-381/API-DISCONTINUITIES.md) (API mapping).
 
 ## Translator exports
 
@@ -21,6 +21,13 @@
 ## Server
 
 - `createOpenAIProxyServer(options)` – attaches a WebSocket server to an HTTP server at `options.path`, connects to `options.upstreamUrl`, and translates messages both ways. Optional `upstreamHeaders` (e.g. `Authorization: Bearer <OPENAI_API_KEY>`) for upstream auth. Run with a mock upstream in integration tests; run with real OpenAI Realtime URL for E2E.
+
+## Protocol and message ordering
+
+**Full spec:** [PROTOCOL-AND-MESSAGE-ORDERING.md](./PROTOCOL-AND-MESSAGE-ORDERING.md)
+
+- **Wire contract:** Client sends JSON as **text** and microphone PCM as **binary**. Proxy → client: **only** decoded TTS from `response.output_audio.delta` is sent as **binary**; all other messages (SettingsApplied, ConversationText, Error, conversation.item.*, etc.) are sent as **text**. Sending JSON as binary would route it into the component’s audio pipeline (Issue #414).
+- **Ordering:** Proxy sends `SettingsApplied` only after upstream `session.updated` (not on `session.created`). Context and greeting are applied after session is configured. `response.create` is sent only after the upstream confirms the corresponding item(s) (e.g. after `conversation.item.added` for InjectUserMessage).
 
 ## Running the proxy (E2E)
 

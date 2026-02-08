@@ -82,6 +82,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * is received before session.updated was sent (catches proxy sending context before session.updated).
    */
   let mockEnforceSessionBeforeContext = false;
+  /** Protocol test gap: when true, mock sends response.created (untranslated event) after session.updated so client must receive it as text. */
+  let mockSendResponseCreatedAfterSessionUpdated = false;
   /** Protocol errors detected by mock (e.g. conversation.item.create before session.updated). Tests assert this is empty. */
   const protocolErrors: Error[] = [];
   /** Records conversation.item.create payloads for assertions */
@@ -205,9 +207,19 @@ describe('OpenAI proxy integration (Issue #381)', () => {
               sessionUpdatedSent = true;
             };
             if (mockEnforceSessionBeforeContext) {
-              setTimeout(sendSessionUpdated, 50);
+              setTimeout(() => {
+                sendSessionUpdated();
+                if (mockSendResponseCreatedAfterSessionUpdated) {
+                  mockSendResponseCreatedAfterSessionUpdated = false;
+                  socket.send(JSON.stringify({ type: 'response.created', response_id: 'r1' }));
+                }
+              }, 50);
             } else {
               sendSessionUpdated();
+              if (mockSendResponseCreatedAfterSessionUpdated) {
+                mockSendResponseCreatedAfterSessionUpdated = false;
+                socket.send(JSON.stringify({ type: 'response.created', response_id: 'r1' }));
+              }
             }
             if (mockSendTranscriptThenFunctionCallAfterSession) {
               mockSendTranscriptThenFunctionCallAfterSession = false;
@@ -1425,4 +1437,222 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       done(err);
     });
   });
+
+  // --- Protocol document test gaps (PROTOCOL-TEST-GAPS.md) ---
+
+  /**
+   * Protocol §1.2 / §5: response.output_audio.done must not send any message to client.
+   * Mock sends delta → done → output_text.done; client must get exactly one binary frame and one ConversationText; no message for .done.
+   */
+  itMockOnly('Protocol: response.output_audio.done sends no message to client', (done) => {
+    mockSendOutputAudioBeforeText = true;
+    let binaryCount = 0;
+    const textTypes: string[] = [];
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      const str = data.toString('utf8');
+      if (data.length > 0 && data[0] === 0x7b) {
+        try {
+          const msg = JSON.parse(str) as { type?: string; role?: string };
+          if (msg.type) textTypes.push(msg.type);
+          if (msg.type === 'SettingsApplied') {
+            client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hi' }));
+          }
+          if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+            expect(binaryCount).toBe(1);
+            expect(textTypes).not.toContain('response.output_audio.done');
+            client.close();
+            done();
+          }
+        } catch {
+          // ignore
+        }
+      } else {
+        binaryCount++;
+      }
+    });
+    client.on('error', done);
+  }, 8000);
+
+  /**
+   * Protocol §2.1: Client messages queued until upstream open, then drained in order.
+   * Client sends Settings then InjectUserMessage immediately; assert upstream receives session.update then conversation.item.create.
+   */
+  itMockOnly('Protocol: client message queue order (session.update then conversation.item.create)', (done) => {
+    mockReceived.length = 0;
+    mockEnforceSessionBeforeContext = true;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Hello' }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          const types = mockReceived.map((m) => m.type);
+          const sessionUpdateIdx = types.indexOf('session.update');
+          const itemCreateIdx = types.indexOf('conversation.item.create');
+          expect(sessionUpdateIdx).toBeGreaterThanOrEqual(0);
+          expect(itemCreateIdx).toBeGreaterThanOrEqual(0);
+          expect(sessionUpdateIdx).toBeLessThan(itemCreateIdx);
+          mockEnforceSessionBeforeContext = false;
+          client.close();
+          done();
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => {
+      mockEnforceSessionBeforeContext = false;
+      done(err);
+    });
+  }, 8000);
+
+  /**
+   * Protocol §4: Same item id — .added and .done must decrement counter once (proxy sends exactly one response.create).
+   */
+  itMockOnly('Protocol: same item id .added + .done count once (one response.create)', (done) => {
+    mockReceived.length = 0;
+    mockSendItemDoneAfterAdded = true;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Hi' }));
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+          expect(responseCreateCount).toBe(1);
+          mockSendItemDoneAfterAdded = false;
+          client.close();
+          done();
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => {
+      mockSendItemDoneAfterAdded = false;
+      done(err);
+    });
+  }, 8000);
+
+  /**
+   * Protocol §3: Other client JSON (unknown type) forwarded to upstream as-is.
+   */
+  itMockOnly('Protocol: other client JSON (e.g. KeepAlive) forwarded to upstream', (done) => {
+    mockReceived.length = 0;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'KeepAlive' }));
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Hi' }));
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          const hasKeepAlive = mockReceived.some((m) => m.type === 'KeepAlive');
+          expect(hasKeepAlive).toBe(true);
+          client.close();
+          done();
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', done);
+  }, 8000);
+
+  /**
+   * Protocol §5: Any other upstream event forwarded to client as text.
+   */
+  itMockOnly('Protocol: other upstream event (e.g. response.created) forwarded to client as text', (done) => {
+    mockSendResponseCreatedAfterSessionUpdated = true;
+    let finished = false;
+    const clientMessages: Array<{ type?: string }> = [];
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; response_id?: string };
+        if (msg && typeof msg === 'object' && typeof msg.type === 'string') {
+          clientMessages.push({ type: msg.type });
+          if (msg.type === 'response.created') {
+            expect(msg.response_id).toBe('r1');
+            finished = true;
+            client.close();
+            done();
+          }
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => {
+      if (!finished) done(err);
+    });
+    setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      client.close();
+      const hasResponseCreated = clientMessages.some((m) => m.type === 'response.created');
+      if (!hasResponseCreated) {
+        done(new Error('Expected to receive response.created from proxy (other upstream events must be forwarded as text)'));
+      } else {
+        done();
+      }
+    }, 5000);
+  }, 8000);
+
+  /**
+   * Protocol §1.2 (optional): conversation.item.added / .done received as text (not binary).
+   */
+  itMockOnly('Protocol: conversation.item.added or .done received by client as text frame', (done) => {
+    mockSendOutputAudioBeforeText = true;
+    const receivedTextTypes: string[] = [];
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length > 0 && data[0] === 0x7b) {
+        try {
+          const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
+          if (msg.type) receivedTextTypes.push(msg.type);
+          if (msg.type === 'SettingsApplied') {
+            client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hi' }));
+          }
+          if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+            const hasItemEvent = receivedTextTypes.some(
+              (t) => t === 'conversation.item.added' || t === 'conversation.item.done' || t === 'conversation.item.created'
+            );
+            expect(hasItemEvent).toBe(true);
+            client.close();
+            done();
+          }
+        } catch {
+          // ignore
+        }
+      }
+    });
+    client.on('error', done);
+  }, 8000);
 });

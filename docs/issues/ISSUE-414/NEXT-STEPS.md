@@ -19,7 +19,7 @@ Acceptance criteria for #414 are **done** (CLI text-in, playback + text, docs). 
 - **Ruled out:** Session.update audio/turn_detection config (four TDD cycles); greeting/session payload variations.
 - **Next:**
   1. **Idle timeout:** Check whether server VAD `idle_timeout_ms` (and default ~5–6s) is the cause; try overriding it in `session.audio.input.turn_detection` and re-test with real API.
-  2. **Protocol and ordering:** Document client/server events and text vs binary frame ordering; confirm we don’t violate Realtime API expectations.
+  2. **Protocol and ordering:** ✅ **Done.** See [scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md](../../scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) — client/server events, text vs binary frame rules, and ordering are documented. Use it to confirm we don’t violate Realtime API expectations.
   3. **Upstream/community:** Gather more evidence from OpenAI community (e.g. [server error thread](https://community.openai.com/t/openai-realtime-api-server-error/1373435)); decide if this is a known upstream bug and document or mitigate.
   4. **Fix or document:** Once root cause is known, either fix proxy/component so the error no longer occurs or document upstream behavior and adjust tests/assertions accordingly. Do not suppress forwarding of errors.
 
@@ -44,6 +44,8 @@ Acceptance criteria for #414 are **done** (CLI text-in, playback + text, docs). 
 ## 4. Doc and code references
 
 - **Main status:** [README.md](./README.md)
+- **Protocol and message ordering:** [scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md](../../scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md)
+- **Protocol test gaps:** [PROTOCOL-TEST-GAPS.md](./PROTOCOL-TEST-GAPS.md) — missing unit/integration tests to prove protocol requirements
 - **Audio investigation:** [OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md](./OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md)
 - **Server error investigation:** [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md)
 - **Proxy:** `scripts/openai-proxy/` (server, translator, CLI)
