@@ -46,6 +46,10 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   const mockReceived: Array<{ type: string; at?: number }> = [];
   /** When > 0, mock sends conversation.item.added this many ms after receiving conversation.item.create (user). Issue #388: proxy must send response.create only after item.added. */
   let mockDelayItemAddedForInjectUserMessageMs = 0;
+  /** Issue #414: when true, mock sends session.created on connection open (before any session.update) to simulate real OpenAI behavior. */
+  let mockSendSessionCreatedOnConnect = false;
+  /** Issue #414: when true, mock sends conversation.item.added for assistant messages too (not just user). Needed for greeting TTS. */
+  let mockSendItemAddedForAssistant = false;
   /** When true, mock sends response.function_call_arguments.done after session.updated (for function-call test) */
   let mockSendFunctionCallAfterSession = false;
   /** When true, mock sends only response.output_audio_transcript.done with "Function call: ..." after session.updated (no .done event) */
@@ -97,6 +101,10 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockWss!.on('connection', (socket: import('ws')) => {
       /** Issue #406: per-connection; true after we have sent session.updated (used when mockEnforceSessionBeforeContext). */
       let sessionUpdatedSent = false;
+      // Issue #414: simulate real OpenAI behavior — send session.created immediately on connection
+      if (mockSendSessionCreatedOnConnect) {
+        socket.send(JSON.stringify({ type: 'session.created', session: { id: 'sess_mock', model: 'gpt-realtime', modalities: ['text', 'audio'] } }));
+      }
       socket.on('message', (data: Buffer) => {
         try {
           const msg = JSON.parse(data.toString()) as { type?: string; item?: { type?: string; role?: string; content?: Array<{ type?: string }>; call_id?: string; output?: string } };
@@ -114,6 +122,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             receivedConversationItems.push({ type: msg.type, item: msg.item });
             // Issue #388: proxy sends response.create only after conversation.item.added. Mock must send item.added for user messages.
             const isUserMessage = msg.item?.type === 'message' && msg.item?.role === 'user';
+            const isAssistantMessage = msg.item?.type === 'message' && msg.item?.role === 'assistant';
             if (isUserMessage) {
               const delay = mockDelayItemAddedForInjectUserMessageMs;
               const sendItemAdded = () => {
@@ -128,6 +137,17 @@ describe('OpenAI proxy integration (Issue #381)', () => {
               };
               if (delay > 0) setTimeout(sendItemAdded, delay);
               else sendItemAdded();
+            }
+            // Issue #414: send conversation.item.added for assistant messages (greeting) so proxy can trigger response.create for TTS
+            if (isAssistantMessage && mockSendItemAddedForAssistant) {
+              try {
+                socket.send(JSON.stringify({
+                  type: 'conversation.item.added',
+                  item: { id: 'item_mock_greeting', type: 'message', status: 'completed', role: 'assistant', content: msg.item?.content ?? [] },
+                }));
+              } catch {
+                // ignore
+              }
             }
           }
           if (msg.type === 'session.update') {
@@ -389,7 +409,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           return;
         }
         if (msg.type === 'SettingsApplied') {
-          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hello in one short sentence.' }));
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What is 2 plus 2?' }));
         }
         if (msg.type === 'ConversationText' && msg.role === 'assistant') {
           if (useRealOpenAI) {
@@ -436,6 +456,65 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 5000);
 
   /**
+   * Issue #414 proxy contract: only response.output_audio.delta (decoded PCM) must be sent as binary;
+   * all other upstream messages (conversation.item.added, response.output_text.done, etc.) must be sent as text.
+   * Catches regression where proxy sends JSON as binary (e.g. clientWs.send(raw)) and component routes it to audio.
+   * We classify "binary" as payload that does not parse as JSON with a type field (ws may deliver all as Buffer).
+   */
+  itMockOnly('Issue #414: only response.output_audio.delta is sent as binary; all other upstream messages as text (proxy wire contract)', (done) => {
+    mockSendOutputAudioBeforeText = true;
+    const receivedFrames: Array<{ isBinary: boolean; type?: string; binaryData?: Buffer }> = [];
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer | string) => {
+      const buf = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
+      let type: string | undefined;
+      let role: string | undefined;
+      try {
+        const parsed = JSON.parse(buf.toString('utf8')) as { type?: string; role?: string };
+        if (parsed && typeof parsed === 'object') {
+          if (typeof parsed.type === 'string') type = parsed.type;
+          if (typeof parsed.role === 'string') role = parsed.role;
+        }
+      } catch {
+        // not JSON (e.g. binary PCM)
+      }
+      const isBinary = !type;
+      receivedFrames.push({
+        isBinary,
+        type,
+        binaryData: isBinary ? (buf as Buffer) : undefined,
+      });
+      if (type === 'SettingsApplied') {
+        client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What is 2 plus 2?' }));
+      }
+      if (type === 'ConversationText' && role === 'assistant' && receivedFrames.some((f) => f.type === 'SettingsApplied')) {
+        const binaryFrames = receivedFrames.filter((f) => f.isBinary);
+        expect(binaryFrames.length).toBe(1);
+        expect(receivedFrames.filter((f) => !f.isBinary).length).toBeGreaterThanOrEqual(2);
+        const singleBinary = binaryFrames[0]?.binaryData;
+        expect(singleBinary).toBeDefined();
+        const isLikelyJson = singleBinary
+          ? (() => {
+              try {
+                const p = JSON.parse(singleBinary.toString('utf8')) as { type?: string };
+                return typeof p === 'object' && p !== null && typeof p.type === 'string';
+              } catch {
+                return false;
+              }
+            })()
+          : false;
+        expect(isLikelyJson).toBe(false);
+        client.close();
+        done();
+      }
+    });
+    client.on('error', done);
+  }, 8000);
+
+  /**
    * Proxy must send raw PCM (binary) to the client when upstream sends response.output_audio.delta (JSON with base64).
    * So the test-app component receives binary frames and can play TTS via handleAgentAudio → AudioManager.queueAudio.
    */
@@ -456,7 +535,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       try {
         const msg = JSON.parse(str) as { type?: string; role?: string; content?: string };
         if (msg.type === 'SettingsApplied') {
-          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'hi' }));
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What is 2 plus 2?' }));
         }
         if (msg.type === 'ConversationText' && msg.role === 'assistant') {
           expect(receivedPcmChunks.length).toBeGreaterThanOrEqual(1);
@@ -671,7 +750,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
       if (msg.type === 'SettingsApplied') {
         mockReceived.length = 0;
-        client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'hi' }));
+        client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What is 2 plus 2?' }));
       }
       if (msg.type === 'ConversationText' && msg.role === 'assistant') {
         try {
@@ -744,6 +823,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Greeting (Issue #381): When Settings includes agent.greeting, after session.updated the proxy
    * sends SettingsApplied, then injects the greeting as ConversationText (assistant) to the client
    * and as conversation.item.create (assistant) to upstream.
+   * Note: This test does NOT assert greeting audio (binary PCM). It only asserts greeting as text.
+   * Greeting audio is validated by E2E "connect only" test (greeting-playback-validation.spec.js).
    */
   itMockOnly('injects agent.greeting as ConversationText and conversation.item.create after session.updated', (done) => {
     mockReceived.length = 0;
@@ -784,5 +865,127 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', done);
+  });
+
+  /**
+   * Issue #414: session.created must NOT trigger SettingsApplied or context/greeting injection.
+   * OpenAI sends session.created immediately on WebSocket open, BEFORE our session.update is
+   * processed. If the proxy injects context/greeting on session.created, the upstream receives
+   * conversation.item.create for an unconfigured session → error.
+   *
+   * This test has the mock send session.created on connection open. The proxy must:
+   * 1. NOT send SettingsApplied to client on session.created
+   * 2. Only send SettingsApplied on session.updated (after session.update is processed)
+   * 3. Only inject greeting after session.updated
+   */
+  itMockOnly('Issue #414: session.created does not trigger SettingsApplied or greeting injection (only session.updated does)', (done) => {
+    mockReceived.length = 0;
+    receivedConversationItems.length = 0;
+    protocolErrors.length = 0;
+    mockSendSessionCreatedOnConnect = true;
+    mockSendItemAddedForAssistant = true;
+    mockEnforceSessionBeforeContext = true;
+    const greeting = 'Hi there!';
+    const clientMessages: Array<{ type?: string; role?: string; content?: string }> = [];
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: { think: { prompt: 'Be helpful.' }, greeting },
+      }));
+    });
+    client.on('message', (data: Buffer) => {
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string };
+        clientMessages.push(msg);
+      } catch {
+        // binary or unparseable — ignore
+      }
+    });
+    // Wait long enough for both session.created and session.updated to be processed
+    setTimeout(() => {
+      try {
+        // Client should receive exactly ONE SettingsApplied (from session.updated, not session.created)
+        const settingsAppliedCount = clientMessages.filter((m) => m.type === 'SettingsApplied').length;
+        expect(settingsAppliedCount).toBe(1);
+        // Greeting ConversationText should be present (sent after session.updated)
+        const greetingMsg = clientMessages.find((m) => m.type === 'ConversationText' && m.role === 'assistant' && m.content === greeting);
+        expect(greetingMsg).toBeDefined();
+        // No protocol errors (context/greeting must not arrive before session.updated)
+        expect(protocolErrors).toHaveLength(0);
+        client.close();
+        mockSendSessionCreatedOnConnect = false;
+        mockSendItemAddedForAssistant = false;
+        mockEnforceSessionBeforeContext = false;
+        done();
+      } catch (err) {
+        client.close();
+        mockSendSessionCreatedOnConnect = false;
+        mockSendItemAddedForAssistant = false;
+        mockEnforceSessionBeforeContext = false;
+        done(err);
+      }
+    }, 500);
+    client.on('error', (err) => {
+      mockSendSessionCreatedOnConnect = false;
+      mockSendItemAddedForAssistant = false;
+      mockEnforceSessionBeforeContext = false;
+      done(err);
+    });
+  });
+
+  /**
+   * Issue #414: after greeting injection, proxy must send response.create (via conversation.item.added)
+   * so OpenAI generates TTS for the initial turn. Without response.create, the greeting is silently
+   * added to context and the user hears nothing.
+   */
+  itMockOnly('Issue #414: greeting injection triggers response.create after conversation.item.added (enables TTS)', (done) => {
+    mockReceived.length = 0;
+    receivedConversationItems.length = 0;
+    protocolErrors.length = 0;
+    mockSendItemAddedForAssistant = true;
+    const greeting = 'Welcome!';
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: { think: { prompt: 'Greet.' }, greeting },
+      }));
+    });
+    client.on('message', (data: Buffer) => {
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; content?: string };
+        // response.create triggers mock to send response.output_text.done → ConversationText(content); when we see that, response.create was sent
+        if (msg.type === 'ConversationText' && msg.content === 'Hello from mock') {
+          // response.create was sent (mock responded with "Hello from mock")
+          // Verify the sequence: session.update → (session.updated) → conversation.item.create (greeting) → response.create
+          const responseCreateIdx = mockReceived.findIndex((m) => m.type === 'response.create');
+          expect(responseCreateIdx).toBeGreaterThanOrEqual(0);
+          // conversation.item.create for the greeting must come before response.create
+          const greetingItemIdx = mockReceived.findIndex((m) => m.type === 'conversation.item.create');
+          expect(greetingItemIdx).toBeGreaterThanOrEqual(0);
+          expect(greetingItemIdx).toBeLessThan(responseCreateIdx);
+          expect(protocolErrors).toHaveLength(0);
+          if (timeoutId) clearTimeout(timeoutId);
+          client.close();
+          mockSendItemAddedForAssistant = false;
+          done();
+        }
+      } catch {
+        // ignore parse errors for binary frames
+      }
+    });
+    // Timeout guard
+    timeoutId = setTimeout(() => {
+      client.close();
+      mockSendItemAddedForAssistant = false;
+      done(new Error('Timed out: response.create was never sent after greeting injection (no TTS would be generated)'));
+    }, 3000);
+    client.on('error', (err: Error) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      mockSendItemAddedForAssistant = false;
+      done(err);
+    });
   });
 });

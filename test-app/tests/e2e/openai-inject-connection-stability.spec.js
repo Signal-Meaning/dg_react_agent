@@ -32,7 +32,7 @@ test.describe('OpenAI injectUserMessage (issue #380)', () => {
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
-    await sendTextMessage(page, 'hi');
+    await sendTextMessage(page, 'What is 2 plus 2?');
     // Expected: an agent reply is delivered. When the bug is present, the connection
     // closes before the reply and no response appears, so this times out and the test fails.
     await waitForAgentResponseEnhanced(page, { timeout: 15000 });

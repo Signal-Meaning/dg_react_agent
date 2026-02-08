@@ -61,7 +61,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
-    await sendTextMessage(page, 'hi');
+    await sendTextMessage(page, 'What is 2 plus 2?');
     await waitForAgentResponseEnhanced(page, { timeout: AGENT_RESPONSE_TIMEOUT });
     const response = await page.locator('[data-testid="agent-response"]').textContent();
     expect(response).toBeTruthy();
@@ -73,7 +73,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
-    const r1 = await sendMessageAndWaitForResponse(page, "Hello, I need help.", AGENT_RESPONSE_TIMEOUT);
+    const r1 = await sendMessageAndWaitForResponse(page, "What is the capital of France?", AGENT_RESPONSE_TIMEOUT);
     expect(r1).toBeTruthy();
     expect(r1.length).toBeGreaterThan(0);
     const r2 = await sendMessageAndWaitForResponse(page, "What did I just say?", AGENT_RESPONSE_TIMEOUT);
@@ -101,7 +101,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
-    await sendTextMessage(page, 'Hello.');
+    await sendTextMessage(page, 'What is 2 plus 2?');
     await waitForAgentResponse(page, null, AGENT_RESPONSE_TIMEOUT);
     const hasSample = await page.evaluate(async () => {
       try {
@@ -150,7 +150,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     expect(firstResponse.length).toBeGreaterThan(0);
     await disconnectComponent(page);
     await page.waitForTimeout(1000);
-    const secondResponse = await sendMessageAndWaitForResponse(page, "Hello again.", AGENT_RESPONSE_TIMEOUT);
+    const secondResponse = await sendMessageAndWaitForResponse(page, "What is 3 times 3?", AGENT_RESPONSE_TIMEOUT);
     expect(secondResponse).toBeTruthy();
     expect(secondResponse.length).toBeGreaterThan(0);
     await assertNoRecoverableAgentErrors(page);

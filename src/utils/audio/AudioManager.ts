@@ -815,15 +815,11 @@ export class AudioManager {
   }
   
   /**
-   * Gets the AudioContext instance for playback readiness checks
-   * Used to ensure AudioContext is ready before greeting audio arrives
+   * Gets the AudioContext used for TTS playback. Creates the playback context if needed
+   * so the host can resume it on user gesture before any TTS arrives. That way when agent
+   * audio is queued, the context is already running and playback is not held pending.
    */
   public getAudioContext(): AudioContext | null {
-    return this.playbackContext ?? this.audioContext;
+    return this.getOrCreatePlaybackContext() ?? this.audioContext;
   }
-
-  /**
-   * Gets the AudioContext instance for playback readiness checks
-   * Used to ensure AudioContext is ready before greeting audio arrives
-   */
 } 

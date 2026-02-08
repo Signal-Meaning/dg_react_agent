@@ -48,7 +48,8 @@ test.describe('OpenAI proxy TTS diagnostic (Issue #414)', () => {
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
 
-    await sendTextMessage(page, 'Say hello in one short sentence.');
+    // Non-greeting prompt so TTS is from agent response, not greeting path
+    await sendTextMessage(page, 'What is 2 plus 2?');
     await waitForAgentResponseEnhanced(page, { timeout: AGENT_RESPONSE_TIMEOUT });
     // Wait for TTS playback to start (audio-playing-status becomes true); may already have finished
     let playbackStarted = false;
@@ -95,14 +96,18 @@ test.describe('OpenAI proxy TTS diagnostic (Issue #414)', () => {
         'If 0: proxy may not be sending PCM (response.output_audio.delta → binary), or backend not running / wrong endpoint.'
     ).toBeGreaterThanOrEqual(1);
 
-    // Assert 2: First binary frame must not be JSON (proxy must send only PCM as binary; Issue #414 integration coverage)
+    // Assert 2: Every binary frame must not be JSON (proxy contract: only response.output_audio.delta as binary; Issue #414).
+    // Aligns with integration test "Issue #414: only response.output_audio.delta is sent as binary; all other upstream messages as text".
     const chunksBase64 = await getTtsChunksBase64List(page);
     if (chunksBase64.length > 0) {
-      const firstBinaryIsJson = isFirstBinaryChunkLikelyJson(chunksBase64[0]);
+      const jsonLikeIndices = chunksBase64
+        .map((b64, i) => (isFirstBinaryChunkLikelyJson(b64) ? i : -1))
+        .filter((i) => i >= 0);
       expect(
-        firstBinaryIsJson,
-        'First binary frame must not be JSON (proxy must send only PCM as binary). If true, text/JSON was sent as binary and is being routed to audio.'
-      ).toBe(false);
+        jsonLikeIndices,
+        `No binary frame may be JSON (proxy must send only PCM as binary). Chunk index(s) that look like JSON: [${jsonLikeIndices.join(', ')}]. ` +
+          'If non-empty, text/JSON was sent as binary and is being routed to audio.'
+      ).toEqual([]);
     }
 
     // Assert 3: Component must receive binary in handleAgentAudio (routing from WebSocketManager)
