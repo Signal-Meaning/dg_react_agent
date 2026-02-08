@@ -99,6 +99,12 @@ Add or extend a script that integrates with the OpenAI proxy to send command-lin
 
 ---
 
+## Next steps
+
+See **[NEXT-STEPS.md](./NEXT-STEPS.md)** for what to do next (server error regression, optional E2E/playback hardening).
+
+---
+
 ## References
 
 - OpenAI proxy: `scripts/openai-proxy/` (e.g. `run.ts`, `server.ts`)
