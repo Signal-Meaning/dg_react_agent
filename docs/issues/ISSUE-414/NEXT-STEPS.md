@@ -85,8 +85,8 @@ Each of the following appears repeatedly in E2E and manual run logs. Each should
 
 - **What:** Upstream sends *"The server had an error while processing your request"* (often a few seconds after a successful turn). Connection may then close.
 - **Why it matters:** Users see an error in the UI; E2E that assert “no agent error” fail when this occurs within the assertion window. It is unclear whether the cause is our usage (e.g. timing, duplicate commits/responses above) or an upstream bug.
-- **Likely causes:** Documented in [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md). Session.update / greeting payload variations ruled out. Hypotheses include: server-side idle timeout or VAD behavior; upstream bug (see [community thread](https://community.openai.com/t/realtime-api-server-error/1373435)); or our triggering it by the commit/response ordering issues above.
-- **Next:** (1) Fix or mitigate 3.1 and 3.2 so we do not send early commit or duplicate response.create; re-run with real API and see if “server had an error” frequency drops. (2) If it persists, treat as upstream: try session/input config (e.g. idle timeout) per API docs; gather community evidence; document as known behavior and adjust E2E (e.g. allow recoverable error in window or skip assertion when real API). (3) Do not suppress forwarding the error to the client; keep UI “recoverable” handling so the user can continue or reconnect.
+- **Mitigations in place:** §3.1 and §3.2 are fixed (no early commit, no duplicate response.create). Proxy **forwards** all upstream `error` events to the client (no suppression); integration test "when upstream sends error after session.updated, client receives Error" confirms. UI keeps recoverable handling so the user can continue or reconnect.
+- **Next:** (1) Re-run with real API and see if "server had an error" frequency drops after 3.1/3.2. (2) If it persists, treat as upstream: try session/input config (e.g. idle timeout) per API docs; document as known behavior and adjust E2E (e.g. allow recoverable error in window or skip assertion when real API). See [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md).
 
 ### 3.4 WebSocket closed code 1005
 
@@ -108,7 +108,7 @@ Each of the following appears repeatedly in E2E and manual run logs. Each should
 
 **Ref:** [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md), [OPENAI-SESSION-STATE-AND-TESTS.md](./OPENAI-SESSION-STATE-AND-TESTS.md), [PROTOCOL-TEST-GAPS.md](./PROTOCOL-TEST-GAPS.md)
 
-- **Server error regression:** Covered in §3.3. Protocol and session.update/greeting payload variations have been ruled out; next steps are fixing commit/response ordering (§3.1, §3.2), then idle-timeout investigation and upstream/community evidence.
+- **Server error regression:** Covered in §3.3. §3.1 and §3.2 are fixed. Proxy forwards errors; next steps are re-run with real API to observe frequency, then idle-timeout investigation and upstream/community evidence if it persists.
 - **Protocol and ordering:** Documented in [scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md](../../scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md). Integration tests enforce session.update → session.updated → context/greeting ordering and wire contract (binary only for `response.output_audio.delta`). Keep these green and align E2E with proxy vs direct backend.
 - **Session state and tests:** Component passes full state in Settings; proxy maps to OpenAI session.update + conversation.item.create after session.updated. See [OPENAI-SESSION-STATE-AND-TESTS.md](./OPENAI-SESSION-STATE-AND-TESTS.md).
 
