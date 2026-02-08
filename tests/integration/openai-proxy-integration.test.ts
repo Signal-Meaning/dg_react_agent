@@ -86,6 +86,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   const protocolErrors: Error[] = [];
   /** Records conversation.item.create payloads for assertions */
   const receivedConversationItems: Array<{ type: string; item?: { type?: string; call_id?: string; output?: string; role?: string } }> = [];
+  /** Issue #414 TDD: records session.update payloads sent to upstream for assertions (e.g. turn_detection) */
+  const receivedSessionUpdatePayloads: Array<{ type: string; session?: { turn_detection?: unknown; [key: string]: unknown } }> = [];
 
   beforeAll(async () => {
     proxyServer = http.createServer((_req, res) => {
@@ -197,6 +199,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             }
           }
           if (msg.type === 'session.update') {
+            receivedSessionUpdatePayloads.push(msg as typeof receivedSessionUpdatePayloads[number]);
             const sendSessionUpdated = () => {
               socket.send(JSON.stringify({ type: 'session.updated', session: { type: 'realtime' } }));
               sessionUpdatedSent = true;
@@ -1320,6 +1323,58 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       done(err);
     });
   }, 15000);
+
+  /**
+   * Issue #414 TDD: session.update must NOT include audio configuration.
+   *
+   * Investigation history:
+   * - turn_detection: null (top-level) → "Unknown parameter: 'session.turn_detection'"
+   * - audio.input.turn_detection: null → accepted, 5s error persists
+   * - audio.input.turn_detection: { type: 'server_vad', create_response: false } → accepted, 5s error persists
+   * - Community reports turn_detection: null is broken in GA API
+   *
+   * Hypothesis: sending audio.input config without audio.input.format puts the session
+   * in a broken audio input state. The official gpt-realtime example includes
+   * audio.input.format alongside turn_detection. Sending partial audio config may cause
+   * the 5-second server error.
+   *
+   * Fix: do not send audio config in session.update. The proxy handles turn detection
+   * manually (debounce + response.create) and doesn't need to override server defaults.
+   * If default server VAD auto-creates responses, the proxy ignores them or handles
+   * the error gracefully.
+   */
+  itMockOnly('Issue #414 TDD: session.update must not include audio config (avoids partial audio config error)', (done) => {
+    receivedSessionUpdatePayloads.length = 0;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: { think: { prompt: 'Help.' } },
+      }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string };
+        if (msg.type === 'SettingsApplied') {
+          expect(receivedSessionUpdatePayloads.length).toBe(1);
+          const sessionUpdate = receivedSessionUpdatePayloads[0];
+          expect(sessionUpdate.session).toBeDefined();
+          // Must NOT include audio config — partial audio config (turn_detection without format)
+          // puts session in a broken state causing 5-second server errors
+          expect(sessionUpdate.session!.audio).toBeUndefined();
+          // Must NOT have top-level turn_detection (causes "Unknown parameter: 'session.turn_detection'")
+          expect(sessionUpdate.session!.turn_detection).toBeUndefined();
+          client.close();
+          done();
+        }
+      } catch (err) {
+        client.close();
+        done(err);
+      }
+    });
+    client.on('error', done);
+  });
 
   itMockOnly('Issue #414 TDD: greeting delivers text to client only (nothing to upstream)', (done) => {
     mockReceived.length = 0;

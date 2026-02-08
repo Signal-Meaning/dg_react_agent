@@ -27,6 +27,8 @@ export interface OpenAISessionUpdate {
     model?: string;
     instructions?: string;
     voice?: string;
+    /** GA API: audio config including turn_detection under input */
+    audio?: { input?: { turn_detection?: { type: 'server_vad'; create_response?: boolean; interrupt_response?: boolean } | null } };
     tools?: Array<{ type: 'function'; name: string; description?: string; parameters?: unknown }>;
     [key: string]: unknown;
   };
@@ -163,6 +165,13 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
     instructions: settings.agent?.think?.prompt ?? '',
     // Do not send voice in session.update; current Realtime API returns "Unknown parameter: 'session.voice'".
     // Voice can be set via the WebSocket URL (e.g. ?voice=alloy) if the API supports it.
+    // Issue #414: do NOT send audio config in session.update. Investigation showed:
+    // - turn_detection: null (top-level) → "Unknown parameter: 'session.turn_detection'"
+    // - audio.input.turn_detection: null → accepted, 5s error persists
+    // - audio.input.turn_detection: { server_vad, create_response: false } → accepted, 5s error persists
+    // Partial audio config (turn_detection without audio.input.format) may put session in a
+    // broken state. The proxy handles turn detection manually (debounce + response.create)
+    // and doesn't need to override server defaults via session.update.
   };
   if (settings.agent?.think?.functions?.length) {
     session.tools = settings.agent.think.functions.map((f) => ({

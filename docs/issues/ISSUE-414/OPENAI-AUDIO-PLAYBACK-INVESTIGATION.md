@@ -109,7 +109,7 @@ Additionally, the proxy sent **two** `SettingsApplied` messages to the client (o
 
 **Previous analysis (context):**
 
-The upstream (OpenAI Realtime API) sends an `error` event with a recoverable message (e.g. "The server had an error while processing your request…"). The proxy forwards it; the component sets recoverable and the test-app increments `agent-error-count`. The **same** error is also observed **after** a successful turn (playback finishes, then error). For the "after successful response" case, **ruled out so far**: greeting injection (greeting-text-only didn't remove it), full session payload (minimal-session didn't remove it). Community reports exist (e.g. OpenAI Realtime "server had an error"). See [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md).
+The upstream (OpenAI Realtime API) sends an `error` event with a recoverable message (e.g. "The server had an error while processing your request…"). The proxy forwards it; the component sets recoverable and the test-app increments `agent-error-count`. The **same** error is also observed **after** a successful turn (playback finishes, then error). For the "after successful response" case, **ruled out so far**: greeting injection (greeting-text-only didn't remove it), full session payload (minimal-session didn't remove it), and all session.update audio/turn_detection configurations (four TDD cycles; see [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md) § "session.update configuration investigation"). The error persists regardless of session.update content — it appears to be server-side default VAD idle timeout behavior.
 
 **Why the "prior" E2E test played good audio but the manual (connect-only) test did not**
 

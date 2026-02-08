@@ -80,8 +80,16 @@ Add or extend a script that integrates with the OpenAI proxy to send command-lin
 ### "Server had an error" after response (OpenAI Realtime)
 
 - **Observed:** Test-app sometimes shows "The server had an error while processing your request" from the agent *after* a successful turn (e.g. right after "Audio playback finished"). Greeting-text-only and minimal-session diagnostics did not remove the error, so the trigger is not our session or greeting payload.
-- **Likely cause:** Known OpenAI Realtime API behavior: the server can send an `error` event after a successful response (see [community reports](https://community.openai.com/t/realtime-api-the-server-had-an-error-while-processing-your-request/978856)). The CLI often "succeeds" because it exits on first ConversationText and closes the connection before the error arrives.
+- **Likely cause:** Known OpenAI Realtime API behavior: the server can send an `error` event after a successful response (see [community reports](https://community.openai.com/t/openai-realtime-api-server-error/1373435)). The CLI often "succeeds" because it exits on first ConversationText and closes the connection before the error arrives.
 - **Workaround (UI only):** When the component receives this error and the agent is already **idle** (e.g. just finished playback), it passes `recoverable: true` on the error to the host. The test-app then logs a warning ("You can continue or reconnect") instead of a hard error, so the user can keep using the app or reconnect. **Tests do not treat it as success:** both integration and E2E tests are written to **fail** when this error is encountered (see below and [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md)).
+
+- **session.update configuration investigation (2026-02):** Four TDD cycles tested whether session.update audio/turn_detection config causes the error. All four passed mock tests but failed manual testing — the 5-second error persisted regardless:
+  1. `session.turn_detection: null` (top-level) → rejected by GA API ("Unknown parameter")
+  2. `session.audio.input.turn_detection: null` → accepted, error persists
+  3. `session.audio.input.turn_detection: { server_vad, create_response: false }` → accepted, error persists
+  4. No audio config at all → error STILL persists
+
+  **Conclusion:** The error is **not caused by session.update configuration**. Likely server-side default VAD idle timeout behavior. See [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md) for full details, source URLs, and remaining hypotheses.
 
 - **Regression trap (tests fail when defect is present):**
   - **Integration:** `tests/integration/openai-proxy-integration.test.ts` – Any test that receives a message with `type: 'Error'` from the proxy calls `done(new Error(...))`, so the test **fails**. Real-API tests wait **5s** after a successful response before finishing, so a late-arriving "server had an error" within that window causes a failure. A mock-only test *"when upstream sends error after session.updated, client receives Error (proxy forwards error)"* verifies the proxy forwards upstream errors (test **passes** when client receives the Error). With mocks we do not simulate a failing run; with real API, if the upstream sends the error within 5s, the test fails.
