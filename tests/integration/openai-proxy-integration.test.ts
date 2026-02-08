@@ -12,6 +12,9 @@
  * Real upstream: set USE_REAL_OPENAI=1 and OPENAI_API_KEY to run a subset of tests
  * against the live OpenAI Realtime API. See docs/development/TEST-STRATEGY.md.
  *
+ * Run order: integration tests first against real APIs (when keys available), then mocks.
+ * CI runs mocks only.
+ *
  * @jest-environment node
  */
 
@@ -137,6 +140,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         try {
           const msg = JSON.parse(data.toString()) as { type?: string; item?: { type?: string; role?: string; content?: Array<{ type?: string }>; call_id?: string; output?: string } };
           if (msg.type) mockReceived.push({ type: msg.type, at: Date.now() });
+          if (msg.type === 'input_audio_buffer.append') {
+            if (!sessionUpdatedSent) {
+              protocolErrors.push(new Error('input_audio_buffer.append received before session.updated was sent (protocol: audio must follow session.updated, Issue #414)'));
+            }
+          }
           if (msg.type === 'conversation.item.create') {
             if (mockEnforceSessionBeforeContext && !sessionUpdatedSent) {
               protocolErrors.push(new Error('conversation.item.create received before session.updated was sent (protocol: context must follow session.updated)'));
@@ -315,7 +323,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       });
     });
 
-    // Proxy created with default options (no greetingTextOnly/minimalSession); matches production when those TODOs are removed.
+    // Proxy created with default options (no greetingTextOnly); matches production when that TODO is removed.
     createOpenAIProxyServer({
       server: proxyServer,
       path: PROXY_PATH,
@@ -460,6 +468,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       originalConnection(socket);
     });
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const timeoutId = setTimeout(() => done(new Error('Timeout: did not receive UserStartedSpeaking')), 5000);
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
     });
@@ -468,15 +477,17 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       try {
         const msg = JSON.parse(data.toString()) as { type?: string; description?: string };
         if (msg.type === 'Error') {
+          clearTimeout(timeoutId);
           client.close();
           done(new Error(`Upstream error: ${msg.description ?? 'unknown'}`));
           return;
         }
         if (msg.type === 'SettingsApplied') {
-          mockSocket?.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }));
+          setImmediate(() => mockSocket?.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' })));
           return;
         }
         if (msg.type === 'UserStartedSpeaking') {
+          clearTimeout(timeoutId);
           expect(msg.type).toBe('UserStartedSpeaking');
           client.close();
           done();
@@ -485,8 +496,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         // ignore
       }
     });
-    client.on('error', (err) => done(err));
-    setTimeout(() => done(new Error('Timeout: did not receive UserStartedSpeaking')), 5000);
+    client.on('error', (err) => { clearTimeout(timeoutId); done(err); });
   });
 
   /**
@@ -502,6 +512,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       originalConnection(socket);
     });
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const timeoutId = setTimeout(() => done(new Error('Timeout: did not receive UtteranceEnd')), 5000);
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
     });
@@ -510,15 +521,17 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       try {
         const msg = JSON.parse(data.toString()) as { type?: string; description?: string; channel?: number[]; last_word_end?: number };
         if (msg.type === 'Error') {
+          clearTimeout(timeoutId);
           client.close();
           done(new Error(`Upstream error: ${msg.description ?? 'unknown'}`));
           return;
         }
         if (msg.type === 'SettingsApplied') {
-          mockSocket?.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
+          setImmediate(() => mockSocket?.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' })));
           return;
         }
         if (msg.type === 'UtteranceEnd') {
+          clearTimeout(timeoutId);
           expect(msg.type).toBe('UtteranceEnd');
           expect(Array.isArray(msg.channel)).toBe(true);
           expect(typeof msg.last_word_end).toBe('number');
@@ -529,8 +542,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         // ignore
       }
     });
-    client.on('error', (err) => done(err));
-    setTimeout(() => done(new Error('Timeout: did not receive UtteranceEnd')), 5000);
+    client.on('error', (err) => { clearTimeout(timeoutId); done(err); });
   });
 
   /**
@@ -631,6 +643,193 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     });
     client.on('error', done);
   }, 5000);
+
+  /**
+   * Issue #414: Proxy must not send input_audio_buffer.append until after session.updated (audio gated).
+   * When client sends binary before session.updated, proxy queues it and flushes after session.updated.
+   * Mock enforces protocol: input_audio_buffer.append before session.updated → protocolErrors.
+   * This test delays session.updated (mockEnforceSessionBeforeContext); client sends Settings then binary
+   * immediately. We assert no append before session.updated (30ms), then order and no protocol errors.
+   */
+  itMockOnly('Issue #414: no input_audio_buffer.append before session.updated (audio gated, queued then flushed)', (done) => {
+    mockReceived.length = 0;
+    protocolErrors.length = 0;
+    mockEnforceSessionBeforeContext = true;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      setImmediate(() => client.send(Buffer.alloc(960, 0)));
+    });
+    setTimeout(() => {
+      const types = mockReceived.map((m) => m.type);
+      expect(types.filter((t) => t === 'input_audio_buffer.append')).toHaveLength(0);
+    }, 30);
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string };
+        if (msg.type === 'SettingsApplied') {
+          setTimeout(() => {
+            expect(protocolErrors).toHaveLength(0);
+            const types = mockReceived.map((m) => m.type);
+            expect(types).toContain('session.update');
+            expect(types).toContain('input_audio_buffer.append');
+            const sessionUpdateIdx = types.indexOf('session.update');
+            const firstAppendIdx = types.indexOf('input_audio_buffer.append');
+            expect(sessionUpdateIdx).toBeLessThan(firstAppendIdx);
+            mockEnforceSessionBeforeContext = false;
+            client.close();
+            done();
+          }, 80);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => {
+      mockEnforceSessionBeforeContext = false;
+      done(err);
+    });
+  }, 5000);
+
+  /**
+   * Issue #414: Upstream message order — session.update must appear before any input_audio_buffer.append.
+   * Client sends binary only after SettingsApplied; proxy must have sent session.update first.
+   * Mock enforces protocol: append before session.updated → protocolErrors; we assert none.
+   */
+  itMockOnly('Issue #414: session.update before input_audio_buffer.append in upstream order', (done) => {
+    mockReceived.length = 0;
+    protocolErrors.length = 0;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string };
+        if (msg.type === 'SettingsApplied') {
+          client.send(Buffer.alloc(960, 0));
+          setTimeout(() => {
+            expect(protocolErrors).toHaveLength(0);
+            const types = mockReceived.map((m) => m.type);
+            const sessionUpdateIdx = types.indexOf('session.update');
+            const firstAppendIdx = types.indexOf('input_audio_buffer.append');
+            expect(sessionUpdateIdx).toBeGreaterThanOrEqual(0);
+            expect(firstAppendIdx).toBeGreaterThanOrEqual(0);
+            expect(sessionUpdateIdx).toBeLessThan(firstAppendIdx);
+            client.close();
+            done();
+          }, 100);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', done);
+  }, 5000);
+
+  /**
+   * Issue #414: Firm audio connection — after sending audio per protocol, no Error from upstream within N seconds.
+   * With mock: upstream never sends error after append, so test passes. Documents expected behavior when upstream is well-behaved.
+   * See docs/issues/ISSUE-414/RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md §4.
+   */
+  itMockOnly('Issue #414: firm audio connection — no Error from upstream within 5s after sending audio (mock)', (done) => {
+    protocolErrors.length = 0;
+    const FIRM_AUDIO_WINDOW_MS = 5000;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string };
+        if (msg.type === 'Error') {
+          if (timeoutId) clearTimeout(timeoutId);
+          timeoutId = null;
+          client.close();
+          done(new Error(
+            `Received Error from proxy within firm-audio window: "${msg.description ?? 'unknown'}". ` +
+            'Expected no error after sending audio per protocol (Issue #414).'
+          ));
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          client.send(Buffer.alloc(4800, 0)); // 100ms at 24kHz 16-bit mono
+          timeoutId = setTimeout(() => {
+            timeoutId = null;
+            try {
+              expect(protocolErrors).toHaveLength(0);
+              client.close();
+              done();
+            } catch (err) {
+              client.close();
+              done(err as Error);
+            }
+          }, FIRM_AUDIO_WINDOW_MS);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err: Error) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      done(err);
+    });
+    client.on('close', () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    });
+  }, 10000);
+
+  /**
+   * Issue #414 real-API: Same assertion as mock test. With real OpenAI, upstream currently returns error after append;
+   * this test FAILS and documents the server error. When the API is fixed, it should pass.
+   */
+  (useRealOpenAI ? it : it.skip)('Issue #414 real-API: firm audio connection — no Error from upstream within 5s after sending audio (USE_REAL_OPENAI=1)', (done) => {
+    const FIRM_AUDIO_WINDOW_MS = 5000;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let receivedSettingsApplied = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string };
+        if (msg.type === 'SettingsApplied') {
+          receivedSettingsApplied = true;
+          client.send(Buffer.alloc(4800, 0));
+          timeoutId = setTimeout(() => {
+            timeoutId = null;
+            client.close();
+            done();
+          }, FIRM_AUDIO_WINDOW_MS);
+          return;
+        }
+        if (msg.type === 'Error') {
+          if (timeoutId) clearTimeout(timeoutId);
+          timeoutId = null;
+          client.close();
+          done(new Error(
+            `Real API returned Error within firm-audio window: "${msg.description ?? 'unknown'}". ` +
+            `This documents the Issue #414 server error. (settingsApplied=${receivedSettingsApplied})`
+          ));
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err: Error) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      done(err);
+    });
+    client.on('close', () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    });
+  }, 15000);
 
   itMockOnly('translates binary client message to input_audio_buffer.append and after debounce sends commit + response.create when ≥100ms audio', (done) => {
     mockReceived.length = 0;
@@ -1523,7 +1722,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           // Must NOT include audio config — partial audio config (turn_detection without format)
           // puts session in a broken state causing 5-second server errors
           expect(sessionUpdate.session!.audio).toBeUndefined();
-          // Must NOT have top-level turn_detection (causes "Unknown parameter: 'session.turn_detection'")
+          // Must NOT have top-level turn_detection (live API returns "Unknown parameter: 'session.turn_detection'")
           expect(sessionUpdate.session!.turn_detection).toBeUndefined();
           client.close();
           done();

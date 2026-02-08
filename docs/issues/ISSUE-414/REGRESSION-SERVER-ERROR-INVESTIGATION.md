@@ -90,7 +90,7 @@ Treating the error as recoverable **must not** let tests pass. Both integration 
 - **Hypothesis:** Sending partial audio config (turn_detection without `audio.input.format`) puts the session in a broken audio input state. The official examples include `audio.input.format` alongside turn_detection. Removing all audio config lets OpenAI use defaults.
 - **Test (red):** Asserted `sessionUpdate.session.audio === undefined`. Failed: audio had the turn_detection config from cycle 3.
 - **Fix (green):** Removed all audio config from `mapSettingsToSessionUpdate`. Test passed; full suite passed.
-- **Manual result:** **5-second server error STILL persisted** even with minimal session.update (only `type`, `model`, `instructions`).
+- **Manual result:** **5-second server error STILL persisted** even when we tried a minimal session.update (only `type`, `model`, `instructions`). That diagnostic option has since been removed.
 
 ### Conclusion
 

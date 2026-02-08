@@ -165,13 +165,10 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
     instructions: settings.agent?.think?.prompt ?? '',
     // Do not send voice in session.update; current Realtime API returns "Unknown parameter: 'session.voice'".
     // Voice can be set via the WebSocket URL (e.g. ?voice=alloy) if the API supports it.
-    // Issue #414: do NOT send audio config in session.update. Investigation showed:
-    // - turn_detection: null (top-level) → "Unknown parameter: 'session.turn_detection'"
-    // - audio.input.turn_detection: null → accepted, 5s error persists
-    // - audio.input.turn_detection: { server_vad, create_response: false } → accepted, 5s error persists
-    // Partial audio config (turn_detection without audio.input.format) may put session in a
-    // broken state. The proxy handles turn detection manually (debounce + response.create)
-    // and doesn't need to override server defaults via session.update.
+    // We do NOT send turn_detection: null (to disable Server VAD): the live API returns "Unknown parameter: 'session.turn_detection'".
+    // With Server VAD enabled (default), the SERVER auto-commits the input buffer; when it does so before our appends
+    // are applied (e.g. right after session.updated), we get "buffer too small ... 0.00ms". So we are NOT sending
+    // a too-small buffer — the server is committing an empty buffer. We only send commit when pendingAudioBytes >= 4800.
   };
   if (settings.agent?.think?.functions?.length) {
     session.tools = settings.agent.think.functions.map((f) => ({

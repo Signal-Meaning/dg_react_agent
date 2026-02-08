@@ -50,7 +50,18 @@ So: client sends **text** (JSON) and **binary** (PCM). The proxy never forwards 
   2. Sending **SettingsApplied** to the client.
   3. Sending **greeting** to the client only (as `ConversationText`); the proxy does **not** send the greeting as `conversation.item.create` to upstream (OpenAI Realtime rejects client-created assistant items). Greeting is shown in the UI; the model may see it in instructions.
 
-Order: **session.created** (ignored for injection) → **session.updated** (context to upstream, SettingsApplied + greeting to client).
+Order: **session.created** (ignored for injection) → **session.updated** (context to upstream, SettingsApplied + greeting to client, **flush any queued audio** — see §3).
+
+**Audio readiness (Issue #414):** The proxy does **not** send `input_audio_buffer.append` until after `session.updated` has been received. Binary received before `session.updated` is queued and sent in order when the session is ready. This avoids sending audio before the session is configured for it (which can contribute to upstream "server had an error").
+
+### 2.4 Firm audio connection (single source of truth)
+
+A connection is **ready for audio** (firm audio connection) when the proxy has received **session.updated** from upstream — i.e. after the client’s Settings have been applied and the proxy has sent **SettingsApplied** to the client.
+
+- **Client obligation:** The client **must not** send audio (binary PCM) before it has received **SettingsApplied**. Sending audio before the session is ready can cause upstream errors.
+- **Proxy behavior:** The proxy does not send `input_audio_buffer.append` to upstream until after `session.updated`. Binary that arrives from the client before `session.updated` is queued and flushed in order when `session.updated` is received (§3).
+
+This is the single source of truth for when audio may be sent. Integration tests assert this protocol (no append before session.updated; session.update before first append). See [RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md](../../docs/issues/ISSUE-414/RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md).
 
 ---
 
@@ -62,7 +73,18 @@ Order: **session.created** (ignored for injection) → **session.updated** (cont
 | **InjectUserMessage** | Map to `conversation.item.create` (user, `input_text`); send to upstream. Set `pendingItemAddedBeforeResponseCreate = 1`. Send **user echo** (`ConversationText` role `user`) to client. Send `response.create` only after upstream confirms the item (see §4). |
 | **FunctionCallResponse** | Map to `conversation.item.create` (function_call_output); send to upstream, then send `response.create` immediately. |
 | **Other JSON** | Forward to upstream as-is (text). |
-| **Binary** | Treat as PCM; send `input_audio_buffer.append` (base64) to upstream; set debounce timer for `input_audio_buffer.commit` + `response.create`. |
+| **Binary** | Treat as PCM; **only after session.updated** send `input_audio_buffer.append` (base64) to upstream (Issue #414: session must be configured for audio first). If binary arrives before session.updated, queue and flush when session.updated is received. Set debounce timer for `input_audio_buffer.commit` + `response.create`. Chunk size and commit timing must respect [OpenAI buffer restrictions](#35-openai-input-audio-buffer-restrictions). |
+
+### 3.5 OpenAI input audio buffer restrictions
+
+The proxy **enforces** these upstream constraints (single source of truth: `scripts/openai-proxy/openai-audio-constants.ts`):
+
+| Constraint | Value | API source |
+|------------|--------|------------|
+| **Minimum audio before commit** | At least 100ms (4800 bytes at 24kHz 16-bit mono). Sending commit with less causes "buffer too small" error. | [input_audio_buffer.commit](https://platform.openai.com/docs/api-reference/realtime-client-events/input-audio-buffer/commit) |
+| **Maximum bytes per append event** | 15 MiB per `input_audio_buffer.append`. Larger chunks must be split. | [input_audio_buffer.append](https://platform.openai.com/docs/api-reference/realtime-client-events/input-audio-buffer/append) |
+
+The proxy asserts these before sending (e.g. `assertMinAudioBeforeCommit`, `assertAppendChunkSize`). A 400ms debounce is used before sending commit. **Why "buffer too small … 0.00ms" still happens:** We are *not* sending commit with too little data (we only commit when we have sent ≥4800 bytes). With Server VAD enabled (API default), the **server** auto-commits the input buffer; when it does so before our appends are applied (e.g. right after session.updated), the server commits an empty buffer and returns that error. We cannot disable Server VAD via `session.turn_detection: null` because the live API returns "Unknown parameter: 'session.turn_detection'".
 
 ---
 

@@ -42,9 +42,8 @@ if (!apiKey || apiKey.trim().length === 0) {
 }
 
 const debug = process.env.OPENAI_PROXY_DEBUG === '1' || process.env.OPENAI_PROXY_DEBUG === 'true';
-// TODO: Not expected to keep. Diagnostic options for upstream error investigation.
+// TODO: Not expected to keep. Diagnostic option for upstream error investigation.
 const greetingTextOnly = process.env.OPENAI_PROXY_GREETING_TEXT_ONLY === '1' || process.env.OPENAI_PROXY_GREETING_TEXT_ONLY === 'true';
-const minimalSession = process.env.OPENAI_PROXY_MINIMAL_SESSION === '1' || process.env.OPENAI_PROXY_MINIMAL_SESSION === 'true';
 
 let server: ReturnType<typeof createOpenAIProxyServer>['server'] | undefined = undefined;
 if (useHttps) {
@@ -66,7 +65,6 @@ const { server: proxyServer } = createOpenAIProxyServer({
   upstreamHeaders: { Authorization: `Bearer ${apiKey.trim()}` },
   debug,
   greetingTextOnly,
-  minimalSession,
 });
 
 const scheme = useHttps ? 'https' : 'http';

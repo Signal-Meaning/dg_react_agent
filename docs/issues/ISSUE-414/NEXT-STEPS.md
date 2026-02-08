@@ -173,6 +173,10 @@ Each of the following appears repeatedly in E2E and manual run logs. Each should
 
 **Integration testability:** (1) Not testable (real API). (2) Partially: we can add a test that proxy sends session.update with turn_detection and mock upstream returns session.updated without error. (3) Component path is already covered by `tests/component-vad-callbacks.test.tsx`; proxy→client by existing proxy integration tests. (4) Doc only. See [VAD-FAILURES-AND-RESOLUTION-PLAN.md](./VAD-FAILURES-AND-RESOLUTION-PLAN.md) for full VAD failure description, tests needed, and resolution plan.
 
+**Phase A outcome (debug run):** With `OPENAI_PROXY_DEBUG=1`, test 5b was run and proxy logs inspected. Upstream **never** sent `speech_started` or `speech_stopped`; the flow was append → KeepAlive → **error** ("The server had an error...") → upstream closed. So the **server error (§3.3) is the blocker** for VAD: the connection fails before the API can emit VAD. Resolving or mitigating that error is a prerequisite for test 5b to pass.
+
+**Audio setup fix (Issue #414):** We were not setting up correctly for audio before sending it: the proxy forwarded `input_audio_buffer.append` as soon as upstream was open, without waiting for `session.updated`. The API expects append only after the session is configured (session configuration defines `input_audio_format`). **Fix applied:** Proxy now gates binary → append until **after** `session.updated`; any binary received before that is queued and flushed when `session.updated` is received. See [PROTOCOL-AND-MESSAGE-ORDERING.md](../../scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) §3 and `server.ts` (`pendingAudioQueue`, `flushPendingAudio`). Re-run test 5b and Phase A with this fix to see if the server error is reduced or eliminated.
+
 ---
 
 ## 4. OpenAI proxy protocol and upstream
@@ -192,6 +196,7 @@ Each of the following appears repeatedly in E2E and manual run logs. Each should
 - **E2E failure review (three failures, actions taken):** [E2E-FAILURE-REVIEW.md](./E2E-FAILURE-REVIEW.md)
 - **Component/proxy interface (transcript & VAD, TDD):** [COMPONENT-PROXY-INTERFACE-TDD.md](./COMPONENT-PROXY-INTERFACE-TDD.md)
 - **VAD failures, tests needed, resolution plan:** [VAD-FAILURES-AND-RESOLUTION-PLAN.md](./VAD-FAILURES-AND-RESOLUTION-PLAN.md)
+- **Resolving server error (firm audio connection):** [RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md](./RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md) — focus on item #1; protocol and tests for audio connection.
 - **OpenAI Realtime audio testing (best practices, Basic Audio diagnosis, session retention):** [OPENAI-REALTIME-AUDIO-TESTING.md](./OPENAI-REALTIME-AUDIO-TESTING.md)
 - **OpenAI playback (test-tone, 24k context, double-connect fix):** [OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md](./OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md)
 - **Server error investigation:** [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md)

@@ -44,12 +44,14 @@ import {
   ATTR_UPSTREAM_CLOSE_CODE,
   ATTR_UPSTREAM_CLOSE_REASON,
 } from './logger';
+import {
+  OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT,
+  assertMinAudioBeforeCommit,
+  assertAppendChunkSize,
+} from './openai-audio-constants';
 
-/** Debounce delay (ms) after last binary chunk before sending commit + response.create */
-const INPUT_AUDIO_COMMIT_DEBOUNCE_MS = 200;
-
-/** Minimum bytes of audio to send before commit (OpenAI: "at least 100ms of audio"). Use 24kHz so both 16k and 24k clients work: 24000 * 0.1 * 2 = 4800. */
-const MIN_AUDIO_BYTES_FOR_COMMIT = 4800;
+/** Debounce delay (ms) after last binary chunk before sending commit + response.create. Must be long enough for upstream to process appends (real API returns "buffer too small ... 0.00ms" if commit is sent too soon). */
+const INPUT_AUDIO_COMMIT_DEBOUNCE_MS = 400;
 
 /** Connection counter for stable short ids in logs */
 let connectionCounter = 0;
@@ -70,11 +72,6 @@ export interface OpenAIProxyServerOptions {
    * Use when upstream errors after greeting injection (e.g. OPENAI_PROXY_GREETING_TEXT_ONLY=1). Integration tests leave this false.
    */
   greetingTextOnly?: boolean;
-  /**
-   * TODO: Not expected to keep. When true, send a minimal session.update to upstream (instructions: '', no tools) to isolate whether a rich payload triggers upstream errors.
-   * Client still receives SettingsApplied; only the payload sent to upstream is minimal. Integration tests leave this false.
-   */
-  minimalSession?: boolean;
 }
 
 /**
@@ -94,7 +91,6 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
 
   const wss = new WebSocketServer({ server, path: options.path });
   const debug = options.debug === true;
-  const minimalSession = options.minimalSession === true;
   if (debug) initProxyLogger();
 
   wss.on('connection', (clientWs: WebSocket) => {
@@ -133,6 +129,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let hasSentSettingsApplied = false;
     /** Issue #406: defer context (conversation.item.create) until after session.updated to avoid upstream close. */
     const pendingContextItems: string[] = [];
+    /** Issue #414: defer input_audio_buffer.append until after session.updated so session is configured for audio. */
+    const pendingAudioQueue: Buffer[] = [];
     /** TODO: Not expected to keep. Only forward the first Settings per connection; duplicate Settings (e.g. on reconnect/reload) must not send a second session.update or upstream can error. */
     let hasForwardedSessionUpdate = false;
     /** Issue #414: TTS chunk boundary diagnostic (set OPENAI_PROXY_TTS_BOUNDARY_DEBUG=1 to log same format as test-app E2E). */
@@ -146,10 +144,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         audioCommitTimer = null;
         if (
           hasPendingAudio &&
-          pendingAudioBytes >= MIN_AUDIO_BYTES_FOR_COMMIT &&
+          pendingAudioBytes >= OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT &&
           !responseInProgress &&
           upstream.readyState === WebSocket.OPEN
         ) {
+          assertMinAudioBeforeCommit(pendingAudioBytes);
           const bytesAtCommit = pendingAudioBytes;
           if (debug) {
             emitLog({
@@ -233,9 +232,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           hasForwardedSessionUpdate = true;
           const settings = msg as Parameters<typeof mapSettingsToSessionUpdate>[0];
-          const sessionUpdate = minimalSession
-            ? { type: 'session.update' as const, session: { type: 'realtime' as const, model: 'gpt-realtime', instructions: '' } }
-            : mapSettingsToSessionUpdate(settings);
+          const sessionUpdate = mapSettingsToSessionUpdate(settings);
           upstream.send(JSON.stringify(sessionUpdate));
           const contextMessages = settings.agent?.context?.messages;
           if (contextMessages?.length) {
@@ -271,6 +268,25 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         }
       } catch {
         if (raw.length > 0) {
+          if (!hasSentSettingsApplied) {
+            // Session not ready for audio yet; queue and send after session.updated (Issue #414).
+            pendingAudioQueue.push(raw);
+            if (debug) {
+              emitLog({
+                severityNumber: SeverityNumber.INFO,
+                severityText: 'INFO',
+                body: 'input_audio_buffer.append deferred (waiting for session.updated)',
+                attributes: {
+                  [ATTR_CONNECTION_ID]: connId,
+                  [ATTR_DIRECTION]: 'client→upstream',
+                  'audio.queued_bytes': raw.length,
+                  'audio.queued_chunks': pendingAudioQueue.length,
+                },
+              });
+            }
+            return;
+          }
+          assertAppendChunkSize(raw.length);
           if (debug) {
             emitLog({
               severityNumber: SeverityNumber.INFO,
@@ -290,6 +306,31 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           scheduleAudioCommit();
         }
       }
+    };
+
+    const flushPendingAudio = () => {
+      while (pendingAudioQueue.length > 0) {
+        const chunk = pendingAudioQueue.shift();
+        if (!chunk || upstream.readyState !== WebSocket.OPEN) continue;
+        assertAppendChunkSize(chunk.length);
+        if (debug) {
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: 'input_audio_buffer.append (flushed after session.updated)',
+            attributes: {
+              [ATTR_CONNECTION_ID]: connId,
+              [ATTR_DIRECTION]: 'client→upstream',
+              [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.append',
+            },
+          });
+        }
+        const appendEvent = binaryToInputAudioBufferAppend(chunk);
+        upstream.send(JSON.stringify(appendEvent));
+        pendingAudioBytes += chunk.length;
+        hasPendingAudio = true;
+      }
+      if (hasPendingAudio) scheduleAudioCommit();
     };
 
     clientWs.on('message', (data: Buffer | ArrayBuffer | Buffer[]) => {
@@ -378,6 +419,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             }
             storedGreeting = undefined;
           }
+          // Issue #414: session is now configured for audio; send any append chunks queued before session.updated.
+          flushPendingAudio();
         } else if (msg.type === 'response.output_text.done') {
           responseInProgress = false;
           const m = msg as { type: string; text?: string };
