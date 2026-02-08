@@ -69,19 +69,17 @@ Acceptance criteria for #414 are **done** (CLI text-in, playback + text, docs). 
 
 Each of the following appears repeatedly in E2E and manual run logs. Each should be explicitly addressed (root cause, ownership, and next action).
 
-### 3.1 `input_audio_buffer_commit_empty` (buffer too small)
+### 3.1 `input_audio_buffer_commit_empty` (buffer too small) — **Addressed**
 
 - **What:** OpenAI Realtime API returns an error: *"Error committing input audio buffer: buffer too small. Expected at least 100ms of audio, but buffer only has 0.00ms of audio."*
 - **Why it matters:** The proxy (or client) is sending `input_audio_buffer.commit` (and/or triggering a response) before the upstream has received at least 100ms of audio. This can cascade: commit fails, then duplicate commits or response.create while a response is already in progress, then further errors or connection close.
-- **Likely causes:** Proxy debounce firing too early (e.g. on first chunk or timer); client sending commit explicitly before enough audio is buffered; or audio path not delivering chunks to the proxy before a commit is triggered.
-- **Next:** (1) Inspect proxy logic in `server.ts`: when is `input_audio_buffer.commit` (and `response.create`) sent? Ensure we only commit after the upstream has received enough audio (e.g. track bytes/chunk count or delay commit until a minimum duration has been streamed). (2) If the client ever sends commit, ensure it only does so after sending ≥100ms of audio. (3) Add integration or E2E that reproduces the error when commit is sent too early, then fix so the test passes.
+- **Addressed:** Proxy now tracks cumulative bytes sent via `input_audio_buffer.append` per connection and only sends `input_audio_buffer.commit` + `response.create` when total bytes ≥ 3200 (100ms at 16kHz mono 16-bit). Constant `MIN_AUDIO_BYTES_FOR_COMMIT` in `scripts/openai-proxy/server.ts`; integration tests: "does not send input_audio_buffer.commit when total appended audio < 100ms" and "translates binary … when ≥100ms audio".
 
-### 3.2 `conversation_already_has_active_response`
+### 3.2 `conversation_already_has_active_response` — **Addressed**
 
 - **What:** Upstream returns *"Conversation already has an active response in progress: resp_xxx. Wait until the response is finished before creating a new one."*
 - **Why it matters:** We are sending a second `response.create` (or committing and triggering a response) while the model is still generating. That violates the Realtime API contract and can cause the server to error or close the connection.
-- **Likely causes:** Proxy sending `response.create` multiple times (e.g. once per commit when debounce fires repeatedly, or after both greeting path and user audio path); client sending `response.create` or InjectUserMessage while a response is already in progress.
-- **Next:** (1) Ensure the proxy sends at most one `response.create` per logical user turn and does not send another until the previous response has completed (e.g. `response.done` received). (2) Track “response in progress” in the proxy and gate commit + response.create on it. (3) In the component/test-app, avoid sending new user messages or triggering new responses until the current response is done. (4) Add or extend integration tests that assert only one response.create per turn and that we wait for response.done before the next.
+- **Addressed:** Proxy now tracks `responseInProgress` (set when sending `response.create`, cleared on `response.output_text.done`). Commit + response.create are only sent when `!responseInProgress`. Integration test: "sends at most one response.create per turn until response completes".
 
 ### 3.3 OpenAI “server had an error”
 

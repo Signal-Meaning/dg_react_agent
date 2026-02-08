@@ -48,6 +48,9 @@ import {
 /** Debounce delay (ms) after last binary chunk before sending commit + response.create */
 const INPUT_AUDIO_COMMIT_DEBOUNCE_MS = 200;
 
+/** Minimum bytes of audio to send before commit (OpenAI: "at least 100ms of audio"). 16kHz mono 16-bit: 16000 * 0.1 * 2 = 3200. */
+const MIN_AUDIO_BYTES_FOR_COMMIT = 3200;
+
 /** Connection counter for stable short ids in logs */
 let connectionCounter = 0;
 
@@ -111,6 +114,10 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     const clientMessageQueue: Buffer[] = [];
     let audioCommitTimer: ReturnType<typeof setTimeout> | null = null;
     let hasPendingAudio = false;
+    /** Cumulative bytes sent via input_audio_buffer.append this connection; commit only when >= MIN_AUDIO_BYTES_FOR_COMMIT (Issue #414). */
+    let pendingAudioBytes = 0;
+    /** True after we send response.create until we receive response.output_text.done (Issue #414: avoid "conversation already has an active response"). */
+    let responseInProgress = false;
     /** Greeting from Settings; injected after session.updated (Issue #381) */
     let storedGreeting: string | undefined;
     /**
@@ -137,7 +144,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
       audioCommitTimer = setTimeout(() => {
         audioCommitTimer = null;
-        if (hasPendingAudio && upstream.readyState === WebSocket.OPEN) {
+        if (
+          hasPendingAudio &&
+          pendingAudioBytes >= MIN_AUDIO_BYTES_FOR_COMMIT &&
+          !responseInProgress &&
+          upstream.readyState === WebSocket.OPEN
+        ) {
           if (debug) {
             emitLog({
               severityNumber: SeverityNumber.INFO,
@@ -148,7 +160,9 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           upstream.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
           upstream.send(JSON.stringify({ type: 'response.create' }));
+          responseInProgress = true;
           hasPendingAudio = false;
+          pendingAudioBytes = 0;
         }
       }, INPUT_AUDIO_COMMIT_DEBOUNCE_MS);
     };
@@ -266,6 +280,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           const appendEvent = binaryToInputAudioBufferAppend(raw);
           upstream.send(JSON.stringify(appendEvent));
+          pendingAudioBytes += raw.length;
           hasPendingAudio = true;
           scheduleAudioCommit();
         }
@@ -359,6 +374,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             storedGreeting = undefined;
           }
         } else if (msg.type === 'response.output_text.done') {
+          responseInProgress = false;
           const m = msg as { type: string; text?: string };
           if (debug || (m.text && m.text.trim().startsWith('Function call:'))) {
             console.log(`[proxy ${connId}] upstream→client: ${msg.type}${m.text?.startsWith('Function call:') ? ' (transcript-like)' : ''}`);

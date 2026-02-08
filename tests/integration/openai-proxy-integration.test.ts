@@ -77,6 +77,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   let mockSendTranscriptThenFunctionCallAfterSession = false;
   /** When true, mock sends response.output_audio.delta (base64 PCM) then .done before response.output_text.done (so client receives binary PCM from proxy). */
   let mockSendOutputAudioBeforeText = false;
+  /** Issue #414 3.2: when > 0, mock delays sending response completion (output_audio.delta, .done, output_text.done) by this many ms after receiving response.create. */
+  let mockDelayResponseDoneMs = 0;
   /**
    * Issue #406: when true, mock delays sending session.updated and asserts that no conversation.item.create
    * is received before session.updated was sent (catches proxy sending context before session.updated).
@@ -286,14 +288,23 @@ describe('OpenAI proxy integration (Issue #381)', () => {
               }));
               return; // No normal response — matches real API behavior
             }
-            if (mockSendOutputAudioBeforeText || mockSendAudioDeltaOnGreetingResponseCreate) {
-              if (mockSendOutputAudioBeforeText) mockSendOutputAudioBeforeText = false;
-              if (mockSendAudioDeltaOnGreetingResponseCreate) mockSendAudioDeltaOnGreetingResponseCreate = false;
-              const pcmChunk = Buffer.alloc(320, 0);
-              socket.send(JSON.stringify({ type: 'response.output_audio.delta', delta: pcmChunk.toString('base64') }));
-              socket.send(JSON.stringify({ type: 'response.output_audio.done' }));
+            const sendResponseDone = () => {
+              if (mockSendOutputAudioBeforeText || mockSendAudioDeltaOnGreetingResponseCreate) {
+                if (mockSendOutputAudioBeforeText) mockSendOutputAudioBeforeText = false;
+                if (mockSendAudioDeltaOnGreetingResponseCreate) mockSendAudioDeltaOnGreetingResponseCreate = false;
+                const pcmChunk = Buffer.alloc(320, 0);
+                socket.send(JSON.stringify({ type: 'response.output_audio.delta', delta: pcmChunk.toString('base64') }));
+                socket.send(JSON.stringify({ type: 'response.output_audio.done' }));
+              }
+              socket.send(JSON.stringify({ type: 'response.output_text.done', text: 'Hello from mock' }));
+            };
+            if (mockDelayResponseDoneMs > 0) {
+              const delay = mockDelayResponseDoneMs;
+              mockDelayResponseDoneMs = 0;
+              setTimeout(sendResponseDone, delay);
+            } else {
+              sendResponseDone();
             }
-            socket.send(JSON.stringify({ type: 'response.output_text.done', text: 'Hello from mock' }));
           }
           if (msg.type === 'input_audio_buffer.commit') {
             socket.send(JSON.stringify({ type: 'input_audio_buffer.committed' }));
@@ -512,7 +523,30 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('error', (err) => finish(err));
   }, useRealOpenAI ? 25000 : 5000);
 
-  itMockOnly('translates binary client message to input_audio_buffer.append and after debounce sends commit + response.create', (done) => {
+  /** Issue #414: OpenAI requires ≥100ms audio before commit. Proxy must not send commit when total appended bytes < 100ms (3200 bytes at 16kHz 16-bit). */
+  itMockOnly('does not send input_audio_buffer.commit when total appended audio < 100ms (Issue #414 buffer too small)', (done) => {
+    mockReceived.length = 0;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString()) as { type?: string };
+      if (msg.type === 'SettingsApplied') {
+        client.send(Buffer.alloc(500, 0));
+        setTimeout(() => {
+          const types = mockReceived.map((m) => m.type);
+          expect(types).toContain('input_audio_buffer.append');
+          expect(types).not.toContain('input_audio_buffer.commit');
+          client.close();
+          done();
+        }, 400);
+      }
+    });
+    client.on('error', done);
+  }, 5000);
+
+  itMockOnly('translates binary client message to input_audio_buffer.append and after debounce sends commit + response.create when ≥100ms audio', (done) => {
     mockReceived.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
@@ -521,7 +555,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
       if (msg.type === 'SettingsApplied') {
-        client.send(Buffer.from([0x00, 0x00, 0xff, 0xff]));
+        client.send(Buffer.alloc(3200, 0));
       }
       if (msg.type === 'ConversationText' && msg.role === 'assistant') {
         const types = mockReceived.map((m) => m.type);
@@ -530,6 +564,34 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         expect(types).toContain('response.create');
         client.close();
         done();
+      }
+    });
+    client.on('error', done);
+  }, 5000);
+
+  /** Issue #414 3.2: Proxy must not send a second response.create while a response is still in progress (avoids "conversation already has an active response"). */
+  itMockOnly('sends at most one response.create per turn until response completes (Issue #414 conversation_already_has_active_response)', (done) => {
+    mockDelayResponseDoneMs = 600;
+    mockReceived.length = 0;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString()) as { type?: string };
+      if (msg.type === 'SettingsApplied') {
+        mockReceived.length = 0;
+        client.send(Buffer.alloc(3200, 0));
+        setTimeout(() => client.send(Buffer.alloc(3200, 0)), 250);
+        setTimeout(() => {
+          try {
+            const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+            expect(responseCreateCount).toBe(1);
+          } finally {
+            client.close();
+            done();
+          }
+        }, 550);
       }
     });
     client.on('error', done);
