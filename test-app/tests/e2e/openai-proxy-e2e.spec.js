@@ -32,6 +32,7 @@ import {
   disconnectComponent,
   getAgentState,
   assertNoRecoverableAgentErrors,
+  SELECTORS,
 } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
 
@@ -251,5 +252,49 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     );
     const statusText = await connectionStatus.textContent();
     expect(statusText?.toLowerCase()).toMatch(/closed|error/);
+  });
+
+  /**
+   * Repro: reload then send – response must not be stale (TDD failing test).
+   * 1. Have conversation: greeting, "What is the capital of France?", "Sorry, what was that?", Paris again.
+   * 2. Reload the page.
+   * 3. Focus text input (connect); then connection closes (we force with stop to simulate "connection closes with error").
+   * 4. Send "What famous people lived there?"
+   * 5. Assert: agent response must NOT be the stale "The capital of France is Paris."
+   * Bug: after reload + connection-closes-with-error, the next response is sometimes the previous answer.
+   */
+  test('9. Repro – after reload and connection close, new message must not get stale response', async ({ page }) => {
+    test.setTimeout(90000);
+    await setupTestPageWithOpenAIProxy(page);
+    await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
+
+    const r1 = await sendMessageAndWaitForResponse(page, 'What is the capital of France?', AGENT_RESPONSE_TIMEOUT);
+    expect(r1).toBeTruthy();
+    expect(r1.length).toBeGreaterThan(0);
+
+    const r2 = await sendMessageAndWaitForResponse(page, 'Sorry, what was that?', AGENT_RESPONSE_TIMEOUT);
+    expect(r2).toBeTruthy();
+    expect(r2.length).toBeGreaterThan(0);
+
+    await page.reload();
+    await page.waitForSelector(SELECTORS.voiceAgent, { timeout: 15000 });
+    await establishConnectionViaText(page, 15000);
+    await waitForSettingsApplied(page, 15000);
+    await disconnectComponent(page);
+
+    const response = await sendMessageAndWaitForResponse(page, 'What famous people lived there?', AGENT_RESPONSE_TIMEOUT);
+    expect(response).toBeTruthy();
+    expect(response.length).toBeGreaterThan(0);
+    console.log('[Repro test 9] Agent response to "What famous people lived there?":', JSON.stringify(response));
+    const trimmed = response.trim();
+    expect(
+      trimmed,
+      'Must not get stale Paris one-liner as response to "What famous people lived there?"'
+    ).not.toBe('The capital of France is Paris.');
+    expect(
+      trimmed,
+      'Must not get greeting as response to "What famous people lived there?"'
+    ).not.toBe('Hello! How can I assist you today?');
   });
 });

@@ -226,12 +226,8 @@ describe('Issue #388: upstream close and agent reply after inject', () => {
     });
 
     expect(onAgentUtterance).toHaveBeenCalledTimes(1);
-    expect(onAgentUtterance).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'llm',
-        text: 'Hello! How can I help?',
-      })
-    );
+    const [utterance] = onAgentUtterance.mock.calls[0];
+    expect(utterance).toMatchObject({ type: 'llm', text: 'Hello! How can I help?' });
   });
 
   it.skip('receives agent reply (onAgentUtterance) within 10s after injectUserMessage when connection stays open (fails with closing mock)', async () => {
