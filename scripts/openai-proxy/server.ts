@@ -28,7 +28,6 @@ import {
   mapFunctionCallArgumentsDoneToConversationText,
   mapFunctionCallResponseToConversationItemCreate,
   mapContextMessageToConversationItemCreate,
-  mapGreetingToConversationItemCreate,
   mapGreetingToConversationText,
   mapErrorToComponentError,
   binaryToInputAudioBufferAppend,
@@ -92,7 +91,6 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
 
   const wss = new WebSocketServer({ server, path: options.path });
   const debug = options.debug === true;
-  const greetingTextOnly = options.greetingTextOnly === true;
   const minimalSession = options.minimalSession === true;
   if (debug) initProxyLogger();
 
@@ -116,11 +114,14 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     /** Greeting from Settings; injected after session.updated (Issue #381) */
     let storedGreeting: string | undefined;
     /**
-     * Issue #388 / #414: send response.create after this many conversation.item.added events.
-     * Set to 1 for InjectUserMessage (one item). Set to N+1 for greeting with N context items
-     * (context items + greeting all generate conversation.item.added; response.create fires after the last one).
+     * Issue #388 / #414: send response.create after this many conversation.item events are confirmed.
+     * Set to 1 for InjectUserMessage (one item). Set to N+1 for greeting with N context items.
+     * Decremented once per unique item (tracked by pendingItemAckedIds) so that receiving both
+     * .created/.added/.done for the same item only counts once.
      */
     let pendingItemAddedBeforeResponseCreate = 0;
+    /** Issue #414: track item IDs already counted toward the pending counter to avoid double-decrement. */
+    const pendingItemAckedIds = new Set<string>();
     /** Issue #406: have we sent SettingsApplied to the client? Used to send clear Error when upstream closes before session ready. */
     let hasSentSettingsApplied = false;
     /** Issue #406: defer context (conversation.item.create) until after session.updated to avoid upstream close. */
@@ -335,7 +336,6 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
         } else if (msg.type === 'session.updated') {
           hasSentSettingsApplied = true;
-          const contextCount = pendingContextItems.length;
           for (const itemJson of pendingContextItems) {
             upstream.send(itemJson);
           }
@@ -343,32 +343,18 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           const settingsApplied = mapSessionUpdatedToSettingsApplied(msg as Parameters<typeof mapSessionUpdatedToSettingsApplied>[0]);
           clientWs.send(JSON.stringify(settingsApplied));
           if (storedGreeting) {
-            if (greetingTextOnly) {
-              clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting)));
-              if (debug) {
-                emitLog({
-                  severityNumber: SeverityNumber.INFO,
-                  severityText: 'INFO',
-                  body: 'greeting sent to client only (not upstream)',
-                  attributes: { [ATTR_CONNECTION_ID]: connId },
-                });
-              }
-            } else {
-              upstream.send(JSON.stringify(mapGreetingToConversationItemCreate(storedGreeting)));
-              clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting)));
-              // Issue #414: wait for all conversation.item.added events (context items +
-              // greeting) before sending response.create. Without response.create, OpenAI
-              // won't generate TTS — the greeting is just added to context silently.
-              // contextCount items + 1 greeting = total items that produce item.added.
-              pendingItemAddedBeforeResponseCreate = contextCount + 1;
-              if (debug) {
-                emitLog({
-                  severityNumber: SeverityNumber.INFO,
-                  severityText: 'INFO',
-                  body: `greeting injected (after session.updated); pending response.create after ${contextCount + 1} item.added`,
-                  attributes: { [ATTR_CONNECTION_ID]: connId },
-                });
-              }
+            // Issue #414 fix: greeting is text-only to client. Do NOT send conversation.item.create
+            // (assistant) to upstream — OpenAI Realtime API errors on client-created assistant messages.
+            // The greeting text is shown immediately in the UI; the model sees the greeting text in
+            // its instructions (if configured) so it knows it already greeted the user.
+            clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting)));
+            if (debug) {
+              emitLog({
+                severityNumber: SeverityNumber.INFO,
+                severityText: 'INFO',
+                body: 'greeting sent to client only (not upstream; OpenAI Realtime rejects client-created assistant items)',
+                attributes: { [ATTR_CONNECTION_ID]: connId },
+              });
             }
             storedGreeting = undefined;
           }
@@ -452,12 +438,25 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           ttsChunkLengths = [];
           lastTtsChunk = null;
           // No client message needed for playback; component just queues chunks. Skip forwarding.
-        } else if (msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
-          // Issue #388 / #414: decrement the counter; send response.create when all pending items are confirmed
+        } else if (msg.type === 'conversation.item.created' || msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
+          // Issue #388 / #414: decrement the counter once per unique item; send response.create when all pending items are confirmed.
+          // OpenAI may send .created (legacy), .added, and/or .done for the same item — only count the first event per item ID.
           if (pendingItemAddedBeforeResponseCreate > 0) {
-            pendingItemAddedBeforeResponseCreate--;
-            if (pendingItemAddedBeforeResponseCreate === 0) {
-              upstream.send(JSON.stringify({ type: 'response.create' }));
+            const itemId = (msg as { item?: { id?: string } }).item?.id;
+            if (itemId && !pendingItemAckedIds.has(itemId)) {
+              pendingItemAckedIds.add(itemId);
+              pendingItemAddedBeforeResponseCreate--;
+              if (pendingItemAddedBeforeResponseCreate === 0) {
+                pendingItemAckedIds.clear();
+                upstream.send(JSON.stringify({ type: 'response.create' }));
+              }
+            } else if (!itemId) {
+              // Fallback for events without item.id: decrement unconditionally (legacy behavior)
+              pendingItemAddedBeforeResponseCreate--;
+              if (pendingItemAddedBeforeResponseCreate === 0) {
+                pendingItemAckedIds.clear();
+                upstream.send(JSON.stringify({ type: 'response.create' }));
+              }
             }
           }
           // Issue #414: send as text so component routes as message, not binary (audio)

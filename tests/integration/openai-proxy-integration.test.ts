@@ -50,6 +50,23 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   let mockSendSessionCreatedOnConnect = false;
   /** Issue #414: when true, mock sends conversation.item.added for assistant messages too (not just user). Needed for greeting TTS. */
   let mockSendItemAddedForAssistant = false;
+  /** Issue #414 TDD: when true, mock sends conversation.item.created (legacy) instead of conversation.item.added for assistant messages. */
+  let mockSendItemCreatedInsteadOfAdded = false;
+  /** Issue #414 TDD: when true, mock also sends conversation.item.done after conversation.item.added (or .created) for ALL items (user + assistant). Simulates real OpenAI lifecycle. */
+  let mockSendItemDoneAfterAdded = false;
+  /** Issue #414 TDD: when true, mock sends response.output_audio.delta (base64 PCM) before text on response.create (greeting audio path). */
+  let mockSendAudioDeltaOnGreetingResponseCreate = false;
+  /** Issue #414 TDD: delay (ms) before mock sends .added for assistant (greeting) items. Used to expose double-decrement bug. */
+  let mockDelayAssistantItemAddedMs = 0;
+  /** Issue #414 TDD: when true, mock records protocol error if response.create arrives before all items are acknowledged. */
+  let mockEnforceAllItemsAckedBeforeResponseCreate = false;
+  /**
+   * Issue #414 TDD: when true, mock sends an error event (instead of a normal response) when
+   * response.create is received and the last conversation.item.create was role=assistant.
+   * Simulates the real OpenAI Realtime API behavior: "The server had an error while processing
+   * your request." This is the exact failure pattern from manual testing.
+   */
+  let mockSendErrorOnAssistantResponseCreate = false;
   /** When true, mock sends response.function_call_arguments.done after session.updated (for function-call test) */
   let mockSendFunctionCallAfterSession = false;
   /** When true, mock sends only response.output_audio_transcript.done with "Function call: ..." after session.updated (no .done event) */
@@ -101,6 +118,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockWss!.on('connection', (socket: import('ws')) => {
       /** Issue #406: per-connection; true after we have sent session.updated (used when mockEnforceSessionBeforeContext). */
       let sessionUpdatedSent = false;
+      /** Issue #414 TDD: per-connection counters for protocol enforcement. */
+      let itemCreateCount = 0;
+      let itemAckedCount = 0;
+      /** Issue #414 TDD: role of the last conversation.item.create received (used to simulate error on assistant response.create). */
+      let lastItemCreateRole: string | undefined;
       // Issue #414: simulate real OpenAI behavior — send session.created immediately on connection
       if (mockSendSessionCreatedOnConnect) {
         socket.send(JSON.stringify({ type: 'session.created', session: { id: 'sess_mock', model: 'gpt-realtime', modalities: ['text', 'audio'] } }));
@@ -120,6 +142,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
               protocolErrors.push(new Error("conversation.item.create for assistant must use content type 'output_text', got 'input_text' (OpenAI Realtime API)"));
             }
             receivedConversationItems.push({ type: msg.type, item: msg.item });
+            itemCreateCount++;
+            lastItemCreateRole = msg.item?.role;
             // Issue #388: proxy sends response.create only after conversation.item.added. Mock must send item.added for user messages.
             const isUserMessage = msg.item?.type === 'message' && msg.item?.role === 'user';
             const isAssistantMessage = msg.item?.type === 'message' && msg.item?.role === 'assistant';
@@ -131,6 +155,13 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                     type: 'conversation.item.added',
                     item: { id: 'item_mock_1', type: 'message', status: 'completed', role: 'user', content: msg.item?.content ?? [{ type: 'input_text', text: 'hi' }] },
                   }));
+                  itemAckedCount++;
+                  if (mockSendItemDoneAfterAdded) {
+                    socket.send(JSON.stringify({
+                      type: 'conversation.item.done',
+                      item: { id: 'item_mock_1', type: 'message', status: 'completed', role: 'user', content: msg.item?.content ?? [{ type: 'input_text', text: 'hi' }] },
+                    }));
+                  }
                 } catch {
                   // ignore
                 }
@@ -138,15 +169,30 @@ describe('OpenAI proxy integration (Issue #381)', () => {
               if (delay > 0) setTimeout(sendItemAdded, delay);
               else sendItemAdded();
             }
-            // Issue #414: send conversation.item.added for assistant messages (greeting) so proxy can trigger response.create for TTS
-            if (isAssistantMessage && mockSendItemAddedForAssistant) {
-              try {
-                socket.send(JSON.stringify({
-                  type: 'conversation.item.added',
-                  item: { id: 'item_mock_greeting', type: 'message', status: 'completed', role: 'assistant', content: msg.item?.content ?? [] },
-                }));
-              } catch {
-                // ignore
+            // Issue #414: send conversation.item.added (or .created) for assistant messages (greeting) so proxy can trigger response.create for TTS
+            if (isAssistantMessage && (mockSendItemAddedForAssistant || mockSendItemCreatedInsteadOfAdded)) {
+              const eventType = mockSendItemCreatedInsteadOfAdded ? 'conversation.item.created' : 'conversation.item.added';
+              const sendAssistantEvents = () => {
+                try {
+                  socket.send(JSON.stringify({
+                    type: eventType,
+                    item: { id: 'item_mock_greeting', type: 'message', status: 'completed', role: 'assistant', content: msg.item?.content ?? [] },
+                  }));
+                  itemAckedCount++;
+                  if (mockSendItemDoneAfterAdded) {
+                    socket.send(JSON.stringify({
+                      type: 'conversation.item.done',
+                      item: { id: 'item_mock_greeting', type: 'message', status: 'completed', role: 'assistant', content: msg.item?.content ?? [] },
+                    }));
+                  }
+                } catch {
+                  // ignore
+                }
+              };
+              if (mockDelayAssistantItemAddedMs > 0) {
+                setTimeout(sendAssistantEvents, mockDelayAssistantItemAddedMs);
+              } else {
+                sendAssistantEvents();
               }
             }
           }
@@ -207,8 +253,27 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             }
           }
           if (msg.type === 'response.create') {
-            if (mockSendOutputAudioBeforeText) {
-              mockSendOutputAudioBeforeText = false;
+            // Issue #414 TDD: protocol enforcement — response.create must not arrive before all items are acknowledged
+            if (mockEnforceAllItemsAckedBeforeResponseCreate && itemAckedCount < itemCreateCount) {
+              protocolErrors.push(new Error(
+                `response.create received before all items acknowledged: acked ${itemAckedCount}/${itemCreateCount} items. ` +
+                'Counter may have double-decremented (.added + .done both consumed the counter for the same item).'
+              ));
+            }
+            // Issue #414 TDD: simulate real OpenAI behavior — error on response.create after assistant item (greeting)
+            if (mockSendErrorOnAssistantResponseCreate && lastItemCreateRole === 'assistant') {
+              socket.send(JSON.stringify({
+                type: 'error',
+                error: {
+                  message: 'The server had an error while processing your request. Sorry about that! Please contact us through our help center at help.openai.com if the error persists. (include session ID in your message: sess_mock). We recommend you retry your request. You can continue or reconnect.',
+                  code: 'server_error',
+                },
+              }));
+              return; // No normal response — matches real API behavior
+            }
+            if (mockSendOutputAudioBeforeText || mockSendAudioDeltaOnGreetingResponseCreate) {
+              if (mockSendOutputAudioBeforeText) mockSendOutputAudioBeforeText = false;
+              if (mockSendAudioDeltaOnGreetingResponseCreate) mockSendAudioDeltaOnGreetingResponseCreate = false;
               const pcmChunk = Buffer.alloc(320, 0);
               socket.send(JSON.stringify({ type: 'response.output_audio.delta', delta: pcmChunk.toString('base64') }));
               socket.send(JSON.stringify({ type: 'response.output_audio.done' }));
@@ -826,11 +891,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Note: This test does NOT assert greeting audio (binary PCM). It only asserts greeting as text.
    * Greeting audio is validated by E2E "connect only" test (greeting-playback-validation.spec.js).
    */
-  itMockOnly('injects agent.greeting as ConversationText and conversation.item.create after session.updated', (done) => {
+  itMockOnly('injects agent.greeting as ConversationText to client only (not sent to upstream)', (done) => {
     mockReceived.length = 0;
     receivedConversationItems.length = 0;
     protocolErrors.length = 0;
     const greeting = 'Hello! How can I help you today?';
+    let receivedGreetingText = false;
+    let receivedSettingsApplied = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
       client.send(JSON.stringify({
@@ -839,32 +907,38 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }));
     });
     client.on('message', (data: Buffer) => {
-      const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string };
-      if (msg.type === 'SettingsApplied') {
-        // After SettingsApplied we expect proxy to send ConversationText (assistant, greeting)
-        // and to send conversation.item.create (assistant, greeting) to upstream.
-      }
-      if (msg.type === 'ConversationText' && msg.role === 'assistant' && msg.content === greeting) {
-        expect(msg.content).toBe(greeting);
-        // Defer so upstream (mock) has processed proxy's conversation.item.create
-        setImmediate(() => {
-          const greetingItem = receivedConversationItems.find(
-            (m) => m.item?.type === 'message' && m.item?.role === 'assistant'
-          );
-          expect(greetingItem).toBeDefined();
-          const content0 = greetingItem?.item && 'content' in greetingItem.item && Array.isArray(greetingItem.item.content)
-            ? greetingItem.item.content[0]
-            : undefined;
-          expect(content0?.text).toBe(greeting);
-          // OpenAI Realtime API: assistant messages must use output_text, not input_text
-          expect(content0).toHaveProperty('type', 'output_text');
-          expect(protocolErrors).toHaveLength(0);
-          client.close();
-          done();
-        });
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string };
+        if (msg.type === 'SettingsApplied') receivedSettingsApplied = true;
+        if (msg.type === 'ConversationText' && msg.role === 'assistant' && msg.content === greeting) {
+          receivedGreetingText = true;
+        }
+      } catch {
+        // ignore
       }
     });
-    client.on('error', done);
+    // Wait long enough for any upstream send to have happened
+    timeoutId = setTimeout(() => {
+      client.close();
+      try {
+        expect(receivedSettingsApplied).toBe(true);
+        expect(receivedGreetingText).toBe(true);
+        // Greeting must NOT be sent to upstream as conversation.item.create — OpenAI Realtime
+        // rejects client-created assistant messages ("The server had an error").
+        const assistantItem = receivedConversationItems.find(
+          (m) => m.item?.type === 'message' && m.item?.role === 'assistant'
+        );
+        expect(assistantItem).toBeUndefined();
+        expect(protocolErrors).toHaveLength(0);
+        done();
+      } catch (err) {
+        done(err);
+      }
+    }, 1500);
+    client.on('error', (err: Error) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      done(err);
+    });
   });
 
   /**
@@ -935,16 +1009,16 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   });
 
   /**
-   * Issue #414: after greeting injection, proxy must send response.create (via conversation.item.added)
-   * so OpenAI generates TTS for the initial turn. Without response.create, the greeting is silently
-   * added to context and the user hears nothing.
+   * Issue #414: greeting must NOT be sent to upstream (no conversation.item.create, no response.create).
+   * OpenAI Realtime API rejects client-created assistant messages. Greeting is text-only to client.
    */
-  itMockOnly('Issue #414: greeting injection triggers response.create after conversation.item.added (enables TTS)', (done) => {
+  itMockOnly('Issue #414: greeting must not send conversation.item.create or response.create to upstream', (done) => {
     mockReceived.length = 0;
     receivedConversationItems.length = 0;
     protocolErrors.length = 0;
-    mockSendItemAddedForAssistant = true;
     const greeting = 'Welcome!';
+    let receivedGreetingText = false;
+    let receivedSettingsApplied = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
@@ -955,36 +1029,344 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     });
     client.on('message', (data: Buffer) => {
       try {
-        const msg = JSON.parse(data.toString()) as { type?: string; content?: string };
-        // response.create triggers mock to send response.output_text.done → ConversationText(content); when we see that, response.create was sent
-        if (msg.type === 'ConversationText' && msg.content === 'Hello from mock') {
-          // response.create was sent (mock responded with "Hello from mock")
-          // Verify the sequence: session.update → (session.updated) → conversation.item.create (greeting) → response.create
-          const responseCreateIdx = mockReceived.findIndex((m) => m.type === 'response.create');
-          expect(responseCreateIdx).toBeGreaterThanOrEqual(0);
-          // conversation.item.create for the greeting must come before response.create
-          const greetingItemIdx = mockReceived.findIndex((m) => m.type === 'conversation.item.create');
-          expect(greetingItemIdx).toBeGreaterThanOrEqual(0);
-          expect(greetingItemIdx).toBeLessThan(responseCreateIdx);
-          expect(protocolErrors).toHaveLength(0);
-          if (timeoutId) clearTimeout(timeoutId);
-          client.close();
-          mockSendItemAddedForAssistant = false;
-          done();
+        const msg = JSON.parse(data.toString()) as { type?: string; content?: string; role?: string };
+        if (msg.type === 'SettingsApplied') receivedSettingsApplied = true;
+        if (msg.type === 'ConversationText' && msg.role === 'assistant' && msg.content === greeting) {
+          receivedGreetingText = true;
         }
       } catch {
         // ignore parse errors for binary frames
       }
     });
-    // Timeout guard
     timeoutId = setTimeout(() => {
       client.close();
-      mockSendItemAddedForAssistant = false;
-      done(new Error('Timed out: response.create was never sent after greeting injection (no TTS would be generated)'));
-    }, 3000);
+      try {
+        expect(receivedSettingsApplied).toBe(true);
+        expect(receivedGreetingText).toBe(true);
+        // No conversation.item.create for greeting (assistant items rejected by OpenAI Realtime)
+        const assistantItemIdx = receivedConversationItems.findIndex(
+          (m) => m.item?.type === 'message' && m.item?.role === 'assistant'
+        );
+        expect(assistantItemIdx).toBe(-1);
+        // No response.create
+        const responseCreateIdx = mockReceived.findIndex((m) => m.type === 'response.create');
+        expect(responseCreateIdx).toBe(-1);
+        expect(protocolErrors).toHaveLength(0);
+        done();
+      } catch (err) {
+        done(err);
+      }
+    }, 1500);
     client.on('error', (err: Error) => {
       if (timeoutId) clearTimeout(timeoutId);
+      done(err);
+    });
+  });
+
+  /**
+   * Issue #414: greeting is text-only to client — nothing sent to upstream for greeting,
+   * regardless of what item events the upstream would send. Greeting never touches upstream.
+   */
+  itMockOnly('Issue #414 TDD: greeting sends nothing to upstream (text-only to client)', (done) => {
+    mockReceived.length = 0;
+    receivedConversationItems.length = 0;
+    protocolErrors.length = 0;
+    const greeting = 'Hello text-only!';
+    let receivedGreetingText = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: { think: { prompt: 'Greet.' }, greeting },
+      }));
+    });
+    client.on('message', (data: Buffer) => {
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; content?: string; role?: string };
+        if (msg.type === 'ConversationText' && msg.role === 'assistant' && msg.content === greeting) {
+          receivedGreetingText = true;
+        }
+      } catch {
+        // ignore
+      }
+    });
+    timeoutId = setTimeout(() => {
+      client.close();
+      try {
+        expect(receivedGreetingText).toBe(true);
+        // Only session.update should have been sent to upstream — no conversation.item.create for greeting
+        const itemCreateCount = mockReceived.filter((m) => m.type === 'conversation.item.create').length;
+        expect(itemCreateCount).toBe(0);
+        const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+        expect(responseCreateCount).toBe(0);
+        done();
+      } catch (err) {
+        done(err);
+      }
+    }, 1500);
+    client.on('error', (err: Error) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      done(err);
+    });
+  });
+
+  /**
+   * Issue #414: With context messages + greeting, only context items are sent to upstream.
+   * Greeting is text-only to client. No conversation.item.create for greeting, no response.create.
+   */
+  itMockOnly('Issue #414 TDD: context + greeting sends only context items to upstream (greeting is text-only)', (done) => {
+    mockReceived.length = 0;
+    receivedConversationItems.length = 0;
+    protocolErrors.length = 0;
+    mockSendItemDoneAfterAdded = true;
+    mockEnforceSessionBeforeContext = true;
+    const greeting = 'Welcome with context!';
+    let receivedGreetingText = false;
+    let receivedSettingsApplied = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const cleanup = () => {
+      mockSendItemDoneAfterAdded = false;
+      mockEnforceSessionBeforeContext = false;
+    };
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: {
+          think: { prompt: 'Help.' },
+          greeting,
+          context: {
+            messages: [
+              { type: 'History', role: 'user', content: 'Previous question' },
+            ],
+          },
+        },
+      }));
+    });
+    client.on('message', (data: Buffer) => {
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; content?: string; role?: string };
+        if (msg.type === 'SettingsApplied') receivedSettingsApplied = true;
+        if (msg.type === 'ConversationText' && msg.role === 'assistant' && msg.content === greeting) {
+          receivedGreetingText = true;
+        }
+      } catch {
+        // ignore
+      }
+    });
+    timeoutId = setTimeout(() => {
+      client.close();
+      cleanup();
+      try {
+        expect(receivedSettingsApplied).toBe(true);
+        expect(receivedGreetingText).toBe(true);
+        // Only the context item should have been sent to upstream (1 context, 0 greeting)
+        const itemCreateCount = mockReceived.filter((m) => m.type === 'conversation.item.create').length;
+        expect(itemCreateCount).toBe(1); // 1 context only — greeting is NOT sent to upstream
+        // No response.create
+        const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+        expect(responseCreateCount).toBe(0);
+        expect(protocolErrors).toHaveLength(0);
+        done();
+      } catch (err) {
+        done(err);
+      }
+    }, 1500);
+    client.on('error', (err: Error) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      cleanup();
+      done(err);
+    });
+  });
+
+  /**
+   * Issue #414 TDD: greeting flow must not produce an upstream error.
+   *
+   * Root cause (now fixed): proxy used to send conversation.item.create (assistant) and
+   * response.create to upstream for the greeting. OpenAI Realtime API rejects client-created
+   * assistant messages and errors on response.create after an assistant-only item.
+   * Fix: greeting is text-only to client — nothing sent to upstream for greeting.
+   *
+   * Mock simulates real OpenAI behavior: sends error on response.create when the last
+   * conversation.item.create was role=assistant. With the fix, neither is sent for greeting.
+   */
+  itMockOnly('Issue #414 TDD: greeting flow must not produce upstream error (nothing sent to upstream for greeting)', (done) => {
+    mockReceived.length = 0;
+    receivedConversationItems.length = 0;
+    protocolErrors.length = 0;
+    mockSendSessionCreatedOnConnect = true;
+    mockSendItemAddedForAssistant = true;
+    mockSendErrorOnAssistantResponseCreate = true;
+    const greeting = 'Hello! How can I assist you today?';
+    let receivedError: string | null = null;
+    let receivedGreetingText = false;
+    let receivedSettingsApplied = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const cleanup = () => {
+      mockSendSessionCreatedOnConnect = false;
       mockSendItemAddedForAssistant = false;
+      mockSendErrorOnAssistantResponseCreate = false;
+    };
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: {
+          think: { prompt: 'You are a helpful voice assistant. Keep your responses concise and informative.' },
+          greeting,
+        },
+      }));
+    });
+    client.on('message', (data: Buffer) => {
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string; description?: string };
+        if (msg.type === 'SettingsApplied') receivedSettingsApplied = true;
+        if (msg.type === 'ConversationText' && msg.role === 'assistant' && msg.content === greeting) {
+          receivedGreetingText = true;
+        }
+        if (msg.type === 'Error') {
+          receivedError = msg.description ?? 'unknown error';
+        }
+      } catch {
+        // binary or unparseable
+      }
+    });
+    // Wait for the full greeting flow to complete (same 5s window as real API error timing)
+    timeoutId = setTimeout(() => {
+      if (timeoutId) clearTimeout(timeoutId);
+      client.close();
+      cleanup();
+      // Assert: the greeting flow must produce greeting text, SettingsApplied, and NO error
+      try {
+        expect(receivedSettingsApplied).toBe(true);
+        expect(receivedGreetingText).toBe(true);
+        expect(receivedError).toBeNull();
+        done();
+      } catch (err) {
+        done(err);
+      }
+    }, 2000);
+    client.on('error', (err: Error) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      cleanup();
+      done(err);
+    });
+  });
+
+  /**
+   * Issue #414: Real-API greeting flow test. Only runs with USE_REAL_OPENAI=1 and OPENAI_API_KEY.
+   * Sends Settings with greeting, asserts: SettingsApplied received, no Error within 10s.
+   * This test FAILS against the real API if OpenAI errors during the greeting flow.
+   */
+  (useRealOpenAI ? it : it.skip)('Issue #414 real-API: greeting flow must not produce error (USE_REAL_OPENAI=1)', (done) => {
+    const greeting = 'Hello! How can I assist you today?';
+    let receivedError: string | null = null;
+    let receivedSettingsApplied = false;
+    let receivedGreetingText = false;
+    let receivedAudioChunks = 0;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: {
+          think: { prompt: 'You are a helpful voice assistant.' },
+          greeting,
+        },
+      }));
+    });
+    client.on('message', (data: Buffer) => {
+      // Check for binary PCM (audio chunks)
+      let isJson = false;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string; description?: string };
+        if (msg && typeof msg === 'object' && typeof msg.type === 'string') {
+          isJson = true;
+          if (msg.type === 'SettingsApplied') receivedSettingsApplied = true;
+          if (msg.type === 'ConversationText' && msg.role === 'assistant') receivedGreetingText = true;
+          if (msg.type === 'Error') {
+            receivedError = msg.description ?? 'unknown error';
+          }
+        }
+      } catch {
+        // not JSON
+      }
+      if (!isJson && data.length > 100) {
+        receivedAudioChunks++;
+      }
+    });
+    // Wait 10s for the full greeting flow (real API can be slow)
+    timeoutId = setTimeout(() => {
+      client.close();
+      const details = `settingsApplied=${receivedSettingsApplied}, greeting=${receivedGreetingText}, audioChunks=${receivedAudioChunks}, error=${receivedError}`;
+      try {
+        expect(receivedSettingsApplied).toBe(true);
+        if (receivedError) {
+          done(new Error(
+            `Greeting flow produced a client-visible error: "${receivedError}". ` +
+            `This is the Issue #414 manual test failure reproduced in integration. (${details})`
+          ));
+        } else {
+          expect(receivedGreetingText).toBe(true);
+          done();
+        }
+      } catch (err) {
+        done(err);
+      }
+    }, 10000);
+    client.on('error', (err: Error) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      done(err);
+    });
+  }, 15000);
+
+  itMockOnly('Issue #414 TDD: greeting delivers text to client only (nothing to upstream)', (done) => {
+    mockReceived.length = 0;
+    receivedConversationItems.length = 0;
+    protocolErrors.length = 0;
+    const greeting = 'Text greeting!';
+    let receivedGreetingText = false;
+    let receivedSettingsApplied = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: { think: { prompt: 'Greet.' }, greeting },
+      }));
+    });
+    client.on('message', (data: Buffer) => {
+      try {
+        const parsed = JSON.parse(data.toString()) as { type?: string; content?: string; role?: string };
+        if (parsed && typeof parsed === 'object' && typeof parsed.type === 'string') {
+          if (parsed.type === 'SettingsApplied') receivedSettingsApplied = true;
+          if (parsed.type === 'ConversationText' && parsed.role === 'assistant' && parsed.content === greeting) {
+            receivedGreetingText = true;
+          }
+        }
+      } catch {
+        // not JSON
+      }
+    });
+    timeoutId = setTimeout(() => {
+      client.close();
+      try {
+        expect(receivedSettingsApplied).toBe(true);
+        expect(receivedGreetingText).toBe(true);
+        // No conversation.item.create for greeting sent to upstream
+        const itemCreateCount = mockReceived.filter((m) => m.type === 'conversation.item.create').length;
+        expect(itemCreateCount).toBe(0);
+        // No response.create
+        const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+        expect(responseCreateCount).toBe(0);
+        done();
+      } catch (err) {
+        done(err);
+      }
+    }, 1500);
+    client.on('error', (err: Error) => {
+      if (timeoutId) clearTimeout(timeoutId);
       done(err);
     });
   });
