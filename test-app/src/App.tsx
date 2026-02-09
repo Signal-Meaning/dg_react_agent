@@ -860,33 +860,6 @@ function App() {
     }
   }, [addLog, ttsMuted]);
 
-  /** Issue #414: Play a short tone via the component's AudioContext to verify the same output path as TTS. */
-  const handlePlayTestTone = useCallback(() => {
-    const ctx = deepgramRef.current?.getAudioContext?.();
-    if (!ctx) {
-      addLog('Play test tone: No AudioContext yet. Connect and send a message first so the component creates it.');
-      return;
-    }
-    if (ctx.state === 'suspended') {
-      ctx.resume().then(() => playTestTone(ctx)).catch((e) => addLog(`Test tone: resume failed: ${e}`));
-    } else {
-      playTestTone(ctx);
-    }
-    function playTestTone(audioContext: AudioContext) {
-      const osc = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(440, audioContext.currentTime);
-      osc.connect(gain);
-      gain.connect(audioContext.destination);
-      gain.gain.setValueAtTime(0.2, audioContext.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-      osc.start(audioContext.currentTime);
-      osc.stop(audioContext.currentTime + 0.2);
-      addLog('Play test tone: played 440 Hz for 0.2s via component AudioContext.');
-    }
-  }, [addLog]);
-  
   const updateContext = () => {
     // Define the possible instruction prompts
     const instructions = [
@@ -1297,15 +1270,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           data-testid="tts-mute-button"
         >
           {ttsMuted ? '🔇 Mute' : '🔊 Enable'}
-        </button>
-        <button
-          type="button"
-          onClick={handlePlayTestTone}
-          style={{ padding: '10px 20px', pointerEvents: 'auto' }}
-          title="Play a short tone using the same AudioContext as TTS (Issue #414). Connect and send a message first if button has no effect."
-          data-testid="play-test-tone-button"
-        >
-          Play test tone
         </button>
         <button 
           onClick={updateContext}

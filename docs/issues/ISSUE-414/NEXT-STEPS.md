@@ -106,7 +106,7 @@
 
 **Next:**
 
-1. **Reproduce in headed browser:** Focus Text Input, wait for SettingsApplied and greeting text; confirm whether greeting **audio** plays (and whether “Play test tone” works from the same output path). See [OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md](./OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md) for test-tone and output-path checks.
+1. **Reproduce in headed browser:** Focus Text Input, wait for SettingsApplied and greeting text; confirm whether greeting **audio** plays. See [OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md](./OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md) for output-path checks.
 2. **Trace greeting path:** From proxy sending greeting (ConversationText + binary PCM if upstream sends it) through component `handleAgentAudio` and `AudioManager.queueAudio` to `audio-playing-status` / onPlaybackStateChange. Confirm binary is received for the greeting and that the first playback is scheduled and fires.
 3. **E2E and reporting:** If playback works but state is wrong, fix test-app or component so `audio-playing-status` and any “greeting played” signal reflect reality; then tighten E2E assertions. If playback does not work on focus, fix the greeting playback path and re-run E2E with `PW_ENABLE_AUDIO=true` and/or headed where relevant.
 
