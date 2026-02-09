@@ -30,7 +30,7 @@ Use this table so the next person does not re-test ruled-out paths.
 |------------|---------|----------------|
 | Session.update audio/VAD config | Yes (4 TDD cycles) | Ruled out |
 | idle_timeout_ms | Yes (experiment run) | With server_vad + idle_timeout_ms 30000 we get "buffer too small" (dual-control race); cannot adopt without re-introducing that error. See §10 progress log. |
-| Audio content/quality (silence vs speech) | No | **Critical to test** — real speech vs silence behaves differently in similar conditions |
+| Audio content/quality (silence vs speech) | Yes (one run) | Both variants passed: silence and speech-like (TTS/recorded fixture from tests/fixtures/audio-samples) within 12s, turn_detection: null. Single run; recommend N runs for pass rate. |
 | Connection concurrency / race conditions | No | E2E may open multiple connections or reconnect |
 | Rate limiting / account-level throttling | No | OpenAI may throttle test accounts |
 | Audio chunk size / framing | Partially | 20ms chunks enforced; not varied |
@@ -119,5 +119,5 @@ Archive or merge the rest (E2E-RELAXATIONS-EXPLAINED, OPENAI-AUDIO-PLAYBACK-INVE
 
 - **Plan updates:** Firm audio assertion window set to **12s** (not 5s). Audio content (real speech vs silence) marked **critical** to vary. Doc consolidation: **definitely** consolidate to 3 docs.
 - **Step 1 (idle_timeout_ms experiment):** Done. Implemented in translator: when `OPENAI_REALTIME_IDLE_TIMEOUT_MS` is set, send `turn_detection: { type: 'server_vad', idle_timeout_ms: N, create_response: false }`. Ran real-API firm audio test with `OPENAI_REALTIME_IDLE_TIMEOUT_MS=30000` and `USE_REAL_OPENAI=1`. **Result:** Test failed with **"Error committing input audio buffer: buffer too small. Expected at least 100ms of audio, but buffer only has 0.00ms"** — i.e. with Server VAD enabled (even with `create_response: false`), the server commits or consumes the buffer before our proxy, so we hit the dual-control race again. The generic "server had an error" did not appear in this run because the buffer error occurred first. **Conclusion:** We cannot adopt server_vad + idle_timeout_ms without re-introducing "buffer too small"; keeping `turn_detection: null` for now. Next: vary audio content (real speech vs silence) as critical; then consider upstream bug or further evidence.
-- **Step 2 (if error persists):** Audio content variation is **critical** (next experiment). Doc consolidation and NEXT-STEPS item A update below.
+- **Step 2 (audio content variation):** Done. Speech-like audio now uses **project fixtures** (TTS/recorded speech): `tests/utils/audio-file-loader.js` loads `tests/fixtures/audio-samples/sample_<name>.json`, decodes base64 PCM, resamples 16k→24k; integration test sends 100ms of that. Real-API test "firm audio (speech-like audio)" uses fixture `hello`. Ran both real-API firm audio tests with **turn_detection: null**: **silence** and **speech-like (fixture)** both **passed** within 12s (single run). Recommendation: run N times and record pass rate for stronger evidence.
 - **Step 4 (regardless):** NEXT-STEPS.md item A updated to reflect 0 errors (no relaxation).

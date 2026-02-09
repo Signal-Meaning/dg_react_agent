@@ -59,6 +59,64 @@ class AudioFileLoader {
   }
 
   /**
+   * Load TTS/speech fixture from JSON (tests/fixtures/audio-samples/sample_<name>.json).
+   * Format: 16 kHz 16-bit mono PCM, base64 in audioData; metadata.sampleRate.
+   * Used by OpenAI proxy integration tests for speech-like input (RESOLUTION-PLAN §7).
+   * @param {string} sampleName - Sample name (e.g. 'hello', 'realistic_speech_test')
+   * @returns {{ buffer: Buffer; sampleRate: number }} - PCM buffer and sample rate (16000)
+   */
+  static loadFixtureJsonAudioSync(sampleName) {
+    const fixturesDir = path.join(__dirname, '../fixtures/audio-samples');
+    const filePath = path.join(fixturesDir, `sample_${sampleName}.json`);
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Audio fixture not found: ${filePath}`);
+    }
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(raw);
+    const buffer = Buffer.from(data.audioData, 'base64');
+    const sampleRate = data.metadata?.sampleRate ?? 16000;
+    return { buffer, sampleRate };
+  }
+
+  /**
+   * Resample 16 kHz 16-bit mono PCM to 24 kHz (linear interpolation).
+   * OpenAI proxy session expects 24 kHz input.
+   * @param {Buffer|ArrayBuffer} pcm16k - 16 kHz 16-bit mono PCM
+   * @returns {Buffer} - 24 kHz 16-bit mono PCM
+   */
+  static resample16kTo24kPcm(pcm16k) {
+    const buf = Buffer.isBuffer(pcm16k) ? pcm16k : Buffer.from(pcm16k);
+    const view = new Int16Array(buf.buffer, buf.byteOffset, buf.length / 2);
+    const inputSamples = view.length;
+    const outputSamples = Math.floor(inputSamples * 24 / 16);
+    const out = new Int16Array(outputSamples);
+    for (let j = 0; j < outputSamples; j++) {
+      const srcIndex = j / 1.5;
+      const i0 = Math.floor(srcIndex);
+      const i1 = Math.min(i0 + 1, inputSamples - 1);
+      const frac = srcIndex - i0;
+      out[j] = Math.round(view[i0] + frac * (view[i1] - view[i0]));
+    }
+    return Buffer.from(out.buffer, 0, out.byteLength);
+  }
+
+  /**
+   * Load speech-like PCM at 24 kHz for OpenAI proxy tests (Issue #414).
+   * Uses project TTS/recorded speech fixtures; resamples 16k→24k. Returns at least minBytes (default 4800 = 100ms).
+   * @param {string} sampleName - Fixture name (e.g. 'hello', 'realistic_speech_test')
+   * @param {number} minBytes - Minimum bytes to return (default 4800 = 100ms at 24 kHz)
+   * @returns {Buffer} - 24 kHz 16-bit mono PCM, length >= minBytes
+   */
+  static loadSpeechLikePcm24kFromFixture(sampleName, minBytes = 4800) {
+    const { buffer } = this.loadFixtureJsonAudioSync(sampleName);
+    const pcm24k = this.resample16kTo24kPcm(buffer);
+    if (pcm24k.length < minBytes) {
+      throw new Error(`Fixture ${sampleName} too short after resample: ${pcm24k.length} < ${minBytes}`);
+    }
+    return pcm24k;
+  }
+
+  /**
    * Convert audio file to PCM format suitable for Deepgram
    * @param {ArrayBuffer} audioData - Raw audio data
    * @param {Object} options - Conversion options

@@ -36,6 +36,13 @@ import {
 
 /** When true, proxy uses real OpenAI Realtime URL and auth; mock is not started. Requires OPENAI_API_KEY. */
 const useRealOpenAI = process.env.USE_REAL_OPENAI === '1' && !!process.env.OPENAI_API_KEY?.trim();
+
+/** Issue #414 RESOLUTION-PLAN: 100ms PCM at 24kHz 16-bit mono (bytes). */
+const PCM_100MS_24K_BYTES = 4800;
+
+/** Issue #414: Load speech-like PCM from project fixtures (TTS/recorded speech); 24 kHz for proxy. */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const AudioFileLoader = require('../utils/audio-file-loader');
 /** Use for tests that require the mock upstream (exact payloads, mockReceived, etc.); skipped when USE_REAL_OPENAI=1. */
 const itMockOnly = useRealOpenAI ? it.skip : it;
 
@@ -816,6 +823,55 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           done(new Error(
             `Real API returned Error within firm-audio window: "${msg.description ?? 'unknown'}". ` +
             `This documents the Issue #414 server error. (settingsApplied=${receivedSettingsApplied})`
+          ));
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err: Error) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      done(err);
+    });
+    client.on('close', () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    });
+  }, 22000); // 12s firm-audio window + buffer
+
+  /**
+   * Issue #414 RESOLUTION-PLAN §7: Real-API firm audio with speech-like PCM from project fixtures.
+   * Uses TTS/recorded speech (tests/fixtures/audio-samples), not synthetic tone. Varying audio content is critical.
+   */
+  (useRealOpenAI ? it : it.skip)('Issue #414 real-API: firm audio (speech-like audio) — no Error from upstream within 12s (USE_REAL_OPENAI=1)', (done) => {
+    const FIRM_AUDIO_WINDOW_MS = 12000;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let receivedSettingsApplied = false;
+    const speechLikePcm = AudioFileLoader.loadSpeechLikePcm24kFromFixture('hello', PCM_100MS_24K_BYTES);
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string };
+        if (msg.type === 'SettingsApplied') {
+          receivedSettingsApplied = true;
+          client.send(speechLikePcm.slice(0, PCM_100MS_24K_BYTES));
+          timeoutId = setTimeout(() => {
+            timeoutId = null;
+            client.close();
+            done();
+          }, FIRM_AUDIO_WINDOW_MS);
+          return;
+        }
+        if (msg.type === 'Error') {
+          if (timeoutId) clearTimeout(timeoutId);
+          timeoutId = null;
+          client.close();
+          done(new Error(
+            `Real API returned Error within firm-audio window (speech-like audio): "${msg.description ?? 'unknown'}". ` +
+            `(settingsApplied=${receivedSettingsApplied})`
           ));
         }
       } catch {
