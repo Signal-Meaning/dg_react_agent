@@ -2224,6 +2224,11 @@ function DeepgramVoiceInteraction(
         console.log('💬 [AGENT EVENT] ConversationText received role=', data.role);
       }
       const content = typeof data.content === 'string' ? data.content : '';
+      // Always log assistant message received (not gated by debug) for observability
+      if (data.role === 'assistant') {
+        const preview = content.length > 80 ? `${content.slice(0, 80)}…` : content;
+        console.info('💬 [AGENT] Assistant message received:', preview || '(empty)');
+      }
       const timestamp = Date.now();
       const role = data.role as ConversationMessage['role'];
       const newEntry: ConversationMessage = { role, content, timestamp };
