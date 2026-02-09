@@ -25,7 +25,7 @@ This doc is the **entry point** for what we know and how the other ISSUE-414 doc
 
 - **Server VAD disabled:** We send `session.audio.input.turn_detection: null`. The [client events doc](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update) states: "To clear a field like turn_detection, pass null." So we are following the documented way to disable Server VAD. The proxy is the only controller for commit + response.create.
 - **Audio format:** We send the correct shape per the official session schema: `session.audio.input.format: { type: 'audio/pcm', rate: 24000 }` (see session.updated example in API reference).
-- **Test result:** Firm audio 5/5; greeting flow passes with default Settings (idleTimeoutMs 10s). Idle timeout is shared via Settings.agent.idleTimeoutMs. See [RESOLUTION-PLAN.md](./RESOLUTION-PLAN.md) §10.
+- **Test result:** Firm audio 5/5; greeting flow passes with default Settings (idleTimeoutMs 10s). Idle timeout is shared via Settings.agent.idleTimeoutMs. See [NEXT-STEPS.md](./NEXT-STEPS.md).
 
 ---
 
@@ -42,29 +42,18 @@ This doc is the **entry point** for what we know and how the other ISSUE-414 doc
 
 ---
 
-## 5. Doc index (16 docs)
+## 5. Doc index (retained docs)
 
 | Doc | Purpose |
 |-----|--------|
 | **CURRENT-UNDERSTANDING.md** (this file) | Entry point; two errors; commit strategy; VAD facts; doc index. |
+| **README.md** | Issue summary, acceptance criteria, status, pointers. |
+| **DOC-RETENTION.md** | Retention policy: which docs to keep vs remove; rationale. |
 | **REFACTOR-PHASE.md** | Refactor-phase review: scope, correctness, completeness, coverage, DRYness, clarity; recommendations. |
 | **REGRESSION-SERVER-ERROR-INVESTIGATION.md** | Authoritative 4-cycle session.update investigation; 5s error hypotheses; idle_timeout_ms lead. |
-| **NEXT-STEPS.md** | Plan and priorities (greeting TTS, basic audio, server error, etc.); §3.1/§3.2 buffer/response. |
-| **RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md** | Firm audio connection protocol and tests; plan steps; references. |
-| **RESOLUTION-PLAN.md** | Actionable resolution plan for 5s server error; 12s firm audio; idle_timeout Path B; 10s idle experiment (greeting passes); progress log. |
-| **PASSING-VS-FAILING-TESTS-THEORY.md** | Compares passing (firm audio) vs failing (greeting, E2E) flows; idle-timeout theory; 10s experiment result and other tests. |
-| **PROTOCOL-AND-MESSAGE-ORDERING.md** (in scripts/openai-proxy/) | Wire protocol, message order, buffer restrictions, dual-control race. |
 | **COMPONENT-PROXY-INTERFACE-TDD.md** | Component ↔ proxy contract; VAD mapping (UserStartedSpeaking, UtteranceEnd). |
-| **VAD-FAILURES-AND-RESOLUTION-PLAN.md** | VAD E2E failures and resolution plan. |
-| **E2E-RUN-RESULTS.md** | E2E run outcomes and failure summary. |
-| **E2E-FAILURE-REVIEW.md** | Review of E2E failures. |
-| **OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md** | Greeting/playback path and TTS investigation. |
-| **OPENAI-REALTIME-AUDIO-TESTING.md** | Audio testing approach. |
-| **OPENAI-SESSION-STATE-AND-TESTS.md** | Session state and tests. |
-| **PROTOCOL-TEST-GAPS.md** | Gaps in protocol tests. |
-| **README.md** | Issue summary and pointers. |
-| **E2E-RELAXATIONS-EXPLAINED.md** | What changed in E2E (allow 1 error, Repro 9/10, connect-only greeting) and how to undo each. |
-| **MULTI-TURN-E2E-CONVERSATION-HISTORY.md** | Multi-turn E2E and conversation history. |
-| **REPRO-RELOAD-STALE-RESPONSE.md** | Repro for reload/stale response. |
+| **NEXT-STEPS.md** | Plan and priorities; what’s done vs optional next steps. |
+| **E2E-RELAXATIONS-EXPLAINED.md** | Why E2E assertions were relaxed (idle_timeout, Repro 9/10, greeting); undo instructions. |
+| **PROTOCOL-AND-MESSAGE-ORDERING.md** (in scripts/openai-proxy/) | Wire protocol, message order, buffer restrictions, dual-control race. |
 
 When in doubt, treat **REGRESSION-SERVER-ERROR-INVESTIGATION.md** and this file as the source for "buffer too small" vs "server had an error," commit strategy, and GA path.

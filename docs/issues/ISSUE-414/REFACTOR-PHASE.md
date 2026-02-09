@@ -43,9 +43,9 @@
 ### 1.5 Docs (ISSUE-414)
 
 - **Entry / index:** CURRENT-UNDERSTANDING.md, README.md, NEXT-STEPS.md.
-- **Resolution / plan:** RESOLUTION-PLAN.md, PASSING-VS-FAILING-TESTS-THEORY.md, E2E-RELAXATIONS-EXPLAINED.md.
+- **Plan / relaxations:** NEXT-STEPS.md, E2E-RELAXATIONS-EXPLAINED.md.
 - **Protocol / contract:** COMPONENT-PROXY-INTERFACE-TDD.md; PROTOCOL-AND-MESSAGE-ORDERING.md (in scripts).
-- **Investigations:** REGRESSION-SERVER-ERROR-INVESTIGATION.md, OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md, OPENAI-SESSION-STATE-AND-TESTS.md, others.
+- **Investigations:** REGRESSION-SERVER-ERROR-INVESTIGATION.md (authoritative); see CURRENT-UNDERSTANDING doc index.
 
 ---
 
@@ -61,7 +61,7 @@
 ## 3. Completeness
 
 - **Done:** Shared constant; Settings carry idle timeout; proxy uses only Settings; expected closure handling; docs and protocol §3.9; integration and E2E coverage for the changed behavior.
-- **Optional / future:** Configurable idle_timeout_ms beyond Settings (e.g. env override) is not required; doc consolidation (§8 in RESOLUTION-PLAN) is optional; adding `idleTimeoutMs` to `AgentSettingsMessage.agent` is a small type completeness fix.
+- **Optional / future:** Configurable idle_timeout_ms beyond Settings (e.g. env override) is not required; doc consolidation (see DOC-RETENTION.md) is optional; adding `idleTimeoutMs` to `AgentSettingsMessage.agent` is a small type completeness fix.
 
 ---
 
@@ -114,7 +114,7 @@
 |---|------|----------|--------|
 | 1 | **Type completeness** | Recommended | Add `idleTimeoutMs?: number` to `AgentSettingsMessage.agent` in `src/types/agent.ts` so the wire shape matches what the component sends. |
 | 2 | **Proxy fallback 10000** | Optional | Keep as-is with comment, or introduce shared constant import in proxy if we want strict DRY. |
-| 3 | **Doc consolidation** | Optional | RESOLUTION-PLAN §8; merge or archive redundant ISSUE-414 docs as needed. |
+| 3 | **Doc consolidation** | Optional | DOC-RETENTION.md; redundant ISSUE-414 docs have been removed per that policy. |
 | 4 | **Connection timeout** | Optional | `WebSocketManager` uses `connectionTimeout: 10000`; could move to `voice-agent.ts` as a named constant if we want all timeouts in one place. |
 
 ---

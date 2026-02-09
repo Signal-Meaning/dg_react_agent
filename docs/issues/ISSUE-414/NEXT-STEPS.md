@@ -3,7 +3,7 @@
 **Branch:** `davidrmcgee/issue414`  
 **Issue:** [#414](https://github.com/Signal-Meaning/dg_react_agent/issues/414)
 
-**Single source of truth:** [CURRENT-UNDERSTANDING.md](./CURRENT-UNDERSTANDING.md). Resolution plan: [RESOLUTION-PLAN.md](./RESOLUTION-PLAN.md). Passing vs failing theory: [PASSING-VS-FAILING-TESTS-THEORY.md](./PASSING-VS-FAILING-TESTS-THEORY.md).
+**Single source of truth:** [CURRENT-UNDERSTANDING.md](./CURRENT-UNDERSTANDING.md).
 
 ---
 
@@ -12,7 +12,7 @@
 - **Buffer too small:** Resolved. With Server VAD disabled (`turn_detection: null`) and proxy-only commit/response.create, this error is gone. It only reappears if Server VAD is re-enabled.
 - **Idle-timeout closure:** We treat the upstream event ("The server had an error while processing your request") as a **normal closing event** due to idle timeout, not an error. Proxy: logs INFO "expected idle timeout closure", sends code `idle_timeout`. Component: treats `idle_timeout` and `session_max_duration` as expected closure (no onError, no error UI). Idle timeout is **shared**: component sends `Settings.agent.idleTimeoutMs` (default 10s); proxy uses it in session.update (no separate env var). See PROTOCOL-AND-MESSAGE-ORDERING.md §3.9.
 - **Integration:** Mock suite 38 passed. Real-API: greeting passes with 10s idle; firm audio passes 5/5 with `turn_detection: null` (without 10s env, firm audio can show "buffer too small" if proxy uses Server VAD). E2E: run with same env (10s idle) — tests executed; full run hit 5min timeout; greeting playback and multi-turn passed in partial run.
-- **Remaining:** Optional: make `idle_timeout_ms` configurable; doc consolidation per RESOLUTION-PLAN §8.
+- **Remaining:** Optional: make `idle_timeout_ms` configurable; doc consolidation (see [DOC-RETENTION.md](./DOC-RETENTION.md)).
 
 **Are we resolved?** **Yes.** Buffer-too-small is **resolved** (protocol + turn_detection null). Idle-timeout closure is **expected** (not an error): proxy sends `idle_timeout`, component treats it like Deepgram idle timeout (no onError). E2E behaves properly — assertNoRecoverableAgentErrors passes when the only event is idle-timeout closure; no E2E revision was required beyond the component/proxy change.
 
@@ -24,11 +24,11 @@
 |---|-------------|------------|------------------|
 | A | **openai-proxy-e2e.spec.js** › **5. Basic audio** | **Resolved.** Idle-timeout closure is no longer surfaced as an error: proxy sends code `idle_timeout`, component treats it as expected closure (no onError), same as Deepgram. So when the only upstream event is idle-timeout closure, agent-error counts stay 0 and `assertNoRecoverableAgentErrors(page)` passes. No E2E assertion change was required; the component/proxy change aligns OpenAI with Deepgram (expected closure, not error). See test-helpers.js JSDoc and openai-proxy-e2e.spec.js describe comment. |
 | ~~B~~ | **openai-proxy-e2e.spec.js** › **9/10. Repro** | ~~Response must not be Paris one-liner.~~ **Resolved (step 3):** Relaxed assertion: accept if response references topic (famous/people/lived), is substantive (>50 chars), or is exactly "The capital of France is Paris." (model may return that short answer). Still reject greeting. See tests 9 and 10. |
-| ~~C~~ | **greeting-playback-validation.spec.js** › **connect only** | ~~Greeting audio must play: chunks >= 1.~~ **Resolved (step 1):** Proxy sends greeting text-only to client (no conversation.item.create for greeting to upstream); OpenAI rejects client-created assistant items. So greeting TTS is not expected in connect-only. Test relaxed: require greeting in conversation + no error; chunks >= 0 only. See OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md. |
+| ~~C~~ | **greeting-playback-validation.spec.js** › **connect only** | ~~Greeting audio must play: chunks >= 1.~~ **Resolved (step 1):** Proxy sends greeting text-only to client (no conversation.item.create for greeting to upstream); OpenAI rejects client-created assistant items. So greeting TTS is not expected in connect-only. Test relaxed: require greeting in conversation + no error; chunks >= 0 only. See CURRENT-UNDERSTANDING and protocol docs. |
 | ~~D~~ | **Upstream / UI** | ~~E2E fail when upstream sends server error.~~ **Addressed:** §3.1/§3.2 fixed. "Server had an error" / 1005 documented as known; idle-timeout mitigation (10s env) supports greeting flow. E2E should not fail when upstream sends an error and the app handles it; see row A and "E2E policy (Test 5)" above. |
 | E | **Transcript / VAD (5b)** | **Addressed:** Proxy maps VAD when upstream sends it. With Server VAD disabled (`turn_detection: null`), upstream does not send speech_started/speech_stopped, so test 5b no longer requires VAD events (passes with 0). Server VAD is a separate requirement; see test 5b comment and [E2E-RELAXATIONS-EXPLAINED.md](./E2E-RELAXATIONS-EXPLAINED.md). |
 
-**Integration (mock):** 38 passed. **Real-API:** Greeting flow passes with default Settings (idleTimeoutMs 10s); firm audio 5/5. Tests 6 and 8 (URL fix) applied. E2E: see RESOLUTION-PLAN §10.
+**Integration (mock):** 38 passed. **Real-API:** Greeting flow passes with default Settings (idleTimeoutMs 10s); firm audio 5/5. Tests 6 and 8 (URL fix) applied. E2E: see NEXT-STEPS and integration tests.
 
 ### E2E policy (Test 5 and idle-timeout closure)
 
@@ -60,7 +60,7 @@
 
 1. **C – Connect-only greeting TTS (0 chunks)** — **Done.**  
    - **Goal:** Either get greeting TTS playing in connect-only flow, or document why it does not and adjust the test.  
-   - **Done:** Traced path: proxy sends greeting **text-only to client** (ConversationText); it does **not** send greeting as conversation.item.create to upstream (OpenAI Realtime rejects client-created assistant items). So no response.create for greeting → no greeting TTS. Documented in OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md. Relaxed E2E test: connect-only now requires greeting in conversation + no error; **chunks >= 0** only (no longer require chunks >= 1). See `greeting-playback-validation.spec.js`.
+   - **Done:** Traced path: proxy sends greeting **text-only to client** (ConversationText); it does **not** send greeting as conversation.item.create to upstream (OpenAI Realtime rejects client-created assistant items). So no response.create for greeting → no greeting TTS. Documented in CURRENT-UNDERSTANDING and README. Relaxed E2E test: connect-only now requires greeting in conversation + no error; **chunks >= 0** only (no longer require chunks >= 1). See `greeting-playback-validation.spec.js`.
 
 2. **A – Basic audio (agent error)** — **Done.**  
    - **Goal:** E2E should pass when the only upstream event is idle-timeout closure (expected, not error).  
@@ -82,7 +82,7 @@
 
 ## Current stage (brief)
 
-- **Resolution plan:** Step 1 (idle_timeout) closed via Path B; Step 2 (audio content) ruled out. Idle timeout is shared via Settings.agent.idleTimeoutMs (default 10s). See RESOLUTION-PLAN §10.
+- **Resolution plan:** Step 1 (idle_timeout) closed via Path B; Step 2 (audio content) ruled out. Idle timeout is shared via Settings.agent.idleTimeoutMs (default 10s). See CURRENT-UNDERSTANDING §2.1 and NEXT-STEPS.
 - **Proxy:** Buffer too small and active-response defects addressed. 5s error mitigated when idle_timeout is extended (env var). Session max duration (60 min) documented; proxy logs it as expected.
 - **Integration:** Mock 38 passed. Real-API: greeting + 10s idle → pass; firm audio 5/5 with turn_detection null. E2E: run with 10s idle env; partial run passed greeting/multi-turn; full run needs longer timeout or run specs separately.
 
@@ -92,7 +92,7 @@
 
 **Observed:** In the test-app, when the user focuses the Text Input field, the component connects, sends Settings, and receives SettingsApplied and the greeting as ConversationText. **The greeting audio, however, fails to play** (or is not heard). This is separate from OpenAI proxy protocol correctness: the issue appears in the test-app flow (focus → connect → greeting) regardless of proxy protocol fixes.
 
-**Evidence from E2E run:** [E2E-RUN-RESULTS.md](./E2E-RUN-RESULTS.md)
+**Evidence from E2E run:** See NEXT-STEPS run summary below.
 
 - **Greeting Idle Timeout › should timeout after greeting completes (Issue #139):** `[data-testid="audio-playing-status"]` never became `'true'` (30s timeout).
 - **Greeting Idle Timeout › should NOT play greeting if AudioContext is suspended:** When AudioContext was **running**, `expect(audioPlayed).toBe(true)` failed — greeting audio was not reported as played.
@@ -106,7 +106,7 @@
 
 **Next:**
 
-1. **Reproduce in headed browser:** Focus Text Input, wait for SettingsApplied and greeting text; confirm whether greeting **audio** plays. See [OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md](./OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md) for output-path checks.
+1. **Reproduce in headed browser:** Focus Text Input, wait for SettingsApplied and greeting text; confirm whether greeting **audio** plays. See [CURRENT-UNDERSTANDING.md](./CURRENT-UNDERSTANDING.md) and protocol docs for output-path context.
 2. **Trace greeting path:** From proxy sending greeting (ConversationText + binary PCM if upstream sends it) through component `handleAgentAudio` and `AudioManager.queueAudio` to `audio-playing-status` / onPlaybackStateChange. Confirm binary is received for the greeting and that the first playback is scheduled and fires.
 3. **E2E and reporting:** If playback works but state is wrong, fix test-app or component so `audio-playing-status` and any “greeting played” signal reflect reality; then tighten E2E assertions. If playback does not work on focus, fix the greeting playback path and re-run E2E with `PW_ENABLE_AUDIO=true` and/or headed where relevant.
 
@@ -114,7 +114,7 @@
 
 ## 2. Test failures and coverage gaps (lessons from E2E run)
 
-**Ref:** [E2E-RUN-RESULTS.md](./E2E-RUN-RESULTS.md)
+**Ref:** Run summary in this doc.
 
 **Run summary (2026-02, from test-app, stopped early):** 56 passed, 11 failed, 5 interrupted, 8 skipped, 162 did not run (~2.3m). Run command with saved output: `cd test-app && npm run test:e2e 2>&1 | tee e2e-run.log`.
 
@@ -185,7 +185,7 @@ Each of the following appears repeatedly in E2E and manual run logs. Each should
 
 **Proposed next (test 5b / VAD):** (1) **Confirm upstream emission:** Run proxy with debug (e.g. log every upstream event type); run test 5b and inspect whether `input_audio_buffer.speech_started` / `speech_stopped` appear from OpenAI. (2) If they never appear, check **session config:** try adding `audio.input.turn_detection: { type: 'server_vad', ... }` in session.update (translator currently omits audio config to avoid past errors; may need a minimal server_vad payload that API accepts). (3) If they do appear but client doesn’t update UI, trace **component path** (message handler → callbacks → test-app state). (4) Optionally **tag test 5b** as `@openai-vad` and document in TEST-STRATEGY that it requires OpenAI to emit VAD; keep test in suite but allow CI to skip when not validating OpenAI VAD until (1)–(3) are resolved.
 
-**Integration testability:** (1) Not testable (real API). (2) Partially: we can add a test that proxy sends session.update with turn_detection and mock upstream returns session.updated without error. (3) Component path is already covered by `tests/component-vad-callbacks.test.tsx`; proxy→client by existing proxy integration tests. (4) Doc only. See [VAD-FAILURES-AND-RESOLUTION-PLAN.md](./VAD-FAILURES-AND-RESOLUTION-PLAN.md) for full VAD failure description, tests needed, and resolution plan.
+**Integration testability:** (1) Not testable (real API). (2) Partially: we can add a test that proxy sends session.update with turn_detection and mock upstream returns session.updated without error. (3) Component path is already covered by `tests/component-vad-callbacks.test.tsx`; proxy→client by existing proxy integration tests. (4) Doc only. See [COMPONENT-PROXY-INTERFACE-TDD.md](./COMPONENT-PROXY-INTERFACE-TDD.md) for VAD contract; tests in component-vad-callbacks and proxy integration.
 
 **Phase A outcome (debug run):** With `OPENAI_PROXY_DEBUG=1`, test 5b was run and proxy logs inspected. Upstream **never** sent `speech_started` or `speech_stopped`; the flow was append → KeepAlive → **error** ("The server had an error...") → upstream closed. So the **server error (§3.3) is the blocker** for VAD: the connection fails before the API can emit VAD. Resolving or mitigating that error is a prerequisite for test 5b to pass.
 
@@ -195,29 +195,22 @@ Each of the following appears repeatedly in E2E and manual run logs. Each should
 
 ## 4. OpenAI proxy protocol and upstream
 
-**Ref:** [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md), [OPENAI-SESSION-STATE-AND-TESTS.md](./OPENAI-SESSION-STATE-AND-TESTS.md), [PROTOCOL-TEST-GAPS.md](./PROTOCOL-TEST-GAPS.md)
+**Ref:** [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md); protocol in scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md
 
 - **Server error regression:** Covered in §3.3. §3.1 and §3.2 are fixed. Proxy forwards errors; next steps are re-run with real API to observe frequency, then idle-timeout investigation and upstream/community evidence if it persists.
 - **Protocol and ordering:** Documented in [scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md](../../scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md). Integration tests enforce session.update → session.updated → context/greeting ordering and wire contract (binary only for `response.output_audio.delta`). Keep these green and align E2E with proxy vs direct backend.
-- **Session state and tests:** Component passes full state in Settings; proxy maps to OpenAI session.update + conversation.item.create after session.updated. See [OPENAI-SESSION-STATE-AND-TESTS.md](./OPENAI-SESSION-STATE-AND-TESTS.md).
+- **Session state and tests:** Component passes full state in Settings; proxy maps to OpenAI session.update + conversation.item.create after session.updated. See README and scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md.
 
 ---
 
 ## 5. Doc and code references
 
-- **Main status:** [README.md](./README.md)
-- **E2E run results and command to save output:** [E2E-RUN-RESULTS.md](./E2E-RUN-RESULTS.md) — run from `test-app`, failure list, recurring errors, `tee` command
-- **E2E failure review (three failures, actions taken):** [E2E-FAILURE-REVIEW.md](./E2E-FAILURE-REVIEW.md)
-- **Component/proxy interface (transcript & VAD, TDD):** [COMPONENT-PROXY-INTERFACE-TDD.md](./COMPONENT-PROXY-INTERFACE-TDD.md)
-- **VAD failures, tests needed, resolution plan:** [VAD-FAILURES-AND-RESOLUTION-PLAN.md](./VAD-FAILURES-AND-RESOLUTION-PLAN.md)
-- **Resolving server error (firm audio connection):** [RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md](./RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md) — focus on item #1; protocol and tests for audio connection.
-- **OpenAI Realtime audio testing (best practices, Basic Audio diagnosis, session retention):** [OPENAI-REALTIME-AUDIO-TESTING.md](./OPENAI-REALTIME-AUDIO-TESTING.md)
-- **OpenAI playback (test-tone, 24k context, double-connect fix):** [OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md](./OPENAI-AUDIO-PLAYBACK-INVESTIGATION.md)
+- **Main status / entry:** [README.md](./README.md), [CURRENT-UNDERSTANDING.md](./CURRENT-UNDERSTANDING.md)
+- **Doc retention:** [DOC-RETENTION.md](./DOC-RETENTION.md)
+- **Component/proxy interface (transcript & VAD):** [COMPONENT-PROXY-INTERFACE-TDD.md](./COMPONENT-PROXY-INTERFACE-TDD.md)
+- **E2E relaxations:** [E2E-RELAXATIONS-EXPLAINED.md](./E2E-RELAXATIONS-EXPLAINED.md)
 - **Server error investigation:** [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md)
 - **Protocol and message ordering:** [scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md](../../scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md)
-- **Protocol test gaps:** [PROTOCOL-TEST-GAPS.md](./PROTOCOL-TEST-GAPS.md)
-- **OpenAI session state and tests:** [OPENAI-SESSION-STATE-AND-TESTS.md](./OPENAI-SESSION-STATE-AND-TESTS.md)
-- **Multi-turn E2E conversation history:** [MULTI-TURN-E2E-CONVERSATION-HISTORY.md](./MULTI-TURN-E2E-CONVERSATION-HISTORY.md)
 - **Proxy:** `scripts/openai-proxy/` (server, translator, CLI)
 - **Tests:** `tests/integration/openai-proxy-integration.test.ts`, `test-app/tests/e2e/`
 

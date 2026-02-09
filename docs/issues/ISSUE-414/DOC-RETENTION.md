@@ -2,6 +2,8 @@
 
 **Principle:** Keep only docs with a **unique, persistent purpose** (for future devs or contract). Do not retain every twist of the investigation.
 
+**Done:** The files listed under "Remove or fold" below have been deleted; CURRENT-UNDERSTANDING §5 (doc index) has been trimmed to match.
+
 ## Keep (unique purpose)
 
 | Doc | Purpose |
