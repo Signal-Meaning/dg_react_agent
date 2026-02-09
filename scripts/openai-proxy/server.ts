@@ -449,16 +449,22 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           );
           clientWs.send(JSON.stringify(conversationText));
         } else if (msg.type === 'error') {
-          if (debug) {
+          const isSessionMaxDuration =
+            typeof msg.error?.message === 'string' &&
+            msg.error.message.includes('maximum duration') &&
+            msg.error.message.includes('60 minutes');
+          if (debug || isSessionMaxDuration) {
             emitLog({
-              severityNumber: SeverityNumber.ERROR,
-              severityText: 'ERROR',
-              body: msg.error?.message ?? String(msg),
+              severityNumber: isSessionMaxDuration ? SeverityNumber.INFO : SeverityNumber.ERROR,
+              severityText: isSessionMaxDuration ? 'INFO' : 'ERROR',
+              body: isSessionMaxDuration
+                ? `expected session limit: ${msg.error?.message ?? 'session max duration'}`
+                : (msg.error?.message ?? String(msg)),
               attributes: {
                 [ATTR_CONNECTION_ID]: connId,
                 [ATTR_DIRECTION]: 'upstream→client',
                 [ATTR_MESSAGE_TYPE]: 'error',
-                [ATTR_ERROR_CODE]: msg.error?.code ?? '',
+                [ATTR_ERROR_CODE]: isSessionMaxDuration ? 'session_max_duration' : (msg.error?.code ?? ''),
                 [ATTR_ERROR_MESSAGE]: msg.error?.message ?? '',
               },
             });

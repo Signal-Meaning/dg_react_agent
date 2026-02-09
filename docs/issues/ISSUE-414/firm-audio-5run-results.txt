@@ -1,0 +1,30 @@
+=== Run 1 ===
+Test Suites: 1 passed, 1 total
+Tests:       39 skipped, 2 passed, 41 total
+Snapshots:   0 total
+Time:        25.682 s, estimated 35 s
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+=== Run 2 ===
+Test Suites: 1 passed, 1 total
+Tests:       39 skipped, 2 passed, 41 total
+Snapshots:   0 total
+Time:        25.47 s, estimated 26 s
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+=== Run 3 ===
+Test Suites: 1 passed, 1 total
+Tests:       39 skipped, 2 passed, 41 total
+Snapshots:   0 total
+Time:        25.242 s, estimated 26 s
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+=== Run 4 ===
+Test Suites: 1 passed, 1 total
+Tests:       39 skipped, 2 passed, 41 total
+Snapshots:   0 total
+Time:        25.15 s, estimated 26 s
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+=== Run 5 ===
+Test Suites: 1 passed, 1 total
+Tests:       39 skipped, 2 passed, 41 total
+Snapshots:   0 total
+Time:        25.319 s, estimated 26 s
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

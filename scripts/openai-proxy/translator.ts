@@ -294,11 +294,21 @@ export function mapFunctionCallResponseToConversationItemCreate(
 }
 
 /**
+ * Detect expected "session hit the maximum duration of 60 minutes" error.
+ * Per PROTOCOL-AND-MESSAGE-ORDERING.md §3.8 this is expected when session reaches server limit.
+ */
+export function isSessionMaxDurationError(event: OpenAIErrorEvent): boolean {
+  const msg = event.error?.message ?? '';
+  return typeof msg === 'string' && msg.includes('maximum duration') && msg.includes('60 minutes');
+}
+
+/**
  * Map OpenAI error event → component Error.
+ * Session max duration (60 min) is mapped to code `session_max_duration` so the client can treat it as expected.
  */
 export function mapErrorToComponentError(event: OpenAIErrorEvent): ComponentError {
   const msg = event.error?.message ?? 'Unknown error';
-  const code = event.error?.code ?? 'unknown';
+  const code = isSessionMaxDurationError(event) ? 'session_max_duration' : (event.error?.code ?? 'unknown');
   return { type: 'Error', description: String(msg), code: String(code) };
 }
 
