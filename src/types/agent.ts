@@ -127,6 +127,8 @@ export interface AgentSettingsMessage {
     };
     greeting?: string;
     context?: ConversationMessage[]; // NEW: conversation context for lazy reconnection
+    /** Idle timeout in ms; shared with backends (e.g. OpenAI proxy session.update). See AgentOptions.idleTimeoutMs. */
+    idleTimeoutMs?: number;
   };
 }
 

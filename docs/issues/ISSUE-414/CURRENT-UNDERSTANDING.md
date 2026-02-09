@@ -42,11 +42,12 @@ This doc is the **entry point** for what we know and how the other ISSUE-414 doc
 
 ---
 
-## 5. Doc index (15 docs)
+## 5. Doc index (16 docs)
 
 | Doc | Purpose |
 |-----|--------|
 | **CURRENT-UNDERSTANDING.md** (this file) | Entry point; two errors; commit strategy; VAD facts; doc index. |
+| **REFACTOR-PHASE.md** | Refactor-phase review: scope, correctness, completeness, coverage, DRYness, clarity; recommendations. |
 | **REGRESSION-SERVER-ERROR-INVESTIGATION.md** | Authoritative 4-cycle session.update investigation; 5s error hypotheses; idle_timeout_ms lead. |
 | **NEXT-STEPS.md** | Plan and priorities (greeting TTS, basic audio, server error, etc.); §3.1/§3.2 buffer/response. |
 | **RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md** | Firm audio connection protocol and tests; plan steps; references. |

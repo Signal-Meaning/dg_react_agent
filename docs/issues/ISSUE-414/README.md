@@ -108,6 +108,8 @@ Add or extend a script that integrates with the OpenAI proxy to send command-lin
 
 See **[NEXT-STEPS.md](./NEXT-STEPS.md)** for what to do next (server error regression, optional E2E/playback hardening).
 
+**Refactor phase:** See **[REFACTOR-PHASE.md](./REFACTOR-PHASE.md)** for branch review (correctness, completeness, coverage, DRYness, clarity) and recommendations.
+
 ---
 
 ## References
