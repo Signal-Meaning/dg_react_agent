@@ -111,6 +111,10 @@ Additionally, the proxy sent **two** `SettingsApplied` messages to the client (o
 
 The upstream (OpenAI Realtime API) sends an `error` event with a recoverable message (e.g. "The server had an error while processing your request…"). The proxy forwards it; the component sets recoverable and the test-app increments `agent-error-count`. The **same** error is also observed **after** a successful turn (playback finishes, then error). For the "after successful response" case, **ruled out so far**: greeting injection (greeting-text-only didn't remove it), full session payload (minimal-session didn't remove it), and all session.update audio/turn_detection configurations (four TDD cycles; see [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md) § "session.update configuration investigation"). The error persists regardless of session.update content — it appears to be server-side default VAD idle timeout behavior.
 
+**Current proxy design: greeting text-only in connect-only (2026-02).**
+
+The proxy sends the **greeting to the client only** (ConversationText for UI) and **does not** send `conversation.item.create` (assistant) for the greeting to upstream — because the OpenAI Realtime API rejects client-created assistant messages. So in connect-only flow there is **no** `response.create` for the greeting and **no greeting TTS** from upstream. The E2E test "connect only (no second message): greeting in conversation, no error, greeting audio played" was relaxed: it now requires greeting in conversation and no error, but **does not require** `agent-audio-chunks-received >= 1` (chunks >= 0 only). See `greeting-playback-validation.spec.js` and [NEXT-STEPS.md](./NEXT-STEPS.md) step 1 (C).
+
 **Why the "prior" E2E test played good audio but the manual (connect-only) test did not**
 
 The tests that play audio (e.g. TTS diagnostic, "click text input then validate greeting playback") do **not** rely on the initial greeting. They do this:

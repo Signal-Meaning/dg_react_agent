@@ -3,6 +3,8 @@
 **Issue:** [#414](https://github.com/Signal-Meaning/dg_react_agent/issues/414)  
 **Status:** Investigation pending; tests written to **fail** when the defect is present.
 
+**See [CURRENT-UNDERSTANDING.md](./CURRENT-UNDERSTANDING.md)** for how this doc relates to the "buffer too small" error (dual-control race), the doc index, and the fact that the 5s error is **not** caused by VAD config (ruled out here).
+
 ---
 
 ## Summary

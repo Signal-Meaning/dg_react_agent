@@ -859,6 +859,10 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockDelayResponseDoneMs = 600;
     mockReceived.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    // Last chunk at 250ms; proxy debounce is 400ms after last append → commit + response.create at 650ms. Wait 750ms so assertion runs after debounce.
+    const LAST_CHUNK_MS = 250;
+    const DEBOUNCE_MS = 400;
+    const ASSERT_AFTER_MS = LAST_CHUNK_MS + DEBOUNCE_MS + 100;
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
     });
@@ -867,7 +871,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       if (msg.type === 'SettingsApplied') {
         mockReceived.length = 0;
         client.send(Buffer.alloc(4800, 0));
-        setTimeout(() => client.send(Buffer.alloc(4800, 0)), 250);
+        setTimeout(() => client.send(Buffer.alloc(4800, 0)), LAST_CHUNK_MS);
         setTimeout(() => {
           try {
             const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
@@ -876,11 +880,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             client.close();
             done();
           }
-        }, 550);
+        }, ASSERT_AFTER_MS);
       }
     });
     client.on('error', done);
-  }, 5000);
+  }, 10000);
 
   /**
    * Issue #414 proxy contract: only response.output_audio.delta (decoded PCM) must be sent as binary;
@@ -1684,25 +1688,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 15000);
 
   /**
-   * Issue #414 TDD: session.update must NOT include audio configuration.
-   *
-   * Investigation history:
-   * - turn_detection: null (top-level) → "Unknown parameter: 'session.turn_detection'"
-   * - audio.input.turn_detection: null → accepted, 5s error persists
-   * - audio.input.turn_detection: { type: 'server_vad', create_response: false } → accepted, 5s error persists
-   * - Community reports turn_detection: null is broken in GA API
-   *
-   * Hypothesis: sending audio.input config without audio.input.format puts the session
-   * in a broken audio input state. The official gpt-realtime example includes
-   * audio.input.format alongside turn_detection. Sending partial audio config may cause
-   * the 5-second server error.
-   *
-   * Fix: do not send audio config in session.update. The proxy handles turn detection
-   * manually (debounce + response.create) and doesn't need to override server defaults.
-   * If default server VAD auto-creates responses, the proxy ignores them or handles
-   * the error gracefully.
+   * Issue #414: session.update uses GA path (session.audio.input) per REGRESSION-SERVER-ERROR-INVESTIGATION.md.
+   * We send turn_detection: null (disable Server VAD so only proxy sends commit + response.create) and
+   * format: { type: 'audio/pcm', rate: 24000 } so the API knows we send PCM 24kHz. No top-level turn_detection.
    */
-  itMockOnly('Issue #414 TDD: session.update must not include audio config (avoids partial audio config error)', (done) => {
+  itMockOnly('Issue #414: session.update uses GA audio.input (turn_detection null + format)', (done) => {
     receivedSessionUpdatePayloads.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
@@ -1719,11 +1709,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           expect(receivedSessionUpdatePayloads.length).toBe(1);
           const sessionUpdate = receivedSessionUpdatePayloads[0];
           expect(sessionUpdate.session).toBeDefined();
-          // Must NOT include audio config — partial audio config (turn_detection without format)
-          // puts session in a broken state causing 5-second server errors
-          expect(sessionUpdate.session!.audio).toBeUndefined();
-          // Must NOT have top-level turn_detection (live API returns "Unknown parameter: 'session.turn_detection'")
-          expect(sessionUpdate.session!.turn_detection).toBeUndefined();
+          const sess = sessionUpdate.session as { audio?: { input?: { turn_detection?: unknown; format?: { type?: string; rate?: number } } }; turn_detection?: unknown };
+          expect(sess.audio?.input?.turn_detection).toBeNull();
+          expect(sess.audio?.input?.format?.type).toBe('audio/pcm');
+          expect(sess.audio?.input?.format?.rate).toBe(24000);
+          expect(sess.turn_detection).toBeUndefined();
           client.close();
           done();
         }

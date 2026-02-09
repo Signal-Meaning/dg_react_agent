@@ -4,6 +4,8 @@
 **GitHub:** [#414](https://github.com/Signal-Meaning/dg_react_agent/issues/414)  
 **Labels:** enhancement
 
+**For current protocol/error understanding and doc index:** [CURRENT-UNDERSTANDING.md](./CURRENT-UNDERSTANDING.md).
+
 ---
 
 ## Summary
@@ -91,6 +93,9 @@ Add or extend a script that integrates with the OpenAI proxy to send command-lin
 
   **Conclusion:** The error is **not caused by session.update configuration**. Likely server-side default VAD idle timeout behavior. See [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md) for full details, source URLs, and remaining hypotheses.
 
+- **Test status (after session config: turn_detection null + format):**
+  - **Real-API firm audio:** Integration test "Issue #414 real-API: firm audio connection … (USE_REAL_OPENAI=1)" **passes** when run with `USE_REAL_OPENAI=1` — no Error from upstream within 5s after sending audio. See [CURRENT-UNDERSTANDING.md §2.1](./CURRENT-UNDERSTANDING.md#21-real-api-verification-firm-audio-test).
+  - **Integration (mock):** One test currently failing: "sends at most one response.create per turn until response completes" — expects 1 response.create, gets 0; cause is timing (assert at 550ms, proxy debounce at 650ms). See [NEXT-STEPS.md §1](./NEXT-STEPS.md#1-what-still-fails) row I.
 - **Regression trap (tests fail when defect is present):**
   - **Integration:** `tests/integration/openai-proxy-integration.test.ts` – Any test that receives a message with `type: 'Error'` from the proxy calls `done(new Error(...))`, so the test **fails**. Real-API tests wait **5s** after a successful response before finishing, so a late-arriving "server had an error" within that window causes a failure. A mock-only test *"when upstream sends error after session.updated, client receives Error (proxy forwards error)"* verifies the proxy forwards upstream errors (test **passes** when client receives the Error). With mocks we do not simulate a failing run; with real API, if the upstream sends the error within 5s, the test fails.
   - **E2E:** `test-app/tests/e2e/` OpenAI proxy specs call `assertNoRecoverableAgentErrors(page)`, which waits 3s then asserts `agent-error-count` and `recoverable-agent-error-count` are 0. The test-app increments both when it receives any agent error (recoverable or not). So when the upstream error occurs during an E2E run, the test **fails**.

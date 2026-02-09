@@ -1,5 +1,7 @@
 # Issue #414: Resolving the server error — firm audio connection
 
+**See [CURRENT-UNDERSTANDING.md](./CURRENT-UNDERSTANDING.md)** for the distinction between "buffer too small" and "server had an error," and for commit strategy (disable Server VAD via GA path) and doc index.
+
 This document focuses on **item #1**: resolving the upstream "server had an error" so we can establish a **firm audio connection**. Text-only conversations through the OpenAI proxy work (session.update → session.updated → InjectUserMessage → response). The **audio** path fails: as soon as we send `input_audio_buffer.append` (after session.updated), the API returns an error and closes the connection. We want **tests that prove the correct protocol** for opening a firm audio connection, analogous to what we have for text.
 
 **Related:** [NEXT-STEPS.md](./NEXT-STEPS.md) §3.3, [VAD-FAILURES-AND-RESOLUTION-PLAN.md](./VAD-FAILURES-AND-RESOLUTION-PLAN.md). Phase B (VAD/session config) waits until the server error is resolved or understood.
@@ -46,7 +48,7 @@ Current tests already prove **our** protocol (no append before session.updated; 
 |------|----------------|--------|
 | **No append before session.updated** | Proxy does not send input_audio_buffer.append until after session.updated; binary is queued and flushed then. | Done (integration tests + mock protocol enforcement). |
 | **session.update before first append (order)** | Upstream receives session.update before any input_audio_buffer.append. | Done (integration tests). |
-| **Real API: connection stays open after append (or documented error)** | Against real OpenAI: after we send append following our protocol, we either get no error within a time window (firm audio connection) or we document that the API returns an error. | Done. Integration test: "Issue #414: firm audio connection — no Error from upstream within 5s after sending audio" (mock passes; real-API run with USE_REAL_OPENAI=1 fails today and documents the server error until resolved). |
+| **Real API: connection stays open after append (or documented error)** | Against real OpenAI: after we send append following our protocol, we either get no error within a time window (firm audio connection) or we document that the API returns an error. | Done. Integration test: "Issue #414: firm audio connection — no Error from upstream within 5s after sending audio". **Mock and real-API both pass** when run (real-API with USE_REAL_OPENAI=1). See [CURRENT-UNDERSTANDING.md §2.1](./CURRENT-UNDERSTANDING.md#21-real-api-verification-firm-audio-test). Server error may still occur in other flows (E2E) or after the 5s window. |
 
 **Integration tests:** `tests/integration/openai-proxy-integration.test.ts` — mock test runs in CI; real-API test runs only with `USE_REAL_OPENAI=1` and `OPENAI_API_KEY`. When the server error is resolved, the real-API test should pass. **Run order:** integration tests first against real APIs (when keys available), then mocks; see [TEST-STRATEGY.md](../../development/TEST-STRATEGY.md).
 
@@ -61,10 +63,10 @@ Current tests already prove **our** protocol (no append before session.updated; 
    Integration test "Issue #414: firm audio connection — no Error from upstream within 5s after sending audio" (mock + real-API variant). See §4 above.
 
 3. **Investigate upstream** — **In progress.**  
-   Check OpenAI Realtime API docs and community/support for "server had an error" when sending `input_audio_buffer.append` after `session.updated`. Notes:
-   - **API:** [Client events – input_audio_buffer.append](https://platform.openai.com/docs/api-reference/realtime-client-events/input-audio-buffer/append): audio must be in the format specified by `input_audio_format` in the session configuration. We do not set `input_audio_format` in session.update (we omit audio config per Issue #414 to avoid partial config); API default is likely PCM.
-   - **Community:** "The server had an error while processing your request" is reported with the Realtime API (see [proxy README](../../scripts/openai-proxy/README.md) link). Other reports: empty buffer on commit, tool-call server errors, `session.updated` not updating `input_audio_format`. No definitive fix for our sequence (append after session.updated) found yet.
-   - **Next:** Re-run real-API integration test when keys available; if error persists, consider opening a support/community thread with minimal repro (connect → session.update → session.updated → append → error).
+   The **"server had an error"** (~5s) is **distinct** from "buffer too small" (see [CURRENT-UNDERSTANDING.md](./CURRENT-UNDERSTANDING.md)). Notes:
+   - **Format:** Proxy now sends `session.audio.input.format: { type: 'audio/pcm', rate: 24000 }` so the API knows we send PCM 24kHz 16-bit.
+   - **VAD config:** Ruled out as cause of the 5s error by [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md) (4 cycles). Most promising lead: **idle_timeout_ms** (server VAD idle timeout ~5–6s).
+   - **Real-API firm audio test:** As of last run, the integration test "Issue #414 real-API: firm audio connection" **passes** (no Error within 5s after sending audio). Server error may still occur in E2E or other flows; continue to investigate idle_timeout_ms and community/support if needed.
 
 4. **Phase B (VAD / session config)**  
    Defer until the server error is resolved or understood (per your agreement).

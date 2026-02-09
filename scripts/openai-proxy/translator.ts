@@ -27,8 +27,14 @@ export interface OpenAISessionUpdate {
     model?: string;
     instructions?: string;
     voice?: string;
-    /** GA API: audio config including turn_detection under input */
-    audio?: { input?: { turn_detection?: { type: 'server_vad'; create_response?: boolean; interrupt_response?: boolean } | null } };
+    /** GA API: audio config under session.audio.input (see REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2). */
+    audio?: {
+      input?: {
+        turn_detection?: { type: 'server_vad'; create_response?: boolean; interrupt_response?: boolean } | null;
+        /** Tell API we send PCM 24kHz 16-bit mono (avoids format mismatch). */
+        format?: { type: string; rate?: number };
+      };
+    };
     tools?: Array<{ type: 'function'; name: string; description?: string; parameters?: unknown }>;
     [key: string]: unknown;
   };
@@ -164,11 +170,15 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
     model: settings.agent?.think?.provider?.model ?? 'gpt-realtime',
     instructions: settings.agent?.think?.prompt ?? '',
     // Do not send voice in session.update; current Realtime API returns "Unknown parameter: 'session.voice'".
-    // Voice can be set via the WebSocket URL (e.g. ?voice=alloy) if the API supports it.
-    // We do NOT send turn_detection: null (to disable Server VAD): the live API returns "Unknown parameter: 'session.turn_detection'".
-    // With Server VAD enabled (default), the SERVER auto-commits the input buffer; when it does so before our appends
-    // are applied (e.g. right after session.updated), we get "buffer too small ... 0.00ms". So we are NOT sending
-    // a too-small buffer — the server is committing an empty buffer. We only send commit when pendingAudioBytes >= 4800.
+    // GA API: turn_detection is under session.audio.input (REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2).
+    // Disable Server VAD so only the proxy sends commit + response.create (avoids dual-control race: server and proxy
+    // both committing/creating response → "buffer too small 0.00ms" and "conversation already has an active response").
+    audio: {
+      input: {
+        turn_detection: null,
+        format: { type: 'audio/pcm', rate: 24000 },
+      },
+    },
   };
   if (settings.agent?.think?.functions?.length) {
     session.tools = settings.agent.think.functions.map((f) => ({

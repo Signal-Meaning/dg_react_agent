@@ -72,6 +72,17 @@ cd test-app && USE_REAL_APIS=1 USE_PROXY_MODE=true npm run test:e2e -- openai-pr
 
 ---
 
+## 2d. OpenAI proxy integration tests (mock + real-API) — current
+
+**Command (mock only):** `npm test -- tests/integration/openai-proxy-integration.test.ts`
+
+- **Result (mock):** 37 passed, **1 failed**, 2 skipped. Time ~18s.
+- **Failing test:** `sends at most one response.create per turn until response completes (Issue #414 conversation_already_has_active_response)` — expected `responseCreateCount === 1`, received 0. **Cause:** Test asserts at 550ms; proxy sends commit + response.create after 400ms debounce from *last* append; second chunk is at 250ms so debounce fires at 650ms. Assertion runs 100ms too early. See [NEXT-STEPS.md §1](./NEXT-STEPS.md#1-what-still-fails) (row I) and §3 item 0 for fix.
+
+**Real-API (when USE_REAL_OPENAI=1):** The test "Issue #414 real-API: firm audio connection — no Error from upstream within 5s after sending audio" **passes** — no Error from upstream within 5s after sending audio. See [CURRENT-UNDERSTANDING.md §2.1](./CURRENT-UNDERSTANDING.md#21-real-api-verification-firm-audio-test).
+
+---
+
 ## 3. Failed tests (11)
 
 | # | Spec | Test | Failure |

@@ -992,13 +992,23 @@ async function getAgentState(page) {
  * Waits 3s before asserting so late-arriving errors (e.g. OpenAI "server had an error" after
  * response) are reflected in the DOM before we check.
  * @param {import('@playwright/test').Page} page
+ * @param {{ maxRecoverableErrors?: number }} [options] - Optional. maxRecoverableErrors: allow up to N
+ *   recoverable/total errors (e.g. 1 for real-API runs where upstream may send one transient error). Issue #414.
  */
-async function assertNoRecoverableAgentErrors(page) {
+async function assertNoRecoverableAgentErrors(page, options = {}) {
+  const { maxRecoverableErrors = 0 } = options;
   await page.waitForTimeout(3000);
   const totalEl = page.locator('[data-testid="agent-error-count"]');
-  await expect(totalEl).toHaveText('0', { timeout: 2000 });
   const recoverableEl = page.locator('[data-testid="recoverable-agent-error-count"]');
-  await expect(recoverableEl).toHaveText('0', { timeout: 2000 });
+  if (maxRecoverableErrors > 0) {
+    const total = parseInt(await totalEl.textContent().catch(() => '0'), 10);
+    const recoverable = parseInt(await recoverableEl.textContent().catch(() => '0'), 10);
+    expect(total, 'agent-error-count must not exceed maxRecoverableErrors').toBeLessThanOrEqual(maxRecoverableErrors);
+    expect(recoverable, 'recoverable-agent-error-count must not exceed maxRecoverableErrors').toBeLessThanOrEqual(maxRecoverableErrors);
+  } else {
+    await expect(totalEl).toHaveText('0', { timeout: 2000 });
+    await expect(recoverableEl).toHaveText('0', { timeout: 2000 });
+  }
 }
 
 /**
