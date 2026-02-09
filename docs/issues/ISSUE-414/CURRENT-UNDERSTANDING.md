@@ -4,12 +4,12 @@ This doc is the **entry point** for what we know and how the other ISSUE-414 doc
 
 ---
 
-## 1. Two distinct errors (do not conflate)
+## 1. Buffer-too-small vs idle-timeout closure (do not conflate)
 
-| Error | Meaning | Likely cause |
-|-------|--------|--------------|
-| **"Error committing input audio buffer: buffer too small … 0.00ms"** | Upstream rejects our (or a) commit because the buffer has no audio. | **Dual-control race:** Server VAD (default) auto-commits on `speech_stopped` and auto-sends `response.create`; the proxy *also* sends commit + `response.create` after 400ms. Server commits first and empties the buffer; then the proxy sends commit on an already-empty buffer → this error. Proxy also sends `response.create` → "conversation already has an active response." |
-| **"The server had an error while processing your request"** (~5s after connection) | Generic upstream error; different from buffer-too-small. | **Not** caused by VAD/session.update config (ruled out by 4-cycle investigation). Most promising lead: **idle_timeout_ms** (server VAD idle timeout ~5–6s). See REGRESSION-SERVER-ERROR-INVESTIGATION.md. |
+| Upstream event | Meaning | How we treat it |
+|----------------|--------|------------------|
+| **"Error committing input audio buffer: buffer too small … 0.00ms"** | Upstream rejects commit (buffer has no audio). | **Error.** Caused by dual-control race when Server VAD is on and proxy also sends commit. Resolved by disabling Server VAD (`turn_detection: null`) and proxy-only commit. |
+| **"The server had an error while processing your request"** (~5s when no activity) | Upstream closes session due to **idle timeout**. | **Expected closure (not an error).** Proxy logs INFO "expected idle timeout closure", sends code `idle_timeout`; component treats as normal closure (no onError). Idle timeout is **Settings.agent.idleTimeoutMs** (shared; default 10s). See PROTOCOL-AND-MESSAGE-ORDERING.md §3.9. |
 
 ---
 
@@ -25,7 +25,7 @@ This doc is the **entry point** for what we know and how the other ISSUE-414 doc
 
 - **Server VAD disabled:** We send `session.audio.input.turn_detection: null`. The [client events doc](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update) states: "To clear a field like turn_detection, pass null." So we are following the documented way to disable Server VAD. The proxy is the only controller for commit + response.create.
 - **Audio format:** We send the correct shape per the official session schema: `session.audio.input.format: { type: 'audio/pcm', rate: 24000 }` (see session.updated example in API reference).
-- **Test result:** The integration test "Issue #414 real-API: firm audio connection — no Error from upstream within 5s after sending audio" is run with `USE_REAL_OPENAI=1`. As of the last run it **passed**: no Error from upstream within 5s after sending audio. That gives one confirmed data point that real integration works with the current session config (turn_detection null + format). Mock tests remain secondary until real-API behavior is the baseline.
+- **Test result:** Firm audio 5/5; greeting flow passes with default Settings (idleTimeoutMs 10s). Idle timeout is shared via Settings.agent.idleTimeoutMs. See [RESOLUTION-PLAN.md](./RESOLUTION-PLAN.md) §10.
 
 ---
 
@@ -42,7 +42,7 @@ This doc is the **entry point** for what we know and how the other ISSUE-414 doc
 
 ---
 
-## 5. Doc index (14 docs)
+## 5. Doc index (15 docs)
 
 | Doc | Purpose |
 |-----|--------|
@@ -50,7 +50,8 @@ This doc is the **entry point** for what we know and how the other ISSUE-414 doc
 | **REGRESSION-SERVER-ERROR-INVESTIGATION.md** | Authoritative 4-cycle session.update investigation; 5s error hypotheses; idle_timeout_ms lead. |
 | **NEXT-STEPS.md** | Plan and priorities (greeting TTS, basic audio, server error, etc.); §3.1/§3.2 buffer/response. |
 | **RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md** | Firm audio connection protocol and tests; plan steps; references. |
-| **RESOLUTION-PLAN.md** | Actionable resolution plan for 5s server error; 12s firm audio window; idle_timeout_ms experiment (run; result: buffer too small with server_vad); progress log. |
+| **RESOLUTION-PLAN.md** | Actionable resolution plan for 5s server error; 12s firm audio; idle_timeout Path B; 10s idle experiment (greeting passes); progress log. |
+| **PASSING-VS-FAILING-TESTS-THEORY.md** | Compares passing (firm audio) vs failing (greeting, E2E) flows; idle-timeout theory; 10s experiment result and other tests. |
 | **PROTOCOL-AND-MESSAGE-ORDERING.md** (in scripts/openai-proxy/) | Wire protocol, message order, buffer restrictions, dual-control race. |
 | **COMPONENT-PROXY-INTERFACE-TDD.md** | Component ↔ proxy contract; VAD mapping (UserStartedSpeaking, UtteranceEnd). |
 | **VAD-FAILURES-AND-RESOLUTION-PLAN.md** | VAD E2E failures and resolution plan. |

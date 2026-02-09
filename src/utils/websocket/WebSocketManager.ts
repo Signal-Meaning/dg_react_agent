@@ -1,3 +1,4 @@
+import { DEFAULT_IDLE_TIMEOUT_MS } from '../../constants/voice-agent';
 import { ConnectionState, DeepgramError, ServiceType } from '../../types';
 import { AgentResponseType } from '../../types/agent';
 import { functionCallLogger } from '../function-call-logger';
@@ -69,12 +70,13 @@ export interface WebSocketManagerOptions {
 }
 
 /**
- * Default WebSocketManager options
+ * Default WebSocketManager options.
+ * idleTimeout uses shared DEFAULT_IDLE_TIMEOUT_MS so it matches Settings (e.g. OpenAI proxy session).
  */
 const DEFAULT_OPTIONS: Partial<WebSocketManagerOptions> = {
   keepaliveInterval: 5000, // 5 seconds - keep connection alive to prevent server timeout
   connectionTimeout: 10000, // 10 seconds - reasonable timeout for connection establishment
-  idleTimeout: 10000, // 10 seconds - client-side timeout for lazy reconnection testing
+  idleTimeout: DEFAULT_IDLE_TIMEOUT_MS,
   debug: false,
 };
 

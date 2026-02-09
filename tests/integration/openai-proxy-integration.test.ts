@@ -1744,12 +1744,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 15000);
 
   /**
-   * Issue #414: session.update uses GA path (session.audio.input) per REGRESSION-SERVER-ERROR-INVESTIGATION.md.
-   * Default: turn_detection: null (disable Server VAD). Experiment (RESOLUTION-PLAN §4): when
-   * OPENAI_REALTIME_IDLE_TIMEOUT_MS is set, turn_detection is { type: 'server_vad', idle_timeout_ms, create_response: false }.
-   * Format always: { type: 'audio/pcm', rate: 24000 }. No top-level turn_detection.
+   * Issue #414: session.update uses GA path (session.audio.input). turn_detection comes from
+   * Settings.agent.idleTimeoutMs (shared with component); when present and > 0 we send
+   * { type: 'server_vad', idle_timeout_ms, create_response: false }. Format: { type: 'audio/pcm', rate: 24000 }.
    */
-  itMockOnly('Issue #414: session.update uses GA audio.input (turn_detection null or idle_timeout experiment + format)', (done) => {
+  itMockOnly('Issue #414: session.update uses GA audio.input (turn_detection from Settings.idleTimeoutMs + format)', (done) => {
     receivedSessionUpdatePayloads.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {

@@ -4,9 +4,9 @@ This doc explains the three E2E/test relaxations added for Issue #414 so you can
 
 ---
 
-## 1. Allow 1 error for Basic audio (test 5) — **UNDONE**
+## 1. Allow 1 error for Basic audio (test 5) — **UNDONE** (no longer needed)
 
-This relaxation was reverted. Both real-API and mock runs now require **0** agent errors; `assertNoRecoverableAgentErrors(page)` has no second argument, and the helper no longer supports `maxRecoverableErrors`. Test 5 (Basic audio) calls `assertNoRecoverableAgentErrors(page)` only. If the real API sends any error within the assertion window, the test fails (intended: we do not allow errors).
+This relaxation was reverted: the helper has no `maxRecoverableErrors`; Test 5 calls `assertNoRecoverableAgentErrors(page)` only. **Resolved:** Idle-timeout closure is now **expected** (not an error). The proxy sends code `idle_timeout` and the component treats it like Deepgram idle timeout (no onError). So when the only upstream event is idle-timeout closure, agent-error counts stay 0 and the assertion **passes**. No E2E change was required; the component/proxy change aligns OpenAI with Deepgram. See [NEXT-STEPS.md](./NEXT-STEPS.md) §1 "E2E policy (Test 5)" and test-helpers.js JSDoc.
 
 ---
 

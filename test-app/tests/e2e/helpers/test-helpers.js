@@ -987,10 +987,11 @@ async function getAgentState(page) {
 
 /**
  * Assert that no upstream agent errors occurred during the test (recoverable or not).
- * The test-app increments agentErrorCount for every agent error and recoverableAgentErrorCount
- * only when error.recoverable is true. E2E fails if either is non-zero (regression signal).
- * Waits 3s before asserting so late-arriving errors (e.g. OpenAI "server had an error" after
- * response) are reflected in the DOM before we check.
+ * The test-app increments agentErrorCount only when the component calls onError. Expected
+ * closures (idle_timeout, session_max_duration) are not surfaced as errors — the component
+ * handles them the same as Deepgram idle timeout (log and return; no onError). So when the
+ * only upstream event is idle-timeout closure, counts stay 0 and this assertion passes.
+ * Waits 3s before asserting so late-arriving events are reflected in the DOM.
  * @param {import('@playwright/test').Page} page
  */
 async function assertNoRecoverableAgentErrors(page) {

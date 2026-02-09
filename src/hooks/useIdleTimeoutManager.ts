@@ -1,21 +1,20 @@
 import React, { useCallback, useEffect, useRef } from 'react';
+import { DEFAULT_IDLE_TIMEOUT_MS } from '../constants/voice-agent';
 import { VoiceInteractionState } from '../utils/state/VoiceInteractionState';
 import { WebSocketManager } from '../utils/websocket/WebSocketManager';
 import { IdleTimeoutService, IdleTimeoutEvent } from '../utils/IdleTimeoutService';
 
-const DEFAULT_IDLE_TIMEOUT_MS = 10000; // 10 seconds
-
 /**
- * Custom hook for managing idle timeout using the IdleTimeoutService
- * 
- * This hook provides a clean interface between the component and the
- * centralized idle timeout service.
+ * Custom hook for managing idle timeout using the IdleTimeoutService.
+ * Uses the shared DEFAULT_IDLE_TIMEOUT_MS (or timeoutMs override) so the same
+ * value can be used in Settings for the OpenAI proxy.
  */
 export function useIdleTimeoutManager(
   state: VoiceInteractionState,
   agentManagerRef: React.RefObject<WebSocketManager | null>,
   debug: boolean = false,
-  onIdleTimeoutActiveChange?: (isActive: boolean) => void
+  onIdleTimeoutActiveChange?: (isActive: boolean) => void,
+  timeoutMs: number = DEFAULT_IDLE_TIMEOUT_MS
 ) {
   const serviceRef = useRef<IdleTimeoutService | null>(null);
   const prevStateRef = useRef<VoiceInteractionState>(state);
@@ -47,7 +46,7 @@ export function useIdleTimeoutManager(
       console.log('🎯 [DEBUG] About to create IdleTimeoutService');
     }
     serviceRef.current = new IdleTimeoutService({
-      timeoutMs: DEFAULT_IDLE_TIMEOUT_MS,
+      timeoutMs,
       debug,
     });
     if (debug) {
@@ -83,7 +82,7 @@ export function useIdleTimeoutManager(
         serviceRef.current = null;
       }
     };
-  }, [debug]);
+  }, [debug, timeoutMs]);
 
   // Set up state getter once (reads from ref to always get latest state)
   useEffect(() => {

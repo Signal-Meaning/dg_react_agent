@@ -65,7 +65,7 @@ We looked up the [OpenAI Realtime API](https://platform.openai.com/docs/api-refe
 
 ### Implementation note (for any repeat experiment)
 
-- **File:** [scripts/openai-proxy/translator.ts](../../../scripts/openai-proxy/translator.ts) — `mapSettingsToSessionUpdate` currently sets `turn_detection: null`. When `OPENAI_REALTIME_IDLE_TIMEOUT_MS` is set, it sends `turn_detection: { type: 'server_vad', idle_timeout_ms: N, create_response: false }`.
+- **File:** [scripts/openai-proxy/translator.ts](../../../scripts/openai-proxy/translator.ts) — `mapSettingsToSessionUpdate` uses **Settings.agent.idleTimeoutMs** (shared with component) for `idle_timeout_ms` in session.update. No separate env var.
 - The type `OpenAISessionUpdate` already allows a `turn_detection` object (see interface around line 33).
 
 ---
@@ -190,6 +190,7 @@ Archive or merge the rest (E2E-RELAXATIONS-EXPLAINED, OPENAI-AUDIO-PLAYBACK-INVE
 - **Protocol details and code locations:** [RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md](./RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md) — translator, server.ts, PROTOCOL doc. Prefer "see file X at line Y" over pasting code so this plan doesn’t go stale.
 - **4 cycles and API/community URLs:** [REGRESSION-SERVER-ERROR-INVESTIGATION.md](./REGRESSION-SERVER-ERROR-INVESTIGATION.md).
 - **Two errors and doc index:** [CURRENT-UNDERSTANDING.md](./CURRENT-UNDERSTANDING.md).
+- **Passing vs failing tests and 10s experiment:** [PASSING-VS-FAILING-TESTS-THEORY.md](./PASSING-VS-FAILING-TESTS-THEORY.md).
 
 ---
 
@@ -201,3 +202,4 @@ Archive or merge the rest (E2E-RELAXATIONS-EXPLAINED, OPENAI-AUDIO-PLAYBACK-INVE
 - **Step 3 (chunk size / framing):** Not done. Table §3: "Partially" — 20ms only; not varied. Optional before Step 5. See §7 Step 3.
 - **Step 4 (regardless):** NEXT-STEPS.md item A updated to reflect 0 errors (no relaxation).
 - **Step 5 (concurrency / rate limiting / upstream):** Deferred until Step 1 (and optionally Step 3) complete. See §3 and §7 Step 5.
+- **Idle timeout shared:** Proxy uses **Settings.agent.idleTimeoutMs** (component sends it; default 10s). No OPENAI_REALTIME_IDLE_TIMEOUT_MS. Greeting flow passes with default Settings. See PROTOCOL-AND-MESSAGE-ORDERING.md §3.9 and NEXT-STEPS.md "Where we are."

@@ -404,6 +404,12 @@ export interface AgentOptions {
       content: string;
     }>;
   };
+
+  /**
+   * Idle timeout in ms (e.g. 10000 for 10s). Shared by the component and backends (e.g. OpenAI proxy
+   * uses it in session.update). When omitted, component default is used.
+   */
+  idleTimeoutMs?: number;
 }
 
 /**

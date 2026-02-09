@@ -49,7 +49,7 @@ Requires `OPENAI_API_KEY` in `.env`, `test-app/.env`, or the environment. The sc
 
 **Greeting-text-only (diagnostic):** Set `OPENAI_PROXY_GREETING_TEXT_ONLY=1` so the proxy sends the greeting to the client only (UI shows it) and does not send `conversation.item.create` (greeting) to OpenAI. If the error stops, the greeting injection was the cause. (Testing showed the error can persist without it, so the trigger may be elsewhere.)
 
-**"The server had an error while processing your request":** This message is sent by the OpenAI Realtime API (see [community reports](https://community.openai.com/t/realtime-api-the-server-had-an-error-while-processing-your-request/978856)) and often arrives *after* a successful response (e.g. after TTS playback). The CLI may not see it because it exits on first ConversationText. The component marks such errors as **recoverable** when the agent is already idle (so the test-app shows a warning and you can continue or reconnect).
+**Idle timeout:** The proxy sends **`idle_timeout_ms`** in `session.update` from **Settings.agent.idleTimeoutMs** (shared with the component; no separate env var). When the upstream closes due to idle timeout, the proxy logs at INFO ("expected idle timeout closure") and sends code **`idle_timeout`**; the component treats it as expected closure. See PROTOCOL-AND-MESSAGE-ORDERING.md §3.9.
 
 Run OpenAI proxy E2E tests (test-app must be served; Playwright starts it via `webServer`):
    ```bash

@@ -30,6 +30,8 @@ import {
   mapContextMessageToConversationItemCreate,
   mapGreetingToConversationText,
   mapErrorToComponentError,
+  isIdleTimeoutClosure,
+  isSessionMaxDurationError,
   binaryToInputAudioBufferAppend,
 } from './translator';
 import {
@@ -449,22 +451,25 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           );
           clientWs.send(JSON.stringify(conversationText));
         } else if (msg.type === 'error') {
-          const isSessionMaxDuration =
-            typeof msg.error?.message === 'string' &&
-            msg.error.message.includes('maximum duration') &&
-            msg.error.message.includes('60 minutes');
-          if (debug || isSessionMaxDuration) {
+          const isSessionMaxDuration = isSessionMaxDurationError(msg as Parameters<typeof isSessionMaxDurationError>[0]);
+          const isIdleTimeout = isIdleTimeoutClosure(msg as Parameters<typeof isIdleTimeoutClosure>[0]);
+          const isExpectedClosure = isSessionMaxDuration || isIdleTimeout;
+          if (debug || isExpectedClosure) {
+            const logBody = isSessionMaxDuration
+              ? `expected session limit: ${msg.error?.message ?? 'session max duration'}`
+              : isIdleTimeout
+                ? `expected idle timeout closure: ${msg.error?.message ?? 'idle timeout'}`
+                : (msg.error?.message ?? String(msg));
+            const closureCode = isSessionMaxDuration ? 'session_max_duration' : isIdleTimeout ? 'idle_timeout' : (msg.error?.code ?? '');
             emitLog({
-              severityNumber: isSessionMaxDuration ? SeverityNumber.INFO : SeverityNumber.ERROR,
-              severityText: isSessionMaxDuration ? 'INFO' : 'ERROR',
-              body: isSessionMaxDuration
-                ? `expected session limit: ${msg.error?.message ?? 'session max duration'}`
-                : (msg.error?.message ?? String(msg)),
+              severityNumber: isExpectedClosure ? SeverityNumber.INFO : SeverityNumber.ERROR,
+              severityText: isExpectedClosure ? 'INFO' : 'ERROR',
+              body: logBody,
               attributes: {
                 [ATTR_CONNECTION_ID]: connId,
                 [ATTR_DIRECTION]: 'upstream→client',
                 [ATTR_MESSAGE_TYPE]: 'error',
-                [ATTR_ERROR_CODE]: isSessionMaxDuration ? 'session_max_duration' : (msg.error?.code ?? ''),
+                [ATTR_ERROR_CODE]: closureCode,
                 [ATTR_ERROR_MESSAGE]: msg.error?.message ?? '',
               },
             });

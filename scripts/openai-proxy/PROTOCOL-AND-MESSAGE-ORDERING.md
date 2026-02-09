@@ -115,7 +115,15 @@ The API reference shows the **effective session** configuration in the example p
 
 **Cannot lower the server limit:** The public API does **not** expose a parameter to set session max duration to a shorter value (e.g. 1 minute). The 60-minute limit is a fixed server policy. To **control for it** (e.g. in tests or to avoid hitting the limit): the **client or proxy** must close the connection before 60 minutes (e.g. close after 1 minute of idle, or after a test completes). Proactively closing from our side avoids hitting the server’s 60-minute closure and the associated error.
 
-**Proxy/client reaction:** When the proxy receives an upstream `error` whose message indicates session maximum duration (e.g. contains "maximum duration" and "60 minutes"), it should treat it as an **expected** session-limit closure: log at INFO (not ERROR) and optionally map it to a distinct component error code (e.g. `session_max_duration`) so the client can show a neutral message or reconnect without treating it as a recoverable failure. See implementation in `server.ts` (error handling for `msg.type === 'error'`).
+**Proxy/client reaction:** When the proxy receives an upstream `error` whose message indicates session maximum duration (e.g. contains "maximum duration" and "60 minutes"), it treats it as an **expected** session-limit closure: log at INFO (not ERROR) and map to component code `session_max_duration` so the client treats it as normal closure (no error surfaced). See implementation in `server.ts` (error handling for `msg.type === 'error'`).
+
+### 3.9 Idle timeout (expected closure, not an error)
+
+**Conclusion (Issue #414):** The upstream sends a generic message *"The server had an error while processing your request"* when the session is closed due to **idle timeout** (no activity for a period). We treat this as a **normal closing event**, not an error.
+
+**Common idle timeout:** The proxy sends **`idle_timeout_ms`** in `session.update` from **Settings.agent.idleTimeoutMs** (the same value the component uses for WebSocketManager and useIdleTimeoutManager). There is no separate env var; the component sends the shared idle timeout in Settings so OpenAI session and client stay in sync. When Settings omit `idleTimeoutMs`, the proxy uses 10000. See `translator.ts` `mapSettingsToSessionUpdate`.
+
+**Proxy/client reaction:** When the proxy receives an upstream `error` with that message, it treats it as **expected idle-timeout closure**: log at INFO (e.g. "expected idle timeout closure"), map to component code **`idle_timeout`**, and send the client an Error-shaped message with that code. The component treats `idle_timeout` and `session_max_duration` as expected closure (log only; do not call onError or surface as error). See `translator.ts` (`isIdleTimeoutClosure`, `mapErrorToComponentError`), `server.ts` (error handling), and component Error handler.
 
 ---
 
@@ -143,7 +151,7 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 | **response.function_call_arguments.done** | Map to **FunctionCallRequest** and **ConversationText** (assistant); send both as **text**. |
 | **response.output_audio.delta** | Decode base64 to PCM; send **binary** (raw PCM) to client only. Do not send as JSON. |
 | **response.output_audio.done** | No message to client (playback is driven by chunks). Optional: boundary debug logging. |
-| **error** | Map to **Error** (component shape); send as **text**. If the error indicates [session maximum duration (60 min)](#38-session-maximum-duration-60-minutes-and-expected-closure) (e.g. message contains "maximum duration" and "60 minutes"), log as INFO (expected) and use code `session_max_duration` so the client can treat it as expected closure. |
+| **error** | Map to **Error** (component shape); send as **text**. **Expected closures** (not treated as errors): (1) [Session max duration (60 min)](#38-session-maximum-duration-60-minutes-and-expected-closure) → log INFO, code `session_max_duration`. (2) [Idle timeout](#39-idle-timeout-expected-closure-not-an-error) (message "The server had an error while processing your request") → log INFO, code `idle_timeout`. Client treats both as normal closure (no error surfaced). |
 | **input_audio_buffer.speech_started** / **speech_stopped** (and transcript if available) | Map to component transcript/VAD contract (**UserStartedSpeaking**, **UtteranceEnd**, etc.). Full mapping spec: [docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md](../../docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md) §2.1. Implemented in `server.ts`. |
 | **Any other upstream event** | Forward to client as **text** (same JSON). |
 
@@ -157,7 +165,7 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 | ConversationText (user) | Text | After InjectUserMessage (echo) |
 | ConversationText (assistant) | Text | From output_text.done, output_audio_transcript.done, function_call_arguments.done, or greeting |
 | FunctionCallRequest | Text | From response.function_call_arguments.done |
-| Error | Text | From upstream error |
+| Error | Text | From upstream error (expected closures `idle_timeout` / `session_max_duration` sent with that code; client treats as normal closure) |
 | (binary PCM) | Binary | From response.output_audio.delta only |
 | (other) | Text | Forwarded upstream events (e.g. conversation.item.added) |
 

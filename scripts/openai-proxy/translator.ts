@@ -10,6 +10,8 @@ export interface ComponentSettings {
   type: 'Settings';
   audio?: { input?: { encoding?: string; sample_rate?: number }; output?: { encoding?: string; sample_rate?: number } };
   agent?: {
+    /** Idle timeout in ms; shared with component (WebSocketManager, useIdleTimeoutManager). Proxy sends in session.update. */
+    idleTimeoutMs?: number;
     think?: { provider?: { model?: string }; prompt?: string; functions?: Array<{ name: string; description?: string; parameters?: unknown }> };
     speak?: { provider?: { voice?: string } };
     /** Conversation context for session continuity (Deepgram: in Settings; OpenAI: via conversation.item.create) */
@@ -171,18 +173,14 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
     instructions: settings.agent?.think?.prompt ?? '',
     // Do not send voice in session.update; current Realtime API returns "Unknown parameter: 'session.voice'".
     // GA API: turn_detection is under session.audio.input (REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2).
-    // Experiment (RESOLUTION-PLAN §4): when OPENAI_REALTIME_IDLE_TIMEOUT_MS is set, send server_vad with long
-    // idle_timeout_ms and create_response: false to test if 5s error is idle timeout. Otherwise disable Server VAD
-    // so only the proxy sends commit + response.create (avoids dual-control race).
+    // Use idle_timeout_ms from Settings.agent.idleTimeoutMs (shared with component). Use server_vad with
+    // create_response: false so only the proxy sends commit + response.create (avoids dual-control race).
     audio: {
       input: {
         turn_detection: (() => {
-          const idleMs = process.env.OPENAI_REALTIME_IDLE_TIMEOUT_MS;
-          if (idleMs != null && idleMs !== '') {
-            const ms = parseInt(idleMs, 10);
-            if (!Number.isNaN(ms) && ms > 0) {
-              return { type: 'server_vad' as const, idle_timeout_ms: ms, create_response: false };
-            }
+          const ms = settings.agent?.idleTimeoutMs ?? 10000;
+          if (typeof ms === 'number' && ms > 0) {
+            return { type: 'server_vad' as const, idle_timeout_ms: ms, create_response: false };
           }
           return null;
         })(),
@@ -294,7 +292,7 @@ export function mapFunctionCallResponseToConversationItemCreate(
 }
 
 /**
- * Detect expected "session hit the maximum duration of 60 minutes" error.
+ * Detect expected "session hit the maximum duration of 60 minutes" event.
  * Per PROTOCOL-AND-MESSAGE-ORDERING.md §3.8 this is expected when session reaches server limit.
  */
 export function isSessionMaxDurationError(event: OpenAIErrorEvent): boolean {
@@ -303,13 +301,32 @@ export function isSessionMaxDurationError(event: OpenAIErrorEvent): boolean {
 }
 
 /**
+ * Detect expected idle-timeout closure. The upstream sends a generic "server had an error" message
+ * when the session is closed due to idle timeout; we treat this as a normal closing event, not an error.
+ * Per Issue #414 / PASSING-VS-FAILING-TESTS-THEORY.md and RESOLUTION-PLAN.
+ */
+export function isIdleTimeoutClosure(event: OpenAIErrorEvent): boolean {
+  const msg = event.error?.message ?? '';
+  return typeof msg === 'string' && msg.includes('The server had an error while processing your request');
+}
+
+/**
  * Map OpenAI error event → component Error.
- * Session max duration (60 min) is mapped to code `session_max_duration` so the client can treat it as expected.
+ * Expected closures (session max duration, idle timeout) are mapped to distinct codes so the client
+ * can treat them as normal closure rather than an error. Session max duration → `session_max_duration`;
+ * idle timeout closure → `idle_timeout`.
  */
 export function mapErrorToComponentError(event: OpenAIErrorEvent): ComponentError {
   const msg = event.error?.message ?? 'Unknown error';
-  const code = isSessionMaxDurationError(event) ? 'session_max_duration' : (event.error?.code ?? 'unknown');
-  return { type: 'Error', description: String(msg), code: String(code) };
+  let code: string;
+  if (isSessionMaxDurationError(event)) {
+    code = 'session_max_duration';
+  } else if (isIdleTimeoutClosure(event)) {
+    code = 'idle_timeout';
+  } else {
+    code = event.error?.code ?? 'unknown';
+  }
+  return { type: 'Error', description: String(msg), code };
 }
 
 /** OpenAI client event: input_audio_buffer.append (base64 audio) */

@@ -13,6 +13,12 @@
  * requires connection + Settings applied before the first user message. Every test that
  * sends a message waits for waitForSettingsApplied after establishConnectionViaText.
  *
+ * Idle-timeout closure (Issue #414): When the upstream closes due to idle timeout, the
+ * proxy sends code `idle_timeout` and the component treats it as expected closure (no
+ * onError), same as Deepgram idle timeout. assertNoRecoverableAgentErrors passes because
+ * no error is surfaced; tests that expect connection to close (e.g. 3b) wait for
+ * connection-status 'closed'.
+ *
  * Behaviors: connection, single message, multi-turn, reconnection, basic audio,
  * simple function calling. See docs/issues/ISSUE-381/E2E-TEST-PLAN.md.
  *

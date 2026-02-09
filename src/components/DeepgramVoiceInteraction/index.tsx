@@ -31,6 +31,7 @@ import {
 import { useIdleTimeoutManager } from '../../hooks/useIdleTimeoutManager';
 import { useCallbackRef, useBooleanDeclarativeProp } from '../../hooks/declarative-props';
 import { AgentStateService } from '../../services/AgentStateService';
+import { DEFAULT_IDLE_TIMEOUT_MS } from '../../constants/voice-agent';
 import { compareAgentOptionsIgnoringContext, hasDependencyChanged } from '../../utils/option-comparison';
 import { filterFunctionsForSettings } from '../../utils/function-utils';
 import { functionCallLogger } from '../../utils/function-call-logger';
@@ -413,11 +414,13 @@ function DeepgramVoiceInteraction(
   };
   
   // Initialize idle timeout manager
+  const effectiveIdleTimeoutMs = agentOptions?.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   const { handleMeaningfulActivity, handleUtteranceEnd, handleFunctionCallStarted, handleFunctionCallCompleted } = useIdleTimeoutManager(
     state,
     agentManagerRef,
     props.debug,
-    props.onIdleTimeoutActiveChange
+    props.onIdleTimeoutActiveChange,
+    effectiveIdleTimeoutMs
   );
 
   // Initialize agent state service
@@ -783,6 +786,7 @@ function DeepgramVoiceInteraction(
         service: 'agent',
         queryParams: agentQueryParams,
         debug: config.debug,
+        idleTimeout: config.agentOptions?.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,
         onMeaningfulActivity: handleMeaningfulActivity,
       });
 
@@ -1833,6 +1837,7 @@ function DeepgramVoiceInteraction(
         }
       },
       agent: {
+        idleTimeoutMs: currentAgentOptions.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,
         language: currentAgentOptions.language || 'en',
         // Issue #299: Only include listen provider when listenModel is explicitly provided
         // This allows text-only interactions (via injectUserMessage) without triggering
@@ -2523,6 +2528,18 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'SETTINGS_SENT', sent: true });
         return;
       }
+
+      // Expected closure events (not errors): idle timeout and session max duration.
+      // Proxy sends code idle_timeout or session_max_duration; treat as normal connection closure.
+      // Fallback: same message without code (e.g. older proxy) is also treated as expected idle-timeout closure.
+      const isExpectedClosure =
+        errorCode === 'idle_timeout' ||
+        errorCode === 'session_max_duration' ||
+        errorMessage.includes('The server had an error while processing your request');
+      if (isExpectedClosure) {
+        log('[Agent] Expected closure:', errorCode || 'idle_timeout', errorMessage);
+        return;
+      }
       
       // Issue #365/#366: Provide clearer error message for CLIENT_MESSAGE_TIMEOUT
       // The Deepgram API error message incorrectly suggests only binary audio messages are allowed.
@@ -2541,19 +2558,11 @@ function DeepgramVoiceInteraction(
         };
       }
 
-      // Known OpenAI Realtime API behavior: server sometimes sends an error event after a successful response
-      // (see e.g. https://community.openai.com/t/realtime-api-the-server-had-an-error-while-processing-your-request/978856).
-      // When we're already idle (e.g. just finished playback), treat as recoverable so the host can show a soft message.
-      const isOpenAIPostResponseError =
-        errorMessage.includes('The server had an error while processing your request') &&
-        stateRef.current.agentState === 'idle';
-
       handleError({
         service: 'agent',
         code: errorCode,
         message: finalErrorMessage,
         details: errorDetails,
-        ...(isOpenAIPostResponseError && { recoverable: true }),
       });
       return;
     }
