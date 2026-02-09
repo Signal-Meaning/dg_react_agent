@@ -30,7 +30,7 @@ export interface OpenAISessionUpdate {
     /** GA API: audio config under session.audio.input (see REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2). */
     audio?: {
       input?: {
-        turn_detection?: { type: 'server_vad'; create_response?: boolean; interrupt_response?: boolean } | null;
+        turn_detection?: { type: 'server_vad'; create_response?: boolean; interrupt_response?: boolean; idle_timeout_ms?: number } | null;
         /** Tell API we send PCM 24kHz 16-bit mono (avoids format mismatch). */
         format?: { type: string; rate?: number };
       };
@@ -171,11 +171,21 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
     instructions: settings.agent?.think?.prompt ?? '',
     // Do not send voice in session.update; current Realtime API returns "Unknown parameter: 'session.voice'".
     // GA API: turn_detection is under session.audio.input (REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2).
-    // Disable Server VAD so only the proxy sends commit + response.create (avoids dual-control race: server and proxy
-    // both committing/creating response → "buffer too small 0.00ms" and "conversation already has an active response").
+    // Experiment (RESOLUTION-PLAN §4): when OPENAI_REALTIME_IDLE_TIMEOUT_MS is set, send server_vad with long
+    // idle_timeout_ms and create_response: false to test if 5s error is idle timeout. Otherwise disable Server VAD
+    // so only the proxy sends commit + response.create (avoids dual-control race).
     audio: {
       input: {
-        turn_detection: null,
+        turn_detection: (() => {
+          const idleMs = process.env.OPENAI_REALTIME_IDLE_TIMEOUT_MS;
+          if (idleMs != null && idleMs !== '') {
+            const ms = parseInt(idleMs, 10);
+            if (!Number.isNaN(ms) && ms > 0) {
+              return { type: 'server_vad' as const, idle_timeout_ms: ms, create_response: false };
+            }
+          }
+          return null;
+        })(),
         format: { type: 'audio/pcm', rate: 24000 },
       },
     },

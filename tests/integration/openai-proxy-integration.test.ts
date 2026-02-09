@@ -734,9 +734,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * With mock: upstream never sends error after append, so test passes. Documents expected behavior when upstream is well-behaved.
    * See docs/issues/ISSUE-414/RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md §4.
    */
-  itMockOnly('Issue #414: firm audio connection — no Error from upstream within 5s after sending audio (mock)', (done) => {
+  itMockOnly('Issue #414: firm audio connection — no Error from upstream within 12s after sending audio (mock)', (done) => {
     protocolErrors.length = 0;
-    const FIRM_AUDIO_WINDOW_MS = 5000;
+    const FIRM_AUDIO_WINDOW_MS = 12000;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
@@ -781,14 +781,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('close', () => {
       if (timeoutId) clearTimeout(timeoutId);
     });
-  }, 10000);
+  }, 22000); // 12s firm-audio window + buffer
 
   /**
    * Issue #414 real-API: Same assertion as mock test. With real OpenAI, upstream currently returns error after append;
    * this test FAILS and documents the server error. When the API is fixed, it should pass.
    */
-  (useRealOpenAI ? it : it.skip)('Issue #414 real-API: firm audio connection — no Error from upstream within 5s after sending audio (USE_REAL_OPENAI=1)', (done) => {
-    const FIRM_AUDIO_WINDOW_MS = 5000;
+  (useRealOpenAI ? it : it.skip)('Issue #414 real-API: firm audio connection — no Error from upstream within 12s after sending audio (USE_REAL_OPENAI=1)', (done) => {
+    const FIRM_AUDIO_WINDOW_MS = 12000;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let receivedSettingsApplied = false;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
@@ -829,7 +829,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('close', () => {
       if (timeoutId) clearTimeout(timeoutId);
     });
-  }, 15000);
+  }, 22000); // 12s firm-audio window + buffer
 
   itMockOnly('translates binary client message to input_audio_buffer.append and after debounce sends commit + response.create when ≥100ms audio', (done) => {
     mockReceived.length = 0;
@@ -1689,10 +1689,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
 
   /**
    * Issue #414: session.update uses GA path (session.audio.input) per REGRESSION-SERVER-ERROR-INVESTIGATION.md.
-   * We send turn_detection: null (disable Server VAD so only proxy sends commit + response.create) and
-   * format: { type: 'audio/pcm', rate: 24000 } so the API knows we send PCM 24kHz. No top-level turn_detection.
+   * Default: turn_detection: null (disable Server VAD). Experiment (RESOLUTION-PLAN §4): when
+   * OPENAI_REALTIME_IDLE_TIMEOUT_MS is set, turn_detection is { type: 'server_vad', idle_timeout_ms, create_response: false }.
+   * Format always: { type: 'audio/pcm', rate: 24000 }. No top-level turn_detection.
    */
-  itMockOnly('Issue #414: session.update uses GA audio.input (turn_detection null + format)', (done) => {
+  itMockOnly('Issue #414: session.update uses GA audio.input (turn_detection null or idle_timeout experiment + format)', (done) => {
     receivedSessionUpdatePayloads.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
@@ -1710,7 +1711,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           const sessionUpdate = receivedSessionUpdatePayloads[0];
           expect(sessionUpdate.session).toBeDefined();
           const sess = sessionUpdate.session as { audio?: { input?: { turn_detection?: unknown; format?: { type?: string; rate?: number } } }; turn_detection?: unknown };
-          expect(sess.audio?.input?.turn_detection).toBeNull();
+          const td = sess.audio?.input?.turn_detection;
+          expect(td === null || (typeof td === 'object' && td !== null && (td as { type?: string; create_response?: boolean }).type === 'server_vad' && (td as { create_response?: boolean }).create_response === false)).toBe(true);
           expect(sess.audio?.input?.format?.type).toBe('audio/pcm');
           expect(sess.audio?.input?.format?.rate).toBe(24000);
           expect(sess.turn_detection).toBeUndefined();

@@ -50,6 +50,7 @@ This doc is the **entry point** for what we know and how the other ISSUE-414 doc
 | **REGRESSION-SERVER-ERROR-INVESTIGATION.md** | Authoritative 4-cycle session.update investigation; 5s error hypotheses; idle_timeout_ms lead. |
 | **NEXT-STEPS.md** | Plan and priorities (greeting TTS, basic audio, server error, etc.); §3.1/§3.2 buffer/response. |
 | **RESOLVING-SERVER-ERROR-AUDIO-CONNECTION.md** | Firm audio connection protocol and tests; plan steps; references. |
+| **RESOLUTION-PLAN.md** | Actionable resolution plan for 5s server error; 12s firm audio window; idle_timeout_ms experiment (run; result: buffer too small with server_vad); progress log. |
 | **PROTOCOL-AND-MESSAGE-ORDERING.md** (in scripts/openai-proxy/) | Wire protocol, message order, buffer restrictions, dual-control race. |
 | **COMPONENT-PROXY-INTERFACE-TDD.md** | Component ↔ proxy contract; VAD mapping (UserStartedSpeaking, UtteranceEnd). |
 | **VAD-FAILURES-AND-RESOLUTION-PLAN.md** | VAD E2E failures and resolution plan. |
@@ -60,6 +61,7 @@ This doc is the **entry point** for what we know and how the other ISSUE-414 doc
 | **OPENAI-SESSION-STATE-AND-TESTS.md** | Session state and tests. |
 | **PROTOCOL-TEST-GAPS.md** | Gaps in protocol tests. |
 | **README.md** | Issue summary and pointers. |
+| **E2E-RELAXATIONS-EXPLAINED.md** | What changed in E2E (allow 1 error, Repro 9/10, connect-only greeting) and how to undo each. |
 | **MULTI-TURN-E2E-CONVERSATION-HISTORY.md** | Multi-turn E2E and conversation history. |
 | **REPRO-RELOAD-STALE-RESPONSE.md** | Repro for reload/stale response. |
 
