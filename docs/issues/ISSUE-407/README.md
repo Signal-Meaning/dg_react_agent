@@ -106,8 +106,8 @@ No implementation for the backend endpoint or frontend forwarding without tests 
 | **1** | Test-app frontend: forward only, no execution by default (Phase 1.3) | ✅ Done | `functionCallBackend.ts` + App.tsx; unit tests in functionCallBackend.test.ts |
 | **2** | BACKEND-PROXY / Component–Proxy docs updated | ✅ Done | README + COMPONENT-PROXY-CONTRACT |
 | **2** | CONVERSATION-STORAGE / other refs (if needed) | ✅ Done | Best-practice + link to #407 |
-| **3** | Unit/integration tests for backend execution path | ⬜ Not started | |
-| **3** | E2E updated or documented for backend execution | ⬜ Not started | |
+| **3** | Unit/integration tests for backend execution path | ✅ Done | function-call-endpoint-integration, functionCallBackend, openai-proxy-integration (FCR) |
+| **3** | E2E updated or documented for backend execution | ✅ Done | [PHASE-3-TESTS-E2E.md](./PHASE-3-TESTS-E2E.md); test 6 (openai-proxy-e2e) uses backend path |
 | **4** | Optional: Frontend → app backend example | ⬜ Not started | |
 
 **Legend:** ⬜ Not started | 🔄 In progress | ✅ Done
@@ -126,3 +126,4 @@ No implementation for the backend endpoint or frontend forwarding without tests 
 - **Phase 1.2 implementation:** `test-app/scripts/function-call-handlers.js`, `test-app/scripts/backend-server.js` (POST /function-call)
 - **Phase 1.3 tests:** `test-app/tests/functionCallBackend.test.ts` — unit tests for forwarding util
 - **Phase 1.3 implementation:** `test-app/src/utils/functionCallBackend.ts`, `test-app/src/App.tsx` (forward when no handler; baseUrl from proxyEndpoint)
+- **Phase 3:** [PHASE-3-TESTS-E2E.md](./PHASE-3-TESTS-E2E.md) — which tests cover backend path; E2E demo vs backend
