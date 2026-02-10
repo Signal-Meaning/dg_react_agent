@@ -427,10 +427,11 @@ describe('Agent State Message Handling', () => {
       expect(testService.isTimeoutActive()).toBe(false);
       expect(onIdleTimeoutActiveChange).not.toHaveBeenCalled(); // No change from initial false
 
-      // Now transition to idle state - this should start timeout and trigger callback
+      // User speaks (so we have activity this session), then transition to idle
+      testService.handleEvent({ type: 'USER_STARTED_SPEAKING' });
       testService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
       testService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
-      testService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      testService.handleEvent({ type: 'USER_STOPPED_SPEAKING' }); // state change: isUserSpeaking true -> false, so onStateChange runs and sees timeout active
 
       // Verify timeout is active (updateTimeoutBehavior should have started it)
       expect(testService.isTimeoutActive()).toBe(true);

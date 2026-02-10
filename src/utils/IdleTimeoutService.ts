@@ -42,8 +42,8 @@ export class IdleTimeoutService {
   // Issue #373: Track active function calls to prevent idle timeout during execution
   private activeFunctionCalls: Set<string> = new Set();
   private logger: Logger;
-  /** Only start idle timeout after user has spoken at least once (UserStartedSpeaking). Keeps connection open until first user activity. */
-  private userHasSpokenThisSession = false;
+  /** Pause timeout until first user activity (speaking, sending text, etc.). After any such event, timeout is allowed to run when conditions are idle. */
+  private hasSeenUserActivityThisSession = false;
 
   constructor(config: IdleTimeoutConfig) {
     this.config = config;
@@ -130,16 +130,15 @@ export class IdleTimeoutService {
     
     switch (event.type) {
       case 'USER_STARTED_SPEAKING':
-        this.userHasSpokenThisSession = true;
+        this.hasSeenUserActivityThisSession = true;
         this.currentState.isUserSpeaking = true;
         this.disableResets();
         break;
         
       case 'USER_STOPPED_SPEAKING':
       case 'UTTERANCE_END':
-        // Both events indicate user has finished speaking
-        // Enable resets and let updateTimeoutBehavior decide if timeout should start
-        // based on agent state (timeout should start if agent is idle/listening, not if speaking/thinking)
+        // Both events indicate user has finished speaking (or utterance ended) — counts as user activity
+        this.hasSeenUserActivityThisSession = true;
         this.currentState.isUserSpeaking = false;
         this.enableResetsAndUpdateBehavior();
         break;
@@ -190,8 +189,8 @@ export class IdleTimeoutService {
         break;
         
       case 'MEANINGFUL_USER_ACTIVITY':
-        // MEANINGFUL_USER_ACTIVITY events (like AgentAudioDone) can arrive after agent becomes idle
-        // Log state to debug why timeout isn't starting
+        // User activity (e.g. sending text, conversation activity) — unpause timeout for this session
+        this.hasSeenUserActivityThisSession = true;
         this.log(`MEANINGFUL_USER_ACTIVITY: activity=${event.activity}, agentState=${this.currentState.agentState}, isPlaying=${this.currentState.isPlaying}, isUserSpeaking=${this.currentState.isUserSpeaking}, isDisabled=${this.isDisabled}`);
         // CRITICAL FIX: If agent is idle and not playing, enable resets and RESET timeout
         // This handles the case where MEANINGFUL_USER_ACTIVITY arrives after agent becomes idle
@@ -252,11 +251,11 @@ export class IdleTimeoutService {
 
   /**
    * Check if timeout can start based on current state.
-   * Timeout only starts after the user has spoken at least once (UserStartedSpeaking),
-   * so the connection stays open until first user activity (e.g. E2E sending audio).
+   * Timeout is paused until first user activity (speaking, sending text, etc.);
+   * after that, it can start when conditions are idle.
    */
   private canStartTimeout(state: IdleTimeoutState = this.currentState): boolean {
-    return this.userHasSpokenThisSession &&
+    return this.hasSeenUserActivityThisSession &&
            this.isAgentIdle(state) &&
            !state.isUserSpeaking &&
            !state.isPlaying &&
@@ -296,9 +295,9 @@ export class IdleTimeoutService {
       }
     }
     
-    // CRITICAL FIX: After any state update, check if we should start timeout
-    // This handles cases where events arrive in wrong order or React batches updates
-    // Use setTimeout to ensure this check happens after all state updates are processed
+    // Run check synchronously so timeout starts this tick and onStateChange sees it
+    this.checkAndStartTimeoutIfNeeded();
+    // Also defer once so we catch any state updates that are batched or arrive out of order
     setTimeout(() => {
       this.checkAndStartTimeoutIfNeeded();
     }, 0);
@@ -407,7 +406,7 @@ export class IdleTimeoutService {
   private startTimeout(): void {
     // Only start if conditions allow (e.g. user has spoken at least once)
     if (!this.canStartTimeout()) {
-      this.log('startTimeout() skipped - canStartTimeout() false (e.g. user has not spoken yet)');
+      this.log('startTimeout() skipped - canStartTimeout() false (e.g. no user activity this session yet)');
       return;
     }
     // Only start if timeout is not already running (prevents unnecessary restarts)

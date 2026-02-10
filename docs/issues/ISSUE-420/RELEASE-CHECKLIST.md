@@ -12,7 +12,7 @@ This issue tracks the complete release process for version v0.7.19 of the Deepgr
 #### Pre-Release Preparation
 - [ ] **Code Review Complete**: All PRs merged and code reviewed
 - [ ] **Tests Passing**: All unit tests and E2E tests passing
-  - [ ] Run: `npm test` — **Status:** Run 2025-02-10: 20 failures in `agent-state-handling.test.ts` (idle timeout `isTimeoutActive()` assertions). 860 passed.
+  - [ ] Run: `npm test` — **Status:** Run 2025-02-10: 20 failures in `agent-state-handling.test.ts` (idle timeout `isTimeoutActive()` assertions). 860 passed. **Tracking:** [AGENT-STATE-HANDLING-TEST-FIXES.md](AGENT-STATE-HANDLING-TEST-FIXES.md)
   - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode** (proxy mode is the default and primary mode)
     - [ ] Start backend: `cd test-app && npm run backend`
     - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e` (all E2E tests must pass in proxy mode)
