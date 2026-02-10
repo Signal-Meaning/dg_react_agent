@@ -2,6 +2,17 @@
 
 This document flags which E2E specs assume **Deepgram** (direct or Deepgram proxy) vs **OpenAI Realtime proxy** vs backend-agnostic. Use it when running a "full E2E pass" to know which tests apply to which backend.
 
+**Run only one backend:**
+
+| Goal | Command (from `test-app`) |
+|------|----------------------------|
+| **OpenAI proxy specs only** (4 specs + callback suite that runs with either) | `npm run test:e2e:openai` |
+| **Deepgram-backed specs only** (all except the 4 OpenAI-only specs) | `npm run test:e2e:deepgram` |
+
+Both scripts set `USE_PROXY_MODE=true`. For OpenAI, set `VITE_OPENAI_PROXY_ENDPOINT` in `.env` or env (default `ws://localhost:8080/openai`). For Deepgram, set `VITE_DEEPGRAM_PROXY_ENDPOINT` and do not set `VITE_OPENAI_PROXY_ENDPOINT` so the app uses the Deepgram proxy.
+
+**Tests that run with either backend** (e.g. `deepgram-callback-test.spec.js` after Issue #414/#416) are included in both runs: they run against the OpenAI proxy when you use `test:e2e:openai` and against the Deepgram backend when you use `test:e2e:deepgram`.
+
 **Capture full E2E output to a file (recommended for long runs):**
 ```bash
 npm run test:e2e:log

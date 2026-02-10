@@ -824,7 +824,10 @@ function App() {
   // Control functions
   const startInteraction = async () => {
     try {
-      await deepgramRef.current?.start();
+      const useOpenAIProxy = (proxyEndpoint ?? '').includes('/openai');
+      await deepgramRef.current?.start(
+        useOpenAIProxy ? { agent: true, transcription: false } : undefined
+      );
       setIsRecording(true);
       addLog('Started interaction');
     } catch (error) {
@@ -919,13 +922,19 @@ function App() {
           console.log('🎤 [APP] deepgramRef.current exists, calling startAudioCapture()');
           console.log('🎤 [APP] deepgramRef.current methods:', Object.keys(deepgramRef.current));
           
-          // Always attempt to start both agent and transcription services
-          // start() is safe for redundant calls - it will reuse existing connections
-          // This ensures both services are available when microphone is activated
-          // (VAD events and transcripts require transcription service)
-          console.log('🎤 [APP] Starting both agent and transcription services...');
-          addLog('Starting agent and transcription services...');
-          await deepgramRef.current.start({ agent: true, transcription: true });
+          // With OpenAI proxy, transcript/VAD come from the agent connection (Issue #414); do not
+          // start a separate Deepgram transcription WebSocket (avoids "Deepgram did not receive
+          // audio" and wrong backend). With Deepgram proxy, start both agent and transcription.
+          const useOpenAIProxy = (proxyEndpoint ?? '').includes('/openai');
+          if (useOpenAIProxy) {
+            console.log('🎤 [APP] Starting agent only (OpenAI proxy – transcript/VAD via agent)...');
+            addLog('Starting agent (OpenAI proxy)...');
+            await deepgramRef.current.start({ agent: true, transcription: false });
+          } else {
+            console.log('🎤 [APP] Starting both agent and transcription services...');
+            addLog('Starting agent and transcription services...');
+            await deepgramRef.current.start({ agent: true, transcription: true });
+          }
           console.log('🎤 [APP] Services started (or already connected)');
           
           if (typeof deepgramRef.current.startAudioCapture === 'function') {

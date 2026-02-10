@@ -6,6 +6,10 @@ These E2E tests use **REAL Deepgram WebSocket connections**, not mocks. This pro
 
 **Backend matrix:** Some specs assume **Deepgram** only (e.g. CLIENT_MESSAGE_TIMEOUT, Deepgram proxy); others are **OpenAI-proxy-only** (Issue #381). See [E2E-BACKEND-MATRIX.md](./E2E-BACKEND-MATRIX.md) for which specs to run with which backend. For OpenAI proxy E2E, see [OPENAI-PROTOCOL-E2E.md](./OPENAI-PROTOCOL-E2E.md) for how tests align with the proxy protocol and the test-app.
 
+**Run only one backend (from `test-app`):**
+- **OpenAI proxy specs only:** `npm run test:e2e:openai` (requires `VITE_OPENAI_PROXY_ENDPOINT` or default). Includes the callback suite so tests that run with either backend run against the OpenAI proxy too.
+- **Deepgram-backed specs only:** `npm run test:e2e:deepgram` (use `VITE_DEEPGRAM_PROXY_ENDPOINT`; do not set `VITE_OPENAI_PROXY_ENDPOINT`). Includes all non–OpenAI-only specs, so tests that run with either backend run against the Deepgram backend too.
+
 ## Setup
 
 ### 1. Get a Deepgram API Key

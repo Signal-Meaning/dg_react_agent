@@ -8,8 +8,7 @@ import {
   waitForAudioPlaybackStart,
   waitForAgentGreeting,
   getAudioPlayingStatus,
-  setupAudioSendingPrerequisites,
-  skipIfOpenAIProxy
+  setupAudioSendingPrerequisites
 } from './helpers/test-helpers.js';
 
 /**
@@ -61,7 +60,7 @@ test.describe('Callback Test Suite', () => {
   });
 
   test('should test onTranscriptUpdate callback with existing audio sample', async ({ page, context }) => {
-    skipIfOpenAIProxy('onTranscriptUpdate relies on Deepgram transcript events; skip when using OpenAI proxy');
+    // Runs with Deepgram or OpenAI proxy (Issue #414: proxy maps transcript/VAD to same component events)
     console.log('🧪 Testing onTranscriptUpdate callback with existing audio sample...');
     
     // Use setupAudioSendingPrerequisites helper for audio-sending tests
@@ -101,7 +100,7 @@ test.describe('Callback Test Suite', () => {
   });
 
   test('should test onUserStartedSpeaking callback with existing audio sample', async ({ page, context }) => {
-    skipIfOpenAIProxy('onUserStartedSpeaking relies on Deepgram VAD events; skip when using OpenAI proxy');
+    // Runs with Deepgram or OpenAI proxy (Issue #414: proxy maps VAD to UserStartedSpeaking/UtteranceEnd)
     console.log('🧪 Testing onUserStartedSpeaking callback with existing audio sample...');
     
     // Use setupAudioSendingPrerequisites helper for audio-sending tests
@@ -143,7 +142,7 @@ test.describe('Callback Test Suite', () => {
   });
 
   test('should test onUserStoppedSpeaking callback with existing audio sample', async ({ page, context }) => {
-    skipIfOpenAIProxy('onUserStoppedSpeaking relies on Deepgram VAD events; skip when using OpenAI proxy');
+    // Runs with Deepgram or OpenAI proxy (Issue #414: proxy maps VAD to UserStartedSpeaking/UtteranceEnd)
     console.log('🧪 Testing onUserStoppedSpeaking callback with existing audio sample...');
     
     // Use setupAudioSendingPrerequisites helper for audio-sending tests

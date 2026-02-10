@@ -298,6 +298,43 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   /**
+   * Lengthy response: user asks for a long poem; after 15s the assistant is still speaking,
+   * assistant content is in the DOM, and the agent remains connected.
+   */
+  test('8b. Lengthy response – after 15s agent still speaking, content in DOM, connection connected', async ({ page }) => {
+    test.setTimeout(60000);
+    await setupTestPageWithOpenAIProxy(page);
+    await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
+
+    const poemPrompt = 'Tell me rather lengthy and boring poem about a woodchuck named Barney.';
+    await sendTextMessage(page, poemPrompt);
+
+    // Wait for agent to enter speaking state (response has started)
+    await page.waitForFunction(
+      () => document.querySelector('[data-testid="agent-state"]')?.textContent?.trim() === 'speaking',
+      { timeout: 30000 }
+    );
+
+    // Wait 15 seconds while agent is speaking
+    await page.waitForTimeout(15000);
+
+    // After 15s: agent should still be speaking (lengthy poem), content in DOM, still connected
+    const agentState = await page.locator('[data-testid="agent-state"]').textContent();
+    expect(agentState?.trim()).toBe('speaking');
+
+    const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
+    expect(connectionStatus?.trim()).toBe('connected');
+
+    const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
+    expect(agentResponse).toBeTruthy();
+    expect(agentResponse?.trim()).not.toBe('');
+    expect(agentResponse).not.toBe('(Waiting for agent response...)');
+
+    await assertNoRecoverableAgentErrors(page);
+  });
+
+  /**
    * Session state is retained from one connection to the next unless a test stipulates otherwise.
    * This test does NOT stipulate a session change (no reload). It verifies that after disconnect
    * and reconnect on the same page, the next user message receives a response that reflects the
