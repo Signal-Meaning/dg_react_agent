@@ -18,7 +18,7 @@
     "test:e2e:report": "playwright show-report",
     "test:e2e:monitor": "../scripts/monitor-e2e-tests.sh",
     "test:dev": "vite & playwright test tests/e2e/ --headed",
-    "test:e2e:openai": "USE_PROXY_MODE=true playwright test tests/e2e/openai-proxy-e2e.spec.js tests/e2e/openai-proxy-tts-diagnostic.spec.js tests/e2e/greeting-playback-validation.spec.js tests/e2e/openai-inject-connection-stability.spec.js tests/e2e/deepgram-callback-test.spec.js --config=tests/playwright.config.mjs",
+    "test:e2e:openai": "USE_PROXY_MODE=true playwright test tests/e2e/openai-proxy-e2e.spec.js tests/e2e/openai-proxy-tts-diagnostic.spec.js tests/e2e/greeting-playback-validation.spec.js tests/e2e/openai-inject-connection-stability.spec.js tests/e2e/callback-test.spec.js --config=tests/playwright.config.mjs",
     "test:e2e:deepgram": "E2E_BACKEND=deepgram USE_PROXY_MODE=true playwright test --config=tests/playwright.config.mjs",
     "backend": "node scripts/backend-server.js",
     "openai-proxy:cli": "npm run openai-proxy:cli --prefix .. --",

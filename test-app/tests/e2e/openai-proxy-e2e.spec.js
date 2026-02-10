@@ -13,11 +13,12 @@
  * requires connection + Settings applied before the first user message. Every test that
  * sends a message waits for waitForSettingsApplied after establishConnectionViaText.
  *
- * Idle-timeout closure (Issue #414): When the upstream closes due to idle timeout, the
- * proxy sends code `idle_timeout` and the component treats it as expected closure (no
- * onError), same as Deepgram idle timeout. assertNoRecoverableAgentErrors passes because
- * no error is surfaced; tests that expect connection to close (e.g. 3b) wait for
- * connection-status 'closed'.
+ * Upstream timeouts: We expect (1) a short timeout from upstream when no message has been
+ * sent, and (2) idle_timeout_ms timeout when a message has been sent. So tests use
+ * assertAgentErrorsAllowUpstreamTimeouts (allow total/recoverable <= 1) instead of
+ * assertNoRecoverableAgentErrors. When the only upstream event is idle-timeout closure,
+ * the component may not surface onError; when upstream sends an error before that, count
+ * can be 1.
  *
  * Behaviors: connection, single message, multi-turn, reconnection, basic audio,
  * simple function calling. See docs/issues/ISSUE-381/E2E-TEST-PLAN.md.
@@ -38,6 +39,7 @@ import {
   disconnectComponent,
   getAgentState,
   assertNoRecoverableAgentErrors,
+  assertAgentErrorsAllowUpstreamTimeouts,
   SELECTORS,
 } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, loadAndSendAudioSampleAt24k, waitForVADEvents, CHUNK_20MS_16K_MONO } from './fixtures/audio-helpers.js';
@@ -173,7 +175,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const secondResponse = await sendMessageAndWaitForResponse(page, "Second after disconnect.", AGENT_RESPONSE_TIMEOUT);
     expect(secondResponse).toBeTruthy();
     expect(secondResponse.length).toBeGreaterThan(0);
-    await assertNoRecoverableAgentErrors(page);
+    await assertAgentErrorsAllowUpstreamTimeouts(page);
   });
 
   test('5. Basic audio – send recorded audio; assert agent response appears in [data-testid="agent-response"]', async ({ page, context }) => {
@@ -204,7 +206,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const response = await page.locator('[data-testid="agent-response"]').textContent();
     expect(response).toBeTruthy();
     expect(response).not.toBe('(Waiting for agent response...)');
-    await assertNoRecoverableAgentErrors(page);
+    await assertAgentErrorsAllowUpstreamTimeouts(page);
   });
 
   /**

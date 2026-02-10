@@ -614,6 +614,13 @@ function DeepgramVoiceInteraction(
       return null;
     }
 
+    // OpenAI proxy does not expose a separate transcription WebSocket; transcript/VAD come from the agent connection (Issue #414).
+    // Do not create a transcription manager so we never open a second WS or see Deepgram timeout messages in logs.
+    if (config.connectionMode === 'proxy' && (config.proxyEndpoint ?? '').includes('/openai')) {
+      log('🔧 [TRANSCRIPTION] Skipping transcription manager when using OpenAI proxy (transcript/VAD via agent)');
+      return null;
+    }
+
     // Validate connection configuration
     if (!validateConnectionConfig('transcription')) {
       return null;
@@ -1518,6 +1525,41 @@ function DeepgramVoiceInteraction(
     return result;
   };
 
+  /** Normalize Results/Transcript message (from Deepgram or proxy) to TranscriptResponse for onTranscriptUpdate (Issue #414). */
+  const normalizeTranscriptMessageToResponse = (data: {
+    type: string;
+    channel?: number | { alternatives?: Array<{ transcript?: string }>; channel_index?: number[] };
+    alternatives?: Array<{ transcript?: string; confidence?: number; words?: unknown[] }>;
+    is_final?: boolean;
+    speech_final?: boolean;
+    channel_index?: number[];
+    start?: number;
+    duration?: number;
+    metadata?: unknown;
+  }): TranscriptResponse | null => {
+    if (data.type !== 'Results' && data.type !== 'Transcript') return null;
+    const rawTranscript = data;
+    const channelObj = typeof rawTranscript.channel === 'object' ? rawTranscript.channel : null;
+    const transcriptText = (channelObj?.alternatives?.[0]?.transcript ||
+                             rawTranscript.alternatives?.[0]?.transcript ||
+                             (data as { transcript?: string }).transcript) ?? '';
+    const alternatives = (channelObj?.alternatives || rawTranscript.alternatives || []) as TranscriptAlternative[];
+    return {
+      ...rawTranscript,
+      type: 'transcript',
+      transcript: transcriptText,
+      channel: typeof rawTranscript.channel === 'object'
+        ? (channelObj?.channel_index?.[0] ?? 0)
+        : (rawTranscript.channel ?? 0),
+      alternatives,
+      is_final: rawTranscript.is_final ?? false,
+      speech_final: rawTranscript.speech_final ?? false,
+      channel_index: rawTranscript.channel_index ?? [],
+      start: rawTranscript.start ?? 0,
+      duration: rawTranscript.duration ?? 0,
+    };
+  };
+
   // Handle transcription messages - only relevant if transcription is configured
   const handleTranscriptionMessage = (data: unknown) => {
     if (props.debug) {
@@ -1675,50 +1717,8 @@ function DeepgramVoiceInteraction(
         sleepLog('Ignoring transcript (state:', stateRef.current.agentState, ')');
         return;
       }
-      
-      // Don't re-enable idle timeout resets here
-      // Let WebSocketManager handle it based on message content
-      const rawTranscript = data as {
-        type: string;
-        channel?: number | { alternatives?: Array<{ transcript?: string }>; channel_index?: number[] };
-        alternatives?: Array<{ transcript?: string }>;
-        is_final?: boolean;
-        speech_final?: boolean;
-        channel_index?: number[];
-        start?: number;
-        duration?: number;
-        metadata?: unknown;
-      };
-      
-      // Extract transcript text from the actual API structure (channel.alternatives[0].transcript)
-      // and add it as a top-level field for easier consumer access
-      const channelObj = typeof rawTranscript.channel === 'object' ? rawTranscript.channel : null;
-      const transcriptText = channelObj?.alternatives?.[0]?.transcript || 
-                             rawTranscript.alternatives?.[0]?.transcript || 
-                             '';
-      
-      // Normalize the response with a top-level transcript field
-      // Preserve the nested structure for advanced use cases (cast to proper type)
-      const alternatives = (channelObj?.alternatives || rawTranscript.alternatives || []) as TranscriptAlternative[];
-      
-      const normalizedTranscript: TranscriptResponse = {
-        ...rawTranscript,
-        type: 'transcript',
-        transcript: transcriptText,
-        // Ensure channel is properly typed (could be number or object)
-        channel: typeof rawTranscript.channel === 'object' 
-          ? (channelObj?.channel_index?.[0] ?? 0)
-          : (rawTranscript.channel ?? 0),
-        // Preserve the nested structure for advanced use cases
-        alternatives,
-        is_final: rawTranscript.is_final ?? false,
-        speech_final: rawTranscript.speech_final ?? false,
-        channel_index: rawTranscript.channel_index ?? [],
-        start: rawTranscript.start ?? 0,
-        duration: rawTranscript.duration ?? 0
-      };
-      
-      onTranscriptUpdate?.(normalizedTranscript);
+      const normalized = normalizeTranscriptMessageToResponse(data as Parameters<typeof normalizeTranscriptMessageToResponse>[0]);
+      if (normalized) onTranscriptUpdate?.(normalized);
       return;
     }
 
@@ -2090,6 +2090,17 @@ function DeepgramVoiceInteraction(
     const isSleepingOrEntering = 
       stateRef.current.agentState === 'sleeping' || 
       stateRef.current.agentState === 'entering_sleep';
+
+    // Issue #414: proxy can send Transcript (e.g. OpenAI input_audio_transcription) on agent path; normalize and emit onTranscriptUpdate
+    if (data.type === 'Transcript' || data.type === 'Results') {
+      if (isSleepingOrEntering) {
+        sleepLog('Ignoring transcript (state:', stateRef.current.agentState, ')');
+        return;
+      }
+      const normalized = normalizeTranscriptMessageToResponse(data as Parameters<typeof normalizeTranscriptMessageToResponse>[0]);
+      if (normalized) onTranscriptUpdate?.(normalized);
+      return;
+    }
 
     if (data.type === 'UserStartedSpeaking') {
       log('🎤 [VAD] UserStartedSpeaking message received');
