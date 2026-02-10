@@ -30,6 +30,7 @@ import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { executeFunctionCall } from './function-call-handlers.js';
+import { getLogger, generateTraceId } from './logger.js';
 
 // Load test-app/.env so VITE_DEEPGRAM_API_KEY (and DEEPGRAM_API_KEY) are available when run via npm run backend
 // Skip when SKIP_DOTENV=1 (used by integration tests to assert "at least one key required")
@@ -90,6 +91,9 @@ const DEEPGRAM_AGENT_URL = 'wss://agent.deepgram.com/v1/agent/converse';
 const DEBUG_LOG_PATH = path.join(process.cwd(), '.cursor', 'debug.log');
 const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
 const wsScheme = useHttps ? 'wss' : 'ws';
+
+// Issue #412: shared logger; LOG_LEVEL env controls verbosity
+const rootLog = getLogger({ level: process.env.LOG_LEVEL || 'info' });
 
 // Log API key status at startup (for debugging authentication issues)
 if (DEEPGRAM_API_KEY) {
@@ -173,6 +177,8 @@ const requestHandler = (req, res) => {
 
   // POST /function-call — Issue #407: app backend executes function calls (common handlers, not proxy-specific)
   if (req.method === 'POST' && pathname === '/function-call') {
+    const traceId = req.headers['x-trace-id'] || req.headers['x-request-id'] || generateTraceId();
+    const requestLog = rootLog.child({ traceId });
     let body = '';
     req.on('data', (chunk) => { body += chunk; });
     req.on('end', () => {
@@ -182,6 +188,7 @@ const requestHandler = (req, res) => {
         const name = payload.name;
         const argsStr = payload.arguments;
         if (typeof id !== 'string' || typeof name !== 'string' || typeof argsStr !== 'string') {
+          requestLog.warn('Function call rejected: missing or invalid id, name, or arguments', { id, name });
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Missing or invalid id, name, or arguments' }));
           return;
@@ -194,13 +201,16 @@ const requestHandler = (req, res) => {
         }
         const result = executeFunctionCall(name, args);
         if (result.error) {
+          requestLog.warn('Function call error', { name, id, error: result.error });
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: result.error }));
           return;
         }
+        requestLog.info('Function call executed', { name, id });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ content: result.content }));
       } catch (err) {
+        requestLog.error('Function call handler threw', { error: err instanceof Error ? err.message : String(err) });
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Internal error' }));
       }
