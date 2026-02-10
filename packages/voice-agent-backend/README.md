@@ -20,7 +20,17 @@ Returns an Express application with voice-agent routes mounted.
 
 ### mountVoiceAgentBackend(app, options)
 
-Mounts the same routes on an existing Express app. Use this for a thin wrapper: create your app, add auth/logging middleware, then call `mountVoiceAgentBackend(app, options)`.
+Mounts the same routes on an existing Express app. Use this for a **thin wrapper**: create your app, add config/auth/logging middleware, then call `mountVoiceAgentBackend(app, options)`. The test-app and voice-commerce are intended to use this pattern so they only provide config, auth, and logging.
+
+## CLI
+
+From the package directory or via `npx @signal-meaning/voice-agent-backend` (when published):
+
+```bash
+voice-agent-backend serve   # or: node src/cli.js serve
+```
+
+Uses `PORT` (default `3000`). Same routes as the programmatic API.
 
 ## Status
 

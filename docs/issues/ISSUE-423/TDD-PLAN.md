@@ -177,9 +177,15 @@ Update this section as phases are completed (e.g. “Phase 1.1 RED: Done”; “
 | Phase | RED | GREEN | REFACTOR |
 |-------|-----|-------|----------|
 | 1. Package contract | ✅ | ✅ | ✅ |
-| 2. Mountable routes | ⏳ | ⏳ | ⏳ |
-| 3. CLI | ⏳ | ⏳ | ⏳ |
-| 4. Thin-wrapper | ⏳ | ⏳ | ⏳ |
+| 2. Mountable routes | ✅ | ✅ | ✅ |
+| 3. CLI | ✅ | ✅ | ✅ |
+| 4. Thin-wrapper | ✅ | ✅ | ✅ |
+
+**Phase 4 done:** Thin-wrapper integration test in `tests/integration/voice-agent-backend-thin-wrapper.test.ts`; minimal app with auth/logging stubs mounts package and handles request. **Next (acceptance criterion):** Refactor test-app backend (`test-app/scripts/backend-server.js`) to depend on the package and mount its routes (config, auth, logging only); this requires the package to implement real proxy and function-call behavior (wire from current backend-server and openai-proxy) in a follow-up.
+
+**Phase 3 done:** CLI at `packages/voice-agent-backend/src/cli.js` (serve command, respects PORT); integration test in `tests/integration/voice-agent-backend-cli.test.ts`; bin and README updated.
+
+**Phase 2 done:** Integration tests in `tests/integration/voice-agent-backend-routes.test.ts`; mounted routes return defined 501 + route name; placeholder behavior sufficient for Phase 2.
 
 **Phase 1 done:** Contract tests in `tests/voice-agent-backend-api.test.ts`; package at `packages/voice-agent-backend` with `createServer` and `mountVoiceAgentBackend`; placeholder routes (501); package README added.
 

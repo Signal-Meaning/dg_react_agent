@@ -3,11 +3,15 @@
   "version": "0.1.0",
   "description": "Backend and proxy package for Deepgram and OpenAI voice agent; mountable routes for test-app and voice-commerce.",
   "main": "src/index.js",
+  "bin": {
+    "voice-agent-backend": "src/cli.js"
+  },
   "files": [
     "src",
     "README.md"
   ],
   "scripts": {
+    "serve": "node src/cli.js serve",
     "test": "echo \"Tests run from repo root\" && exit 0"
   },
   "keywords": [
