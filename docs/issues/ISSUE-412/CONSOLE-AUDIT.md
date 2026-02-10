@@ -11,9 +11,11 @@ This document lists all `console.log`, `console.warn`, and `console.error` call 
 
 ### DeepgramVoiceInteraction (src/components/DeepgramVoiceInteraction/index.tsx)
 
+**Status: ✅ Migrated (Issue #412).** Uses getLogger({ debug: props.debug }), log(), sleepLog(), logConsole('debug'|'info'|'warn'|'error'). No direct console.*.
+
 | Line | Type | Notes |
 |------|------|--------|
-| 232 | warn | Remount detection |
+| (was 232) | warn | Remount detection → logConsole('warn', ...) |
 | 242 | log | Mount (new instance) |
 | 405 | warn | VAD conflicting signals |
 | 412 | error | VAD event tracking error |
@@ -51,17 +53,12 @@ This document lists all `console.log`, `console.warn`, and `console.error` call 
 
 ### IdleTimeoutService (src/utils/IdleTimeoutService.ts)
 
-| Line | Type | Notes |
-|------|------|--------|
-| 46, 119, 278, 295, 302, 358, 376, 388, 398, 435, 441, 452, 465, 473, 478 | log | Debug / state (gate on config.debug) |
-| 510 | log | Internal this.log() |
-
-**Count:** 17 call sites; all should be gated on debug and moved to logger.
+**Status: ✅ Migrated (Issue #412).** Uses getLogger({ debug: !!config.debug }); private log() → logger.debug().
 
 ### Other src (hooks, utils, websocket)
 
-- **src/hooks/useIdleTimeoutManager.ts:** 15+ console.log (debug)
-- **src/utils/websocket/WebSocketManager.ts:** 1 console.log (DEBUG sendJSON)
+- **src/hooks/useIdleTimeoutManager.ts:** ✅ Migrated — getLogger({ debug }), logger.debug/info.
+- **src/utils/websocket/WebSocketManager.ts:** ✅ Migrated — getLogger({ debug: options.debug }), private log() → logger.debug; connection close → logger.info; errors → logger.error.
 - **src/utils/instructions-loader.ts:** 0 (uses calm message per Issue #410)
 - **src/utils/function-call-logger.ts:** 0 direct; may use process.env
 - **src/services/AgentStateService.ts:** 1
@@ -95,7 +92,7 @@ This document lists all `console.log`, `console.warn`, and `console.error` call 
 
 ## Test-app (test-app/src)
 
-- **App.tsx:** 2 (console.warn for function-call; console.log audio constraints from URL). See grep for line numbers if needed.
+- **App.tsx:** ✅ Migrated (Issue #412). Uses getLogger and sessionLogger (logger.child({ traceId: sessionTraceId })); all former console.log/warn/error replaced with sessionLogger.debug/info/warn/error. Only remaining references are comments (e.g. line 222 commented-out test log; line 675 comment about skipping console.error).
 
 ---
 
@@ -110,6 +107,6 @@ This document lists all `console.log`, `console.warn`, and `console.error` call 
 | openai-proxy server.ts | 6 | Medium (use emitLog with connectionAttrs) |
 | openai-proxy run.ts / cli.ts | 3 | Allowlist (bootstrap/CLI) |
 | backend-server | ~70 | Medium (use rootLog; request-scoped where applicable) |
-| test-app App | 2 | Low |
+| test-app App | 0 (migrated) | — |
 
 **Allowlist (justified direct console):** Logger default sink; run.ts fatal + startup; cli usage; backend fatal bootstrap (no key, etc.). See [ALLOWLIST.md](./ALLOWLIST.md).

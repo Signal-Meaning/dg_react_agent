@@ -20,6 +20,7 @@ import { ClosureIssueTestPage } from './closure-issue-test-page';
 import { getFunctionDefinitions } from './utils/functionDefinitions';
 import { getFunctionCallBackendBaseUrl, forwardFunctionCallToBackend } from './utils/functionCallBackend';
 import type { AgentFunction } from '../../src/types/agent';
+import { getLogger } from '../../src/utils/logger';
 
 // Type declaration for E2E test support
 // Only used in test-app for E2E testing, not part of the component's public API
@@ -191,7 +192,10 @@ function App() {
       ? (crypto as { randomUUID: () => string }).randomUUID()
       : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`
   );
-  
+  const isDebugMode = import.meta.env.VITE_DEBUG === 'true' || new URLSearchParams(window.location.search).get('debug') === 'true' || false;
+  const logger = useMemo(() => getLogger({ debug: isDebugMode }), [isDebugMode]);
+  const sessionLogger = useMemo(() => logger.child({ traceId: sessionTraceId }), [logger, sessionTraceId]);
+
   // Audio constraints for echo cancellation testing (Issue #243)
   // Allow override via URL query params for E2E testing
   const memoizedAudioConstraints = useMemo(() => {
@@ -201,17 +205,17 @@ function App() {
     if (constraintsParam) {
       try {
         const parsed = JSON.parse(constraintsParam);
-        console.log('🎤 [APP] Using audio constraints from URL:', parsed);
+        sessionLogger.debug('Using audio constraints from URL', { parsed });
         return parsed as AudioConstraints;
       } catch (error) {
-        console.warn('🎤 [APP] Failed to parse audioConstraints from URL:', error);
+        sessionLogger.warn('Failed to parse audioConstraints from URL', { error: error instanceof Error ? error.message : String(error) });
       }
     }
     
     // Default: return undefined to use component defaults
     return undefined;
-  }, []);
-  
+  }, [sessionLogger]);
+
   // Flag to prevent state override after UtteranceEnd
   const utteranceEndDetected = useRef(false);
   
@@ -244,14 +248,9 @@ function App() {
   const addLog = useCallback((message: string) => {
     const timestampedMessage = `${new Date().toISOString().substring(11, 19)} - ${message}`;
     setLogs(prev => [...prev, timestampedMessage]);
-    // Also log to console for debugging
-    console.log(timestampedMessage);
-    // Don't clear keepalive - let it persist in the log history
-  }, []); // No dependencies, created once
-  
-  // Get debug state from URL or environment
-  const isDebugMode = import.meta.env.VITE_DEBUG === 'true' || new URLSearchParams(window.location.search).get('debug') === 'true' || false;
-  
+    sessionLogger.info(timestampedMessage);
+  }, [sessionLogger]);
+
   // Enable test mode for E2E tests (exposes Settings message to window)
   useEffect(() => {
     if (isTestMode || new URLSearchParams(window.location.search).get('test-mode') === 'true') {
@@ -389,7 +388,7 @@ function App() {
         setLoadedInstructions(instructions);
         addLog(`Loaded instructions via loader: ${instructions.substring(0, 50)}...`);
       } catch (error) {
-        console.error('Failed to load instructions:', error);
+        sessionLogger.error('Failed to load instructions', { error: error instanceof Error ? error.message : String(error) });
         addLog(`Failed to load instructions: ${error instanceof Error ? error.message : 'Unknown error'}`);
         
         // Fallback to environment variable directly if loader fails
@@ -414,7 +413,7 @@ function App() {
 
   const memoizedTranscriptionOptions = useMemo(() => {
     const interimResults = import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS !== 'false';
-    console.log(`[TEST-APP] Transcription options - interim_results: ${interimResults} (env var: ${import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS || 'not set'})`);
+    sessionLogger.debug(`Transcription options - interim_results: ${interimResults}`, { envVar: import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS || 'not set' });
     return {
       // Use environment variables with sensible defaults
       model: import.meta.env.VITE_TRANSCRIPTION_MODEL || 'nova-3',
@@ -441,7 +440,7 @@ function App() {
     
     // Log for debugging E2E tests
     if (enableFunctionCalling) {
-      console.log(`[APP] memoizedAgentOptions: enableFunctionCalling=true, functionType=${functionType}`);
+      sessionLogger.debug('memoizedAgentOptions: enableFunctionCalling=true', { functionType });
     }
     
     // Get test override if available (Issue #336: set by setupFunctionCallingTest helper)
@@ -521,11 +520,11 @@ function App() {
     
     // Skip empty transcripts (can happen with early interim results)
     if (!text || text.trim().length === 0) {
-      console.log(`[TRANSCRIPT-CALLBACK] Skipping empty transcript (interim result with no text yet)`);
+      sessionLogger.debug('TRANSCRIPT-CALLBACK: Skipping empty transcript (interim result with no text yet)');
       return;
     }
     
-    console.log(`[TRANSCRIPT-CALLBACK] Received ${isFinal ? 'final' : 'interim'} transcript:`, {
+    sessionLogger.debug(`TRANSCRIPT-CALLBACK: Received ${isFinal ? 'final' : 'interim'} transcript`, {
       type: transcript.type,
       is_final: isFinal,
       speech_final: speechFinal,
@@ -563,18 +562,18 @@ function App() {
       const transcriptTypeLabel = transcriptEntry.is_final 
         ? (transcriptEntry.speech_final ? 'final (speech_final)' : 'final')
         : 'interim';
-      console.log(`[TRANSCRIPT-CAPTURE] Stored ${transcriptTypeLabel} transcript: "${text.substring(0, 50)}..." (is_final: ${transcriptEntry.is_final}, speech_final: ${transcriptEntry.speech_final})`);
+      sessionLogger.debug(`TRANSCRIPT-CAPTURE: Stored ${transcriptTypeLabel} transcript`, { textPreview: text.substring(0, 50), is_final: transcriptEntry.is_final, speech_final: transcriptEntry.speech_final });
     } else {
       // Log warning if we can't extract text from transcript
-      console.warn('[TRANSCRIPT] Could not extract text from transcript:', {
+      sessionLogger.warn('Could not extract text from transcript', {
         hasAlternatives: 'alternatives' in transcript,
         hasChannel: 'channel' in transcript,
         channelType: typeof (transcript as { channel?: unknown }).channel,
         keys: Object.keys(transcript)
       });
     }
-  }, [addLog]); // Include addLog in dependencies
-  
+  }, [addLog, sessionLogger]);
+
   const handleAgentUtterance = useCallback((utterance: LLMResponse, conversationHistory?: Array<{ role: ConversationRole; content: string; timestamp?: number }>) => {
     const history = conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? [];
     const greeting = import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?';
@@ -634,11 +633,7 @@ function App() {
     // If mute button is pressed (ttsMuted === true) but audio starts playing,
     // this indicates allowAgentRef blocking state was lost/reset between turns
     if (isPlaying && ttsMuted) {
-      console.error('⚠️ Audio playback started while mute button is active!');
-      console.error('   This indicates allowAgentRef blocking state was reset/lost between agent turns.');
-      console.error('   - Mute button state: PRESSED (ttsMuted=true)');
-      console.error('   - Audio playback state: PLAYING (isPlaying=true)');
-      console.error('   - Expected: Audio should be blocked and NOT playing');
+      sessionLogger.error('Audio playback started while mute button is active (allowAgentRef blocking state lost)', { ttsMuted: true, isPlaying: true });
       addLog('⚠️ [BUG DETECTED] Audio playing while muted - Issue #223!');
     }
     
@@ -670,16 +665,16 @@ function App() {
     // Recoverable: e.g. OpenAI sends "server had an error" after a successful response. Still a regression; tests assert count stays 0.
     if (error.recoverable) {
       addLog(`Warning (${error.service}): ${error.message} You can continue or reconnect.`);
-      if (isDebugMode) console.warn(`Recoverable error (${error.service}):`, error);
+      if (isDebugMode) sessionLogger.warn(`Recoverable error (${error.service})`, { error: error.message, code: error.code });
       return;
     }
     addLog(`Error (${error.service}): ${error.message}`);
     // Skip console.error for connection failures to avoid duplicate noise (browser already logs WebSocket failure)
     const isConnectionError = error.code === 'websocket_error' || (error.message?.toLowerCase().includes('connection') ?? false);
     if (!isConnectionError) {
-      console.error(`Error (${error.service}):`, error);
+      sessionLogger.error(`Error (${error.service})`, { message: error.message, code: error.code });
     }
-  }, [addLog, isDebugMode]);
+  }, [addLog, isDebugMode, sessionLogger]);
 
   // VAD event handlers - clearly marked by source
   const handleUserStartedSpeaking = useCallback(() => {
@@ -749,7 +744,7 @@ function App() {
 
   // Function call request handler (Issue #305, #407) - must be defined before early returns
   const handleFunctionCallRequest = useCallback((request: FunctionCallRequest, sendResponse: (response: FunctionCallResponse) => void) => {
-    console.log('[APP] FunctionCallRequest received:', request);
+    sessionLogger.debug('FunctionCallRequest received', { name: request.name, id: request.id });
     setFunctionCallCount(prev => prev + 1);
 
     const testWindow = window as TestWindow;
@@ -777,7 +772,7 @@ function App() {
     }
 
     // No handler and no backend URL: log only (e.g. direct Deepgram without proxy)
-    console.warn('[APP] No function-call handler or backend URL; request not handled:', request.name);
+    sessionLogger.warn('No function-call handler or backend URL; request not handled', { name: request.name });
   }, [proxyEndpoint]);
 
   // Auto-connect dual mode event handlers
@@ -814,7 +809,7 @@ function App() {
       setTextInput('');
     } catch (error) {
       addLog(`Error sending text message: ${(error as Error).message}`);
-      console.error('Text submit error:', error);
+      sessionLogger.error('Text submit error', { error: error instanceof Error ? error.message : String(error) });
     }
   }, [textInput, addLog]);
 
@@ -836,7 +831,7 @@ function App() {
       addLog('Started interaction');
     } catch (error) {
       addLog(`Error starting: ${(error as Error).message}`);
-      console.error('Start error:', error);
+      sessionLogger.error('Start error', { error: error instanceof Error ? error.message : String(error) });
     }
   };
   
@@ -847,7 +842,7 @@ function App() {
       addLog('Stopped interaction');
     } catch (error) {
       addLog(`Error stopping: ${(error as Error).message}`);
-      console.error('Stop error:', error);
+      sessionLogger.error('Stop error', { error: error instanceof Error ? error.message : String(error) });
     }
   };
   
@@ -865,7 +860,7 @@ function App() {
       addLog('🔊 Agent audio allowed');
       if (deepgramRef.current) deepgramRef.current.allowAgent();
     }
-  }, [addLog, ttsMuted]);
+  }, [addLog, ttsMuted, sessionLogger]);
 
   const updateContext = () => {
     // Define the possible instruction prompts
@@ -912,57 +907,42 @@ function App() {
 
   const toggleMicrophone = async () => {
     try {
-      console.log('🎤 [APP] toggleMicrophone called');
-      console.log('🎤 [APP] micEnabled:', micEnabled);
-      console.log('🎤 [APP] deepgramRef.current:', !!deepgramRef.current);
-      
+      sessionLogger.debug('toggleMicrophone called', { micEnabled, hasRef: !!deepgramRef.current });
       if (!micEnabled) {
-        // Enable microphone with lazy audio initialization
         setMicLoading(true);
         addLog('Starting audio capture (lazy initialization)');
-        console.log('🎤 [APP] About to call startAudioCapture()');
-        
+        sessionLogger.debug('About to call startAudioCapture()');
         if (deepgramRef.current) {
-          console.log('🎤 [APP] deepgramRef.current exists, calling startAudioCapture()');
-          console.log('🎤 [APP] deepgramRef.current methods:', Object.keys(deepgramRef.current));
-          
-          // Always attempt to start both agent and transcription services
-          // start() is safe for redundant calls - it will reuse existing connections
-          // This ensures both services are available when microphone is activated
-          // (VAD events and transcripts require transcription service)
-          console.log('🎤 [APP] Starting both agent and transcription services...');
+          sessionLogger.debug('deepgramRef.current exists, calling startAudioCapture()', { methods: Object.keys(deepgramRef.current) });
+          sessionLogger.debug('Starting both agent and transcription services...');
           addLog('Starting agent and transcription services...');
           await deepgramRef.current.start({ agent: true, transcription: true });
-          console.log('🎤 [APP] Services started (or already connected)');
-          
+          sessionLogger.debug('Services started (or already connected)');
           if (typeof deepgramRef.current.startAudioCapture === 'function') {
-            console.log('🎤 [APP] startAudioCapture method exists, calling it');
+            sessionLogger.debug('startAudioCapture method exists, calling it');
             await deepgramRef.current.startAudioCapture();
-            console.log('🎤 [APP] startAudioCapture() completed successfully');
+            sessionLogger.debug('startAudioCapture() completed successfully');
             addLog('Audio capture started successfully');
-            
-            // Update local state to reflect microphone is enabled
             setMicEnabled(true);
           } else {
-            console.log('🎤 [APP] startAudioCapture method does not exist!');
+            sessionLogger.debug('startAudioCapture method does not exist');
             addLog('❌ [APP] startAudioCapture method not found on ref');
           }
         } else {
-          console.log('🎤 [APP] deepgramRef.current is null!');
+          sessionLogger.debug('deepgramRef.current is null');
           addLog('❌ [APP] deepgramRef.current is null - cannot start audio capture');
         }
         setMicLoading(false);
       } else {
-        // Disable microphone
-        console.log('🎤 [APP] Disabling microphone');
+        sessionLogger.debug('Disabling microphone');
         await deepgramRef.current?.stop();
         setMicEnabled(false);
         addLog('Microphone disabled');
       }
     } catch (error) {
-      console.log('🎤 [APP] Error in toggleMicrophone:', error);
+      sessionLogger.debug('Error in toggleMicrophone', { error: error instanceof Error ? error.message : String(error) });
       addLog(`Error toggling microphone: ${(error as Error).message}`);
-      console.error('Microphone toggle error:', error);
+      sessionLogger.error('Microphone toggle error', { error: error instanceof Error ? error.message : String(error) });
       setMicLoading(false);
     }
   };

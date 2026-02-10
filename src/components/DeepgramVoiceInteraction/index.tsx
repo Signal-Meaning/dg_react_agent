@@ -41,6 +41,7 @@ import {
   warnAboutNonMemoizedOptions,
   WindowWithDeepgramGlobals
 } from '../../utils/component-helpers';
+import { getLogger } from '../../utils/logger';
 
 // Default endpoints
 const DEFAULT_ENDPOINTS = {
@@ -229,7 +230,7 @@ function DeepgramVoiceInteraction(
     // If we had a previous instance ID, this is a remount
     // (This can happen if the component was unmounted and remounted)
     if (previousInstanceIdRef.current !== null && shouldLogRemounts) {
-      console.warn('⚠️ [Component] COMPONENT REMOUNT DETECTED!', {
+      logConsole('warn','⚠️ [Component] COMPONENT REMOUNT DETECTED!', {
         previousInstanceId: previousInstanceIdRef.current,
         newInstanceId: componentInstanceIdRef.current,
         reason: 'Component was unmounted and remounted by React (likely parent component remount or key prop change)',
@@ -239,7 +240,7 @@ function DeepgramVoiceInteraction(
     
     // Always log mount (even if not a remount) when debugging is enabled
     if (shouldLogRemounts) {
-      console.log('🔧 [Component] DeepgramVoiceInteraction component MOUNTED (new instance)', {
+      logConsole('debug','🔧 [Component] DeepgramVoiceInteraction component MOUNTED (new instance)', {
         instanceId: componentInstanceIdRef.current,
         previousInstanceId: previousInstanceIdRef.current,
         isRemount: previousInstanceIdRef.current !== null,
@@ -402,14 +403,14 @@ function DeepgramVoiceInteraction(
       // If yes: Review VAD source configuration (consider disabling one if both enabled).
       // If no: Safe to ignore - conflicts are expected when multiple VAD sources are active.
       if (conflictingEvents.length > 0 && props.debug) {
-        console.warn('⚠️ [VAD] Conflicting signals detected (usually harmless):', {
+        logConsole('warn','⚠️ [VAD] Conflicting signals detected (usually harmless):', {
           current: `${event.source}:${event.type} (${event.speechDetected})`,
           conflicts: conflictingEvents.map(e => `${e.source}:${e.type} (${e.speechDetected})`),
           note: 'Only investigate if seeing frequent conflicts AND incorrect behavior (idle timeouts, state issues)'
         });
       }
     } catch (error) {
-      console.error('Error tracking VAD event:', error);
+      logConsole('error','Error tracking VAD event:', error);
     }
   };
   
@@ -435,18 +436,23 @@ function DeepgramVoiceInteraction(
     });
   }
   
-  // Debug logging
+  // Issue #412: shared logger, gated by props.debug
+  const logger = React.useMemo(() => getLogger({ debug: !!props.debug }), [props.debug]);
   const log = (...args: unknown[]) => {
-    if (props.debug) {
-      console.log('[DeepgramVoiceInteraction]', ...args);
-    }
+    const msg = args.length && args[0] !== undefined ? String(args[0]) : '';
+    logger.debug('[DeepgramVoiceInteraction] ' + msg, args.length > 1 ? { extra: args.slice(1) } : undefined);
   };
-  
-  // Targeted sleep/wake logging
   const sleepLog = (...args: unknown[]) => {
-    if (props.debug) {
-      console.log('[SLEEP_CYCLE][CORE]', ...args);
-    }
+    const msg = args.length && args[0] !== undefined ? String(args[0]) : '';
+    logger.debug('[SLEEP_CYCLE][CORE] ' + msg, args.length > 1 ? { extra: args.slice(1) } : undefined);
+  };
+  const logConsole = (level: 'debug' | 'info' | 'warn' | 'error', ...args: unknown[]) => {
+    const msg = args.length && args[0] !== undefined ? String(args[0]) : '';
+    const attrs = args.length > 1 ? { extra: args.slice(1) } : undefined;
+    if (level === 'debug') logger.debug(msg, attrs);
+    else if (level === 'info') logger.info(msg, attrs);
+    else if (level === 'warn') logger.warn(msg, attrs);
+    else logger.error(msg, attrs);
   };
 
   // Update stateRef whenever state changes
@@ -486,11 +492,11 @@ function DeepgramVoiceInteraction(
       log('Error:', error);
       // Verbose error dump only when debug is enabled to avoid console spam (e.g. connection failures)
       if (props.debug) {
-        console.log(`🚨 [ERROR] Error (${error.service}):`, error);
-        console.log('🚨 [ERROR] Error service:', error.service);
-        console.log('🚨 [ERROR] Error code:', error.code);
-        console.log('🚨 [ERROR] Error message:', error.message);
-        console.log('🚨 [ERROR] Error details:', error.details);
+        logConsole('debug',`🚨 [ERROR] Error (${error.service}):`, error);
+        logConsole('debug','🚨 [ERROR] Error service:', error.service);
+        logConsole('debug','🚨 [ERROR] Error code:', error.code);
+        logConsole('debug','🚨 [ERROR] Error message:', error.message);
+        logConsole('debug','🚨 [ERROR] Error details:', error.details);
       }
     }
 
@@ -560,7 +566,7 @@ function DeepgramVoiceInteraction(
     // However, if apiKey is actually provided, it should be passed through correctly.
     const apiKeyValue = config.apiKey ?? '';
     // ALWAYS log this to debug the regression (remove after fix is verified)
-    console.log('🔧 [getConnectionOptions] Direct mode (ALWAYS LOG):', {
+    logConsole('debug','🔧 [getConnectionOptions] Direct mode (ALWAYS LOG):', {
       connectionMode: config.connectionMode,
       apiKeyProvided: !!config.apiKey,
       apiKeyLength: config.apiKey?.length || 0,
@@ -635,13 +641,13 @@ function DeepgramVoiceInteraction(
       // Add VAD configuration if provided
       if (config.transcriptionOptions.utterance_end_ms) {
         baseTranscriptionParams.utterance_end_ms = config.transcriptionOptions.utterance_end_ms;
-        console.log(`VAD: utterance_end_ms set to ${config.transcriptionOptions.utterance_end_ms}ms`);
+        logConsole('debug',`VAD: utterance_end_ms set to ${config.transcriptionOptions.utterance_end_ms}ms`);
       }
       
       if (config.transcriptionOptions.interim_results !== undefined) {
         baseTranscriptionParams.interim_results = config.transcriptionOptions.interim_results;
         if (config.debug) {
-          console.log(`VAD: interim_results set to ${config.transcriptionOptions.interim_results}`);
+          logConsole('debug',`VAD: interim_results set to ${config.transcriptionOptions.interim_results}`);
         }
       }
 
@@ -717,7 +723,7 @@ function DeepgramVoiceInteraction(
         if (event.type === 'state') {
           // Only log and dispatch if state actually changed
           if (config.debug) {
-            console.log('🔧 [DEBUG] Transcription state event:', event.state, 'Previous:', lastConnectionStates.current.transcription);
+            logConsole('debug','🔧 [DEBUG] Transcription state event:', event.state, 'Previous:', lastConnectionStates.current.transcription);
           }
           if (lastConnectionStates.current.transcription !== event.state) {
             log('Transcription state:', event.state);
@@ -726,7 +732,7 @@ function DeepgramVoiceInteraction(
             lastConnectionStates.current.transcription = event.state;
           } else {
             if (config.debug) {
-              console.log('🔧 [DEBUG] Transcription state unchanged, skipping:', event.state);
+              logConsole('debug','🔧 [DEBUG] Transcription state unchanged, skipping:', event.state);
             }
           }
         } else if (event.type === 'message') {
@@ -738,7 +744,7 @@ function DeepgramVoiceInteraction(
 
       return manager;
     } catch (error) {
-      console.error('Exception in transcription manager creation:', error);
+      logConsole('error','Exception in transcription manager creation:', error);
       handleError({
         service: 'transcription',
         code: 'setup_error',
@@ -772,11 +778,11 @@ function DeepgramVoiceInteraction(
       const agentQueryParams = { service: 'agent' };
       
       if (config.debug) {
-        console.log('🔧 [AGENT] Creating WebSocketManager with URL:', finalAgentUrl);
-        console.log('🔧 [AGENT] Connection mode:', config.connectionMode);
-        console.log('🔧 [AGENT] Proxy endpoint:', config.proxyEndpoint);
-        console.log('🔧 [AGENT] API key present:', !!connectionOptions.apiKey);
-        console.log('🔧 [AGENT] Auth token present:', !!connectionOptions.authToken);
+        logConsole('debug','🔧 [AGENT] Creating WebSocketManager with URL:', finalAgentUrl);
+        logConsole('debug','🔧 [AGENT] Connection mode:', config.connectionMode);
+        logConsole('debug','🔧 [AGENT] Proxy endpoint:', config.proxyEndpoint);
+        logConsole('debug','🔧 [AGENT] API key present:', !!connectionOptions.apiKey);
+        logConsole('debug','🔧 [AGENT] Auth token present:', !!connectionOptions.authToken);
       }
       
       const manager = new WebSocketManager({
@@ -795,12 +801,12 @@ function DeepgramVoiceInteraction(
         if (event.type === 'state') {
           // Only log and dispatch if state actually changed
           if (config.debug) {
-            console.log('🔧 [DEBUG] Agent state event:', event.state, 'Previous:', lastConnectionStates.current.agent);
+            logConsole('debug','🔧 [DEBUG] Agent state event:', event.state, 'Previous:', lastConnectionStates.current.agent);
           }
           if (lastConnectionStates.current.agent !== event.state) {
             log('Agent state:', event.state);
             if (event.state === 'connected') {
-              console.info('🔗 [Protocol] Agent WebSocket connected');
+              logger.info('🔗 [Protocol] Agent WebSocket connected');
               
               // Handle reconnection logic
               if (event.isReconnection) {
@@ -818,15 +824,15 @@ function DeepgramVoiceInteraction(
             lastConnectionStates.current.agent = event.state;
           } else {
             if (config.debug) {
-              console.log('🔧 [DEBUG] Agent state unchanged, skipping:', event.state);
+              logConsole('debug','🔧 [DEBUG] Agent state unchanged, skipping:', event.state);
             }
           }
           
           // Reset settings flag when connection closes
           if (event.state === 'closed') {
             if (config.debug) {
-              console.log('🔧 [Connection] Agent connection closed - checking for errors or reasons');
-              console.log('🔧 [Connection] Connection close event details:', event);
+              logConsole('debug','🔧 [Connection] Agent connection closed - checking for errors or reasons');
+              logConsole('debug','🔧 [Connection] Connection close event details:', event);
             }
             
             dispatch({ type: 'SETTINGS_SENT', sent: false });
@@ -834,9 +840,9 @@ function DeepgramVoiceInteraction(
             windowWithGlobals.globalSettingsSent = false; // Reset global flag when connection closes
             settingsSentTimeRef.current = null; // Reset settings time
             if (config.debug) {
-              console.log('🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
+              logConsole('debug','🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
             }
-            if (props.debug) console.log('Reset hasSentSettings flag due to connection close');
+            if (props.debug) logConsole('debug','Reset hasSentSettings flag due to connection close');
             
             // Disable microphone when connection closes
             // CRITICAL: Stop audio synchronously to prevent race conditions with explicit stop() calls
@@ -845,13 +851,13 @@ function DeepgramVoiceInteraction(
               // Check guard: if audio is already being stopped by explicit stop(), skip to prevent double-stop
               if (isStoppingAudioRef.current) {
                 if (config.debug) {
-                  console.log('🔧 [Connection] Audio already being stopped by explicit stop(), skipping connection close handler');
+                  logConsole('debug','🔧 [Connection] Audio already being stopped by explicit stop(), skipping connection close handler');
                 }
                 return; // Early return to prevent double-stopping
               }
               
               if (config.debug) {
-                console.log('🔧 [Connection] Connection closed, disabling microphone');
+                logConsole('debug','🔧 [Connection] Connection closed, disabling microphone');
               }
               try {
                 // Set guard to prevent double-stopping if explicit stop() is called concurrently
@@ -859,7 +865,7 @@ function DeepgramVoiceInteraction(
                 // Stop recording synchronously - stopRecording() is synchronous, no need for setTimeout
                 audioManagerRef.current.stopRecording();
                 if (config.debug) {
-                  console.log('🔧 [Connection] Recording stopped due to connection close');
+                  logConsole('debug','🔧 [Connection] Recording stopped due to connection close');
                 }
                 // Reset guard immediately after stopping (synchronous operation is complete)
                 isStoppingAudioRef.current = false;
@@ -867,7 +873,7 @@ function DeepgramVoiceInteraction(
                 // Reset guard even on error
                 isStoppingAudioRef.current = false;
                 if (config.debug) {
-                  console.log('🔧 [Connection] Error stopping recording:', error);
+                  logConsole('debug','🔧 [Connection] Error stopping recording:', error);
                 }
                 // Log error but don't throw - connection is already closing
                 log('Error stopping recording on connection close:', error);
@@ -878,7 +884,7 @@ function DeepgramVoiceInteraction(
           // Send settings message when connection is established
           if (event.state === 'connected') {
             if (config.debug) {
-              console.log('🔧 [Connection State] Agent connected, checking if Settings should be sent:', {
+              logConsole('debug','🔧 [Connection State] Agent connected, checking if Settings should be sent:', {
                 hasSentSettingsRef: hasSentSettingsRef.current,
                 globalSettingsSent: windowWithGlobals.globalSettingsSent,
                 stateHasSentSettings: state.hasSentSettings,
@@ -888,7 +894,7 @@ function DeepgramVoiceInteraction(
             if (!hasSentSettingsRef.current && !windowWithGlobals.globalSettingsSent) {
               log('Connection established, sending settings via connection state handler');
               if (config.debug) {
-                console.log('🔧 [Connection State] ✅ Will send Settings after WebSocket is fully open');
+                logConsole('debug','🔧 [Connection State] ✅ Will send Settings after WebSocket is fully open');
               }
               // Wait for WebSocket to be fully OPEN before sending Settings (Issue #329)
               // React StrictMode can cause timing issues where state is 'connected' but WebSocket isn't fully OPEN yet
@@ -900,24 +906,24 @@ function DeepgramVoiceInteraction(
                                     wsState === 3 ? 'CLOSED' : 'UNKNOWN';
                 
                 if (config.debug) {
-                  console.log('🔧 [Connection State] Checking WebSocket state:', wsState, `(${wsStateName})`);
+                  logConsole('debug','🔧 [Connection State] Checking WebSocket state:', wsState, `(${wsStateName})`);
                 }
                 
                 if (wsState === 1) { // OPEN
                   if (config.debug) {
-                    console.log('🔧 [Connection State] WebSocket is OPEN, sending Settings');
+                    logConsole('debug','🔧 [Connection State] WebSocket is OPEN, sending Settings');
                   }
                   sendAgentSettings();
                 } else if (wsState === 0) { // CONNECTING
                   // Still connecting, wait a bit more
                   if (config.debug) {
-                    console.log('🔧 [Connection State] WebSocket still CONNECTING, will retry');
+                    logConsole('debug','🔧 [Connection State] WebSocket still CONNECTING, will retry');
                   }
                   setTimeout(checkAndSend, 50);
                 } else {
                   // CLOSING or CLOSED - connection is gone, can't send Settings
                   if (config.debug) {
-                    console.error('🔧 [Connection State] WebSocket is', wsStateName, '- cannot send Settings');
+                    logConsole('error','🔧 [Connection State] WebSocket is', wsStateName, '- cannot send Settings');
                   }
                 }
               };
@@ -927,11 +933,11 @@ function DeepgramVoiceInteraction(
             } else if (state.hasSentSettings) {
               log('Connection established but settings already sent, skipping');
               if (config.debug) {
-                console.log('🔧 [Connection State] ⚠️ Settings already sent, skipping');
+                logConsole('debug','🔧 [Connection State] ⚠️ Settings already sent, skipping');
               }
             } else {
               if (config.debug) {
-                console.log('🔧 [Connection State] ⚠️ Settings not sent - blocked by flags:', {
+                logConsole('debug','🔧 [Connection State] ⚠️ Settings not sent - blocked by flags:', {
                   hasSentSettingsRef: hasSentSettingsRef.current,
                   globalSettingsSent: windowWithGlobals.globalSettingsSent
                 });
@@ -949,7 +955,7 @@ function DeepgramVoiceInteraction(
 
       return manager;
     } catch (error) {
-      console.error('Exception in agent manager creation:', error);
+      logConsole('error','Exception in agent manager creation:', error);
       handleError({
         service: 'agent',
         code: 'setup_error',
@@ -974,7 +980,7 @@ function DeepgramVoiceInteraction(
     
     // Debug: Log initialization decision
     if (props.debug) {
-      console.log('🔧 [Component] Initialization check', {
+      logConsole('debug','🔧 [Component] Initialization check', {
         isFirstMount,
         isReady: currentState.isReady,
         isMounted: isMountedRef.current,
@@ -1024,13 +1030,13 @@ function DeepgramVoiceInteraction(
       prevApiKeyRef.current = apiKey;
       prevDebugRef.current = props.debug;
       if (props.debug) {
-        console.log('🔧 [Component] Skipping re-initialization - dependencies unchanged');
+        logConsole('debug','🔧 [Component] Skipping re-initialization - dependencies unchanged');
       }
       return; // Skip re-initialization
     }
     
     if (props.debug) {
-      console.log('🔧 [Component] Proceeding with initialization', {
+      logConsole('debug','🔧 [Component] Proceeding with initialization', {
         isFirstMount,
         needsInitialization,
         isReady: currentState.isReady,
@@ -1078,7 +1084,7 @@ function DeepgramVoiceInteraction(
       // In CI or package import context, just log a warning instead of erroring
       if (isCIEnvironment || isPackageImport) {
         if (props.debug) {
-          console.log('⚠️ [DeepgramVoiceInteraction] No API key or proxy endpoint provided in CI/import context - component will not initialize');
+          logConsole('debug','⚠️ [DeepgramVoiceInteraction] No API key or proxy endpoint provided in CI/import context - component will not initialize');
         }
         return;
       }
@@ -1101,7 +1107,7 @@ function DeepgramVoiceInteraction(
     const servicesStr = services.length > 0 ? services.join(' + ') : 'none';
     
     if (debug) {
-      console.log('🔧 [Component] DeepgramVoiceInteraction initialized', {
+      logConsole('debug','🔧 [Component] DeepgramVoiceInteraction initialized', {
         services: servicesStr,
         mountId: currentMountId,
         instanceId: componentInstanceIdRef.current,
@@ -1118,7 +1124,7 @@ function DeepgramVoiceInteraction(
     
     // Detailed debug logging (only when debug prop is true)
     if (props.debug) {
-      console.log('🔧 [INIT] Service configuration details:', {
+      logConsole('debug','🔧 [INIT] Service configuration details:', {
         transcriptionOptions,
         agentOptions,
         isTranscriptionConfigured,
@@ -1135,7 +1141,7 @@ function DeepgramVoiceInteraction(
       // In CI or package import context, just log a warning instead of erroring
       if (isCIEnvironment || isPackageImport) {
         if (props.debug) {
-          console.log('⚠️ [DeepgramVoiceInteraction] No services configured in CI/import context - component will not initialize');
+          logConsole('debug','⚠️ [DeepgramVoiceInteraction] No services configured in CI/import context - component will not initialize');
         }
         return;
       }
@@ -1187,13 +1193,13 @@ function DeepgramVoiceInteraction(
       // Debug: Log cleanup to understand when it runs
       if (props.debug) {
         const stack = new Error().stack;
-        console.log('🔧 [Component] useEffect cleanup running', {
+        logConsole('debug','🔧 [Component] useEffect cleanup running', {
           mountId: cleanupMountId,
           transcriptionManagerExists: !!transcriptionManagerRef.current,
           agentManagerExists: !!agentManagerRef.current,
           isMounted: isMountedRef.current
         });
-        console.log('🔧 [Component] Cleanup stack trace:', stack?.split('\n').slice(2, 6).join('\n'));
+        logConsole('debug','🔧 [Component] Cleanup stack trace:', stack?.split('\n').slice(2, 6).join('\n'));
       }
       
       // Check if this is a StrictMode cleanup (component will immediately re-mount)
@@ -1214,14 +1220,14 @@ function DeepgramVoiceInteraction(
         // In that case, don't close connections as they'll be needed for the re-mounted component
         if (isMountedRef.current) {
           if (props.debug) {
-            console.log('🔧 [Component] Cleanup detected StrictMode re-invocation - preserving connections and state');
+            logConsole('debug','🔧 [Component] Cleanup detected StrictMode re-invocation - preserving connections and state');
           }
           return; // Component re-mounted, don't close connections or reset state
         }
         
         // Component is truly unmounting - close connections
         if (props.debug) {
-          console.log('🔧 [Component] Component truly unmounting - closing connections');
+          logConsole('debug','🔧 [Component] Component truly unmounting - closing connections');
         }
         
         // Mark as unmounted only after confirming it's a true unmount
@@ -1230,7 +1236,7 @@ function DeepgramVoiceInteraction(
         // Close managers if they were created (they handle their own event listener cleanup)
         if (transcriptionManagerRef.current) {
           if (props.debug) {
-            console.log('🔧 [Component] Closing transcription manager in cleanup');
+            logConsole('debug','🔧 [Component] Closing transcription manager in cleanup');
           }
           transcriptionManagerRef.current.close();
           transcriptionManagerRef.current = null;
@@ -1238,7 +1244,7 @@ function DeepgramVoiceInteraction(
         
         if (agentManagerRef.current) {
           if (props.debug) {
-            console.log('🔧 [Component] Closing agent manager in cleanup');
+            logConsole('debug','🔧 [Component] Closing agent manager in cleanup');
           }
           agentManagerRef.current.close();
           agentManagerRef.current = null;
@@ -1273,7 +1279,7 @@ function DeepgramVoiceInteraction(
     // Issue #311: Entry point logging to verify useEffect is running
     const shouldLogDiagnostics = props.debug || windowWithGlobals.__DEEPGRAM_DEBUG_AGENT_OPTIONS__;
     if (shouldLogDiagnostics) {
-      console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Entry point - useEffect triggered', {
+      logConsole('debug','[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Entry point - useEffect triggered', {
         agentOptionsRef: agentOptions !== undefined ? 'exists' : 'undefined',
         prevAgentOptionsRef: prevAgentOptionsForResendRef.current !== undefined ? 'exists' : 'undefined',
         isFirstRender: prevAgentOptionsForResendRef.current === undefined
@@ -1284,7 +1290,7 @@ function DeepgramVoiceInteraction(
     if (prevAgentOptionsForResendRef.current === undefined) {
       prevAgentOptionsForResendRef.current = agentOptions;
       if (shouldLogDiagnostics) {
-        console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] First render - skipping change detection');
+        logConsole('debug','[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] First render - skipping change detection');
       }
       return;
     }
@@ -1293,7 +1299,7 @@ function DeepgramVoiceInteraction(
     if (shouldLogDiagnostics) {
       const prevOptions = prevAgentOptionsForResendRef.current as AgentOptions | undefined;
       const currentOptions = agentOptions as AgentOptions | undefined;
-      console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Comparing values:', {
+      logConsole('debug','[DeepgramVoiceInteraction] 🔍 [agentOptions useEffect] Comparing values:', {
         prevHasFunctions: !!(prevOptions?.functions),
         prevFunctionsCount: Array.isArray(prevOptions?.functions) 
           ? prevOptions?.functions.length 
@@ -1325,8 +1331,8 @@ function DeepgramVoiceInteraction(
       const isConnected = connectionState === 'connected';
       const hasSentSettingsBefore = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
       
-      // Use console.log directly for diagnostic logs (not log() which requires props.debug)
-      console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions Change] Diagnostic:', {
+      // Issue #412: diagnostic logs via logger (gated by shouldLogDiagnostics)
+      logConsole('debug','[DeepgramVoiceInteraction] 🔍 [agentOptions Change] Diagnostic:', {
         agentOptionsChanged,
         agentOptionsExists: !!agentOptions,
         agentManagerExists: !!agentManagerRef.current,
@@ -1356,7 +1362,7 @@ function DeepgramVoiceInteraction(
         // Only retry if component is ready (manager should exist)
         if (currentState.isReady) {
           if (shouldLogDiagnostics) {
-            console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] agentManager is null, waiting for re-initialization...');
+            logConsole('debug','[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] agentManager is null, waiting for re-initialization...');
           }
           
           // Clear any existing timeout before creating a new one
@@ -1388,14 +1394,14 @@ function DeepgramVoiceInteraction(
                   log('agentOptions changed while connected - skipping re-send (Issue #399: send Settings only once per connection)');
                 }
               } else if (shouldLogDiagnostics) {
-                console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] Re-send still blocked after delay:', {
+                logConsole('debug','[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] Re-send still blocked after delay:', {
                   isConnected,
                   hasSentSettingsBefore,
                   agentManagerExists: !!agentManagerRef.current
                 });
               }
             } else if (shouldLogDiagnostics) {
-              console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] agentManager still null after delay');
+              logConsole('debug','[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] agentManager still null after delay');
             }
           }, 100); // Small delay to allow main useEffect to recreate manager
           
@@ -1435,16 +1441,16 @@ function DeepgramVoiceInteraction(
           log('agentOptions changed while connected - skipping re-send (Issue #399: send Settings only once per connection)');
         }
       } else if (shouldLogDiagnostics) {
-        // Issue #311: Log why re-send was blocked (use console.log directly for diagnostics)
-        console.log('[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] Re-send blocked:', {
+        // Issue #311: Log why re-send was blocked (Issue #412: via logger)
+        logConsole('debug','[DeepgramVoiceInteraction] ⚠️ [agentOptions Change] Re-send blocked:', {
           isConnected,
           hasSentSettingsBefore,
           reason: !isConnected ? 'connection not established' : 'settings not sent before'
         });
       }
     } else if (shouldLogDiagnostics) {
-      // Issue #311: Log why change detection didn't trigger re-send (use console.log directly for diagnostics)
-      console.log('[DeepgramVoiceInteraction] 🔍 [agentOptions Change] Change detection:', {
+      // Issue #311: Log why change detection didn't trigger re-send (Issue #412: via logger)
+      logConsole('debug','[DeepgramVoiceInteraction] 🔍 [agentOptions Change] Change detection:', {
         agentOptionsChanged,
         agentOptionsExists: !!agentOptions,
         agentManagerExists: !!agentManagerRef.current
@@ -1507,7 +1513,7 @@ function DeepgramVoiceInteraction(
     const result = isObject && isNotNull && hasType;
     
     if (props.debug) {
-      console.log('🔍 [DEBUG] isTranscriptionMessage check:', {
+      logConsole('debug','🔍 [DEBUG] isTranscriptionMessage check:', {
         data: data,
         isObject,
         isNotNull,
@@ -1521,7 +1527,7 @@ function DeepgramVoiceInteraction(
   // Handle transcription messages - only relevant if transcription is configured
   const handleTranscriptionMessage = (data: unknown) => {
     if (props.debug) {
-      console.log('🔍 [DEBUG] handleTranscriptionMessage called with:', data);
+      logConsole('debug','🔍 [DEBUG] handleTranscriptionMessage called with:', data);
     }
     
     // Add simplified transcript log for better readability - always show with [TRANSCRIPT] prefix
@@ -1544,14 +1550,14 @@ function DeepgramVoiceInteraction(
         const speechFinal = rawData.speech_final ?? false;
         
         if (props.debug) {
-          console.log(`[TRANSCRIPT] "${transcript}" ${isFinal ? '(final)' : '(interim)'}${speechFinal ? ' [SPEECH_FINAL]' : ''}`);
+          logConsole('debug',`[TRANSCRIPT] "${transcript}" ${isFinal ? '(final)' : '(interim)'}${speechFinal ? ' [SPEECH_FINAL]' : ''}`);
         }
         
         // CRITICAL FIX: Use Deepgram's recommended end-of-speech signals
         if (speechFinal === true) {
           // speech_final=true - Deepgram's endpointing detected speech has ended
           if (props.debug) {
-            console.log('🎯 [SPEECH] speech_final=true received - user finished speaking (endpointing)');
+            logConsole('debug','🎯 [SPEECH] speech_final=true received - user finished speaking (endpointing)');
           }
           
           // Set flag to ignore subsequent UtteranceEnd (per Deepgram guidelines)
@@ -1571,7 +1577,7 @@ function DeepgramVoiceInteraction(
         } else if (isFinal && !speechFinal) {
           // Final transcript without speech_final - user finished speaking (fallback)
           if (props.debug) {
-            console.log('🎯 [SPEECH] Final transcript received - user finished speaking (fallback)');
+            logConsole('debug','🎯 [SPEECH] Final transcript received - user finished speaking (fallback)');
           }
           
           // User stopped speaking - call callback if user was speaking
@@ -1588,7 +1594,7 @@ function DeepgramVoiceInteraction(
         } else if (!isFinal) {
           // Interim transcript - user is actively speaking
           if (props.debug) {
-            console.log('🎯 [SPEECH] Interim transcript received - user is speaking');
+            logConsole('debug','🎯 [SPEECH] Interim transcript received - user is speaking');
           }
           
           onUserStartedSpeaking?.();
@@ -1605,7 +1611,7 @@ function DeepgramVoiceInteraction(
     // Always log VAD events for debugging
     if (typeof data === 'object' && data !== null && 'type' in data && (data as { type?: string }).type === 'vad') {
       if (props.debug) {
-        console.log('🎯 [VAD] VADEvent received in handleTranscriptionMessage:', data);
+        logConsole('debug','🎯 [VAD] VADEvent received in handleTranscriptionMessage:', data);
       }
     }
     
@@ -1618,48 +1624,48 @@ function DeepgramVoiceInteraction(
       );
       
       if (hasContent) {
-        console.log('📝 [TRANSCRIPTION] Message received:', data);
+        logConsole('debug','📝 [TRANSCRIPTION] Message received:', data);
       }
     }
     
     // Skip processing if transcription service isn't configured
     if (!transcriptionManagerRef.current) {
       if (props.debug) {
-        console.log('🔍 [DEBUG] Transcription service not configured, returning early');
+        logConsole('debug','🔍 [DEBUG] Transcription service not configured, returning early');
       }
       log('Received unexpected transcription message but service is not configured:', data);
       return;
     }
     
     if (props.debug) {
-      console.log('🔍 [DEBUG] Transcription service is configured, continuing...');
+      logConsole('debug','🔍 [DEBUG] Transcription service is configured, continuing...');
     }
     
     // Debug: Log message type for VAD debugging
     if (typeof data === 'object' && data !== null && 'type' in data) {
       if (props.debug) {
-        console.log('🔍 [DEBUG] Processing message type:', (data as { type?: string }).type);
+        logConsole('debug','🔍 [DEBUG] Processing message type:', (data as { type?: string }).type);
       }
     }
 
     // Type guard check
     if (props.debug) {
-      console.log('🔍 [DEBUG] Checking type guard for data:', data);
+      logConsole('debug','🔍 [DEBUG] Checking type guard for data:', data);
     }
     const typeGuardResult = isTranscriptionMessage(data);
     if (props.debug) {
-      console.log('🔍 [DEBUG] isTranscriptionMessage result:', typeGuardResult);
+      logConsole('debug','🔍 [DEBUG] isTranscriptionMessage result:', typeGuardResult);
     }
     if (!typeGuardResult) {
       if (props.debug) {
-        console.log('🔍 [DEBUG] Type guard failed, returning early');
+        logConsole('debug','🔍 [DEBUG] Type guard failed, returning early');
       }
       log('Invalid transcription message format:', data);
       return;
     }
     
     if (props.debug) {
-      console.log('🔍 [DEBUG] Message passed type guard, processing...');
+      logConsole('debug','🔍 [DEBUG] Message passed type guard, processing...');
     }
     
     // Check if agent is in sleep mode
@@ -1724,7 +1730,7 @@ function DeepgramVoiceInteraction(
 
     if (data.type === 'UtteranceEnd') {
       if (props.debug) {
-        console.log('🎯 [SPEECH] UtteranceEnd message received - checking if should process');
+        logConsole('debug','🎯 [SPEECH] UtteranceEnd message received - checking if should process');
       }
       
       // Always call onUtteranceEnd callback to provide channel and lastWordEnd data
@@ -1743,13 +1749,13 @@ function DeepgramVoiceInteraction(
       // If so, skip internal state management but still call callbacks above
       if (speechFinalReceivedRef.current) {
         if (props.debug) {
-          console.log('🎯 [SPEECH] UtteranceEnd callbacks called, but skipping internal state (speech_final=true already received)');
+          logConsole('debug','🎯 [SPEECH] UtteranceEnd callbacks called, but skipping internal state (speech_final=true already received)');
         }
         return; // Skip internal state management, but callbacks were already called above
       }
       
       if (props.debug) {
-        console.log('🎯 [SPEECH] UtteranceEnd processing - no speech_final received, user finished speaking (word timing)');
+        logConsole('debug','🎯 [SPEECH] UtteranceEnd processing - no speech_final received, user finished speaking (word timing)');
       }
       
       if (isSleepingOrEntering) {
@@ -1759,7 +1765,7 @@ function DeepgramVoiceInteraction(
       
       // Re-enable idle timeout resets when user finishes speaking (per Deepgram docs)
       if (props.debug) {
-        console.log('🎯 [SPEECH] UtteranceEnd detected - re-enabling idle timeout resets');
+        logConsole('debug','🎯 [SPEECH] UtteranceEnd detected - re-enabling idle timeout resets');
       }
       
       // Note: onUserStoppedSpeaking was already called above (before the speech_final check)
@@ -1789,18 +1795,18 @@ function DeepgramVoiceInteraction(
     const currentAgentOptions = agentOptionsRef.current;
     
     if (debug) {
-      console.log('🔧 [sendAgentSettings] Called');
-      console.log(`🔧 [sendAgentSettings] agentManagerRef.current: ${!!agentManagerRef.current}`);
-      console.log(`🔧 [sendAgentSettings] agentOptions: ${!!currentAgentOptions}`);
-      console.log(`🔧 [sendAgentSettings] agentOptions.functions: ${currentAgentOptions?.functions ? `[${currentAgentOptions.functions.length} functions]` : 'undefined'}`);
-      console.log(`🔧 [sendAgentSettings] agentOptions.functions?.length: ${currentAgentOptions?.functions?.length || 0}`);
-      console.log(`🔧 [sendAgentSettings] hasSentSettings: ${state.hasSentSettings}`);
-      console.log(`🔧 [sendAgentSettings] hasSentSettingsRef.current: ${hasSentSettingsRef.current}`);
+      logConsole('debug','🔧 [sendAgentSettings] Called');
+      logConsole('debug',`🔧 [sendAgentSettings] agentManagerRef.current: ${!!agentManagerRef.current}`);
+      logConsole('debug',`🔧 [sendAgentSettings] agentOptions: ${!!currentAgentOptions}`);
+      logConsole('debug',`🔧 [sendAgentSettings] agentOptions.functions: ${currentAgentOptions?.functions ? `[${currentAgentOptions.functions.length} functions]` : 'undefined'}`);
+      logConsole('debug',`🔧 [sendAgentSettings] agentOptions.functions?.length: ${currentAgentOptions?.functions?.length || 0}`);
+      logConsole('debug',`🔧 [sendAgentSettings] hasSentSettings: ${state.hasSentSettings}`);
+      logConsole('debug',`🔧 [sendAgentSettings] hasSentSettingsRef.current: ${hasSentSettingsRef.current}`);
     }
     
     if (!agentManagerRef.current || !currentAgentOptions) {
       if (debug) {
-        console.log('🔧 [sendAgentSettings] Cannot send agent settings: agent manager not initialized or agentOptions not provided');
+        logConsole('debug','🔧 [sendAgentSettings] Cannot send agent settings: agent manager not initialized or agentOptions not provided');
       }
       return;
     }
@@ -1809,9 +1815,9 @@ function DeepgramVoiceInteraction(
     // Use both ref and global flag to avoid stale closure issues and cross-component duplicates
     if (hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent) {
       if (debug) {
-        console.log('🔧 [sendAgentSettings] Settings already sent (via ref or global), skipping');
-        console.log('🔧 [sendAgentSettings] hasSentSettingsRef.current:', hasSentSettingsRef.current);
-        console.log('🔧 [sendAgentSettings] globalSettingsSent:', windowWithGlobals.globalSettingsSent);
+        logConsole('debug','🔧 [sendAgentSettings] Settings already sent (via ref or global), skipping');
+        logConsole('debug','🔧 [sendAgentSettings] hasSentSettingsRef.current:', hasSentSettingsRef.current);
+        logConsole('debug','🔧 [sendAgentSettings] globalSettingsSent:', windowWithGlobals.globalSettingsSent);
       }
       return;
     }
@@ -1820,7 +1826,7 @@ function DeepgramVoiceInteraction(
     settingsSentTimeRef.current = Date.now();
     
     if (debug) {
-      console.log('🔧 [sendAgentSettings] Settings message sent, waiting for SettingsApplied confirmation');
+      logConsole('debug','🔧 [sendAgentSettings] Settings message sent, waiting for SettingsApplied confirmation');
     }
     
     // Build the Settings message based on agentOptions
@@ -1891,7 +1897,7 @@ function DeepgramVoiceInteraction(
     };
     
     if (debug) {
-      console.log('📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
+      logConsole('debug','📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
         conversationHistoryLength: currentAgentOptions.context?.messages?.length || 0,
         contextMessages: currentAgentOptions.context?.messages || [],
         hasSpeakProvider: 'speak' in settingsMessage.agent,
@@ -1917,8 +1923,8 @@ function DeepgramVoiceInteraction(
       const functionsJson = JSON.stringify(settingsMessage.agent.think.functions, null, 2);
       
       if (debug) {
-        console.log('🔍 [SETTINGS DEBUG] Full Settings message with functions:', settingsJson);
-        console.log('🔍 [SETTINGS DEBUG] Functions array structure:', functionsJson);
+        logConsole('debug','🔍 [SETTINGS DEBUG] Full Settings message with functions:', settingsJson);
+        logConsole('debug','🔍 [SETTINGS DEBUG] Functions array structure:', functionsJson);
       }
       
       // Also expose to window for E2E testing (only in test environments)
@@ -1934,7 +1940,7 @@ function DeepgramVoiceInteraction(
       }
       
       if (props.debug) {
-        console.log('🔍 [DEBUG] Full Settings message structure:', JSON.stringify(settingsMessage, null, 2));
+        logConsole('debug','🔍 [DEBUG] Full Settings message structure:', JSON.stringify(settingsMessage, null, 2));
       }
     }
     
@@ -1948,8 +1954,8 @@ function DeepgramVoiceInteraction(
                             wsState === 1 ? 'OPEN' : 
                             wsState === 2 ? 'CLOSING' : 
                             wsState === 3 ? 'CLOSED' : 'UNKNOWN';
-        console.error('❌ [Protocol] Cannot send Settings - WebSocket not OPEN');
-        console.error('❌ [Protocol] WebSocket state:', wsState, `(${wsStateName})`);
+        logConsole('error','❌ [Protocol] Cannot send Settings - WebSocket not OPEN');
+        logConsole('error','❌ [Protocol] WebSocket state:', wsState, `(${wsStateName})`);
       }
       return; // Don't mark as sent if we can't actually send
     }
@@ -1971,14 +1977,14 @@ function DeepgramVoiceInteraction(
                             stateAtFail === 1 ? 'OPEN' :
                             stateAtFail === 2 ? 'CLOSING' :
                             stateAtFail === 3 ? 'CLOSED' : 'UNKNOWN';
-        console.error('❌ [Protocol] Settings message send FAILED (sendJSON returned false)');
-        console.error('❌ [Protocol] WebSocket state at send time:', stateAtFail, `(${wsStateName})`);
+        logConsole('error','❌ [Protocol] Settings message send FAILED (sendJSON returned false)');
+        logConsole('error','❌ [Protocol] WebSocket state at send time:', stateAtFail, `(${wsStateName})`);
       }
       return;
     }
 
     if (debug) {
-      console.log('🔧 [sendAgentSettings] Flags set before send (Issue #399 race protection)');
+      logConsole('debug','🔧 [sendAgentSettings] Flags set before send (Issue #399 race protection)');
     }
 
     // Mark settings as sent for welcome-first behavior
@@ -1999,7 +2005,7 @@ function DeepgramVoiceInteraction(
       content: content
     };
 
-    console.log('🔧 [FUNCTION] Sending FunctionCallResponse to Deepgram:', responseMessage);
+    logConsole('debug','🔧 [FUNCTION] Sending FunctionCallResponse to Deepgram:', responseMessage);
     log('Sending FunctionCallResponse to Deepgram');
     agentManagerRef.current.sendJSON(responseMessage);
   };
@@ -2023,7 +2029,7 @@ function DeepgramVoiceInteraction(
   const transitionToThinkingState = (reason: string, maintainKeepalive: boolean = false): void => {
     const currentState = stateRef.current.agentState;
     if (currentState !== 'thinking') {
-      console.log(`🧠 [AGENT] ${reason} - transitioning to thinking state`);
+      logConsole('debug',`🧠 [AGENT] ${reason} - transitioning to thinking state`);
       log(`${reason} - transitioning to thinking state`);
       sleepLog(`Dispatching AGENT_STATE_CHANGE to thinking (${reason})`);
       dispatch({ type: 'AGENT_STATE_CHANGE', state: 'thinking' });
@@ -2053,14 +2059,14 @@ function DeepgramVoiceInteraction(
     // Enhanced logging for FunctionCallRequest messages
     if (messageType === 'FunctionCallRequest') {
       if (configRef.current.debug) {
-        console.log('🔧 [FUNCTION] FunctionCallRequest detected in handleAgentMessage:', JSON.stringify(data, null, 2));
+        logConsole('debug','🔧 [FUNCTION] FunctionCallRequest detected in handleAgentMessage:', JSON.stringify(data, null, 2));
       }
     }
     
     // Special logging for Error messages when functions are configured (to debug SettingsApplied issue)
     // Issue #307: Use ref to access latest agentOptions value
     if (messageType === 'Error' && agentOptionsRef.current?.functions && agentOptionsRef.current.functions.length > 0) {
-      console.error('❌ [FUNCTION DEBUG] Error received after sending Settings with functions:', JSON.stringify(data, null, 2));
+      logConsole('error','❌ [FUNCTION DEBUG] Error received after sending Settings with functions:', JSON.stringify(data, null, 2));
     }
     
     // Don't re-enable idle timeout resets here
@@ -2072,7 +2078,7 @@ function DeepgramVoiceInteraction(
       const errorMsg = 'Received unexpected agent message but service is not configured';
       log(errorMsg, data);
       if (configRef.current.debug) {
-        console.warn('🔧 [AGENT] ⚠️', errorMsg, 'Message type:', messageType, 'Data:', data);
+        logConsole('warn','🔧 [AGENT] ⚠️', errorMsg, 'Message type:', messageType, 'Data:', data);
       }
       return;
     }
@@ -2082,7 +2088,7 @@ function DeepgramVoiceInteraction(
       const errorMsg = 'Invalid agent message format';
       log(errorMsg, data);
       if (configRef.current.debug) {
-        console.warn('🔧 [AGENT] ⚠️', errorMsg, 'Message type:', messageType, 'Data:', data);
+        logConsole('warn','🔧 [AGENT] ⚠️', errorMsg, 'Message type:', messageType, 'Data:', data);
       }
       return;
     }
@@ -2119,11 +2125,11 @@ function DeepgramVoiceInteraction(
       if (!stateRef.current.isUserSpeaking) {
         dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: true });
         if (props.debug) {
-          console.log('🎯 [AGENT] UserStartedSpeaking from agent service - setting isUserSpeaking=true');
+          logConsole('debug','🎯 [AGENT] UserStartedSpeaking from agent service - setting isUserSpeaking=true');
         }
       } else {
         if (props.debug) {
-          console.log('🎯 [AGENT] UserStartedSpeaking from agent service - already have speech evidence, skipping');
+          logConsole('debug','🎯 [AGENT] UserStartedSpeaking from agent service - already have speech evidence, skipping');
         }
       }
       
@@ -2142,7 +2148,7 @@ function DeepgramVoiceInteraction(
 
     // Handle Welcome message for dual mode connection
     if (data.type === 'Welcome') {
-      console.info('✅ [Protocol] Welcome message received - dual mode connection established');
+      logger.info('✅ [Protocol] Welcome message received - dual mode connection established');
       log('Welcome message received - dual mode connection established');
       if (!state.welcomeReceived) {
         dispatch({ type: 'WELCOME_RECEIVED', received: true });
@@ -2160,13 +2166,13 @@ function DeepgramVoiceInteraction(
     
     // Handle SettingsApplied message - settings are now active
     if (data.type === 'SettingsApplied') {
-      console.info('✅ [Protocol] SettingsApplied received - settings are now active');
+      logger.info('✅ [Protocol] SettingsApplied received - settings are now active');
       log('SettingsApplied received - settings are now active');
       // Only mark as sent when we get confirmation from Deepgram
       hasSentSettingsRef.current = true;
       windowWithGlobals.globalSettingsSent = true;
       dispatch({ type: 'SETTINGS_SENT', sent: true });
-      console.log('🎯 [SettingsApplied] Settings confirmed by agent, audio data can now be processed');
+      logConsole('debug','🎯 [SettingsApplied] Settings confirmed by agent, audio data can now be processed');
       
       // Call public API callback to notify that settings have been applied
       onSettingsApplied?.();
@@ -2175,14 +2181,14 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentThinking') {
-      console.log('🧠 [AGENT EVENT] AgentThinking received');
+      logConsole('debug','🧠 [AGENT EVENT] AgentThinking received');
       transitionToThinkingState('AgentThinking message received');
       return;
     }
     
     if (data.type === 'AgentStartedSpeaking') {
-      console.log('🗣️ [AGENT EVENT] AgentStartedSpeaking received');
-      console.log('🎯 [AGENT] AgentStartedSpeaking received - transitioning to speaking state');
+      logConsole('debug','🗣️ [AGENT EVENT] AgentStartedSpeaking received');
+      logConsole('debug','🎯 [AGENT] AgentStartedSpeaking received - transitioning to speaking state');
       sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
       dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
 
@@ -2195,8 +2201,8 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentAudioDone') {
-      console.log('🔊 [AGENT EVENT] AgentAudioDone received');
-      console.log('🎯 [AGENT] AgentAudioDone received - audio generation complete, playback may continue');
+      logConsole('debug','🔊 [AGENT EVENT] AgentAudioDone received');
+      logConsole('debug','🎯 [AGENT] AgentAudioDone received - audio generation complete, playback may continue');
       sleepLog('AgentAudioDone received - audio generation complete, but playback may continue');
       
       // Track agent silent for greeting state
@@ -2221,13 +2227,13 @@ function DeepgramVoiceInteraction(
     // Handle conversation text
     if (data.type === 'ConversationText') {
       if (debug) {
-        console.log('💬 [AGENT EVENT] ConversationText received role=', data.role);
+        logConsole('debug','💬 [AGENT EVENT] ConversationText received role=', data.role);
       }
       const content = typeof data.content === 'string' ? data.content : '';
       // Always log assistant message received (not gated by debug) for observability
       if (data.role === 'assistant') {
         const preview = content.length > 80 ? `${content.slice(0, 80)}…` : content;
-        console.info('💬 [AGENT] Assistant message received:', preview || '(empty)');
+        logger.info('💬 [AGENT] Assistant message received: ' + (preview || '(empty)'));
       }
       const timestamp = Date.now();
       const role = data.role as ConversationMessage['role'];
@@ -2276,7 +2282,7 @@ function DeepgramVoiceInteraction(
       
       // Enhanced logging when debug is enabled (not just in test mode)
       if (configRef.current.debug) {
-        console.log('🔧 [FUNCTION] FunctionCallRequest received from Deepgram:', JSON.stringify(data, null, 2));
+        logConsole('debug','🔧 [FUNCTION] FunctionCallRequest received from Deepgram:', JSON.stringify(data, null, 2));
       }
       
       // Type-safe extraction of function call information
@@ -2296,8 +2302,8 @@ function DeepgramVoiceInteraction(
       functionCallLogger.functionsArrayInfo(functions);
       
       if (configRef.current.debug) {
-        console.log('🔧 [FUNCTION] Functions array length:', functions.length);
-        console.log('🔧 [FUNCTION] onFunctionCallRequest callback available:', !!onFunctionCallRequest);
+        logConsole('debug','🔧 [FUNCTION] Functions array length:', functions.length);
+        logConsole('debug','🔧 [FUNCTION] onFunctionCallRequest callback available:', !!onFunctionCallRequest);
       }
       
       if (functions.length > 0) {
@@ -2323,7 +2329,7 @@ function DeepgramVoiceInteraction(
           });
           
           if (configRef.current.debug) {
-            console.log('🔧 [FUNCTION] Processing function call:', {
+            logConsole('debug','🔧 [FUNCTION] Processing function call:', {
               id: funcCall.id,
               name: funcCall.name,
               client_side: funcCall.client_side,
@@ -2344,7 +2350,7 @@ function DeepgramVoiceInteraction(
             
             // Enhanced logging for callback invocation
             if (configRef.current.debug) {
-              console.log('🔧 [FUNCTION] About to invoke onFunctionCallRequest callback:', {
+              logConsole('debug','🔧 [FUNCTION] About to invoke onFunctionCallRequest callback:', {
                 id: functionCall.id,
                 name: functionCall.name,
                 hasCallback: !!onFunctionCallRequest
@@ -2356,7 +2362,7 @@ function DeepgramVoiceInteraction(
               const errorMsg = 'onFunctionCallRequest callback is not defined. Function call will not be handled.';
               log(errorMsg);
               if (configRef.current.debug) {
-                console.warn('🔧 [FUNCTION] ⚠️', errorMsg);
+                logConsole('warn','🔧 [FUNCTION] ⚠️', errorMsg);
               }
               return; // Skip this function call if no callback
             }
@@ -2401,13 +2407,13 @@ function DeepgramVoiceInteraction(
             // Issue #355: Guarantee response is always sent
             try {
               if (configRef.current.debug) {
-                console.log('🔧 [FUNCTION] Invoking onFunctionCallRequest callback now...');
+                logConsole('debug','🔧 [FUNCTION] Invoking onFunctionCallRequest callback now...');
               }
               const result = onFunctionCallRequest(functionCall, trackedSendResponse);
               functionCallLogger.callbackResult(result !== undefined && result !== null);
               
               if (configRef.current.debug) {
-                console.log('🔧 [FUNCTION] onFunctionCallRequest callback completed:', {
+                logConsole('debug','🔧 [FUNCTION] onFunctionCallRequest callback completed:', {
                   returnedValue: result !== undefined && result !== null,
                   resultType: result !== undefined && result !== null ? typeof result : 'void'
                 });
@@ -2493,7 +2499,7 @@ function DeepgramVoiceInteraction(
               const errorMsg = `Error invoking onFunctionCallRequest callback: ${error instanceof Error ? error.message : 'Unknown error'}`;
               log(errorMsg, error);
               if (configRef.current.debug) {
-                console.error('🔧 [FUNCTION] ❌', errorMsg, error);
+                logConsole('error','🔧 [FUNCTION] ❌', errorMsg, error);
               }
               // Issue #355: Send error response instead of re-throwing
               if (!responseSent) {
@@ -2510,7 +2516,7 @@ function DeepgramVoiceInteraction(
               }
             }
           } else {
-            console.log('🔧 [FUNCTION DEBUG] Server-side function call received (not handled by component):', funcCall.name);
+            logConsole('debug','🔧 [FUNCTION DEBUG] Server-side function call received (not handled by component):', funcCall.name);
             log('Server-side function call received (not handled by component):', funcCall.name);
           }
         });
@@ -2586,7 +2592,7 @@ function DeepgramVoiceInteraction(
     // Handle UtteranceEnd events from Deepgram's end-of-speech detection
     if (data.type === 'UtteranceEnd') {
       if (props.debug) {
-        console.log('🎯 [VAD] UtteranceEnd message received:', data);
+        logConsole('debug','🎯 [VAD] UtteranceEnd message received:', data);
       }
       if (isSleepingOrEntering) {
         sleepLog('Ignoring UtteranceEnd event (state:', stateRef.current.agentState, ')');
@@ -2626,11 +2632,11 @@ function DeepgramVoiceInteraction(
     // Handle VAD events from agent service (vad type)
     // NOTE: SpeechStarted removed - was from old Transcription API, Voice Agent API uses UserStartedSpeaking
     if (props.debug) {
-      console.log('🔍 [DEBUG] Checking for VAD event type:', data.type);
+      logConsole('debug','🔍 [DEBUG] Checking for VAD event type:', data.type);
     }
     if (data.type === 'vad') {
       if (props.debug) {
-        console.log('🎯 [VAD] VADEvent message received:', data);
+        logConsole('debug','🎯 [VAD] VADEvent message received:', data);
       }
       log('VADEvent message received:', data);
       
@@ -2643,7 +2649,7 @@ function DeepgramVoiceInteraction(
       // IGNORE raw VAD events for idle timeout management - they detect any audio, not actual speech
       // Use speech_final=true and UtteranceEnd messages instead (per Deepgram best practices)
       if (props.debug) {
-        console.log(`🎯 [VAD] VADEvent speechDetected: ${speechDetected} - IGNORING for idle timeout (use speech_final/UtteranceEnd instead)`);
+        logConsole('debug',`🎯 [VAD] VADEvent speechDetected: ${speechDetected} - IGNORING for idle timeout (use speech_final/UtteranceEnd instead)`);
       }
       
       // Don't change agent state or idle timeout based on VAD alone
@@ -2656,7 +2662,7 @@ function DeepgramVoiceInteraction(
   const handleAgentAudio = async (data: ArrayBuffer) => {
     onAgentAudioChunk?.(data?.byteLength ?? 0);
     if (props.debug) {
-      console.log('🎵 [AUDIO EVENT] handleAgentAudio received buffer bytes=', data?.byteLength);
+      logConsole('debug','🎵 [AUDIO EVENT] handleAgentAudio received buffer bytes=', data?.byteLength);
     }
     // Don't re-enable idle timeout resets here
     // After UtteranceEnd, only new connection should re-enable
@@ -2678,11 +2684,11 @@ function DeepgramVoiceInteraction(
     // Check if agent audio is blocked
     if (props.debug) {
       const isBlocked = !allowAgentRef.current;
-      console.log(`🔍 [AUDIO BLOCKING] handleAgentAudio - allowAgentRef.current=${allowAgentRef.current} (BLOCKED=${isBlocked})`);
+      logConsole('debug',`🔍 [AUDIO BLOCKING] handleAgentAudio - allowAgentRef.current=${allowAgentRef.current} (BLOCKED=${isBlocked})`);
     }
     if (!allowAgentRef.current) {
       if (props.debug) {
-        console.log('🔇 [AUDIO EVENT] Agent audio currently blocked (allowAgentRef=false) - discarding buffer');
+        logConsole('debug','🔇 [AUDIO EVENT] Agent audio currently blocked (allowAgentRef=false) - discarding buffer');
       }
       log('🔇 Agent audio blocked - discarding audio buffer to prevent playback');
       return;
@@ -2706,7 +2712,7 @@ function DeepgramVoiceInteraction(
     }
     
     log('Passing buffer to playback sink (AudioManager.queueAudio)');
-    if (props.debug) console.log('🎵 [AUDIO] Audio context state:', audioManagerRef.current?.getAudioContext?.()?.state);
+    if (props.debug) logConsole('debug','🎵 [AUDIO] Audio context state:', audioManagerRef.current?.getAudioContext?.()?.state);
     const sink = agentAudioSinkRef.current ?? (audioManagerRef.current ? new WebAudioPlaybackSink(audioManagerRef.current) : null);
     if (sink) {
       if (!agentAudioSinkRef.current) agentAudioSinkRef.current = sink;
@@ -2722,21 +2728,21 @@ function DeepgramVoiceInteraction(
   const sendAudioData = (data: ArrayBuffer) => {
     // Debug logging only (reduce console spam)
     if (props.debug) {
-      console.log('🎵 [sendAudioData] Called with data size:', data.byteLength);
-      console.log('🎵 [sendAudioData] hasSentSettingsRef.current:', hasSentSettingsRef.current);
-      console.log('🎵 [sendAudioData] state.hasSentSettings:', state.hasSentSettings);
-      console.log('🎵 [sendAudioData] agentManagerRef.current?.getState():', agentManagerRef.current?.getState());
-      console.log('🎵 [sendAudioData] transcriptionManagerRef.current?.getState():', transcriptionManagerRef.current?.getState());
+      logConsole('debug','🎵 [sendAudioData] Called with data size:', data.byteLength);
+      logConsole('debug','🎵 [sendAudioData] hasSentSettingsRef.current:', hasSentSettingsRef.current);
+      logConsole('debug','🎵 [sendAudioData] state.hasSentSettings:', state.hasSentSettings);
+      logConsole('debug','🎵 [sendAudioData] agentManagerRef.current?.getState():', agentManagerRef.current?.getState());
+      logConsole('debug','🎵 [sendAudioData] transcriptionManagerRef.current?.getState():', transcriptionManagerRef.current?.getState());
     }
     
     // Send to transcription service if configured and connected
     const transcriptionManager = transcriptionManagerRef.current;
     const transcriptionState = transcriptionManager?.getState();
       if (transcriptionState === 'connected' && transcriptionManager) {
-        if (props.debug) console.log('🎵 [TRANSCRIPTION] Sending audio data to transcription service for VAD events');
+        if (props.debug) logConsole('debug','🎵 [TRANSCRIPTION] Sending audio data to transcription service for VAD events');
         transcriptionManager.sendBinary(data);
       } else {
-        if (props.debug) console.log('🎵 [TRANSCRIPTION] Transcription service not connected, state:', transcriptionState);
+        if (props.debug) logConsole('debug','🎵 [TRANSCRIPTION] Transcription service not connected, state:', transcriptionState);
       }
     
     // Send to agent service if configured, connected, and not in sleep mode
@@ -2745,7 +2751,7 @@ function DeepgramVoiceInteraction(
       
       // Early return for closed connections to prevent log spam
       if (connectionState === 'closed') {
-        if (props.debug) console.log('🎵 [sendAudioData] Skipping agent service - not connected:', connectionState);
+        if (props.debug) logConsole('debug','🎵 [sendAudioData] Skipping agent service - not connected:', connectionState);
         return;
       }
       
@@ -2758,31 +2764,31 @@ function DeepgramVoiceInteraction(
         // Check if settings have been sent and enough time has passed
         if (!hasSentSettingsRef.current) {
           if (props.debug) {
-            console.log('🎵 [sendAudioData] ❌ CRITICAL: Cannot send audio data before settings are sent!');
-            console.log('🎵 [sendAudioData] ❌ hasSentSettingsRef.current:', hasSentSettingsRef.current);
-            console.log('🎵 [sendAudioData] ❌ state.hasSentSettings:', state.hasSentSettings);
+            logConsole('debug','🎵 [sendAudioData] ❌ CRITICAL: Cannot send audio data before settings are sent!');
+            logConsole('debug','🎵 [sendAudioData] ❌ hasSentSettingsRef.current:', hasSentSettingsRef.current);
+            logConsole('debug','🎵 [sendAudioData] ❌ state.hasSentSettings:', state.hasSentSettings);
           }
           return; // Don't send audio data
         }
         
         // Wait for settings to be processed by Deepgram (minimum 500ms)
         if (settingsSentTimeRef.current && Date.now() - settingsSentTimeRef.current < 500) {
-          if (props.debug) console.log('🎵 [sendAudioData] ⏳ Waiting for settings to be processed by Deepgram...');
+          if (props.debug) logConsole('debug','🎵 [sendAudioData] ⏳ Waiting for settings to be processed by Deepgram...');
           return; // Don't send audio data yet
         }
         
-        if (props.debug) console.log('🎵 [sendAudioData] ✅ Settings confirmed, sending to agent service');
+        if (props.debug) logConsole('debug','🎵 [sendAudioData] ✅ Settings confirmed, sending to agent service');
         agentManagerRef.current.sendBinary(data);
         
         // Log successful audio transmission (debug level)
-        if (props.debug) console.log('🎵 [AUDIO] Audio data sent to Deepgram agent service');
+        if (props.debug) logConsole('debug','🎵 [AUDIO] Audio data sent to Deepgram agent service');
       } else if (isSleepingOrEntering) {
         if (props.debug) {
-          console.log('🎵 [sendAudioData] Skipping agent service - sleeping state:', stateRef.current.agentState);
+          logConsole('debug','🎵 [sendAudioData] Skipping agent service - sleeping state:', stateRef.current.agentState);
           sleepLog('Skipping sendAudioData to agent (state:', stateRef.current.agentState, ')');
         }
       } else {
-        if (props.debug) console.log('🎵 [sendAudioData] Skipping agent service - not connected:', connectionState);
+        if (props.debug) logConsole('debug','🎵 [sendAudioData] Skipping agent service - not connected:', connectionState);
       }
     }
   };
@@ -2817,12 +2823,12 @@ function DeepgramVoiceInteraction(
         const previousBlockingState = allowAgentRef.current;
         allowAgentRef.current = ALLOW_AUDIO;
         if (props.debug) {
-          console.log(`🔍 [AUDIO BLOCKING] start() - Fresh connection detected, resetting allowAgentRef from ${previousBlockingState} to ${ALLOW_AUDIO}`);
+          logConsole('debug',`🔍 [AUDIO BLOCKING] start() - Fresh connection detected, resetting allowAgentRef from ${previousBlockingState} to ${ALLOW_AUDIO}`);
         }
         log('🔄 Fresh connection starting - resetting audio blocking state');
       } else {
         if (props.debug) {
-          console.log(`🔍 [AUDIO BLOCKING] start() - Connection already exists (agent=${agentAlreadyConnected}, transcription=${transcriptionAlreadyConnected}), preserving allowAgentRef.current=${allowAgentRef.current}`);
+          logConsole('debug',`🔍 [AUDIO BLOCKING] start() - Connection already exists (agent=${agentAlreadyConnected}, transcription=${transcriptionAlreadyConnected}), preserving allowAgentRef.current=${allowAgentRef.current}`);
         }
         log('🔄 Connection already exists - preserving audio blocking state');
       }
@@ -3077,7 +3083,7 @@ function DeepgramVoiceInteraction(
     const previousBlockingState = allowAgentRef.current;
     allowAgentRef.current = BLOCK_AUDIO;
     if (props.debug) {
-      console.log(`🔍 [AUDIO BLOCKING] interruptAgent() - Set allowAgentRef from ${previousBlockingState} to ${BLOCK_AUDIO}`);
+      logConsole('debug',`🔍 [AUDIO BLOCKING] interruptAgent() - Set allowAgentRef from ${previousBlockingState} to ${BLOCK_AUDIO}`);
     }
     log('🔇 Agent audio blocked - future audio will be discarded');
     
@@ -3092,7 +3098,7 @@ function DeepgramVoiceInteraction(
     const previousBlockingState = allowAgentRef.current;
     allowAgentRef.current = ALLOW_AUDIO;
     if (props.debug) {
-      console.log(`🔍 [AUDIO BLOCKING] allowAgent() - Set allowAgentRef from ${previousBlockingState} to ${ALLOW_AUDIO}`);
+      logConsole('debug',`🔍 [AUDIO BLOCKING] allowAgent() - Set allowAgentRef from ${previousBlockingState} to ${ALLOW_AUDIO}`);
     }
     log('🔊 Agent audio allowed - audio will play normally');
   };
@@ -3246,7 +3252,7 @@ function DeepgramVoiceInteraction(
     // Check WebSocket state before sending
     const finalConnectionState = agentManagerRef.current.getState();
     log('Injecting user message:', message, '- WebSocket state:', finalConnectionState);
-    console.log('📝 [TEXT_MESSAGE] Attempting to send:', message, '- Connection state:', finalConnectionState);
+    logConsole('debug','📝 [TEXT_MESSAGE] Attempting to send:', message, '- Connection state:', finalConnectionState);
     
     if (!agentManagerRef.current) {
       throw new Error('Agent manager is null when trying to send message');
@@ -3327,7 +3333,7 @@ function DeepgramVoiceInteraction(
       content: message
     });
     
-    console.log('📝 [TEXT_MESSAGE] Message sent successfully');
+    logConsole('debug','📝 [TEXT_MESSAGE] Message sent successfully');
     log('User message sent successfully');
   };
 
@@ -3350,7 +3356,7 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'RECORDING_STATE_CHANGE', isRecording: event.isRecording });
       } else if (event.type === 'playing') {
         log('Playing state:', event.isPlaying);
-        console.log(`🎯 [AUDIO] Playback state changed: ${event.isPlaying ? 'PLAYING' : 'NOT PLAYING'}, current agent state: ${stateRef.current.agentState}`);
+        logConsole('debug',`🎯 [AUDIO] Playback state changed: ${event.isPlaying ? 'PLAYING' : 'NOT PLAYING'}, current agent state: ${stateRef.current.agentState}`);
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: event.isPlaying });
         
         // Transition agent to speaking when playback starts
@@ -3360,11 +3366,11 @@ function DeepgramVoiceInteraction(
         if (event.isPlaying) {
           const currentState = stateRef.current.agentState;
           if (currentState !== 'speaking') {
-            console.log(`🎯 [AGENT] Audio playback started - transitioning from ${currentState} to speaking`);
+            logConsole('debug',`🎯 [AGENT] Audio playback started - transitioning from ${currentState} to speaking`);
             sleepLog(`Dispatching AGENT_STATE_CHANGE to speaking (from playback start, previous state: ${currentState})`);
             dispatch({ type: 'AGENT_STATE_CHANGE', state: 'speaking' });
           } else {
-            console.log(`🎯 [AGENT] Audio playback started but already in speaking state - no transition needed`);
+            logConsole('debug',`🎯 [AGENT] Audio playback started but already in speaking state - no transition needed`);
           }
           
           // Always ensure onAgentStateChange('speaking') is called when playback starts
@@ -3372,7 +3378,7 @@ function DeepgramVoiceInteraction(
           // and React hasn't fired the useEffect yet due to batching/timing
           // Use ref to prevent duplicate callbacks in the same playback cycle
           if (onAgentStateChange && !hasNotifiedSpeakingForPlaybackRef.current) {
-            console.log(`🎯 [AGENT] Ensuring onAgentStateChange('speaking') is called for playback start`);
+            logConsole('debug',`🎯 [AGENT] Ensuring onAgentStateChange('speaking') is called for playback start`);
             onAgentStateChange('speaking');
             hasNotifiedSpeakingForPlaybackRef.current = true;
           }
@@ -3383,7 +3389,7 @@ function DeepgramVoiceInteraction(
         if (!event.isPlaying) {
           const currentState = stateRef.current.agentState;
           if (currentState === 'speaking') {
-            console.log('🎯 [AGENT] Audio playback finished - transitioning agent from speaking to idle');
+            logConsole('debug','🎯 [AGENT] Audio playback finished - transitioning agent from speaking to idle');
             sleepLog('Audio playback finished - transitioning agent to idle');
             
             // FIX: Call AgentStateService to ensure state transition is properly synchronized
@@ -3394,7 +3400,7 @@ function DeepgramVoiceInteraction(
             // Also dispatch directly as fallback (redundant but safe)
             dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
           } else {
-            console.log(`🎯 [AGENT] Audio playback stopped but agent state is ${currentState} (not speaking) - skipping transition to idle`);
+            logConsole('debug',`🎯 [AGENT] Audio playback stopped but agent state is ${currentState} (not speaking) - skipping transition to idle`);
           }
           
           // Reset the notification flag when playback stops

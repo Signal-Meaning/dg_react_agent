@@ -5,6 +5,8 @@
  * It separates concerns between speech detection and idle timeout management.
  */
 
+import { getLogger, type Logger } from './logger';
+
 export interface IdleTimeoutConfig {
   timeoutMs: number;
   debug?: boolean;
@@ -39,12 +41,12 @@ export class IdleTimeoutService {
   private stateGetter?: () => IdleTimeoutState | null; // Callback to get current state from component
   // Issue #373: Track active function calls to prevent idle timeout during execution
   private activeFunctionCalls: Set<string> = new Set();
+  private logger: Logger;
 
   constructor(config: IdleTimeoutConfig) {
     this.config = config;
-    if (this.config.debug) {
-      console.log('🎯 [DEBUG] IdleTimeoutService constructor - debug:', this.config.debug);
-    }
+    this.logger = getLogger({ debug: !!this.config.debug });
+    this.log('IdleTimeoutService constructor - debug: ' + String(this.config.debug));
     this.currentState = {
       isUserSpeaking: false,
       agentState: 'idle',
@@ -114,10 +116,7 @@ export class IdleTimeoutService {
    * Handle events that affect idle timeout behavior
    */
   public handleEvent(event: IdleTimeoutEvent): void {
-    this.log(`🎯 [DEBUG] handleEvent called with event type: ${event.type}`);
-    if (this.config.debug) {
-      console.log(`🎯 [DEBUG] handleEvent called with event type: ${event.type}`);
-    }
+    this.log(`handleEvent called with event type: ${event.type}`);
     const prevState = { ...this.currentState };
     
     // Start polling if we're not already polling and timeout isn't active
@@ -274,14 +273,7 @@ export class IdleTimeoutService {
    * Update timeout behavior based on current state
    */
   private updateTimeoutBehavior(): void {
-    if (this.config.debug) {
-      console.log('🎯 [DEBUG] updateTimeoutBehavior() called with state:', {
-        isUserSpeaking: this.currentState.isUserSpeaking,
-        agentState: this.currentState.agentState,
-        isPlaying: this.currentState.isPlaying,
-        isDisabled: this.isDisabled
-      });
-    }
+    this.log(`updateTimeoutBehavior() called with state: isUserSpeaking=${this.currentState.isUserSpeaking}, agentState=${this.currentState.agentState}, isPlaying=${this.currentState.isPlaying}, isDisabled=${this.isDisabled}`);
     // Issue #373: Also disable timeout if there are active function calls
     if (this.shouldDisableTimeoutResets()) {
       this.disableResets();
@@ -291,21 +283,10 @@ export class IdleTimeoutService {
       // CRITICAL: Check conditions again after enabling resets to ensure state is consistent
       // Issue #373: Also check that there are no active function calls
       if (this.canStartTimeout()) {
-        if (this.config.debug) {
-          console.log('🎯 [DEBUG] updateTimeoutBehavior() - conditions met, starting timeout');
-        }
+        this.log('updateTimeoutBehavior() - conditions met, starting timeout');
         this.startTimeout();
       } else {
-        // Log why timeout isn't starting (even if debug is off, log this important case)
         this.log(`updateTimeoutBehavior() - conditions not met for starting timeout: agentState=${this.currentState.agentState}, isUserSpeaking=${this.currentState.isUserSpeaking}, isPlaying=${this.currentState.isPlaying}, hasActiveFunctionCalls=${this.hasActiveFunctionCalls()}`);
-        if (this.config.debug) {
-          console.log('🎯 [DEBUG] updateTimeoutBehavior() - conditions not met for starting timeout:', {
-            agentState: this.currentState.agentState,
-            isUserSpeaking: this.currentState.isUserSpeaking,
-            isPlaying: this.currentState.isPlaying,
-            hasActiveFunctionCalls: this.hasActiveFunctionCalls()
-          });
-        }
       }
     }
     
@@ -353,10 +334,7 @@ export class IdleTimeoutService {
         this.enableResets();
         this.startTimeout();
       } else {
-        // Timeout already running, don't restart it (prevents unnecessary restarts)
-        if (this.config.debug) {
-          console.log('🎯 [DEBUG] checkAndStartTimeoutIfNeeded() - conditions met but timeout already running, skipping restart');
-        }
+        this.log('checkAndStartTimeoutIfNeeded() - conditions met but timeout already running, skipping restart');
       }
     }
   }
@@ -371,10 +349,7 @@ export class IdleTimeoutService {
     this.pollingIntervalId = window.setInterval(() => {
       this.checkAndStartTimeoutIfNeeded();
     }, IdleTimeoutService.POLLING_INTERVAL_MS);
-    
-    if (this.config.debug) {
-      console.log('🎯 [DEBUG] Started polling for idle timeout conditions');
-    }
+    this.log('Started polling for idle timeout conditions');
   }
 
   /**
@@ -384,9 +359,7 @@ export class IdleTimeoutService {
     if (this.pollingIntervalId !== null) {
       window.clearInterval(this.pollingIntervalId);
       this.pollingIntervalId = null;
-      if (this.config.debug) {
-        console.log('🎯 [DEBUG] Stopped polling for idle timeout conditions');
-      }
+      this.log('Stopped polling for idle timeout conditions');
     }
   }
 
@@ -394,9 +367,7 @@ export class IdleTimeoutService {
    * Disable idle timeout resets (during activity)
    */
   private disableResets(): void {
-    if (this.config.debug) {
-      console.log('🎯 [DEBUG] disableResets() called');
-    }
+    this.log('disableResets() called');
     if (!this.isDisabled) {
       this.isDisabled = true;
       this.stopTimeout();
@@ -428,18 +399,11 @@ export class IdleTimeoutService {
    * Start the idle timeout
    */
   private startTimeout(): void {
-    // Only start if timeout is not already running (prevents unnecessary restarts)
     if (this.timeoutId !== null) {
-      // Timeout already running, don't restart it
-      if (this.config.debug) {
-        console.log('🎯 [DEBUG] startTimeout() called but timeout already running, skipping');
-      }
+      this.log('startTimeout() called but timeout already running, skipping');
       return;
     }
-    
-    if (this.config.debug) {
-      console.log('🎯 [DEBUG] Starting timeout with timeoutId:', this.timeoutId);
-    }
+    this.log('Starting timeout with timeoutId: ' + this.timeoutId);
     this.timeoutId = window.setTimeout(() => {
       this.log(`Idle timeout reached (${this.config.timeoutMs}ms) - firing callback`);
       // Clear timeoutId before calling callback so a new timeout can be started if needed
@@ -448,9 +412,6 @@ export class IdleTimeoutService {
       this.stopPolling();
       this.onTimeoutCallback?.();
     }, this.config.timeoutMs);
-    if (this.config.debug) {
-      console.log('🎯 [DEBUG] Timeout started with timeoutId:', this.timeoutId);
-    }
     this.log(`Started idle timeout (${this.config.timeoutMs}ms)`);
     // Keep polling active even after timeout starts - we need it to detect when user starts speaking
     // and stop the timeout. Polling will be stopped when timeout fires or is manually stopped.
@@ -461,22 +422,13 @@ export class IdleTimeoutService {
    * Stop the idle timeout
    */
   private stopTimeout(): void {
-    if (this.config.debug) {
-      console.log('🎯 [DEBUG] stopTimeout() called - timeoutId:', this.timeoutId);
-    }
     this.log(`stopTimeout() called - timeoutId: ${this.timeoutId}`);
     if (this.timeoutId !== null) {
       window.clearTimeout(this.timeoutId);
       this.timeoutId = null;
       this.log('Stopped idle timeout');
-      if (this.config.debug) {
-        console.log('🎯 [DEBUG] Timeout cleared successfully');
-      }
     } else {
       this.log('No timeout to stop (timeoutId is null)');
-      if (this.config.debug) {
-        console.log('🎯 [DEBUG] No timeout to stop (timeoutId is null)');
-      }
     }
   }
 
@@ -503,12 +455,10 @@ export class IdleTimeoutService {
   }
 
   /**
-   * Logging helper
+   * Logging helper (Issue #412: use shared logger, gated by config.debug)
    */
   private log(message: string): void {
-    if (this.config.debug) {
-      console.log(`🎯 [IDLE_TIMEOUT_SERVICE] ${message}`);
-    }
+    this.logger.debug(`[IDLE_TIMEOUT_SERVICE] ${message}`);
   }
 
   /**

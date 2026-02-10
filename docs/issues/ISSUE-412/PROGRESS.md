@@ -41,13 +41,15 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 | # | Task | Status |
 |---|------|--------|
 | 3.1 | Audit and list all console.* call sites (component, utils, services) | [x] |
-| 3.2 | Component: replace console.* with logger; gate verbose on debug prop | [ ] |
-| 3.3 | Test-app: use shared logger; set trace/request ID context for session | [ ] (sends X-Trace-Id to backend; full logger adoption pending) |
+| 3.2 | Component: replace console.* with logger; gate verbose on debug prop | [x] |
+| 3.3 | Test-app: use shared logger; set trace/request ID context for session | [x] |
 | 3.4 | backend-server: replace console.* with logger; attach request context | [x] (POST /function-call path; rest in follow-up) |
 | 3.5 | openai-proxy: replace console.* with logger; attach caller ID context | [x] (server.ts uses emitLog; run.ts/cli.ts on allowlist) |
 | 3.6 | Allowlist/bootstrap: document and keep minimal justified console.* | [x] |
 
 **Phase 3 done when:** Single abstraction in use; minimal direct console.* outside allowlist.
+
+**Note (requested):** Optional follow-up cleanup is **wanted** — migrate remaining `console.*` in src/ (AudioUtils, AudioManager, declarative-props, instructions-loader, component-helpers, function-call-logger, AgentStateService, instructions-loader.cjs; test-helpers optional). See CONSOLE-AUDIT.md "Remaining console.* in src/".
 
 ---
 
@@ -70,7 +72,7 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 | Criterion | Status |
 |-----------|--------|
 | OpenTelemetry (or agreed logger) integrated; single abstraction | [x] |
-| Direct console.log/warn/error rare and justified | [ ] (in progress; backend function-call path done) |
+| Direct console.log/warn/error rare and justified | [x] (component, IdleTimeoutService, WebSocketManager, useIdleTimeoutManager migrated; other src see CONSOLE-AUDIT) |
 | Log levels and debug prop/env drive what is emitted | [x] |
 | Docs describe standard and migration for console.* | [x] |
 | Demo/doc: logs from backend, proxies, test-app pulled together via ID | [x] |
@@ -80,4 +82,4 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 
 ## Last updated
 
-- 3.5 done: openai-proxy server.ts — all console.log replaced with emitLog (connectionAttrs + trace_id). run.ts/cli.ts remain on allowlist. Next: 3.2 (component), 3.3 (test-app).
+- 3.3 done: test-app App.tsx uses getLogger and sessionLogger (logger.child({ traceId })); all console.log/warn/error replaced with sessionLogger.debug/info/warn/error; only comments remain. CONSOLE-AUDIT updated. Optional follow-up (user wanted): migrate remaining console.* in src/; backend-server rest (3.4) in follow-up.

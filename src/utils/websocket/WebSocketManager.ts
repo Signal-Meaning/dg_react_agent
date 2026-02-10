@@ -2,6 +2,7 @@ import { DEFAULT_IDLE_TIMEOUT_MS } from '../../constants/voice-agent';
 import { ConnectionState, DeepgramError, ServiceType } from '../../types';
 import { AgentResponseType } from '../../types/agent';
 import { functionCallLogger } from '../function-call-logger';
+import { getLogger, type Logger } from '../logger';
 
 /**
  * Event types emitted by the WebSocketManager
@@ -99,12 +100,14 @@ export class WebSocketManager {
   private hasEverConnected = false;
   private idleTimeoutDisabled = false; // Flag to disable idle timeout resets
   private settingsSent = false; // Track if Settings has been sent (for agent service only)
+  private logger: Logger;
 
   /**
    * Creates a new WebSocketManager
    */
   constructor(options: WebSocketManagerOptions) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
+    this.logger = getLogger({ debug: !!this.options.debug });
     this.log('WebSocketManager created');
   }
 
@@ -113,9 +116,9 @@ export class WebSocketManager {
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private log(...args: any[]): void {
-    if (this.options.debug) {
-      console.log(`[WebSocketManager:${this.options.service}]`, ...args);
-    }
+    const msg = args.length > 0 && typeof args[0] === 'string' ? args[0] : '';
+    const rest = args.length > 1 ? args.slice(1) : [];
+    this.logger.debug(`[WebSocketManager:${this.options.service}] ${msg}`, rest.length ? { extra: rest } : undefined);
   }
 
   /**
@@ -177,7 +180,7 @@ export class WebSocketManager {
       try {
         listener(event);
       } catch (error) {
-        console.error('Error in WebSocketManager event listener:', error);
+        this.logger.error('Error in WebSocketManager event listener', { error: error instanceof Error ? error.message : String(error) });
       }
     });
   }
@@ -283,9 +286,7 @@ export class WebSocketManager {
         const isProxyMode = !this.options.apiKey || this.options.apiKey === '';
         
         if (this.options.debug) {
-          console.log(`🔌 [WebSocketManager.connect] URL: ${url}`);
-          console.log(`🔌 [WebSocketManager.connect] Is proxy mode: ${isProxyMode}`);
-          console.log(`🔌 [WebSocketManager.connect] Service: ${this.options.service}`);
+          this.logger.debug(`[WebSocketManager.connect] URL=${url}, isProxyMode=${isProxyMode}, service=${this.options.service}`);
         }
         
         // Create WebSocket
@@ -294,7 +295,7 @@ export class WebSocketManager {
         if (isProxyMode) {
           this.ws = new WebSocket(url);
           if (this.options.debug) {
-            console.log(`🔌 [WebSocketManager.connect] Created WebSocket without token protocol (proxy mode)`);
+            this.logger.debug('[WebSocketManager.connect] Created WebSocket without token protocol (proxy mode)');
           }
         } else {
           // For WebSocket authentication: Use normalized API key (raw key, prefix stripped if present)
@@ -304,7 +305,7 @@ export class WebSocketManager {
           }
           this.ws = new WebSocket(url, ['token', apiKeyForAuth]);
           if (this.options.debug) {
-            console.log(`🔌 [WebSocketManager.connect] Created WebSocket with token protocol (direct mode)`);
+            this.logger.debug('[WebSocketManager.connect] Created WebSocket with token protocol (direct mode)');
           }
         }
         // Ensure binary frames (e.g. TTS PCM from proxy) are delivered as ArrayBuffer for synchronous handling
@@ -456,8 +457,8 @@ export class WebSocketManager {
         };
 
         this.ws.onclose = (event) => {
-          // Always log connection close (not gated by debug) so operators see disconnects
-          console.log(`[WebSocketManager:${this.options.service}] WebSocket closed: code=${event.code}, reason='${event.reason || ''}', wasClean=${event.wasClean}`);
+          // Always log connection close (not gated by debug) so operators see disconnects (Issue #412: use logger)
+          this.logger.info(`WebSocket closed: code=${event.code}, reason='${event.reason || ''}', wasClean=${event.wasClean}`, { service: this.options.service });
           this.log(`WebSocket closed: code=${event.code}, reason='${event.reason}', wasClean=${event.wasClean}`);
           this.stopKeepalive();
           this.stopIdleTimeout();
@@ -757,8 +758,7 @@ export class WebSocketManager {
     if (!this.ws) {
       this.log(`❌ Cannot send ${dataType} message, WebSocket is null`);
       if (dataType === 'Settings') {
-        console.error(`[WebSocketManager.sendJSON] ❌ CRITICAL: Settings - WebSocket is null`);
-        console.error(`[WebSocketManager.sendJSON] URL: ${this.options.url}, Service: ${this.options.service}`);
+        this.logger.error('Settings - WebSocket is null', { url: this.options.url, service: this.options.service });
       }
       return false;
     }
@@ -769,11 +769,7 @@ export class WebSocketManager {
     if (wsState !== 1) { // WebSocket.OPEN = 1
       this.log(`❌ Cannot send ${dataType} message, WebSocket not open (state: ${wsState} ${wsStateName})`);
       if (dataType === 'Settings') {
-        console.error(`[WebSocketManager.sendJSON] ❌ CRITICAL: Settings message cannot be sent`);
-        console.error(`[WebSocketManager.sendJSON] WebSocket state: ${wsState} (${wsStateName})`);
-        console.error(`[WebSocketManager.sendJSON] WebSocket URL: ${this.options.url}`);
-        console.error(`[WebSocketManager.sendJSON] WebSocket object:`, this.ws);
-        console.error(`[WebSocketManager.sendJSON] WebSocket readyState property:`, this.ws.readyState);
+        this.logger.error('Settings message cannot be sent - WebSocket not open', { wsState, wsStateName, url: this.options.url, service: this.options.service });
       }
       return false;
     }
@@ -781,42 +777,27 @@ export class WebSocketManager {
     try {
       const jsonString = JSON.stringify(data);
       
-      // Debug logging for sendJSON calls
+      // Debug logging for sendJSON calls (Issue #412: use logger)
       if (this.options.debug) {
-        const dataType = data?.type || 'unknown';
-        console.log('📤 [WEBSOCKET.sendJSON] Called with type:', dataType);
-        console.log('📤 [WEBSOCKET.sendJSON] DEBUG: data.type=' + dataType + ', isSettings=' + (data?.type === 'Settings'));
-        
-        if (data && data.type === 'Settings') {
-          console.log('📤 [WEBSOCKET.sendJSON] ✅ ENTERED Settings block!');
-          
-          // Expose Settings payload to window for automated testing (only in debug mode)
-          // This is the exact JSON string that will be sent over WebSocket
+        const debugType = data && typeof data === 'object' && 'type' in data ? (data as { type: string }).type : 'unknown';
+        this.logger.debug(`[WEBSOCKET.sendJSON] type=${debugType}, isSettings=${(data as { type?: string })?.type === 'Settings'}`);
+        if (data && (data as { type?: string }).type === 'Settings') {
           if (typeof window !== 'undefined') {
-            console.log('📤 [WEBSOCKET.sendJSON] Setting window variables...');
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (window as any).__DEEPGRAM_WS_SETTINGS_PAYLOAD__ = jsonString;
             try {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (window as any).__DEEPGRAM_WS_SETTINGS_PARSED__ = JSON.parse(jsonString);
-              console.log('📤 [WEBSOCKET.sendJSON] ✅ Window variables set successfully');
             } catch (e) {
-              console.error('📤 [WEBSOCKET.sendJSON] Error parsing JSON for window exposure:', e);
+              this.logger.error('Error parsing JSON for window exposure', { error: e instanceof Error ? e.message : String(e) });
             }
-          } else {
-            console.log('📤 [WEBSOCKET.sendJSON] Window is undefined');
           }
-          
-          console.log('📤 [WEBSOCKET.sendJSON] ✅ Settings message detected!');
-          console.log('📤 [WEBSOCKET.sendJSON] Settings message payload (exact JSON string):', jsonString);
           try {
-            const parsed = JSON.parse(jsonString);
-            console.log('📤 [WEBSOCKET.sendJSON] Settings message payload (parsed):', parsed);
+            JSON.parse(jsonString);
+            this.logger.debug('[WEBSOCKET.sendJSON] Settings payload (parsed)', { length: jsonString.length });
           } catch (e) {
-            console.error('📤 [WEBSOCKET.sendJSON] Error parsing JSON:', e);
+            this.logger.error('Error parsing Settings JSON', { error: e instanceof Error ? e.message : String(e) });
           }
-        } else {
-          console.log('📤 [WEBSOCKET.sendJSON] NOT a Settings message, skipping');
         }
       }
       
