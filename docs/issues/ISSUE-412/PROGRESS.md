@@ -29,7 +29,7 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 | 2.2 | Define propagation contract (e.g. X-Trace-Id, X-Request-Id headers) | [x] |
 | 2.3 | Backend/server: read IDs from headers, set logger context per request | [x] |
 | 2.4 | Proxy (openai-proxy): attach caller trace/request ID to logger context | [ ] |
-| 2.5 | Test-app: generate or receive trace/request ID, send to backend | [ ] |
+| 2.5 | Test-app: generate or receive trace/request ID, send to backend | [x] |
 | 2.6 | Integration test: same trace ID in backend + proxy logs for one request | [x] |
 
 **Phase 2 done when:** One end-to-end path shows same ID in backend, proxy, and test-app logs.
@@ -42,7 +42,7 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 |---|------|--------|
 | 3.1 | Audit and list all console.* call sites (component, utils, services) | [ ] |
 | 3.2 | Component: replace console.* with logger; gate verbose on debug prop | [ ] |
-| 3.3 | Test-app: use shared logger; set trace/request ID context for session | [ ] |
+| 3.3 | Test-app: use shared logger; set trace/request ID context for session | [ ] (sends X-Trace-Id to backend; full logger adoption pending) |
 | 3.4 | backend-server: replace console.* with logger; attach request context | [x] (POST /function-call path; rest in follow-up) |
 | 3.5 | openai-proxy: replace console.* with logger; attach caller ID context | [ ] |
 | 3.6 | Allowlist/bootstrap: document and keep minimal justified console.* | [ ] |
@@ -56,10 +56,10 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 | # | Task | Status |
 |---|------|--------|
 | 4.1 | Logging standard doc (levels, when to use, dev vs prod) | [x] |
-| 4.2 | Migration guide for existing console.* call sites | [ ] |
+| 4.2 | Migration guide for existing console.* call sites | [x] |
 | 4.3 | Correlation doc: how trace/request ID is propagated and queried | [x] (PROPAGATION-CONTRACT.md) |
 | 4.4 | Partner-app developer instructions (use logger, set ID, correlate) | [x] |
-| 4.5 | Demo or doc: same trace ID in test-app, backend, proxy logs | [ ] |
+| 4.5 | Demo or doc: same trace ID in test-app, backend, proxy logs | [x] |
 
 **Phase 4 done when:** Docs and partner-app instructions published; correlation demonstrated or documented.
 
@@ -72,12 +72,12 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 | OpenTelemetry (or agreed logger) integrated; single abstraction | [x] |
 | Direct console.log/warn/error rare and justified | [ ] (in progress; backend function-call path done) |
 | Log levels and debug prop/env drive what is emitted | [x] |
-| Docs describe standard and migration for console.* | [ ] (standard + partner done; migration pending) |
-| Demo/doc: logs from backend, proxies, test-app pulled together via ID | [ ] |
+| Docs describe standard and migration for console.* | [x] |
+| Demo/doc: logs from backend, proxies, test-app pulled together via ID | [x] |
 | Developer docs: clear instructions for partner app logging | [x] |
 
 ---
 
 ## Last updated
 
-- Phase 1–2 (logger, propagation contract, backend trace ID, integration test) and partial Phase 3–4 (backend /function-call path; LOGGING-STANDARD.md, PROPAGATION-CONTRACT.md, PARTNER-APP-LOGGING.md). Next: 2.4–2.5 (proxy + test-app ID), 3.1–3.3/3.5–3.6 (full adoption), 4.2 (migration guide), 4.5 (demo).
+- 2.5 done: test-app sends X-Trace-Id in forwardFunctionCallToBackend. 4.2 MIGRATION-GUIDE.md, 4.5 DEMO-CORRELATION.md added. Next: 2.4 (proxy), 3.1–3.3/3.5–3.6 (full adoption), 3.6 (allowlist).

@@ -64,6 +64,8 @@ See **[DEVELOPMENT-PLAN.md](./DEVELOPMENT-PLAN.md)** for phased implementation: 
 | [LOGGING-STANDARD.md](./LOGGING-STANDARD.md) | Log levels, env, migration from `console.*`. |
 | [PROPAGATION-CONTRACT.md](./PROPAGATION-CONTRACT.md) | Trace/request ID headers and flow. |
 | [PARTNER-APP-LOGGING.md](./PARTNER-APP-LOGGING.md) | How to use the logger in a partner app and correlate with backend. |
+| [MIGRATION-GUIDE.md](./MIGRATION-GUIDE.md) | Replace existing `console.*` call sites with the logger. |
+| [DEMO-CORRELATION.md](./DEMO-CORRELATION.md) | Example: same trace ID in test-app and backend logs. |
 
 ---
 
