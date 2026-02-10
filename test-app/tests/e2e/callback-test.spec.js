@@ -15,19 +15,12 @@ import {
 } from './helpers/test-helpers.js';
 
 /**
- * Callback Test Suite
+ * Callback Test Suite (runs with Deepgram or OpenAI proxy)
  *
- * This test suite verifies that ALL callbacks are properly implemented and working:
- * - onReady ✅ (has tests)
- * - onConnectionStateChange ✅ (has tests)
- * - onError ✅ (has tests)
- * - onTranscriptUpdate ❌ (needs tests)
- * - onUserStartedSpeaking ❌ (needs tests)
- * - onUserStoppedSpeaking ❌ (needs tests - was restored)
- * - onAgentStateChange ✅ (has tests)
- * - onAgentUtterance ✅ (has tests)
- * - onUserMessage ✅ (has tests)
- * - onPlaybackStateChange ✅ (has tests)
+ * Verifies component callback contracts: onReady, onConnectionStateChange, onError,
+ * onTranscriptUpdate, onUserStartedSpeaking, onUserStoppedSpeaking, onAgentStateChange,
+ * onAgentUtterance, onUserMessage, onPlaybackStateChange. Runs with both backends;
+ * Deepgram asserts transcript/VAD; OpenAI path asserts agent response + no error.
  */
 
 test.describe('Callback Test Suite', () => {
@@ -202,17 +195,11 @@ test.describe('Callback Test Suite', () => {
     const testMessage = 'Hello, can you help me?';
     await sendTextMessage(page, testMessage);
 
-    // Wait for audio playback to start using helper
-    // Increased timeout for full test runs where API may be slower
-    await waitForAudioPlaybackStart(page, 30000);
-
-    // Verify audio playing status is true
+    // Wait for audio playback to start (extended for OpenAI proxy)
+    await waitForAudioPlaybackStart(page, 35000);
     const audioPlayingStatus = await getAudioPlayingStatus(page);
     expect(audioPlayingStatus).toBe('true');
-
-    // Wait for agent response audio to finish (waitForAgentGreeting waits for audio to finish)
-    // This helper waits for audio-playing-status to be 'false' or agent-state to be 'idle'
-    await waitForAgentGreeting(page, 20000);
+    await waitForAgentGreeting(page, 25000);
 
     // Verify audio playing status is false
     const finalAudioStatus = await getAudioPlayingStatus(page);
@@ -241,12 +228,12 @@ test.describe('Callback Test Suite', () => {
     const testMessage = 'Hello, this is a comprehensive test message';
     await sendTextMessage(page, testMessage);
 
-    // Wait for agent response using helper
+    // Wait for agent response (extended timeout for OpenAI proxy)
     await page.waitForFunction(() => {
       const agentResponseElement = document.querySelector('[data-testid="agent-response"]');
       return agentResponseElement && agentResponseElement.textContent &&
              agentResponseElement.textContent !== '(Waiting for agent response...)';
-    }, { timeout: 15000 });
+    }, { timeout: 30000 });
 
     // Wait for component to be ready (onReady callback)
     await page.waitForSelector('[data-testid="component-ready-status"]', { timeout: 5000 });

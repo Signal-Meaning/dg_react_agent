@@ -35,6 +35,8 @@ export interface OpenAISessionUpdate {
         turn_detection?: { type: 'server_vad'; create_response?: boolean; interrupt_response?: boolean; idle_timeout_ms?: number } | null;
         /** Tell API we send PCM 24kHz 16-bit mono (avoids format mismatch). */
         format?: { type: string; rate?: number };
+        /** Enable input audio transcription for conversation.item.input_audio_transcription.* (Issue #414). */
+        transcription?: { model: string; language?: string; prompt?: string };
       };
     };
     tools?: Array<{ type: 'function'; name: string; description?: string; parameters?: unknown }>;
@@ -185,6 +187,8 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
           return null;
         })(),
         format: { type: 'audio/pcm', rate: 24000 },
+        // Enable input audio transcription so we get conversation.item.input_audio_transcription.* (Issue #414).
+        transcription: { model: 'gpt-4o-transcribe', language: 'en', prompt: '' },
       },
     },
   };
@@ -327,6 +331,79 @@ export function mapErrorToComponentError(event: OpenAIErrorEvent): ComponentErro
     code = event.error?.code ?? 'unknown';
   }
   return { type: 'Error', description: String(msg), code };
+}
+
+/** OpenAI server event: conversation.item.input_audio_transcription.completed (user speech transcript) */
+export interface OpenAIInputAudioTranscriptionCompleted {
+  type: 'conversation.item.input_audio_transcription.completed';
+  item_id?: string;
+  content_index?: number;
+  transcript?: string;
+}
+
+/** OpenAI server event: conversation.item.input_audio_transcription.delta (interim user transcript) */
+export interface OpenAIInputAudioTranscriptionDelta {
+  type: 'conversation.item.input_audio_transcription.delta';
+  item_id?: string;
+  content_index?: number;
+  delta?: string;
+}
+
+/** Component message: Transcript (incoming from proxy; same shape as Deepgram Results/Transcript for onTranscriptUpdate) */
+export interface ComponentTranscript {
+  type: 'Transcript';
+  transcript: string;
+  is_final: boolean;
+  speech_final: boolean;
+  channel: number;
+  channel_index: number[];
+  start: number;
+  duration: number;
+  alternatives: Array<{ transcript: string; confidence: number; words: unknown[] }>;
+}
+
+/**
+ * Map OpenAI conversation.item.input_audio_transcription.completed → component Transcript.
+ * Component maps this to TranscriptResponse and calls onTranscriptUpdate (Issue #414).
+ */
+export function mapInputAudioTranscriptionCompletedToTranscript(
+  event: OpenAIInputAudioTranscriptionCompleted
+): ComponentTranscript {
+  const transcript = event.transcript ?? '';
+  return {
+    type: 'Transcript',
+    transcript,
+    is_final: true,
+    speech_final: true,
+    channel: 0,
+    channel_index: [0],
+    start: 0,
+    duration: 0,
+    alternatives: [{ transcript, confidence: 1, words: [] }],
+  };
+}
+
+/**
+ * Map OpenAI conversation.item.input_audio_transcription.delta → component Transcript (interim).
+ * Component maps this to TranscriptResponse and calls onTranscriptUpdate (Issue #414).
+ */
+export function mapInputAudioTranscriptionDeltaToTranscript(
+  event: OpenAIInputAudioTranscriptionDelta,
+  accumulated?: string
+): ComponentTranscript {
+  const delta = event.delta ?? '';
+  const transcript = (accumulated ?? '') + delta;
+  return {
+    type: 'Transcript',
+    transcript,
+    is_final: false,
+    speech_final: false,
+    channel: 0,
+    channel_index: [0],
+    start: 0,
+    duration: 0,
+    alternatives: [{ transcript, confidence: 1, words: [] }],
+  };
 }
 
 /** OpenAI client event: input_audio_buffer.append (base64 audio) */

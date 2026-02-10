@@ -28,6 +28,7 @@ This document describes the environment variables that can be used to configure 
 - `VITE_AGENT_VOICE` - Agent voice (default: `aura-2-apollo-en`)
 - `VITE_AGENT_GREETING` - Agent greeting message (default: `Hello! How can I assist you today?`)
 - `VITE_AGENT_URL` - Custom agent WebSocket URL (default: `wss://agent.deepgram.com/v1/agent/converse`)
+- `VITE_IDLE_TIMEOUT_MS` - Idle timeout in milliseconds (default: component default, e.g. 10000). When set, used for agent session and component; E2E runs use 30000 so the connection stays open long enough for audio-sending tests.
 
 ### Proxy Endpoints (E2E / real API tests)
 - `VITE_DEEPGRAM_PROXY_ENDPOINT` - WebSocket URL for the Deepgram proxy (default: `ws://localhost:8080/deepgram-proxy`). Used by deepgram-text-session-flow and other Deepgram proxy E2E tests.
@@ -49,6 +50,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-project-id-here
 VITE_TRANSCRIPTION_MODEL=nova-2
 VITE_TRANSCRIPTION_LANGUAGE=en-GB
 VITE_AGENT_VOICE=aura-2-luna-en
+
+# Optional - idle timeout (ms); E2E defaults to 30000 when started via Playwright
+# VITE_IDLE_TIMEOUT_MS=30000
 
 # Optional - proxy endpoints for E2E tests (set in test-app/.env)
 # VITE_DEEPGRAM_PROXY_ENDPOINT=ws://localhost:8080/deepgram-proxy
