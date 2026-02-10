@@ -27,7 +27,7 @@ These specs require **VITE_OPENAI_PROXY_ENDPOINT** and the OpenAI proxy (`npm ru
 
 | Spec | Description |
 |------|-------------|
-| `openai-proxy-e2e.spec.js` | Connection, messages, multi-turn, reconnection, basic audio, **VAD (Issue #414 test 5b)**, function calling, error handling; protocol user echo |
+| `openai-proxy-e2e.spec.js` | Connection, messages, multi-turn, reconnection, basic audio, **VAD (Issue #414 test 5b)**, function calling (test 6 uses **backend** path — no `window.handleFunctionCall`; Issue #407), error handling; protocol user echo |
 | `openai-proxy-tts-diagnostic.spec.js` | TTS binary received, wire contract (only PCM as binary), playback status |
 | `greeting-playback-validation.spec.js` | Greeting path (connect-only) and agent response TTS; session ordering |
 | `openai-inject-connection-stability.spec.js` | Connection stability after injectUserMessage (real OpenAI proxy) |
