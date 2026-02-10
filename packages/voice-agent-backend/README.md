@@ -16,7 +16,13 @@ Returns an Express application with voice-agent routes mounted.
 
 - **options.deepgramProxy** — `{ enabled?: boolean }` (default: enabled)
 - **options.openaiProxy** — `{ enabled?: boolean }` (default: enabled)
-- **options.functionCall** — `{ path?: string }` (default: `/api/function-call`)
+- **options.functionCall** — `{ path?: string, execute?: (name, args) => { content?: string } | { error?: string } }` (default path: `/api/function-call`). When `execute` is provided, POST to the path is handled (Issue #407 contract); otherwise returns 501.
+
+### createFunctionCallHandler(options)
+
+For raw Node HTTP servers (no Express). Returns a `(req, res)` handler that implements POST /function-call (Issue #407 contract). Use when your backend is not Express (e.g. test-app backend-server).
+
+- **options.execute** — `(name, args) => { content?: string } | { error?: string }` (required for real behavior).
 
 ### mountVoiceAgentBackend(app, options)
 
@@ -34,4 +40,5 @@ Uses `PORT` (default `3000`). Same routes as the programmatic API.
 
 ## Status
 
-Initial API and placeholder routes only. Real proxy and function-call behavior will be wired in later phases (see repo `docs/issues/ISSUE-423/TDD-PLAN.md`).
+- **Function-call:** Implemented. Use `functionCall.execute` or `createFunctionCallHandler({ execute })` (Issue #407 contract).
+- **Deepgram / OpenAI proxy:** Placeholder (501). To be wired from current backend-server and openai-proxy in a follow-up (see repo `docs/issues/ISSUE-423/TDD-PLAN.md`).

@@ -35,6 +35,12 @@ import { getLogger, generateTraceId } from './logger.js';
 // Load test-app/.env so VITE_DEEPGRAM_API_KEY (and DEEPGRAM_API_KEY) are available when run via npm run backend
 // Skip when SKIP_DOTENV=1 (used by integration tests to assert "at least one key required")
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Issue #423: use voice-agent-backend package for /function-call (thin wrapper)
+const require = createRequire(import.meta.url);
+const voiceAgentBackendPath = path.resolve(__dirname, '..', '..', 'packages', 'voice-agent-backend', 'src', 'index.js');
+const { createFunctionCallHandler } = require(voiceAgentBackendPath);
+const functionCallHandler = createFunctionCallHandler({ execute: executeFunctionCall });
 if (process.env.SKIP_DOTENV !== '1') {
   dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 }
@@ -173,46 +179,11 @@ const requestHandler = (req, res) => {
 
   const pathname = getPathname(req.url);
 
-  // POST /function-call — Issue #407: app backend executes function calls (common handlers, not proxy-specific)
+  // POST /function-call — Issue #407, #423: delegated to voice-agent-backend package (thin wrapper)
   if (req.method === 'POST' && pathname === '/function-call') {
     const traceId = req.headers['x-trace-id'] || req.headers['x-request-id'] || generateTraceId();
-    const requestLog = rootLog.child({ traceId });
-    let body = '';
-    req.on('data', (chunk) => { body += chunk; });
-    req.on('end', () => {
-      try {
-        const payload = JSON.parse(body || '{}');
-        const id = payload.id;
-        const name = payload.name;
-        const argsStr = payload.arguments;
-        if (typeof id !== 'string' || typeof name !== 'string' || typeof argsStr !== 'string') {
-          requestLog.warn('Function call rejected: missing or invalid id, name, or arguments', { id, name });
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Missing or invalid id, name, or arguments' }));
-          return;
-        }
-        let args = {};
-        try {
-          args = JSON.parse(argsStr || '{}');
-        } catch {
-          // leave args as {}
-        }
-        const result = executeFunctionCall(name, args);
-        if (result.error) {
-          requestLog.warn('Function call error', { name, id, error: result.error });
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: result.error }));
-          return;
-        }
-        requestLog.info('Function call executed', { name, id });
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ content: result.content }));
-      } catch (err) {
-        requestLog.error('Function call handler threw', { error: err instanceof Error ? err.message : String(err) });
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Internal error' }));
-      }
-    });
+    rootLog.debug('Function call request', { traceId });
+    functionCallHandler(req, res);
     return;
   }
 

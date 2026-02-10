@@ -15,7 +15,8 @@ const { createServer: createVoiceAgentServer } = require(backendPath);
 function request(
   port: number,
   pathName: string,
-  method: string = 'GET'
+  method: string = 'GET',
+  body: string = method === 'POST' ? '{}' : ''
 ): Promise<{ statusCode: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = http.request(
@@ -35,7 +36,7 @@ function request(
       }
     );
     req.on('error', reject);
-    if (method === 'POST') req.write('{}');
+    if (method === 'POST') req.write(body);
     req.end();
   });
 }
@@ -86,7 +87,7 @@ describe('voice-agent-backend mounted routes (Issue #423 Phase 2)', () => {
     expect(data).toHaveProperty('route', 'openai');
   });
 
-  it('responds on custom function-call path with defined shape', async () => {
+  it('responds on custom function-call path with defined shape (no handler)', async () => {
     const app = createVoiceAgentServer({
       functionCall: { path: '/api/function-call' },
     });
@@ -97,5 +98,30 @@ describe('voice-agent-backend mounted routes (Issue #423 Phase 2)', () => {
     expect(statusCode).toBe(501);
     const data = JSON.parse(body);
     expect(data).toHaveProperty('route', 'function-call');
+  });
+
+  it('when functionCall.execute is provided, POST /api/function-call returns 200 and content', async () => {
+    const app = createVoiceAgentServer({
+      functionCall: {
+        path: '/api/function-call',
+        execute: (name, args) => {
+          expect(name).toBe('get_current_time');
+          return { content: JSON.stringify({ time: '14:30:00', timezone: args?.timezone || 'UTC' }) };
+        },
+      },
+    });
+    server = app.listen(0) as http.Server;
+    port = (server.address() as { port: number }).port;
+
+    const payload = JSON.stringify({
+      id: 'call_abc',
+      name: 'get_current_time',
+      arguments: '{"timezone":"UTC"}',
+    });
+    const { statusCode, body } = await request(port, '/api/function-call', 'POST', payload);
+    expect(statusCode).toBe(200);
+    const data = JSON.parse(body);
+    expect(data).toHaveProperty('content');
+    expect(JSON.parse(data.content)).toEqual({ time: '14:30:00', timezone: 'UTC' });
   });
 });
