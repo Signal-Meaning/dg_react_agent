@@ -67,25 +67,19 @@ This issue tracks the complete release process for version v0.7.19 of the Deepgr
   - [x] Push: `git push origin release/v0.7.19`
 
 #### Package Publishing
-- [ ] **Publish to GitHub Registry**: Publish package to GitHub Package Registry
-  - [ ] **Triggered by**: Push to `release/v0.7.19` runs `.github/workflows/test-and-publish.yml`
-    - Test job: linting, `npm run test:mock`, package validation
-    - Publish job (if tests pass): build, `npm publish`, then **Create GitHub Release** (tag `v0.7.19`, notes from `docs/releases/v0.7.19/RELEASE-NOTES.md`)
-  - [ ] **Monitor CI**: GitHub Actions → Test and Publish Package workflow
-  - [ ] **Verify**: Package appears in GitHub Packages; release appears under Releases with tag `v0.7.19`
-  - **Fallback**: If CI fails, run `npm publish` locally from `release/v0.7.19`; then create release/tag manually.
-- [ ] **Verify Installation**: After publish
-  - [ ] Test: Install from `@signal-meaning/deepgram-voice-interaction-react@0.7.19`
-  - [ ] Verify: Package works correctly in test environment
+- [x] **Publish to GitHub Registry**: Publish package to GitHub Package Registry
+  - [x] Push to `release/v0.7.19` ran workflow; test job and publish job passed.
+  - [x] **Verify**: Package published; GitHub Release created with tag `v0.7.19`.
+- [ ] **Verify Installation** (optional): Install from `@signal-meaning/deepgram-voice-interaction-react@0.7.19` and smoke-test if desired.
 
 #### GitHub Release
-- [ ] **Created by CI** when publish job runs (tag `v0.7.19`, notes from RELEASE-NOTES.md). If you triggered via push to `release/v0.7.19`, no manual release creation needed.
+- [x] **Created by CI** — tag `v0.7.19` and notes from RELEASE-NOTES.md.
 - [ ] **Add Release Labels** (optional): `release`, `v0.7.19`
 - [ ] **Add Branch Labels** (optional): label `release/v0.7.19` branch
 
 #### Post-Release
 - [ ] **Update Main Branch**: Merge release branch to main **via Pull Request** (required — do not push directly to `main`)
-  - [ ] Open a PR: `release/v0.7.19` → `main` (e.g. "Merge release/v0.7.19 into main")
+  - [x] Open a PR: [**#421** Merge release/v0.7.19 into main](https://github.com/Signal-Meaning/dg_react_agent/pull/421)
   - [ ] Get review/approval if branch protection requires it
   - [ ] Merge the PR (squash or merge commit per repo policy)
   - [ ] **Do not** `git push origin main` from a local merge — use the GitHub PR merge so branch protection is satisfied
