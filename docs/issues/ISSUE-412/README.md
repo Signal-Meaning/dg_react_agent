@@ -66,6 +66,8 @@ See **[DEVELOPMENT-PLAN.md](./DEVELOPMENT-PLAN.md)** for phased implementation: 
 | [PARTNER-APP-LOGGING.md](./PARTNER-APP-LOGGING.md) | How to use the logger in a partner app and correlate with backend. |
 | [MIGRATION-GUIDE.md](./MIGRATION-GUIDE.md) | Replace existing `console.*` call sites with the logger. |
 | [DEMO-CORRELATION.md](./DEMO-CORRELATION.md) | Example: same trace ID in test-app and backend logs. |
+| [CONSOLE-AUDIT.md](./CONSOLE-AUDIT.md) | Audit of all console.* call sites (Phase 3 migration). |
+| [ALLOWLIST.md](./ALLOWLIST.md) | Justified direct console.* usage (logger sink, bootstrap, CLI). |
 
 ---
 

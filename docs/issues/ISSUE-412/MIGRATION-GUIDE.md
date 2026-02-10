@@ -45,7 +45,7 @@ Use these to find call sites (then replace manually or with care):
 - `console\.warn\(`
 - `console\.error\(`
 
-**Allowlist:** Fatal bootstrap-only use of `console.error` (e.g. "Cannot load config") is acceptable; document those in a comment and in [PROGRESS](./PROGRESS.md) allowlist.
+**Allowlist:** Fatal bootstrap-only use of `console.error` (e.g. "Cannot load config") is acceptable; document those in a comment and in [ALLOWLIST.md](./ALLOWLIST.md).
 
 ---
 

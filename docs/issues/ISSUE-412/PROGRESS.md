@@ -40,12 +40,12 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 
 | # | Task | Status |
 |---|------|--------|
-| 3.1 | Audit and list all console.* call sites (component, utils, services) | [ ] |
+| 3.1 | Audit and list all console.* call sites (component, utils, services) | [x] |
 | 3.2 | Component: replace console.* with logger; gate verbose on debug prop | [ ] |
 | 3.3 | Test-app: use shared logger; set trace/request ID context for session | [ ] (sends X-Trace-Id to backend; full logger adoption pending) |
 | 3.4 | backend-server: replace console.* with logger; attach request context | [x] (POST /function-call path; rest in follow-up) |
 | 3.5 | openai-proxy: replace console.* with logger; attach caller ID context | [ ] |
-| 3.6 | Allowlist/bootstrap: document and keep minimal justified console.* | [ ] |
+| 3.6 | Allowlist/bootstrap: document and keep minimal justified console.* | [x] |
 
 **Phase 3 done when:** Single abstraction in use; minimal direct console.* outside allowlist.
 
@@ -80,4 +80,4 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 
 ## Last updated
 
-- 2.4 done: openai-proxy reads traceId from req.url, adds ATTR_TRACE_ID to all connection logs; backend forwarder forwards client query to proxy; test-app appends ?traceId=sessionTraceId to proxy WebSocket URL. Phase 2 complete. Next: 3.1–3.3/3.5–3.6 (full adoption), 3.6 (allowlist).
+- 3.1 done: CONSOLE-AUDIT.md lists all console.* call sites (component, IdleTimeoutService, hooks, proxy, backend). 3.6 done: ALLOWLIST.md documents justified usage (logger sink, fatal bootstrap, startup, CLI). Next: 3.2, 3.3, 3.5 (replace console.* with logger in component, test-app, openai-proxy).
