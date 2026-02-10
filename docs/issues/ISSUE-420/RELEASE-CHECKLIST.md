@@ -5,18 +5,20 @@
 ### Overview
 This issue tracks the complete release process for version v0.7.19 of the Deepgram Voice Interaction React component. This is a **patch** version release. It is primarily a large patch in support of **openai-proxy** (backend proxy, POST /function-call, E2E and integration tests, docs), and also includes **new logging support** (OTel-style logger, trace ID propagation, backend and test-app adoption), idle timeout and callback fixes, and related documentation. This release includes every commit since the last official published release (v0.7.18).
 
+**Progress:** Branch `davidrmcgee/issue420` created and pushed. Lint ✅. Unit tests: 20 failing (idle timeout in `agent-state-handling.test.ts`) — must be fixed before release.
+
 ### 📋 Release Checklist
 
 #### Pre-Release Preparation
 - [ ] **Code Review Complete**: All PRs merged and code reviewed
 - [ ] **Tests Passing**: All unit tests and E2E tests passing
-  - [ ] Run: `npm test`
+  - [ ] Run: `npm test` — **Status:** Run 2025-02-10: 20 failures in `agent-state-handling.test.ts` (idle timeout `isTimeoutActive()` assertions). 860 passed.
   - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode** (proxy mode is the default and primary mode)
     - [ ] Start backend: `cd test-app && npm run backend`
     - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e` (all E2E tests must pass in proxy mode)
     - [ ] Verify: All tests pass in proxy mode before proceeding
-- [ ] **Linting Clean**: No linting errors
-  - [ ] Run: `npm run lint`
+- [x] **Linting Clean**: No linting errors
+  - [x] Run: `npm run lint` — **Done:** 2025-02-10
 - [ ] **Documentation Updated**: All relevant documentation updated
 - [ ] **API Changes Documented**: Any API changes appear in API-REFERENCE.md evolution section
 - [ ] **Breaking Changes Documented**: Any breaking changes identified and documented
