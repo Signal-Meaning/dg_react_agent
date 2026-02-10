@@ -59,50 +59,29 @@ This issue tracks the complete release process for version v0.7.19 of the Deepgr
 - [ ] **Update Migration Guide**: Update migration documentation if needed
 
 #### Git Operations
-- [ ] **Commit Changes**: Commit all release-related changes
-  - [ ] Commit: Version bump and documentation updates
-  - [ ] Message: `chore: prepare release v0.7.19`
-- [ ] **Create Release Branch**: Create a release branch for the version
-  - [ ] Create: `release/v0.7.19` branch
-  - [ ] Push: `git push origin release/v0.7.19`
+- [x] **Commit Changes**: Commit all release-related changes
+  - [x] Commit: Version bump and documentation updates
+  - [x] Message: `chore: prepare release v0.7.19 — version bump, release docs, checklist`
+- [x] **Create Release Branch**: Create a release branch for the version
+  - [x] Create: `release/v0.7.19` branch
+  - [x] Push: `git push origin release/v0.7.19`
 
 #### Package Publishing
 - [ ] **Publish to GitHub Registry**: Publish package to GitHub Package Registry
-  - [ ] **Preferred**: Use CI build (validated CI build)
-    - Create GitHub release to trigger `.github/workflows/test-and-publish.yml`
-    - CI workflow will: test (mock APIs only), **build in CI**, validate package, and publish. No local build required.
-    - Test job runs first: linting, mock tests, build, package validation
-    - Publish job only runs if test job succeeds
-    - **All non-skipped tests must pass** before publishing
-    - **Monitor CI workflow**: Wait for CI build to complete successfully
-      - Check GitHub Actions workflow status
-      - Verify all CI checks pass
-      - Verify package appears in GitHub Packages
-    - **Only proceed to tagging if publish succeeds**
-  - [ ] **Fallback**: Dev publish (only if CI fails)
-    - Run: `npm publish` (automatically publishes to GitHub Registry)
-    - Verify: Package appears in GitHub Packages
-    - **Only proceed to tagging if publish succeeds**
-- [ ] **Tag Release**: Create git tag for the release (AFTER publish succeeds)
-  - [ ] Verify: Package is successfully published to GitHub Packages
-  - [ ] Tag: `git tag v0.7.19`
-  - [ ] Push: `git push origin v0.7.19`
-- [ ] **Verify Installation**: Test package installation from registry
-  - [ ] Test: Install from `@signal-meaning/deepgram-voice-interaction-react@v0.7.19`
+  - [ ] **Triggered by**: Push to `release/v0.7.19` runs `.github/workflows/test-and-publish.yml`
+    - Test job: linting, `npm run test:mock`, package validation
+    - Publish job (if tests pass): build, `npm publish`, then **Create GitHub Release** (tag `v0.7.19`, notes from `docs/releases/v0.7.19/RELEASE-NOTES.md`)
+  - [ ] **Monitor CI**: GitHub Actions → Test and Publish Package workflow
+  - [ ] **Verify**: Package appears in GitHub Packages; release appears under Releases with tag `v0.7.19`
+  - **Fallback**: If CI fails, run `npm publish` locally from `release/v0.7.19`; then create release/tag manually.
+- [ ] **Verify Installation**: After publish
+  - [ ] Test: Install from `@signal-meaning/deepgram-voice-interaction-react@0.7.19`
   - [ ] Verify: Package works correctly in test environment
 
 #### GitHub Release
-- [ ] **Create GitHub Release**: Create release on GitHub
-  - [ ] Title: `Release v0.7.19`
-  - [ ] Description: Include changelog and migration notes
-  - [ ] Tag: `v0.7.19`
-  - [ ] Target: `main` branch
-- [ ] **Add Release Labels**: Label the release appropriately
-  - [ ] Add: `release` label
-  - [ ] Add: `v0.7.19` label
-- [ ] **Add Branch Labels**: Label the release branch
-  - [ ] Add: `release` label to `release/v0.7.19` branch
-  - [ ] Add: `v0.7.19` label to `release/v0.7.19` branch
+- [ ] **Created by CI** when publish job runs (tag `v0.7.19`, notes from RELEASE-NOTES.md). If you triggered via push to `release/v0.7.19`, no manual release creation needed.
+- [ ] **Add Release Labels** (optional): `release`, `v0.7.19`
+- [ ] **Add Branch Labels** (optional): label `release/v0.7.19` branch
 
 #### Post-Release
 - [ ] **Update Main Branch**: Merge release branch to main **via Pull Request** (required — do not push directly to `main`)
