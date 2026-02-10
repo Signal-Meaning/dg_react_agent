@@ -128,3 +128,4 @@ No implementation for the backend endpoint or frontend forwarding without tests 
 - **Phase 1.3 implementation:** `test-app/src/utils/functionCallBackend.ts`, `test-app/src/App.tsx` (forward when no handler; baseUrl from proxyEndpoint)
 - **Phase 3:** [PHASE-3-TESTS-E2E.md](./PHASE-3-TESTS-E2E.md) — which tests cover backend path; E2E demo vs backend
 - **Phase 4:** [FRONTEND-TO-BACKEND-EXAMPLE.md](./FRONTEND-TO-BACKEND-EXAMPLE.md) — example flow with code references
+- **Refactor phase:** [REFACTOR-PHASE.md](./REFACTOR-PHASE.md) — branch review (correctness, DRYness, coverage) and applied refactors

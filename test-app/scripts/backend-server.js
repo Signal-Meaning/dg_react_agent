@@ -169,7 +169,7 @@ const requestHandler = (req, res) => {
   // For other requests, set security headers
   setSecurityHeaders(res);
 
-  const pathname = req.url && req.url.indexOf('?') !== -1 ? req.url.slice(0, req.url.indexOf('?')) : (req.url || '/');
+  const pathname = getPathname(req.url);
 
   // POST /function-call — Issue #407: app backend executes function calls (common handlers, not proxy-specific)
   if (req.method === 'POST' && pathname === '/function-call') {
@@ -258,6 +258,12 @@ function validateOrigin(origin) {
   
   // Accept valid origins (any other origin is considered valid for testing)
   return { valid: true, reason: null };
+}
+
+/** Get pathname from request URL (no query). Used for HTTP routes and WebSocket upgrade path. */
+function getPathname(reqUrl) {
+  const parsed = url.parse(reqUrl || '', false);
+  return parsed.pathname || '/';
 }
 
 // Helper function to set security headers
@@ -784,9 +790,7 @@ async function attachOpenAIForwarder() {
   }
   // Single upgrade handler so /openai is not rejected by Deepgram's path check (which would send 400).
   server.on('upgrade', (req, socket, head) => {
-    const pathname = (req.url && req.url.indexOf('?') !== -1)
-      ? req.url.slice(0, req.url.indexOf('?'))
-      : (req.url || '/');
+    const pathname = getPathname(req.url);
     if (pathname === '/openai' && wssOpenAI) {
       wssOpenAI.handleUpgrade(req, socket, head, (ws) => {
         wssOpenAI.emit('connection', ws, req);
