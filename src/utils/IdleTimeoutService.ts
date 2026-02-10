@@ -39,6 +39,8 @@ export class IdleTimeoutService {
   private stateGetter?: () => IdleTimeoutState | null; // Callback to get current state from component
   // Issue #373: Track active function calls to prevent idle timeout during execution
   private activeFunctionCalls: Set<string> = new Set();
+  /** Only start idle timeout after user has spoken at least once (UserStartedSpeaking). Keeps connection open until first user activity. */
+  private userHasSpokenThisSession = false;
 
   constructor(config: IdleTimeoutConfig) {
     this.config = config;
@@ -129,6 +131,7 @@ export class IdleTimeoutService {
     
     switch (event.type) {
       case 'USER_STARTED_SPEAKING':
+        this.userHasSpokenThisSession = true;
         this.currentState.isUserSpeaking = true;
         this.disableResets();
         break;
@@ -249,10 +252,13 @@ export class IdleTimeoutService {
   }
 
   /**
-   * Check if timeout can start based on current state
+   * Check if timeout can start based on current state.
+   * Timeout only starts after the user has spoken at least once (UserStartedSpeaking),
+   * so the connection stays open until first user activity (e.g. E2E sending audio).
    */
   private canStartTimeout(state: IdleTimeoutState = this.currentState): boolean {
-    return this.isAgentIdle(state) &&
+    return this.userHasSpokenThisSession &&
+           this.isAgentIdle(state) &&
            !state.isUserSpeaking &&
            !state.isPlaying &&
            !this.isDisabled &&
@@ -428,6 +434,13 @@ export class IdleTimeoutService {
    * Start the idle timeout
    */
   private startTimeout(): void {
+    // Only start if conditions allow (e.g. user has spoken at least once)
+    if (!this.canStartTimeout()) {
+      if (this.config.debug) {
+        console.log('🎯 [DEBUG] startTimeout() skipped - canStartTimeout() false (e.g. user has not spoken yet)');
+      }
+      return;
+    }
     // Only start if timeout is not already running (prevents unnecessary restarts)
     if (this.timeoutId !== null) {
       // Timeout already running, don't restart it

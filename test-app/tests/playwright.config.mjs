@@ -26,8 +26,22 @@ console.log('PW_ENABLE_AUDIO:', ENABLE_AUDIO);
 /**
  * @see https://playwright.dev/docs/test-configuration
  */
+const E2E_BACKEND = process.env.E2E_BACKEND || '';
+const isDeepgramOnly = E2E_BACKEND === 'deepgram';
+
 export default defineConfig({
   testDir: './e2e',
+  /* When E2E_BACKEND=deepgram, run only Deepgram-backed specs (exclude OpenAI proxy-only specs) */
+  ...(isDeepgramOnly
+    ? {
+        testIgnore: [
+          '**/openai-proxy-e2e.spec.js',
+          '**/openai-proxy-tts-diagnostic.spec.js',
+          '**/greeting-playback-validation.spec.js',
+          '**/openai-inject-connection-stability.spec.js',
+        ],
+      }
+    : {}),
   /* Run tests in files in parallel */
   fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -128,6 +142,7 @@ export default defineConfig({
               VITE_BASE_URL: process.env.VITE_BASE_URL || baseURL,
               VITE_DEEPGRAM_PROXY_ENDPOINT: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || `${proxyBase}/deepgram-proxy`,
               VITE_OPENAI_PROXY_ENDPOINT: process.env.VITE_OPENAI_PROXY_ENDPOINT || `${proxyBase}/openai`,
+              VITE_IDLE_TIMEOUT_MS: process.env.VITE_IDLE_TIMEOUT_MS || '30000',
             },
           },
           {

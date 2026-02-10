@@ -12,8 +12,10 @@ import type { Server as HttpsServer } from 'https';
 import path from 'path';
 // Use require so we get CJS WebSocket; Server is on WebSocket.Server in ws/index.js
 // Under Jest/ts-jest the default export may not have .Server, so load Server from lib
+// Type assertion: default import('ws') typings may omit Server; at runtime require('ws').Server exists.
+type WsServerConstructor = new (options: object) => { on(event: string, cb: (...args: unknown[]) => void): void; close(): void };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const WebSocket = require('ws') as typeof import('ws');
+const WebSocket = require('ws') as typeof import('ws') & { Server: WsServerConstructor };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const WebSocketServer = (WebSocket.Server && typeof WebSocket.Server === 'function')
   ? WebSocket.Server
@@ -33,6 +35,8 @@ import {
   isIdleTimeoutClosure,
   isSessionMaxDurationError,
   binaryToInputAudioBufferAppend,
+  mapInputAudioTranscriptionCompletedToTranscript,
+  mapInputAudioTranscriptionDeltaToTranscript,
 } from './translator';
 import {
   initProxyLogger,
@@ -484,6 +488,28 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // Issue #414 COMPONENT-PROXY-INTERFACE-TDD: map to UtteranceEnd with channel and last_word_end (component contract)
           if (debug) console.log(`[proxy ${connId}] upstream→client: input_audio_buffer.speech_stopped → UtteranceEnd`);
           clientWs.send(JSON.stringify({ type: 'UtteranceEnd', channel: [0, 1], last_word_end: 0 }));
+        } else if (msg.type === 'conversation.item.input_audio_transcription.completed') {
+          // Issue #414: map OpenAI user transcript to component Transcript → onTranscriptUpdate
+          const completedMsg = msg as Parameters<typeof mapInputAudioTranscriptionCompletedToTranscript>[0];
+          const transcriptText = (completedMsg.transcript ?? '').slice(0, 60);
+          console.log(`[proxy ${connId}] input_audio_transcription.completed → Transcript (${transcriptText}${(completedMsg.transcript?.length ?? 0) > 60 ? '...' : ''})`);
+          if (debug) {
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: 'input_audio_transcription.completed → Transcript',
+              attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'upstream→client' },
+            });
+          }
+          const transcript = mapInputAudioTranscriptionCompletedToTranscript(completedMsg);
+          clientWs.send(JSON.stringify(transcript));
+        } else if (msg.type === 'conversation.item.input_audio_transcription.delta') {
+          // Issue #414: send interim transcript (delta); we do not accumulate across deltas here (each delta is sent as its own Transcript)
+          if (debug) console.log(`[proxy ${connId}] upstream→client: input_audio_transcription.delta → Transcript (interim)`);
+          const transcript = mapInputAudioTranscriptionDeltaToTranscript(
+            msg as Parameters<typeof mapInputAudioTranscriptionDeltaToTranscript>[0]
+          );
+          clientWs.send(JSON.stringify(transcript));
         } else if (msg.type === 'response.output_audio.delta') {
           // Component expects raw PCM (binary frame) for playback; upstream sends JSON with base64 delta.
           const delta = msg.delta;

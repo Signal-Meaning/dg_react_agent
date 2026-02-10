@@ -1003,6 +1003,27 @@ async function assertNoRecoverableAgentErrors(page) {
 }
 
 /**
+ * Assert that upstream agent errors are within expected bounds for OpenAI proxy (or similar) runs.
+ * We expect (1) a short timeout from upstream when no message has been sent, and (2) idle_timeout_ms
+ * timeout if a message has been sent. So total and recoverable counts may be 0 or 1.
+ * Waits 3s before asserting so late-arriving events are reflected in the DOM.
+ * @param {import('@playwright/test').Page} page
+ * @param {{ maxTotal?: number; maxRecoverable?: number }} [options] - maxTotal (default 1), maxRecoverable (default 1)
+ */
+async function assertAgentErrorsAllowUpstreamTimeouts(page, options = {}) {
+  const { maxTotal = 1, maxRecoverable = 1 } = options;
+  await page.waitForTimeout(3000);
+  const totalEl = page.locator('[data-testid="agent-error-count"]');
+  const totalText = await totalEl.textContent();
+  const total = parseInt(totalText ?? '0', 10);
+  expect(total).toBeLessThanOrEqual(maxTotal);
+  const recoverableEl = page.locator('[data-testid="recoverable-agent-error-count"]');
+  const recoverableText = await recoverableEl.textContent();
+  const recoverable = parseInt(recoverableText ?? '0', 10);
+  expect(recoverable).toBeLessThanOrEqual(maxRecoverable);
+}
+
+/**
  * Wait for agent state to become a specific value
  * @param {import('@playwright/test').Page} page
  * @param {string} expectedState - Expected agent state (idle, listening, thinking, speaking, etc.)
@@ -1682,6 +1703,7 @@ export {
   disconnectComponent, // Disconnect the component (stop button or simulate network issue)
   getAgentState, // Get current agent state from UI
   assertNoRecoverableAgentErrors, // Assert no recoverable upstream errors (fail E2E on regression)
+  assertAgentErrorsAllowUpstreamTimeouts, // Allow up to 1 upstream timeout error (OpenAI proxy: no-message / idle_timeout)
   waitForAgentState, // Wait for agent state to become a specific value
   getAudioDiagnostics, // Get AudioContext state and audio playing status for diagnostics
   getAudioContextState, // Get AudioContext state from window (test-app specific)
