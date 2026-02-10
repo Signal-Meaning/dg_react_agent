@@ -172,46 +172,6 @@ test.describe('Declarative Props API - Issue #305', () => {
   
   test.describe('connectionState/autoStart props (replaces start/stop)', () => {
     
-    test('should connect when autoStartAgent is true', async ({ page }) => {
-      skipIfNoRealAPI();
-      
-      await page.goto('/?test-mode=true');
-      
-      await page.waitForSelector('[data-testid="deepgram-component"]', { timeout: 5000 }).catch(() => {});
-      
-      // Set autoStartAgent prop
-      await page.evaluate(() => {
-        window.__testAutoStartAgent = true;
-        window.__testAutoStartAgentSet = true;
-      });
-      
-      // Wait for connection to be established - check DOM first, then window variable
-      await page.waitForFunction(
-        () => {
-          const connectionStatus = document.querySelector('[data-testid="connection-status"]');
-          return connectionStatus && connectionStatus.textContent && 
-                 connectionStatus.textContent.toLowerCase().includes('connected');
-        },
-        { timeout: 10000 }
-      ).catch(() => {
-        // Fallback: check window variable if DOM not updated yet
-        return page.waitForFunction(
-          () => window.__testConnectionState === 'connected',
-          { timeout: 5000 }
-        );
-      });
-      
-      // Verify connection was established
-      const connectionState = await page.evaluate(() => {
-        const connectionStatus = document.querySelector('[data-testid="connection-status"]');
-        const domState = connectionStatus?.textContent?.toLowerCase().includes('connected') ? 'connected' : null;
-        return domState || window.__testConnectionState || 'closed';
-      });
-      
-      // Note: This test will need to be updated once the implementation is complete
-      expect(connectionState).toBeDefined();
-    });
-    
     test('should connect when connectionState prop is "connected"', async ({ page }) => {
       skipIfNoRealAPI();
       

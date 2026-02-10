@@ -66,10 +66,15 @@ test.describe('Microphone Control', () => {
   });
 
   test('should start transcription service when microphone button clicked with agent already connected (Issue #255)', async ({ page }) => {
+    // OpenAI proxy: single agent connection only; no separate transcription service to start (Issue #420).
+    const { hasOpenAIProxyEndpoint, setupConnectionStateTracking } = await import('./helpers/test-helpers.js');
+    if (hasOpenAIProxyEndpoint()) {
+      test.skip(true, 'OpenAI proxy has no separate transcription service; single agent connection only');
+      return;
+    }
     // This test validates Issue #255: Microphone button should start transcription service
     // even when agent service is already connected
     
-    const { setupConnectionStateTracking } = await import('./helpers/test-helpers.js');
     const stateTracker = await setupConnectionStateTracking(page);
     
     // Step 1: Start agent service first (simulating agent already connected scenario)
