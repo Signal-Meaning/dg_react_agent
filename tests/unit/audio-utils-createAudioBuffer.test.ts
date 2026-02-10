@@ -101,9 +101,7 @@ describe('AudioUtils createAudioBuffer() - Issue #340 Fix', () => {
       expect(result).not.toBeNull();
       // Should create buffer with 500 samples (1000 bytes / 2)
       expect(audioContext.createBuffer).toHaveBeenCalledWith(1, 500, 24000);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Odd length (1001 bytes)')
-      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith('warn', expect.stringContaining('Odd length'), expect.objectContaining({ bytes: 1001 }));
     });
 
     test('should handle 1-byte buffer (minimum odd length)', () => {
@@ -115,9 +113,7 @@ describe('AudioUtils createAudioBuffer() - Issue #340 Fix', () => {
 
       // Should truncate to 0 bytes, which should return undefined (empty buffer)
       expect(result).toBeUndefined();
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Odd length (1 bytes)')
-      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith('warn', expect.stringContaining('Odd length'), expect.objectContaining({ bytes: 1 }));
     });
 
     test('should handle 3-byte buffer', () => {
@@ -133,9 +129,7 @@ describe('AudioUtils createAudioBuffer() - Issue #340 Fix', () => {
       // Should truncate to 2 bytes = 1 sample
       expect(result).toBeDefined();
       expect(audioContext.createBuffer).toHaveBeenCalledWith(1, 1, 24000);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Odd length (3 bytes)')
-      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith('warn', expect.stringContaining('Odd length'), expect.objectContaining({ bytes: 3 }));
     });
 
     test('should handle 999-byte buffer', () => {
@@ -151,9 +145,8 @@ describe('AudioUtils createAudioBuffer() - Issue #340 Fix', () => {
       // Should truncate to 998 bytes = 499 samples
       expect(result).toBeDefined();
       expect(audioContext.createBuffer).toHaveBeenCalledWith(1, 499, 24000);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Odd length (999 bytes)')
-      );
+      // Logger emits (level, message, attrs); message no longer embeds bytes (Issue #412)
+      expect(consoleWarnSpy).toHaveBeenCalledWith('warn', expect.stringContaining('Odd length'), expect.objectContaining({ bytes: 999 }));
     });
 
     test('should not throw RangeError with odd-length buffer', () => {
@@ -219,9 +212,7 @@ describe('AudioUtils createAudioBuffer() - Issue #340 Fix', () => {
       expect(result).toBeDefined();
       // Should truncate to 1MB = 524,288 samples
       expect(audioContext.createBuffer).toHaveBeenCalledWith(1, 524288, 24000);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Odd length (1048577 bytes)')
-      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith('warn', expect.stringContaining('Odd length'), expect.objectContaining({ bytes: 1048577 }));
     });
   });
 

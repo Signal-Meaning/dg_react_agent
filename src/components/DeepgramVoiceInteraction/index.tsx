@@ -218,7 +218,26 @@ function DeepgramVoiceInteraction(
   // Use this to detect if component is actually remounting vs just re-rendering
   const componentInstanceIdRef = useRef<string | null>(null);
   const previousInstanceIdRef = useRef<string | null>(null);
-  
+
+  // Issue #412: shared logger and logConsole — must be defined before any use (e.g. remount detection below)
+  const logger = React.useMemo(() => getLogger({ debug: !!props.debug }), [props.debug]);
+  const log = (...args: unknown[]) => {
+    const msg = args.length && args[0] !== undefined ? String(args[0]) : '';
+    logger.debug('[DeepgramVoiceInteraction] ' + msg, args.length > 1 ? { extra: args.slice(1) } : undefined);
+  };
+  const sleepLog = (...args: unknown[]) => {
+    const msg = args.length && args[0] !== undefined ? String(args[0]) : '';
+    logger.debug('[SLEEP_CYCLE][CORE] ' + msg, args.length > 1 ? { extra: args.slice(1) } : undefined);
+  };
+  const logConsole = (level: 'debug' | 'info' | 'warn' | 'error', ...args: unknown[]) => {
+    const msg = args.length && args[0] !== undefined ? String(args[0]) : '';
+    const attrs = args.length > 1 ? { extra: args.slice(1) } : undefined;
+    if (level === 'debug') logger.debug(msg, attrs);
+    else if (level === 'info') logger.info(msg, attrs);
+    else if (level === 'warn') logger.warn(msg, attrs);
+    else logger.error(msg, attrs);
+  };
+
   // Detect actual remounts (not just re-renders)
   // This runs on every render, but only generates a new ID on first mount
   if (componentInstanceIdRef.current === null) {
@@ -226,7 +245,7 @@ function DeepgramVoiceInteraction(
     componentInstanceIdRef.current = `instance-${Date.now()}-${Math.random()}`;
     const windowWithGlobals = typeof window !== 'undefined' ? window as WindowWithDeepgramGlobals : undefined;
     const shouldLogRemounts = props.debug || windowWithGlobals?.__DEEPGRAM_DEBUG_REMOUNTS__;
-    
+
     // If we had a previous instance ID, this is a remount
     // (This can happen if the component was unmounted and remounted)
     if (previousInstanceIdRef.current !== null && shouldLogRemounts) {
@@ -436,25 +455,6 @@ function DeepgramVoiceInteraction(
     });
   }
   
-  // Issue #412: shared logger, gated by props.debug
-  const logger = React.useMemo(() => getLogger({ debug: !!props.debug }), [props.debug]);
-  const log = (...args: unknown[]) => {
-    const msg = args.length && args[0] !== undefined ? String(args[0]) : '';
-    logger.debug('[DeepgramVoiceInteraction] ' + msg, args.length > 1 ? { extra: args.slice(1) } : undefined);
-  };
-  const sleepLog = (...args: unknown[]) => {
-    const msg = args.length && args[0] !== undefined ? String(args[0]) : '';
-    logger.debug('[SLEEP_CYCLE][CORE] ' + msg, args.length > 1 ? { extra: args.slice(1) } : undefined);
-  };
-  const logConsole = (level: 'debug' | 'info' | 'warn' | 'error', ...args: unknown[]) => {
-    const msg = args.length && args[0] !== undefined ? String(args[0]) : '';
-    const attrs = args.length > 1 ? { extra: args.slice(1) } : undefined;
-    if (level === 'debug') logger.debug(msg, attrs);
-    else if (level === 'info') logger.info(msg, attrs);
-    else if (level === 'warn') logger.warn(msg, attrs);
-    else logger.error(msg, attrs);
-  };
-
   // Update stateRef whenever state changes
   useEffect(() => {
     stateRef.current = state;

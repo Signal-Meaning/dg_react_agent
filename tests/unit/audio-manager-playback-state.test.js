@@ -91,11 +91,8 @@ describe('AudioManager isPlaybackActive() Method', () => {
       // Should sync the isPlaying flag to true (since result is true)
       expect(audioManager.isPlaying).toBe(true);
       
-      // Should log the mismatch
-      expect(mockLog).toHaveBeenCalledWith(
-        '[AudioManager]',
-        expect.stringContaining('isPlaying mismatch detected')
-      );
+      // Logger emits (level, message); message contains '[AudioManager]' and mismatch text (Issue #412)
+      expect(mockLog).toHaveBeenCalledWith('debug', expect.stringContaining('isPlaying mismatch detected'));
     });
 
     test('should handle isPlaying=false but active sources exist', () => {
@@ -111,11 +108,7 @@ describe('AudioManager isPlaybackActive() Method', () => {
       // Should sync the isPlaying flag to true
       expect(audioManager.isPlaying).toBe(true);
       
-      // Should log the mismatch
-      expect(mockLog).toHaveBeenCalledWith(
-        '[AudioManager]',
-        expect.stringContaining('isPlaying mismatch detected')
-      );
+      expect(mockLog).toHaveBeenCalledWith('debug', expect.stringContaining('isPlaying mismatch detected'));
     });
 
     test('should not log when states are consistent', () => {
@@ -125,10 +118,7 @@ describe('AudioManager isPlaybackActive() Method', () => {
       
       audioManager.isPlaybackActive();
       
-      // Should not log mismatch
-      expect(mockLog).not.toHaveBeenCalledWith(
-        expect.stringContaining('isPlaying mismatch detected')
-      );
+      expect(mockLog).not.toHaveBeenCalledWith(expect.anything(), expect.stringContaining('isPlaying mismatch detected'));
     });
   });
 
