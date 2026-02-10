@@ -1,0 +1,25 @@
+{
+  "name": "@signal-meaning/voice-agent-backend",
+  "version": "0.1.0",
+  "description": "Backend and proxy package for Deepgram and OpenAI voice agent; mountable routes for test-app and voice-commerce.",
+  "main": "src/index.js",
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "echo \"Tests run from repo root\" && exit 0"
+  },
+  "keywords": [
+    "deepgram",
+    "voice-agent",
+    "openai",
+    "proxy",
+    "backend"
+  ],
+  "author": "Signal Meaning",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

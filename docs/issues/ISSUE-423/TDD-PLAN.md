@@ -176,10 +176,12 @@ Update this section as phases are completed (e.g. “Phase 1.1 RED: Done”; “
 
 | Phase | RED | GREEN | REFACTOR |
 |-------|-----|-------|----------|
-| 1. Package contract | ⏳ | ⏳ | ⏳ |
+| 1. Package contract | ✅ | ✅ | ✅ |
 | 2. Mountable routes | ⏳ | ⏳ | ⏳ |
 | 3. CLI | ⏳ | ⏳ | ⏳ |
 | 4. Thin-wrapper | ⏳ | ⏳ | ⏳ |
+
+**Phase 1 done:** Contract tests in `tests/voice-agent-backend-api.test.ts`; package at `packages/voice-agent-backend` with `createServer` and `mountVoiceAgentBackend`; placeholder routes (501); package README added.
 
 ---
 
