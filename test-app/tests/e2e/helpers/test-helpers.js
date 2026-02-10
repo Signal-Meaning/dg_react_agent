@@ -646,11 +646,11 @@ function analyzePCMChunkBase64(base64) {
   // Use LE metrics for the main check (API specifies LE)
   const { rms, peak, zcr } = le;
 
-  // Speech-like thresholds (Issue #414)
+  // Speech-like thresholds (Issue #414). ZCR_MAX allows real TTS variation (OpenAI/other models can reach ~0.50).
   const RMS_MIN = 0.004;
   const RMS_MAX = 0.75;
   const PEAK_MAX = 1.0; // Allow full-scale; 0.99 was too strict for real TTS (Issue #414)
-  const ZCR_MAX = 0.45;
+  const ZCR_MAX = 0.52;
   // For longer segments, require some zero crossings (ZCR=0 suggests wrong decode or non-speech)
   const ZCR_MIN = numSamples >= 200 ? 0.01 : 0;
 

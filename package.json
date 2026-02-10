@@ -29,6 +29,7 @@
     "api:validate": "jest tests/voice-agent-api-validation.test.tsx",
     "test:e2e": "playwright test",
     "test:e2e:log": "playwright test 2>&1 | tee e2e-run.log",
+    "test:e2e:proxy:log": "USE_PROXY_MODE=true playwright test 2>&1 | tee e2e-proxy-run.log",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:headed": "playwright test --headed",

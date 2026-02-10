@@ -1,8 +1,9 @@
 /**
  * Plugin Validation Test
- * 
- * This test validates that the custom plugin validator correctly identifies
- * React externalization vs bundling issues.
+ *
+ * Validates that React is externalized (not bundled) in the built output.
+ * Uses intent-based checks so the test does not break when the build format
+ * changes (e.g. minification, default vs named imports, quote style).
  */
 
 const fs = require('fs');
@@ -10,91 +11,69 @@ const path = require('path');
 
 describe('Plugin Validation Logic', () => {
   const distPath = path.join(__dirname, '../dist');
-  
+
   beforeAll(() => {
-    // Ensure the package is built
     if (!fs.existsSync(distPath)) {
       throw new Error('Dist folder not found. Please run "npm run build" first.');
     }
   });
 
+  /**
+   * React is "externalized" if the bundle references the module "react" as a dependency
+   * (require or import from "react") rather than inlining its implementation.
+   * These patterns are resilient to minification and import style (default, named, mixed).
+   */
+  function reactIsReferencedAsExternal(content, format) {
+    if (format === 'cjs') {
+      // require("react") or require('react') — minified may have no spaces
+      return /\brequire\s*\(\s*['"]react['"]\s*\)/.test(content);
+    }
+    if (format === 'esm') {
+      // Any ESM import from "react" or 'react' — e.g. import x from "react" or import {y} from "react"
+      // Minified can be }from"react" with no space
+      return /\bfrom\s*['"]react['"]/.test(content);
+    }
+    return false;
+  }
+
+  /**
+   * React is "bundled" if the build contains React's own implementation (runtime/hooks).
+   * We should not ship that; the consumer provides React.
+   */
+  function reactImplementationIsBundled(content) {
+    const bundledPatterns = [
+      /function\s+React\b|class\s+React\b|var\s+React\s*=\s*function/,
+      /\bfunction\s+useState\b|\bfunction\s+useEffect\b|\bfunction\s+useRef\b/,
+      /\bReact\.createElement\b|\bReact\.Component\b/,
+    ];
+    return bundledPatterns.some((p) => p.test(content));
+  }
+
   describe('React Externalization Detection', () => {
-    test('should correctly identify externalized React (not bundled)', () => {
+    test('CJS build: React is externalized and not bundled', () => {
       const cjsPath = path.join(distPath, 'index.js');
-      const cjsContent = fs.readFileSync(cjsPath, 'utf8');
-      
-      // React should be externalized (require("react") is OK)
-      // React should NOT be bundled (no React implementation code)
-      
-      // This should be TRUE - React is externalized via require()
-      const hasExternalReact = /require\(['"]react['"]\)/.test(cjsContent);
-      expect(hasExternalReact).toBe(true);
-      
-      // This should be FALSE - React implementation should not be bundled
-      const hasBundledReactImplementation = /function\s+React|class\s+React|var\s+React\s*=\s*function/.test(cjsContent);
-      expect(hasBundledReactImplementation).toBe(false);
-      
-      // This should be FALSE - No React hooks implementation
-      const hasBundledReactHooks = /function\s+useState|function\s+useEffect|function\s+useRef/.test(cjsContent);
-      expect(hasBundledReactHooks).toBe(false);
+      const content = fs.readFileSync(cjsPath, 'utf8');
+
+      expect(reactIsReferencedAsExternal(content, 'cjs')).toBe(true);
+      expect(reactImplementationIsBundled(content)).toBe(false);
     });
 
-    test('should correctly identify externalized React in ESM build', () => {
+    test('ESM build: React is externalized and not bundled', () => {
       const esmPath = path.join(distPath, 'index.esm.js');
-      const esmContent = fs.readFileSync(esmPath, 'utf8');
-      
-      // React should be externalized (named imports from "react" are OK)
-      const hasExternalReact = /import\s*\{[^}]*\}\s*from\s*['"]react['"]/.test(esmContent);
-      expect(hasExternalReact).toBe(true);
-      
-      // React implementation should not be bundled
-      const hasBundledReactImplementation = /function\s+React|class\s+React|var\s+React\s*=\s*function/.test(esmContent);
-      expect(hasBundledReactImplementation).toBe(false);
+      const content = fs.readFileSync(esmPath, 'utf8');
+
+      expect(reactIsReferencedAsExternal(content, 'esm')).toBe(true);
+      expect(reactImplementationIsBundled(content)).toBe(false);
     });
   });
 
   describe('Validator Logic (Fixed)', () => {
-    test('should correctly identify externalized React vs bundled React implementation', () => {
-      // This test verifies the fixed validator logic
-      // The validator now correctly distinguishes between externalized and bundled React
-      
+    test('CJS: external reference present and no bundled React implementation', () => {
       const cjsPath = path.join(distPath, 'index.js');
-      const cjsContent = fs.readFileSync(cjsPath, 'utf8');
-      
-      // Externalized React patterns (should be present)
-      const reactExternalPatterns = [
-        /require\(['"]react['"]\)/g,
-        /import\s*\{[^}]*\}\s*from\s*['"]react['"]/g,
-        /import\s+.*\s+from\s+['"]react['"]/g,
-        /var\s+\w+\s*=\s*require\(['"]react['"]\)/g
-      ];
+      const content = fs.readFileSync(cjsPath, 'utf8');
 
-      // Bundled React implementation patterns (should NOT be present)
-      const reactBundledPatterns = [
-        /function\s+React|class\s+React|var\s+React\s*=\s*function/g,
-        /function\s+useState|function\s+useEffect|function\s+useRef/g,
-        /React\.createElement|React\.Component/g
-      ];
-
-      let hasExternalReact = false;
-      for (const pattern of reactExternalPatterns) {
-        if (pattern.test(cjsContent)) {
-          hasExternalReact = true;
-          break;
-        }
-      }
-
-      let hasBundledReact = false;
-      for (const pattern of reactBundledPatterns) {
-        if (pattern.test(cjsContent)) {
-          hasBundledReact = true;
-          break;
-        }
-      }
-
-      // React should be externalized (present) but not bundled (absent)
-      expect(hasExternalReact).toBe(true);
-      expect(hasBundledReact).toBe(false);
+      expect(reactIsReferencedAsExternal(content, 'cjs')).toBe(true);
+      expect(reactImplementationIsBundled(content)).toBe(false);
     });
   });
 });
