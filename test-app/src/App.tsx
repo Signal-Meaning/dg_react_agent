@@ -18,6 +18,7 @@ import {
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 import { ClosureIssueTestPage } from './closure-issue-test-page';
 import { getFunctionDefinitions } from './utils/functionDefinitions';
+import { getFunctionCallBackendBaseUrl, forwardFunctionCallToBackend } from './utils/functionCallBackend';
 import type { AgentFunction } from '../../src/types/agent';
 
 // Type declaration for E2E test support
@@ -740,38 +741,38 @@ function App() {
     }
   }, []);
 
-  // Function call request handler (Issue #305) - must be defined before early returns
+  // Function call request handler (Issue #305, #407) - must be defined before early returns
   const handleFunctionCallRequest = useCallback((request: FunctionCallRequest, sendResponse: (response: FunctionCallResponse) => void) => {
-    // Handle function call requests from Deepgram
     console.log('[APP] FunctionCallRequest received:', request);
-    
-    // Issue #336: Increment function call count for E2E test tracking
     setFunctionCallCount(prev => prev + 1);
-    
-    // Issue #305: Support declarative return value pattern
-    // Check for test handler first (for E2E tests), then fallback to window.handleFunctionCall
+
     const testWindow = window as TestWindow;
     const handler = testWindow.__testFunctionCallHandler || testWindow.handleFunctionCall;
-    
-    // Mark that function call request was received (for tests)
+
     if (testWindow.__testFunctionCallHandler) {
       testWindow.__testFunctionCallRequestReceived = true;
     }
-    
+
     if (handler) {
-      // Call handler - it may return a value (declarative) or call sendResponse (imperative)
+      // E2E/demo: use in-browser handler (Issue #305)
       const result = handler(request, sendResponse);
-      // If it returns a value, that will be handled by the component
-      // The component will mark __testFunctionCallResponseSent after processing
       if (result !== undefined && result !== null) {
         return result;
-      } else {
-        // Imperative pattern - handler called sendResponse
-        // Mark response sent for tests
-        testWindow.__testFunctionCallResponseSent = true;
       }
+      testWindow.__testFunctionCallResponseSent = true;
+      return;
     }
-  }, []);
+
+    // Issue #407: By default, forward to app backend (no in-browser execution)
+    const baseUrl = getFunctionCallBackendBaseUrl(proxyEndpoint);
+    if (baseUrl) {
+      forwardFunctionCallToBackend(request, sendResponse, baseUrl);
+      return;
+    }
+
+    // No handler and no backend URL: log only (e.g. direct Deepgram without proxy)
+    console.warn('[APP] No function-call handler or backend URL; request not handled:', request.name);
+  }, [proxyEndpoint]);
 
   // Auto-connect dual mode event handlers
 
