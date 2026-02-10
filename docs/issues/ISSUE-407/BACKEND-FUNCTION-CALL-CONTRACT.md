@@ -85,3 +85,22 @@ Example:
 - Handlers are keyed by `name`; they receive parsed `arguments` (object) and return a result (then serialized to `content` by the route).
 
 See [README.md](./README.md) Phase 1.2 for implementing this contract on the test-app backend server.
+
+---
+
+## Optional: minimal frontend example
+
+```ts
+// In onFunctionCallRequest(request, sendResponse):
+const baseUrl = getFunctionCallBackendBaseUrl(proxyEndpoint); // e.g. http://localhost:8080
+const res = await fetch(`${baseUrl}/function-call`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ id: request.id, name: request.name, arguments: request.arguments ?? '{}' }),
+});
+const body = await res.json();
+if (body.error) sendResponse({ id: request.id, error: body.error });
+else sendResponse({ id: request.id, result: JSON.parse(body.content) });
+```
+
+Full flow and test-app references: [FRONTEND-TO-BACKEND-EXAMPLE.md](./FRONTEND-TO-BACKEND-EXAMPLE.md).
