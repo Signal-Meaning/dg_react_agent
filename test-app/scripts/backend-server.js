@@ -757,13 +757,15 @@ async function waitForPort(port, timeoutMs = 15000) {
 
 async function attachOpenAIForwarder() {
   await waitForPort(OPENAI_INTERNAL_PORT);
-  const targetUrl = `${wsScheme}://127.0.0.1:${OPENAI_INTERNAL_PORT}/openai`;
+  const targetBase = `${wsScheme}://127.0.0.1:${OPENAI_INTERNAL_PORT}/openai`;
   const upstreamOptions = useHttps ? { rejectUnauthorized: false } : {};
   // Use noServer: true so upgrade is routed by path in a single handler (avoids /openai hitting Deepgram first and getting 400).
   wssOpenAI = new WebSocketServer({ noServer: true, path: '/openai' });
   const openaiForwarderBoundaryDebug = process.env.OPENAI_PROXY_TTS_BOUNDARY_DEBUG === '1';
   wssOpenAI.on('connection', (clientWs, req) => {
-    const upstream = new WebSocket(targetUrl, upstreamOptions);
+    // Issue #412: pass client query (e.g. traceId) to proxy so logs can be correlated
+    const query = req?.url?.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    const upstream = new WebSocket(targetBase + query, upstreamOptions);
     upstream.on('open', () => {
       clientWs.on('message', (data, isBinary) => upstream.send(data, { binary: isBinary }));
       upstream.on('message', (data, isBinary) => {

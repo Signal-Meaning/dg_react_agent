@@ -39,6 +39,7 @@ import {
   emitLog,
   SeverityNumber,
   ATTR_CONNECTION_ID,
+  ATTR_TRACE_ID,
   ATTR_DIRECTION,
   ATTR_MESSAGE_TYPE,
   ATTR_ERROR_CODE,
@@ -46,6 +47,7 @@ import {
   ATTR_UPSTREAM_CLOSE_CODE,
   ATTR_UPSTREAM_CLOSE_REASON,
 } from './logger';
+import { parse as parseUrl } from 'url';
 import {
   OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT,
   assertMinAudioBeforeCommit,
@@ -95,14 +97,20 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
   const debug = options.debug === true;
   if (debug) initProxyLogger();
 
-  wss.on('connection', (clientWs: WebSocket) => {
+  wss.on('connection', (clientWs: WebSocket, req: http.IncomingMessage) => {
     const connId = `c${++connectionCounter}`;
+    const traceId =
+      (req?.url && parseUrl(req.url, true).query?.traceId) as string | undefined;
+    const connectionAttrs: Record<string, string> = {
+      [ATTR_CONNECTION_ID]: connId,
+      ...(traceId && { [ATTR_TRACE_ID]: traceId }),
+    };
     if (debug) {
       emitLog({
         severityNumber: SeverityNumber.INFO,
         severityText: 'INFO',
         body: 'client connected',
-        attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'client' },
+        attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'client' },
       });
     }
     const upstream =
@@ -158,7 +166,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               severityText: 'INFO',
               body: 'input_audio_buffer.commit + response.create',
               attributes: {
-                [ATTR_CONNECTION_ID]: connId,
+                ...connectionAttrs,
                 [ATTR_DIRECTION]: 'client→upstream',
                 'audio.pending_bytes': bytesAtCommit,
               },
@@ -180,7 +188,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           severityText: 'ERROR',
           body: (err as Error).message,
           attributes: {
-            [ATTR_CONNECTION_ID]: connId,
+            ...connectionAttrs,
             [ATTR_DIRECTION]: 'upstream',
             [ATTR_ERROR_MESSAGE]: (err as Error).message,
           },
@@ -196,7 +204,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           severityText: 'INFO',
           body: 'upstream closed',
           attributes: {
-            [ATTR_CONNECTION_ID]: connId,
+            ...connectionAttrs,
             [ATTR_DIRECTION]: 'upstream',
             [ATTR_UPSTREAM_CLOSE_CODE]: code,
             [ATTR_UPSTREAM_CLOSE_REASON]: reason?.toString() ?? '',
@@ -217,7 +225,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             severityText: 'INFO',
             body: 'client → upstream',
             attributes: {
-              [ATTR_CONNECTION_ID]: connId,
+              ...connectionAttrs,
               [ATTR_DIRECTION]: 'client→upstream',
               [ATTR_MESSAGE_TYPE]: msg.type ?? '(binary)',
             },
@@ -279,7 +287,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
                 severityText: 'INFO',
                 body: 'input_audio_buffer.append deferred (waiting for session.updated)',
                 attributes: {
-                  [ATTR_CONNECTION_ID]: connId,
+                  ...connectionAttrs,
                   [ATTR_DIRECTION]: 'client→upstream',
                   'audio.queued_bytes': raw.length,
                   'audio.queued_chunks': pendingAudioQueue.length,
@@ -295,7 +303,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               severityText: 'INFO',
               body: 'input_audio_buffer.append',
               attributes: {
-                [ATTR_CONNECTION_ID]: connId,
+                ...connectionAttrs,
                 [ATTR_DIRECTION]: 'client→upstream',
                 [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.append',
               },
@@ -321,7 +329,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             severityText: 'INFO',
             body: 'input_audio_buffer.append (flushed after session.updated)',
             attributes: {
-              [ATTR_CONNECTION_ID]: connId,
+              ...connectionAttrs,
               [ATTR_DIRECTION]: 'client→upstream',
               [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.append',
             },
@@ -350,7 +358,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           severityNumber: SeverityNumber.INFO,
           severityText: 'INFO',
           body: 'upstream open',
-          attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'upstream' },
+          attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream' },
         });
       }
       while (clientMessageQueue.length > 0) {
@@ -377,7 +385,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             severityText: 'INFO',
             body: 'upstream → client',
             attributes: {
-              [ATTR_CONNECTION_ID]: connId,
+              ...connectionAttrs,
               [ATTR_DIRECTION]: 'upstream→client',
               [ATTR_MESSAGE_TYPE]: msg.type ?? '(binary)',
             },
@@ -394,7 +402,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               severityNumber: SeverityNumber.INFO,
               severityText: 'INFO',
               body: 'session.created received (waiting for session.updated before injecting context/greeting)',
-              attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'upstream→client' },
+              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client' },
             });
           }
         } else if (msg.type === 'session.updated') {
@@ -416,7 +424,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
                 severityNumber: SeverityNumber.INFO,
                 severityText: 'INFO',
                 body: 'greeting sent to client only (not upstream; OpenAI Realtime rejects client-created assistant items)',
-                attributes: { [ATTR_CONNECTION_ID]: connId },
+                attributes: { ...connectionAttrs },
               });
             }
             storedGreeting = undefined;
@@ -466,7 +474,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               severityText: isExpectedClosure ? 'INFO' : 'ERROR',
               body: logBody,
               attributes: {
-                [ATTR_CONNECTION_ID]: connId,
+                ...connectionAttrs,
                 [ATTR_DIRECTION]: 'upstream→client',
                 [ATTR_MESSAGE_TYPE]: 'error',
                 [ATTR_ERROR_CODE]: closureCode,
@@ -575,7 +583,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             severityText: 'WARN',
             body: description,
             attributes: {
-              [ATTR_CONNECTION_ID]: connId,
+              ...connectionAttrs,
               [ATTR_UPSTREAM_CLOSE_CODE]: code,
               [ATTR_UPSTREAM_CLOSE_REASON]: reasonStr,
             },

@@ -185,6 +185,12 @@ function App() {
   const [connectionMode, setConnectionMode] = useState<'direct' | 'proxy'>(memoizedProxyConfig.connectionMode);
   const [proxyEndpoint, setProxyEndpoint] = useState<string>(memoizedProxyConfig.proxyEndpoint);
   const [proxyAuthToken, setProxyAuthToken] = useState<string>(memoizedProxyConfig.proxyAuthToken);
+  // Issue #412: stable trace ID per session so proxy/backend logs can be correlated
+  const [sessionTraceId] = useState(() =>
+    typeof crypto !== 'undefined' && typeof (crypto as { randomUUID?: () => string }).randomUUID === 'function'
+      ? (crypto as { randomUUID: () => string }).randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`
+  );
   
   // Audio constraints for echo cancellation testing (Issue #243)
   // Allow override via URL query params for E2E testing
@@ -1028,7 +1034,11 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
               debug: isDebugMode || window.location.search.includes('debug=true') // Enable debug for authentication troubleshooting
             }
           : { 
-              proxyEndpoint: proxyEndpoint || import.meta.env.VITE_PROXY_ENDPOINT,
+              proxyEndpoint: (() => {
+                const base = proxyEndpoint || import.meta.env.VITE_PROXY_ENDPOINT;
+                if (!base) return undefined;
+                return `${base}${base.includes('?') ? '&' : '?'}traceId=${sessionTraceId}`;
+              })(),
               ...(proxyAuthToken ? { proxyAuthToken } : {}),
               debug: isDebugMode || window.location.search.includes('debug=true') // Enable debug for authentication troubleshooting
             }

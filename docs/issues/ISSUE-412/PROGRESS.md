@@ -28,11 +28,11 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 | 2.1 | Add logger context API (e.g. `child(attrs)` or `withContext(attrs)`) | [x] |
 | 2.2 | Define propagation contract (e.g. X-Trace-Id, X-Request-Id headers) | [x] |
 | 2.3 | Backend/server: read IDs from headers, set logger context per request | [x] |
-| 2.4 | Proxy (openai-proxy): attach caller trace/request ID to logger context | [ ] |
+| 2.4 | Proxy (openai-proxy): attach caller trace/request ID to logger context | [x] |
 | 2.5 | Test-app: generate or receive trace/request ID, send to backend | [x] |
 | 2.6 | Integration test: same trace ID in backend + proxy logs for one request | [x] |
 
-**Phase 2 done when:** One end-to-end path shows same ID in backend, proxy, and test-app logs.
+**Phase 2 done when:** One end-to-end path shows same ID in backend, proxy, and test-app logs. ✅ Done: test-app sends traceId on WS URL; backend forwarder passes query to proxy; proxy reads traceId from req.url and adds ATTR_TRACE_ID to all emitLog attributes.
 
 ---
 
@@ -80,4 +80,4 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 
 ## Last updated
 
-- 2.5 done: test-app sends X-Trace-Id in forwardFunctionCallToBackend. 4.2 MIGRATION-GUIDE.md, 4.5 DEMO-CORRELATION.md added. Next: 2.4 (proxy), 3.1–3.3/3.5–3.6 (full adoption), 3.6 (allowlist).
+- 2.4 done: openai-proxy reads traceId from req.url, adds ATTR_TRACE_ID to all connection logs; backend forwarder forwards client query to proxy; test-app appends ?traceId=sessionTraceId to proxy WebSocket URL. Phase 2 complete. Next: 3.1–3.3/3.5–3.6 (full adoption), 3.6 (allowlist).

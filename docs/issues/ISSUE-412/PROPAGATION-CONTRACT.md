@@ -32,7 +32,7 @@ This document defines how trace/request IDs are propagated so logs from backend,
 
 1. **Test-app:** On session start or first request, generate or receive `traceId`; set `logger.child({ traceId })` for the session; when calling backend (e.g. fetch or WebSocket), send `X-Trace-Id: <traceId>` in headers or in the first message.
 2. **Backend server:** On each request, read `X-Trace-Id` (or `X-Request-Id`); create `logger.child({ traceId })` and use it for all logs for that request.
-3. **OpenAI proxy (or other proxies):** When invoked (e.g. by backend or test-app), receive trace ID from caller (header or payload); create child logger with that ID for the duration of the call.
+3. **OpenAI proxy (or other proxies):** When the client connects via WebSocket, the trace ID is passed in the URL query (e.g. `ws://host/openai?traceId=xxx`). The backend forwarder passes the client’s query string through to the proxy; the proxy reads `traceId` from the request URL and attaches it to every log for that connection (OTel attribute `trace_id`).
 
 ---
 
