@@ -1,6 +1,6 @@
 {
   "name": "@signal-meaning/deepgram-voice-interaction-react",
-  "version": "0.7.18",
+  "version": "0.7.19",
   "description": "A React component for real-time transcription and voice agent interactions using Deepgram APIs",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
@@ -27,8 +27,8 @@
     "api:fetch-spec": "npx tsx tests/api-baseline/fetch-official-specs.ts",
     "openai-proxy:cli": "npx tsx scripts/openai-proxy/cli.ts",
     "api:validate": "jest tests/voice-agent-api-validation.test.tsx",
-    "test:e2e": "playwright test",
-    "test:e2e:log": "playwright test 2>&1 | tee e2e-run.log",
+    "test:e2e": "USE_PROXY_MODE=true playwright test",
+    "test:e2e:log": "USE_PROXY_MODE=true playwright test 2>&1 | tee e2e-run.log",
     "test:e2e:proxy:log": "USE_PROXY_MODE=true playwright test 2>&1 | tee e2e-proxy-run.log",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
