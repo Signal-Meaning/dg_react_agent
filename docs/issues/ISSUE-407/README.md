@@ -29,10 +29,10 @@ Currently the test-app runs function handlers in the frontend (`onFunctionCallRe
 
 ## Acceptance criteria
 
-- [ ] Test-app no longer executes function logic in the browser by default; execution happens on app backend (proxies not involved).
-- [ ] Documentation clearly recommends backend execution for function calls and explains API semantics (client = your infrastructure, not necessarily browser).
-- [ ] Existing E2E for function calling still pass (or are updated to reflect backend execution).
-- [ ] Optional: Example shows how the frontend routes `FunctionCallRequest` to an app backend and returns `FunctionCallResponse`.
+- [x] Test-app no longer executes function logic in the browser by default; execution happens on app backend (proxies not involved).
+- [x] Documentation clearly recommends backend execution for function calls and explains API semantics (client = your infrastructure, not necessarily browser).
+- [x] Existing E2E for function calling still pass (or are updated to reflect backend execution).
+- [x] Optional: Example shows how the frontend routes `FunctionCallRequest` to an app backend and returns `FunctionCallResponse`.
 
 ---
 
