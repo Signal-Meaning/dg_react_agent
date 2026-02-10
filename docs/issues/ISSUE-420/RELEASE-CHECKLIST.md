@@ -78,11 +78,10 @@ This issue tracks the complete release process for version v0.7.19 of the Deepgr
 - [ ] **Add Branch Labels** (optional): label `release/v0.7.19` branch
 
 #### Post-Release
-- [ ] **Update Main Branch**: Merge release branch to main **via Pull Request** (required — do not push directly to `main`)
+- [x] **Update Main Branch**: Merge release branch to main **via Pull Request** (required — do not push directly to `main`)
   - [x] Open a PR: [**#421** Merge release/v0.7.19 into main](https://github.com/Signal-Meaning/dg_react_agent/pull/421)
-  - [ ] Get review/approval if branch protection requires it
-  - [ ] Merge the PR (squash or merge commit per repo policy)
-  - [ ] **Do not** `git push origin main` from a local merge — use the GitHub PR merge so branch protection is satisfied
+  - [x] Labels added: `release`, `v0.7.19`
+  - [x] Merge the PR (merged 2026-02-10)
 - [ ] **Clean Up**: Clean up release artifacts (only if you ran optional local package)
   - [ ] If you ran `npm run package:local` locally: remove any `.tgz` in repo root, or leave (they are gitignored)
 - [ ] **Announcement**: Announce release (if applicable)
