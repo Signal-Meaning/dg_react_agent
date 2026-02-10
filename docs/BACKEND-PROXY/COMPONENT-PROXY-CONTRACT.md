@@ -24,6 +24,10 @@ In both cases, the **component expects the same contract**: connection establish
 
 If the proxy never sends `SettingsApplied` (e.g. because the upstream closes before sending the equivalent event), the component never enters “ready” state and the first user message cannot be sent successfully. Host apps that wait for “connection + Settings applied” before sending (e.g. via `onSettingsApplied` or a DOM flag like `[data-testid="has-sent-settings"]`) rely on this contract for **both** Deepgram and OpenAI (or any other) backend.
 
+## Function calls (Issue #407)
+
+The component delivers **`FunctionCallRequest`** to the host via `onFunctionCallRequest`. The **proxy** only forwards messages; it does **not** execute function logic. For production, the host should execute function calls on the **app backend** (e.g. HTTP `POST /function-call`), not in the browser: frontend forwards the request to the backend, backend runs common handlers (neither Deepgram- nor OpenAI-specific), frontend sends `FunctionCallResponse` with the result. See [Issue #407](../issues/ISSUE-407/README.md) and [Backend function-call contract](../issues/ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md).
+
 ## Summary
 
 | Aspect | Contract |
@@ -31,6 +35,7 @@ If the proxy never sends `SettingsApplied` (e.g. because the upstream closes bef
 | **Protocol** | Component speaks one protocol (Deepgram Voice Agent message types). Proxies either forward it (Deepgram) or translate to/from another API (e.g. OpenAI Realtime). |
 | **Readiness** | Session is ready for the first user message only after the component has received **SettingsApplied** (or equivalent). Proxies must send it and keep the connection open until the host can send. |
 | **First message** | The component will not send `InjectUserMessage` until Settings are confirmed. Proxies must not close the connection before sending `SettingsApplied`. |
+| **Function calls** | Host should execute functions on the app backend (proxies not involved). Frontend forwards `FunctionCallRequest` → backend executes → frontend sends `FunctionCallResponse`. |
 
 Tests that enforce this contract (for either proxy):
 

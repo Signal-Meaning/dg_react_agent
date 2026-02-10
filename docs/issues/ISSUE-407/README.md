@@ -104,8 +104,8 @@ No implementation for the backend endpoint or frontend forwarding without tests 
 | **1** | Backend contract for function execution (Phase 1.1) | ✅ Done | [BACKEND-FUNCTION-CALL-CONTRACT.md](./BACKEND-FUNCTION-CALL-CONTRACT.md) |
 | **1** | Implement backend handler (Phase 1.2; common/DRY) | ✅ Done | `test-app/scripts/function-call-handlers.js`, `backend-server.js` POST /function-call |
 | **1** | Test-app frontend: forward only, no execution by default (Phase 1.3) | ✅ Done | `functionCallBackend.ts` + App.tsx; unit tests in functionCallBackend.test.ts |
-| **2** | BACKEND-PROXY / Component–Proxy docs updated | ⬜ Not started | |
-| **2** | CONVERSATION-STORAGE / other refs (if needed) | ⬜ Not started | |
+| **2** | BACKEND-PROXY / Component–Proxy docs updated | ✅ Done | README + COMPONENT-PROXY-CONTRACT |
+| **2** | CONVERSATION-STORAGE / other refs (if needed) | ✅ Done | Best-practice + link to #407 |
 | **3** | Unit/integration tests for backend execution path | ⬜ Not started | |
 | **3** | E2E updated or documented for backend execution | ⬜ Not started | |
 | **4** | Optional: Frontend → app backend example | ⬜ Not started | |

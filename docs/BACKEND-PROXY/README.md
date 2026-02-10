@@ -45,6 +45,13 @@ The component speaks **one protocol** (Deepgram Voice Agent message types). Whet
 - **Direct Mode**: Component connects directly to Deepgram using `apiKey` prop
 - **Proxy Mode**: Component connects through your backend proxy using `proxyEndpoint` prop
 
+### Function calls: execute on the app backend (Issue #407)
+
+In both Deepgram and OpenAI Voice Agent APIs, **"client-side" means your side of the WebSocket (your infrastructure), not necessarily the browser.** For production (security, secrets, data access), **function calls should be executed on your app backend**, not in the browser.
+
+- **Proxies are not involved with function execution.** The WebSocket proxy forwards `FunctionCallRequest` / `FunctionCallResponse`; it does not run function logic. Your **app backend** (e.g. the same server that hosts the proxy or a separate service) should expose an HTTP endpoint (e.g. `POST /function-call`) that executes the function and returns the result.
+- **Recommended pattern:** Frontend receives `FunctionCallRequest` from the component → POSTs to your app backend → backend executes (common handlers for Deepgram and OpenAI) → frontend sends `FunctionCallResponse` with the returned content. See [Issue #407](../issues/ISSUE-407/README.md) and [Backend function-call contract](../issues/ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md).
+
 ### Security Benefits
 
 - API keys never exposed to frontend
@@ -75,5 +82,6 @@ The test-app can use an **OpenAI Realtime** backend via a translation proxy in `
 
 - [API Reference](../API-REFERENCE.md) - Component API documentation with proxy mode examples
 - [Conversation storage](../CONVERSATION-STORAGE.md) - Who owns persistence logic (component) vs storage implementation (application); test-app demonstrates with localStorage
+- [Issue #407](../issues/ISSUE-407/README.md) - Function calls on the app backend (not frontend); [contract](../issues/ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md)
 - [Issue #242 Tracking](../issues/ISSUE-242-BACKEND-PROXY-SUPPORT.md) - Complete feature tracking document
 - [Proxy ownership decision](../issues/ISSUE-388/PROXY-OWNERSHIP-DECISION.md) - What we own (code, contract) and support scope for proxies
