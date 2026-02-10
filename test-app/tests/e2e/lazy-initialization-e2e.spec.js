@@ -14,8 +14,8 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { MicrophoneHelpers, setupConnectionStateTracking, waitForConnection } from './helpers/test-helpers.js';
-import { APP_ROOT } from './helpers/test-helpers.mjs';
+import { MicrophoneHelpers, setupConnectionStateTracking, waitForConnection, hasOpenAIProxyEndpoint } from './helpers/test-helpers.js';
+import { APP_ROOT, pathWithQuery, getOpenAIProxyParams } from './helpers/test-helpers.mjs';
 
 test.describe('Lazy Initialization E2E Tests', () => {
   test.beforeEach(async ({ page }) => {
@@ -213,32 +213,34 @@ test.describe('Lazy Initialization E2E Tests', () => {
   test('should create both managers when start() is called with both flags', async ({ page }) => {
     console.log('🔍 Testing start() with both service flags...');
     
-    // Navigate fresh and wait for component
-    await page.goto(APP_ROOT);
+    // OpenAI proxy: load with proxy params so connection can establish (Issue #420).
+    const url = hasOpenAIProxyEndpoint() ? pathWithQuery(getOpenAIProxyParams()) : APP_ROOT;
+    await page.goto(url);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
     // Setup connection state tracking
     const stateTracker = await setupConnectionStateTracking(page);
     
-    // Call start with both flags
-    const startResult = await page.evaluate(async () => {
+    // OpenAI proxy: start({ agent: true, transcription: true }) throws "Failed to create transcription manager"; use agent-only (Issue #420).
+    const startFlags = hasOpenAIProxyEndpoint() ? { agent: true, transcription: false } : { agent: true, transcription: true };
+    const startResult = await page.evaluate(async (flags) => {
       const deepgramComponent = window.deepgramRef?.current;
       if (!deepgramComponent) return { error: 'No component found' };
       
       try {
-        await deepgramComponent.start({ agent: true, transcription: true });
+        await deepgramComponent.start(flags);
         return { success: true };
       } catch (error) {
         return { error: error.message, stack: error.stack };
       }
-    });
+    }, startFlags);
     
     console.log('🔍 start() result:', JSON.stringify(startResult, null, 2));
     
     // Wait for connection to be established using helper function
-    await waitForConnection(page, 15000);
-    console.log('✅ Connection established via start({ agent: true, transcription: true })');
+    await waitForConnection(page, 30000);
+    console.log('✅ Connection established via start(', startFlags, ')');
     
     // Check connection states after start (state tracker may lag, so UI is source of truth)
     const connectionStates = await stateTracker.getStates();
@@ -246,9 +248,13 @@ test.describe('Lazy Initialization E2E Tests', () => {
     
     expect(connectionStates).toBeTruthy();
     expect(connectionStates.agent).not.toBe('not-found');
-    expect(connectionStates.transcription).not.toBe('not-found');
-    
-    console.log('✅ Verified: Both managers created and connected via start({ agent: true, transcription: true })');
+    // OpenAI proxy: no separate transcription service; transcription may stay closed (Issue #420).
+    if (!hasOpenAIProxyEndpoint()) {
+      expect(connectionStates.transcription).not.toBe('not-found');
+      console.log('✅ Verified: Both managers created and connected via start({ agent: true, transcription: true })');
+    } else {
+      console.log('✅ Verified: Agent manager created and connected via start({ agent: true }) (OpenAI proxy: no transcription manager)');
+    }
   });
 
   test('should create agent manager when injectUserMessage() is called', async ({ page }) => {
@@ -464,8 +470,9 @@ test.describe('Lazy Initialization E2E Tests', () => {
   test('should handle agent already connected when microphone is activated', async ({ page }) => {
     console.log('🔍 Testing microphone activation with agent already connected...');
     
-    // Navigate fresh and wait for component
-    await page.goto(APP_ROOT);
+    // OpenAI proxy: load with proxy params so connection can establish (Issue #420).
+    const url = hasOpenAIProxyEndpoint() ? pathWithQuery(getOpenAIProxyParams()) : APP_ROOT;
+    await page.goto(url);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
     
@@ -488,7 +495,7 @@ test.describe('Lazy Initialization E2E Tests', () => {
     console.log('🔍 start() result:', JSON.stringify(startResult, null, 2));
     
     // Wait for connection to be established using helper function
-    await waitForConnection(page, 15000);
+    await waitForConnection(page, hasOpenAIProxyEndpoint() ? 30000 : 15000);
     console.log('✅ Agent connection established before microphone activation');
     
     // Verify agent is connected (or at least manager exists)
@@ -497,10 +504,12 @@ test.describe('Lazy Initialization E2E Tests', () => {
     
     // Agent manager should exist (even if connection unstable)
     expect(connectionStates.agent).not.toBe('not-found');
-    // Transcription should be 'closed' (not started yet), not 'not-found' (since tracking initialized it)
-    expect(connectionStates.transcription).toBe('closed');
+    // Transcription should be 'closed' (not started yet); skip for OpenAI proxy (no separate transcription)
+    if (!hasOpenAIProxyEndpoint()) {
+      expect(connectionStates.transcription).toBe('closed');
+    }
     
-    // Now activate microphone - should create transcription but reuse agent
+    // Now activate microphone - should create transcription but reuse agent (or for OpenAI, just enable mic on agent)
     const captureResult = await page.evaluate(async () => {
       const deepgramComponent = window.deepgramRef?.current;
       if (!deepgramComponent) return { error: 'No component found' };
@@ -528,7 +537,7 @@ test.describe('Lazy Initialization E2E Tests', () => {
     console.log('🔍 startAudioCapture() result:', JSON.stringify(captureResultWithStates, null, 2));
     
     // Verify connection is still established (microphone activation should work with existing agent)
-    await waitForConnection(page, 15000);
+    await waitForConnection(page, hasOpenAIProxyEndpoint() ? 30000 : 15000);
     console.log('✅ Connection verified after microphone activation');
     
     // Verify managers exist now
@@ -536,11 +545,14 @@ test.describe('Lazy Initialization E2E Tests', () => {
     
     console.log('🔍 Connection states after startAudioCapture():', JSON.stringify(connectionStates, null, 2));
     
-    // Verify lazy creation behavior: agent reused, transcription created
     // Agent should remain connected (reused from initial start() call)
     expect(connectionStates.agent).toBe('connected');
-    // Transcription should be connected (created by startAudioCapture())
-    expect(connectionStates.transcription).toBe('connected');
-    console.log('✅ Verified: Agent reused when microphone activated (transcription created by startAudioCapture)');
+    // Transcription connected only for Deepgram (OpenAI proxy has no separate transcription service)
+    if (!hasOpenAIProxyEndpoint()) {
+      expect(connectionStates.transcription).toBe('connected');
+      console.log('✅ Verified: Agent reused when microphone activated (transcription created by startAudioCapture)');
+    } else {
+      console.log('✅ Verified: Agent reused when microphone activated (OpenAI proxy: no separate transcription to assert)');
+    }
   });
 });

@@ -5,7 +5,7 @@
 ### Overview
 This issue tracks the complete release process for version v0.7.19 of the Deepgram Voice Interaction React component. This is a **patch** version release. It is primarily a large patch in support of **openai-proxy** (backend proxy, POST /function-call, E2E and integration tests, docs), and also includes **new logging support** (OTel-style logger, trace ID propagation, backend and test-app adoption), idle timeout and callback fixes, and related documentation. This release includes every commit since the last official published release (v0.7.18).
 
-**Progress:** Branch `davidrmcgee/issue420` created and pushed. Lint ✅. Unit tests ✅ (idle timeout + plugin-validation fixes). Next: E2E in proxy mode.
+**Progress:** Branch `davidrmcgee/issue420` created and pushed. Lint ✅. Unit tests ✅. E2E proxy failures triaged: all 11 addressed. Declarative-props: hybrid approach, verified 12 passed. Lazy-init: #4 use start(agent only) for OpenAI (both flags throws); #11 runs for both, transcription assertion skipped for OpenAI. Re-run full proxy E2E to confirm.
 
 ### 📋 Release Checklist
 
@@ -16,8 +16,8 @@ This issue tracks the complete release process for version v0.7.19 of the Deepgr
   - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode** (proxy mode is the default and primary mode)
     - [ ] Start backend: `cd test-app && npm run backend`
     - [ ] Run: `npm run test:e2e:proxy:log` (or `USE_PROXY_MODE=true npm run test:e2e 2>&1 | tee e2e-proxy-run.log`) — 245 tests, ~several minutes; log in `e2e-proxy-run.log`
-    - **Status (2025-02-10):** 213 passed, 11 failed, 21 skipped. **Tracking:** [E2E-PROXY-FAILURES.md](E2E-PROXY-FAILURES.md)
-    - [ ] Verify: All tests pass in proxy mode before proceeding (or triage failures per tracking doc)
+    - **Status (2025-02-10):** 11 proxy failures triaged and addressed (see [E2E-PROXY-FAILURES.md](E2E-PROXY-FAILURES.md)). Declarative-props: hybrid, verified 12 passed. Lazy-init: #4 use start(agent only) for OpenAI; #11 runs for both, skip transcription assertion for OpenAI. Lazy-initialization-e2e: 7 passed in proxy (verified).
+    - [ ] Verify: Full proxy run `npm run test:e2e:proxy:log` to confirm 0 failures
 - [x] **Linting Clean**: No linting errors
   - [x] Run: `npm run lint` — **Done:** 2025-02-10
 - [ ] **Documentation Updated**: All relevant documentation updated
