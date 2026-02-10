@@ -126,13 +126,12 @@ export async function sendTextMessage(page: Page, message: string) {
  */
 export async function installWebSocketCapture(page: Page) {
   await page.addInitScript(() => {
-    // Use the global interface defined above
+    const log = (msg: string, data?: unknown) => { if (typeof console !== 'undefined' && console.log) console.log(msg, data ?? ''); };
     const windowWithCapture = window as WindowWithWebSocketCapture;
-    
     const OriginalWebSocket = window.WebSocket;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).WebSocket = function(url: string, protocols?: string | string[]) {
-      console.log('WebSocket created:', { url, protocols });
+      log('WebSocket created:', { url, protocols });
       windowWithCapture.capturedWebSocketUrl = url;
       windowWithCapture.capturedWebSocketProtocols = protocols;
       
@@ -149,7 +148,7 @@ export async function installWebSocketCapture(page: Page) {
             type: parsed.type,
             data: parsed
           });
-          console.log('WebSocket send:', parsed.type, parsed);
+          log('WebSocket send:', { type: parsed.type, parsed });
         } catch (e) {
           // Not JSON, might be binary audio data
           windowWithCapture.capturedSentMessages = windowWithCapture.capturedSentMessages || [];
@@ -172,7 +171,7 @@ export async function installWebSocketCapture(page: Page) {
             type: parsed.type,
             data: parsed
           });
-          console.log('WebSocket receive:', parsed.type, parsed);
+          log('WebSocket receive:', { type: parsed.type, parsed });
         } catch (e) {
           // Binary data
           windowWithCapture.capturedReceivedMessages = windowWithCapture.capturedReceivedMessages || [];
@@ -212,9 +211,8 @@ export async function getCapturedWebSocketData(page: Page): Promise<WebSocketDat
  */
 export async function installMockWebSocket(context: BrowserContext) {
   await context.addInitScript(() => {
-    console.log('🔧 Installing WebSocket mock...');
-    
-    // Create mock WebSocket
+    const log = (msg: string, data?: unknown) => { if (typeof console !== 'undefined' && console.log) console.log(msg, data ?? ''); };
+    log('Installing WebSocket mock...');
     class MockWebSocket extends EventTarget {
       url: string;
       protocols: string | string[];
@@ -230,7 +228,7 @@ export async function installMockWebSocket(context: BrowserContext) {
 
       constructor(url: string, protocols?: string | string[]) {
         super();
-        console.log('🎭 MockWebSocket created:', url, protocols);
+        log('MockWebSocket created:', { url, protocols });
         this.url = url;
         this.protocols = protocols || '';
         this.readyState = 0; // CONNECTING
@@ -242,7 +240,7 @@ export async function installMockWebSocket(context: BrowserContext) {
         // Simulate connection
         setTimeout(() => {
           this.readyState = 1; // OPEN
-          console.log('🎭 Mock WebSocket opened');
+          log('Mock WebSocket opened');
           if (this.onopen) this.onopen({ type: 'open' } as Event);
           
           // Send mock Welcome message
@@ -251,7 +249,7 @@ export async function installMockWebSocket(context: BrowserContext) {
               type: 'Welcome',
               request_id: 'mock-request-id-12345'
             });
-            console.log('🎭 Mock sending Welcome:', welcomeMsg);
+            log('Mock sending Welcome:', welcomeMsg);
             if (this.onmessage) {
               this.onmessage({ data: welcomeMsg, type: 'message' } as MessageEvent);
             }
@@ -259,7 +257,7 @@ export async function installMockWebSocket(context: BrowserContext) {
             // Send SettingsApplied
             setTimeout(() => {
               const settingsMsg = JSON.stringify({ type: 'SettingsApplied' });
-              console.log('🎭 Mock sending SettingsApplied');
+              log('Mock sending SettingsApplied');
               if (this.onmessage) {
                 this.onmessage({ data: settingsMsg, type: 'message' } as MessageEvent);
               }
@@ -269,7 +267,7 @@ export async function installMockWebSocket(context: BrowserContext) {
       }
       
       send(data: string | ArrayBufferLike | Blob | ArrayBufferView) {
-        console.log('🎭 Mock WebSocket send:', typeof data === 'string' ? data.substring(0, 100) : 'binary');
+        log('Mock WebSocket send:', typeof data === 'string' ? data.substring(0, 100) : 'binary');
         
         // Simulate response to text message
         if (typeof data === 'string') {
@@ -283,20 +281,20 @@ export async function installMockWebSocket(context: BrowserContext) {
                   role: 'assistant',
                   content: '[MOCK] I received your message: "' + parsed.content + '". How can I help you with that?'
                 });
-                console.log('🎭 Mock sending agent response');
+                log('Mock sending agent response');
                 if (this.onmessage) {
                   this.onmessage({ data: responseMsg, type: 'message' } as MessageEvent);
                 }
               }, 500);
             }
           } catch (e) {
-            console.log('🎭 Could not parse sent data');
+            log('Could not parse sent data');
           }
         }
       }
       
       close() {
-        console.log('🎭 Mock WebSocket closed');
+        log('Mock WebSocket closed');
         this.readyState = 3; // CLOSED
         if (this.onclose) this.onclose({ type: 'close', code: 1000, reason: 'Normal closure' } as CloseEvent);
       }
@@ -323,7 +321,7 @@ export async function installMockWebSocket(context: BrowserContext) {
     // Replace global WebSocket
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).WebSocket = MockWebSocket;
-    console.log('✅ WebSocket mock installed');
+    log('WebSocket mock installed');
   });
 }
 

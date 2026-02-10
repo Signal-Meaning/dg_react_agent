@@ -101,13 +101,11 @@ if (DEEPGRAM_API_KEY) {
     ? `${DEEPGRAM_API_KEY.substring(0, 8)}...${DEEPGRAM_API_KEY.substring(DEEPGRAM_API_KEY.length - 4)}`
     : '***';
   const hadPrefix = RAW_DEEPGRAM_API_KEY && RAW_DEEPGRAM_API_KEY.startsWith('dgkey_');
-  console.log(`[Proxy] DEEPGRAM_API_KEY loaded: ${apiKeyPreview} (length: ${DEEPGRAM_API_KEY.length})`);
-  console.log(`[Proxy]    Raw key from env: ${RAW_DEEPGRAM_API_KEY ? (RAW_DEEPGRAM_API_KEY.substring(0, 8) + '...') : 'NOT SET'}`);
-  console.log(`[Proxy]    Prefix stripped: ${hadPrefix ? 'YES (dgkey_ removed for WebSocket auth)' : 'NO (raw key used as-is)'}`);
+  rootLog.info('[Proxy] DEEPGRAM_API_KEY loaded', { apiKeyPreview, length: DEEPGRAM_API_KEY.length });
+  rootLog.info('[Proxy] Raw key from env', { raw: RAW_DEEPGRAM_API_KEY ? (RAW_DEEPGRAM_API_KEY.substring(0, 8) + '...') : 'NOT SET' });
+  rootLog.info('[Proxy] Prefix stripped', { hadPrefix: hadPrefix ? 'YES (dgkey_ removed for WebSocket auth)' : 'NO (raw key used as-is)' });
 } else {
-  console.error('[Proxy] ❌ DEEPGRAM_API_KEY not found in environment');
-  console.error('[Proxy]    Checked: DEEPGRAM_API_KEY, VITE_DEEPGRAM_API_KEY');
-  console.error('[Proxy]    Raw key value:', RAW_DEEPGRAM_API_KEY ? 'SET' : 'NOT SET');
+  rootLog.error('[Proxy] DEEPGRAM_API_KEY not found in environment', { checked: 'DEEPGRAM_API_KEY, VITE_DEEPGRAM_API_KEY', rawSet: !!RAW_DEEPGRAM_API_KEY });
 }
 
 // Debug logging helper
@@ -129,7 +127,7 @@ function debugLog(location, message, data, hypothesisId) {
     }
     fs.appendFileSync(DEBUG_LOG_PATH, JSON.stringify(logEntry) + '\n');
   } catch (e) {
-    console.error(`[DEBUG] Failed to write log: ${e.message}`);
+    rootLog.error('[DEBUG] Failed to write log', { message: e.message });
   }
 }
 
@@ -138,16 +136,16 @@ const hasDeepgram = DEEPGRAM_API_KEY && DEEPGRAM_API_KEY.trim() !== '';
 const hasOpenAI = OPENAI_API_KEY.length > 0;
 
 if (!hasDeepgram && !hasOpenAI) {
-  console.error('❌ Error: At least one of DEEPGRAM_API_KEY or OPENAI_API_KEY is required');
-  console.error('   Set DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY for /deepgram-proxy');
-  console.error('   Set OPENAI_API_KEY or VITE_OPENAI_API_KEY for /openai (default proxy for test-app)');
+  rootLog.error('At least one of DEEPGRAM_API_KEY or OPENAI_API_KEY is required', {
+  hintDeepgram: 'Set DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY for /deepgram-proxy',
+  hintOpenAI: 'Set OPENAI_API_KEY or VITE_OPENAI_API_KEY for /openai (default for test-app)',
+  });
   process.exit(1);
 }
 
 // Validate API key format (Deepgram keys don't require prefix)
-if (!DEEPGRAM_API_KEY.startsWith('test') && DEEPGRAM_API_KEY.length < 40) {
-  console.warn(`[Proxy] ⚠️  Warning: API key appears to be too short (should be 40+ characters)`);
-  console.warn(`[Proxy]    API key preview: ${DEEPGRAM_API_KEY.substring(0, 10)}...`);
+if (DEEPGRAM_API_KEY && !DEEPGRAM_API_KEY.startsWith('test') && DEEPGRAM_API_KEY.length < 40) {
+  rootLog.warn('[Proxy] API key appears to be too short (should be 40+ characters)', { preview: DEEPGRAM_API_KEY.substring(0, 10) + '...' });
 }
 
 // Create HTTP or HTTPS server for WebSocket upgrade (HTTPS when HTTPS=true for wss://)
@@ -306,8 +304,7 @@ if (hasDeepgram) {
     const originValidation = validateOrigin(origin);
     
     if (!originValidation.valid) {
-      console.log(`[Proxy] ❌ Rejecting connection: ${originValidation.reason}`);
-      console.log(`[Proxy]    Origin: ${origin || 'none'}`);
+      rootLog.warn('[Proxy] Rejecting connection', { reason: originValidation.reason, origin: origin || 'none' });
       return false; // Reject connection
     }
     
@@ -316,8 +313,7 @@ if (hasDeepgram) {
     const validation = validateAuthToken(token);
     
     if (!validation.valid) {
-      console.log(`[Proxy] ❌ Rejecting connection: ${validation.reason}`);
-      console.log(`[Proxy]    Token preview: ${token ? token.substring(0, 10) + '...' : 'none'}`);
+      rootLog.warn('[Proxy] Rejecting connection', { reason: validation.reason, tokenPreview: token ? token.substring(0, 10) + '...' : 'none' });
       return false; // Reject connection
     }
     
@@ -327,28 +323,23 @@ if (hasDeepgram) {
       setSecurityHeaders(info.req.res);
     }
     
-    if (token) {
-      console.log(`[Proxy] Connection with auth token: ${token.substring(0, 10)}...`);
-    }
-    if (origin) {
-      console.log(`[Proxy] Connection from origin: ${origin}`);
-    }
+    if (token) rootLog.debug('[Proxy] Connection with auth token', { tokenPreview: token.substring(0, 10) + '...' });
+    if (origin) rootLog.debug('[Proxy] Connection from origin', { origin });
     return true;
   }
 });
 
-console.log(`🚀 Backend server starting...`);
+rootLog.info('Backend server starting', { hasDeepgram, hasOpenAI });
 if (hasDeepgram) {
-  console.log(`   Deepgram: ${wsScheme}://localhost:${PROXY_PORT}${PROXY_PATH} → ${DEEPGRAM_AGENT_URL}`);
-  console.log(`   API Key: ${DEEPGRAM_API_KEY.substring(0, 8)}...`);
+  rootLog.info('Deepgram proxy', { url: `${wsScheme}://localhost:${PROXY_PORT}${PROXY_PATH}`, target: DEEPGRAM_AGENT_URL, apiKeyPreview: DEEPGRAM_API_KEY.substring(0, 8) + '...' });
 }
 if (hasOpenAI) {
-  console.log(`   OpenAI:   ${wsScheme}://localhost:${PROXY_PORT}/openai (subprocess on ${OPENAI_INTERNAL_PORT})`);
+  rootLog.info('OpenAI proxy', { url: `${wsScheme}://localhost:${PROXY_PORT}/openai`, subprocessPort: OPENAI_INTERNAL_PORT });
 }
 
 wssDeepgram.on('connection', (clientWs, req) => {
   const clientIp = req.socket.remoteAddress;
-  console.log(`[Proxy] New client connection from ${clientIp}`);
+  rootLog.info('[Proxy] New client connection', { clientIp });
   
   // Queue messages from Deepgram until client connection is ready (Issue #329)
   // This prevents critical messages like SettingsApplied from being dropped
@@ -357,7 +348,7 @@ wssDeepgram.on('connection', (clientWs, req) => {
   // Helper function to forward queued Deepgram messages when client is ready
   const forwardQueuedDeepgramMessages = () => {
     if (clientWs.readyState === WebSocket.OPEN && deepgramMessageQueue.length > 0) {
-      console.log(`[Proxy] Forwarding ${deepgramMessageQueue.length} queued messages from Deepgram to client`);
+      rootLog.debug('[Proxy] Forwarding queued messages from Deepgram to client', { count: deepgramMessageQueue.length });
       while (deepgramMessageQueue.length > 0) {
         const { data, isBinary } = deepgramMessageQueue.shift();
         if (!isBinary) {
@@ -365,26 +356,21 @@ wssDeepgram.on('connection', (clientWs, req) => {
             const text = data.toString('utf8');
             const parsed = JSON.parse(text);
             const messageType = parsed.type || 'unknown';
-            console.log(`[Proxy] Deepgram → Client (queued): ${messageType} message`);
-            
-            if (messageType === 'SettingsApplied') {
-              console.log(`[Proxy] ✅ SettingsApplied forwarded from queue`);
-            }
+            rootLog.debug('[Proxy] Deepgram → Client (queued)', { messageType });
+            if (messageType === 'SettingsApplied') rootLog.debug('[Proxy] SettingsApplied forwarded from queue');
           } catch (e) {
-            console.log(`[Proxy] Deepgram → Client (queued): text message (not JSON)`);
+            rootLog.debug('[Proxy] Deepgram → Client (queued): text message (not JSON)');
           }
         } else {
-          console.log(`[Proxy] Deepgram → Client (queued): binary message (${data.length} bytes)`);
+          rootLog.debug('[Proxy] Deepgram → Client (queued): binary', { bytes: data.length });
         }
         clientWs.send(data, { binary: isBinary });
       }
     }
   };
 
-  // #region debug log - connection received
-  console.log(`[DEBUG] Connection received from ${clientIp}, URL: ${req.url}`);
+  rootLog.debug('[Proxy] Connection received', { clientIp, url: req.url });
   debugLog('mock-proxy-server.js:58', 'Connection received', { clientIp, url: req.url }, 'A');
-  // #endregion
 
   // Extract auth token from query params if present
   const parsedUrl = url.parse(req.url, true);
@@ -401,19 +387,15 @@ wssDeepgram.on('connection', (clientWs, req) => {
   const serviceTypeValue = Array.isArray(serviceParam) ? serviceParam[0] : serviceParam;
   const serviceType = serviceTypeValue || (parsedUrl.pathname?.includes('transcription') ? 'transcription' : 'agent');
   
-  // #region debug log - service type detection
-  console.log(`[DEBUG] Service type detected: ${serviceType} (from query: ${parsedUrl.query.service}, pathname: ${parsedUrl.pathname})`);
+  rootLog.debug('[Proxy] Service type detected', { serviceType, queryService: parsedUrl.query.service, pathname: parsedUrl.pathname });
   debugLog('mock-proxy-server.js:70', 'Service type detected', { serviceType, queryService: parsedUrl.query.service, pathname: parsedUrl.pathname }, 'B');
-  // #endregion
 
   // Select appropriate Deepgram endpoint based on service type
   const DEEPGRAM_TRANSCRIPTION_URL = 'wss://api.deepgram.com/v1/listen';
   const targetDeepgramUrl = serviceType === 'transcription' ? DEEPGRAM_TRANSCRIPTION_URL : DEEPGRAM_AGENT_URL;
 
-  // #region debug log - target URL selection
-  console.log(`[DEBUG] Routing ${serviceType} service to ${targetDeepgramUrl}`);
+  rootLog.debug('[Proxy] Routing to Deepgram', { serviceType, targetUrl: targetDeepgramUrl });
   debugLog('mock-proxy-server.js:75', 'Target Deepgram URL selected', { serviceType, targetUrl: targetDeepgramUrl, isAgent: serviceType === 'agent', isTranscription: serviceType === 'transcription' }, 'A');
-  // #endregion
 
   // Create connection to Deepgram
   // Deepgram Voice Agent API requires API key via WebSocket protocol, not query params
@@ -433,8 +415,7 @@ wssDeepgram.on('connection', (clientWs, req) => {
     }
   });
   
-  // #region debug log - query params forwarding
-  console.log(`[DEBUG] Forwarding query params to Deepgram (excluding service/token):`, Array.from(deepgramUrl.searchParams.entries()));
+  rootLog.debug('[Proxy] Forwarding query params to Deepgram', { params: Array.from(deepgramUrl.searchParams.entries()) });
   debugLog('mock-proxy-server.js:130', 'Query params forwarded', { 
     serviceType, 
     forwardedParams: Array.from(deepgramUrl.searchParams.entries()),
@@ -442,7 +423,7 @@ wssDeepgram.on('connection', (clientWs, req) => {
   }, 'D');
   // #endregion
 
-  console.log(`[Proxy] Connecting to Deepgram ${serviceType} service at ${deepgramUrl.toString()}...`);
+  rootLog.info('[Proxy] Connecting to Deepgram', { serviceType, url: deepgramUrl.toString() });
   
   // #region debug log - before WebSocket creation
   debugLog('mock-proxy-server.js:140', 'Before WebSocket creation', { serviceType, targetUrl: deepgramUrl.toString(), hasApiKey: !!DEEPGRAM_API_KEY }, 'C');
@@ -451,16 +432,14 @@ wssDeepgram.on('connection', (clientWs, req) => {
   // Pass API key via WebSocket protocol array: ['token', apiKey]
   // Validate API key format before attempting connection
   if (!DEEPGRAM_API_KEY || DEEPGRAM_API_KEY.trim() === '') {
-    console.error(`[Proxy] ❌ DEEPGRAM_API_KEY is empty or invalid for ${serviceType} service`);
+    rootLog.error('[Proxy] DEEPGRAM_API_KEY is empty or invalid', { serviceType });
     clientWs.close(1011, 'Proxy configuration error: DEEPGRAM_API_KEY not set');
     return;
   }
-  
-  // Log API key status (first 8 chars only for security)
   const apiKeyPreview = DEEPGRAM_API_KEY.length > 8 
     ? `${DEEPGRAM_API_KEY.substring(0, 8)}...${DEEPGRAM_API_KEY.substring(DEEPGRAM_API_KEY.length - 4)}`
     : '***';
-  console.log(`[Proxy] Connecting to Deepgram with API key: ${apiKeyPreview} (length: ${DEEPGRAM_API_KEY.length})`);
+  rootLog.debug('[Proxy] Connecting to Deepgram with API key', { apiKeyPreview, length: DEEPGRAM_API_KEY.length });
   
   const deepgramWs = new WebSocket(deepgramUrl.toString(), ['token', DEEPGRAM_API_KEY]);
   
@@ -482,8 +461,7 @@ wssDeepgram.on('connection', (clientWs, req) => {
         
         // Special logging for Settings messages (Issue #329)
         if (messageType === 'Settings') {
-          console.log(`[Proxy] 📤 Settings message received from client!`);
-          console.log(`[Proxy] 📤 Client state: ${clientWs.readyState}, Deepgram state: ${deepgramWs.readyState}`);
+          rootLog.debug('[Proxy] Settings message received from client', { clientState: clientWs.readyState, deepgramState: deepgramWs.readyState });
           debugLog('mock-proxy-server.js:200', 'Settings received from client', { 
             serviceType,
             clientState: clientWs.readyState,
@@ -503,17 +481,13 @@ wssDeepgram.on('connection', (clientWs, req) => {
           const text = data.toString('utf8');
           const parsed = JSON.parse(text);
           const messageType = parsed.type || 'unknown';
-          console.log(`[Proxy] Client → Deepgram: ${messageType} message`);
-          
-          // Special logging for Settings messages (Issue #329)
-          if (messageType === 'Settings') {
-            console.log(`[Proxy] 📤 Settings message forwarded to Deepgram`);
-          }
+          rootLog.debug('[Proxy] Client → Deepgram', { messageType });
+          if (messageType === 'Settings') rootLog.debug('[Proxy] Settings message forwarded to Deepgram');
         } catch (e) {
-          console.log(`[Proxy] Client → Deepgram: text message (not JSON)`);
+          rootLog.debug('[Proxy] Client → Deepgram: text message (not JSON)');
         }
       } else {
-        console.log(`[Proxy] Client → Deepgram: binary message (${data.length} bytes)`);
+        rootLog.debug('[Proxy] Client → Deepgram: binary', { bytes: data.length });
       }
       deepgramWs.send(data, { binary: isBinary });
     } else {
@@ -526,10 +500,8 @@ wssDeepgram.on('connection', (clientWs, req) => {
           return 'unknown';
         }
       })() : 'binary';
-      console.log(`[Proxy] Deepgram not ready (state: ${deepgramWs.readyState}), queuing ${messageType} message`);
-      if (messageType === 'Settings') {
-        console.log(`[Proxy] ⚠️ Settings message queued (Deepgram not ready yet)`);
-      }
+      rootLog.debug('[Proxy] Deepgram not ready, queuing message', { deepgramState: deepgramWs.readyState, messageType });
+      if (messageType === 'Settings') rootLog.debug('[Proxy] Settings message queued (Deepgram not ready yet)');
       messageQueue.push({ data, isBinary });
     }
   });
@@ -543,11 +515,9 @@ wssDeepgram.on('connection', (clientWs, req) => {
           const text = data.toString('utf8');
           const parsed = JSON.parse(text);
           const messageType = parsed.type || 'unknown';
-          console.log(`[Proxy] Deepgram → Client: ${messageType} message`);
-          
-          // Special logging for SettingsApplied to debug issue #329
+          rootLog.debug('[Proxy] Deepgram → Client', { messageType });
           if (messageType === 'SettingsApplied') {
-            console.log(`[Proxy] ✅ SettingsApplied received from Deepgram, forwarding to client`);
+            rootLog.debug('[Proxy] SettingsApplied received from Deepgram, forwarding to client');
             debugLog('mock-proxy-server.js:194', 'SettingsApplied received', { 
               serviceType, 
               clientReady: clientWs.readyState === WebSocket.OPEN,
@@ -557,7 +527,7 @@ wssDeepgram.on('connection', (clientWs, req) => {
           
           // Special logging for UserStartedSpeaking to debug idle timeout issue
           if (messageType === 'UserStartedSpeaking') {
-            console.log(`[Proxy] 🎤 UserStartedSpeaking received from Deepgram, forwarding to client`);
+            rootLog.debug('[Proxy] UserStartedSpeaking received from Deepgram, forwarding to client');
             debugLog('mock-proxy-server.js:194', 'UserStartedSpeaking received', { 
               serviceType, 
               clientReady: clientWs.readyState === WebSocket.OPEN,
@@ -565,16 +535,15 @@ wssDeepgram.on('connection', (clientWs, req) => {
             }, 'F');
           }
         } catch (e) {
-          console.log(`[Proxy] Deepgram → Client: text message (not JSON)`);
+          rootLog.debug('[Proxy] Deepgram → Client: text message (not JSON)');
         }
       } else {
-        console.log(`[Proxy] Deepgram → Client: binary message (${data.length} bytes)`);
+        rootLog.debug('[Proxy] Deepgram → Client: binary', { bytes: data.length });
       }
-      
       try {
         clientWs.send(data, { binary: isBinary });
       } catch (error) {
-        console.error(`[Proxy] Error sending message to client:`, error);
+        rootLog.error('[Proxy] Error sending message to client', { error: error?.message ?? String(error) });
         // If send fails, queue the message to retry later
         deepgramMessageQueue.push({ data, isBinary });
       }
@@ -589,12 +558,10 @@ wssDeepgram.on('connection', (clientWs, req) => {
           return 'unknown';
         }
       })() : 'binary';
-      console.log(`[Proxy] Client not ready (state: ${clientWs.readyState}), queuing ${messageType} message`);
+      rootLog.debug('[Proxy] Client not ready, queuing message', { clientState: clientWs.readyState, messageType });
       deepgramMessageQueue.push({ data, isBinary });
-      
-      // Special logging for SettingsApplied
       if (messageType === 'SettingsApplied') {
-        console.log(`[Proxy] ⚠️ SettingsApplied queued (client not ready yet, will forward when ready)`);
+        rootLog.debug('[Proxy] SettingsApplied queued (client not ready yet, will forward when ready)');
         debugLog('mock-proxy-server.js:203', 'SettingsApplied queued', { 
           serviceType,
           clientState: clientWs.readyState,
@@ -615,20 +582,18 @@ wssDeepgram.on('connection', (clientWs, req) => {
     // #region debug log - Deepgram connection opened
     debugLog('mock-proxy-server.js:120', 'Deepgram connection opened', { serviceType, targetUrl: targetDeepgramUrl, queuedMessages: messageQueue.length }, 'A');
     // #endregion
-    console.log(`[Proxy] Connected to Deepgram ${serviceType} service`);
-    // Forward any queued messages from client to Deepgram now that connection is ready
+    rootLog.info('[Proxy] Connected to Deepgram', { serviceType });
     while (messageQueue.length > 0) {
       const { data, isBinary } = messageQueue.shift();
       if (!isBinary) {
         try {
-          const text = data.toString('utf8');
-          const parsed = JSON.parse(text);
-          console.log(`[Proxy] Client → Deepgram (queued): ${parsed.type || 'unknown'} message`);
+          const parsed = JSON.parse(data.toString('utf8'));
+          rootLog.debug('[Proxy] Client → Deepgram (queued)', { messageType: parsed.type || 'unknown' });
         } catch (e) {
-          console.log(`[Proxy] Client → Deepgram (queued): text message (not JSON)`);
+          rootLog.debug('[Proxy] Client → Deepgram (queued): text message (not JSON)');
         }
       } else {
-        console.log(`[Proxy] Client → Deepgram (queued): binary message (${data.length} bytes)`);
+        rootLog.debug('[Proxy] Client → Deepgram (queued): binary', { bytes: data.length });
       }
       deepgramWs.send(data, { binary: isBinary });
     }
@@ -643,7 +608,7 @@ wssDeepgram.on('connection', (clientWs, req) => {
     // #region debug log - Deepgram connection closed
     debugLog('mock-proxy-server.js:141', 'Deepgram connection closed', { serviceType, targetUrl: targetDeepgramUrl, code, reason: reason?.toString() }, 'D');
     // #endregion
-    console.log(`[Proxy] Deepgram ${serviceType} connection closed: ${code} ${reason}`);
+    rootLog.info('[Proxy] Deepgram connection closed', { serviceType, code, reason: reason?.toString?.() || reason });
     if (clientWs.readyState === WebSocket.OPEN) {
       // Ensure code is a valid WebSocket close code
       // 1005 (No Status Received) and 1006 (Abnormal Closure) cannot be sent
@@ -662,13 +627,13 @@ wssDeepgram.on('connection', (clientWs, req) => {
     const errorMessage = error.message || String(error);
     debugLog('mock-proxy-server.js:156', 'Deepgram error', { serviceType, targetUrl: targetDeepgramUrl, error: errorMessage }, 'C');
     // #endregion
-    console.error(`[Proxy] Deepgram ${serviceType} error:`, errorMessage);
-    
-    // Special handling for authentication errors (401)
+    rootLog.error('[Proxy] Deepgram error', { serviceType, error: errorMessage });
     if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-      console.error(`[Proxy] ❌ Authentication failed - check DEEPGRAM_API_KEY is valid and not expired`);
-      console.error(`[Proxy] ❌ API key length: ${DEEPGRAM_API_KEY.length}, preview: ${DEEPGRAM_API_KEY.substring(0, 8)}...`);
-      console.error(`[Proxy] ❌ Target URL: ${deepgramUrl.toString()}`);
+      rootLog.error('[Proxy] Authentication failed - check DEEPGRAM_API_KEY is valid and not expired', {
+        apiKeyLength: DEEPGRAM_API_KEY.length,
+        apiKeyPreview: DEEPGRAM_API_KEY.substring(0, 8) + '...',
+        targetUrl: deepgramUrl.toString(),
+      });
     }
     
     if (clientWs.readyState === WebSocket.OPEN) {
@@ -678,8 +643,7 @@ wssDeepgram.on('connection', (clientWs, req) => {
 
   // Handle client connection close
   clientWs.on('close', (code, reason) => {
-    console.log(`[Proxy] Client connection closed: ${code} ${reason || ''}`);
-    console.log(`[Proxy] Client connection closed - messages sent to Deepgram: ${messageQueue.length} queued, messages received from Deepgram: ${deepgramMessageQueue.length} queued`);
+    rootLog.info('[Proxy] Client connection closed', { code, reason: reason || '', queuedToDeepgram: messageQueue.length, queuedFromDeepgram: deepgramMessageQueue.length });
     debugLog('mock-proxy-server.js:close', 'Client connection closed', { 
       serviceType,
       code,
@@ -701,7 +665,7 @@ wssDeepgram.on('connection', (clientWs, req) => {
 
   // Handle client errors
   clientWs.on('error', (error) => {
-    console.error(`[Proxy] Client error:`, error);
+    rootLog.error('[Proxy] Client error', { error: error?.message ?? String(error) });
     if (deepgramWs.readyState === WebSocket.OPEN) {
       deepgramWs.close();
     }
@@ -733,10 +697,10 @@ function spawnOpenAIProxy(spawnFn) {
   });
   openaiChild.stdout?.on('data', (d) => process.stdout.write(d));
   openaiChild.stderr?.on('data', (d) => process.stderr.write(d));
-  openaiChild.on('error', (err) => console.error('[Proxy] OpenAI subprocess error:', err));
+  openaiChild.on('error', (err) => rootLog.error('[Proxy] OpenAI subprocess error', { error: err?.message ?? String(err) }));
   openaiChild.on('exit', (code, sig) => {
-    if (code != null && code !== 0) console.error('[Proxy] OpenAI subprocess exited with code', code);
-    if (sig) console.error('[Proxy] OpenAI subprocess killed:', sig);
+    if (code != null && code !== 0) rootLog.error('[Proxy] OpenAI subprocess exited with code', { code });
+    if (sig) rootLog.error('[Proxy] OpenAI subprocess killed', { signal: sig });
   });
 }
 
@@ -771,7 +735,7 @@ async function attachOpenAIForwarder() {
       upstream.on('message', (data, isBinary) => {
         if (openaiForwarderBoundaryDebug && isBinary) {
           const len = data?.byteLength ?? data?.length;
-          if (len != null) console.log(`[TTS BOUNDARY FORWARDER] 8080←8081 binary size: ${len}`);
+          if (len != null) rootLog.debug('[TTS BOUNDARY FORWARDER] 8080←8081 binary size', { len });
         }
         clientWs.send(data, { binary: isBinary });
       });
@@ -781,7 +745,7 @@ async function attachOpenAIForwarder() {
       upstream.on('error', () => clientWs.close());
     });
     upstream.on('error', (err) => {
-      console.error('[Proxy] OpenAI forwarder upstream error:', err.message);
+      rootLog.error('[Proxy] OpenAI forwarder upstream error', { error: err?.message ?? String(err) });
       clientWs.close();
     });
   });
@@ -795,7 +759,7 @@ async function attachOpenAIForwarder() {
     try {
       await attachOpenAIForwarder();
     } catch (err) {
-      console.error('[Proxy] Failed to start OpenAI forwarder:', err.message);
+      rootLog.error('[Proxy] Failed to start OpenAI forwarder', { error: err?.message ?? String(err) });
       if (openaiChild) openaiChild.kill('SIGTERM');
       process.exit(1);
     }
@@ -816,34 +780,27 @@ async function attachOpenAIForwarder() {
     }
   });
   server.listen(PROXY_PORT, () => {
-    console.log(`✅ Backend server running on port ${PROXY_PORT}`);
-    if (hasDeepgram) {
-      console.log(`   Deepgram: ${wsScheme}://localhost:${PROXY_PORT}${PROXY_PATH}`);
-    }
-    if (hasOpenAI) {
-      console.log(`   OpenAI:   ${wsScheme}://localhost:${PROXY_PORT}/openai (default for test-app)`);
-    }
-    console.log(`\n   To use in test-app:`);
-    if (hasOpenAI) {
-      console.log(`   VITE_OPENAI_PROXY_ENDPOINT=${wsScheme}://localhost:${PROXY_PORT}/openai  (default)`);
-    }
-    if (hasDeepgram) {
-      console.log(`   VITE_DEEPGRAM_PROXY_ENDPOINT=${wsScheme}://localhost:${PROXY_PORT}${PROXY_PATH}`);
-    }
-    console.log(`\n   Press Ctrl+C to stop\n`);
+    rootLog.info('Backend server running', { port: PROXY_PORT });
+    if (hasDeepgram) rootLog.info('Deepgram endpoint', { url: `${wsScheme}://localhost:${PROXY_PORT}${PROXY_PATH}` });
+    if (hasOpenAI) rootLog.info('OpenAI endpoint', { url: `${wsScheme}://localhost:${PROXY_PORT}/openai`, note: 'default for test-app' });
+    rootLog.info('To use in test-app', {
+      openaiEnv: hasOpenAI ? `VITE_OPENAI_PROXY_ENDPOINT=${wsScheme}://localhost:${PROXY_PORT}/openai` : null,
+      deepgramEnv: hasDeepgram ? `VITE_DEEPGRAM_PROXY_ENDPOINT=${wsScheme}://localhost:${PROXY_PORT}${PROXY_PATH}` : null,
+    });
+    rootLog.info('Press Ctrl+C to stop');
   });
 })();
 
 // Graceful shutdown
 function doShutdown() {
-  console.log('\n[Proxy] Shutting down...');
+  rootLog.info('[Proxy] Shutting down...');
   const closeServer = () => {
     if (openaiChild) {
       openaiChild.kill('SIGTERM');
       openaiChild = null;
     }
     server.close(() => {
-      console.log('[Proxy] Server closed');
+      rootLog.info('[Proxy] Server closed');
       process.exit(0);
     });
   };

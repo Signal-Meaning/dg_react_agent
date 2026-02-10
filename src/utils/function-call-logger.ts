@@ -5,6 +5,7 @@
  * and can be conditionally enabled/disabled based on debug flags or test mode.
  */
 
+import { getLogger } from './logger';
 import type { FunctionCallRequest } from '../../types';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -23,11 +24,13 @@ class FunctionCallLogger {
   private enabled: boolean;
   private logLevel: LogLevel;
   private prefix: string;
+  private logger = getLogger({ debug: false, level: 'debug' });
 
   constructor(options: FunctionCallLoggerOptions = {}) {
     this.enabled = options.enabled ?? this.shouldEnableLogging();
     this.logLevel = options.logLevel || 'debug';
     this.prefix = options.prefix || '🔧 [FUNCTION]';
+    this.logger = getLogger({ debug: this.enabled, level: this.logLevel });
   }
 
   private shouldEnableLogging(): boolean {
@@ -58,27 +61,19 @@ class FunctionCallLogger {
   }
 
   debug(message: string, ...args: unknown[]): void {
-    if (this.shouldLog('debug')) {
-      console.log(this.formatMessage(message, ...args));
-    }
+    if (this.shouldLog('debug')) this.logger.debug(this.formatMessage(message, ...args));
   }
 
   info(message: string, ...args: unknown[]): void {
-    if (this.shouldLog('info')) {
-      console.info(this.formatMessage(message, ...args));
-    }
+    if (this.shouldLog('info')) this.logger.info(this.formatMessage(message, ...args));
   }
 
   warn(message: string, ...args: unknown[]): void {
-    if (this.shouldLog('warn')) {
-      console.warn(this.formatMessage(message, ...args));
-    }
+    if (this.shouldLog('warn')) this.logger.warn(this.formatMessage(message, ...args));
   }
 
   error(message: string, ...args: unknown[]): void {
-    if (this.shouldLog('error')) {
-      console.error(this.formatMessage(message, ...args));
-    }
+    if (this.shouldLog('error')) this.logger.error(this.formatMessage(message, ...args));
   }
 
   // Convenience methods for common function call events

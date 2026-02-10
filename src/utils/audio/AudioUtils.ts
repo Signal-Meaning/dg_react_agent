@@ -1,3 +1,7 @@
+import { getLogger } from '../logger';
+
+const log = getLogger();
+
 /**
  * Audio processing utilities for smooth real-time audio playback
  *
@@ -31,14 +35,12 @@ export function createAudioBuffer(
   let processedData = data;
   if (data.byteLength % 2 !== 0) {
     processedData = data.slice(0, data.byteLength - 1);
-    console.warn(
-      `[createAudioBuffer] Odd length (${data.byteLength} bytes) — truncated to even; avoid in streaming path (use carry in queueAudio)`
-    );
+    log.warn('[createAudioBuffer] Odd length — truncated to even; avoid in streaming path (use carry in queueAudio)', { bytes: data.byteLength });
   }
 
   const numSamples = processedData.byteLength / 2;
   if (numSamples === 0) {
-    console.error("Received audio data is empty.");
+    log.error('Received audio data is empty');
     return undefined;
   }
 

@@ -43,13 +43,11 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 | 3.1 | Audit and list all console.* call sites (component, utils, services) | [x] |
 | 3.2 | Component: replace console.* with logger; gate verbose on debug prop | [x] |
 | 3.3 | Test-app: use shared logger; set trace/request ID context for session | [x] |
-| 3.4 | backend-server: replace console.* with logger; attach request context | [x] (POST /function-call path; rest in follow-up) |
+| 3.4 | backend-server: replace console.* with logger; attach request context | [x] (full file: rootLog for all; fatal uses rootLog.error) |
 | 3.5 | openai-proxy: replace console.* with logger; attach caller ID context | [x] (server.ts uses emitLog; run.ts/cli.ts on allowlist) |
 | 3.6 | Allowlist/bootstrap: document and keep minimal justified console.* | [x] |
 
-**Phase 3 done when:** Single abstraction in use; minimal direct console.* outside allowlist.
-
-**Note (requested):** Optional follow-up cleanup is **wanted** — migrate remaining `console.*` in src/ (AudioUtils, AudioManager, declarative-props, instructions-loader, component-helpers, function-call-logger, AgentStateService, instructions-loader.cjs; test-helpers optional). See CONSOLE-AUDIT.md "Remaining console.* in src/".
+**Phase 3 done when:** Single abstraction in use; minimal direct console.* outside allowlist. ✅ **Complete:** Component, test-app, backend-server, openai-proxy server, and all remaining src/ (AudioUtils, AudioManager, declarative-props, instructions-loader, component-helpers, function-call-logger, AgentStateService, instructions-loader.cjs, test-helpers) now use logger or local abstraction.
 
 ---
 
@@ -82,4 +80,4 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 
 ## Last updated
 
-- 3.3 done: test-app App.tsx uses getLogger and sessionLogger (logger.child({ traceId })); all console.log/warn/error replaced with sessionLogger.debug/info/warn/error; only comments remain. CONSOLE-AUDIT updated. Optional follow-up (user wanted): migrate remaining console.* in src/; backend-server rest (3.4) in follow-up.
+- **Full scope complete:** Backend-server: all console.* replaced with rootLog (info/debug/warn/error). Src: AudioUtils, AudioManager, declarative-props, instructions-loader, component-helpers, AgentStateService, function-call-logger use getLogger; instructions-loader.cjs uses minimal local log.warn (CJS); test-helpers use local log() in addInitScript. PROGRESS 3.4 and CONSOLE-AUDIT updated. Ticket scope (backend, component, test-app, scripts) is complete.

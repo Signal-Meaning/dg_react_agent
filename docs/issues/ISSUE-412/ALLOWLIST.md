@@ -23,7 +23,7 @@ Use `console.error` only when the process cannot start and no logger is availabl
 | Location | Purpose |
 |----------|---------|
 | **scripts/openai-proxy/run.ts** ~40 | `OPENAI_API_KEY is required` before server starts; then `process.exit(1)`. |
-| **test-app/scripts/backend-server.js** ~108–110, 141–143 | DEEPGRAM_API_KEY not found; at least one key required. Fatal before rootLog could be used (rootLog is created after config). |
+| **test-app/scripts/backend-server.js** | All logging via rootLog (including fatal: rootLog.error then process.exit(1)). No direct console.*. |
 
 **Rule:** If the process exits immediately after the message (e.g. `process.exit(1)`), `console.error` is acceptable. Add a comment: `// Bootstrap exception (Issue #412): fatal startup only.`
 

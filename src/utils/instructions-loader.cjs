@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
+// Issue #412: minimal logger for CJS (shared logger is ESM); single abstraction for console.warn
+const log = { warn: (msg, err) => { if (typeof console !== 'undefined' && console.warn) console.warn(msg, err); } };
+
 const DEFAULT_INSTRUCTIONS = 'You are a helpful voice assistant. Keep your responses concise and informative.';
 
 function getDefaultInstructions() {
@@ -52,7 +55,7 @@ async function loadInstructionsFromFile(filePath) {
 
     return getDefaultInstructions();
   } catch (error) {
-    console.warn('Failed to load instructions from file, using default:', error.message);
+    log.warn('Failed to load instructions from file, using default:', error && error.message);
     return getDefaultInstructions();
   }
 }
@@ -73,7 +76,7 @@ function loadInstructionsFromFileSync(filePath) {
 
     return getDefaultInstructions();
   } catch (error) {
-    console.warn('Failed to load instructions from file, using default:', error);
+    log.warn('Failed to load instructions from file, using default:', error);
     return getDefaultInstructions();
   }
 }

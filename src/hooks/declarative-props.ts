@@ -1,4 +1,5 @@
 import { useEffect, useRef, MutableRefObject } from 'react';
+import { getLogger } from '../utils/logger';
 
 /**
  * Hook to store a callback in a ref to avoid stale closures
@@ -62,8 +63,7 @@ export function useBooleanDeclarativeProp(
         result.then(() => {
           onComplete?.();
         }).catch((error) => {
-          // Error handling should be done in onTrue callback
-          console.error('[useBooleanDeclarativeProp] Error in onTrue:', error);
+          getLogger().error('[useBooleanDeclarativeProp] Error in onTrue', { error: error instanceof Error ? error.message : String(error) });
         });
       } else {
         // Synchronous completion - call onComplete immediately
@@ -75,7 +75,7 @@ export function useBooleanDeclarativeProp(
         result.then(() => {
           onComplete?.();
         }).catch((error) => {
-          console.error('[useBooleanDeclarativeProp] Error in onFalse:', error);
+          getLogger().error('[useBooleanDeclarativeProp] Error in onFalse', { error: error instanceof Error ? error.message : String(error) });
         });
       } else {
         // Synchronous completion - call onComplete immediately

@@ -59,11 +59,15 @@ This document lists all `console.log`, `console.warn`, and `console.error` call 
 
 - **src/hooks/useIdleTimeoutManager.ts:** ✅ Migrated — getLogger({ debug }), logger.debug/info.
 - **src/utils/websocket/WebSocketManager.ts:** ✅ Migrated — getLogger({ debug: options.debug }), private log() → logger.debug; connection close → logger.info; errors → logger.error.
-- **src/utils/instructions-loader.ts:** 0 (uses calm message per Issue #410)
-- **src/utils/function-call-logger.ts:** 0 direct; may use process.env
-- **src/services/AgentStateService.ts:** 1
-- **src/utils/component-helpers.ts:** 0
-- **src/utils/instructions-loader.cjs:** 0
+- **src/utils/instructions-loader.ts:** ✅ Migrated — getLogger(), log.info/warn.
+- **src/utils/function-call-logger.ts:** ✅ Migrated — uses getLogger(); all levels via logger.
+- **src/services/AgentStateService.ts:** ✅ Migrated — getLogger({ debug }), private log() → logger.debug.
+- **src/utils/component-helpers.ts:** ✅ Migrated — getLogger(), log.warn.
+- **src/utils/audio/AudioUtils.ts:** ✅ Migrated — getLogger(), log.warn/error.
+- **src/utils/audio/AudioManager.ts:** ✅ Migrated — getLogger({ debug: options.debug }), private log() → logger.debug; errors → logger.error.
+- **src/hooks/declarative-props.ts:** ✅ Migrated — getLogger().error in catch.
+- **src/utils/instructions-loader.cjs:** ✅ Minimal local log.warn (CJS; shared logger is ESM); single abstraction.
+- **src/test-utils/test-helpers.ts:** ✅ Local log() in addInitScript (browser context); no direct console.* at call sites.
 
 ---
 
@@ -79,14 +83,7 @@ This document lists all `console.log`, `console.warn`, and `console.error` call 
 
 ### backend-server (test-app/scripts/backend-server.js)
 
-| Area | Count | Notes |
-|------|--------|--------|
-| Startup / API key | 104–110, 132, 141–143, 149–150 | Bootstrap / config; some are fatal |
-| Connection / Deepgram proxy | 309–334, 340–351, 360–618, 646–704 | Many; use rootLog/requestLog |
-| OpenAI forwarder | 736–739, 774, 784, 798 | Subprocess / errors |
-| Listen / shutdown | 819–833, 839, 846 | Startup / shutdown |
-
-**Already using logger:** POST /function-call path. Rest to be migrated to rootLog or request-scoped logger.
+**Status: ✅ Migrated (Issue #412).** All console.* replaced with rootLog (info/debug/warn/error). Fatal startup (no API key) uses rootLog.error then process.exit(1). POST /function-call uses request-scoped logger (rootLog.child({ traceId })). No remaining direct console.*.
 
 ---
 
@@ -98,15 +95,19 @@ This document lists all `console.log`, `console.warn`, and `console.error` call 
 
 ## Summary
 
-| Area | Est. count | Priority |
-|------|------------|----------|
-| DeepgramVoiceInteraction | ~120 | High (gate on debug, use logger) |
-| IdleTimeoutService | 17 | High |
-| useIdleTimeoutManager | 15 | High |
-| WebSocketManager | 1 | Medium |
-| openai-proxy server.ts | 6 | Medium (use emitLog with connectionAttrs) |
-| openai-proxy run.ts / cli.ts | 3 | Allowlist (bootstrap/CLI) |
-| backend-server | ~70 | Medium (use rootLog; request-scoped where applicable) |
-| test-app App | 0 (migrated) | — |
+| Area | Status |
+|------|--------|
+| DeepgramVoiceInteraction | ✅ Migrated |
+| IdleTimeoutService | ✅ Migrated |
+| useIdleTimeoutManager | ✅ Migrated |
+| WebSocketManager | ✅ Migrated |
+| AudioUtils, AudioManager, declarative-props, instructions-loader, component-helpers | ✅ Migrated |
+| function-call-logger, AgentStateService | ✅ Migrated |
+| instructions-loader.cjs | ✅ Local log.warn (CJS) |
+| test-helpers | ✅ Local log() in init scripts |
+| openai-proxy server.ts | ✅ Migrated (emitLog) |
+| openai-proxy run.ts / cli.ts | Allowlist (bootstrap/CLI) |
+| backend-server | ✅ Migrated (rootLog) |
+| test-app App | ✅ Migrated |
 
-**Allowlist (justified direct console):** Logger default sink; run.ts fatal + startup; cli usage; backend fatal bootstrap (no key, etc.). See [ALLOWLIST.md](./ALLOWLIST.md).
+**Allowlist (justified direct console):** Logger default sink only; run.ts fatal + startup; cli usage. See [ALLOWLIST.md](./ALLOWLIST.md).

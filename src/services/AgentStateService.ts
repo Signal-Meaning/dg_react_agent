@@ -7,6 +7,7 @@
  */
 
 import { AgentState } from '../types';
+import { getLogger } from '../utils/logger';
 
 export interface AgentStateTransition {
   from: AgentState;
@@ -25,9 +26,11 @@ export class AgentStateService {
   private stateHistory: AgentStateTransition[] = [];
   private callbacks: AgentStateCallbacks = {};
   private debug: boolean = false;
+  private logger = getLogger({ debug: false });
 
   constructor(debug: boolean = false) {
     this.debug = debug;
+    this.logger = getLogger({ debug: this.debug });
   }
 
   /**
@@ -218,8 +221,6 @@ export class AgentStateService {
    * Logging helper
    */
   private log(message: string): void {
-    if (this.debug) {
-      console.log(`🤖 [AgentStateService] ${message}`);
-    }
+    this.logger.debug(`[AgentStateService] ${message}`);
   }
 }
