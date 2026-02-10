@@ -146,7 +146,7 @@ This section is the **spec** for how the proxy maps OpenAI Realtime server event
 | **Phase 1 REFACTOR** | ✅ Done | No extra abstraction; two short branches in upstream handler with comments referencing this doc. |
 | **Phase 2 (optional)** | ✅ Done | Component behavior tests added in `tests/component-vad-callbacks.test.tsx`: (1) mock WebSocket emits `UserStartedSpeaking` → `onUserStartedSpeaking` called once; (2) mock emits `UtteranceEnd` with `channel` and `last_word_end` → `onUtteranceEnd` called with `{ channel, lastWordEnd }`; (3) `UtteranceEnd` without payload → component applies defaults `[0, 1]` and `0`. All three tests pass; no component code changes required (component already accepts wire shape). |
 | **Phase 3 E2E** | ✅ Done | E2E test **5b. VAD (Issue #414)** added in `test-app/tests/e2e/openai-proxy-e2e.spec.js`: sends audio via proxy, asserts at least one VAD event (UserStartedSpeaking or UtteranceEnd) in UI within 15s. Depends on OpenAI sending speech_started/speech_stopped for the sample. |
-| **Phase 4 Docs** | ✅ Done | NEXT-STEPS §3.5 and root-cause (item E) updated; TEST-STRATEGY.md has "Transcript / VAD and backends" and link to this doc; E2E-BACKEND-MATRIX.md updated for test 5b and deepgram-callback-test note. |
+| **Phase 4 Docs** | ✅ Done | NEXT-STEPS §3.5 and root-cause (item E) updated; TEST-STRATEGY.md has "Transcript / VAD and backends" and link to this doc; E2E-BACKEND-MATRIX.md updated for test 5b and callback-test note. |
 
 ---
 

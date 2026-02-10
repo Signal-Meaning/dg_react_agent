@@ -36,7 +36,7 @@ These specs assume **Deepgram** backend behavior (e.g. Deepgram server timeouts,
 | `deepgram-client-message-timeout.spec.js` | Assumes **CLIENT_MESSAGE_TIMEOUT** from Deepgram; "Waiting for Deepgram server timeout (~60s)". Skips when `VITE_OPENAI_PROXY_ENDPOINT` is set. |
 | `deepgram-text-session-flow.spec.js` | Uses `setupTestPageWithDeepgramProxy`; real Deepgram API. |
 | `deepgram-backend-proxy-mode.spec.js` | Expects `deepgram-proxy` endpoint. Skips when `VITE_OPENAI_PROXY_ENDPOINT` is set. |
-| `deepgram-callback-test.spec.js` | onTranscriptUpdate, onUserStartedSpeaking, onUserStoppedSpeaking rely on Deepgram transcript/VAD events. Skips those tests when `VITE_OPENAI_PROXY_ENDPOINT` is set. (OpenAI proxy also sends UserStartedSpeaking/UtteranceEnd per Issue #414; see `openai-proxy-e2e.spec.js` test 5b.) |
+| `callback-test.spec.js` | onTranscriptUpdate, onUserStartedSpeaking, onUserStoppedSpeaking rely on Deepgram transcript/VAD events. Skips those tests when `VITE_OPENAI_PROXY_ENDPOINT` is set. (OpenAI proxy also sends UserStartedSpeaking/UtteranceEnd per Issue #414; see `openai-proxy-e2e.spec.js` test 5b.) |
 | `declarative-props-api.spec.js` | Function-call test runs with OpenAI proxy; proxy sends **FunctionCallRequest** on `response.function_call_arguments.done` and maps **FunctionCallResponse** → `conversation.item.create` (function_call_output). |
 | `context-retention-agent-usage.spec.js` | Context test runs with OpenAI proxy; proxy maps **Settings.agent.context.messages** → sequence of **conversation.item.create** (OpenAI does not send context in session.update). |
 | `context-retention-with-function-calling.spec.js` | Same as above; proxy handles both function-call path and context on reconnect. |
