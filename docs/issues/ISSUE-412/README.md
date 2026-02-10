@@ -30,12 +30,12 @@ Introduce an OpenTelemetry-based logging standard across the codebase and severe
 
 ## Acceptance criteria
 
-- [ ] OpenTelemetry (or agreed logger) integrated; logging goes through a single abstraction.
-- [ ] Direct `console.log` / `warn` / `error` usage is rare and justified (e.g. bootstrap errors only).
-- [ ] Log levels (e.g. debug, info, warn, error) and `debug` prop/env drive what is emitted.
-- [ ] Docs describe the standard and migration for existing `console.*` call sites.
-- [ ] Demonstrate or document how logs from backend, proxies, and test-app can be pulled together via OTel logging with common ID threading (e.g. trace/span context) so a single request or session is observable across all layers.
-- [ ] Developer documentation includes clear instructions on how to use the improved logging in a partner app (e.g. integrating the logger, setting trace/request ID, and correlating with app backend logs).
+- [x] OpenTelemetry (or agreed logger) integrated; logging goes through a single abstraction.
+- [x] Direct `console.log` / `warn` / `error` usage is rare and justified (e.g. bootstrap errors only).
+- [x] Log levels (e.g. debug, info, warn, error) and `debug` prop/env drive what is emitted.
+- [x] Docs describe the standard and migration for existing `console.*` call sites.
+- [x] Demonstrate or document how logs from backend, proxies, and test-app can be pulled together via OTel logging with common ID threading (e.g. trace/span context) so a single request or session is observable across all layers.
+- [x] Developer documentation includes clear instructions on how to use the improved logging in a partner app (e.g. integrating the logger, setting trace/request ID, and correlating with app backend logs).
 
 ---
 
