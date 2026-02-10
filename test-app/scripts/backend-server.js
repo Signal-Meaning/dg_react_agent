@@ -1,9 +1,10 @@
 /**
  * Backend server for test-app - Issue #242, #381
  *
- * Single HTTP(S) server that hosts both proxy endpoints (and can host function endpoints for testing):
+ * Single HTTP(S) server that hosts both proxy endpoints and app-backend function execution (Issue #407):
  *   - /deepgram-proxy: pass-through to Deepgram Voice Agent (and optionally transcription) API
  *   - /openai: OpenAI Realtime translation proxy (spawns scripts/openai-proxy/run.ts; no duplicate proxy logic)
+ *   - POST /function-call: execute function calls (common handlers; see function-call-handlers.js)
  *
  * One implementation per proxy (DRY). See docs/BACKEND-PROXY/ARCHITECTURE.md.
  *
@@ -28,6 +29,7 @@ import path from 'path';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { executeFunctionCall } from './function-call-handlers.js';
 
 // Load test-app/.env so VITE_DEEPGRAM_API_KEY (and DEEPGRAM_API_KEY) are available when run via npm run backend
 // Skip when SKIP_DOTENV=1 (used by integration tests to assert "at least one key required")
@@ -166,7 +168,46 @@ const requestHandler = (req, res) => {
   
   // For other requests, set security headers
   setSecurityHeaders(res);
-  
+
+  const pathname = req.url && req.url.indexOf('?') !== -1 ? req.url.slice(0, req.url.indexOf('?')) : (req.url || '/');
+
+  // POST /function-call — Issue #407: app backend executes function calls (common handlers, not proxy-specific)
+  if (req.method === 'POST' && pathname === '/function-call') {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const id = payload.id;
+        const name = payload.name;
+        const argsStr = payload.arguments;
+        if (typeof id !== 'string' || typeof name !== 'string' || typeof argsStr !== 'string') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing or invalid id, name, or arguments' }));
+          return;
+        }
+        let args = {};
+        try {
+          args = JSON.parse(argsStr || '{}');
+        } catch {
+          // leave args as {}
+        }
+        const result = executeFunctionCall(name, args);
+        if (result.error) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: result.error }));
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ content: result.content }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Internal error' }));
+      }
+    });
+    return;
+  }
+
   // Default handler (WebSocket upgrade is handled by WebSocketServer)
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('Not Found');
