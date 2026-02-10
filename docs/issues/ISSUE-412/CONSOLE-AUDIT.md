@@ -74,16 +74,11 @@ This document lists all `console.log`, `console.warn`, and `console.error` call 
 
 ### openai-proxy (scripts/openai-proxy/)
 
-| File | Line | Type | Notes |
-|------|------|------|--------|
-| server.ts | 438, 445, 452 | log | upstream→client message (debug) |
-| server.ts | 489, 493 | log | speech_started / speech_stopped (if debug) |
-| server.ts | 513, 527 | log | TTS boundary / chunk lengths |
-| run.ts | 40 | error | OPENAI_API_KEY required (bootstrap) |
-| run.ts | 73–74 | log | Listening message (startup) |
-| cli.ts | 69 | log | Usage (CLI) |
-
-**Bootstrap / allowlist candidates:** run.ts:40 (fatal), run.ts:73–74 (startup), cli.ts:69 (usage).
+| File | Status | Notes |
+|------|--------|--------|
+| server.ts | ✅ Migrated | All former console.log replaced with emitLog (connectionAttrs; Issue #412). |
+| run.ts | Allowlist | 40: fatal OPENAI_API_KEY; 73–74: startup listen (bootstrap). |
+| cli.ts | Allowlist | 69: usage (CLI). |
 
 ### backend-server (test-app/scripts/backend-server.js)
 

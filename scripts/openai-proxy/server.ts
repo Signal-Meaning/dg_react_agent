@@ -435,21 +435,38 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           responseInProgress = false;
           const m = msg as { type: string; text?: string };
           if (debug || (m.text && m.text.trim().startsWith('Function call:'))) {
-            console.log(`[proxy ${connId}] upstream→client: ${msg.type}${m.text?.startsWith('Function call:') ? ' (transcript-like)' : ''}`);
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: `upstream→client: ${msg.type}${m.text?.startsWith('Function call:') ? ' (transcript-like)' : ''}`,
+              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
+            });
           }
           const conversationText = mapOutputTextDoneToConversationText(msg as Parameters<typeof mapOutputTextDoneToConversationText>[0]);
           clientWs.send(JSON.stringify(conversationText));
         } else if (msg.type === 'response.output_audio_transcript.done') {
           const m = msg as { type: string; transcript?: string };
           if (debug || (m.transcript && m.transcript.trim().startsWith('Function call:'))) {
-            console.log(`[proxy ${connId}] upstream→client: ${msg.type}${m.transcript?.startsWith('Function call:') ? ' (transcript-like)' : ''}`);
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: `upstream→client: ${msg.type}${m.transcript?.startsWith('Function call:') ? ' (transcript-like)' : ''}`,
+              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
+            });
           }
           const conversationText = mapOutputAudioTranscriptDoneToConversationText(
             msg as Parameters<typeof mapOutputAudioTranscriptDoneToConversationText>[0]
           );
           clientWs.send(JSON.stringify(conversationText));
         } else if (msg.type === 'response.function_call_arguments.done') {
-          console.log(`[proxy ${connId}] upstream→client: ${msg.type} → sending FunctionCallRequest + ConversationText`);
+          if (debug) {
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: `upstream→client: ${msg.type} → sending FunctionCallRequest + ConversationText`,
+              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
+            });
+          }
           const functionCallRequest = mapFunctionCallArgumentsDoneToFunctionCallRequest(
             msg as Parameters<typeof mapFunctionCallArgumentsDoneToFunctionCallRequest>[0]
           );
@@ -486,11 +503,25 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           clientWs.send(JSON.stringify(componentError));
         } else if (msg.type === 'input_audio_buffer.speech_started') {
           // Issue #414 COMPONENT-PROXY-INTERFACE-TDD: map OpenAI VAD to component contract (COMPONENT-PROXY-INTERFACE-TDD.md §2.1)
-          if (debug) console.log(`[proxy ${connId}] upstream→client: input_audio_buffer.speech_started → UserStartedSpeaking`);
+          if (debug) {
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: 'upstream→client: input_audio_buffer.speech_started → UserStartedSpeaking',
+              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.speech_started' },
+            });
+          }
           clientWs.send(JSON.stringify({ type: 'UserStartedSpeaking' }));
         } else if (msg.type === 'input_audio_buffer.speech_stopped') {
           // Issue #414 COMPONENT-PROXY-INTERFACE-TDD: map to UtteranceEnd with channel and last_word_end (component contract)
-          if (debug) console.log(`[proxy ${connId}] upstream→client: input_audio_buffer.speech_stopped → UtteranceEnd`);
+          if (debug) {
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: 'upstream→client: input_audio_buffer.speech_stopped → UtteranceEnd',
+              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.speech_stopped' },
+            });
+          }
           clientWs.send(JSON.stringify({ type: 'UtteranceEnd', channel: [0, 1], last_word_end: 0 }));
         } else if (msg.type === 'response.output_audio.delta') {
           // Component expects raw PCM (binary frame) for playback; upstream sends JSON with base64 delta.
@@ -510,12 +541,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
                   const u = bufA.readUInt8(bufA.length - 1) | (bufB.readUInt8(0) << 8);
                   carriedPlusFirst = u > 0x7fff ? u - 0x10000 : u;
                 }
-                console.log(
-                  `[TTS BOUNDARY PROXY] Boundary after chunk ${ttsChunkLengths.length - 1}: chunk lengths ${bufA.length}, ${bufB.length}; ` +
-                    `last 2 bytes of A: [${lastBytesA.join(', ')}] (LE sample: ${lastSampleLE ?? 'n/a'}); ` +
-                    `first 2 bytes of B: [${firstBytesB.join(', ')}] (LE sample: ${firstSampleLE ?? 'n/a'})` +
-                    (carriedPlusFirst !== undefined ? `; carried+first as LE sample: ${carriedPlusFirst}` : '')
-                );
+                emitLog({
+                  severityNumber: SeverityNumber.DEBUG,
+                  severityText: 'DEBUG',
+                  body: `TTS boundary after chunk ${ttsChunkLengths.length - 1}: lengths ${bufA.length}, ${bufB.length}; last A (LE: ${lastSampleLE ?? 'n/a'}); first B (LE: ${firstSampleLE ?? 'n/a'})${carriedPlusFirst !== undefined ? `; carried+first: ${carriedPlusFirst}` : ''}`,
+                  attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.output_audio.delta' },
+                });
               }
               ttsChunkLengths.push(pcm.length);
               lastTtsChunk = pcm;
@@ -524,7 +555,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
         } else if (msg.type === 'response.output_audio.done') {
           if (ttsBoundaryDebug && ttsChunkLengths.length > 0) {
-            console.log(`[TTS BOUNDARY PROXY] Chunk lengths (first ${Math.min(ttsChunkLengths.length, 10)}): ${ttsChunkLengths.slice(0, 10).join(', ')}${ttsChunkLengths.length > 10 ? '...' : ''}`);
+            emitLog({
+              severityNumber: SeverityNumber.DEBUG,
+              severityText: 'DEBUG',
+              body: `TTS chunk lengths (first ${Math.min(ttsChunkLengths.length, 10)}): ${ttsChunkLengths.slice(0, 10).join(', ')}${ttsChunkLengths.length > 10 ? '...' : ''}`,
+              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.output_audio.done' },
+            });
           }
           ttsChunkLengths = [];
           lastTtsChunk = null;

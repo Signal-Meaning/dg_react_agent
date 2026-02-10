@@ -44,7 +44,7 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 | 3.2 | Component: replace console.* with logger; gate verbose on debug prop | [ ] |
 | 3.3 | Test-app: use shared logger; set trace/request ID context for session | [ ] (sends X-Trace-Id to backend; full logger adoption pending) |
 | 3.4 | backend-server: replace console.* with logger; attach request context | [x] (POST /function-call path; rest in follow-up) |
-| 3.5 | openai-proxy: replace console.* with logger; attach caller ID context | [ ] |
+| 3.5 | openai-proxy: replace console.* with logger; attach caller ID context | [x] (server.ts uses emitLog; run.ts/cli.ts on allowlist) |
 | 3.6 | Allowlist/bootstrap: document and keep minimal justified console.* | [x] |
 
 **Phase 3 done when:** Single abstraction in use; minimal direct console.* outside allowlist.
@@ -80,4 +80,4 @@ Use this file to track work to conclusion. Update checkboxes and status as you g
 
 ## Last updated
 
-- 3.1 done: CONSOLE-AUDIT.md lists all console.* call sites (component, IdleTimeoutService, hooks, proxy, backend). 3.6 done: ALLOWLIST.md documents justified usage (logger sink, fatal bootstrap, startup, CLI). Next: 3.2, 3.3, 3.5 (replace console.* with logger in component, test-app, openai-proxy).
+- 3.5 done: openai-proxy server.ts — all console.log replaced with emitLog (connectionAttrs + trace_id). run.ts/cli.ts remain on allowlist. Next: 3.2 (component), 3.3 (test-app).
