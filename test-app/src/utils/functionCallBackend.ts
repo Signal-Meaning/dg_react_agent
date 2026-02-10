@@ -18,23 +18,37 @@ export function getFunctionCallBackendBaseUrl(proxyEndpoint: string | undefined)
   return hostPort ? `${httpScheme}${hostPort}` : '';
 }
 
+/** Generate a trace/request ID for correlation (Issue #412). */
+function generateTraceId(): string {
+  if (typeof crypto !== 'undefined' && typeof (crypto as { randomUUID?: () => string }).randomUUID === 'function') {
+    return (crypto as { randomUUID: () => string }).randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
 /**
  * Forward a function-call request to the app backend and call sendResponse with the result or error.
+ * Sends X-Trace-Id so backend logs can be correlated (Issue #412).
  */
 export async function forwardFunctionCallToBackend(
   request: FunctionCallRequest,
   sendResponse: (response: FunctionCallResponse) => void,
-  baseUrl: string
+  baseUrl: string,
+  traceId?: string
 ): Promise<void> {
   if (!baseUrl) {
     sendResponse({ id: request.id, error: 'Function-call backend URL not configured' });
     return;
   }
   const url = `${baseUrl.replace(/\/$/, '')}/function-call`;
+  const requestTraceId = traceId ?? generateTraceId();
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Trace-Id': requestTraceId,
+      },
       body: JSON.stringify({
         id: request.id,
         name: request.name,

@@ -10,7 +10,6 @@
  * These tests address Issue #190: Missing Agent State Handlers Cause Idle Timeout Regression
  */
 
-import React from 'react';
 import { renderHook, act } from '@testing-library/react';
 import { useIdleTimeoutManager } from '../src/hooks/useIdleTimeoutManager';
 import { IdleTimeoutService } from '../src/utils/IdleTimeoutService';
@@ -805,9 +804,7 @@ describe('AgentStateService', () => {
       
       agentStateService.handleAgentThinking();
       
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('State transition: idle → thinking')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith('debug', expect.stringContaining('State transition: idle → thinking'));
       
       consoleSpy.mockRestore();
     });
@@ -827,9 +824,7 @@ describe('AgentStateService', () => {
       
       agentStateService.handleAgentStartedSpeaking(true, false);
       
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Greeting started - agent began speaking')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith('debug', expect.stringContaining('Greeting started - agent began speaking'));
       
       consoleSpy.mockRestore();
     });
@@ -919,9 +914,7 @@ describe('AgentStateService', () => {
       // This should cause an invalid transition warning
       agentStateService.handleAgentStartedSpeaking(false, false);
       
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid state transition')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith('debug', expect.stringContaining('Invalid state transition'));
       
       consoleSpy.mockRestore();
     });

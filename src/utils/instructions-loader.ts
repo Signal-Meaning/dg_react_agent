@@ -5,6 +5,10 @@
  * with environment variable override support.
  */
 
+import { getLogger } from './logger';
+
+const log = getLogger();
+
 // Only import Node.js modules in Node.js environment
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let fs: any, path: any; // Node.js types not available in browser environment
@@ -61,9 +65,9 @@ export async function loadInstructionsFromFile(filePath?: string): Promise<strin
     const isBrowser = typeof window !== 'undefined';
     const isFileReadError = error instanceof Error && error.message?.includes('File reading not supported');
     if (isBrowser && isFileReadError) {
-      console.log('Using default instructions (file load not available in browser).');
+      log.info('Using default instructions (file load not available in browser)');
     } else {
-      console.warn('Failed to load instructions from file, using default:', error);
+      log.warn('Failed to load instructions from file, using default', { error: error instanceof Error ? error.message : String(error) });
     }
     return getDefaultInstructions();
   }
@@ -159,9 +163,9 @@ export function loadInstructionsFromFileSync(filePath?: string): string {
     const isBrowser = typeof window !== 'undefined';
     const isFileReadError = error instanceof Error && error.message?.includes('File reading not supported');
     if (isBrowser && isFileReadError) {
-      console.log('Using default instructions (file load not available in browser).');
+      log.info('Using default instructions (file load not available in browser)');
     } else {
-      console.warn('Failed to load instructions from file, using default:', error);
+      log.warn('Failed to load instructions from file, using default', { error: error instanceof Error ? error.message : String(error) });
     }
     return getDefaultInstructions();
   }

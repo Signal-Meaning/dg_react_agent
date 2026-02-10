@@ -3,6 +3,7 @@ import { DEFAULT_IDLE_TIMEOUT_MS } from '../constants/voice-agent';
 import { VoiceInteractionState } from '../utils/state/VoiceInteractionState';
 import { WebSocketManager } from '../utils/websocket/WebSocketManager';
 import { IdleTimeoutService, IdleTimeoutEvent } from '../utils/IdleTimeoutService';
+import { getLogger } from '../utils/logger';
 
 /**
  * Custom hook for managing idle timeout using the IdleTimeoutService.
@@ -16,12 +17,11 @@ export function useIdleTimeoutManager(
   onIdleTimeoutActiveChange?: (isActive: boolean) => void,
   timeoutMs: number = DEFAULT_IDLE_TIMEOUT_MS
 ) {
+  const logger = getLogger({ debug });
   const serviceRef = useRef<IdleTimeoutService | null>(null);
   const prevStateRef = useRef<VoiceInteractionState>(state);
-  // Store callback in ref to avoid stale closures and allow it to change without recreating service
   const callbackRef = useRef(onIdleTimeoutActiveChange);
   const prevTimeoutActiveRef = useRef<boolean>(false);
-  // Store current state in ref so stateGetter can always read latest state
   const currentStateRef = useRef<VoiceInteractionState>(state);
 
   // Update callback ref when it changes
@@ -34,29 +34,20 @@ export function useIdleTimeoutManager(
     // Issue #235: Destroy any existing service BEFORE creating a new one
     // This prevents multiple timeout handlers from existing simultaneously
     if (serviceRef.current) {
-      if (debug) {
-        console.log('🎯 [DEBUG] Destroying existing IdleTimeoutService before creating new one');
-      }
+      logger.debug('Destroying existing IdleTimeoutService before creating new one');
       serviceRef.current.destroy();
       serviceRef.current = null;
     }
 
-    if (debug) {
-      console.log('🎯 [DEBUG] Creating new IdleTimeoutService');
-      console.log('🎯 [DEBUG] About to create IdleTimeoutService');
-    }
+    logger.debug('Creating new IdleTimeoutService');
     serviceRef.current = new IdleTimeoutService({
       timeoutMs,
       debug,
     });
-    if (debug) {
-      console.log('🎯 [DEBUG] IdleTimeoutService created successfully');
-    }
+    logger.debug('IdleTimeoutService created successfully');
 
-    // Set up timeout callback
     serviceRef.current.onTimeout(() => {
-      // Always log so operators see why the connection closed (not gated by debug)
-      console.log('🎯 [IDLE_TIMEOUT] Idle timeout reached - closing agent connection');
+      logger.info('Idle timeout reached - closing agent connection');
       agentManagerRef.current?.close();
     });
 
@@ -73,9 +64,7 @@ export function useIdleTimeoutManager(
     });
 
     return () => {
-      if (debug) {
-        console.log('🎯 [DEBUG] Destroying IdleTimeoutService (cleanup)');
-      }
+      logger.debug('Destroying IdleTimeoutService (cleanup)');
       // Issue #235: Ensure service is destroyed and timeout is cancelled
       if (serviceRef.current) {
         serviceRef.current.destroy();
@@ -115,32 +104,25 @@ export function useIdleTimeoutManager(
       isPlaying: prevStateRef.current.isPlaying,
     };
 
-    // Debug logging to track state changes
-    if (debug) {
-      console.log('[useIdleTimeoutManager] State change detected:', {
-        prev: prevState,
-        current: currentState,
-        agentStateChanged: currentState.agentState !== prevState.agentState,
-        isPlayingChanged: currentState.isPlaying !== prevState.isPlaying,
-        isUserSpeakingChanged: currentState.isUserSpeaking !== prevState.isUserSpeaking
-      });
-    }
+    logger.debug('State change detected', {
+      prev: prevState,
+      current: currentState,
+      agentStateChanged: currentState.agentState !== prevState.agentState,
+      isPlayingChanged: currentState.isPlaying !== prevState.isPlaying,
+      isUserSpeakingChanged: currentState.isUserSpeaking !== prevState.isUserSpeaking
+    });
 
     // Emit events for state changes
     if (currentState.isUserSpeaking !== prevState.isUserSpeaking) {
       const event: IdleTimeoutEvent = currentState.isUserSpeaking 
         ? { type: 'USER_STARTED_SPEAKING' }
         : { type: 'USER_STOPPED_SPEAKING' };
-      if (debug) {
-        console.log('[useIdleTimeoutManager] Emitting USER_STARTED/STOPPED_SPEAKING event');
-      }
+      logger.debug('Emitting USER_STARTED/STOPPED_SPEAKING event');
       serviceRef.current.handleEvent(event);
     }
 
     if (currentState.agentState !== prevState.agentState) {
-      if (debug) {
-        console.log(`[useIdleTimeoutManager] Emitting AGENT_STATE_CHANGED: ${prevState.agentState} -> ${currentState.agentState}`);
-      }
+      logger.debug(`Emitting AGENT_STATE_CHANGED: ${prevState.agentState} -> ${currentState.agentState}`);
       serviceRef.current.handleEvent({ 
         type: 'AGENT_STATE_CHANGED', 
         state: currentState.agentState 
@@ -148,9 +130,7 @@ export function useIdleTimeoutManager(
     }
 
     if (currentState.isPlaying !== prevState.isPlaying) {
-      if (debug) {
-        console.log(`[useIdleTimeoutManager] Emitting PLAYBACK_STATE_CHANGED: ${prevState.isPlaying} -> ${currentState.isPlaying}`);
-      }
+      logger.debug(`Emitting PLAYBACK_STATE_CHANGED: ${prevState.isPlaying} -> ${currentState.isPlaying}`);
       serviceRef.current.handleEvent({ 
         type: 'PLAYBACK_STATE_CHANGED', 
         isPlaying: currentState.isPlaying 
@@ -192,24 +172,13 @@ export function useIdleTimeoutManager(
 
   // Handle UtteranceEnd events specifically
   const handleUtteranceEnd = useCallback(() => {
-    if (debug) {
-      console.log('🎯 [DEBUG] handleUtteranceEnd called');
-    }
+    logger.debug('handleUtteranceEnd called');
     if (serviceRef.current) {
-      if (debug) {
-        console.log('🎯 [DEBUG] Service exists, calling handleEvent');
-        console.log('🎯 [DEBUG] About to call serviceRef.current.handleEvent with UTTERANCE_END');
-      }
-      serviceRef.current.handleEvent({ 
-        type: 'UTTERANCE_END'
-      });
-      if (debug) {
-        console.log('🎯 [DEBUG] serviceRef.current.handleEvent call completed');
-      }
+      logger.debug('Calling handleEvent with UTTERANCE_END');
+      serviceRef.current.handleEvent({ type: 'UTTERANCE_END' });
+      logger.debug('handleEvent call completed');
     } else {
-      if (debug) {
-        console.log('🎯 [DEBUG] Service is null!');
-      }
+      logger.debug('Service is null');
     }
   }, [debug]);
 

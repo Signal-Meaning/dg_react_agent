@@ -70,25 +70,25 @@ describe('Component Remount - Customer Issue #769', () => {
     const originalConsoleWarn = console.warn;
     
     (global as any).console.log = jest.fn((...args: any[]) => {
-      const message = args[0]?.toString() || '';
-      
+      // Issue #412: logger defaultSink calls console.log(level, message, attrs) so args may be [level, message, attrs]
+      const first = args[0]?.toString() || '';
+      const isLoggerFormat = ['debug', 'info', 'warn', 'error'].includes(first) && args.length >= 2;
+      const message = isLoggerFormat ? (args[1]?.toString() || '') : first;
+      const logObj = isLoggerFormat && args.length > 2 && typeof args[2] === 'object' ? args[2] : (args.length > 1 && typeof args[1] === 'object' ? args[1] : null);
+
       // Track component MOUNT (actual React remount)
-      // The actual log message is: "🔧 [Component] DeepgramVoiceInteraction component MOUNTED (new instance)"
-      // Check for mount-related messages
-      if (message.includes('component MOUNTED') || 
-          message.includes('MOUNTED (new instance)') || 
+      if (message.includes('component MOUNTED') ||
+          message.includes('MOUNTED (new instance)') ||
           message.includes('DeepgramVoiceInteraction component MOUNTED') ||
-          message.includes('[Component]') && message.includes('MOUNTED')) {
+          (message.includes('[Component]') && message.includes('MOUNTED'))) {
         try {
-          // Try to extract instanceId from the second argument (the object)
-          if (args.length > 1 && typeof args[1] === 'object' && args[1] !== null) {
-            const logObj = args[1] as any;
-            if (logObj.instanceId) {
-              mountLogs.push({
-                instanceId: logObj.instanceId,
-                timestamp: Date.now()
-              });
-            }
+          const obj = logObj as any;
+          const instanceId = obj?.instanceId ?? obj?.extra?.[0]?.instanceId;
+          if (instanceId) {
+            mountLogs.push({
+              instanceId: String(instanceId),
+              timestamp: Date.now()
+            });
           } else {
             // Fallback: try to extract from message string
             const jsonMatch = message.match(/\{([^}]+)\}/);
@@ -165,7 +165,8 @@ describe('Component Remount - Customer Issue #769', () => {
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
     const stableAgentOptions = createAgentOptions({ functions: undefined });
 
-    // Initial render
+    // Initial render (rerender/unmount not used in this test)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars -- destructure for consistency
     const { rerender, unmount } = render(
       <DeepgramVoiceInteraction
         ref={ref}
@@ -264,6 +265,7 @@ describe('Component Remount - Customer Issue #769', () => {
     });
 
     const beforeSecondReconnectMountCount = mountLogs.length;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars -- kept for symmetry with first reconnect
     const beforeSecondReconnectInitCount = initLogs.length;
 
     await act(async () => {
@@ -272,14 +274,14 @@ describe('Component Remount - Customer Issue #769', () => {
     });
 
     // Simulate reconnection - get event listener and trigger connection state change
-    const eventListenerCalls = mockWebSocketManager.addEventListener.mock.calls;
-    const connectionStateListener = eventListenerCalls.find(
-      (call: any[]) => call[0] === 'connection_state_change'
+    const eventListenerCalls2 = mockWebSocketManager.addEventListener.mock.calls;
+    const connectionStateListener2 = eventListenerCalls2.find(
+      (call: [string, (ev: { type: string; state: string }) => void]) => call[0] === 'connection_state_change'
     )?.[1];
-    
-    if (connectionStateListener) {
+
+    if (connectionStateListener2) {
       act(() => {
-        connectionStateListener({ type: 'connection_state_change', state: 'connected' });
+        connectionStateListener2({ type: 'connection_state_change', state: 'connected' });
       });
     }
 

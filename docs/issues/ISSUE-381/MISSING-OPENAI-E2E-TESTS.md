@@ -14,7 +14,7 @@ This document lists **OpenAI proxy E2E tests** that are either (1) representativ
 | deepgram-backend-proxy-mode | 1 (Connection) | Proxy endpoint connection. |
 | deepgram-greeting-idle-timeout | 2 (Greeting) | Greeting injection; idle/close semantics differ. |
 | deepgram-ux-protocol | 1, 2 | Connection + settings; message ordering implied. |
-| deepgram-callback-test (audio path) | 6 (Basic audio) | Audio in; transcript/VAD not applicable. |
+| callback-test (audio path) | 6 (Basic audio) | Audio in; transcript/VAD not applicable. |
 
 No additional OpenAI-only test is required for these; run the Corresponding Test when using the OpenAI proxy.
 
@@ -57,7 +57,7 @@ No additional OpenAI-only test is required for these; run the Corresponding Test
 
 ### 6. Transcript callbacks absent (negative) (deferred)
 
-- **Deepgram analogue:** deepgram-callback-test (onTranscriptUpdate, onUserStartedSpeaking, onUserStoppedSpeaking).
+- **Deepgram analogue:** callback-test (onTranscriptUpdate, onUserStartedSpeaking, onUserStoppedSpeaking).
 - **Gap:** OpenAI doesn’t send equivalent transcript/VAD events. We could add a negative test: register transcript callbacks, connect via OpenAI proxy, send message, assert no crash and agent response still appears (basic path works without transcript events).
 - **Status:** **Deferred.** Low value unless we see regressions when callbacks are present but never fired.
 

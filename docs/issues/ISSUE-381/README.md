@@ -21,7 +21,7 @@
 - **Proxy integration tests** (`tests/integration/openai-proxy-integration.test.ts`): 12 tests. Function-call round-trip, FCR then CT order, transcript-only path (no FCR), transcript then .done order, user echo, context in Settings, **greeting** (agent.greeting → ConversationText + conversation.item.create after session.updated). Run: `npm run test -- tests/integration/openai-proxy-integration.test.ts`. See [INTEGRATION-TEST-PLAN.md](./INTEGRATION-TEST-PLAN.md).
 - **E2E – context retention**: context-retention-agent-usage and context-retention-with-function-calling **pass** when running against OpenAI proxy (proxy running; real API sends `response.function_call_arguments.done` for the function-calling spec). Test app adds user message optimistically in `handleTextSubmit`; context retained after reconnect.
 - **E2E – declarative-props (Deepgram function-call)**: Tests **skip** when OpenAI proxy; when run (e.g. Deepgram), they require a real function call. OpenAI flow covered by openai-proxy-e2e “Simple function calling” and integration tests.
-- **E2E – Deepgram-only specs**: deepgram-backend-proxy-mode (Deepgram), deepgram-callback-test (Deepgram transcript/VAD) skip when OpenAI proxy. See [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md).
+- **E2E – Deepgram-only specs**: deepgram-backend-proxy-mode (Deepgram), callback-test (Deepgram transcript/VAD) skip when OpenAI proxy. See [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md).
 - **Phase 5 – Run and env**: [RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md) documents env vars, how to run the proxy, and how to run unit, integration, and E2E tests.
 
 ---
@@ -81,7 +81,7 @@ Use this checklist to confirm the issue is complete before closing.
 
 - [x] **Phase 4 – Component tests with OpenAI backend**  
   Full component test suite passes with the OpenAI proxy where applicable; no regressions; Deepgram-only exceptions documented if any.  
-  **Done**: context-retention and context-retention-with-function-calling pass; declarative-props (Deepgram function-call), deepgram-backend-proxy-mode (Deepgram), deepgram-callback-test (Deepgram transcript/VAD) skip when OpenAI; documented in [PROGRESS.md](./PROGRESS.md) and [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md). **Ref**: [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md#phase-4).
+  **Done**: context-retention and context-retention-with-function-calling pass; declarative-props (Deepgram function-call), deepgram-backend-proxy-mode (Deepgram), callback-test (Deepgram transcript/VAD) skip when OpenAI; documented in [PROGRESS.md](./PROGRESS.md) and [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md). **Ref**: [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md#phase-4).
 
 - [x] **Phase 5 – Documentation and CI**  
   [RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md) describes proxy env, how to run the proxy, and how to run unit, integration, and E2E tests; CI runs proxy unit and integration tests in existing Jest job.  

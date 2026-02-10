@@ -1,4 +1,5 @@
 import { DeepgramError, AudioConstraints } from '../../types';
+import { getLogger } from '../logger';
 import { EchoCancellationDetector, EchoCancellationSupport } from './EchoCancellationDetector';
 import { AudioConstraintValidator } from './AudioConstraintValidator';
 // Remove import/placeholder for worklet code and embed directly
@@ -173,22 +174,22 @@ export class AudioManager {
   // private analyzerData: Uint8Array | null = null; // Unused for now
   private currentSource: AudioBufferSourceNode | null = null;
   private activeSourceNodes: AudioBufferSourceNode[] = []; // Track all active/scheduled sources
-  
+  private logger = getLogger({ debug: false }); // set in constructor
+
   /**
    * Creates a new AudioManager
    */
   constructor(options: Omit<AudioManagerOptions, 'processorUrl'>) { // Update constructor options
     this.options = { ...DEFAULT_OPTIONS, ...options };
+    this.logger = getLogger({ debug: !!this.options.debug });
     this.log('AudioManager created');
   }
-  
+
   /**
    * Logs a message if debug is enabled
    */
   private log(...args: unknown[]): void {
-    if (this.options.debug) {
-      console.log('[AudioManager]', ...args);
-    }
+    this.logger.debug('[AudioManager] ' + args.map(a => (typeof a === 'object' && a !== null ? JSON.stringify(a) : String(a))).join(' '));
   }
   
   /**
@@ -209,7 +210,7 @@ export class AudioManager {
       try {
         listener(event);
       } catch (error) {
-        console.error('Error in AudioManager event listener:', error);
+        this.logger.error('Error in AudioManager event listener', { error: error instanceof Error ? error.message : String(error) });
       }
     });
   }
@@ -756,11 +757,11 @@ export class AudioManager {
       // Check if we have access to device labels (indicates permission)
       return microphones.some(mic => mic.label !== '');
     } catch (error) {
-      console.error('Error checking microphone permissions:', error);
+      getLogger().error('Error checking microphone permissions', { error: error instanceof Error ? error.message : String(error) });
       return false;
     }
   }
-  
+
   /**
    * Cleans up resources
    */

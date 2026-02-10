@@ -19,8 +19,9 @@ const LOGGER_VERSION = '1.0.0';
 let loggerProvider: LoggerProvider | null = null;
 let logger: ReturnType<LoggerProvider['getLogger']> | null = null;
 
-/** OTel attribute keys used by the proxy (standard + custom) */
+/** OTel attribute keys used by the proxy (standard + custom). Issue #412: trace_id for correlation. */
 export const ATTR_CONNECTION_ID = 'connection_id';
+export const ATTR_TRACE_ID = 'trace_id';
 export const ATTR_DIRECTION = 'direction';
 export const ATTR_MESSAGE_TYPE = 'message_type';
 export const ATTR_ERROR_CODE = 'error.code';

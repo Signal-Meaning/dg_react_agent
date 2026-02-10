@@ -48,17 +48,18 @@ function httpGet(url) {
   });
 }
 
-function httpPost(url, body) {
+function httpPost(url, body, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const data = JSON.stringify(body);
+    const headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), ...extraHeaders };
     const req = http.request(
       {
         hostname: u.hostname,
         port: u.port || 80,
         path: u.pathname,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+        headers,
       },
       (res) => {
         let buf = '';
@@ -167,5 +168,22 @@ describe('POST /function-call (Issue #407)', () => {
     });
     expect(status).toBeGreaterThanOrEqual(400);
     expect(body.error != null || status === 400).toBe(true);
+  });
+
+  it('accepts X-Trace-Id and X-Request-Id for request-scoped logging (Issue #412)', async () => {
+    const traceId = 'test-trace-' + Date.now();
+    const { status, body } = await httpPost(
+      `${BASE_URL}/function-call`,
+      { id: 'call_trace_1', name: 'get_current_time', arguments: '{}' },
+      { 'X-Trace-Id': traceId }
+    );
+    expect(status).toBe(200);
+    expect(body).toHaveProperty('content');
+    const withRequestId = await httpPost(
+      `${BASE_URL}/function-call`,
+      { id: 'call_trace_2', name: 'get_current_time', arguments: '{}' },
+      { 'X-Request-Id': 'test-request-' + Date.now() }
+    );
+    expect(withRequestId.status).toBe(200);
   });
 });

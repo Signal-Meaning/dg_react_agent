@@ -1,5 +1,8 @@
 import React from 'react';
+import { getLogger } from './logger';
 import { WebSocketManager } from './websocket/WebSocketManager';
+
+const log = getLogger();
 
 /**
  * Extended Window interface for global properties used by the component
@@ -100,15 +103,7 @@ export function warnAboutNonMemoizedOptions(propName: string, options: unknown):
     Object.getOwnPropertyNames(options).length > 0;
   
   if (isLikelyInlineObject) {
-    try {
-      console.warn(
-        `[DeepgramVoiceInteraction] ${propName} prop detected. ` +
-        'For optimal performance, memoize this prop with useMemo() to prevent unnecessary re-initialization. ' +
-        'See component documentation for details.'
-      );
-    } catch (error) {
-      // Silently fail if console.warn is not available
-    }
+    log.warn(`[DeepgramVoiceInteraction] ${propName} prop detected. For optimal performance, memoize this prop with useMemo() to prevent unnecessary re-initialization. See component documentation for details.`);
   }
 }
 
