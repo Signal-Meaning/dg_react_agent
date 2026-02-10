@@ -1,6 +1,6 @@
 {
   "name": "@signal-meaning/deepgram-voice-interaction-react",
-  "version": "0.7.18",
+  "version": "0.7.19",
   "description": "A React component for real-time transcription and voice agent interactions using Deepgram APIs",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
@@ -27,8 +27,9 @@
     "api:fetch-spec": "npx tsx tests/api-baseline/fetch-official-specs.ts",
     "openai-proxy:cli": "npx tsx scripts/openai-proxy/cli.ts",
     "api:validate": "jest tests/voice-agent-api-validation.test.tsx",
-    "test:e2e": "playwright test",
-    "test:e2e:log": "playwright test 2>&1 | tee e2e-run.log",
+    "test:e2e": "USE_PROXY_MODE=true playwright test",
+    "test:e2e:log": "USE_PROXY_MODE=true playwright test 2>&1 | tee e2e-run.log",
+    "test:e2e:proxy:log": "USE_PROXY_MODE=true playwright test 2>&1 | tee e2e-proxy-run.log",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:headed": "playwright test --headed",
@@ -98,7 +99,6 @@
     "rollup-plugin-raw": "^0.0.1",
     "rollup-plugin-terser": "^7.0.2",
     "selfsigned": "^2.4.1",
-    "speaker": "^0.5.4",
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.6",
@@ -111,6 +111,9 @@
   "peerDependencies": {
     "react": ">=16.8.0 <19.0.0",
     "react-dom": ">=16.8.0 <19.0.0"
+  },
+  "optionalDependencies": {
+    "speaker": "^0.5.4"
   },
   "peerDependenciesMeta": {
     "react": {

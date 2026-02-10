@@ -255,8 +255,10 @@ describe('Unified Timeout Coordination Integration', () => {
       jest.advanceTimersByTime(5000);
       expect(mockOnTimeout).not.toHaveBeenCalled();
       
-      // Agent stops speaking
+      // Agent stops speaking; need user activity this session before timeout can start
       idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
       
       // Should now timeout after idle period
       jest.advanceTimersByTime(5000);
