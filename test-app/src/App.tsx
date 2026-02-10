@@ -463,6 +463,10 @@ function App() {
       greeting: import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?',
       // Include functions if function calling is enabled
       functions: functions,
+      // Idle timeout (ms). When set via VITE_IDLE_TIMEOUT_MS, used for agent session and component; omit to use component default.
+      ...(import.meta.env.VITE_IDLE_TIMEOUT_MS
+        ? { idleTimeoutMs: Number(import.meta.env.VITE_IDLE_TIMEOUT_MS) }
+        : {}),
       // Pass conversation history as context (from component ref via conversationForDisplay)
       context: conversationForDisplay.length > 0 ? {
         messages: conversationForDisplay.map(message => ({

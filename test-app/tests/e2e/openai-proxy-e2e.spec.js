@@ -318,15 +318,16 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
       { timeout: 30000 }
     );
 
-    // Wait 15 seconds while agent is speaking
+    // Wait 15 seconds while agent may still be speaking (or may have finished a shorter poem)
     await page.waitForTimeout(15000);
 
-    // After 15s: agent should still be speaking (lengthy poem), content in DOM, still connected
-    const agentState = await page.locator('[data-testid="agent-state"]').textContent();
-    expect(agentState?.trim()).toBe('speaking');
-
+    // After 15s: connection must stay connected and we must have non-empty agent content.
+    // Agent state may be 'speaking' (long poem still going) or 'idle' (model finished before 15s).
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
     expect(connectionStatus?.trim()).toBe('connected');
+
+    const agentState = await page.locator('[data-testid="agent-state"]').textContent();
+    expect(['speaking', 'idle']).toContain(agentState?.trim());
 
     const agentResponse = await page.locator('[data-testid="agent-response"]').textContent();
     expect(agentResponse).toBeTruthy();

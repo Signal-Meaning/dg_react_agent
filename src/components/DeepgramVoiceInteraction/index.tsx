@@ -119,8 +119,7 @@ function DeepgramVoiceInteraction(
     apiKey,
     proxyEndpoint,
     proxyAuthToken,
-    // Change defaults from {} to undefined for stability
-    transcriptionOptions, // = {}, - remove default
+    transcriptionOptions = null,
     agentOptions, // = {}, - remove default
     endpointConfig,
     audioConstraints, // Phase 2: Issue #243
@@ -1824,6 +1823,8 @@ function DeepgramVoiceInteraction(
     }
     
     // Build the Settings message based on agentOptions
+    // Deepgram Voice Agent API does not support agent.idleTimeoutMs; only include it for OpenAI proxy (session.update)
+    const isOpenAIProxy = (configRef.current?.proxyEndpoint ?? '').includes('/openai');
     const settingsMessage = {
       type: 'Settings',
       audio: {
@@ -1837,7 +1838,7 @@ function DeepgramVoiceInteraction(
         }
       },
       agent: {
-        idleTimeoutMs: currentAgentOptions.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,
+        ...(isOpenAIProxy ? { idleTimeoutMs: currentAgentOptions.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS } : {}),
         language: currentAgentOptions.language || 'en',
         // Issue #299: Only include listen provider when listenModel is explicitly provided
         // This allows text-only interactions (via injectUserMessage) without triggering
@@ -3448,8 +3449,9 @@ function DeepgramVoiceInteraction(
       // Check if agent is already connected
       const agentAlreadyConnected = agentManagerRef.current?.getState() === 'connected';
       
-      // Create and connect transcription manager if needed
-      if (isTranscriptionConfigured) {
+      // Create and connect transcription manager if needed (skip when OpenAI proxy – transcript/VAD via agent only, Issue #414)
+      const isOpenAIProxy = config.connectionMode === 'proxy' && (config.proxyEndpoint ?? '').includes('/openai');
+      if (isTranscriptionConfigured && !isOpenAIProxy) {
         if (!transcriptionManagerRef.current) {
           log('Creating transcription manager lazily for microphone...');
           transcriptionManagerRef.current = createTranscriptionManager();
@@ -3457,12 +3459,12 @@ function DeepgramVoiceInteraction(
             throw new Error('Failed to create transcription manager');
           }
         }
-        
-        // Connect transcription if not already connected
         if (transcriptionManagerRef.current.getState() !== 'connected') {
           log('Connecting transcription service for microphone/VAD...');
           await transcriptionManagerRef.current.connect();
         }
+      } else if (isTranscriptionConfigured && isOpenAIProxy) {
+        log('Skipping transcription manager for OpenAI proxy (transcript/VAD via agent connection)');
       }
       
       // Create and connect agent manager if needed (only if not already connected)
@@ -3501,9 +3503,9 @@ function DeepgramVoiceInteraction(
         }
       }
       
-      // Transcription connection should also be connected if configured
-      if (isTranscriptionConfigured) {
-        const transcriptionState = transcriptionManagerRef.current?.getState();
+      // Transcription connection required only when we have a transcription manager (not in OpenAI proxy mode)
+      if (transcriptionManagerRef.current) {
+        const transcriptionState = transcriptionManagerRef.current.getState();
         if (transcriptionState !== 'connected') {
           log(`⚠️ Transcription connection is ${transcriptionState}, not 'connected'. Cannot start microphone.`);
           throw new Error(`Cannot start microphone: transcription connection is ${transcriptionState}, expected 'connected'`);

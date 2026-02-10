@@ -129,9 +129,9 @@ export interface DeepgramVoiceInteractionProps {
   proxyAuthToken?: string;
   
   /**
-   * Options for the transcription service
+   * Options for the transcription service. Default is null (no transcription).
    */
-  transcriptionOptions?: TranscriptionOptions;
+  transcriptionOptions?: TranscriptionOptions | null;
   
   /**
    * Options for the agent service

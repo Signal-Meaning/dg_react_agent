@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
+import { loadAndSendAudioSample, loadAndSendAudioSampleAt24k, waitForVADEvents } from './fixtures/audio-helpers.js';
 import { getVADState } from './fixtures/vad-helpers.js';
-import { pathWithQuery } from './helpers/test-helpers.mjs';
+import { pathWithQuery, getBackendProxyParams } from './helpers/test-helpers.mjs';
 import {
   MicrophoneHelpers,
   sendTextMessage,
@@ -27,8 +27,8 @@ test.describe('Callback Test Suite', () => {
     // This ensures permissions are available when the page loads
     await context.grantPermissions(['microphone']);
     
-    // Navigate using relative path so baseURL (http/https) is applied
-    await page.goto(pathWithQuery({ 'test-mode': 'true' }));
+    // Use backend-specific proxy so test:e2e:openai hits /openai, test:e2e:deepgram hits /deepgram-proxy
+    await page.goto(pathWithQuery({ ...getBackendProxyParams(), 'test-mode': 'true' }));
 
     // Capture console logs for debugging (simplified approach)
     page.on('console', msg => {
@@ -53,8 +53,12 @@ test.describe('Callback Test Suite', () => {
     }
   });
 
+  // Expected transcript for shopping-concierge-question (must match public/audio-samples/samples.json)
+  const SHOPPING_CONCIERGE_EXPECTED_PHRASE = "Hello, can you help me find a gift for my friend's birthday?";
+
   test('should test onTranscriptUpdate callback with existing audio sample', async ({ page, context }) => {
-    // Runs with Deepgram or OpenAI proxy (Issue #414: proxy maps transcript/VAD to same component events)
+    // Runs with Deepgram or OpenAI proxy (Issue #414: proxy maps transcript to same component events)
+    // Uses longer, domain-specific sample (shopping-concierge-question: human speech WAV) to confirm exact transcript.
     console.log('🧪 Testing onTranscriptUpdate callback with existing audio sample...');
     
     // Use setupAudioSendingPrerequisites helper for audio-sending tests
@@ -66,31 +70,41 @@ test.describe('Callback Test Suite', () => {
       settingsProcessingDelay: 600
     });
     
+    // Intended flow: connection and settings are ready; next we send audio and wait for transcript.
+    // If you see "WebSocket closed: code=1005" right after this line, the server likely closed due to
+    // idle timeout. E2E runs use VITE_IDLE_TIMEOUT_MS (e.g. 30000) so the connection stays open.
     console.log('✅ Connection established and settings applied');
     
-    // Use DRY fixture to load and send existing audio sample
-    await loadAndSendAudioSample(page, 'hello'); // Use existing 'hello' sample
+    // Use longer, domain-specific sample: shopping-concierge-question (human speech WAV, 16k → resampled to 24k).
+    // Same sample used in deepgram-interim-transcript-validation and component-remount-detection.
+    const sampleName = 'shopping-concierge-question';
+    console.log(`🎤 Loading and sending audio sample: ${sampleName} (expected: "${SHOPPING_CONCIERGE_EXPECTED_PHRASE}")...`);
+    await loadAndSendAudioSampleAt24k(page, sampleName);
     
     // Wait for transcript element to be visible first
     await page.waitForSelector('[data-testid="transcription"]', { timeout: 5000 });
     
-    // Wait for transcript to appear in the UI with actual content
-    // Check for both interim and final transcripts
+    // Wait for transcript to appear in the UI with actual content (interim or final).
+    // With OpenAI proxy, transcript comes from input_audio_transcription after commit/debounce, so allow 30s.
     await page.waitForFunction(() => {
       const transcriptElement = document.querySelector('[data-testid="transcription"]');
       if (!transcriptElement) return false;
       const text = transcriptElement.textContent?.trim() || '';
-      // Transcript is valid if it's not empty and not the waiting message
       return text.length > 0 && text !== '(Waiting for transcript...)';
-    }, { timeout: 20000 });
+    }, { timeout: 30000 });
     
-    // Verify transcript appears in UI
-    const transcriptText = await page.locator('[data-testid="transcription"]').textContent();
+    const transcriptText = (await page.locator('[data-testid="transcription"]').textContent())?.trim() || '';
     expect(transcriptText).toBeTruthy();
-    expect(transcriptText?.trim()).not.toBe('');
     expect(transcriptText).not.toBe('(Waiting for transcript...)');
-    
-    console.log('✅ onTranscriptUpdate callback working - transcript displayed:', transcriptText);
+
+    // UI may show only the latest segment (e.g. "friend's birthday."); API sends multiple segments.
+    // Assert the displayed transcript contains the distinctive part of the expected phrase.
+    const normalize = (s) => s.toLowerCase().replace(/['',.?]/g, '').replace(/\s+/g, ' ').trim();
+    const normalizedTranscript = normalize(transcriptText);
+    expect(normalizedTranscript).toContain('friend');
+    expect(normalizedTranscript).toContain('birthday');
+
+    console.log('✅ onTranscriptUpdate callback working - transcript contains expected phrase:', transcriptText);
   });
 
   test('should test onUserStartedSpeaking callback with existing audio sample', async ({ page, context }) => {

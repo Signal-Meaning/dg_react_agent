@@ -490,10 +490,18 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           clientWs.send(JSON.stringify({ type: 'UtteranceEnd', channel: [0, 1], last_word_end: 0 }));
         } else if (msg.type === 'conversation.item.input_audio_transcription.completed') {
           // Issue #414: map OpenAI user transcript to component Transcript → onTranscriptUpdate
-          if (debug) console.log(`[proxy ${connId}] upstream→client: input_audio_transcription.completed → Transcript`);
-          const transcript = mapInputAudioTranscriptionCompletedToTranscript(
-            msg as Parameters<typeof mapInputAudioTranscriptionCompletedToTranscript>[0]
-          );
+          const completedMsg = msg as Parameters<typeof mapInputAudioTranscriptionCompletedToTranscript>[0];
+          const transcriptText = (completedMsg.transcript ?? '').slice(0, 60);
+          console.log(`[proxy ${connId}] input_audio_transcription.completed → Transcript (${transcriptText}${(completedMsg.transcript?.length ?? 0) > 60 ? '...' : ''})`);
+          if (debug) {
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: 'input_audio_transcription.completed → Transcript',
+              attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'upstream→client' },
+            });
+          }
+          const transcript = mapInputAudioTranscriptionCompletedToTranscript(completedMsg);
           clientWs.send(JSON.stringify(transcript));
         } else if (msg.type === 'conversation.item.input_audio_transcription.delta') {
           // Issue #414: send interim transcript (delta); we do not accumulate across deltas here (each delta is sent as its own Transcript)

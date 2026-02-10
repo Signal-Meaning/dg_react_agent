@@ -142,6 +142,7 @@ export default defineConfig({
               VITE_BASE_URL: process.env.VITE_BASE_URL || baseURL,
               VITE_DEEPGRAM_PROXY_ENDPOINT: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || `${proxyBase}/deepgram-proxy`,
               VITE_OPENAI_PROXY_ENDPOINT: process.env.VITE_OPENAI_PROXY_ENDPOINT || `${proxyBase}/openai`,
+              VITE_IDLE_TIMEOUT_MS: process.env.VITE_IDLE_TIMEOUT_MS || '30000',
             },
           },
           {
