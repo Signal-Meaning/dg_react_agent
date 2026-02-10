@@ -180,10 +180,14 @@ Update this section as phases are completed (e.g. “Phase 1.1 RED: Done”; “
 | 2. Mountable routes | ✅ | ✅ | ✅ |
 | 3. CLI | ✅ | ✅ | ✅ |
 | 4. Thin-wrapper | ✅ | ✅ | ✅ |
+| 5. Real function-call | ✅ | ✅ | ✅ |
+| 6. Proxies in package | ✅ | ✅ | — |
 
 **Phase 4 done:** Thin-wrapper integration test in `tests/integration/voice-agent-backend-thin-wrapper.test.ts`; minimal app with auth/logging stubs mounts package and handles request.
 
-**Phase 5 done:** Real function-call in package and test-app thin wrapper. Package now supports `functionCall.execute(name, args) => { content? } | { error? }` in `createServer`/`mountVoiceAgentBackend`, and exports `createFunctionCallHandler(options)` for raw Node HTTP. Test-app backend delegates POST /function-call to the package via `createFunctionCallHandler({ execute: executeFunctionCall })`; test-app provides config, auth, logging and the handler implementation only. Deepgram and OpenAI proxy routes remain in test-app for now (to be moved into package in a follow-up).
+**Phase 5 done:** Real function-call in package and test-app thin wrapper. Package now supports `functionCall.execute` and `createFunctionCallHandler(options)`. Test-app delegates POST /function-call to the package.
+
+**Phase 6 done:** Deepgram and OpenAI WebSocket proxies moved into the package. Package exports `attachVoiceAgentUpgrade(server, options)` (async): options.deepgram (path, apiKey, verifyClient, setSecurityHeaders, etc.), options.openai (path, proxyUrl or spawn). Test-app backend now uses the package for all three: function-call (createFunctionCallHandler), Deepgram proxy, and OpenAI proxy (attachVoiceAgentUpgrade with openai.spawn). Test-app is a thin wrapper: config (env), auth (validateOrigin, validateAuthToken), logging (rootLog), and mounting the package.
 
 **Phase 3 done:** CLI at `packages/voice-agent-backend/src/cli.js` (serve command, respects PORT); integration test in `tests/integration/voice-agent-backend-cli.test.ts`; bin and README updated.
 

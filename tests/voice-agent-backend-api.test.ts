@@ -10,15 +10,18 @@ let createServer: (options: unknown) => unknown;
 let mountVoiceAgentBackend: (app: unknown, options: unknown) => void;
 
 let createFunctionCallHandler: (options: { execute?: (name: string, args: object) => { content?: string } | { error?: string } }) => (req: unknown, res: unknown) => void;
+let attachVoiceAgentUpgrade: (server: unknown, options: unknown) => Promise<{ shutdown: () => Promise<void> }>;
 try {
   const pkg = require(backendPath);
   createServer = pkg.createServer;
   mountVoiceAgentBackend = pkg.mountVoiceAgentBackend;
   createFunctionCallHandler = pkg.createFunctionCallHandler;
+  attachVoiceAgentUpgrade = pkg.attachVoiceAgentUpgrade;
 } catch {
   createServer = undefined;
   mountVoiceAgentBackend = undefined;
   createFunctionCallHandler = undefined;
+  attachVoiceAgentUpgrade = undefined;
 }
 
 describe('voice-agent-backend package API (Issue #423)', () => {
@@ -33,6 +36,10 @@ describe('voice-agent-backend package API (Issue #423)', () => {
 
     it('exports createFunctionCallHandler function', () => {
       expect(typeof createFunctionCallHandler).toBe('function');
+    });
+
+    it('exports attachVoiceAgentUpgrade function', () => {
+      expect(typeof attachVoiceAgentUpgrade).toBe('function');
     });
   });
 

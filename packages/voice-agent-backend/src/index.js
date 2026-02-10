@@ -149,8 +149,11 @@ function _placeholderRouter(name) {
   return router;
 }
 
+const { attachVoiceAgentUpgrade } = require('./attach-upgrade.js');
+
 module.exports = {
   createServer,
   mountVoiceAgentBackend,
   createFunctionCallHandler,
+  attachVoiceAgentUpgrade,
 };

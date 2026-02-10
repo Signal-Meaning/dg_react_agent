@@ -38,7 +38,33 @@ voice-agent-backend serve   # or: node src/cli.js serve
 
 Uses `PORT` (default `3000`). Same routes as the programmatic API.
 
+## WebSocket proxies (Deepgram, OpenAI)
+
+Attach to an existing HTTP(S) server (raw Node, not Express):
+
+```js
+const http = require('http');
+const { createFunctionCallHandler, attachVoiceAgentUpgrade } = require('@signal-meaning/voice-agent-backend');
+
+const server = http.createServer((req, res) => {
+  if (req.method === 'POST' && req.url?.startsWith('/function-call')) {
+    return functionCallHandler(req, res);
+  }
+  res.writeHead(404).end();
+});
+
+await attachVoiceAgentUpgrade(server, {
+  deepgram: { path: '/deepgram-proxy', apiKey: process.env.DEEPGRAM_API_KEY, verifyClient, setSecurityHeaders },
+  openai: { path: '/openai', spawn: { cwd: repoRoot, command: 'npx', args: ['tsx', 'scripts/openai-proxy/run.ts'], env: { OPENAI_API_KEY }, port: 8081 } },
+  logger: myLogger,
+  https: false,
+});
+server.listen(8080);
+```
+
+Options: **deepgram** — path, apiKey, agentUrl?, transcriptionUrl?, verifyClient?(info), setSecurityHeaders?(res). **openai** — path, proxyUrl? (forward to URL), or spawn? (cwd, command, args, env, port). **logger** — { info, warn, error, debug }. Returns a Promise that resolves to `{ shutdown() }` for graceful close.
+
 ## Status
 
 - **Function-call:** Implemented. Use `functionCall.execute` or `createFunctionCallHandler({ execute })` (Issue #407 contract).
-- **Deepgram / OpenAI proxy:** Placeholder (501). To be wired from current backend-server and openai-proxy in a follow-up (see repo `docs/issues/ISSUE-423/TDD-PLAN.md`).
+- **Deepgram / OpenAI proxy:** Implemented via `attachVoiceAgentUpgrade(server, options)`. Test-app backend uses the package for all routes (thin wrapper).
