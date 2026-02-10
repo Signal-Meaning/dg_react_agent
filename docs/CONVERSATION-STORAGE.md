@@ -36,7 +36,7 @@ If no storage is provided, the component behaves as today: no persist/restore (b
 - **Injection over configuration**: Pass a storage **implementation**, not a connection string. The component never touches credentials or storage internals.
 - **Single source of truth**: The component should maintain the canonical conversation list (from protocol events), persist it via the interface, and expose it to the app (e.g. ref or callback) for display. The app does not maintain a separate copy for persistence.
 - **Optional feature**: Persistence is opt-in when the app provides the storage implementation.
-- **Function calls**: For production, execute function calls on the app backend, not in the browser. See [BACKEND-PROXY](../docs/BACKEND-PROXY/README.md#function-calls-execute-on-the-app-backend-issue-407) and [Issue #407](../docs/issues/ISSUE-407/README.md).
+- **Function calls**: For production, execute function calls on the app backend, not in the browser. See [BACKEND-PROXY](BACKEND-PROXY/README.md#function-calls-execute-on-the-app-backend-issue-407) and [Issue #407](issues/ISSUE-407/README.md).
 
 ## Test-app role
 
