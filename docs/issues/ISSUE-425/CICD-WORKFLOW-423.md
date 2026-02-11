@@ -94,12 +94,12 @@
 
 ## 8. Summary checklist (implementation)
 
-- [ ] **Test job:** No change required; optionally add a step to run `npm pack --dry-run` in `packages/voice-agent-backend`.
-- [ ] **Publish job:** Add steps to publish `packages/voice-agent-backend` (version from its `package.json`, same NPM_TOKEN/registry).
-- [ ] **Version check:** Optionally check if backend version already exists; skip or respect force (consistent with root).
-- [ ] **Post-publish:** Optionally verify installation of `@signal-meaning/voice-agent-backend` from registry.
-- [ ] **Docs:** Update release checklist template and release notes to mention both packages; ensure backend README has registry/install instructions.
-- [ ] **Versioning:** Document that root and backend use independent versions (Option A) unless we decide otherwise.
+- [x] **Test job:** Added step to run `npm pack --dry-run` in `packages/voice-agent-backend` (validates package contents).
+- [x] **Publish job:** Added steps to publish `packages/voice-agent-backend` (version from its `package.json`, same NPM_TOKEN/registry).
+- [x] **Version check:** Check if backend version already exists; skip publish unless force input is set (consistent with root).
+- [x] **Post-publish:** Verify installation of `@signal-meaning/voice-agent-backend` from registry after publish.
+- [x] **Docs:** Updated release checklist template to mention both packages; added Install/registry section to backend README.
+- [x] **Versioning:** Independent versions (Option A) documented in release checklist template.
 
 ---
 

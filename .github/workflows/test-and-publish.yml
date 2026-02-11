@@ -86,6 +86,11 @@ jobs:
           cd ..
           rm -rf test-install
 
+      - name: Validate voice-agent-backend package (pack dry-run)
+        run: |
+          cd packages/voice-agent-backend
+          npm pack --dry-run
+
   # E2E tests temporarily disabled in CI
   # test-e2e:
   #   name: Playwright E2E Tests
@@ -252,6 +257,26 @@ jobs:
             echo "✅ Version $CHECK_VERSION does not exist, ready to publish"
           fi
         continue-on-error: true
+
+      - name: Determine voice-agent-backend version
+        id: backend_version
+        run: |
+          BACKEND_VERSION=$(node -p "require('./packages/voice-agent-backend/package.json').version")
+          echo "version=$BACKEND_VERSION" >> $GITHUB_OUTPUT
+          echo "📦 voice-agent-backend version: $BACKEND_VERSION"
+
+      - name: Check if voice-agent-backend version already exists
+        id: check_backend_version
+        run: |
+          CHECK_VERSION="${{ steps.backend_version.outputs.version }}"
+          if npm view @signal-meaning/voice-agent-backend@$CHECK_VERSION --registry https://npm.pkg.github.com 2>/dev/null; then
+            echo "version_exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️ voice-agent-backend@$CHECK_VERSION already exists in registry"
+          else
+            echo "version_exists=false" >> $GITHUB_OUTPUT
+            echo "✅ voice-agent-backend@$CHECK_VERSION does not exist, ready to publish"
+          fi
+        continue-on-error: true
         
       - name: Publish to GitHub Package Registry
         run: |
@@ -317,6 +342,29 @@ jobs:
           }
           echo "✅ Package published successfully"
           
+      - name: Publish voice-agent-backend to GitHub Package Registry
+        run: |
+          set -e
+          FORCE_PUBLISH="${{ inputs.force }}"
+          BACKEND_VERSION="${{ steps.backend_version.outputs.version }}"
+          
+          if [ "${{ steps.check_backend_version.outputs.version_exists }}" == "true" ] && [ "$FORCE_PUBLISH" != "true" ]; then
+            echo "⚠️ voice-agent-backend@$BACKEND_VERSION already exists in registry"
+            echo "⚠️ Skipping publish (set force to overwrite)."
+            exit 0
+          fi
+          
+          cd packages/voice-agent-backend
+          echo "📦 Publishing @signal-meaning/voice-agent-backend@$BACKEND_VERSION"
+          npm pack --dry-run 2>/dev/null | tail -15 || true
+          npm publish 2>&1 | tee /tmp/npm-publish-backend.log || {
+            EXIT_CODE=${PIPESTATUS[0]}
+            echo "❌ voice-agent-backend publish failed with exit code: $EXIT_CODE"
+            cat /tmp/npm-publish-backend.log
+            exit $EXIT_CODE
+          }
+          echo "✅ voice-agent-backend published successfully"
+          
       - name: Verify package installation
         run: |
           # Create a temporary directory to test package installation
@@ -339,6 +387,19 @@ jobs:
           # Clean up
           cd ..
           rm -rf test-install
+
+      - name: Verify voice-agent-backend installation
+        run: |
+          mkdir test-install-backend
+          cd test-install-backend
+          echo '{"name": "test-install-backend", "version": "1.0.0", "dependencies": {}}' > package.json
+          echo "@signal-meaning:registry=https://npm.pkg.github.com" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
+          npm install @signal-meaning/voice-agent-backend
+          ls node_modules/@signal-meaning/voice-agent-backend
+          node -e "const pkg = require('@signal-meaning/voice-agent-backend'); console.log('voice-agent-backend imported:', Object.keys(pkg));"
+          cd ..
+          rm -rf test-install-backend
 
       # Create GitHub Release (and tag) when triggered by push to release/v* or workflow_dispatch (not when trigger is release:published)
       - name: Create GitHub Release
