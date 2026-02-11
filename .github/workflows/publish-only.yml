@@ -1,0 +1,209 @@
+# Isolated publish workflow for investigating and fixing package publishing (e.g. 401, org settings).
+# Use this to test NPM_TOKEN, org Package creation, and both packages without running the full test suite.
+# Trigger: Actions → Publish Only (workflow_dispatch).
+# See docs/issues/ISSUE-425/PUBLISH-INVESTIGATION-PLAN.md and PUBLISH-BACKEND-401-INVESTIGATION.md.
+name: Publish Only
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to publish from (leave empty to use default branch)'
+        required: false
+        type: string
+        default: ''
+      version:
+        description: 'Version to publish for root package (leave empty to use package.json)'
+        required: false
+        type: string
+        default: ''
+      force:
+        description: 'Force publish even if version already exists'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    name: Publish Packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Prelim (Node, install, build)
+        uses: Signal-Meaning/dg_react_agent/.github/actions/prelim@main
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@signal-meaning'
+          token: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify npm configuration
+        run: |
+          echo "📋 Verifying npm configuration..."
+          echo "Default registry: $(npm config get registry)"
+          echo "Scope registry: $(npm config get @signal-meaning:registry)"
+          if [ -n "$NPM_CONFIG_USERCONFIG" ] && [ -f "$NPM_CONFIG_USERCONFIG" ]; then
+            echo "✅ npmrc exists at: $NPM_CONFIG_USERCONFIG"
+            head -3 "$NPM_CONFIG_USERCONFIG" | sed 's/_authToken=.*/_authToken=***MASKED***/' || true
+          else
+            echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+            echo "@signal-meaning:registry=https://npm.pkg.github.com" >> ~/.npmrc
+            echo "✅ Created ~/.npmrc"
+          fi
+          if [ ! -f .npmrc ]; then
+            echo "@signal-meaning:registry=https://npm.pkg.github.com" > .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
+            echo "✅ Created project-level .npmrc"
+          fi
+
+      - name: Verify authentication
+        run: |
+          echo "🔐 Verifying authentication..."
+          npm whoami --registry https://npm.pkg.github.com || {
+            echo "❌ Authentication failed. Check NPM_TOKEN and write:packages — see docs/issues/ISSUE-425/PUBLISH-BACKEND-401-INVESTIGATION.md"
+            exit 1
+          }
+          echo "✅ Authentication verified"
+
+      # --- Package 1: @signal-meaning/voice-agent-react (root) ---
+      - name: Determine version (voice-agent-react)
+        id: root_version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 voice-agent-react version: $VERSION"
+
+      - name: Check if version exists (voice-agent-react)
+        id: check_root
+        run: |
+          V="${{ steps.root_version.outputs.version }}"
+          if npm view @signal-meaning/voice-agent-react@$V --registry https://npm.pkg.github.com 2>/dev/null; then
+            echo "version_exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️ @signal-meaning/voice-agent-react@$V already in registry"
+          else
+            echo "version_exists=false" >> $GITHUB_OUTPUT
+            echo "✅ @signal-meaning/voice-agent-react@$V not in registry, will publish"
+          fi
+        continue-on-error: true
+
+      - name: Publish (voice-agent-react)
+        env:
+          PACKAGE_NAME: "@signal-meaning/voice-agent-react"
+          PACKAGE_DIR: "."
+          PACKAGE_VERSION: ${{ steps.root_version.outputs.version }}
+          VERSION_EXISTS: ${{ steps.check_root.outputs.version_exists }}
+        run: |
+          set -e
+          if [ "$VERSION_EXISTS" == "true" ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "⚠️ $PACKAGE_NAME@$PACKAGE_VERSION already in registry; skipping (use force to overwrite)."
+            exit 0
+          fi
+          cd "$PACKAGE_DIR"
+          echo "📦 Publishing $PACKAGE_NAME@$PACKAGE_VERSION from $PACKAGE_DIR"
+          npm pack --dry-run 2>/dev/null | tail -15 || true
+          npm publish 2>&1 | tee /tmp/npm-publish.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          if [ -n "$EXIT_CODE" ] && [ "$EXIT_CODE" -ne 0 ]; then
+            echo "❌ Publish failed (exit $EXIT_CODE)"
+            cat /tmp/npm-publish.log
+            echo "💡 401? Ensure NPM_TOKEN has write:packages — see docs/issues/ISSUE-425/PUBLISH-BACKEND-401-INVESTIGATION.md"
+            exit $EXIT_CODE
+          fi
+          echo "✅ $PACKAGE_NAME published successfully"
+
+      # --- Package 2: @signal-meaning/voice-agent-backend ---
+      - name: Determine version (voice-agent-backend)
+        id: backend_version
+        run: |
+          VERSION=$(node -p "require('./packages/voice-agent-backend/package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 voice-agent-backend version: $VERSION"
+
+      - name: Check if version exists (voice-agent-backend)
+        id: check_backend
+        run: |
+          V="${{ steps.backend_version.outputs.version }}"
+          if npm view @signal-meaning/voice-agent-backend@$V --registry https://npm.pkg.github.com 2>/dev/null; then
+            echo "version_exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️ @signal-meaning/voice-agent-backend@$V already in registry"
+          else
+            echo "version_exists=false" >> $GITHUB_OUTPUT
+            echo "✅ @signal-meaning/voice-agent-backend@$V not in registry, will publish"
+          fi
+        continue-on-error: true
+
+      - name: Publish (voice-agent-backend)
+        env:
+          PACKAGE_NAME: "@signal-meaning/voice-agent-backend"
+          PACKAGE_DIR: "packages/voice-agent-backend"
+          PACKAGE_VERSION: ${{ steps.backend_version.outputs.version }}
+          VERSION_EXISTS: ${{ steps.check_backend.outputs.version_exists }}
+        run: |
+          set -e
+          if [ "$VERSION_EXISTS" == "true" ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "⚠️ $PACKAGE_NAME@$PACKAGE_VERSION already in registry; skipping (use force to overwrite)."
+            exit 0
+          fi
+          cd "$PACKAGE_DIR"
+          echo "📦 Publishing $PACKAGE_NAME@$PACKAGE_VERSION from $PACKAGE_DIR"
+          npm pack --dry-run 2>/dev/null | tail -15 || true
+          npm publish 2>&1 | tee /tmp/npm-publish.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          if [ -n "$EXIT_CODE" ] && [ "$EXIT_CODE" -ne 0 ]; then
+            echo "❌ Publish failed (exit $EXIT_CODE)"
+            cat /tmp/npm-publish.log
+            echo "💡 401? Ensure NPM_TOKEN has write:packages — see docs/issues/ISSUE-425/PUBLISH-BACKEND-401-INVESTIGATION.md"
+            exit $EXIT_CODE
+          fi
+          echo "✅ $PACKAGE_NAME published successfully"
+
+      - name: Verify package installation (voice-agent-react)
+        run: |
+          mkdir test-install && cd test-install
+          echo '{"name": "test-install", "version": "1.0.0", "dependencies": {}}' > package.json
+          echo "@signal-meaning:registry=https://npm.pkg.github.com" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
+          npm install @signal-meaning/voice-agent-react
+          ls node_modules/@signal-meaning/voice-agent-react
+          cd .. && rm -rf test-install
+
+      - name: Verify package installation (voice-agent-backend)
+        continue-on-error: true
+        run: |
+          mkdir test-install-backend && cd test-install-backend
+          echo '{"name": "test-install-backend", "version": "1.0.0", "dependencies": {}}' > package.json
+          echo "@signal-meaning:registry=https://npm.pkg.github.com" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
+          npm install @signal-meaning/voice-agent-backend
+          ls node_modules/@signal-meaning/voice-agent-backend
+          node -e "const pkg = require('@signal-meaning/voice-agent-backend'); console.log('voice-agent-backend imported:', Object.keys(pkg));"
+          cd .. && rm -rf test-install-backend
+
+      - name: Create GitHub Release
+        run: |
+          VER="v${{ steps.root_version.outputs.version }}"
+          if gh release view "$VER" --repo $GITHUB_REPOSITORY 2>/dev/null; then
+            echo "Release $VER already exists, skipping."
+            exit 0
+          fi
+          NOTES="docs/releases/$VER/RELEASE-NOTES.md"
+          if [ -f "$NOTES" ]; then
+            gh release create "$VER" --title "$VER" --notes-file "$NOTES" --repo $GITHUB_REPOSITORY
+          else
+            gh release create "$VER" --title "$VER" --notes "Release $VER" --repo $GITHUB_REPOSITORY
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
