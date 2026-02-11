@@ -11,9 +11,9 @@
 | 3. Add diagnostic step (section 2b/2c) | ✅ Done | 2026-02-11 | Added “Diagnose npm config (voice-agent-backend cwd)” to `publish-only.yml`: `npm config list` + `npm whoami` from `packages/voice-agent-backend` before publish. |
 | 4. Re-run Publish Only and inspect diagnostic output | ✅ Done | 2026-02-11 | Run 21912479105. **Finding:** From `packages/voice-agent-backend` cwd, `npm config list` shows auth and `@signal-meaning:registry` correct; **`npm whoami` returns 403 Forbidden** (not 401). So auth is present in cwd (2c ruled out); server denies whoami/publish. |
 | 5. Conclusion and next action | — | 2026-02-11 | ~~Token/org (section 4).~~ **Revised:** We are **not** changing NPM_TOKEN; it works for the first package in the same repo. The issue is **workflow design**. |
-| 6. **Workflow design fix** | ✅ Done | 2026-02-11 | Publish the second package **from repo root by path** (`npm publish packages/voice-agent-backend`), with **no `cd`** into the package dir. Same cwd and auth context as the first publish. Updated `publish-only.yml` and `test-and-publish.yml`. |
-| 7. Re-run Publish Only to verify | Next | — | Trigger Publish Only; confirm both packages publish. |
-| 8. Document final outcome | Pending | — | After backend publishes successfully, record date and “both packages visible.” |
+| 6. **Workflow design fix** | ✅ Done | 2026-02-11 | Publish the second package **from repo root by path** (`npm publish ./packages/voice-agent-backend`), with **no `cd`**. Use `./` prefix so npm treats it as a local path, not a git repo. Updated `publish-only.yml` and `test-and-publish.yml`. |
+| 7. Re-run Publish Only to verify | ✅ Done | 2026-02-11 | Run 21912777769: **both packages published**; verify install and Create GitHub Release passed. |
+| 8. Document final outcome | ✅ Done | 2026-02-11 | Publish verified; both packages visible from same repo. |
 
 ---
 
