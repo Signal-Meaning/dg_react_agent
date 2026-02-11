@@ -9,11 +9,11 @@ This is the standard release checklist for the repo. For Issue #425, complete th
 
 ---
 
-## Release vX.X.X – complete release process
+## Release v0.8.0 – complete release process (minor: new package)
 
 ### Overview
 
-This checklist tracks the complete release process for version vX.X.X. After Issue #423, the repo contains two publishable packages:
+This checklist tracks the complete release process for **v0.8.0** (minor release: first publish of voice-agent-backend; component API unchanged). The repo contains two publishable packages:
 
 - **Root package:** `@signal-meaning/deepgram-voice-interaction-react` (React component)
 - **Backend package:** `@signal-meaning/voice-agent-backend` (in `packages/voice-agent-backend`)
