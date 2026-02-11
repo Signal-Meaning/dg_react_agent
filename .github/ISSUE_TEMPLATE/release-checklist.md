@@ -18,7 +18,7 @@ gh issue create --template release-checklist.md --title "Release vX.X.X: Complet
 ### Overview
 This issue tracks the complete release process for version vX.X.X of the Deepgram Voice Interaction React component. This is a [minor/major/patch] version release that should include [new features/improvements/bug fixes].
 
-The repository publishes two packages to GitHub Package Registry. CI (`.github/workflows/test-and-publish.yml`) publishes both when the workflow runs: **@signal-meaning/deepgram-voice-interaction-react** (root) and **@signal-meaning/voice-agent-backend** (`packages/voice-agent-backend`). Each package has its own version in its `package.json`; you may release the component only, the backend only, or both in one release.
+The repository publishes two packages to GitHub Package Registry. CI (`.github/workflows/test-and-publish.yml`) publishes both when the workflow runs: **@signal-meaning/voice-agent-react** (root) and **@signal-meaning/voice-agent-backend** (`packages/voice-agent-backend`). Each package has its own version in its `package.json`; you may release the component only, the backend only, or both in one release.
 
 ### 📋 Release Checklist
 
@@ -105,7 +105,7 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
   - [ ] Tag: `git tag vX.X.X`
   - [ ] Push: `git push origin vX.X.X`
 - [ ] **Verify Installation**: Test package installation from registry
-  - [ ] Test: Install from `@signal-meaning/deepgram-voice-interaction-react@vX.X.X`
+  - [ ] Test: Install from `@signal-meaning/voice-agent-react@vX.X.X`
   - [ ] If releasing backend: Install from `@signal-meaning/voice-agent-backend@<version>` (see `packages/voice-agent-backend/README.md` for registry config)
   - [ ] Verify: Package(s) work correctly in test environment
 

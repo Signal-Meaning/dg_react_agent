@@ -77,7 +77,7 @@ fi
 # Test 6: Test package view in isolated environment
 echo ""
 echo "👀 Testing package view in isolated environment..."
-VIEW_RESULT=$(NPM_CONFIG_USERCONFIG="$TEMP_DIR/.npmrc" npm view @signal-meaning/deepgram-voice-interaction-react --registry https://npm.pkg.github.com 2>&1)
+VIEW_RESULT=$(NPM_CONFIG_USERCONFIG="$TEMP_DIR/.npmrc" npm view @signal-meaning/voice-agent-react --registry https://npm.pkg.github.com 2>&1)
 if [ $? -eq 0 ]; then
     echo "✅ Successfully viewed package"
     echo "📄 Package info:"

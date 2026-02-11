@@ -82,7 +82,7 @@ try {
 // Test 6: Test package view
 console.log('\n👀 Testing package view...');
 try {
-  const viewResult = execSync('npm view @signal-meaning/deepgram-voice-interaction-react --registry https://npm.pkg.github.com', {
+  const viewResult = execSync('npm view @signal-meaning/voice-agent-react --registry https://npm.pkg.github.com', {
     encoding: 'utf8',
     stdio: 'pipe'
   });

@@ -1,6 +1,6 @@
 # API Changes - v0.8.0
 
-## React component (@signal-meaning/deepgram-voice-interaction-react)
+## React component (@signal-meaning/voice-agent-react)
 
 **No API changes.** This release does not modify the component's props, callbacks, ref API, or TypeScript types. The bump to 0.8.0 reflects the addition of a second publishable package (voice-agent-backend), not component API changes.
 

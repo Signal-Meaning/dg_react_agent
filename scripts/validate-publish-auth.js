@@ -112,7 +112,7 @@ try {
   console.log(`🔍 Checking if version ${packageVersion} already exists in registry...`);
   try {
     const viewOutput = execSync(
-      `npm view @signal-meaning/deepgram-voice-interaction-react@${packageVersion} --registry https://npm.pkg.github.com`,
+      `npm view @signal-meaning/voice-agent-react@${packageVersion} --registry https://npm.pkg.github.com`,
       { encoding: 'utf8', stdio: 'pipe' }
     );
     console.log(`⚠️  Version ${packageVersion} already exists in registry`);

@@ -2,7 +2,7 @@
 
 ## Using the React component (unchanged)
 
-Usage of `@signal-meaning/deepgram-voice-interaction-react` is unchanged from v0.7.x. See existing docs and [test-app](../../../test-app/) for examples.
+Usage of `@signal-meaning/voice-agent-react` is unchanged from v0.7.x. See existing docs and [test-app](../../../test-app/) for examples.
 
 ## Using the voice-agent-backend package (new)
 

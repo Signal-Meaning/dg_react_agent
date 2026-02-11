@@ -5,11 +5,11 @@
 
 ## Summary
 
-This **minor** release adds a second publishable package to the repo: **voice-agent-backend** (Issues #423, #425). CI/CD now publishes both `@signal-meaning/deepgram-voice-interaction-react` and `@signal-meaning/voice-agent-backend`. The React component API is unchanged; the bump reflects the expanded offering (official backend package).
+This **minor** release adds a second publishable package to the repo: **voice-agent-backend** (Issues #423, #425). CI/CD now publishes both `@signal-meaning/voice-agent-react` and `@signal-meaning/voice-agent-backend`. The React component API is unchanged; the bump reflects the expanded offering (official backend package).
 
 ## Highlights
 
-- **CI:** Test-and-publish workflow now runs tests, validates packaging, and publishes both `@signal-meaning/deepgram-voice-interaction-react` and `@signal-meaning/voice-agent-backend` on release.
+- **CI:** Test-and-publish workflow now runs tests, validates packaging, and publishes both `@signal-meaning/voice-agent-react` and `@signal-meaning/voice-agent-backend` on release.
 - **Backend package:** Install with `npm install @signal-meaning/voice-agent-backend` (see [packages/voice-agent-backend/README.md](../../../packages/voice-agent-backend/README.md) for GitHub Packages registry config).
 - **Release process:** Release checklist and template updated for two-package releases; independent versioning for component and backend.
 
@@ -17,7 +17,7 @@ This **minor** release adds a second publishable package to the repo: **voice-ag
 
 **React component (unchanged API):**
 ```bash
-npm install @signal-meaning/deepgram-voice-interaction-react@0.8.0
+npm install @signal-meaning/voice-agent-react@0.8.0
 ```
 
 **Voice-agent-backend (first publish):**

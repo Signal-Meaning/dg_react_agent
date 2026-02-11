@@ -80,10 +80,10 @@ jobs:
           npm install ../*.tgz
           
           # Verify the package was installed
-          ls node_modules/@signal-meaning/deepgram-voice-interaction-react
+          ls node_modules/@signal-meaning/voice-agent-react
           
           # Test that the package can be imported
-          node -e "console.log('Testing import...'); const pkg = require('@signal-meaning/deepgram-voice-interaction-react'); console.log('Package imported successfully:', Object.keys(pkg));"
+          node -e "console.log('Testing import...'); const pkg = require('@signal-meaning/voice-agent-react'); console.log('Package imported successfully:', Object.keys(pkg));"
           
           # Clean up
           cd ..
@@ -252,7 +252,7 @@ jobs:
         id: check_version
         run: |
           CHECK_VERSION="${{ steps.version.outputs.version }}"
-          if npm view @signal-meaning/deepgram-voice-interaction-react@$CHECK_VERSION --registry https://npm.pkg.github.com 2>/dev/null; then
+          if npm view @signal-meaning/voice-agent-react@$CHECK_VERSION --registry https://npm.pkg.github.com 2>/dev/null; then
             echo "version_exists=true" >> $GITHUB_OUTPUT
             echo "⚠️ Version $CHECK_VERSION already exists in registry"
           else
@@ -382,10 +382,10 @@ jobs:
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
           
           # Install the package
-          npm install @signal-meaning/deepgram-voice-interaction-react
+          npm install @signal-meaning/voice-agent-react
           
           # Verify the package was installed
-          ls node_modules/@signal-meaning/deepgram-voice-interaction-react
+          ls node_modules/@signal-meaning/voice-agent-react
           
           # Clean up
           cd ..
