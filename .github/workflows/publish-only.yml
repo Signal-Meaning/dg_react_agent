@@ -159,8 +159,8 @@ jobs:
             exit 0
           fi
           echo "📦 Publishing $PACKAGE_NAME@$PACKAGE_VERSION from $PACKAGE_DIR (from repo root, no cd)"
-          npm pack --dry-run "$PACKAGE_DIR" 2>/dev/null | tail -15 || true
-          npm publish "$PACKAGE_DIR" 2>&1 | tee /tmp/npm-publish.log
+          npm pack --dry-run "./$PACKAGE_DIR" 2>/dev/null | tail -15 || true
+          npm publish "./$PACKAGE_DIR" 2>&1 | tee /tmp/npm-publish.log
           EXIT_CODE=${PIPESTATUS[0]}
           if [ -n "$EXIT_CODE" ] && [ "$EXIT_CODE" -ne 0 ]; then
             echo "❌ Publish failed (exit $EXIT_CODE)"

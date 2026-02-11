@@ -359,8 +359,8 @@ jobs:
           fi
           
           echo "📦 Publishing @signal-meaning/voice-agent-backend@$BACKEND_VERSION (from repo root, no cd)"
-          npm pack --dry-run packages/voice-agent-backend 2>/dev/null | tail -15 || true
-          npm publish packages/voice-agent-backend 2>&1 | tee /tmp/npm-publish-backend.log || {
+          npm pack --dry-run ./packages/voice-agent-backend 2>/dev/null | tail -15 || true
+          npm publish ./packages/voice-agent-backend 2>&1 | tee /tmp/npm-publish-backend.log || {
             EXIT_CODE=${PIPESTATUS[0]}
             echo "❌ voice-agent-backend publish failed with exit code: $EXIT_CODE"
             cat /tmp/npm-publish-backend.log
