@@ -18,6 +18,8 @@ gh issue create --template release-checklist.md --title "Release vX.X.X: Complet
 ### Overview
 This issue tracks the complete release process for version vX.X.X of the Deepgram Voice Interaction React component. This is a [minor/major/patch] version release that should include [new features/improvements/bug fixes].
 
+The repository publishes two packages to GitHub Package Registry. CI (`.github/workflows/test-and-publish.yml`) publishes both when the workflow runs: **@signal-meaning/deepgram-voice-interaction-react** (root) and **@signal-meaning/voice-agent-backend** (`packages/voice-agent-backend`). Each package has its own version in its `package.json`; you may release the component only, the backend only, or both in one release.
+
 ### 📋 Release Checklist
 
 #### Pre-Release Preparation
@@ -37,6 +39,7 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
 #### Version Management
 - [ ] **Bump Version**: Update package.json to vX.X.X
   - [ ] Run: `npm version [patch/minor/major]` (or manually update)
+- [ ] **Bump voice-agent-backend version** (if releasing that package): Update `packages/voice-agent-backend/package.json` version (e.g. 0.1.0 → 0.2.0)
 - [ ] **Update Dependencies**: Ensure all dependencies are up to date
   - [ ] Run: `npm update`
   - [ ] Review and update any outdated dependencies
@@ -80,29 +83,31 @@ This issue tracks the complete release process for version vX.X.X of the Deepgra
   - [ ] Push: `git push origin release/vX.X.X`
 
 #### Package Publishing
-- [ ] **Publish to GitHub Registry**: Publish package to GitHub Package Registry
+- [ ] **Publish to GitHub Registry**: Publish package(s) to GitHub Package Registry
   - [ ] **Preferred**: Use CI build (validated CI build)
     - Create GitHub release to trigger `.github/workflows/test-and-publish.yml`
-    - CI workflow will: test (mock APIs only), **build in CI**, validate package, and publish. No local build required.
-    - Test job runs first: linting, mock tests, build, package validation
-    - Publish job only runs if test job succeeds
+    - CI workflow will: test (mock APIs only), **build in CI**, validate packages, and publish **both** the root package and `@signal-meaning/voice-agent-backend`. No local build required.
+    - Test job runs first: linting, mock tests, build, package validation (including voice-agent-backend pack dry-run)
+    - Publish job only runs if test job succeeds; it publishes root then voice-agent-backend (each skips if that version already exists unless force is set)
     - **All non-skipped tests must pass** before publishing
     - **Monitor CI workflow**: Wait for CI build to complete successfully
       - Check GitHub Actions workflow status
       - Verify all CI checks pass
-      - Verify package appears in GitHub Packages
+      - Verify both packages appear in GitHub Packages (if released)
     - **Only proceed to tagging if publish succeeds**
   - [ ] **Fallback**: Dev publish (only if CI fails)
-    - Run: `npm publish` (automatically publishes to GitHub Registry)
-    - Verify: Package appears in GitHub Packages
+    - Root: Run `npm publish` from repo root
+    - Backend: Run `cd packages/voice-agent-backend && npm publish`
+    - Verify: Package(s) appear in GitHub Packages
     - **Only proceed to tagging if publish succeeds**
 - [ ] **Tag Release**: Create git tag for the release (AFTER publish succeeds)
-  - [ ] Verify: Package is successfully published to GitHub Packages
+  - [ ] Verify: Package(s) successfully published to GitHub Packages
   - [ ] Tag: `git tag vX.X.X`
   - [ ] Push: `git push origin vX.X.X`
 - [ ] **Verify Installation**: Test package installation from registry
   - [ ] Test: Install from `@signal-meaning/deepgram-voice-interaction-react@vX.X.X`
-  - [ ] Verify: Package works correctly in test environment
+  - [ ] If releasing backend: Install from `@signal-meaning/voice-agent-backend@<version>` (see `packages/voice-agent-backend/README.md` for registry config)
+  - [ ] Verify: Package(s) work correctly in test environment
 
 #### GitHub Release
 - [ ] **Create GitHub Release**: Create release on GitHub

@@ -4,6 +4,25 @@ Backend and proxy package for Deepgram and OpenAI voice agent. Provides mountabl
 
 **Issue:** [#423](https://github.com/Signal-Meaning/dg_react_agent/issues/423)
 
+## Install
+
+The package is published to **GitHub Package Registry**. Configure npm to use it for the `@signal-meaning` scope, then install:
+
+```bash
+# One-time: tell npm to use GitHub Packages for @signal-meaning
+npm config set @signal-meaning:registry https://npm.pkg.github.com
+
+# Authenticate (requires a GitHub token with read:packages)
+# Option A: .npmrc in project or home
+# //npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN
+# Option B: env
+# export NPM_CONFIG_//npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN
+
+npm install @signal-meaning/voice-agent-backend
+```
+
+Or with a specific version: `npm install @signal-meaning/voice-agent-backend@0.1.0`
+
 ## Programmatic API
 
 ```js
