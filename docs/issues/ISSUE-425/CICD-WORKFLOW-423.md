@@ -48,6 +48,8 @@
    - Run `npm publish` (with same registry/auth as root).
 2. Optionally: add a “Verify voice-agent-backend installation” step that installs the backend package from the registry and runs a minimal check.
 
+**Package linking (GitHub Packages repo tab):** For both packages to appear under the repo's "Packages" section on GitHub, each `package.json` must include `repository` (pointing at this repo; backend uses `directory: "packages/voice-agent-backend"`) and `publishConfig.registry: "https://npm.pkg.github.com"`. Without these, publishes may succeed but packages will not be linked to this repo in the UI.
+
 ---
 
 ## 4. Versioning strategy
