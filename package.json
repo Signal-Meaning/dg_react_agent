@@ -60,10 +60,6 @@
   ],
   "author": "Deepgram",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Signal-Meaning/dg_react_agent.git"
-  },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",
     "@signal-meaning:registry": "https://npm.pkg.github.com"

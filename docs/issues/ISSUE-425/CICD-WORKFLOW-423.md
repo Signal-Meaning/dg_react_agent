@@ -5,6 +5,8 @@
 **Relevant workflow:** `.github/workflows/test-and-publish.yml`  
 **Relevant action:** `.github/actions/prelim/` (Node, install, build — applies to repo root only)
 
+**⚠️ Publishing requires:** The `NPM_TOKEN` repo secret must be a **classic** Personal Access Token with **write:packages** (and optionally **read:packages**). If either package fails to publish with **401 Unauthorized**, update the token per [PUBLISH-BACKEND-401-INVESTIGATION.md](./PUBLISH-BACKEND-401-INVESTIGATION.md).
+
 ---
 
 ## 1. Testing
@@ -47,8 +49,6 @@
    - Optionally: check if current version already exists (`npm view @signal-meaning/voice-agent-backend@<version>`); skip or respect force.
    - Run `npm publish` (with same registry/auth as root).
 2. Optionally: add a “Verify voice-agent-backend installation” step that installs the backend package from the registry and runs a minimal check.
-
-**Package linking (GitHub Packages repo tab):** For both packages to appear under the repo's "Packages" section on GitHub, each `package.json` must include `repository` (pointing at this repo; backend uses `directory: "packages/voice-agent-backend"`) and `publishConfig.registry: "https://npm.pkg.github.com"`. Without these, publishes may succeed but packages will not be linked to this repo in the UI.
 
 ---
 

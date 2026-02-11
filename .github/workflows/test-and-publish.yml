@@ -155,8 +155,8 @@ jobs:
   #         VITE_DEEPGRAM_PROJECT_ID: ${{ secrets.VITE_DEEPGRAM_PROJECT_ID }}
   #         VITE_BASE_URL: 'http://localhost:5173'
 
-  # Publishes both packages to GitHub Package Registry. Each package.json must have
-  # repository (links package to this repo on GitHub Packages) and publishConfig.registry.
+  # Publishes two packages: @signal-meaning/deepgram-voice-interaction-react (root) and @signal-meaning/voice-agent-backend.
+  # Requires NPM_TOKEN secret with write:packages (classic PAT). See docs/issues/ISSUE-425/PUBLISH-BACKEND-401-INVESTIGATION.md if publish fails with 401.
   publish:
     name: Publish Package
     runs-on: ubuntu-latest
@@ -320,31 +320,24 @@ jobs:
           echo "📋 Files to be published:"
           npm pack --dry-run 2>/dev/null | tail -20 || true
           
-          # Attempt publish with detailed error capture
-          npm publish 2>&1 | tee /tmp/npm-publish-output.log || {
-            EXIT_CODE=${PIPESTATUS[0]}
+          # Attempt publish with detailed error capture (pipe to tee; then check npm exit code)
+          npm publish 2>&1 | tee /tmp/npm-publish-output.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          if [ -n "$EXIT_CODE" ] && [ "$EXIT_CODE" -ne 0 ]; then
             echo ""
             echo "❌ Publish failed with exit code: $EXIT_CODE"
             echo ""
             echo "📋 npm publish output:"
             cat /tmp/npm-publish-output.log || echo "No output captured"
             echo ""
-            echo "📋 npm debug logs (most recent):"
-            find ~/.npm/_logs -name "*debug*.log" -type f -mtime -1 2>/dev/null | head -1 | xargs cat 2>/dev/null || {
-              echo "Listing all debug logs:"
-              ls -la ~/.npm/_logs/*debug*.log 2>/dev/null || echo "No debug logs found"
-              # Try to cat the most recent one
-              ls -t ~/.npm/_logs/*debug*.log 2>/dev/null | head -1 | xargs cat 2>/dev/null || echo "Could not read debug log"
-            }
-            echo ""
             echo "Common causes:"
             echo "  - Version already exists (409 Conflict)"
-            echo "  - Authentication failed (401 Unauthorized)"
+            echo "  - Authentication failed (401 Unauthorized) — ensure NPM_TOKEN has write:packages (see docs/issues/ISSUE-425/PUBLISH-BACKEND-401-INVESTIGATION.md)"
             echo "  - Insufficient permissions (403 Forbidden)"
             echo "  - Missing files or invalid package.json"
             echo "  - prepublishOnly script failed"
             exit $EXIT_CODE
-          }
+          fi
           echo "✅ Package published successfully"
           
       - name: Publish voice-agent-backend to GitHub Package Registry
@@ -362,12 +355,14 @@ jobs:
           cd packages/voice-agent-backend
           echo "📦 Publishing @signal-meaning/voice-agent-backend@$BACKEND_VERSION"
           npm pack --dry-run 2>/dev/null | tail -15 || true
-          npm publish 2>&1 | tee /tmp/npm-publish-backend.log || {
-            EXIT_CODE=${PIPESTATUS[0]}
+          npm publish 2>&1 | tee /tmp/npm-publish-backend.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          if [ -n "$EXIT_CODE" ] && [ "$EXIT_CODE" -ne 0 ]; then
             echo "❌ voice-agent-backend publish failed with exit code: $EXIT_CODE"
             cat /tmp/npm-publish-backend.log
+            echo "💡 Ensure NPM_TOKEN has write:packages (see docs/issues/ISSUE-425/PUBLISH-BACKEND-401-INVESTIGATION.md)"
             exit $EXIT_CODE
-          }
+          fi
           echo "✅ voice-agent-backend published successfully"
           
       - name: Verify package installation
