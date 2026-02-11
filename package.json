@@ -1,6 +1,6 @@
 {
   "name": "@signal-meaning/deepgram-voice-interaction-react",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "A React component for real-time transcription and voice agent interactions using Deepgram APIs",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
@@ -60,6 +60,7 @@
   ],
   "author": "Deepgram",
   "license": "MIT",
+  "repository": "github:Signal-Meaning/dg_react_agent",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",
     "@signal-meaning:registry": "https://npm.pkg.github.com"
