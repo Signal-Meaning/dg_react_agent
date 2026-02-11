@@ -45,7 +45,10 @@ jobs:
         uses: Signal-Meaning/dg_react_agent/.github/actions/prelim@main
         with:
           ref: ${{ inputs.branch || github.ref }}
-        
+
+      - name: Install voice-agent-backend dependencies
+        run: cd packages/voice-agent-backend && npm ci
+
       - name: Run linting
         run: npm run lint
         
