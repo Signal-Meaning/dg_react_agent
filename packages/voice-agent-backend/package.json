@@ -6,23 +6,19 @@
   "bin": {
     "voice-agent-backend": "src/cli.js"
   },
-  "files": [
-    "src",
-    "README.md"
-  ],
+  "files": ["src", "README.md"],
   "scripts": {
     "serve": "node src/cli.js serve",
     "test": "echo \"Tests run from repo root\" && exit 0"
   },
-  "keywords": [
-    "deepgram",
-    "voice-agent",
-    "openai",
-    "proxy",
-    "backend"
-  ],
+  "keywords": ["deepgram", "voice-agent", "openai", "proxy", "backend"],
   "author": "Signal Meaning",
   "license": "MIT",
+  "repository": "github:Signal-Meaning/dg_react_agent",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "@signal-meaning:registry": "https://npm.pkg.github.com"
+  },
   "dependencies": {
     "express": "^4.21.0",
     "ws": "^8.18.0"
