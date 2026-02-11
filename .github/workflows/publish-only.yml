@@ -145,6 +145,14 @@ jobs:
           fi
         continue-on-error: true
 
+      - name: Diagnose npm config (voice-agent-backend cwd)
+        run: |
+          cd packages/voice-agent-backend
+          echo "📋 npm config from PACKAGE_DIR (auth masked):"
+          npm config list
+          echo "🔐 npm whoami (GitHub Packages):"
+          npm whoami --registry https://npm.pkg.github.com || true
+
       - name: Publish (voice-agent-backend)
         env:
           PACKAGE_NAME: "@signal-meaning/voice-agent-backend"

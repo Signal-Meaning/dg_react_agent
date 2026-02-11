@@ -7,9 +7,10 @@
 | Step | Status | Date | Notes |
 |------|--------|------|--------|
 | 1. Add `repository` + `publishConfig` to backend `package.json` | ✅ Done | 2026-02-11 | Added `repository: "github:Signal-Meaning/dg_react_agent"` and `publishConfig` (registry + scope) to `packages/voice-agent-backend/package.json`. |
-| 2. Run Publish Only workflow | In progress | — | Trigger after push. |
-| 3. Inspect logs / confirm packages | Pending | — | |
-| 4. Document outcome | Pending | — | |
+| 2. Run Publish Only workflow | ✅ Done | 2026-02-11 | Run 21912428446 (main). Result: voice-agent-react published; **voice-agent-backend still 401**. Repo linkage did not resolve. |
+| 3. Add diagnostic step (section 2b/2c) | ✅ Done | 2026-02-11 | Added “Diagnose npm config (voice-agent-backend cwd)” to `publish-only.yml`: `npm config list` + `npm whoami` from `packages/voice-agent-backend` before publish. |
+| 4. Re-run Publish Only and inspect diagnostic output | Next | — | If `npm whoami` fails in backend cwd → auth scope (2c). If it succeeds → registry/repo policy (2a/2d) or token org (section 4). |
+| 5. Document final outcome | Pending | — | |
 
 ---
 
