@@ -145,14 +145,7 @@ jobs:
           fi
         continue-on-error: true
 
-      - name: Diagnose npm config (voice-agent-backend cwd)
-        run: |
-          cd packages/voice-agent-backend
-          echo "📋 npm config from PACKAGE_DIR (auth masked):"
-          npm config list
-          echo "🔐 npm whoami (GitHub Packages):"
-          npm whoami --registry https://npm.pkg.github.com || true
-
+      # Publish from repo root by path so the same cwd/auth context as the first package is used.
       - name: Publish (voice-agent-backend)
         env:
           PACKAGE_NAME: "@signal-meaning/voice-agent-backend"
@@ -165,10 +158,9 @@ jobs:
             echo "⚠️ $PACKAGE_NAME@$PACKAGE_VERSION already in registry; skipping (use force to overwrite)."
             exit 0
           fi
-          cd "$PACKAGE_DIR"
-          echo "📦 Publishing $PACKAGE_NAME@$PACKAGE_VERSION from $PACKAGE_DIR"
-          npm pack --dry-run 2>/dev/null | tail -15 || true
-          npm publish 2>&1 | tee /tmp/npm-publish.log
+          echo "📦 Publishing $PACKAGE_NAME@$PACKAGE_VERSION from $PACKAGE_DIR (from repo root, no cd)"
+          npm pack --dry-run "$PACKAGE_DIR" 2>/dev/null | tail -15 || true
+          npm publish "$PACKAGE_DIR" 2>&1 | tee /tmp/npm-publish.log
           EXIT_CODE=${PIPESTATUS[0]}
           if [ -n "$EXIT_CODE" ] && [ "$EXIT_CODE" -ne 0 ]; then
             echo "❌ Publish failed (exit $EXIT_CODE)"

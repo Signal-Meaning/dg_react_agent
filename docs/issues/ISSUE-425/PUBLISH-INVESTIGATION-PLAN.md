@@ -9,8 +9,11 @@
 | 1. Add `repository` + `publishConfig` to backend `package.json` | ✅ Done | 2026-02-11 | Added `repository: "github:Signal-Meaning/dg_react_agent"` and `publishConfig` (registry + scope) to `packages/voice-agent-backend/package.json`. |
 | 2. Run Publish Only workflow | ✅ Done | 2026-02-11 | Run 21912428446 (main). Result: voice-agent-react published; **voice-agent-backend still 401**. Repo linkage did not resolve. |
 | 3. Add diagnostic step (section 2b/2c) | ✅ Done | 2026-02-11 | Added “Diagnose npm config (voice-agent-backend cwd)” to `publish-only.yml`: `npm config list` + `npm whoami` from `packages/voice-agent-backend` before publish. |
-| 4. Re-run Publish Only and inspect diagnostic output | Next | — | If `npm whoami` fails in backend cwd → auth scope (2c). If it succeeds → registry/repo policy (2a/2d) or token org (section 4). |
-| 5. Document final outcome | Pending | — | |
+| 4. Re-run Publish Only and inspect diagnostic output | ✅ Done | 2026-02-11 | Run 21912479105. **Finding:** From `packages/voice-agent-backend` cwd, `npm config list` shows auth and `@signal-meaning:registry` correct; **`npm whoami` returns 403 Forbidden** (not 401). So auth is present in cwd (2c ruled out); server denies whoami/publish. |
+| 5. Conclusion and next action | — | 2026-02-11 | ~~Token/org (section 4).~~ **Revised:** We are **not** changing NPM_TOKEN; it works for the first package in the same repo. The issue is **workflow design**. |
+| 6. **Workflow design fix** | ✅ Done | 2026-02-11 | Publish the second package **from repo root by path** (`npm publish packages/voice-agent-backend`), with **no `cd`** into the package dir. Same cwd and auth context as the first publish. Updated `publish-only.yml` and `test-and-publish.yml`. |
+| 7. Re-run Publish Only to verify | Next | — | Trigger Publish Only; confirm both packages publish. |
+| 8. Document final outcome | Pending | — | After backend publishes successfully, record date and “both packages visible.” |
 
 ---
 
@@ -38,11 +41,11 @@ These focus on why **publishing @signal-meaning/voice-agent-backend** fails desp
 - **Hypothesis:** In the subdirectory, npm might resolve config differently (e.g. a different registry or no auth for that scope), so the publish request goes to the right host but without the token, or with different scope rules, leading to 401.
 - **Check:** Add `publishConfig` to the backend `package.json` to match the root (same registry and scope). Ensures the backend package always publishes to GitHub Packages with the same config regardless of cwd.
 
-### 2c. Working directory and auth scope
+### 2c. Working directory and auth scope (workflow design) — **root cause**
 
-- **Fact:** We run `npm publish` from `PACKAGE_DIR` (e.g. `packages/voice-agent-backend`). Auth is set in the job (e.g. `NPM_CONFIG_USERCONFIG`, `NODE_AUTH_TOKEN`) before the first publish; both publish steps run in the same job.
-- **Hypothesis:** Less likely, but possible: after `cd packages/voice-agent-backend`, something (e.g. a local `.npmrc` or npm’s config cascade) overrides or strips auth for that directory. Then the second publish would be unauthenticated.
-- **Check:** In the workflow, before the backend publish step, log `npm config list` and confirm `@signal-meaning:registry` and auth are still applied when cwd is `packages/voice-agent-backend`. Ensure no `.npmrc` in that directory overrides the job’s auth.
+- **Fact:** We run the first publish from repo root (cwd = `.`). We run the second publish after `cd packages/voice-agent-backend`. Auth is set in the job; diagnostic showed 403 from that cwd while root succeeded.
+- **Hypothesis:** Changing cwd for the second publish changes the context (npm config cascade, or how the registry treats the request). The same token works at root but not from the subdirectory. **Fix:** Do not `cd` for the second package. Publish from repo root by path: `npm publish packages/voice-agent-backend`. Same cwd = same auth context as the first package.
+- **Check:** Use workflow design that publishes both packages from repo root (second via path). No NPM_TOKEN change.
 
 ### 2d. “First package vs. new package name” in the same repo
 
@@ -61,10 +64,10 @@ These focus on why **publishing @signal-meaning/voice-agent-backend** fails desp
 
 ---
 
-## 4. Confirm token and permissions (optional / if 401 persists after above)
+## 4. Token and permissions (no change)
 
-- **Check:** `NPM_TOKEN` is a classic PAT with **write:packages**; token user is in the org; org **Package creation** allows the visibility you use. See [PUBLISH-BACKEND-401-INVESTIGATION.md](./PUBLISH-BACKEND-401-INVESTIGATION.md).
-- Only revisit token/org if repo linkage and publishConfig are in place and the second package still returns 401.
+- **Decision:** We are **not** adjusting NPM_TOKEN. It works for publishing the first package in this repo; it should work for the second package in the same repo. The fix is workflow design (publish from root by path), not token/org.
+- **Reference:** If publish still failed after the workflow fix, see [PUBLISH-BACKEND-401-INVESTIGATION.md](./PUBLISH-BACKEND-401-INVESTIGATION.md) for token setup.
 
 ---
 
@@ -121,12 +124,11 @@ These focus on why **publishing @signal-meaning/voice-agent-backend** fails desp
 
 ## 10. Order of operations (summary)
 
-1. **Add** `repository` and `publishConfig` to `packages/voice-agent-backend/package.json` (section 3) so the second package is linked to the same repo.
-2. **Run** the **“Publish Only”** workflow (Actions → Publish Only) to test without the full test suite.
-3. **Inspect** Publish job logs; if 401 on backend, verify repo linkage and add diagnostic steps (section 2b/2c); only then revisit token/org (section 4).
-4. **Confirm** both packages under the repo’s Packages (same repo).
-5. **Run** the full “Test and Publish Package” workflow (no test-only) to validate the full pipeline.
-6. **Document** in this folder: “Publish verified on &lt;date&gt;; both packages visible.”
+1. **Publish both packages from repo root:** first package from `.`, second via path `npm publish packages/voice-agent-backend` (no `cd`). Same cwd = same auth context (section 2c).
+2. **Run** the **“Publish Only”** workflow to verify both publish.
+3. **Confirm** both packages under the repo’s Packages (same repo).
+4. **Run** the full “Test and Publish Package” workflow (no test-only) to validate the full pipeline.
+5. **Document** in this folder: “Publish verified on &lt;date&gt;; both packages visible.”
 
 ---
 
