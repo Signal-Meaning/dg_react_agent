@@ -36,9 +36,13 @@ In a pipeline, the exit status is that of the **last** command (`tee`). When `np
 
 The next step "Verify voice-agent-backend installation" runs `npm install @signal-meaning/voice-agent-backend` and gets **404 Not Found** (package was never created because publish failed). That step has `continue-on-error: true`, so the job still completes “successfully”.
 
+## “Version already exists” vs “No packages published”
+
+If the repo’s **Packages** section shows **“No packages published”**, then no version is actually published for this repo. The workflow’s “Check if version exists” steps run `npm view <package>@<version>` against GitHub Package Registry. If that returns success (e.g. cached data or a package created under a different context), the publish step **skips** and never runs `npm publish`. So the root package can appear to “succeed” only because it skipped; the backend step attempted publish and failed with 401. With the refactored workflow, both packages use the same logic; once `NPM_TOKEN` has `write:packages`, both will attempt publish and both will succeed when no version exists.
+
 ## Root cause
 
-- **401:** The `NPM_TOKEN` secret used in the publish job does not have permission to publish (or create) the package `@signal-meaning/voice-agent-backend` on GitHub Package Registry.
+- **401:** The `NPM_TOKEN` secret used in the publish job does not have permission to publish (or create) the package on GitHub Package Registry (applies to both `@signal-meaning/voice-agent-react` and `@signal-meaning/voice-agent-backend`).
 
 ## What to add to the token
 

@@ -3,7 +3,7 @@
 # Requires: gh auth with read:packages scope. Run: gh auth refresh -h github.com -s read:packages
 set -e
 ORG="Signal-Meaning"
-FRONTEND_PKG="deepgram-voice-interaction-react"
+FRONTEND_PKG="voice-agent-react"
 BACKEND_PKG="voice-agent-backend"
 
 echo "Validating packages under org $ORG..."

@@ -15,7 +15,7 @@ This is the standard release checklist for the repo. For Issue #425, complete th
 
 This checklist tracks the complete release process for **v0.8.0** (minor release: first publish of voice-agent-backend; component API unchanged). The repo contains two publishable packages:
 
-- **Root package:** `@signal-meaning/deepgram-voice-interaction-react` (React component)
+- **Root package:** `@signal-meaning/voice-agent-react` (React component)
 - **Backend package:** `@signal-meaning/voice-agent-backend` (in `packages/voice-agent-backend`)
 
 CI must be updated to publish the backend package (see CICD-WORKFLOW-423.md) before both packages can be released via the same workflow.
@@ -98,7 +98,7 @@ CI must be updated to publish the backend package (see CICD-WORKFLOW-423.md) bef
   - [ ] Backend: `cd packages/voice-agent-backend && npm publish`
 - [ ] **Tag release (after publish succeeds):** `git tag vX.X.X` then `git push origin vX.X.X`
 - [ ] **Verify installation:** Install from registry and smoke-test
-  - [ ] `npm install @signal-meaning/deepgram-voice-interaction-react@vX.X.X`
+  - [ ] `npm install @signal-meaning/voice-agent-react@vX.X.X`
   - [ ] `npm install @signal-meaning/voice-agent-backend@<version>` (if released)
 
 ---

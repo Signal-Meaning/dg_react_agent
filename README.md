@@ -4,7 +4,7 @@ A headless React component designed to drastically simplify the integration of D
 
 **Development Note:** This component was forked from the original Deepgram repository at commit `7191eb4a062f35344896e873f02eba69c9c46a2d` (pre-fork). All development after that point is considered post-fork. The original component provided basic microphone functionality via `startAudioCapture()` method, which is preserved in this fork.
 
-[![npm version](https://img.shields.io/npm/v/@signal-meaning/deepgram-voice-interaction-react?registry_uri=https://npm.pkg.github.com)](https://npm.pkg.github.com/@signal-meaning/deepgram-voice-interaction-react)
+[![npm version](https://img.shields.io/npm/v/@signal-meaning/voice-agent-react?registry_uri=https://npm.pkg.github.com)](https://npm.pkg.github.com/@signal-meaning/voice-agent-react)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Project Objectives
@@ -133,9 +133,9 @@ GITHUB_TOKEN=your_github_token_here
 ### 3. Install the package
 
 ```bash
-npm install @signal-meaning/deepgram-voice-interaction-react
+npm install @signal-meaning/voice-agent-react
 # or
-yarn add @signal-meaning/deepgram-voice-interaction-react
+yarn add @signal-meaning/voice-agent-react
 ```
 
 ### Alternative: Login with npm
@@ -191,7 +191,7 @@ const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
 ## Quick Start
 
 ```tsx
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 
 function App() {
   return (
@@ -367,13 +367,13 @@ This example focuses solely on getting live transcripts from microphone input.
 ```tsx
 import React, { useRef, useState, useCallback, useMemo } from 'react';
 // Adjust import path based on your setup (package vs local)
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react'; 
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react'; 
 import type { 
   DeepgramVoiceInteractionHandle, 
   TranscriptResponse,
   TranscriptionOptions,
   DeepgramError 
-} from '@signal-meaning/deepgram-voice-interaction-react';
+} from '@signal-meaning/voice-agent-react';
 
 function SimpleTranscriber() {
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
@@ -449,7 +449,7 @@ This example focuses on interacting with a voice agent, using its responses.
 ```tsx
 import React, { useRef, useState, useCallback, useMemo } from 'react';
 // Adjust import path based on your setup (package vs local)
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 import type { 
   DeepgramVoiceInteractionHandle, 
   AgentState, 
@@ -457,7 +457,7 @@ import type {
   AgentOptions,
   DeepgramError,
   UserMessageResponse // Added for the new callback
-} from '@signal-meaning/deepgram-voice-interaction-react';
+} from '@signal-meaning/voice-agent-react';
 
 function SimpleAgent() {
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
@@ -550,10 +550,10 @@ Leverage both services simultaneously. Get live transcripts *while* interacting 
 
 ```tsx
 // (Combine imports, state, callbacks, and controls from examples 1 & 2)
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 import type { 
   // ... include UserMessageResponse ... 
-} from '@signal-meaning/deepgram-voice-interaction-react';
+} from '@signal-meaning/voice-agent-react';
 // ...
 
 function CombinedInteraction() {

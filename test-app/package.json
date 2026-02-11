@@ -27,7 +27,7 @@
     "test:e2e:proxy:log": "USE_PROXY_MODE=true playwright test --config=tests/playwright.config.mjs 2>&1 | tee e2e-proxy-run.log"
   },
   "dependencies": {
-    "deepgram-voice-interaction-react": "file:../",
+    "@signal-meaning/voice-agent-react": "file:../",
     "dotenv": "^17.2.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -1,7 +1,7 @@
 # API Reference
 
 **Component**: `DeepgramVoiceInteraction`  
-**Package**: `@signal-meaning/deepgram-voice-interaction-react`  
+**Package**: `@signal-meaning/voice-agent-react`  
 **Version**: 0.7.0+
 
 ## 🎯 Document Audience
@@ -533,7 +533,7 @@ import {
   // New since fork (v0.5.0+)
   UserMessageResponse, // Added for user message handling
   AgentFunction, // Added for function calling support
-} from '@signal-meaning/deepgram-voice-interaction-react';
+} from '@signal-meaning/voice-agent-react';
 ```
 
 ### Type Usage Examples
@@ -811,7 +811,7 @@ The component manages internal state that you can monitor through callbacks. For
 
 ```tsx
 import React, { useRef, useMemo } from 'react';
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 
 function BasicApp() {
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
@@ -841,7 +841,7 @@ function BasicApp() {
 
 ```tsx
 import React, { useRef, useMemo } from 'react';
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 
 function BasicAppWithProxy() {
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);

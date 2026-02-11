@@ -81,7 +81,7 @@ try {
 // Check 5: Test package access
 console.log('\n5. Testing package access...');
 try {
-  const view = execSync('npm view @signal-meaning/deepgram-voice-interaction-react --registry https://npm.pkg.github.com', { 
+  const view = execSync('npm view @signal-meaning/voice-agent-react --registry https://npm.pkg.github.com', { 
     encoding: 'utf8',
     stdio: 'pipe'
   });

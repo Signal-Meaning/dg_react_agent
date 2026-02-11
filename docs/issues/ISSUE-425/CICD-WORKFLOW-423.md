@@ -1,6 +1,6 @@
 # CI/CD workflow work to accommodate Issue #423 (voice-agent-backend)
 
-**Context:** Issue #423 added a publishable package `@signal-meaning/voice-agent-backend` in `packages/voice-agent-backend`. The current CI workflow (`.github/workflows/test-and-publish.yml`) only tests, builds, and publishes the **root** package `@signal-meaning/deepgram-voice-interaction-react`. This document enumerates the work required so the workflow supports the new package.
+**Context:** Issue #423 added a publishable package `@signal-meaning/voice-agent-backend` in `packages/voice-agent-backend`. The current CI workflow (`.github/workflows/test-and-publish.yml`) tests, builds, and publishes two packages: **root** `@signal-meaning/voice-agent-react` and **backend** `@signal-meaning/voice-agent-backend`. This document enumerates the work required so the workflow supports the new package.
 
 **Relevant workflow:** `.github/workflows/test-and-publish.yml`  
 **Relevant action:** `.github/actions/prelim/` (Node, install, build — applies to repo root only)
