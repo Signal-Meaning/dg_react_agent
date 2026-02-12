@@ -163,9 +163,11 @@ The TDD plan above supports either; tests in 1.1 and 1.2 should be written to ma
 
 | Phase | RED | GREEN | REFACTOR |
 |-------|-----|-------|----------|
-| 1. Unit (text + audio) | — | — | — |
+| 1. Unit (text + audio) | 1.1 done (injectUserMessage) | — | — |
 | 2. Integration (WebSocket) | — | — | — |
 | 3. Regression & docs | — | — | — |
+
+**Phase 1.1 RED done:** `tests/no-send-until-ready-issue433.test.tsx` — connect without receiving SettingsApplied, call `injectUserMessage('hello')`, wait 7s; assert 0 `InjectUserMessage` sent (fails on current code: component sends after wait). Helper `setupConnectWithoutReceivingSettingsApplied` in `tests/utils/component-test-helpers.tsx`.
 
 ---
 
