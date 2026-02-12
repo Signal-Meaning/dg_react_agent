@@ -166,15 +166,17 @@ jobs:
       id-token: write
       
     steps:
+      # When trigger is release:published, checkout the release tag so we build/publish the right version (not default branch).
+      # See docs/issues/ISSUE-425/RELEASE-WITHOUT-PUBLISH-EXPLANATION.md
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch || github.ref }}
+          ref: ${{ github.event.release.tag_name || inputs.branch || github.ref }}
       
       - name: Prelim (Node, install, build)
         uses: Signal-Meaning/dg_react_agent/.github/actions/prelim@main
         with:
-          ref: ${{ inputs.branch || github.ref }}
+          ref: ${{ github.event.release.tag_name || inputs.branch || github.ref }}
           registry-url: 'https://npm.pkg.github.com'
           scope: '@signal-meaning'
           token: ${{ secrets.NPM_TOKEN }}
