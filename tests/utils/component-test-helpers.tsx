@@ -142,6 +142,30 @@ export async function setupConnectAndReceiveSettingsApplied(
 }
 
 /**
+ * Connect without receiving SettingsApplied (channel never "ready").
+ * Issue #433: Use for tests that assert no user message is sent until ready.
+ * - Clears globalSettingsSent and keeps hasSettingsBeenSent false so the component
+ *   never considers the channel ready.
+ * - Returns eventListener so the test can later simulate SettingsApplied if needed.
+ */
+export async function setupConnectWithoutReceivingSettingsApplied(
+  ref: React.RefObject<DeepgramVoiceInteractionHandle>,
+  mockWebSocketManager: MockWebSocketManager
+): Promise<((event: any) => void) | undefined> {
+  window.globalSettingsSent = false;
+  if (mockWebSocketManager.hasSettingsBeenSent) {
+    mockWebSocketManager.hasSettingsBeenSent.mockReturnValue(false);
+  }
+  await act(async () => {
+    await ref.current?.start({ agent: true });
+  });
+  const eventListener = await waitForEventListener(mockWebSocketManager);
+  await simulateConnection(eventListener, mockWebSocketManager);
+  await waitForSettingsSent(mockWebSocketManager);
+  return eventListener;
+}
+
+/**
  * Wait for Settings message to be sent
  */
 export async function waitForSettingsSent(

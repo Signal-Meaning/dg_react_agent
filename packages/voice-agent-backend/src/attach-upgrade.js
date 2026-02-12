@@ -190,6 +190,9 @@ function waitForPort(port, timeoutMs = 15000) {
  * @returns {Promise<{ shutdown: () => Promise<void> }>}
  */
 async function attachVoiceAgentUpgrade(server, options = {}) {
+  if (process.env.LOG_LEVEL) {
+    console.log('[voice-agent-backend] proxy LOG_LEVEL:', process.env.LOG_LEVEL);
+  }
   const log = getLogger(options);
   let wssDeepgram = null;
   let wssOpenAI = null;
