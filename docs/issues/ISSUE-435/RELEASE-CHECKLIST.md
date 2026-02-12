@@ -48,20 +48,19 @@ This checklist tracks the v0.8.3 patch release. Main change: **Issue #433** — 
 
 ## Publish
 
-- [ ] **Trigger CI publish**
-  - [ ] Push to `release/v0.8.3` runs `.github/workflows/test-and-publish.yml` (test then publish)
-  - Or: Actions → Test and Publish Package → Run workflow → branch `release/v0.8.3`
-- [ ] **Verify**
-  - [ ] Workflow completes; both packages published to GitHub Package Registry
-  - [ ] GitHub Release created (tag `v0.8.3`, notes from `docs/releases/v0.8.3/RELEASE-NOTES.md`)
+- [x] **Trigger CI publish**
+  - [x] Push to `release/v0.8.3` ran Test and Publish (runs completed successfully)
+- [x] **Verify**
+  - [x] Workflow completes; both packages published to GitHub Package Registry
+  - [x] GitHub Release created: [v0.8.3](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.8.3)
 
 ---
 
 ## Post-Release
 
 - [ ] **Merge to main**
-  - [ ] Open PR: `release/v0.8.3` → `main` (or merge locally and push)
-  - [ ] Merge and push `main`
+  - [x] Open PR: [PR #436](https://github.com/Signal-Meaning/dg_react_agent/pull/436) — `release/v0.8.3` → `main`
+  - [ ] Merge PR and push `main`
 - [ ] **Close issue #435** when all steps are done
 
 ---
