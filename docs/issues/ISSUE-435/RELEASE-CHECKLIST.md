@@ -14,35 +14,35 @@ This checklist tracks the v0.8.3 patch release. Main change: **Issue #433** — 
 
 ## Pre-Release
 
-- [ ] **Tests passing**
-  - [ ] Run: `npm run test:mock`
+- [x] **Tests passing**
+  - [x] Run: `npm run test:mock` — 90 suites, 899 tests passed
   - [ ] (Optional) E2E in proxy mode: `cd test-app && npm run backend` then `USE_PROXY_MODE=true npm run test:e2e`
-- [ ] **Lint clean**
-  - [ ] Run: `npm run lint`
+- [x] **Lint clean**
+  - [x] Run: `npm run lint`
 
 ---
 
 ## Version & release docs
 
-- [ ] **Bump version to 0.8.3**
-  - [ ] Run: `npm version patch` (or edit `package.json` to `"version": "0.8.3"`)
-- [ ] **Create release documentation**
-  - [ ] Create: `docs/releases/v0.8.3/` directory
-  - [ ] Create: `CHANGELOG.md` (Keep a Changelog format; include #433, log-level reporting)
-  - [ ] Create: `RELEASE-NOTES.md` (short summary and install instructions)
-  - [ ] Create: `PACKAGE-STRUCTURE.md` from `docs/releases/PACKAGE-STRUCTURE.template.md` (replace `vX.X.X` / `X.X.X` with `v0.8.3` / `0.8.3`)
-- [ ] **Validate release docs**
-  - [ ] Run: `npm run validate:release-docs 0.8.3`
+- [x] **Bump version to 0.8.3**
+  - [x] Updated `package.json` to `"version": "0.8.3"`
+- [x] **Create release documentation**
+  - [x] Create: `docs/releases/v0.8.3/` directory
+  - [x] Create: `CHANGELOG.md` (Keep a Changelog format; include #433, log-level reporting)
+  - [x] Create: `RELEASE-NOTES.md` (short summary and install instructions)
+  - [x] Create: `PACKAGE-STRUCTURE.md` from template (v0.8.3)
+- [x] **Validate release docs**
+  - [x] Run: `npm run validate:release-docs 0.8.3` — passed
 
 ---
 
 ## Commit and release branch
 
-- [ ] **Commit**
-  - [ ] Message: `chore: prepare release v0.8.3`
-- [ ] **Create release branch**
-  - [ ] Create: `release/v0.8.3` from current branch
-  - [ ] Push: `git push origin release/v0.8.3`
+- [x] **Commit**
+  - [x] Message: `chore: prepare release v0.8.3`
+- [x] **Create release branch**
+  - [x] Create: `release/v0.8.3` from davidrmcgee/issue435
+  - [x] Push: `git push origin release/v0.8.3`
 
 ---
 
