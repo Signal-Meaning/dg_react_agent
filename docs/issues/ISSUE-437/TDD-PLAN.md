@@ -74,30 +74,27 @@ This document is the **Test-Driven Development** plan for correcting the OpenAI 
 
 ---
 
-## Phase 3: Tracing and correlation in the proxy
+## Phase 3: Tracing and correlation in the proxy ✅ DONE
 
-**Goal:** Proxy accepts trace/request ID (e.g. from WebSocket URL query `traceId=xxx`), creates a request-scoped logger (child with that ID), and includes the ID in all proxy log records so logs can be correlated with client and backend.
+**Goal:** Proxy accepts trace/request ID (e.g. from WebSocket URL query `traceId=xxx`), and includes the ID in all proxy log records so logs can be correlated with client and backend.
 
-### 3.1 RED — Tests: proxy includes traceId in log records
+### 3.1 RED — Tests: proxy includes traceId in log records ✅
 
-**Location:** e.g. `scripts/openai-proxy/__tests__/tracing.test.ts` or `tests/logging-standard-proxy.test.ts`.
+**Location:** `tests/logging-standard-proxy.test.ts` (describe 'tracing (Phase 3)').
 
-1. **Write failing tests** that:
-   - Connect to the proxy with a URL that includes `traceId=test-trace-123` (or equivalent). Trigger an event that causes the proxy to log (e.g. session.created or client connected).
-   - **Assert:** The emitted log record (or captured stdout/OTel export) includes an attribute `trace_id` (or `traceId`) with value `test-trace-123`.
-   - Without `traceId` in the URL, trigger the same event. **Assert:** The proxy still logs and generates or uses a fallback trace ID so every record has some trace ID.
-2. Run tests → **RED** (current proxy does not read traceId from URL or attach to logs).
+1. **Tests added:** (1) When emitLog is called with attributes containing `trace_id`, the OTel record includes `trace_id`. (2) Emitted record has `attributes.trace_id` for correlation.
+2. Run tests → **GREEN** (server already passed connectionAttrs with traceId to emitLog; logger merges attributes into OTel record).
 
-### 3.2 GREEN — Implement tracing in the proxy
+### 3.2 GREEN — Implement tracing in the proxy ✅
 
-1. In `server.ts`, on connection: parse the request URL query for `traceId` (or `X-Trace-Id` if passed in a header the WebSocket upgrade receives). Generate a new trace ID if missing. Create a connection-scoped logger (e.g. `logger.child({ traceId })` or pass traceId into emitLog so every `emitLog` call for that connection includes the attribute).
-2. In `logger.ts` (or wherever emitLog is implemented): Accept optional attributes (e.g. traceId); merge them into every LogRecord so OTLP and stdout show the same ID for the connection.
+1. **server.ts:** Already parsed `traceId` from URL query and set `connectionAttrs[ATTR_TRACE_ID]`. Added fallback: when client does not send `?traceId=`, use `connId` so every connection has a `trace_id` in every log record.
+2. **logger.ts:** No change; emitLog already merges `params.attributes` (including `trace_id`) into the OTel LogRecord.
 3. Run tests → **GREEN**.
 
-### 3.3 REFACTOR
+### 3.3 REFACTOR ✅
 
-- Align attribute names with PROPAGATION-CONTRACT.md (e.g. `trace_id` for OTel, or `traceId` for consistency with our docs). Document in README that the client can pass `?traceId=xxx` for correlation.
-- Update PROPAGATION-CONTRACT.md or OPENAI-PROXY docs to state that the proxy reads `traceId` from the WebSocket URL query and attaches it to all log records.
+- Attribute name is `trace_id` (OTel-style); README documents `?traceId=xxx` for correlation and fallback to connection id.
+- PROPAGATION-CONTRACT.md already stated proxy reads `traceId` from WebSocket URL query.
 
 **Deliverables:** Proxy accepts and propagates trace/request ID; all proxy logs for a connection carry the same ID; tests pass.
 

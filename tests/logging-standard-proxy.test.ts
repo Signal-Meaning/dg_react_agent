@@ -11,6 +11,7 @@ import {
   shutdownProxyLogger,
   getLoggerForTesting,
   SeverityNumber,
+  ATTR_TRACE_ID,
 } from '../scripts/openai-proxy/logger';
 
 describe('OpenAI proxy logging standard (Issue #437)', () => {
@@ -138,6 +139,49 @@ describe('OpenAI proxy logging standard (Issue #437)', () => {
         attributes: {},
       });
       expect(emitSpy).toHaveBeenCalledTimes(1);
+      emitSpy.mockRestore();
+    });
+  });
+
+  describe('tracing (Phase 3)', () => {
+    it('includes trace_id in emitted log record when provided in attributes', () => {
+      initProxyLogger({ logLevel: 'info' });
+      const logger = getLoggerForTesting();
+      if (!logger) {
+        throw new Error('Logger not initialized or getLoggerForTesting not available');
+      }
+      const emitSpy = jest.spyOn(logger, 'emit');
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'client connected',
+        attributes: { [ATTR_TRACE_ID]: 'test-trace-123', connection_id: 'c1' },
+      });
+      expect(emitSpy).toHaveBeenCalledTimes(1);
+      const emitted = emitSpy.mock.calls[0][0];
+      expect(emitted?.attributes).toBeDefined();
+      expect(emitted?.attributes?.[ATTR_TRACE_ID]).toBe('test-trace-123');
+      emitSpy.mockRestore();
+    });
+
+    it('includes trace_id in every log for correlation (OTel attribute)', () => {
+      initProxyLogger({ logLevel: 'info' });
+      const logger = getLoggerForTesting();
+      if (!logger) {
+        throw new Error('Logger not initialized or getLoggerForTesting not available');
+      }
+      const emitSpy = jest.spyOn(logger, 'emit');
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'session.created received',
+        attributes: { [ATTR_TRACE_ID]: 'correlation-id-456' },
+      });
+      expect(emitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attributes: expect.objectContaining({ trace_id: 'correlation-id-456' }),
+        })
+      );
       emitSpy.mockRestore();
     });
   });

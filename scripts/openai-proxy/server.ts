@@ -105,11 +105,14 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
 
   wss.on('connection', (clientWs: WebSocket, req: http.IncomingMessage) => {
     const connId = `c${++connectionCounter}`;
-    const traceId =
-      (req?.url && parseUrl(req.url, true).query?.traceId) as string | undefined;
+    // Issue #437 Phase 3: traceId from URL query for correlation; fallback to connId so every log has trace_id
+    const traceIdFromQuery = (req?.url && parseUrl(req.url, true).query?.traceId) as string | undefined;
+    const traceId = (typeof traceIdFromQuery === 'string' && traceIdFromQuery.trim() !== '')
+      ? traceIdFromQuery.trim()
+      : connId;
     const connectionAttrs: Record<string, string> = {
       [ATTR_CONNECTION_ID]: connId,
-      ...(traceId && { [ATTR_TRACE_ID]: traceId }),
+      [ATTR_TRACE_ID]: traceId,
     };
     emitLog({
       severityNumber: SeverityNumber.INFO,
