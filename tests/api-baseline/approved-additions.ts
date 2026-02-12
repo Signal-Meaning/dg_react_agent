@@ -66,6 +66,15 @@ export const APPROVED_COMPONENT_METHOD_ADDITIONS = {
     usage: 'test-app/src/App.tsx (Conversation History UI and agentOptions.context)',
     note: 'Part of conversation storage feature. Documented in CONVERSATION-STORAGE.md.',
   },
+  'getAgentManager': {
+    addedIn: 'v0.8.x',
+    issue: 'Issue #429',
+    rationale: 'Returns the current agent (WebSocket) manager so the app can call disableIdleTimeoutResets() and enableIdleTimeoutResets() for idle-timeout coordination (e.g. during "thinking" or function calls). Same handle shape for Deepgram and OpenAI proxy paths.',
+    breaking: false,
+    confirmed: true,
+    usage: 'Voice Commerce app idleTimeoutManager.ts',
+    note: 'Manager may be null before connection or after stop. Documented in docs/issues/ISSUE-429/RESOLUTION.md.',
+  },
 
 } as const;
 

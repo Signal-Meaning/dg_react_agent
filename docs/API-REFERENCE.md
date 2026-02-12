@@ -505,6 +505,12 @@ voiceRef.current?.stop();
 | `startAudioCapture` | None | `Promise<void>` | Start audio capture (lazy initialization). Triggers browser's microphone permission prompt and initializes AudioManager for voice interactions. Should only be called when user explicitly requests microphone access. |
 | `getAudioContext` | None | `AudioContext \| undefined` | Get the AudioContext instance for debugging and testing. Returns undefined if AudioManager not initialized. Used for browser autoplay policy compliance (e.g., resuming suspended AudioContext). |
 
+### Idle Timeout / Agent Manager (Issue #429)
+
+| Method | Parameters | Return | Description |
+|--------|------------|--------|-------------|
+| `getAgentManager` | None | `{ disableIdleTimeoutResets(): void; enableIdleTimeoutResets(): void } \| null` | Get the current agent (WebSocket) manager, if any. Returns `null` before connection or after stop. The manager exposes `disableIdleTimeoutResets()` and `enableIdleTimeoutResets()` for idle-timeout coordination (e.g. during "thinking" or function calls). Same handle shape for both Deepgram and OpenAI proxy paths. |
+
 ---
 
 ## TypeScript Integration

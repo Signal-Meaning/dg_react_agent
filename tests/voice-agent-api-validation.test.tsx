@@ -1156,6 +1156,7 @@ describe('Component API Surface Validation', () => {
         'injectUserMessage',
         'startAudioCapture',
         'getAudioContext',
+        'getAgentManager', // Issue #429: idle-timeout control (Deepgram + OpenAI proxy parity)
       ];
 
       // Fail if any required method is missing
