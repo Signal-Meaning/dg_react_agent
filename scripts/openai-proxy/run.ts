@@ -41,7 +41,9 @@ if (!apiKey || apiKey.trim().length === 0) {
   process.exit(1);
 }
 
-const debug = process.env.OPENAI_PROXY_DEBUG === '1' || process.env.OPENAI_PROXY_DEBUG === 'true';
+/** Issue #437: Prefer LOG_LEVEL; OPENAI_PROXY_DEBUG=1 is alias for LOG_LEVEL=debug. */
+const openaiProxyDebug = process.env.OPENAI_PROXY_DEBUG === '1' || process.env.OPENAI_PROXY_DEBUG === 'true';
+const logLevel = process.env.LOG_LEVEL ?? (openaiProxyDebug ? 'debug' : undefined);
 // TODO: Not expected to keep. Diagnostic option for upstream error investigation.
 const greetingTextOnly = process.env.OPENAI_PROXY_GREETING_TEXT_ONLY === '1' || process.env.OPENAI_PROXY_GREETING_TEXT_ONLY === 'true';
 
@@ -63,7 +65,7 @@ const { server: proxyServer } = createOpenAIProxyServer({
   path: '/openai',
   upstreamUrl,
   upstreamHeaders: { Authorization: `Bearer ${apiKey.trim()}` },
-  debug,
+  logLevel,
   greetingTextOnly,
 });
 

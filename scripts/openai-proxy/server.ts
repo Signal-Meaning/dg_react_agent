@@ -12,7 +12,8 @@ import type { Server as HttpsServer } from 'https';
 import path from 'path';
 // Use require so we get CJS WebSocket; Server is on WebSocket.Server in ws/index.js
 // Under Jest/ts-jest the default export may not have .Server, so load Server from lib
-// Type assertion: default import('ws') typings may omit Server; at runtime require('ws').Server exists.
+/** Minimal type for ws WebSocket .on(); TS may infer DOM WebSocket which lacks .on(). */
+type WsLike = { on(event: string, cb: (...args: any[]) => void): void };
 type WsServerConstructor = new (options: object) => { on(event: string, cb: (...args: unknown[]) => void): void; close(): void };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const WebSocket = require('ws') as typeof import('ws') & { Server: WsServerConstructor };
@@ -73,8 +74,8 @@ export interface OpenAIProxyServerOptions {
   upstreamUrl: string;
   /** Optional headers for upstream WebSocket (e.g. Authorization for OpenAI API) */
   upstreamHeaders?: Record<string, string>;
-  /** Log connections and message types to stdout (set OPENAI_PROXY_DEBUG=1 when running) */
-  debug?: boolean;
+  /** Issue #437: Log level (debug | info | warn | error). Reads LOG_LEVEL in run.ts. */
+  logLevel?: string;
   /**
    * TODO: Not expected to keep. When true, send greeting to client only (ConversationText for UI); do not send conversation.item.create (greeting) to upstream.
    * Use when upstream errors after greeting injection (e.g. OPENAI_PROXY_GREETING_TEXT_ONLY=1). Integration tests leave this false.
@@ -98,8 +99,9 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     });
 
   const wss = new WebSocketServer({ server, path: options.path });
-  const debug = options.debug === true;
-  if (debug) initProxyLogger();
+  if (options.logLevel) {
+    initProxyLogger({ logLevel: options.logLevel });
+  }
 
   wss.on('connection', (clientWs: WebSocket, req: http.IncomingMessage) => {
     const connId = `c${++connectionCounter}`;
@@ -109,17 +111,16 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       [ATTR_CONNECTION_ID]: connId,
       ...(traceId && { [ATTR_TRACE_ID]: traceId }),
     };
-    if (debug) {
-      emitLog({
-        severityNumber: SeverityNumber.INFO,
-        severityText: 'INFO',
-        body: 'client connected',
-        attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'client' },
-      });
-    }
+    emitLog({
+      severityNumber: SeverityNumber.INFO,
+      severityText: 'INFO',
+      body: 'client connected',
+      attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'client' },
+    });
+    // ws WebSocket constructor accepts (url, options?) with options.headers; TS typings may only show protocols
     const upstream =
       options.upstreamHeaders && Object.keys(options.upstreamHeaders).length > 0
-        ? new WebSocket(options.upstreamUrl, { headers: options.upstreamHeaders })
+        ? new WebSocket(options.upstreamUrl, { headers: options.upstreamHeaders } as unknown as ConstructorParameters<typeof WebSocket>[1])
         : new WebSocket(options.upstreamUrl);
     const clientMessageQueue: Buffer[] = [];
     let audioCommitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -164,18 +165,16 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         ) {
           assertMinAudioBeforeCommit(pendingAudioBytes);
           const bytesAtCommit = pendingAudioBytes;
-          if (debug) {
-            emitLog({
-              severityNumber: SeverityNumber.INFO,
-              severityText: 'INFO',
-              body: 'input_audio_buffer.commit + response.create',
-              attributes: {
-                ...connectionAttrs,
-                [ATTR_DIRECTION]: 'client→upstream',
-                'audio.pending_bytes': bytesAtCommit,
-              },
-            });
-          }
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: 'input_audio_buffer.commit + response.create',
+            attributes: {
+              ...connectionAttrs,
+              [ATTR_DIRECTION]: 'client→upstream',
+              'audio.pending_bytes': bytesAtCommit,
+            },
+          });
           upstream.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
           upstream.send(JSON.stringify({ type: 'response.create' }));
           responseInProgress = true;
@@ -186,35 +185,31 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     };
 
     upstream.on('error', (err) => {
-      if (debug) {
-        emitLog({
-          severityNumber: SeverityNumber.ERROR,
-          severityText: 'ERROR',
-          body: (err as Error).message,
-          attributes: {
-            ...connectionAttrs,
-            [ATTR_DIRECTION]: 'upstream',
-            [ATTR_ERROR_MESSAGE]: (err as Error).message,
-          },
-        });
-      }
+      emitLog({
+        severityNumber: SeverityNumber.ERROR,
+        severityText: 'ERROR',
+        body: (err as Error).message,
+        attributes: {
+          ...connectionAttrs,
+          [ATTR_DIRECTION]: 'upstream',
+          [ATTR_ERROR_MESSAGE]: (err as Error).message,
+        },
+      });
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
       clientWs.close();
     });
     upstream.on('close', (code, reason) => {
-      if (debug) {
-        emitLog({
-          severityNumber: SeverityNumber.INFO,
-          severityText: 'INFO',
-          body: 'upstream closed',
-          attributes: {
-            ...connectionAttrs,
-            [ATTR_DIRECTION]: 'upstream',
-            [ATTR_UPSTREAM_CLOSE_CODE]: code,
-            [ATTR_UPSTREAM_CLOSE_REASON]: reason?.toString() ?? '',
-          },
-        });
-      }
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'upstream closed',
+        attributes: {
+          ...connectionAttrs,
+          [ATTR_DIRECTION]: 'upstream',
+          [ATTR_UPSTREAM_CLOSE_CODE]: code,
+          [ATTR_UPSTREAM_CLOSE_REASON]: reason?.toString() ?? '',
+        },
+      });
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
     });
 
@@ -223,18 +218,16 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       try {
         const text = raw.toString('utf8');
         const msg = JSON.parse(text) as { type?: string; content?: string };
-        if (debug) {
-          emitLog({
-            severityNumber: SeverityNumber.INFO,
-            severityText: 'INFO',
-            body: 'client → upstream',
-            attributes: {
-              ...connectionAttrs,
-              [ATTR_DIRECTION]: 'client→upstream',
-              [ATTR_MESSAGE_TYPE]: msg.type ?? '(binary)',
-            },
-          });
-        }
+        emitLog({
+          severityNumber: SeverityNumber.INFO,
+          severityText: 'INFO',
+          body: 'client → upstream',
+          attributes: {
+            ...connectionAttrs,
+            [ATTR_DIRECTION]: 'client→upstream',
+            [ATTR_MESSAGE_TYPE]: msg.type ?? '(binary)',
+          },
+        });
         if (msg.type === 'Settings') {
           if (hasForwardedSessionUpdate) {
             // Duplicate Settings (e.g. test-app reload/reconnect): do not send second session.update to upstream.
@@ -285,34 +278,30 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           if (!hasSentSettingsApplied) {
             // Session not ready for audio yet; queue and send after session.updated (Issue #414).
             pendingAudioQueue.push(raw);
-            if (debug) {
-              emitLog({
-                severityNumber: SeverityNumber.INFO,
-                severityText: 'INFO',
-                body: 'input_audio_buffer.append deferred (waiting for session.updated)',
-                attributes: {
-                  ...connectionAttrs,
-                  [ATTR_DIRECTION]: 'client→upstream',
-                  'audio.queued_bytes': raw.length,
-                  'audio.queued_chunks': pendingAudioQueue.length,
-                },
-              });
-            }
-            return;
-          }
-          assertAppendChunkSize(raw.length);
-          if (debug) {
             emitLog({
               severityNumber: SeverityNumber.INFO,
               severityText: 'INFO',
-              body: 'input_audio_buffer.append',
+              body: 'input_audio_buffer.append deferred (waiting for session.updated)',
               attributes: {
                 ...connectionAttrs,
                 [ATTR_DIRECTION]: 'client→upstream',
-                [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.append',
+                'audio.queued_bytes': raw.length,
+                'audio.queued_chunks': pendingAudioQueue.length,
               },
             });
+            return;
           }
+          assertAppendChunkSize(raw.length);
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: 'input_audio_buffer.append',
+            attributes: {
+              ...connectionAttrs,
+              [ATTR_DIRECTION]: 'client→upstream',
+              [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.append',
+            },
+          });
           const appendEvent = binaryToInputAudioBufferAppend(raw);
           upstream.send(JSON.stringify(appendEvent));
           pendingAudioBytes += raw.length;
@@ -327,18 +316,16 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         const chunk = pendingAudioQueue.shift();
         if (!chunk || upstream.readyState !== WebSocket.OPEN) continue;
         assertAppendChunkSize(chunk.length);
-        if (debug) {
-          emitLog({
-            severityNumber: SeverityNumber.INFO,
-            severityText: 'INFO',
-            body: 'input_audio_buffer.append (flushed after session.updated)',
-            attributes: {
-              ...connectionAttrs,
-              [ATTR_DIRECTION]: 'client→upstream',
-              [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.append',
-            },
-          });
-        }
+        emitLog({
+          severityNumber: SeverityNumber.INFO,
+          severityText: 'INFO',
+          body: 'input_audio_buffer.append (flushed after session.updated)',
+          attributes: {
+            ...connectionAttrs,
+            [ATTR_DIRECTION]: 'client→upstream',
+            [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.append',
+          },
+        });
         const appendEvent = binaryToInputAudioBufferAppend(chunk);
         upstream.send(JSON.stringify(appendEvent));
         pendingAudioBytes += chunk.length;
@@ -347,7 +334,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       if (hasPendingAudio) scheduleAudioCommit();
     };
 
-    clientWs.on('message', (data: Buffer | ArrayBuffer | Buffer[]) => {
+    (clientWs as unknown as WsLike).on('message', (data: Buffer | ArrayBuffer | Buffer[]) => {
       const raw = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer);
       if (upstream.readyState !== WebSocket.OPEN) {
         clientMessageQueue.push(raw);
@@ -356,15 +343,13 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       forwardClientMessage(raw);
     });
 
-    upstream.on('open', () => {
-      if (debug) {
-        emitLog({
-          severityNumber: SeverityNumber.INFO,
-          severityText: 'INFO',
-          body: 'upstream open',
-          attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream' },
-        });
-      }
+    (upstream as unknown as WsLike).on('open', () => {
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'upstream open',
+        attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream' },
+      });
       while (clientMessageQueue.length > 0) {
         const raw = clientMessageQueue.shift();
         if (raw) forwardClientMessage(raw);
@@ -383,32 +368,28 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           delta?: string;
           error?: { message?: string; code?: string };
         };
-        if (debug) {
-          emitLog({
-            severityNumber: SeverityNumber.INFO,
-            severityText: 'INFO',
-            body: 'upstream → client',
-            attributes: {
-              ...connectionAttrs,
-              [ATTR_DIRECTION]: 'upstream→client',
-              [ATTR_MESSAGE_TYPE]: msg.type ?? '(binary)',
-            },
-          });
-        }
+        emitLog({
+          severityNumber: SeverityNumber.INFO,
+          severityText: 'INFO',
+          body: 'upstream → client',
+          attributes: {
+            ...connectionAttrs,
+            [ATTR_DIRECTION]: 'upstream→client',
+            [ATTR_MESSAGE_TYPE]: msg.type ?? '(binary)',
+          },
+        });
         if (msg.type === 'session.created') {
           // OpenAI sends session.created immediately on WebSocket connection, BEFORE
           // our session.update is processed. Do NOT inject context items or greeting
           // here — the session isn't configured yet. Sending conversation.item.create
           // before session.update is applied causes upstream errors (Issue #414).
           // Wait for session.updated (which confirms our session.update was applied).
-          if (debug) {
-            emitLog({
-              severityNumber: SeverityNumber.INFO,
-              severityText: 'INFO',
-              body: 'session.created received (waiting for session.updated before injecting context/greeting)',
-              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client' },
-            });
-          }
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: 'session.created received (waiting for session.updated before injecting context/greeting)',
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client' },
+          });
         } else if (msg.type === 'session.updated') {
           hasSentSettingsApplied = true;
           for (const itemJson of pendingContextItems) {
@@ -423,14 +404,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             // The greeting text is shown immediately in the UI; the model sees the greeting text in
             // its instructions (if configured) so it knows it already greeted the user.
             clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting)));
-            if (debug) {
-              emitLog({
-                severityNumber: SeverityNumber.INFO,
-                severityText: 'INFO',
-                body: 'greeting sent to client only (not upstream; OpenAI Realtime rejects client-created assistant items)',
-                attributes: { ...connectionAttrs },
-              });
-            }
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: 'greeting sent to client only (not upstream; OpenAI Realtime rejects client-created assistant items)',
+              attributes: { ...connectionAttrs },
+            });
             storedGreeting = undefined;
           }
           // Issue #414: session is now configured for audio; send any append chunks queued before session.updated.
@@ -438,39 +417,33 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         } else if (msg.type === 'response.output_text.done') {
           responseInProgress = false;
           const m = msg as { type: string; text?: string };
-          if (debug || (m.text && m.text.trim().startsWith('Function call:'))) {
-            emitLog({
-              severityNumber: SeverityNumber.INFO,
-              severityText: 'INFO',
-              body: `upstream→client: ${msg.type}${m.text?.startsWith('Function call:') ? ' (transcript-like)' : ''}`,
-              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
-            });
-          }
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: `upstream→client: ${msg.type}${m.text?.startsWith('Function call:') ? ' (transcript-like)' : ''}`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
+          });
           const conversationText = mapOutputTextDoneToConversationText(msg as Parameters<typeof mapOutputTextDoneToConversationText>[0]);
           clientWs.send(JSON.stringify(conversationText));
         } else if (msg.type === 'response.output_audio_transcript.done') {
           const m = msg as { type: string; transcript?: string };
-          if (debug || (m.transcript && m.transcript.trim().startsWith('Function call:'))) {
-            emitLog({
-              severityNumber: SeverityNumber.INFO,
-              severityText: 'INFO',
-              body: `upstream→client: ${msg.type}${m.transcript?.startsWith('Function call:') ? ' (transcript-like)' : ''}`,
-              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
-            });
-          }
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: `upstream→client: ${msg.type}${m.transcript?.startsWith('Function call:') ? ' (transcript-like)' : ''}`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
+          });
           const conversationText = mapOutputAudioTranscriptDoneToConversationText(
             msg as Parameters<typeof mapOutputAudioTranscriptDoneToConversationText>[0]
           );
           clientWs.send(JSON.stringify(conversationText));
         } else if (msg.type === 'response.function_call_arguments.done') {
-          if (debug) {
-            emitLog({
-              severityNumber: SeverityNumber.INFO,
-              severityText: 'INFO',
-              body: `upstream→client: ${msg.type} → sending FunctionCallRequest + ConversationText`,
-              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
-            });
-          }
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: `upstream→client: ${msg.type} → sending FunctionCallRequest + ConversationText`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
+          });
           const functionCallRequest = mapFunctionCallArgumentsDoneToFunctionCallRequest(
             msg as Parameters<typeof mapFunctionCallArgumentsDoneToFunctionCallRequest>[0]
           );
@@ -483,7 +456,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           const isSessionMaxDuration = isSessionMaxDurationError(msg as Parameters<typeof isSessionMaxDurationError>[0]);
           const isIdleTimeout = isIdleTimeoutClosure(msg as Parameters<typeof isIdleTimeoutClosure>[0]);
           const isExpectedClosure = isSessionMaxDuration || isIdleTimeout;
-          if (debug || isExpectedClosure) {
+          {
             const logBody = isSessionMaxDuration
               ? `expected session limit: ${msg.error?.message ?? 'session max duration'}`
               : isIdleTimeout
@@ -507,44 +480,42 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           clientWs.send(JSON.stringify(componentError));
         } else if (msg.type === 'input_audio_buffer.speech_started') {
           // Issue #414 COMPONENT-PROXY-INTERFACE-TDD: map OpenAI VAD to component contract (COMPONENT-PROXY-INTERFACE-TDD.md §2.1)
-          if (debug) {
-            emitLog({
-              severityNumber: SeverityNumber.INFO,
-              severityText: 'INFO',
-              body: 'upstream→client: input_audio_buffer.speech_started → UserStartedSpeaking',
-              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.speech_started' },
-            });
-          }
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: 'upstream→client: input_audio_buffer.speech_started → UserStartedSpeaking',
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.speech_started' },
+          });
           clientWs.send(JSON.stringify({ type: 'UserStartedSpeaking' }));
         } else if (msg.type === 'input_audio_buffer.speech_stopped') {
           // Issue #414 COMPONENT-PROXY-INTERFACE-TDD: map to UtteranceEnd with channel and last_word_end (component contract)
-          if (debug) {
-            emitLog({
-              severityNumber: SeverityNumber.INFO,
-              severityText: 'INFO',
-              body: 'upstream→client: input_audio_buffer.speech_stopped → UtteranceEnd',
-              attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.speech_stopped' },
-            });
-          }
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: 'upstream→client: input_audio_buffer.speech_stopped → UtteranceEnd',
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.speech_stopped' },
+          });
           clientWs.send(JSON.stringify({ type: 'UtteranceEnd', channel: [0, 1], last_word_end: 0 }));
         } else if (msg.type === 'conversation.item.input_audio_transcription.completed') {
           // Issue #414: map OpenAI user transcript to component Transcript → onTranscriptUpdate
           const completedMsg = msg as Parameters<typeof mapInputAudioTranscriptionCompletedToTranscript>[0];
           const transcriptText = (completedMsg.transcript ?? '').slice(0, 60);
-          console.log(`[proxy ${connId}] input_audio_transcription.completed → Transcript (${transcriptText}${(completedMsg.transcript?.length ?? 0) > 60 ? '...' : ''})`);
-          if (debug) {
-            emitLog({
-              severityNumber: SeverityNumber.INFO,
-              severityText: 'INFO',
-              body: 'input_audio_transcription.completed → Transcript',
-              attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'upstream→client' },
-            });
-          }
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: `input_audio_transcription.completed → Transcript (${transcriptText}${(completedMsg.transcript?.length ?? 0) > 60 ? '...' : ''})`,
+            attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'upstream→client' },
+          });
           const transcript = mapInputAudioTranscriptionCompletedToTranscript(completedMsg);
           clientWs.send(JSON.stringify(transcript));
         } else if (msg.type === 'conversation.item.input_audio_transcription.delta') {
           // Issue #414: send interim transcript (delta); we do not accumulate across deltas here (each delta is sent as its own Transcript)
-          if (debug) console.log(`[proxy ${connId}] upstream→client: input_audio_transcription.delta → Transcript (interim)`);
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: 'upstream→client: input_audio_transcription.delta → Transcript (interim)',
+            attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'upstream→client' },
+          });
           const transcript = mapInputAudioTranscriptionDeltaToTranscript(
             msg as Parameters<typeof mapInputAudioTranscriptionDeltaToTranscript>[0]
           );
@@ -639,26 +610,24 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         } catch {
           // ignore send errors (client may already be closing)
         }
-        if (debug) {
-          emitLog({
-            severityNumber: SeverityNumber.WARN,
-            severityText: 'WARN',
-            body: description,
-            attributes: {
-              ...connectionAttrs,
-              [ATTR_UPSTREAM_CLOSE_CODE]: code,
-              [ATTR_UPSTREAM_CLOSE_REASON]: reasonStr,
-            },
-          });
-        }
+        emitLog({
+          severityNumber: SeverityNumber.WARN,
+          severityText: 'WARN',
+          body: description,
+          attributes: {
+            ...connectionAttrs,
+            [ATTR_UPSTREAM_CLOSE_CODE]: code,
+            [ATTR_UPSTREAM_CLOSE_REASON]: reasonStr,
+          },
+        });
       }
       clientWs.close();
     });
-    clientWs.on('close', () => {
+    (clientWs as unknown as WsLike).on('close', () => {
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
       upstream.close();
     });
-    clientWs.on('error', () => upstream.close());
+    (clientWs as unknown as WsLike).on('error', () => upstream.close());
   });
 
   return { wss, server };

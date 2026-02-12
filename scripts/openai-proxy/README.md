@@ -45,7 +45,9 @@ That starts the backend server which hosts `/openai` (and `/deepgram-proxy`). Th
 npx tsx scripts/openai-proxy/run.ts
 ```
 
-Requires `OPENAI_API_KEY` in `.env`, `test-app/.env`, or the environment. The script loads `.env` from the project root and `test-app/.env`. Listens on `http://localhost:8080/openai` by default. Use `OPENAI_PROXY_PORT` and `OPENAI_REALTIME_URL` to override. To see client/upstream activity, run with `OPENAI_PROXY_DEBUG=1`. When debug is on, the proxy uses **OpenTelemetry** logging (`scripts/openai-proxy/logger.ts`). If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
+Requires `OPENAI_API_KEY` in `.env`, `test-app/.env`, or the environment. The script loads `.env` from the project root and `test-app/.env`. Listens on `http://localhost:8080/openai` by default. Use `OPENAI_PROXY_PORT` and `OPENAI_REALTIME_URL` to override.
+
+**Logging (Issue #437):** The proxy respects **`LOG_LEVEL`** (values: `debug`, `info`, `warn`, `error`). Only messages at or above the configured level are emitted. Set `LOG_LEVEL=info` for normal operation or `LOG_LEVEL=debug` for verbose client/upstream activity. **`OPENAI_PROXY_DEBUG=1`** is treated as an alias for `LOG_LEVEL=debug` for backward compatibility. Logging uses **OpenTelemetry** (`scripts/openai-proxy/logger.ts`). If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
 
 **Greeting-text-only (diagnostic):** Set `OPENAI_PROXY_GREETING_TEXT_ONLY=1` so the proxy sends the greeting to the client only (UI shows it) and does not send `conversation.item.create` (greeting) to OpenAI. If the error stops, the greeting injection was the cause. (Testing showed the error can persist without it, so the trigger may be elsewhere.)
 
