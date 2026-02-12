@@ -500,6 +500,10 @@ describe('Lazy Initialization Tests', () => {
       // Set up mock to return 'connected' (already connected)
       mockAgentManager.getState.mockReturnValue('connected');
 
+      // Issue #433: Channel must be ready before injectUserMessage sends; set flags so message is sent (not queued)
+      window.globalSettingsSent = true;
+      mockAgentManager.hasSettingsBeenSent.mockReturnValue(true);
+
       // Call injectUserMessage
       await act(async () => {
         await ref.current.injectUserMessage('Hello');

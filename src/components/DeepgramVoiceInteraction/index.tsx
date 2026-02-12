@@ -305,6 +305,8 @@ function DeepgramVoiceInteraction(
   const speechFinalReceivedRef = useRef(false);
   
   const hasSentSettingsRef = useRef(false);
+  // Issue #433: Queue user messages when channel is not ready; drain when SettingsApplied/session.created is received
+  const pendingInjectUserMessagesRef = useRef<string[]>([]);
   
   // Track when settings were sent to add proper delay
   const settingsSentTimeRef = useRef<number | null>(null);
@@ -844,6 +846,7 @@ function DeepgramVoiceInteraction(
             dispatch({ type: 'SETTINGS_SENT', sent: false });
             hasSentSettingsRef.current = false; // Reset ref when connection closes
             windowWithGlobals.globalSettingsSent = false; // Reset global flag when connection closes
+            pendingInjectUserMessagesRef.current = []; // Issue #433: clear queue on close
             settingsSentTimeRef.current = null; // Reset settings time
             if (config.debug) {
               logConsole('debug','🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
@@ -2189,6 +2192,19 @@ function DeepgramVoiceInteraction(
 
       onSettingsApplied?.();
 
+      // Issue #433: Drain queued user messages (no send until ready - queue contract)
+      while (pendingInjectUserMessagesRef.current.length > 0) {
+        const queuedMessage = pendingInjectUserMessagesRef.current.shift();
+        if (queuedMessage != null && agentManagerRef.current) {
+          transitionToThinkingState('User message sent (injectUserMessage, from queue)', false);
+          agentManagerRef.current.sendJSON({
+            type: 'InjectUserMessage',
+            content: queuedMessage
+          });
+          log('Queued user message sent:', queuedMessage);
+        }
+      }
+
       return;
     }
     
@@ -3333,6 +3349,14 @@ function DeepgramVoiceInteraction(
       }
     } else {
       log('✅ Settings confirmed sent - safe to send InjectUserMessage');
+    }
+    
+    // Issue #433: Do not send until channel is ready; queue and send when SettingsApplied/session.created is received
+    const channelReady = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
+    if (!channelReady) {
+      log('Channel not ready - queuing user message until SettingsApplied/session.created');
+      pendingInjectUserMessagesRef.current.push(message);
+      return;
     }
     
     // Issue #373: Immediately transition to thinking state when user message is sent

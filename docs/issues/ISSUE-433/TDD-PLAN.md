@@ -163,11 +163,15 @@ The TDD plan above supports either; tests in 1.1 and 1.2 should be written to ma
 
 | Phase | RED | GREEN | REFACTOR |
 |-------|-----|-------|----------|
-| 1. Unit (text + audio) | 1.1 done (injectUserMessage) | — | — |
+| 1. Unit (text + audio) | 1.1 done (injectUserMessage) | 1.3 done (queue) | — |
 | 2. Integration (WebSocket) | — | — | — |
-| 3. Regression & docs | — | — | — |
+| 3. Regression & docs | — | done | — |
 
 **Phase 1.1 RED done:** `tests/no-send-until-ready-issue433.test.tsx` — connect without receiving SettingsApplied, call `injectUserMessage('hello')`, wait 7s; assert 0 `InjectUserMessage` sent (fails on current code: component sends after wait). Helper `setupConnectWithoutReceivingSettingsApplied` in `tests/utils/component-test-helpers.tsx`.
+
+**Phase 1.3 GREEN done:** Queue contract. `pendingInjectUserMessagesRef` holds messages when channel is not ready; before `sendJSON(InjectUserMessage)` we check `channelReady` (hasSentSettingsRef \|\| globalSettingsSent); if not ready, push to queue and return. In SettingsApplied/session.created handler, drain queue and send each message. Queue cleared on connection close. Audio path already gated in `sendAudioData` (no change).
+
+**Phase 3:** `lazy-initialization.test.js` updated to set channel ready before injectUserMessage in "reuse existing agent manager" test. Full mock suite passes.
 
 ---
 
