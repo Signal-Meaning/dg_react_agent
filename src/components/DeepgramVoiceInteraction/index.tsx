@@ -3720,6 +3720,8 @@ function DeepgramVoiceInteraction(
     },
     // Issue #406: Expose conversation history (restored + new messages when conversationStorage provided)
     getConversationHistory: () => conversationHistory,
+    // Issue #429: Expose agent manager for idle-timeout control (disableIdleTimeoutResets / enableIdleTimeoutResets)
+    getAgentManager: () => agentManagerRef.current,
   }));
 
   // Render nothing (headless component)

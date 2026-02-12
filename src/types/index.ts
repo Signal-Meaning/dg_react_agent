@@ -496,4 +496,13 @@ export interface DeepgramVoiceInteractionHandle {
    * this includes restored messages plus any new messages from ConversationText.
    */
   getConversationHistory: () => ConversationMessage[];
+
+  /**
+   * Get the current agent (WebSocket) manager, if any (Issue #429).
+   * Returns null before connection or after stop. The manager exposes
+   * disableIdleTimeoutResets() and enableIdleTimeoutResets() for idle-timeout
+   * coordination (e.g. during "thinking" or function calls). Same handle shape
+   * for both Deepgram and OpenAI proxy paths.
+   */
+  getAgentManager: () => { disableIdleTimeoutResets: () => void; enableIdleTimeoutResets: () => void } | null;
 }
