@@ -52,14 +52,13 @@ This document is the **Test-Driven Development** plan for correcting the OpenAI 
 
 **Goal:** Require and maintain tests that validate each executable (backend, proxy, component) treats logging per the standard (respects LOG_LEVEL / level filtering).
 
-### 2.1 RED — Tests for each executable
+### 2.1 RED — Tests for each executable ✅ (proxy + component)
 
-**Location:** e.g. `tests/logging-standard-executables.test.ts` or split: `tests/logging-standard-backend.test.ts`, `tests/logging-standard-proxy.test.ts`, `tests/logging-standard-component.test.ts`.
+**Location:** `tests/logging-standard-proxy.test.ts` (Phase 1), `tests/logging-standard-component.test.ts`.
 
-1. **Backend:** With LOG_LEVEL=error, start or load the backend (e.g. require the backend entry or spawn it); trigger a code path that would log at INFO. Assert no INFO line in captured output. With LOG_LEVEL=info, assert INFO appears. (If backend already uses a shared logger that reads LOG_LEVEL, this may already pass; test enforces it.)
-2. **Proxy:** Covered by Phase 1; add a single “executable” test that runs the proxy process with LOG_LEVEL set and asserts level filtering (can reuse Phase 1 tests or wrap them in an “executable contract” describe block).
-3. **Component:** In a unit test, render the component with a logger that captures calls; set level to `warn`. Trigger an action that would log at info. Assert no info call (or that the logger filters). Set level to info and assert info is called. (Component uses `src/utils/logger.ts`; test that when level is info, debug is not emitted; when level is debug, debug is emitted.)
-2. Run tests → **RED** for any executable that does not yet respect the standard.
+1. **Backend:** Deferred — backend currently reports LOG_LEVEL at startup only; no level-filtered logs elsewhere. Add test when backend adopts level-aware logger for its routes.
+2. **Proxy:** Covered by Phase 1 (`tests/logging-standard-proxy.test.ts`).
+3. **Component:** `tests/logging-standard-component.test.ts` — getLogger({ level }) with custom sink; assert info suppressed when level is warn, debug suppressed when level is info, etc. **GREEN** (component logger already filters).
 
 ### 2.2 GREEN — Fix any failing executable
 
