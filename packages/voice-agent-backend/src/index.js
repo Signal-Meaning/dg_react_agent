@@ -5,6 +5,10 @@
  * Contract: docs/issues/ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md
  */
 
+if (process.env.LOG_LEVEL) {
+  console.log('[voice-agent-backend] LOG_LEVEL:', process.env.LOG_LEVEL);
+}
+
 const express = require('express');
 
 /**

@@ -122,11 +122,20 @@ function resolveLevel(options?: LoggerOptions): LogLevel | undefined {
   return undefined;
 }
 
+let _logLevelReported = false;
+
 /**
  * Get a logger instance. Use options.level or options.debug to control verbosity.
  * In Node, LOG_LEVEL env is used when options.level is not set.
  */
 export function getLogger(options?: LoggerOptions): Logger {
   const level = resolveLevel(options);
-  return createLogger({ ...options, level: level ?? options?.level ?? 'info' });
+  const effective = level ?? options?.level ?? 'info';
+  if (!_logLevelReported && (level !== undefined || options?.level !== undefined)) {
+    _logLevelReported = true;
+    if (typeof console !== 'undefined' && console.info) {
+      console.info('[DeepgramVoiceInteraction] log level:', effective);
+    }
+  }
+  return createLogger({ ...options, level: effective });
 }
