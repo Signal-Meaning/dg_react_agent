@@ -26,6 +26,7 @@ import {
   createAgentOptions,
   setupComponentAndConnect,
   simulateSettingsApplied,
+  simulateSessionCreated,
   simulateConnection,
   setupConnectAndReceiveSettingsApplied,
   waitForEventListener,
@@ -75,6 +76,29 @@ describe('onSettingsApplied Callback Tests', () => {
       await setupConnectAndReceiveSettingsApplied(ref, mockWebSocketManager);
 
       // Verify callback was called
+      await waitFor(() => {
+        expect(onSettingsApplied).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('should call onSettingsApplied when session.created event is received (OpenAI proxy path)', async () => {
+      const onSettingsApplied = jest.fn();
+      const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+          onSettingsApplied={onSettingsApplied}
+        />
+      );
+
+      const eventListener = await setupConnectAndReceiveSettingsApplied(ref, mockWebSocketManager);
+      onSettingsApplied.mockClear();
+
+      await simulateSessionCreated(eventListener);
+
       await waitFor(() => {
         expect(onSettingsApplied).toHaveBeenCalledTimes(1);
       });

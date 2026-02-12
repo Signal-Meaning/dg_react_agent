@@ -2176,19 +2176,19 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    // Handle SettingsApplied message - settings are now active
-    if (data.type === 'SettingsApplied') {
-      logger.info('✅ [Protocol] SettingsApplied received - settings are now active');
-      log('SettingsApplied received - settings are now active');
-      // Only mark as sent when we get confirmation from Deepgram
+    // Handle SettingsApplied (Deepgram) or session.created (OpenAI proxy) - settings/session ready
+    // Issue #428: OpenAI proxy may send session.created as readiness signal; treat same as SettingsApplied
+    if (data.type === 'SettingsApplied' || data.type === 'session.created') {
+      const source = data.type === 'SettingsApplied' ? 'SettingsApplied' : 'session.created';
+      logger.info(`✅ [Protocol] ${source} received - settings are now active`);
+      log(`${source} received - settings are now active`);
       hasSentSettingsRef.current = true;
       windowWithGlobals.globalSettingsSent = true;
       dispatch({ type: 'SETTINGS_SENT', sent: true });
-      logConsole('debug','🎯 [SettingsApplied] Settings confirmed by agent, audio data can now be processed');
-      
-      // Call public API callback to notify that settings have been applied
+      logConsole('debug', `🎯 [${source}] Settings confirmed by agent, audio data can now be processed`);
+
       onSettingsApplied?.();
-      
+
       return;
     }
     

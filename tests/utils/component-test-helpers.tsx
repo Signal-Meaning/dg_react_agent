@@ -106,6 +106,26 @@ export async function simulateSettingsApplied(
 }
 
 /**
+ * Simulate receiving a session.created message (OpenAI proxy path).
+ * Issue #428: component should treat this as readiness and call onSettingsApplied.
+ */
+export async function simulateSessionCreated(
+  eventListener: ((event: any) => void) | undefined
+): Promise<void> {
+  if (eventListener) {
+    await act(async () => {
+      eventListener({
+        type: 'message',
+        data: {
+          type: 'session.created',
+          session: { id: 'sess-1', model: 'gpt-realtime', modalities: ['text', 'audio'] },
+        },
+      });
+    });
+  }
+}
+
+/**
  * Complete flow: Setup, connect, send Settings, and receive SettingsApplied
  * 
  * Note: setupComponentAndConnect already simulates SettingsApplied, so this function
