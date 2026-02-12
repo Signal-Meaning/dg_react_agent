@@ -100,11 +100,12 @@ This document is the **Test-Driven Development** plan for correcting the OpenAI 
 
 ---
 
-## Phase 4: Documentation and acceptance
+## Phase 4: Documentation and acceptance ✅
 
-1. Update **scripts/openai-proxy/README.md**: Document LOG_LEVEL, optional OPENAI_PROXY_DEBUG alias, and traceId query param for correlation.
-2. Update **docs/issues/ISSUE-412/LOGGING-STANDARD.md** (or PARTNER-APP-LOGGING): Note that the proxy is now compliant and how to correlate (traceId in URL).
-3. Mark acceptance criteria in GitHub Issue #437 as complete when all phases are done.
+1. **scripts/openai-proxy/README.md**: LOG_LEVEL, OPENAI_PROXY_DEBUG alias, and traceId query param documented (Phases 1 and 3).
+2. **docs/issues/ISSUE-412/LOGGING-STANDARD.md**: Added "OpenAI proxy (Issue #437)" bullet under Correlation — proxy compliant, LOG_LEVEL, trace_id, ?traceId= in URL, fallback.
+3. **docs/issues/ISSUE-412/PARTNER-APP-LOGGING.md**: WebSocket (OpenAI proxy) bullet — pass traceId in URL query.
+4. Mark acceptance criteria in GitHub Issue #437 when ready (or close issue).
 
 ---
 
