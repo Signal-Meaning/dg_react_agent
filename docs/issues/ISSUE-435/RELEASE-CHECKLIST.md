@@ -1,0 +1,73 @@
+# Release v0.8.3 — Checklist (Issue #435)
+
+**Branch:** `davidrmcgee/issue435`  
+**GitHub:** [Issue #435 — Quick Release v0.8.3](https://github.com/Signal-Meaning/dg_react_agent/issues/435)  
+**Type:** Patch release
+
+---
+
+## Overview
+
+This checklist tracks the v0.8.3 patch release. Main change: **Issue #433** — enforce no send until channel ready (queue `injectUserMessage` until SettingsApplied/session.created). Also includes log-level reporting (backend, proxy, component).
+
+---
+
+## Pre-Release
+
+- [ ] **Tests passing**
+  - [ ] Run: `npm run test:mock`
+  - [ ] (Optional) E2E in proxy mode: `cd test-app && npm run backend` then `USE_PROXY_MODE=true npm run test:e2e`
+- [ ] **Lint clean**
+  - [ ] Run: `npm run lint`
+
+---
+
+## Version & release docs
+
+- [ ] **Bump version to 0.8.3**
+  - [ ] Run: `npm version patch` (or edit `package.json` to `"version": "0.8.3"`)
+- [ ] **Create release documentation**
+  - [ ] Create: `docs/releases/v0.8.3/` directory
+  - [ ] Create: `CHANGELOG.md` (Keep a Changelog format; include #433, log-level reporting)
+  - [ ] Create: `RELEASE-NOTES.md` (short summary and install instructions)
+  - [ ] Create: `PACKAGE-STRUCTURE.md` from `docs/releases/PACKAGE-STRUCTURE.template.md` (replace `vX.X.X` / `X.X.X` with `v0.8.3` / `0.8.3`)
+- [ ] **Validate release docs**
+  - [ ] Run: `npm run validate:release-docs 0.8.3`
+
+---
+
+## Commit and release branch
+
+- [ ] **Commit**
+  - [ ] Message: `chore: prepare release v0.8.3`
+- [ ] **Create release branch**
+  - [ ] Create: `release/v0.8.3` from current branch
+  - [ ] Push: `git push origin release/v0.8.3`
+
+---
+
+## Publish
+
+- [ ] **Trigger CI publish**
+  - [ ] Push to `release/v0.8.3` runs `.github/workflows/test-and-publish.yml` (test then publish)
+  - Or: Actions → Test and Publish Package → Run workflow → branch `release/v0.8.3`
+- [ ] **Verify**
+  - [ ] Workflow completes; both packages published to GitHub Package Registry
+  - [ ] GitHub Release created (tag `v0.8.3`, notes from `docs/releases/v0.8.3/RELEASE-NOTES.md`)
+
+---
+
+## Post-Release
+
+- [ ] **Merge to main**
+  - [ ] Open PR: `release/v0.8.3` → `main` (or merge locally and push)
+  - [ ] Merge and push `main`
+- [ ] **Close issue #435** when all steps are done
+
+---
+
+## References
+
+- [Issue #435](https://github.com/Signal-Meaning/dg_react_agent/issues/435)
+- [Issue #433](../../ISSUE-433/README.md) — no send until ready
+- [Quick release template](https://github.com/Signal-Meaning/dg_react_agent/blob/main/.github/ISSUE_TEMPLATE/quick-release.md)
