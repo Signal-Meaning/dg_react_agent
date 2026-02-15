@@ -25,6 +25,18 @@ All such tests (e.g. `onFunctionCallRequest-sendResponse.test.tsx`, `function-ca
 
 ---
 
+## Scope (Phase 1 output)
+
+**In scope for this release:** The tests that run when `USE_REAL_OPENAI=1` and `OPENAI_API_KEY` are set. Defined in **[SCOPE.md](./SCOPE.md)**:
+
+- **File:** `tests/integration/openai-proxy-integration.test.ts`
+- **Tests that run with real API:** 8 tests (5 always-on + 3 real-API-only). All 8 must pass for Acceptance Criteria.
+- **Run (real API):** `USE_REAL_OPENAI=1 npm test -- tests/integration/openai-proxy-integration.test.ts` (requires `OPENAI_API_KEY`).
+
+Unit tests that use only mocked WebSocket (`onFunctionCallRequest-sendResponse.test.tsx`, `function-calling-settings.test.tsx`) are **out of scope** for “run with real API” this release; they remain mock-based.
+
+---
+
 ## Phases (TDD; update docs after each phase)
 
 | Phase | What (tests drive the step) | Docs to update when phase complete |
@@ -42,17 +54,18 @@ All such tests (e.g. `onFunctionCallRequest-sendResponse.test.tsx`, `function-ca
 
 | Acceptance Criterion | Status |
 |----------------------|--------|
-| Scope defined | ⬜ |
-| Tests failing under real API (red) / baseline captured | ⬜ |
+| Scope defined | ✅ Phase 1 |
+| Tests failing under real API (red) / baseline captured | ⬜ (run with OPENAI_API_KEY to capture) |
 | Tests passing with real OpenAI (green) | ⬜ |
-| Run process documented | ⬜ |
+| Run process documented | ✅ Phase 1 (SCOPE.md + this README) |
 | Release checklist updated (if needed) | ⬜ |
-| Docs updated after each phase | ⬜ |
+| Docs updated after each phase | ✅ Phase 1 |
 | GitHub issue closed | ⬜ |
 
 ---
 
 ## Docs
 
+- **[SCOPE.md](./SCOPE.md)** – Phase 1: in-scope test file and list of 8 tests that run with `USE_REAL_OPENAI=1`.
 - **[../ISSUE-455/TRACKING.md](../ISSUE-455/TRACKING.md)** – Epic tracking; update it and this README after each phase.
 - **[../ISSUE-455/README.md](../ISSUE-455/README.md)** – Epic summary and requirement to update both TRACKING and child README.

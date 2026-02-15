@@ -6,7 +6,7 @@ This document describes the intended run order for tests and when to use mocks v
 
 **Real APIs first, then mocks.** When API keys are available, run integration and E2E against the real upstream first; then run with mocks. **CI always runs mocks** (no real API keys in CI; keep runs fast and deterministic).
 
-1. **Integration tests (real upstream when requested)** — Run first with real APIs when `USE_REAL_OPENAI=1` and `OPENAI_API_KEY` are set. Location: `tests/integration/` (e.g. `openai-proxy-integration.test.ts`).
+1. **Integration tests (real upstream when requested)** — Run first with real APIs when `USE_REAL_OPENAI=1` and `OPENAI_API_KEY` are set. Location: `tests/integration/` (e.g. `openai-proxy-integration.test.ts`). **Scope for “must pass with real API” (Issue #451):** see `docs/issues/ISSUE-451/SCOPE.md`.
 
 2. **Integration / E2E with mocks** — Run the same or full suite with mock upstream (no API keys required).
 
