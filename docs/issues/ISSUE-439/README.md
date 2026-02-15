@@ -15,5 +15,6 @@ When the host uses an OpenAI proxy (`proxyEndpoint` URL containing `/openai`) an
 ## References
 
 - [TDD-PLAN.md](./TDD-PLAN.md) — RED/GREEN/REFACTOR plan
+- [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md) — Release checklist (from gh release template) for the release that includes this fix
 - Component: `src/components/DeepgramVoiceInteraction/index.tsx` — `start()`, `createTranscriptionManager()`
 - Test-app: `test-app/src/App.tsx` — workaround using `start({ agent: true, transcription: false })` when proxy contains `/openai`
