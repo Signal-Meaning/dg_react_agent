@@ -26,6 +26,7 @@ The repository publishes two packages to GitHub Package Registry: **@signal-mean
 #### Pre-Release Preparation
 - [ ] **Code Review Complete**: All PRs merged and code reviewed
 - [ ] **Tests Passing**: All unit tests and E2E tests passing
+  - [ ] **Run what CI runs:** `npm run lint` then `npm run test:mock` (same as Test and Publish workflow; catches broken imports and packaging tests).
   - [x] Run: `npm test` — passed (90 suites, 899 tests)
   - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode** (proxy mode is the default and primary mode)
     - [ ] Start backend: `cd test-app && npm run backend`
