@@ -3,11 +3,11 @@
 **Source:** [.github/ISSUE_TEMPLATE/release-checklist.md](../../.github/ISSUE_TEMPLATE/release-checklist.md)  
 **Issue:** [Issue #439](https://github.com/Signal-Meaning/dg_react_agent/issues/439) — OpenAI proxy: start() with no options must not request transcription
 
-Use this checklist when cutting a release that includes the Issue #439 fix. Replace `vX.X.X` with the actual version (e.g. `v0.8.4`).
+Use this checklist when cutting a release that includes the Issue #439 fix. **This run: v0.8.4.**
 
 ---
 
-## 🚀 Release vX.X.X — Complete Release Process
+## 🚀 Release v0.8.4 — Complete Release Process
 
 ### Overview
 
@@ -22,22 +22,22 @@ The repository publishes two packages. CI (`.github/workflows/test-and-publish.y
 #### Pre-Release Preparation
 
 - [ ] **Code Review Complete**: All PRs for this release merged and reviewed
-- [ ] **Tests Passing**
-  - [ ] Run: `npm test`
-  - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode**
+- [x] **Tests Passing**
+  - [x] Run: `npm run test:mock` — passed
+  - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode** (manual: start backend, then `USE_PROXY_MODE=true npm run test:e2e`)
     - [ ] Start backend: `cd test-app && npm run backend`
     - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e`
     - [ ] Verify: All tests pass in proxy mode before proceeding
-- [ ] **Linting Clean**
-  - [ ] Run: `npm run lint`
+- [x] **Linting Clean**
+  - [x] Run: `npm run lint` — passed
 - [ ] **Documentation Updated**: Issue #439 docs and BACKEND-PROXY/MIGRATION-GUIDE.md (OpenAI proxy agent-only) are current
 - [ ] **API Changes Documented**: Any API changes in API-REFERENCE.md evolution section
 - [ ] **Breaking Changes Documented**: None expected for #439; document if any
 
 #### Version Management
 
-- [ ] **Bump Version**: Update root `package.json` to vX.X.X
-  - [ ] Run: `npm version [patch/minor/major]` (or manually update)
+- [x] **Bump Version**: Update root `package.json` to v0.8.4
+  - [x] Bumped to 0.8.4
 - [x] **Voice-agent-backend version**: Already bumped (no change needed for this release)
 - [ ] **Update Dependencies** (optional): `npm update` and review
 
@@ -48,50 +48,47 @@ The repository publishes two packages. CI (`.github/workflows/test-and-publish.y
 
 #### Documentation
 
-- [ ] **Create Release Documentation**
-  - [ ] Create: `docs/releases/vX.X.X/` directory
-  - [ ] Create: `CHANGELOG.md` (Keep a Changelog format; include Issue #439)
-  - [ ] Create: `MIGRATION.md` if there are breaking changes
-  - [ ] Create: `NEW-FEATURES.md` for new features (or omit if patch-only)
-  - [ ] Create: `API-CHANGES.md` for API changes (or omit if none)
-  - [ ] Create: `RELEASE-NOTES.md` (short summary and install instructions)
-  - [ ] Create: `PACKAGE-STRUCTURE.md` from `docs/releases/PACKAGE-STRUCTURE.template.md` (replace version placeholders)
-- [ ] **Validate Documentation**
-  - [ ] Run: `npm run validate:release-docs vX.X.X`
+- [x] **Create Release Documentation**
+  - [x] Create: `docs/releases/v0.8.4/` directory
+  - [x] Create: `CHANGELOG.md` (Keep a Changelog format; include Issue #439)
+  - [x] Omit MIGRATION.md, NEW-FEATURES.md, API-CHANGES.md (patch-only)
+  - [x] Create: `RELEASE-NOTES.md` (short summary and install instructions)
+  - [x] Create: `PACKAGE-STRUCTURE.md` (v0.8.4)
+- [x] **Validate Documentation**
+  - [x] Run: `npm run validate:release-docs 0.8.4` — passed
 - [ ] **Review Documentation**: Completeness, accuracy, working links
 
 #### Git Operations
 
-- [ ] **Commit Changes**
-  - [ ] Commit: Version bump and release docs
-  - [ ] Message: `chore: prepare release vX.X.X`
-- [ ] **Create Release Branch**
-  - [ ] Create: `release/vX.X.X` branch
-  - [ ] Push: `git push origin release/vX.X.X`
+- [x] **Commit Changes**
+  - [x] Commit: Version bump and release docs
+  - [x] Message: `chore: prepare release v0.8.4`
+- [x] **Create Release Branch**
+  - [x] Create: `release/v0.8.4` branch
+  - [x] Push: `git push origin release/v0.8.4`
 
 #### Package Publishing
 
-- [ ] **Publish via CI**
-  - [ ] Create GitHub release (tag `vX.X.X`, target `release/vX.X.X` or `main` per workflow) to trigger `.github/workflows/test-and-publish.yml`
-  - [ ] CI: test (mock), build, validate, then publish root (and voice-agent-backend only if its version was bumped in this branch)
+- [ ] **Publish via CI** ← **Next step**
+  - [ ] Create GitHub release (tag `v0.8.4`, target `release/v0.8.4`) to trigger `.github/workflows/test-and-publish.yml`
+  - [ ] CI: test (mock), build, validate, then publish root
   - [ ] Monitor CI until publish succeeds
-- [ ] **Tag Release** (after publish succeeds)
-  - [ ] Tag: `git tag vX.X.X` (if not created by release UI)
-  - [ ] Push: `git push origin vX.X.X`
-- [ ] **Verify Installation**: Install `@signal-meaning/voice-agent-react@vX.X.X` and smoke-test
+- [ ] **Tag Release** (after publish succeeds; often created by GitHub release UI)
+  - [ ] Tag: `v0.8.4` (push if created locally)
+- [ ] **Verify Installation**: Install `@signal-meaning/voice-agent-react@0.8.4` and smoke-test
 
 #### GitHub Release
 
 - [ ] **Create GitHub Release**
-  - [ ] Title: `Release vX.X.X`
-  - [ ] Description: Changelog and notes (include Issue #439 fix)
-  - [ ] Tag: `vX.X.X`
-- [ ] **Labels**: Add `release`, `vX.X.X`, `documentation` to the release/issue as applicable
+  - [ ] Title: `Release v0.8.4`
+  - [ ] Description: Changelog and notes (include Issue #439 fix); use `docs/releases/v0.8.4/RELEASE-NOTES.md` and `CHANGELOG.md`
+  - [ ] Tag: `v0.8.4` (create from `release/v0.8.4`)
+- [ ] **Labels**: Add `release`, `v0.8.4`, `documentation` to the release/issue as applicable
 
 #### Post-Release
 
 - [ ] **Merge to main via PR**
-  - [ ] Open PR: `release/vX.X.X` → `main`
+  - [ ] Open PR: `release/v0.8.4` → `main`
   - [ ] Merge via GitHub (do not push directly to `main`)
 - [ ] **Announcement** (if applicable): Notify teams, update external docs
 
@@ -104,7 +101,7 @@ This release is complete when:
 - [ ] All checklist items above are completed
 - [ ] Package(s) published to GitHub Package Registry
 - [ ] GitHub release created and tagged
-- [ ] Documentation in `docs/releases/vX.X.X/` is complete
+- [ ] Documentation in `docs/releases/v0.8.4/` is complete
 - [ ] All tests passing; installation verified
 
 ---
