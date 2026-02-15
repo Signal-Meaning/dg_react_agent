@@ -66,6 +66,9 @@ The repository publishes two packages. CI (`.github/workflows/test-and-publish.y
 
 #### Package Publishing
 
+- [ ] **Update NPM_TOKEN if expired** (required for publish to succeed)
+  - **Doc:** [PUBLISH-BACKEND-401-INVESTIGATION.md](../ISSUE-425/PUBLISH-BACKEND-401-INVESTIGATION.md) — walkthrough: create classic PAT with **write:packages**, add as repo secret **NPM_TOKEN**, then re-run publish.
+  - **Where used:** `.github/workflows/test-and-publish.yml` (and `debug-auth.yml`); secret name: `NPM_TOKEN`.
 - [ ] **Publish via CI** ← **Next step**
   - [ ] Create GitHub release (tag `v0.8.4`, target `release/v0.8.4`) to trigger `.github/workflows/test-and-publish.yml`
   - [ ] CI: test (mock), build, validate, then publish root
