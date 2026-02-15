@@ -19,7 +19,7 @@ All such tests (e.g. `onFunctionCallRequest-sendResponse.test.tsx`, `function-ca
 - [ ] **Tests failing under real API (TDD red)** – Running the in-scope tests with `USE_REAL_APIS=1` (and required env/keys) either already fails in a known way or new/updated tests are added that fail under real API until implementation is in place.
 - [ ] **Tests passing with real API (TDD green)** – The in-scope tests pass when run with `USE_REAL_APIS=1` and required environment (e.g. `OPENAI_API_KEY`); no regressions in mock-only runs.
 - [ ] **Run process documented** – How to run the real-API suite is documented (env vars, keys, commands, optional CI or release-checklist step).
-- [ ] **Release checklist updated** – If release #456 requires a real-API run, that step is added to the release checklist and verified.
+- [x] **Release checklist updated** – If release #456 requires a real-API run, that step is added to the release checklist and verified.
 - [ ] **Docs updated after each phase** – After each phase of work (scope, green, document, release), this README and [TRACKING.md](../ISSUE-455/TRACKING.md) are updated so progress is visible.
 - [ ] **Issue closed** – #451 is closed with resolution; closure comment links to this doc and/or epic TRACKING.
 
@@ -58,8 +58,8 @@ Unit tests that use only mocked WebSocket (`onFunctionCallRequest-sendResponse.t
 | Tests failing under real API (red) / baseline captured | ✅ (2 firm-audio tests failed before fix) |
 | Tests passing with real OpenAI (green) | ✅ Phase 2 |
 | Run process documented | ✅ Phase 1 (SCOPE.md + this README) |
-| Release checklist updated (if needed) | ⬜ |
-| Docs updated after each phase | ✅ Phase 1, Phase 2 |
+| Release checklist updated (if needed) | ✅ Phase 4 |
+| Docs updated after each phase | ✅ Phase 1–4 |
 | GitHub issue closed | ⬜ |
 
 ---

@@ -16,8 +16,8 @@ Use this checklist to drive each child issue to completion. **Update both this f
 | **Update docs:** Mark Phase 2 complete in this TRACKING and in ISSUE-451/README | ✅ |
 | **Phase 3 – Document:** Document how to run real-API suite (env vars, keys, optional CI or release step) | ✅ (SCOPE.md, TEST-STRATEGY.md) |
 | **Update docs:** Mark Phase 3 complete in this TRACKING and in ISSUE-451/README | ✅ |
-| **Phase 4 – Release:** Update release checklist (#456) if a real-API run step is required | ⬜ |
-| **Update docs:** Mark Phase 4 complete in this TRACKING and in ISSUE-451/README | ⬜ |
+| **Phase 4 – Release:** Update release checklist (#456) if a real-API run step is required | ✅ |
+| **Update docs:** Mark Phase 4 complete in this TRACKING and in ISSUE-451/README | ✅ |
 | Close #451 with link to ISSUE-451/README and this TRACKING | ⬜ |
 
 ---
