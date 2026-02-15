@@ -66,29 +66,29 @@ The repository publishes two packages. CI (`.github/workflows/test-and-publish.y
 
 #### Package Publishing
 
-- [ ] **Update NPM_TOKEN if expired** (required for publish to succeed)
+- [x] **Update NPM_TOKEN if expired** (required for publish to succeed)
   - **Doc:** [Publishing and Releasing](../../PUBLISHING-AND-RELEASING.md) — token creation/update, where used; see also [PUBLISH-BACKEND-401-INVESTIGATION.md](../ISSUE-425/PUBLISH-BACKEND-401-INVESTIGATION.md) for 401 investigation.
   - **Where used:** `.github/workflows/test-and-publish.yml` (and `debug-auth.yml`); secret name: `NPM_TOKEN`.
-- [ ] **Publish via CI** ← **Next step**
-  - [ ] Create GitHub release (tag `v0.8.4`, target `release/v0.8.4`) to trigger `.github/workflows/test-and-publish.yml`
-  - [ ] CI: test (mock), build, validate, then publish root
-  - [ ] Monitor CI until publish succeeds
-- [ ] **Tag Release** (after publish succeeds; often created by GitHub release UI)
-  - [ ] Tag: `v0.8.4` (push if created locally)
-- [ ] **Verify Installation**: Install `@signal-meaning/voice-agent-react@0.8.4` and smoke-test
+- [x] **Publish via CI**
+  - [x] Create GitHub release (tag `v0.8.4`, target `release/v0.8.4`) to trigger `.github/workflows/test-and-publish.yml`
+  - [x] CI: test (mock), build, validate, then publish root (workflow_dispatch run 22028792286)
+  - [x] Monitor CI until publish succeeds
+- [x] **Tag Release** (after publish succeeds; often created by GitHub release UI)
+  - [x] Tag: `v0.8.4` (exists on remote)
+- [ ] **Verify Installation**: Install `@signal-meaning/voice-agent-react@0.8.4` and smoke-test (optional: requires NPM_TOKEN / GitHub Packages auth)
 
 #### GitHub Release
 
-- [ ] **Create GitHub Release**
-  - [ ] Title: `Release v0.8.4`
-  - [ ] Description: Changelog and notes (include Issue #439 fix); use `docs/releases/v0.8.4/RELEASE-NOTES.md` and `CHANGELOG.md`
-  - [ ] Tag: `v0.8.4` (create from `release/v0.8.4`)
+- [x] **Create GitHub Release**
+  - [x] Title: `Release v0.8.4`
+  - [x] Description: Changelog and notes (include Issue #439 fix); use `docs/releases/v0.8.4/RELEASE-NOTES.md` and `CHANGELOG.md`
+  - [x] Tag: `v0.8.4` (create from `release/v0.8.4`)
 - [ ] **Labels**: Add `release`, `v0.8.4`, `documentation` to the release/issue as applicable
 
 #### Post-Release
 
-- [ ] **Merge to main via PR**
-  - [ ] Open PR: `release/v0.8.4` → `main`
+- [x] **Merge to main via PR**
+  - [x] Open PR: `release/v0.8.4` → `main` — [PR #443](https://github.com/Signal-Meaning/dg_react_agent/pull/443)
   - [ ] Merge via GitHub (do not push directly to `main`)
 - [ ] **Announcement** (if applicable): Notify teams, update external docs
 
