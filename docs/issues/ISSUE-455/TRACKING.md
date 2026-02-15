@@ -28,10 +28,10 @@ Use this checklist to drive each child issue to completion. **Update both this f
 
 | Step | Status |
 |------|--------|
-| Identify doc locations (e.g. ISSUE-407, README, release notes) | ⬜ |
-| Add “intentional; callers may customize” wording | ⬜ |
+| Identify doc locations (e.g. ISSUE-407, README, release notes) | ✅ |
+| Add “intentional; callers may customize” wording | ✅ `docs/BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md` |
 | No implementation change required | ✅ N/A |
-| **Update docs:** Mark #452 complete in this TRACKING and in ISSUE-452/README | ⬜ |
+| **Update docs:** Mark #452 complete in this TRACKING and in ISSUE-452/README | ✅ |
 | Close #452 with link to ISSUE-452/README and this TRACKING | ⬜ |
 
 ---
@@ -42,10 +42,10 @@ Use this checklist to drive each child issue to completion. **Update both this f
 
 | Step | Status |
 |------|--------|
-| Add/update test-strategy or scope doc (e.g. TEST-STRATEGY.md) | ⬜ |
-| State: 3pp backends not supported or tested by this repo | ⬜ |
-| State: any shape adoption is for our real-API/mock testing only | ⬜ |
-| **Update docs:** Mark #453 complete in this TRACKING and in ISSUE-453/README | ⬜ |
+| Add/update test-strategy or scope doc (e.g. TEST-STRATEGY.md) | ✅ |
+| State: 3pp backends not supported or tested by this repo | ✅ `docs/development/TEST-STRATEGY.md` |
+| State: any shape adoption is for our real-API/mock testing only | ✅ Same section |
+| **Update docs:** Mark #453 complete in this TRACKING and in ISSUE-453/README | ✅ |
 | Close #453 with link to ISSUE-453/README and this TRACKING | ⬜ |
 
 ---
@@ -56,9 +56,9 @@ Use this checklist to drive each child issue to completion. **Update both this f
 
 | Step | Status |
 |------|--------|
-| Update BACKEND-FUNCTION-CALL-CONTRACT.md or related doc | ⬜ |
-| State: 3pp own their contracts; we stick to common shape | ⬜ |
-| **Update docs:** Mark #454 complete in this TRACKING and in ISSUE-454/README | ⬜ |
+| Update BACKEND-FUNCTION-CALL-CONTRACT.md or related doc | ✅ |
+| State: 3pp own their contracts; we stick to common shape | ✅ `docs/BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md` |
+| **Update docs:** Mark #454 complete in this TRACKING and in ISSUE-454/README | ✅ |
 | Close #454 with link to ISSUE-454/README and this TRACKING | ⬜ |
 
 ---

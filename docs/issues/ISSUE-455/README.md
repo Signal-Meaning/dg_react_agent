@@ -29,10 +29,10 @@ After each phase of work within an issue (especially #451), update both so that 
 
 | # | Title | Doc | Acceptance met |
 |---|--------|-----|-----------------|
-| **#451** (focus) | [Require all relevant tests to pass with USE_REAL_APIS (OpenAI provider)](https://github.com/Signal-Meaning/dg_react_agent/issues/451) | [ISSUE-451/README.md](../ISSUE-451/README.md) | ⬜ |
-| #452 | [Document: Function-call backend contract is intentional; callers may customize](https://github.com/Signal-Meaning/dg_react_agent/issues/452) | [ISSUE-452/README.md](../ISSUE-452/README.md) | ⬜ |
-| #453 | [Real-API testing scope; 3pp backends out of scope](https://github.com/Signal-Meaning/dg_react_agent/issues/453) | [ISSUE-453/README.md](../ISSUE-453/README.md) | ⬜ |
-| #454 | [Document: Third parties maintain their own backend contracts](https://github.com/Signal-Meaning/dg_react_agent/issues/454) | [ISSUE-454/README.md](../ISSUE-454/README.md) | ⬜ |
+| **#451** (focus) | [Require all relevant tests to pass with USE_REAL_APIS (OpenAI provider)](https://github.com/Signal-Meaning/dg_react_agent/issues/451) | [ISSUE-451/README.md](../ISSUE-451/README.md) | ✅ (close on merge) |
+| #452 | [Document: Function-call backend contract is intentional; callers may customize](https://github.com/Signal-Meaning/dg_react_agent/issues/452) | [ISSUE-452/README.md](../ISSUE-452/README.md) | ✅ (close on merge) |
+| #453 | [Real-API testing scope; 3pp backends out of scope](https://github.com/Signal-Meaning/dg_react_agent/issues/453) | [ISSUE-453/README.md](../ISSUE-453/README.md) | ✅ (close on merge) |
+| #454 | [Document: Third parties maintain their own backend contracts](https://github.com/Signal-Meaning/dg_react_agent/issues/454) | [ISSUE-454/README.md](../ISSUE-454/README.md) | ✅ (close on merge) |
 
 **Tracking detail:** [TRACKING.md](./TRACKING.md) – Acceptance Criteria and stepwise progress for each child. Update it and the child README as work completes.
 
@@ -40,12 +40,12 @@ After each phase of work within an issue (especially #451), update both so that 
 
 ## Epic Acceptance Criteria
 
-- [ ] **#451** – All Acceptance Criteria in ISSUE-451/README met; tests pass with real OpenAI; both TRACKING.md and ISSUE-451/README updated.
-- [ ] **#452** – All Acceptance Criteria in ISSUE-452/README met; both TRACKING.md and ISSUE-452/README updated.
-- [ ] **#453** – All Acceptance Criteria in ISSUE-453/README met; both TRACKING.md and ISSUE-453/README updated.
-- [ ] **#454** – All Acceptance Criteria in ISSUE-454/README met; both TRACKING.md and ISSUE-454/README updated.
-- [ ] All four GitHub issues closed with resolution linked to this epic.
-- [ ] Release v0.9.0 (#456) checklist updated as needed (e.g. real-API test run).
+- [x] **#451** – All Acceptance Criteria in ISSUE-451/README met; tests pass with real OpenAI; both TRACKING.md and ISSUE-451/README updated. Close #451 on GitHub when merging PR.
+- [x] **#452** – All Acceptance Criteria in ISSUE-452/README met; both TRACKING.md and ISSUE-452/README updated. Close #452 on GitHub when merging PR.
+- [x] **#453** – All Acceptance Criteria in ISSUE-453/README met; both TRACKING.md and ISSUE-453/README updated. Close #453 on GitHub when merging PR.
+- [x] **#454** – All Acceptance Criteria in ISSUE-454/README met; both TRACKING.md and ISSUE-454/README updated. Close #454 on GitHub when merging PR.
+- [ ] All four GitHub issues closed with resolution linked to this epic (do when merging PR).
+- [x] Release v0.9.0 (#456) checklist updated as needed (e.g. real-API test run).
 
 ---
 

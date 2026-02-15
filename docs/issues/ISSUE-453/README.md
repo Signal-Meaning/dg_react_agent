@@ -15,10 +15,10 @@
 
 ## Acceptance Criteria
 
-- [ ] **Scope documented** – Test-strategy or scope doc states that 3pp backends are out of scope (not supported or tested by this repo).
-- [ ] **Adoption clarified** – Any shape adoption is for our own real-API and mock-upstream testing only, not for supporting 3pp.
-- [ ] **Locations updated** – e.g. `docs/development/TEST-STRATEGY.md` or equivalent updated.
-- [ ] **Docs updated on completion** – When all work is done, both this README and the epic [TRACKING.md](../ISSUE-455/TRACKING.md) are updated and #453 is closed with a link to this doc and TRACKING.
+- [x] **Scope documented** – Test-strategy or scope doc states that 3pp backends are out of scope (not supported or tested by this repo).
+- [x] **Adoption clarified** – Any shape adoption is for our own real-API and mock-upstream testing only, not for supporting 3pp.
+- [x] **Locations updated** – e.g. `docs/development/TEST-STRATEGY.md` or equivalent updated.
+- [x] **Docs updated on completion** – When all work is done, both this README and the epic [TRACKING.md](../ISSUE-455/TRACKING.md) are updated. Close #453 on GitHub with a link to this doc and TRACKING.
 
 ---
 
@@ -26,11 +26,11 @@
 
 | Criterion | Status |
 |----------|--------|
-| 3pp out of scope stated | ⬜ |
-| “Adoption for our tests only” stated | ⬜ |
-| Doc locations updated | ⬜ |
-| This README and TRACKING.md updated | ⬜ |
-| Issue closed | ⬜ |
+| 3pp out of scope stated | ✅ `docs/development/TEST-STRATEGY.md` section “Third-party backends and scope” |
+| “Adoption for our tests only” stated | ✅ Same section |
+| Doc locations updated | ✅ |
+| This README and TRACKING.md updated | ✅ |
+| Issue closed | ⬜ (close on GitHub when merging PR) |
 
 ---
 

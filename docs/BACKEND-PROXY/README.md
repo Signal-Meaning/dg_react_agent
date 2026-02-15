@@ -9,6 +9,7 @@ This directory contains comprehensive documentation for implementing and using b
 ### Core Documentation
 
 - **[Component–Proxy Contract](./COMPONENT-PROXY-CONTRACT.md)** - Big picture: one component protocol, multiple backends (Deepgram or translation proxy); readiness contract (SettingsApplied before first user message) applies to all
+- **[Backend function-call contract](./BACKEND-FUNCTION-CALL-CONTRACT.md)** - HTTP contract for app-backend function execution (`POST /function-call`); intent and third-party scope (Epic #455)
 - **[Interface Contract](./INTERFACE-CONTRACT.md)** - Specification of the backend proxy interface contract that developers must implement
 - **[Security Best Practices](./SECURITY-BEST-PRACTICES.md)** - Security guidelines and best practices for backend proxy implementation
 - **[Migration Guide](./MIGRATION-GUIDE.md)** - Step-by-step guide for migrating from direct connection to proxy mode
@@ -72,7 +73,7 @@ if (body.error) sendResponse({ id: request.id, error: body.error });
 else sendResponse({ id: request.id, result: JSON.parse(body.content) });
 ```
 
-Backend responds with `{ "content": "..." }` (success) or `{ "error": "..." }`. See [Issue #407](../issues/ISSUE-407/README.md), [Backend function-call contract](../issues/ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md), and [Full example with test-app code](../issues/ISSUE-407/FRONTEND-TO-BACKEND-EXAMPLE.md).
+Backend responds with `{ "content": "..." }` (success) or `{ "error": "..." }`. See [Backend function-call contract](./BACKEND-FUNCTION-CALL-CONTRACT.md), [Issue #407](../issues/ISSUE-407/README.md) (historical), and [Full example with test-app code](../issues/ISSUE-407/FRONTEND-TO-BACKEND-EXAMPLE.md).
 
 ### Security Benefits
 
@@ -104,6 +105,6 @@ The test-app can use an **OpenAI Realtime** backend via a translation proxy in *
 
 - [API Reference](../API-REFERENCE.md) - Component API documentation with proxy mode examples
 - [Conversation storage](../CONVERSATION-STORAGE.md) - Who owns persistence logic (component) vs storage implementation (application); test-app demonstrates with localStorage
-- [Issue #407](../issues/ISSUE-407/README.md) - Function calls on the app backend (not frontend); [contract](../issues/ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md); [example](../issues/ISSUE-407/FRONTEND-TO-BACKEND-EXAMPLE.md)
+- [Backend function-call contract](./BACKEND-FUNCTION-CALL-CONTRACT.md) - Function calls on the app backend (not frontend); [Issue #407](../issues/ISSUE-407/README.md) (historical); [example](../issues/ISSUE-407/FRONTEND-TO-BACKEND-EXAMPLE.md)
 - [Issue #242 Tracking](../issues/ISSUE-242-BACKEND-PROXY-SUPPORT.md) - Complete feature tracking document
 - [Proxy ownership decision](../issues/ISSUE-388/PROXY-OWNERSHIP-DECISION.md) - What we own (code, contract) and support scope for proxies

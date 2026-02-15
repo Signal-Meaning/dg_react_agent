@@ -1,7 +1,7 @@
 /**
  * Common function-call handlers for test-app backend (Issue #407).
  * Not Deepgram- or OpenAI-specific; one set of handlers for both backends (DRY).
- * Contract: see docs/issues/ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md
+ * Contract: see docs/BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md
  */
 
 /**

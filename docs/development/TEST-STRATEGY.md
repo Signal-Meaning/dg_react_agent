@@ -2,6 +2,11 @@
 
 This document describes the intended run order for tests and when to use mocks vs real upstream.
 
+## Third-party backends and scope (Epic #455)
+
+- **Third-party backends are out of scope.** Voice-commerce and any other third-party backend are not supported or tested by this repo. Our integration and E2E tests use this repo’s proxy and mock (or real OpenAI) only.
+- **Shape adoption is for our tests only.** If we adopt a given request/response shape (e.g. from community or best practice), it is only to meet our own real-API and mock-upstream testing needs (e.g. Issue #451). We do not adopt shapes to support or mandate third-party backends.
+
 ## Run order
 
 **Real APIs first, then mocks.** When API keys are available, run integration and E2E against the real upstream first; then run with mocks. **CI always runs mocks** (no real API keys in CI; keep runs fast and deterministic).

@@ -15,10 +15,10 @@ The single `POST /function-call` endpoint with request `{ id, name, arguments }`
 
 ## Acceptance Criteria
 
-- [ ] **Locations identified** – Document where the contract and “intentional” message live (e.g. `docs/issues/ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md`, README, release notes).
-- [ ] **Wording added** – Explicit statement that this contract is intentional and that 3pp may implement different shapes (e.g. per-route `/api/functions/<name>`) on their side.
-- [ ] **No code change** – Confirmed; documentation only.
-- [ ] **Docs updated on completion** – When all work is done, both this README and the epic [TRACKING.md](../ISSUE-455/TRACKING.md) are updated and #452 is closed with a link to this doc and TRACKING.
+- [x] **Locations identified** – Document where the contract and “intentional” message live (e.g. `docs/BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md`, README, release notes).
+- [x] **Wording added** – Explicit statement that this contract is intentional and that 3pp may implement different shapes (e.g. per-route `/api/functions/<name>`) on their side.
+- [x] **No code change** – Confirmed; documentation only.
+- [x] **Docs updated on completion** – When all work is done, both this README and the epic [TRACKING.md](../ISSUE-455/TRACKING.md) are updated. Close #452 on GitHub with a link to this doc and TRACKING.
 
 ---
 
@@ -26,14 +26,14 @@ The single `POST /function-call` endpoint with request `{ id, name, arguments }`
 
 | Criterion | Status |
 |----------|--------|
-| Doc locations updated | ⬜ |
-| “Intentional; callers may customize” stated | ⬜ |
-| This README and TRACKING.md updated | ⬜ |
-| Issue closed | ⬜ |
+| Doc locations updated | ✅ `docs/BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md` |
+| “Intentional; callers may customize” stated | ✅ Section “Intent and third-party scope” |
+| This README and TRACKING.md updated | ✅ |
+| Issue closed | ⬜ (close on GitHub when merging PR) |
 
 ---
 
 ## Docs
 
-- **[../ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md](../ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md)** – Current backend contract.
+- **[../../BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md](../../BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md)** – Backend contract (project docs).
 - **[../ISSUE-455/TRACKING.md](../ISSUE-455/TRACKING.md)** – Epic tracking; update it and this README when this issue is completed.

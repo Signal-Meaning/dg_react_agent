@@ -15,9 +15,9 @@ Third parties (e.g. voice-commerce) maintain their own backend contracts for any
 
 ## Acceptance Criteria
 
-- [ ] **Contract doc updated** – e.g. `docs/issues/ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md` (or related doc) states that 3pp maintain their own backend contracts.
-- [ ] **Expectations clear** – Readers understand we keep the common shape; 3pp own their contracts and tests.
-- [ ] **Docs updated on completion** – When all work is done, both this README and the epic [TRACKING.md](../ISSUE-455/TRACKING.md) are updated and #454 is closed with a link to this doc and TRACKING.
+- [x] **Contract doc updated** – e.g. `docs/BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md` (or related doc) states that 3pp maintain their own backend contracts.
+- [x] **Expectations clear** – Readers understand we keep the common shape; 3pp own their contracts and tests.
+- [x] **Docs updated on completion** – When all work is done, both this README and the epic [TRACKING.md](../ISSUE-455/TRACKING.md) are updated. Close #454 on GitHub with a link to this doc and TRACKING.
 
 ---
 
@@ -25,14 +25,14 @@ Third parties (e.g. voice-commerce) maintain their own backend contracts for any
 
 | Criterion | Status |
 |----------|--------|
-| BACKEND-FUNCTION-CALL-CONTRACT or related updated | ⬜ |
-| 3pp “maintain own contracts” stated | ⬜ |
-| This README and TRACKING.md updated | ⬜ |
-| Issue closed | ⬜ |
+| BACKEND-FUNCTION-CALL-CONTRACT or related updated | ✅ Section “Intent and third-party scope” |
+| 3pp “maintain own contracts” stated | ✅ Same section |
+| This README and TRACKING.md updated | ✅ |
+| Issue closed | ⬜ (close on GitHub when merging PR) |
 
 ---
 
 ## Docs
 
-- **[../ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md](../ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md)** – Backend contract (primary location for updates).
+- **[../../BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md](../../BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md)** – Backend contract (project docs).
 - **[../ISSUE-455/TRACKING.md](../ISSUE-455/TRACKING.md)** – Epic tracking; update it and this README when this issue is completed.
