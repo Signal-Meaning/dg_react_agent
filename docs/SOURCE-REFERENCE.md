@@ -18,15 +18,15 @@ This document directs you to the **major source elements** in this package so yo
 
 ## OpenAI Realtime proxy
 
-The proxy translates between the **component protocol** (e.g. Settings, InjectUserMessage, ConversationText) and the **OpenAI Realtime API** (session.update, conversation.item.create, response.create, etc.). It runs as a WebSocket server that clients connect to; it then connects to the OpenAI Realtime upstream.
+The proxy translates between the **component protocol** (e.g. Settings, InjectUserMessage, ConversationText) and the **OpenAI Realtime API** (session.update, conversation.item.create, response.create, etc.). It is shipped in **@signal-meaning/voice-agent-backend** (Issue #445). Backends run it from the backend package only (do not depend on the React package).
 
 | File | Purpose |
 |------|--------|
-| **`scripts/openai-proxy/server.ts`** | WebSocket server: accepts component protocol, translates to OpenAI client events, forwards to upstream, translates upstream events back to component. Handles **event ordering**: on `InjectUserMessage` it sends `conversation.item.create` to upstream and sends `response.create` **only after** upstream sends `conversation.item.added` or `conversation.item.done` (required by the OpenAI API so the connection stays open). Also handles binary audio (e.g. `input_audio_buffer.append`), greeting injection after session.updated, and FunctionCallRequest/FunctionCallResponse mapping. |
-| **`scripts/openai-proxy/translator.ts`** | Pure mapping functions: component messages ↔ OpenAI Realtime events (e.g. Settings → session.update, InjectUserMessage → conversation.item.create, response.output_text.done → ConversationText, response.function_call_arguments.done → FunctionCallRequest). |
-| **`scripts/openai-proxy/run.ts`** | Standalone entry to run the OpenAI proxy (loads env, starts HTTP server, attaches WebSocket at a path). Canonical run: `cd test-app && npm run backend` (single backend hosts both proxies). |
-| **`scripts/openai-proxy/logger.ts`** | Optional OpenTelemetry-style logging when `OPENAI_PROXY_DEBUG=1`. |
-| **`scripts/openai-proxy/README.md`** | Translator exports, server behavior, and how to run the proxy. |
+| **`packages/voice-agent-backend/scripts/openai-proxy/server.ts`** | WebSocket server: accepts component protocol, translates to OpenAI client events, forwards to upstream, translates upstream events back to component. Handles **event ordering**: on `InjectUserMessage` it sends `conversation.item.create` to upstream and sends `response.create` **only after** upstream sends `conversation.item.added` or `conversation.item.done` (required by the OpenAI API so the connection stays open). Also handles binary audio (e.g. `input_audio_buffer.append`), greeting injection after session.updated, and FunctionCallRequest/FunctionCallResponse mapping. |
+| **`packages/voice-agent-backend/scripts/openai-proxy/translator.ts`** | Pure mapping functions: component messages ↔ OpenAI Realtime events (e.g. Settings → session.update, InjectUserMessage → conversation.item.create, response.output_text.done → ConversationText, response.function_call_arguments.done → FunctionCallRequest). |
+| **`packages/voice-agent-backend/scripts/openai-proxy/run.ts`** | Standalone entry to run the OpenAI proxy (loads env, starts HTTP server, attaches WebSocket at a path). Canonical run: `cd test-app && npm run backend` (single backend hosts both proxies). Standalone: `cd packages/voice-agent-backend && npx tsx scripts/openai-proxy/run.ts`. |
+| **`packages/voice-agent-backend/scripts/openai-proxy/logger.ts`** | Optional OpenTelemetry-style logging when `OPENAI_PROXY_DEBUG=1`. |
+| **`packages/voice-agent-backend/scripts/openai-proxy/README.md`** | Translator exports, server behavior, and how to run the proxy. |
 
 **Important behavior (event order):** For text messages injected via the component (`InjectUserMessage`), the proxy must send `response.create` to OpenAI **only after** the upstream has sent `conversation.item.added` or `conversation.item.done`. Sending `response.create` immediately after `conversation.item.create` can cause the upstream to close the connection. See `docs/issues/ISSUE-388/OPENAI-REALTIME-API-REVIEW.md` for the API rationale.
 

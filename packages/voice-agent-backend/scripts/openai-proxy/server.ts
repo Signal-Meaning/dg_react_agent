@@ -3,7 +3,7 @@
  *
  * Listens on a path (e.g. /openai); accepts component protocol (Settings, InjectUserMessage);
  * translates to OpenAI Realtime and forwards to upstream; translates upstream events back to component.
- * Logging uses OpenTelemetry (see scripts/openai-proxy/logger.ts) when OPENAI_PROXY_DEBUG=1.
+ * Logging uses OpenTelemetry (see logger.ts in this directory) when OPENAI_PROXY_DEBUG=1.
  * See docs/issues/ISSUE-381/API-DISCONTINUITIES.md.
  */
 

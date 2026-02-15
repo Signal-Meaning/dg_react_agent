@@ -19,7 +19,7 @@ import {
   mapGreetingToConversationText,
   mapErrorToComponentError,
   binaryToInputAudioBufferAppend,
-} from '../scripts/openai-proxy/translator';
+} from '../packages/voice-agent-backend/scripts/openai-proxy/translator';
 
 describe('OpenAI proxy translator (Issue #381)', () => {
   describe('1. Session / config handling', () => {

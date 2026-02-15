@@ -3,8 +3,8 @@
  * Streams PCM to the system default output. Used by the OpenAI proxy CLI.
  */
 
-import type { IAudioPlaybackSink } from '../../src/utils/audio/AudioPlaybackSink';
-import { PCM_STREAM_FORMAT } from '../../src/utils/audio/AudioPlaybackSink';
+import type { IAudioPlaybackSink } from './audio-playback-types';
+import { PCM_STREAM_FORMAT } from './audio-playback-types';
 
 function createSpeaker(): NodeJS.WritableStream | null {
   try {

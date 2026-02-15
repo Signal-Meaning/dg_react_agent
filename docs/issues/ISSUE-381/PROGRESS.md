@@ -13,7 +13,7 @@
 | **Phase 2 – Integration tests** | ✅ Done | 12 tests in `tests/integration/openai-proxy-integration.test.ts` (incl. function-calling API gap, greeting) |
 | **Phase 3 – E2E (OpenAI proxy suite)** | ✅ 9 tests | openai-proxy-e2e + openai-inject-connection-stability; 8 pass, 1 flaky |
 | **Phase 4 – Remaining E2E with OpenAI** | ✅ Done | context-retention **pass**; context-retention-with-function-calling **pass** (when proxy running, API sends function_call_arguments.done); declarative-props **skip** when OpenAI |
-| **Phase 5 – Docs & CI** | ✅ Done | [RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md): env, run proxy, run tests; CI runs proxy unit + integration |
+| **Phase 5 – Docs & CI** | ✅ Done | [RUN-OPENAI-PROXY.md](../BACKEND-PROXY/RUN-OPENAI-PROXY.md): env, run proxy, run tests; CI runs proxy unit + integration |
 
 ---
 
@@ -99,7 +99,7 @@ When running the **full** E2E suite with `VITE_OPENAI_PROXY_ENDPOINT` set:
 | Need | Document |
 |------|----------|
 | **This overview** | [PROGRESS.md](./PROGRESS.md) (this file) |
-| **Phase 5 – env, run proxy, run tests** | [RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md) |
+| **Phase 5 – env, run proxy, run tests** | [RUN-OPENAI-PROXY.md](../BACKEND-PROXY/RUN-OPENAI-PROXY.md) |
 | **E2E run order, commands, remaining specs** | [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md) |
 | **Component vs OpenAI protocol** | [API-DISCONTINUITIES.md](./API-DISCONTINUITIES.md) |
 | **Phased implementation** | [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md) |

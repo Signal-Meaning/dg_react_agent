@@ -7,7 +7,7 @@
 
 The test app and the repo support an **OpenAI Realtime proxy** as an alternative backend to the Deepgram Voice Agent. The proxy translates the component’s protocol (Settings, InjectUserMessage, ConversationText, etc.) to/from the [OpenAI Realtime API](https://platform.openai.com/docs/guides/realtime). This document summarizes improvements made in the test-app and proxy for Issue #381 and how to use them.
 
-**Detailed proxy and API docs:** `docs/issues/ISSUE-381/` (e.g. [README](../../docs/issues/ISSUE-381/README.md), [RUN-OPENAI-PROXY.md](../../docs/issues/ISSUE-381/RUN-OPENAI-PROXY.md), [API-DISCONTINUITIES.md](../../docs/issues/ISSUE-381/API-DISCONTINUITIES.md)).
+**Detailed proxy and API docs:** `docs/issues/ISSUE-381/` (e.g. [README](../../docs/issues/ISSUE-381/README.md), [RUN-OPENAI-PROXY.md](../../docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md), [API-DISCONTINUITIES.md](../../docs/issues/ISSUE-381/API-DISCONTINUITIES.md)).
 
 ---
 
@@ -52,7 +52,7 @@ The test app and the repo support an **OpenAI Realtime proxy** as an alternative
 - **Translation layer** (`scripts/openai-proxy/translator.ts`): Settings → session.update, InjectUserMessage → conversation.item.create, session.updated → SettingsApplied, response.output_text.done / output_audio_transcript.done / function_call_arguments.done → ConversationText or FunctionCallRequest, FunctionCallResponse → conversation.item.create (function_call_output), context messages → conversation.item.create. Unit tests: `tests/openai-proxy.test.ts` (32 tests).
 - **WebSocket server** (`scripts/openai-proxy/server.ts`): Forwards client ↔ upstream with translation; user echo (ConversationText role user); context in Settings → conversation.item.create per message; function-call round-trip. Integration tests: `tests/integration/openai-proxy-integration.test.ts` (11 tests).
 - **Function-calling and transcript handling:** Proxy sends **FunctionCallRequest** when upstream sends **response.function_call_arguments.done**; integration tests cover transcript-only path (no FCR) and FCR-then-ConversationText order. See [INTEGRATION-TEST-PLAN.md](../../docs/issues/ISSUE-381/INTEGRATION-TEST-PLAN.md).
-- **Run and env:** [RUN-OPENAI-PROXY.md](../../docs/issues/ISSUE-381/RUN-OPENAI-PROXY.md) documents env vars, how to run the proxy (`npm run openai-proxy`), and how to run unit, integration, and E2E tests.
+- **Run and env:** [RUN-OPENAI-PROXY.md](../../docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md) documents env vars, how to run the proxy, and how to run unit, integration, and E2E tests.
 
 ---
 
@@ -74,7 +74,7 @@ The test app and the repo support an **OpenAI Realtime proxy** as an alternative
    ```bash
    HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js test-app/tests/e2e/openai-inject-connection-stability.spec.js
    ```
-   See [RUN-OPENAI-PROXY.md](../../docs/issues/ISSUE-381/RUN-OPENAI-PROXY.md) for full commands and CI notes.
+   See [RUN-OPENAI-PROXY.md](../../docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md) for full commands and CI notes.
 
 ---
 
@@ -83,6 +83,6 @@ The test app and the repo support an **OpenAI Realtime proxy** as an alternative
 | Doc | Purpose |
 |-----|--------|
 | [docs/issues/ISSUE-381/README.md](../../docs/issues/ISSUE-381/README.md) | Issue #381 overview and acceptance criteria |
-| [docs/issues/ISSUE-381/RUN-OPENAI-PROXY.md](../../docs/issues/ISSUE-381/RUN-OPENAI-PROXY.md) | Env, run proxy, run unit/integration/E2E tests |
+| [docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md](../../docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md) | Env, run proxy, run unit/integration/E2E tests |
 | [docs/issues/ISSUE-381/API-DISCONTINUITIES.md](../../docs/issues/ISSUE-381/API-DISCONTINUITIES.md) | Component vs OpenAI protocol; greeting (section 6) |
 | [test-app/ENVIRONMENT_VARIABLES.md](../ENVIRONMENT_VARIABLES.md) | Test-app env vars (e.g. `VITE_AGENT_GREETING`, `VITE_OPENAI_PROXY_ENDPOINT`) |
