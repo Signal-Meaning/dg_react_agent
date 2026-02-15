@@ -12,7 +12,7 @@ import {
   getLoggerForTesting,
   SeverityNumber,
   ATTR_TRACE_ID,
-} from '../scripts/openai-proxy/logger';
+} from '../packages/voice-agent-backend/scripts/openai-proxy/logger';
 
 describe('OpenAI proxy logging standard (Issue #437)', () => {
   beforeEach(async () => {
