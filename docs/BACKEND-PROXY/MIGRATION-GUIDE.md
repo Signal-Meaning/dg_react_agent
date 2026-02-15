@@ -35,7 +35,7 @@ First, implement the backend proxy endpoint in your existing backend infrastruct
 #### Before (Direct Connection)
 
 ```tsx
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 
 function MyApp() {
   const agentOptions = useMemo(() => ({
@@ -56,7 +56,7 @@ function MyApp() {
 #### After (Backend Proxy)
 
 ```tsx
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 
 function MyApp() {
   const agentOptions = useMemo(() => ({
