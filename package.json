@@ -46,6 +46,7 @@
     "release:issue": "./scripts/create-release-issue.sh",
     "validate:publish": "node scripts/validate-publish-auth.js",
     "validate:release-docs": "node scripts/validate-release-docs.js",
+    "validate:packaging": "jest tests/packaging",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
