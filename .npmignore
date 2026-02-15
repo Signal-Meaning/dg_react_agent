@@ -1,3 +1,5 @@
+# Issue docs are excluded via docs/.npmignore (see docs/PACKAGING-POLICY.md)
+
 # Test artifacts and results
 test-app/test-results/
 test-app/playwright-report/
