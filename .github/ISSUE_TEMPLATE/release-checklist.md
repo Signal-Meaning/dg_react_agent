@@ -31,6 +31,9 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
     - [ ] Start backend: `cd test-app && npm run backend`
     - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e` (all E2E tests must pass in proxy mode)
     - [ ] Verify: All tests pass in proxy mode before proceeding
+  - [ ] **Optional but recommended: Run real-API integration tests** (when `OPENAI_API_KEY` is available; see `docs/issues/ISSUE-451/SCOPE.md`)
+    - [ ] Run: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
+    - [ ] Verify: All 8 in-scope tests pass (CI runs mocks only; this step validates against live OpenAI when keys are set)
 - [ ] **Linting Clean**: No linting errors
   - [ ] Run: `npm run lint`
 - [ ] **Documentation Updated**: All relevant documentation updated

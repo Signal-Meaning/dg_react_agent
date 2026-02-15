@@ -175,17 +175,12 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
     instructions: settings.agent?.think?.prompt ?? '',
     // Do not send voice in session.update; current Realtime API returns "Unknown parameter: 'session.voice'".
     // GA API: turn_detection is under session.audio.input (REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2).
-    // Use idle_timeout_ms from Settings.agent.idleTimeoutMs (shared with component). Use server_vad with
-    // create_response: false so only the proxy sends commit + response.create (avoids dual-control race).
+    // Use turn_detection: null so the server does NOT auto-commit the audio buffer; only the proxy sends
+    // input_audio_buffer.commit + response.create. With server_vad enabled the server commits on VAD and
+    // our commit then sees "buffer too small ... 0.00ms" (Issue #414, PROTOCOL §3.6). See Issue #451 Phase 2.
     audio: {
       input: {
-        turn_detection: (() => {
-          const ms = settings.agent?.idleTimeoutMs ?? 10000;
-          if (typeof ms === 'number' && ms > 0) {
-            return { type: 'server_vad' as const, idle_timeout_ms: ms, create_response: false };
-          }
-          return null;
-        })(),
+        turn_detection: null,
         format: { type: 'audio/pcm', rate: 24000 },
         // Enable input audio transcription so we get conversation.item.input_audio_transcription.* (Issue #414).
         transcription: { model: 'gpt-4o-transcribe', language: 'en', prompt: '' },

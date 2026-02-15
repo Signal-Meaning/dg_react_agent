@@ -2,11 +2,16 @@
 
 This document describes the intended run order for tests and when to use mocks vs real upstream.
 
+## Third-party backends and scope (Epic #455)
+
+- **Third-party backends are out of scope.** Voice-commerce and any other third-party backend are not supported or tested by this repo. Our integration and E2E tests use this repo’s proxy and mock (or real OpenAI) only.
+- **Shape adoption is for our tests only.** If we adopt a given request/response shape (e.g. from community or best practice), it is only to meet our own real-API and mock-upstream testing needs (e.g. Issue #451). We do not adopt shapes to support or mandate third-party backends.
+
 ## Run order
 
 **Real APIs first, then mocks.** When API keys are available, run integration and E2E against the real upstream first; then run with mocks. **CI always runs mocks** (no real API keys in CI; keep runs fast and deterministic).
 
-1. **Integration tests (real upstream when requested)** — Run first with real APIs when `USE_REAL_OPENAI=1` and `OPENAI_API_KEY` are set. Location: `tests/integration/` (e.g. `openai-proxy-integration.test.ts`).
+1. **Integration tests (real upstream when requested)** — Run first with real APIs when `USE_REAL_APIS=1` and `OPENAI_API_KEY` are set. Location: `tests/integration/` (e.g. `openai-proxy-integration.test.ts`). **Scope for “must pass with real API” (Issue #451):** see `docs/issues/ISSUE-451/SCOPE.md`.
 
 2. **Integration / E2E with mocks** — Run the same or full suite with mock upstream (no API keys required).
 
@@ -19,7 +24,7 @@ Summary: **real APIs first (when available) → mocks**. **CI: mocks only.**
 - **CI:** Always run **mocks** only. No real API keys; fast and deterministic.
 - **Local / when keys available:** Run **real APIs first**, then mocks.
 
-- **When real APIs are requested:** Set **`USE_REAL_OPENAI=1`** and **`OPENAI_API_KEY`** (in `.env`, `test-app/.env`, or env), then run e.g. `USE_REAL_OPENAI=1 npm test -- tests/integration/openai-proxy-integration.test.ts`. Mock-only tests are skipped; the rest run against the live OpenAI Realtime API. Optional: `OPENAI_REALTIME_URL` to override the upstream URL.
+- **When real APIs are requested:** Set **`USE_REAL_APIS=1`** and **`OPENAI_API_KEY`** (in `.env`, `test-app/.env`, or env), then run e.g. `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`. Mock-only tests are skipped; the rest run against the live OpenAI Realtime API. Optional: `OPENAI_REALTIME_URL` to override the upstream URL.
 
 ## Transcript / VAD and backends
 

@@ -1,6 +1,6 @@
 /**
  * Issue #407: Forward function-call requests to the app backend (no in-browser execution).
- * Contract: docs/issues/ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md
+ * Contract: docs/BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md
  */
 
 import type { FunctionCallRequest, FunctionCallResponse } from '../../../src/types';

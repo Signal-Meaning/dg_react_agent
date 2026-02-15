@@ -2,7 +2,7 @@
  * @signal-meaning/voice-agent-backend
  * Issue #423: Programmatic API for mounting Deepgram proxy, OpenAI proxy, and function-call routes.
  * @see docs/issues/ISSUE-423/TDD-PLAN.md
- * Contract: docs/issues/ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md
+ * Contract: docs/BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md
  */
 
 if (process.env.LOG_LEVEL) {

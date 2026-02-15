@@ -1,7 +1,7 @@
 /**
  * Integration tests for POST /function-call (Issue #407, Phase 1.2).
  *
- * TDD: These tests define the contract in BACKEND-FUNCTION-CALL-CONTRACT.md.
+ * TDD: These tests define the contract in docs/BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md.
  * Run backend implementation to make them pass.
  *
  * Uses Node http (not fetch) so tests run under Jest jsdom.
