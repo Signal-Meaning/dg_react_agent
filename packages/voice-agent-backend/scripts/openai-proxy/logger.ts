@@ -1,8 +1,8 @@
 /**
- * OpenAI proxy – OpenTelemetry logging (Issue #381)
+ * OpenAI proxy – OpenTelemetry logging (Issue #381, #437)
  *
- * When OPENAI_PROXY_DEBUG=1, emits OTel LogRecords (SeverityNumber, body, attributes)
- * so logs can be correlated by connection_id and exported to OTLP/collectors.
+ * Reads LOG_LEVEL (debug | info | warn | error) and only emits logs at or above that level.
+ * OPENAI_PROXY_DEBUG=1 is treated as LOG_LEVEL=debug for backward compatibility.
  * See https://opentelemetry.io/docs/specs/otel/logs/
  */
 
@@ -16,8 +16,16 @@ import {
 const LOGGER_NAME = 'openai-proxy';
 const LOGGER_VERSION = '1.0.0';
 
+/** OTel SeverityNumber: DEBUG=5, INFO=9, WARN=13, ERROR=17. Emit when severity >= min. */
+const SEVERITY_DEBUG = 5;
+const SEVERITY_INFO = 9;
+const SEVERITY_WARN = 13;
+const SEVERITY_ERROR = 17;
+
 let loggerProvider: LoggerProvider | null = null;
 let logger: ReturnType<LoggerProvider['getLogger']> | null = null;
+/** Minimum severity to emit (numeric). Undefined = no logging. */
+let minSeverityNumber: number | undefined;
 
 /** OTel attribute keys used by the proxy (standard + custom). Issue #412: trace_id for correlation. */
 export const ATTR_CONNECTION_ID = 'connection_id';
@@ -31,12 +39,39 @@ export const ATTR_UPSTREAM_CLOSE_REASON = 'upstream.close_reason';
 
 export type ProxyLogAttributes = Record<string, string | number | boolean | undefined>;
 
+/** Map level string to OTel SeverityNumber (emit when severity >= this). Issue #437. */
+function severityNumberFromLevel(level: string): number {
+  const normalized = (level || '').toLowerCase();
+  switch (normalized) {
+    case 'debug':
+      return SEVERITY_DEBUG;
+    case 'info':
+      return SEVERITY_INFO;
+    case 'warn':
+      return SEVERITY_WARN;
+    case 'error':
+      return SEVERITY_ERROR;
+    default:
+      return SEVERITY_INFO;
+  }
+}
+
+export interface InitProxyLoggerOptions {
+  /** Log level (debug | info | warn | error). Overrides process.env.LOG_LEVEL. */
+  logLevel?: string;
+}
+
 /**
- * Initialize OpenTelemetry logging for the proxy. Call once when debug is true.
- * Uses LoggerProvider + SimpleLogRecordProcessor + ConsoleLogRecordExporter.
+ * Initialize OpenTelemetry logging for the proxy. Call once with desired log level.
+ * Reads options.logLevel or process.env.LOG_LEVEL; initializes OTel when a level is set.
  */
-export function initProxyLogger(): void {
+export function initProxyLogger(options?: InitProxyLoggerOptions): void {
+  const level = options?.logLevel ?? process.env.LOG_LEVEL;
+  if (level !== undefined && level !== '') {
+    minSeverityNumber = severityNumberFromLevel(level);
+  }
   if (loggerProvider) return;
+  if (minSeverityNumber === undefined) return;
   loggerProvider = new LoggerProvider();
   loggerProvider.addLogRecordProcessor(
     new SimpleLogRecordProcessor(new ConsoleLogRecordExporter())
@@ -45,16 +80,20 @@ export function initProxyLogger(): void {
 }
 
 /**
- * Get the OTel logger; returns null if initProxyLogger() was never called (debug off).
+ * Get the OTel logger; returns null if initProxyLogger() was never called or level not set.
  */
 function getLogger(): ReturnType<LoggerProvider['getLogger']> | null {
   return logger;
 }
 
+/** For tests only (Issue #437). Returns the internal OTel logger or null. */
+export function getLoggerForTesting(): ReturnType<LoggerProvider['getLogger']> | null {
+  return logger;
+}
+
 /**
- * Emit an OTel LogRecord. No-op if debug logging was not initialized.
+ * Emit an OTel LogRecord. No-op if not initialized or severity below LOG_LEVEL.
  * Attributes should use ATTR_* keys where applicable for consistency.
- * Undefined attribute values are omitted (OTel attribute values must be defined).
  */
 export function emitLog(params: {
   severityNumber: SeverityNumber;
@@ -62,6 +101,9 @@ export function emitLog(params: {
   body: string;
   attributes?: ProxyLogAttributes;
 }): void {
+  if (minSeverityNumber !== undefined && params.severityNumber < minSeverityNumber) {
+    return;
+  }
   const l = getLogger();
   if (!l) return;
   const attrs = params.attributes;
@@ -87,6 +129,7 @@ export async function shutdownProxyLogger(): Promise<void> {
     loggerProvider = null;
     logger = null;
   }
+  minSeverityNumber = undefined;
 }
 
 export { SeverityNumber };

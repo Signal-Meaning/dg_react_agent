@@ -39,7 +39,11 @@ cd test-app && npm run backend
 
 That starts the backend server which hosts `/openai` (and `/deepgram-proxy`). The OpenAI proxy logic in this directory is used by that backend (e.g. via subprocess or in-process). Do not run a separate OpenAI-only process from the repo root for normal test-app usage.
 
-**Standalone (optional):** Run from **this package directory** (voice-agent-backend). From repo root: `cd packages/voice-agent-backend && npx tsx scripts/openai-proxy/run.ts`. Requires `OPENAI_API_KEY` in `.env` or the environment; the script loads `.env` from the package dir and parent dirs. Listens on `http://localhost:8080/openai` by default. Use `OPENAI_PROXY_PORT` and `OPENAI_REALTIME_URL` to override. To see client/upstream activity, run with `OPENAI_PROXY_DEBUG=1`. When debug is on, the proxy uses **OpenTelemetry** logging (`logger.ts` in this directory). If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
+**Standalone (optional):** Run from **this package directory** (voice-agent-backend). From repo root: `cd packages/voice-agent-backend && npx tsx scripts/openai-proxy/run.ts`. Requires `OPENAI_API_KEY` in `.env` or the environment; the script loads `.env` from the package dir and parent dirs. Listens on `http://localhost:8080/openai` by default. Use `OPENAI_PROXY_PORT` and `OPENAI_REALTIME_URL` to override.
+
+**Logging (Issue #437):** The proxy respects **`LOG_LEVEL`** (values: `debug`, `info`, `warn`, `error`). Only messages at or above the configured level are emitted. Set `LOG_LEVEL=info` for normal operation or `LOG_LEVEL=debug` for verbose client/upstream activity. **`OPENAI_PROXY_DEBUG=1`** is treated as an alias for `LOG_LEVEL=debug` for backward compatibility. Logging uses **OpenTelemetry** (`logger.ts` in this directory). If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
+
+**Tracing (Issue #437 Phase 3):** For correlation with client and backend logs, pass **`traceId`** in the WebSocket URL query (e.g. `ws://localhost:8080/openai?traceId=my-request-id`). The proxy attaches `trace_id` to every log record for that connection. If the client does not send `traceId`, the proxy uses the connection id as fallback so every record still has a `trace_id`. See [PROPAGATION-CONTRACT.md](../../../docs/issues/ISSUE-412/PROPAGATION-CONTRACT.md).
 
 **Greeting-text-only (diagnostic):** Set `OPENAI_PROXY_GREETING_TEXT_ONLY=1` so the proxy sends the greeting to the client only (UI shows it) and does not send `conversation.item.create` (greeting) to OpenAI. If the error stops, the greeting injection was the cause. (Testing showed the error can persist without it, so the trigger may be elsewhere.)
 
@@ -58,20 +62,23 @@ A CLI script sends text to the proxy and prints (and optionally plays) agent res
 **1. Start the backend** (from repo root, either):
 
 - Test-app backend (recommended): `cd test-app && npm run backend`
-- Standalone proxy: `npx tsx scripts/openai-proxy/run.ts`
+- Standalone proxy: `cd packages/voice-agent-backend && npx tsx scripts/openai-proxy/run.ts`
 
 **2. Run the CLI** (from repo root, or from test-app):
 
 ```bash
-# From repo root:
-npx tsx scripts/openai-proxy/cli.ts --text "Hello, what's the weather?"
-npm run openai-proxy:cli -- --text "Hello"
+# From repo root (root package.json has openai-proxy:cli):
+npm run openai-proxy:cli -- --text "Hello, what's the weather?"
 
-# From test-app (e.g. after starting backend there): same script name
+# From backend package dir:
+cd packages/voice-agent-backend && npx tsx scripts/openai-proxy/cli.ts --text "Hello"
+
+# From test-app (e.g. after starting backend there):
 npm run openai-proxy:cli -- --text "Hello"
 
 # From stdin
 echo "Hello" | npx tsx scripts/openai-proxy/cli.ts
+# (from backend package dir, or use npm run openai-proxy:cli from root)
 
 # Custom URL (default: ws://127.0.0.1:8080/openai)
 npx tsx scripts/openai-proxy/cli.ts --url ws://127.0.0.1:8080/openai --text "Hi"

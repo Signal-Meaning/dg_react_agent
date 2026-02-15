@@ -44,7 +44,8 @@ To pull together logs from the browser, your backend, and any proxies:
 
 3. **Send the ID to your backend** on every request (e.g. fetch or WebSocket):
    - **HTTP:** Add header: `X-Trace-Id: <traceId>` (or `X-Request-Id`).
-   - **WebSocket:** Include it in the first message payload or in a handshake/query param so the server can attach it to its logger context.
+   - **WebSocket (OpenAI proxy):** Include `traceId` in the URL query so the proxy attaches it to every log: `ws://host/openai?traceId=<traceId>`. See [PROPAGATION-CONTRACT.md](./PROPAGATION-CONTRACT.md).
+   - **WebSocket (other):** Include it in the first message payload or in a handshake/query param so the server can attach it to its logger context.
 
 4. **Use the same logger (or same API) on the backend** and create a request-scoped logger from the incoming ID:
    ```ts
