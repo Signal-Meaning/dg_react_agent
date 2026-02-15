@@ -1,11 +1,13 @@
-# Package Structure: @signal-meaning/deepgram-voice-interaction-react@0.5.0
+# Package Structure: @signal-meaning/voice-agent-react@0.5.0
+
+Earlier releases were originally published under the package name `@signal-meaning/deepgram-voice-interaction-react`; the package has been renamed to `@signal-meaning/voice-agent-react`.
 
 ## Files Included in Package
 
 As defined in `package.json` "files" field:
 
 ```
-signal-meaning-deepgram-voice-interaction-react-0.5.0/
+signal-meaning-voice-agent-react-0.5.0/
 ├── dist/                      # Built component and utilities
 │   ├── index.js               # CommonJS entry point
 │   ├── index.esm.js           # ES Module entry point
