@@ -55,11 +55,11 @@ Unit tests that use only mocked WebSocket (`onFunctionCallRequest-sendResponse.t
 | Acceptance Criterion | Status |
 |----------------------|--------|
 | Scope defined | ✅ Phase 1 |
-| Tests failing under real API (red) / baseline captured | ⬜ (run with OPENAI_API_KEY to capture) |
-| Tests passing with real OpenAI (green) | ⬜ |
+| Tests failing under real API (red) / baseline captured | ✅ (2 firm-audio tests failed before fix) |
+| Tests passing with real OpenAI (green) | ✅ Phase 2 |
 | Run process documented | ✅ Phase 1 (SCOPE.md + this README) |
 | Release checklist updated (if needed) | ⬜ |
-| Docs updated after each phase | ✅ Phase 1 |
+| Docs updated after each phase | ✅ Phase 1, Phase 2 |
 | GitHub issue closed | ⬜ |
 
 ---

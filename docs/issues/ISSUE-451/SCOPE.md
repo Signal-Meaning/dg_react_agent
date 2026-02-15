@@ -23,16 +23,17 @@ When `useRealOpenAI` is true, mock-only tests (`itMockOnly`) are skipped. The fo
 | 7 | `echoes user message as ConversationText (role user) when client sends InjectUserMessage` |
 | 8 | `Issue #414 real-API: greeting flow must not produce error (USE_REAL_OPENAI=1)` |
 
-## How to run (baseline / red)
+## How to run
 
 - **Without real API (mocks):**  
   `npm run test:mock -- tests/integration/openai-proxy-integration.test.ts`  
   → 38 passed, 3 skipped (the 3 real-API-only tests above are skipped).
 
-- **With real API (required for Phase 2 green):**  
+- **With real API (Phase 2 green):**  
   `USE_REAL_OPENAI=1 npm test -- tests/integration/openai-proxy-integration.test.ts`  
   → Requires `OPENAI_API_KEY` in `.env`, `test-app/.env`, or environment.  
-  → When set, the 8 tests above run; all must pass for Acceptance Criteria.
+  → When set, the 8 tests above run; all must pass for Acceptance Criteria.  
+  → **Phase 2 fix:** Proxy sends `turn_detection: null` so only the proxy sends `input_audio_buffer.commit`; real API no longer returns "buffer too small ... 0.00ms" (see `packages/voice-agent-backend/scripts/openai-proxy/translator.ts`).
 
 ## Out of scope for this release
 
