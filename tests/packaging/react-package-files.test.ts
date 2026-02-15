@@ -1,13 +1,15 @@
 /**
- * Issue #445 Phase 1.2: Packaging contract — React package must not ship the OpenAI
- * proxy (or backend/maintainer-only scripts).
+ * Packaging contract — React package must not ship the OpenAI proxy (or backend/
+ * maintainer-only scripts), and must not ship docs/issues (internal only).
  * @see docs/issues/ISSUE-445/TDD-PLAN.md
+ * @see docs/PACKAGING-POLICY.md (issue docs not for customers)
  *
  * @jest-environment node
  */
 
 import path from 'path';
 import fs from 'fs';
+import { execSync } from 'child_process';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const ROOT_PACKAGE_JSON = path.join(REPO_ROOT, 'package.json');
@@ -20,5 +22,15 @@ describe('packaging: React package must not ship OpenAI proxy (Issue #445)', () 
       (entry) => entry === 'scripts' || entry.startsWith('scripts/')
     );
     expect(hasScripts).toBe(false);
+  });
+});
+
+describe('packaging: React package must not ship docs/issues (PACKAGING-POLICY)', () => {
+  it('npm pack --dry-run does not include docs/issues/ (internal only; not for customers)', () => {
+    const out = execSync('npm pack --dry-run', {
+      encoding: 'utf8',
+      cwd: REPO_ROOT,
+    });
+    expect(out).not.toMatch(/docs\/issues[/\s]/);
   });
 });

@@ -25,7 +25,8 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 #### Pre-Release Preparation
 - [ ] **Code Review Complete**: All PRs merged and code reviewed
 - [ ] **Tests Passing**: All unit tests and E2E tests passing
-  - [ ] Run: `npm test`
+  - [ ] **Run what CI runs** (catches broken imports, packaging tests, etc.): `npm run lint` then `npm run test:mock`. CI uses these same commands; passing locally means the Test and Publish workflow test job should pass.
+  - [ ] Optionally run full suite: `npm test`
   - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode** (proxy mode is the default and primary mode)
     - [ ] Start backend: `cd test-app && npm run backend`
     - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e` (all E2E tests must pass in proxy mode)

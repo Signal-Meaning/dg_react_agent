@@ -15,6 +15,9 @@ This document defines how we package and validate **@signal-meaning/voice-agent-
 3. **Maintainer-only scripts stay at repo root**  
    Test-infra, build support, publish/release, and test-execution scripts stay at repo root and are **not** published in any package's `files`.
 
+4. **Issue docs are internal only; do not ship to customers**  
+   `docs/issues/` is for internal issue tracking, release checklists, and TDD plans. We **do not** update issue docs as we ship, and we **do not** release them to customers. The React package's `docs/.npmignore` excludes `issues/` so it is never included in the published tarball. If a doc is needed in a permanent or customer-facing way, move it **out of** `docs/issues/` into an appropriate permanent location (e.g. `docs/`, `docs/BACKEND-PROXY/`, `docs/releases/`, or `docs/development/`).
+
 ---
 
 ## Package rules (testable)
@@ -24,7 +27,7 @@ This document defines how we package and validate **@signal-meaning/voice-agent-
 | Rule | Assertion |
 |------|-----------|
 | **Must include** | `dist/`, `src/`, types (e.g. `dist/index.d.ts`), `README.md`. Optional for consumers: `tests/`, `docs/`, `DEVELOPMENT.md` (product decision). |
-| **Must NOT include** | Any path under `scripts/openai-proxy/` (backend proxy). After ISSUE-445: **Must NOT include** `scripts/` at all (or use an explicit allowlist so no backend or maintainer-only script is shipped). |
+| **Must NOT include** | Any path under `scripts/openai-proxy/` (backend proxy). After ISSUE-445: **Must NOT include** `scripts/` at all (or use an explicit allowlist so no backend or maintainer-only script is shipped). **Must NOT include** `docs/issues/` (internal/maintainer only; excluded via `docs/.npmignore`). |
 | **Must NOT** | Require or document that backends depend on this package to run the OpenAI proxy or any other server-side tool. |
 | **Consumer** | React applications only. Backends must not need to install or resolve this package for proxy or server behavior. |
 
@@ -89,6 +92,11 @@ See **docs/issues/ISSUE-445/TDD-PLAN.md** for the RED/GREEN phases that introduc
 
 - **Before adding** a script to repo root or a package: check the allocation in **docs/issues/ISSUE-445/README.md** (Script and artifact allocation). If it's backend-runnable, it belongs in the backend (or dedicated) package, not in the React package. If it's test-infra or publish, it must not be in the React package's `files`.  
 - **After changing** `files` in any published package: run packaging contract tests and update this policy if the rules change.
+
+### 5. When adding or moving documentation
+
+- **Issue docs** (`docs/issues/`) are internal only: we do not update them as we ship, and they are **not** released to customers. `docs/.npmignore` excludes `issues/` so the React package tarball never contains them.
+- **Customer-facing or permanent docs** must live **outside** `docs/issues/` (e.g. `docs/`, `docs/BACKEND-PROXY/`, `docs/releases/`, `docs/development/`). If something in `docs/issues/` is needed for customers or long-term, move it to the appropriate permanent location.
 
 ---
 
