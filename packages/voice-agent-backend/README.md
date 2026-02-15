@@ -83,7 +83,7 @@ await attachVoiceAgentUpgrade(server, {
 server.listen(8080);
 ```
 
-**Running the OpenAI proxy:** The proxy lives in this package at `scripts/openai-proxy/`. Set `cwd` to the backend package directory (e.g. `path.dirname(require.resolve('@signal-meaning/voice-agent-backend/package.json'))`) and run `npx tsx scripts/openai-proxy/run.ts`. Requires `OPENAI_API_KEY` in the environment or a `.env` file. See `scripts/openai-proxy/README.md` in this package for details.
+**Running the OpenAI proxy:** The proxy lives in this package at `scripts/openai-proxy/`. Set `cwd` to the backend package directory (e.g. `path.dirname(require.resolve('@signal-meaning/voice-agent-backend/package.json'))`) and run `npx tsx scripts/openai-proxy/run.ts`. Requires `OPENAI_API_KEY` in the environment or a `.env` file. See `scripts/openai-proxy/README.md` in this package for details. For integrators (e.g. voice-commerce): do not resolve or depend on the React package to run the proxy; see **docs/OPENAI-PROXY-PACKAGING.md** in the repo.
 
 Options: **deepgram** — path, apiKey, agentUrl?, transcriptionUrl?, verifyClient?(info), setSecurityHeaders?(res). **openai** — path, proxyUrl? (forward to URL), or spawn? (cwd, command, args, env, port). **logger** — { info, warn, error, debug }. Returns a Promise that resolves to `{ shutdown() }` for graceful close.
 

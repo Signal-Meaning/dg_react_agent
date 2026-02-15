@@ -39,13 +39,7 @@ cd test-app && npm run backend
 
 That starts the backend server which hosts `/openai` (and `/deepgram-proxy`). The OpenAI proxy logic in this directory is used by that backend (e.g. via subprocess or in-process). Do not run a separate OpenAI-only process from the repo root for normal test-app usage.
 
-**Standalone (optional):** For integration tests or when you need only the OpenAI proxy on its own HTTP server, from the **project root**:
-
-```bash
-npx tsx scripts/openai-proxy/run.ts
-```
-
-Requires `OPENAI_API_KEY` in `.env`, `test-app/.env`, or the environment. The script loads `.env` from the project root and `test-app/.env`. Listens on `http://localhost:8080/openai` by default. Use `OPENAI_PROXY_PORT` and `OPENAI_REALTIME_URL` to override. To see client/upstream activity, run with `OPENAI_PROXY_DEBUG=1`. When debug is on, the proxy uses **OpenTelemetry** logging (`scripts/openai-proxy/logger.ts`). If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
+**Standalone (optional):** Run from **this package directory** (voice-agent-backend). From repo root: `cd packages/voice-agent-backend && npx tsx scripts/openai-proxy/run.ts`. Requires `OPENAI_API_KEY` in `.env` or the environment; the script loads `.env` from the package dir and parent dirs. Listens on `http://localhost:8080/openai` by default. Use `OPENAI_PROXY_PORT` and `OPENAI_REALTIME_URL` to override. To see client/upstream activity, run with `OPENAI_PROXY_DEBUG=1`. When debug is on, the proxy uses **OpenTelemetry** logging (`logger.ts` in this directory). If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
 
 **Greeting-text-only (diagnostic):** Set `OPENAI_PROXY_GREETING_TEXT_ONLY=1` so the proxy sends the greeting to the client only (UI shows it) and does not send `conversation.item.create` (greeting) to OpenAI. If the error stops, the greeting injection was the cause. (Testing showed the error can persist without it, so the trigger may be elsewhere.)
 

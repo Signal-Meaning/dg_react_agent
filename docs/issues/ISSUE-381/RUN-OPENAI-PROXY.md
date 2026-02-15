@@ -25,19 +25,20 @@
 
 ## Run the proxy
 
-From the **project root** (repo root where `package.json` is):
+**Canonical:** Run the test-app backend (one server for Deepgram and OpenAI proxies): `cd test-app && npm run backend`. The OpenAI proxy is spawned from the **voice-agent-backend** package (Issue #445); backends must not depend on the React package to run the proxy.
+
+**Standalone (from repo root):** Run the proxy from the backend package directory:
 
 ```bash
-# With API key in .env or test-app/.env
-npm run openai-proxy
+cd packages/voice-agent-backend && npx tsx scripts/openai-proxy/run.ts
 ```
 
 - Listens on **http://localhost:8080**; WebSocket path **/openai** → `ws://localhost:8080/openai`.
-- Loads `.env` and `test-app/.env`; put `OPENAI_API_KEY=sk-...` in either.
+- Loads `.env` from the package dir or repo root; put `OPENAI_API_KEY=sk-...` in `.env` or the environment.
 - Optional: `OPENAI_PROXY_PORT=9000` to use a different port.
-- Optional: `OPENAI_PROXY_DEBUG=1 npm run openai-proxy` to log upstream→client message types (useful to confirm `response.function_call_arguments.done` is received).
+- Optional: `OPENAI_PROXY_DEBUG=1` to log upstream→client message types.
 
-See `scripts/openai-proxy/README.md` for more (translator, server, OpenTelemetry logging).
+**Integrators (e.g. voice-commerce):** Use `@signal-meaning/voice-agent-backend` only. Set spawn `cwd` to `path.dirname(require.resolve('@signal-meaning/voice-agent-backend/package.json'))` and run `npx tsx scripts/openai-proxy/run.ts`. Do not resolve or depend on `@signal-meaning/voice-agent-react` to run the proxy. See `packages/voice-agent-backend/README.md` and `docs/OPENAI-PROXY-PACKAGING.md`.
 
 ---
 

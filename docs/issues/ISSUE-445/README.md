@@ -1,8 +1,8 @@
 # Issue #445: Packaging — Move OpenAI translation proxy out of voice-agent-react
 
 **GitHub:** [#445](https://github.com/Signal-Meaning/dg_react_agent/issues/445)  
-**Branch:** _(TBD)_  
-**Status:** Open
+**Branch:** `davidrmcgee/issue445`  
+**Status:** Implemented (Phase 2–5). Proxy moved to voice-agent-backend; React package no longer ships scripts; docs updated.
 
 ---
 
@@ -14,9 +14,9 @@
 | Move proxy code to chosen package | _Pending_ |
 | Update voice-agent-react `files` (stop publishing proxy) | _Pending_ |
 | test-app / E2E run proxy from backend (or proxy) package | _Pending_ |
-| Docs updated (backend README, OPENAI-WEBSOCKET-CONNECTION-FAILURE.md) | _Pending_ |
-| Packaging policy and validation: tests in CI; PACKAGING-POLICY / VALIDATION aligned | _Pending_ |
-| Acceptance criteria verified | _Pending_ |
+| Docs updated (backend README, RUN-OPENAI-PROXY, SOURCE-REFERENCE, OPENAI-PROXY-PACKAGING) | _Done_ |
+| Packaging policy and validation: tests in CI; PACKAGING-POLICY / VALIDATION aligned | _Done_ |
+| Acceptance criteria verified | _Done_ |
 
 **TDD plan:** All implementation follows tests first. See **[TDD-PLAN.md](./TDD-PLAN.md)** for RED → GREEN → REFACTOR phases (packaging contract tests, move proxy to backend, test-app/E2E, React package files, docs).
 
@@ -159,7 +159,7 @@ Grouped by **purpose** and **consumer**. This is the full picture so we can deci
 
 | Location | Contents | Consumer | Note |
 |----------|----------|----------|------|
-| `test-app/scripts/backend-server.js` | Single HTTP(S) server: Deepgram proxy attach, OpenAI proxy spawn, function-call | test-app when running `npm run backend` | Uses voice-agent-backend and spawns root `scripts/openai-proxy/run.ts` (cwd repo root). After fix: should spawn proxy from backend package path. |
+| `test-app/scripts/backend-server.js` | Single HTTP(S) server: Deepgram proxy attach, OpenAI proxy spawn, function-call | test-app when running `npm run backend` | Uses voice-agent-backend and spawns proxy from **backend package** path (`cwd: voiceAgentBackendPkgDir`, `args: ['tsx', 'scripts/openai-proxy/run.ts']`). Issue #445 done. |
 | `test-app/scripts/function-call-handlers.js` | Function-call handlers (e.g. get_current_time) for test-app | test-app backend | |
 | `test-app/scripts/logger.js` | Shared logger for test-app scripts (Issue #412) | test-app scripts | |
 
@@ -202,6 +202,6 @@ Grouped by **purpose** and **consumer**. This is the full picture so we can deci
 ## References
 
 - Voice-commerce backend: `backend/src/index.js` — `buildOpenAIOptions()`, spawn cwd from `require.resolve('@signal-meaning/voice-agent-react/package.json')`.
-- Doc: OPENAI-WEBSOCKET-CONNECTION-FAILURE.md (§ "Why is OpenAI disabled? Why do we resolve voice-agent-react?").
-- This repo: `scripts/openai-proxy/`, `packages/voice-agent-backend/`, root `package.json` `files`, `test-app/scripts/backend-server.js`.
+- **Integrators:** [docs/OPENAI-PROXY-PACKAGING.md](../../OPENAI-PROXY-PACKAGING.md) — run the proxy from voice-agent-backend only; do not resolve voice-agent-react.
+- This repo: proxy at `packages/voice-agent-backend/scripts/openai-proxy/`; root `package.json` `files` no longer includes `scripts`; `test-app/scripts/backend-server.js` spawns from backend package.
 - **Packaging policy and validation:** [docs/PACKAGING-POLICY.md](../../PACKAGING-POLICY.md), [VALIDATION.md](./VALIDATION.md), [TDD-PLAN.md](./TDD-PLAN.md).
