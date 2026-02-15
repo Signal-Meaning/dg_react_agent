@@ -9,22 +9,11 @@
  *   npx tsx scripts/openai-proxy/cli.ts [options] [--text "message"]
  *   echo "message" | npx tsx scripts/openai-proxy/cli.ts [options]
  *
- * Options:
- *   --url URL       Proxy WebSocket URL (default: ws://127.0.0.1:8080/openai)
- *   --text STRING   User message (if omitted, read from stdin)
- *   --text-only     Do not play agent TTS audio; only print response text
- *   --help          Show this usage
- *
- * Requires backend running (e.g. npm run backend from test-app, or npx tsx scripts/openai-proxy/run.ts).
- * API key: OPENAI_API_KEY is required by the proxy server; this script does not send it (proxy uses it for upstream).
- * Audio: OpenAI Realtime sends PCM 24kHz mono 16-bit; the speaker package streams it to the default output device.
- *
- * Playback uses the shared IAudioPlaybackSink (src/utils/audio/AudioPlaybackSink.ts) with a Node implementation
- * (SpeakerSink in speaker-sink.ts). The test-app uses the same interface with WebAudioPlaybackSink (Web Audio API).
+ * Run with cwd = voice-agent-backend package dir. Requires backend running.
  */
 
 import WebSocket from 'ws';
-import type { IAudioPlaybackSink } from '../../src/utils/audio/AudioPlaybackSink';
+import type { IAudioPlaybackSink } from './audio-playback-types';
 import { createSpeakerSink } from './speaker-sink';
 
 const DEFAULT_URL = 'ws://127.0.0.1:8080/openai';
@@ -64,7 +53,7 @@ function printUsage(): void {
     '  --text-only     Do not play agent TTS audio; only print response text',
     '  --help          Show this usage',
     '',
-    'Run the backend first (e.g. npm run backend from test-app, or npx tsx scripts/openai-proxy/run.ts).',
+    'Run the backend first (e.g. npm run backend from test-app, or npx tsx scripts/openai-proxy/run.ts from this package).',
   ].join('\n');
   console.log(usage);
 }
@@ -112,8 +101,7 @@ function run(url: string, message: string, textOnly: boolean): Promise<void> {
     });
 
     ws.on('message', (data: Buffer) => {
-      // Proxy sends raw PCM as binary frames (not JSON delta); JSON messages start with '{'
-      const isLikelyJson = data.length > 0 && data[0] === 0x7b; // '{'
+      const isLikelyJson = data.length > 0 && data[0] === 0x7b;
       if (isLikelyJson) {
         try {
           const msg = JSON.parse(data.toString()) as {
@@ -146,7 +134,6 @@ function run(url: string, message: string, textOnly: boolean): Promise<void> {
               clearTimeout(timeout);
               done();
             } else if (audioSink && receivedAnyAudioDelta && !waitingForSinkClose) {
-              // Proxy does not forward response.output_audio.done; end sink when we have transcript
               waitingForSinkClose = true;
               audioSink.end(() => {
                 if (waitingForSinkClose) {
@@ -162,10 +149,9 @@ function run(url: string, message: string, textOnly: boolean): Promise<void> {
             done(new Error(msg.description ?? 'Unknown error'));
           }
         } catch {
-          // not JSON, fall through to binary handling
+          // not JSON
         }
       }
-      // Binary PCM from proxy (response.output_audio.delta is sent as raw PCM, not JSON)
       if (!isLikelyJson && Buffer.isBuffer(data) && data.length > 0 && audioSink) {
         receivedAnyAudioDelta = true;
         audioSink.write(data);

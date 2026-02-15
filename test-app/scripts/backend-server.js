@@ -35,8 +35,10 @@ import { getLogger, generateTraceId } from './logger.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Issue #423: use voice-agent-backend package for /function-call (thin wrapper)
+// Issue #445: OpenAI proxy lives in voice-agent-backend; spawn with cwd = backend package dir
 const require = createRequire(import.meta.url);
 const voiceAgentBackendPath = path.resolve(__dirname, '..', '..', 'packages', 'voice-agent-backend', 'src', 'index.js');
+const voiceAgentBackendPkgDir = path.resolve(__dirname, '..', '..', 'packages', 'voice-agent-backend');
 const { createFunctionCallHandler, attachVoiceAgentUpgrade } = require(voiceAgentBackendPath);
 const functionCallHandler = createFunctionCallHandler({ execute: executeFunctionCall });
 if (process.env.SKIP_DOTENV !== '1') {
@@ -260,7 +262,7 @@ let voiceAgentAttachment = null;
       openai: hasOpenAI ? {
         path: '/openai',
         spawn: {
-          cwd: path.resolve(__dirname, '..', '..'),
+          cwd: voiceAgentBackendPkgDir,
           command: 'npx',
           args: ['tsx', 'scripts/openai-proxy/run.ts'],
           env: { OPENAI_API_KEY },
