@@ -32,7 +32,7 @@ const WebSocket = require('ws');
 const WebSocketServer = require(path.join(path.dirname(require.resolve('ws')), 'lib', 'websocket-server.js'));
 import {
   createOpenAIProxyServer,
-} from '../../scripts/openai-proxy/server';
+} from '../../packages/voice-agent-backend/scripts/openai-proxy/server';
 
 /** When true, proxy uses real OpenAI Realtime URL and auth; mock is not started. Requires OPENAI_API_KEY. */
 const useRealOpenAI = process.env.USE_REAL_OPENAI === '1' && !!process.env.OPENAI_API_KEY?.trim();

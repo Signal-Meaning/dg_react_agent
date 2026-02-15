@@ -137,7 +137,7 @@ With only one key set, only the corresponding endpoint lines are printed.
 - **OpenAI (default)** – Set `VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai`. The test-app uses this as the default proxy when present.
 - **E2E** – Playwright can start the proxy via `webServer` in `test-app/tests/playwright.config.mjs`, or you can start it yourself and run with `E2E_USE_EXISTING_SERVER=1`.
 
-See [OPENAI-PROXY-AND-ISSUE-381.md](./OPENAI-PROXY-AND-ISSUE-381.md) and repo `docs/issues/ISSUE-381/RUN-OPENAI-PROXY.md` for OpenAI proxy details.
+See [OPENAI-PROXY-AND-ISSUE-381.md](./OPENAI-PROXY-AND-ISSUE-381.md) and repo [docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md](../../docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md) for OpenAI proxy details.
 
 ---
 
@@ -229,5 +229,5 @@ That document lists:
 
 - **[OPENAI-PROXY-AND-ISSUE-381.md](./OPENAI-PROXY-AND-ISSUE-381.md)** – OpenAI proxy backend, test-app changes, and E2E usage.
 - **[PROXY-SERVER-TEST-COVERAGE.md](../tests/PROXY-SERVER-TEST-COVERAGE.md)** – Requirements vs. tests and how to run them.
-- **Repo `docs/issues/ISSUE-381/`** – OpenAI proxy implementation, RUN-OPENAI-PROXY, API discontinuities, E2E plan.
+- **Repo `docs/issues/ISSUE-381/`** and **`docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md`** – OpenAI proxy implementation, run/env/tests doc, API discontinuities, E2E plan.
 - **Repo `docs/BACKEND-PROXY/`** – Backend proxy interface and implementation guides (generic backend proxy pattern).

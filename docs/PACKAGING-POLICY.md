@@ -16,7 +16,7 @@ This document defines how we package and validate **@signal-meaning/voice-agent-
    Test-infra, build support, publish/release, and test-execution scripts stay at repo root and are **not** published in any package's `files`.
 
 4. **Issue docs are internal only; do not ship to customers**  
-   `docs/issues/` is for internal issue tracking, release checklists, and TDD plans. We **do not** update issue docs as we ship, and we **do not** release them to customers. The React package's `.npmignore` excludes `docs/issues/` so it is never included in the published tarball. If a doc is needed in a permanent or customer-facing way, move it **out of** `docs/issues/` into an appropriate permanent location (e.g. `docs/`, `docs/BACKEND-PROXY/`, `docs/releases/`, or `docs/development/`).
+   `docs/issues/` is for internal issue tracking, release checklists, and TDD plans. We **do not** update issue docs as we ship, and we **do not** release them to customers. The React package's `docs/.npmignore` excludes `issues/` so it is never included in the published tarball. If a doc is needed in a permanent or customer-facing way, move it **out of** `docs/issues/` into an appropriate permanent location (e.g. `docs/`, `docs/BACKEND-PROXY/`, `docs/releases/`, or `docs/development/`).
 
 ---
 
@@ -27,7 +27,7 @@ This document defines how we package and validate **@signal-meaning/voice-agent-
 | Rule | Assertion |
 |------|-----------|
 | **Must include** | `dist/`, `src/`, types (e.g. `dist/index.d.ts`), `README.md`. Optional for consumers: `tests/`, `docs/`, `DEVELOPMENT.md` (product decision). |
-| **Must NOT include** | Any path under `scripts/openai-proxy/` (backend proxy). After ISSUE-445: **Must NOT include** `scripts/` at all (or use an explicit allowlist so no backend or maintainer-only script is shipped). **Must NOT include** `docs/issues/` (internal/maintainer only; excluded via `.npmignore`). |
+| **Must NOT include** | Any path under `scripts/openai-proxy/` (backend proxy). After ISSUE-445: **Must NOT include** `scripts/` at all (or use an explicit allowlist so no backend or maintainer-only script is shipped). **Must NOT include** `docs/issues/` (internal/maintainer only; excluded via `docs/.npmignore`). |
 | **Must NOT** | Require or document that backends depend on this package to run the OpenAI proxy or any other server-side tool. |
 | **Consumer** | React applications only. Backends must not need to install or resolve this package for proxy or server behavior. |
 

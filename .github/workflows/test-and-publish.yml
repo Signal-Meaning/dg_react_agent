@@ -1,8 +1,7 @@
 name: Test and Publish Package
 
+# No push trigger: we do not run CI/CD on every merge to main (see docs/issues/ISSUE-448).
 on:
-  push:
-    branches: [ main, 'release/v*' ]
   release:
     types: [published]
   workflow_dispatch:

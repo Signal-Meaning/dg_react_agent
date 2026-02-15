@@ -5,7 +5,7 @@
 
 ## 🎯 Purpose
 
-This documentation directory contains comprehensive guides and examples for integrating the `@signal-meaning/deepgram-voice-interaction-react` component into React applications. The documentation is organized by release version and covers real-world integration patterns, best practices, and advanced use cases.
+This documentation directory contains comprehensive guides and examples for integrating the `@signal-meaning/voice-agent-react` component into React applications. The documentation is organized by release version and covers real-world integration patterns, best practices, and advanced use cases.
 
 ## 📁 Documentation Structure
 
@@ -26,7 +26,7 @@ This documentation directory contains comprehensive guides and examples for inte
 ## 🔗 Relationship: Test App ↔ Component
 
 ### The Component
-The `@signal-meaning/deepgram-voice-interaction-react` component is a **headless React component** that provides:
+The `@signal-meaning/voice-agent-react` component is a **headless React component** that provides:
 - Real-time voice transcription via Deepgram's API
 - AI agent interaction capabilities
 - WebSocket connection management
@@ -49,7 +49,7 @@ The test app (`test-app/`) serves as:
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    Component Package                     │
-│  (@signal-meaning/deepgram-voice-interaction-react)     │
+│  (@signal-meaning/voice-agent-react)     │
 │                                                          │
 │  - Headless React component                             │
 │  - WebSocket management                                 │
