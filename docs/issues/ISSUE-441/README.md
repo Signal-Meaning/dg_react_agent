@@ -52,11 +52,11 @@ if (openaiOpts?.path && openaiProxyUrl) {
 
 ## Acceptance criteria
 
-- [ ] `attachVoiceAgentUpgrade` passes a **merged** `upstreamOptions` (package defaults + `openai.upstreamOptions`) into `createOpenAIWss`.
-- [ ] Integrators can pass `openai.upstreamOptions` (e.g. `headers`) and the upstream WebSocket is created with those options.
-- [ ] Existing behavior when `openai.upstreamOptions` is omitted is unchanged (TLS defaults still applied when `useHttps`).
-- [ ] Document `openai.upstreamOptions` in the package README / JSDoc (e.g. “merged with package defaults; use for Authorization header for OpenAI Realtime”).
-- [ ] Backend package version bumped and release cut so host apps can consume the fix without patching.
+- [x] `attachVoiceAgentUpgrade` passes a **merged** `upstreamOptions` (package defaults + `openai.upstreamOptions`) into `createOpenAIWss`.
+- [x] Integrators can pass `openai.upstreamOptions` (e.g. `headers`) and the upstream WebSocket is created with those options.
+- [x] Existing behavior when `openai.upstreamOptions` is omitted is unchanged (TLS defaults still applied when `useHttps`).
+- [x] Document `openai.upstreamOptions` in the package README / JSDoc (e.g. “merged with package defaults; use for Authorization header for OpenAI Realtime”).
+- [x] Backend package version bumped to 0.1.2; release cut so host apps can consume the fix without patching.
 
 ---
 

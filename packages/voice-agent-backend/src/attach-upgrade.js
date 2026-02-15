@@ -27,6 +27,17 @@ function getPathname(reqUrl) {
 }
 
 /**
+ * Merge package default upstream options with caller-supplied options (Issue #441).
+ * @param {boolean} useHttps - When true, base includes rejectUnauthorized: false.
+ * @param {object} [callerOptions] - Caller openai.upstreamOptions (e.g. headers for Authorization).
+ * @returns {object} Merged options for WebSocket client (createOpenAIWss).
+ */
+function mergeUpstreamOptions(useHttps, callerOptions) {
+  const baseUpstreamOptions = useHttps ? { rejectUnauthorized: false } : {};
+  return { ...baseUpstreamOptions, ...(callerOptions || {}) };
+}
+
+/**
  * Create Deepgram WebSocket proxy (client <-> Deepgram).
  * @param {{ path: string, apiKey: string, agentUrl?: string, transcriptionUrl?: string, verifyClient?: (info: object) => boolean, setSecurityHeaders?: (res: object) => void, logger?: object }} options
  * @returns {{ wss: import('ws').WebSocketServer }}
@@ -184,7 +195,7 @@ function waitForPort(port, timeoutMs = 15000) {
  * @param {import('http').Server|import('https').Server} server
  * @param {{
  *   deepgram?: { path: string, apiKey: string, agentUrl?: string, transcriptionUrl?: string, verifyClient?: (info: object) => boolean, setSecurityHeaders?: (res: object) => void },
- *   openai?: { path: string, proxyUrl?: string, spawn?: { cwd: string, command: string, args: string[], env?: object, port: number }, upstreamOptions?: object },
+ *   openai?: { path: string, proxyUrl?: string, spawn?: { cwd: string, command: string, args: string[], env?: object, port: number }, upstreamOptions?: object } - upstreamOptions merged with package defaults; use for Authorization header for OpenAI Realtime (Issue #441)
  *   logger?: object
  * }} options
  * @returns {Promise<{ shutdown: () => Promise<void> }>}
@@ -229,7 +240,7 @@ async function attachVoiceAgentUpgrade(server, options = {}) {
   }
 
   if (openaiOpts?.path && openaiProxyUrl) {
-    const upstreamOptions = useHttps ? { rejectUnauthorized: false } : {};
+    const upstreamOptions = mergeUpstreamOptions(useHttps, openaiOpts.upstreamOptions);
     const { wss } = createOpenAIWss({
       path: openaiOpts.path,
       proxyUrl: openaiProxyUrl,
@@ -267,4 +278,5 @@ module.exports = {
   attachVoiceAgentUpgrade,
   createDeepgramWss,
   createOpenAIWss,
+  mergeUpstreamOptions,
 };
