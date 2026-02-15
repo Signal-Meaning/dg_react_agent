@@ -3,6 +3,8 @@
 **GitHub:** [#454 Document: Third parties maintain their own backend contracts for function calls](https://github.com/Signal-Meaning/dg_react_agent/issues/454)  
 **Epic:** [#455 – Real-API tests, function-call contract, and 3pp scope](../ISSUE-455/README.md)
 
+**Note:** This is a documentation-only issue. It may be done in **any order** with #452 and #453. When the issue is completed, **update both this README and the epic [TRACKING.md](../ISSUE-455/TRACKING.md)**.
+
 ---
 
 ## Summary
@@ -11,20 +13,21 @@ Third parties (e.g. voice-commerce) maintain their own backend contracts for any
 
 ---
 
-## Completion criteria (track to conclusion)
+## Acceptance Criteria
 
 - [ ] **Contract doc updated** – e.g. `docs/issues/ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md` (or related doc) states that 3pp maintain their own backend contracts.
 - [ ] **Expectations clear** – Readers understand we keep the common shape; 3pp own their contracts and tests.
-- [ ] **Issue closed** – #454 closed with resolution; link to this doc or to epic TRACKING.md.
+- [ ] **Docs updated on completion** – When all work is done, both this README and the epic [TRACKING.md](../ISSUE-455/TRACKING.md) are updated and #454 is closed with a link to this doc and TRACKING.
 
 ---
 
-## Status
+## Status (update when issue is completed)
 
 | Criterion | Status |
 |----------|--------|
 | BACKEND-FUNCTION-CALL-CONTRACT or related updated | ⬜ |
 | 3pp “maintain own contracts” stated | ⬜ |
+| This README and TRACKING.md updated | ⬜ |
 | Issue closed | ⬜ |
 
 ---
@@ -32,4 +35,4 @@ Third parties (e.g. voice-commerce) maintain their own backend contracts for any
 ## Docs
 
 - **[../ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md](../ISSUE-407/BACKEND-FUNCTION-CALL-CONTRACT.md)** – Backend contract (primary location for updates).
-- **[../ISSUE-455/TRACKING.md](../ISSUE-455/TRACKING.md)** – Epic tracking checklist for this issue.
+- **[../ISSUE-455/TRACKING.md](../ISSUE-455/TRACKING.md)** – Epic tracking; update it and this README when this issue is completed.
