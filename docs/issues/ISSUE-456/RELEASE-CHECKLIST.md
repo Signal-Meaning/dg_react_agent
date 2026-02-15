@@ -4,6 +4,8 @@
 
 **Epic:** [#455](https://github.com/Signal-Meaning/dg_react_agent/issues/455) — Real-API tests, function-call contract, and 3pp scope (voice-commerce feedback). Complete the four tracked issues (#451–#454) as part of this release.
 
+**Progress:** Release checklist docs added ✅. Lint ✅. `npm run test:mock` ✅ (96 suites, 921 tests). Next: run full suite and E2E in proxy mode, then version bump and release docs.
+
 ---
 
 ## 🚀 Release v0.9.0 - Complete Release Process
@@ -22,14 +24,14 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 - [ ] **Code Review Complete**: All PRs merged and code reviewed
 - [ ] **Tests Passing**: All unit tests and E2E tests passing
-  - [ ] Run what CI runs (catches broken imports, packaging tests, etc.): `npm run lint` then `npm run test:mock`. CI uses these same commands; passing locally means the Test and Publish workflow test job should pass.
+  - [x] Run what CI runs (catches broken imports, packaging tests, etc.): `npm run lint` then `npm run test:mock`. CI uses these same commands; passing locally means the Test and Publish workflow test job should pass.
   - [ ] Optionally run full suite: `npm test`
   - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode** (proxy mode is the default and primary mode)
     - [ ] Start backend: `cd test-app && npm run backend`
     - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e` (all E2E tests must pass in proxy mode)
     - [ ] Verify: All tests pass in proxy mode before proceeding
-- [ ] **Linting Clean**: No linting errors
-  - [ ] Run: `npm run lint`
+- [x] **Linting Clean**: No linting errors
+  - [x] Run: `npm run lint`
 - [ ] **Documentation Updated**: All relevant documentation updated
 - [ ] **API Changes Documented**: Any API changes appear in API-REFERENCE.md evolution section
 - [ ] **Breaking Changes Documented**: Any breaking changes identified and documented
