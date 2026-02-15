@@ -14,7 +14,7 @@
 | Move proxy code to chosen package | _Pending_ |
 | Update voice-agent-react `files` (stop publishing proxy) | _Pending_ |
 | test-app / E2E run proxy from backend (or proxy) package | _Pending_ |
-| Docs updated (backend README, RUN-OPENAI-PROXY, SOURCE-REFERENCE, OPENAI-PROXY-PACKAGING) | _Done_ |
+| Docs updated (backend README, RUN-OPENAI-PROXY in BACKEND-PROXY/, SOURCE-REFERENCE, OPENAI-PROXY-PACKAGING) | _Done_ |
 | Packaging policy and validation: tests in CI; PACKAGING-POLICY / VALIDATION aligned | _Done_ |
 | Acceptance criteria verified | _Done_ |
 

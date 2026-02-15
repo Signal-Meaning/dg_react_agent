@@ -11,7 +11,7 @@
 
 **[→ PROGRESS.md](./PROGRESS.md)** — Single overview of progress against Issue #381: phase status, test counts (unit 28, integration 12, E2E), what’s done vs remaining, and links to all other docs.
 
-**[→ RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md)** — Phase 5: environment variables, how to run the proxy, and how to run unit, integration, and E2E tests.
+**[→ RUN-OPENAI-PROXY.md](../BACKEND-PROXY/RUN-OPENAI-PROXY.md)** — Phase 5: environment variables, how to run the proxy, and how to run unit, integration, and E2E tests (doc lives in BACKEND-PROXY).
 
 ---
 
@@ -22,7 +22,7 @@
 - **E2E – context retention**: context-retention-agent-usage and context-retention-with-function-calling **pass** when running against OpenAI proxy (proxy running; real API sends `response.function_call_arguments.done` for the function-calling spec). Test app adds user message optimistically in `handleTextSubmit`; context retained after reconnect.
 - **E2E – declarative-props (Deepgram function-call)**: Tests **skip** when OpenAI proxy; when run (e.g. Deepgram), they require a real function call. OpenAI flow covered by openai-proxy-e2e “Simple function calling” and integration tests.
 - **E2E – Deepgram-only specs**: deepgram-backend-proxy-mode (Deepgram), callback-test (Deepgram transcript/VAD) skip when OpenAI proxy. See [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md).
-- **Phase 5 – Run and env**: [RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md) documents env vars, how to run the proxy, and how to run unit, integration, and E2E tests.
+- **Phase 5 – Run and env**: [RUN-OPENAI-PROXY.md](../BACKEND-PROXY/RUN-OPENAI-PROXY.md) documents env vars, how to run the proxy, and how to run unit, integration, and E2E tests.
 
 ---
 
@@ -31,7 +31,7 @@
 | Document | Purpose |
 |----------|---------|
 | **[PROGRESS.md](./PROGRESS.md)** | **Progress overview** — phase status, test counts, done vs remaining, links to all below |
-| **[RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md)** | **Phase 5** — env vars, run proxy, run unit/integration/E2E tests, CI notes |
+| **[RUN-OPENAI-PROXY.md](../BACKEND-PROXY/RUN-OPENAI-PROXY.md)** | **Phase 5** — env vars, run proxy, run unit/integration/E2E tests, CI notes |
 | [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md) | E2E run order, commands, remaining specs when running with OpenAI proxy |
 | [API-DISCONTINUITIES.md](./API-DISCONTINUITIES.md) | Component vs OpenAI Realtime protocol; discontinuities and proxy mapping |
 | [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md) | Phased implementation: tests first (RED), then implementation (GREEN), then refactor |
@@ -84,7 +84,7 @@ Use this checklist to confirm the issue is complete before closing.
   **Done**: context-retention and context-retention-with-function-calling pass; declarative-props (Deepgram function-call), deepgram-backend-proxy-mode (Deepgram), callback-test (Deepgram transcript/VAD) skip when OpenAI; documented in [PROGRESS.md](./PROGRESS.md) and [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md). **Ref**: [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md#phase-4).
 
 - [x] **Phase 5 – Documentation and CI**  
-  [RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md) describes proxy env, how to run the proxy, and how to run unit, integration, and E2E tests; CI runs proxy unit and integration tests in existing Jest job.  
+  [RUN-OPENAI-PROXY.md](../BACKEND-PROXY/RUN-OPENAI-PROXY.md) describes proxy env, how to run the proxy, and how to run unit, integration, and E2E tests; CI runs proxy unit and integration tests in existing Jest job.  
   **Ref**: [IMPLEMENTATION-PHASES.md](./IMPLEMENTATION-PHASES.md#phase-5).
 
 - [x] **Greeting**  
