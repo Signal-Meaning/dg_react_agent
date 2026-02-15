@@ -24,10 +24,7 @@ The repository publishes two packages. CI (`.github/workflows/test-and-publish.y
 - [ ] **Code Review Complete**: All PRs for this release merged and reviewed
 - [x] **Tests Passing**
   - [x] Run: `npm run test:mock` — passed
-  - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode** (manual: start backend, then `USE_PROXY_MODE=true npm run test:e2e`)
-    - [ ] Start backend: `cd test-app && npm run backend`
-    - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e`
-    - [ ] Verify: All tests pass in proxy mode before proceeding
+  - [x] **E2E tests in proxy mode** — passed (fix: 16k + 24k retry for UserStartedSpeaking in idle timeout state machine test)
 - [x] **Linting Clean**
   - [x] Run: `npm run lint` — passed
 - [ ] **Documentation Updated**: Issue #439 docs and BACKEND-PROXY/MIGRATION-GUIDE.md (OpenAI proxy agent-only) are current
