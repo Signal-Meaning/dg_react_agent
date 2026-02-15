@@ -6,13 +6,13 @@ Use this checklist to drive each child issue to completion. **Update both this f
 
 ## #451 – Real-API tests required (focus; TDD)
 
-**Acceptance Criteria (summary):** Relevant tests pass when run with real APIs (e.g. `USE_REAL_OPENAI=1`); scope is defined; run process and expectations are documented; release checklist updated if needed. **Tests drive every step** (red–green–refactor per phase). After each phase, update this TRACKING and [ISSUE-451/README.md](../ISSUE-451/README.md).
+**Acceptance Criteria (summary):** Relevant tests pass when run with real APIs (e.g. `USE_REAL_APIS=1`); scope is defined; run process and expectations are documented; release checklist updated if needed. **Tests drive every step** (red–green–refactor per phase). After each phase, update this TRACKING and [ISSUE-451/README.md](../ISSUE-451/README.md).
 
 | Step | Status |
 |------|--------|
 | **Phase 1 – Scope (TDD):** Define which tests must pass with USE_REAL_APIS; add or identify tests that fail under real API run; document scope in ISSUE-451/README | ✅ |
 | **Update docs:** Mark Phase 1 complete in this TRACKING and in ISSUE-451/README | ✅ |
-| **Phase 2 – Green (TDD):** Implement or adjust tests/implementation so selected tests pass with OpenAI provider (USE_REAL_OPENAI=1) | ✅ |
+| **Phase 2 – Green (TDD):** Implement or adjust tests/implementation so selected tests pass with OpenAI provider (USE_REAL_APIS=1) | ✅ |
 | **Update docs:** Mark Phase 2 complete in this TRACKING and in ISSUE-451/README | ✅ |
 | **Phase 3 – Document:** Document how to run real-API suite (env vars, keys, optional CI or release step) | ✅ (SCOPE.md, TEST-STRATEGY.md) |
 | **Update docs:** Mark Phase 3 complete in this TRACKING and in ISSUE-451/README | ✅ |

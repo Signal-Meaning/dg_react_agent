@@ -9,7 +9,7 @@
  * error after a successful response; the test-app sees it because it talks to the real API
  * via the proxy. Integration tests verify translation and protocol, not live API behavior.
  *
- * Real upstream: set USE_REAL_OPENAI=1 and OPENAI_API_KEY to run a subset of tests
+ * Real upstream: set USE_REAL_APIS=1 and OPENAI_API_KEY to run a subset of tests
  * against the live OpenAI Realtime API. See docs/development/TEST-STRATEGY.md.
  *
  * Run order: integration tests first against real APIs (when keys available), then mocks.
@@ -19,7 +19,7 @@
  */
 
 import path from 'path';
-// Load root .env and test-app/.env so OPENAI_API_KEY is available when running with USE_REAL_OPENAI=1
+// Load root .env and test-app/.env so OPENAI_API_KEY is available when running with USE_REAL_APIS=1
 import dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config({ path: path.resolve(process.cwd(), 'test-app', '.env') });
@@ -35,7 +35,7 @@ import {
 } from '../../packages/voice-agent-backend/scripts/openai-proxy/server';
 
 /** When true, proxy uses real OpenAI Realtime URL and auth; mock is not started. Requires OPENAI_API_KEY. */
-const useRealOpenAI = process.env.USE_REAL_OPENAI === '1' && !!process.env.OPENAI_API_KEY?.trim();
+const useRealAPIs = (process.env.USE_REAL_APIS === '1' || process.env.USE_REAL_APIS === 'true') && !!process.env.OPENAI_API_KEY?.trim();
 
 /** Issue #414 RESOLUTION-PLAN: 100ms PCM at 24kHz 16-bit mono (bytes). */
 const PCM_100MS_24K_BYTES = 4800;
@@ -43,8 +43,8 @@ const PCM_100MS_24K_BYTES = 4800;
 /** Issue #414: Load speech-like PCM from project fixtures (TTS/recorded speech); 24 kHz for proxy. */
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const AudioFileLoader = require('../utils/audio-file-loader');
-/** Use for tests that require the mock upstream (exact payloads, mockReceived, etc.); skipped when USE_REAL_OPENAI=1. */
-const itMockOnly = useRealOpenAI ? it.skip : it;
+/** Use for tests that require the mock upstream (exact payloads, mockReceived, etc.); skipped when USE_REAL_APIS=1. */
+const itMockOnly = useRealAPIs ? it.skip : it;
 
 describe('OpenAI proxy integration (Issue #381)', () => {
   let mockUpstreamServer: http.Server | null = null;
@@ -111,7 +111,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     await new Promise<void>((resolve) => proxyServer.listen(0, () => resolve()));
     proxyPort = (proxyServer.address() as { port: number }).port;
 
-    if (useRealOpenAI) {
+    if (useRealAPIs) {
       const apiKey = process.env.OPENAI_API_KEY!.trim();
       const upstreamUrl = process.env.OPENAI_REALTIME_URL ?? 'wss://api.openai.com/v1/realtime?model=gpt-realtime';
       createOpenAIProxyServer({
@@ -345,7 +345,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 10000);
 
   beforeEach(() => {
-    if (useRealOpenAI) jest.useRealTimers();
+    if (useRealAPIs) jest.useRealTimers();
   });
 
 
@@ -608,13 +608,13 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What is 2 plus 2?' }));
         }
         if (msg.type === 'ConversationText' && msg.role === 'assistant') {
-          if (useRealOpenAI) {
+          if (useRealAPIs) {
             expect(typeof msg.content).toBe('string');
             expect((msg.content ?? '').length).toBeGreaterThan(0);
           } else {
             expect(msg.content).toBe('Hello from mock');
           }
-          if (useRealOpenAI) {
+          if (useRealAPIs) {
             // Real API can send error after response; wait so receiving Error fails the test (5s window)
             setTimeout(() => finish(), 5000);
           } else {
@@ -626,7 +626,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', (err) => finish(err));
-  }, useRealOpenAI ? 25000 : 5000);
+  }, useRealAPIs ? 25000 : 5000);
 
   /** Issue #414: OpenAI requires ≥100ms audio before commit. Proxy must not send commit when total appended bytes < 100ms (4800 bytes at 24kHz 16-bit; proxy uses 24k so both 16k and 24k clients work). */
   itMockOnly('does not send input_audio_buffer.commit when total appended audio < 100ms (Issue #414 buffer too small)', (done) => {
@@ -794,7 +794,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Issue #414 real-API: Same assertion as mock test. With real OpenAI, upstream currently returns error after append;
    * this test FAILS and documents the server error. When the API is fixed, it should pass.
    */
-  (useRealOpenAI ? it : it.skip)('Issue #414 real-API: firm audio connection — no Error from upstream within 12s after sending audio (USE_REAL_OPENAI=1)', (done) => {
+  (useRealAPIs ? it : it.skip)('Issue #414 real-API: firm audio connection — no Error from upstream within 12s after sending audio (USE_REAL_APIS=1)', (done) => {
     const FIRM_AUDIO_WINDOW_MS = 12000;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let receivedSettingsApplied = false;
@@ -842,7 +842,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Issue #414 RESOLUTION-PLAN §7: Real-API firm audio with speech-like PCM from project fixtures.
    * Uses TTS/recorded speech (tests/fixtures/audio-samples), not synthetic tone. Varying audio content is critical.
    */
-  (useRealOpenAI ? it : it.skip)('Issue #414 real-API: firm audio (speech-like audio) — no Error from upstream within 12s (USE_REAL_OPENAI=1)', (done) => {
+  (useRealAPIs ? it : it.skip)('Issue #414 real-API: firm audio (speech-like audio) — no Error from upstream within 12s (USE_REAL_APIS=1)', (done) => {
     const FIRM_AUDIO_WINDOW_MS = 12000;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let receivedSettingsApplied = false;
@@ -1208,7 +1208,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         }
         if (msg.type === 'ConversationText' && msg.role === 'user') {
           expect(msg.content).toBe(userContent);
-          if (useRealOpenAI) {
+          if (useRealAPIs) {
             // Wait 5s so late-arriving upstream Error fails the test
             setTimeout(() => finish(), 5000);
           } else {
@@ -1220,7 +1220,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', (err) => finish(err));
-  }, useRealOpenAI ? 25000 : 5000);
+  }, useRealAPIs ? 25000 : 5000);
 
   /**
    * Issue #388 (TDD red): Proxy must send response.create only AFTER receiving conversation.item.added
@@ -1677,11 +1677,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   });
 
   /**
-   * Issue #414: Real-API greeting flow test. Only runs with USE_REAL_OPENAI=1 and OPENAI_API_KEY.
+   * Issue #414: Real-API greeting flow test. Only runs with USE_REAL_APIS=1 and OPENAI_API_KEY.
    * Sends Settings with greeting, asserts: SettingsApplied received, no Error within 10s.
    * This test FAILS against the real API if OpenAI errors during the greeting flow.
    */
-  (useRealOpenAI ? it : it.skip)('Issue #414 real-API: greeting flow must not produce error (USE_REAL_OPENAI=1)', (done) => {
+  (useRealAPIs ? it : it.skip)('Issue #414 real-API: greeting flow must not produce error (USE_REAL_APIS=1)', (done) => {
     const greeting = 'Hello! How can I assist you today?';
     let receivedError: string | null = null;
     let receivedSettingsApplied = false;
