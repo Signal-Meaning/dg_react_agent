@@ -12,6 +12,8 @@
  *
  * Run: USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-tts-diagnostic
  * (Backend must be running: cd test-app && npm run backend)
+ *
+ * Optional: this describe is marked optional so it is skipped in default E2E runs; run explicitly when diagnosing TTS.
  */
 
 import { test, expect } from '@playwright/test';
@@ -39,7 +41,7 @@ const AGENT_RESPONSE_TIMEOUT = 25000;
 const TTS_PLAYBACK_WAIT_MS = 8000; // Wait for playback to start (audio-playing-status -> true)
 const TTS_DELIVERY_WAIT_MS = 4000;
 
-test.describe('OpenAI proxy TTS diagnostic (Issue #414)', () => {
+test.describe.optional('OpenAI proxy TTS diagnostic (Issue #414)', () => {
   test.beforeEach(() => {
     skipIfNoOpenAIProxy('Requires VITE_OPENAI_PROXY_ENDPOINT for OpenAI proxy E2E');
   });

@@ -403,6 +403,7 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
   });
 
   test('should maintain consistent idle timeout state machine', async ({ page }) => {
+    test.setTimeout(120000); // Deepgram VAD/state transitions can be slow; extend from default 60s
     console.log('🧪 Testing idle timeout state machine consistency with pre-recorded audio...');
     
     // Import behavior-based fixtures (preferred over console log parsing)
