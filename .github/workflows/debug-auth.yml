@@ -53,7 +53,7 @@ jobs:
           echo "✅ Authentication successful"
           echo ""
           echo "=== Package Access Test ==="
-          if ! npm view @signal-meaning/deepgram-voice-interaction-react --registry https://npm.pkg.github.com; then
+          if ! npm view @signal-meaning/voice-agent-react --registry https://npm.pkg.github.com; then
             echo "❌ Package view failed"
             exit 1
           fi

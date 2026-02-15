@@ -139,6 +139,11 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 
 - Focus on maintaining and improving test coverage
 
+## Publishing and Releasing
+
+- **Publishing the project** (npm packages to GitHub Package Registry) and the **tokens/secrets** required are documented in **docs/PUBLISHING-AND-RELEASING.md**.
+- That doc covers: NPM_TOKEN (create/update, where it’s used), release flow, and pointers to the release checklist and workflow. Use it when updating an expired token or preparing a release.
+
 ## Git Branch Management
 
 ### CRITICAL: Never Delete Release Branches
