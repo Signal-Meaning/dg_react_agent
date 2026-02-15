@@ -49,7 +49,6 @@ Use this standard for all logging in the component, test-app, and scripts so log
 - **Server:** For each request, create a request-scoped logger:  
   `const requestLog = rootLog.child({ traceId: req.headers['x-trace-id'] || generateTraceId() });`  
   Use `requestLog` for all logs in that request so every line carries the same ID.
-- **OpenAI proxy (Issue #437):** The proxy in `scripts/openai-proxy` complies with this standard: it reads **LOG_LEVEL** and filters by level, and attaches **trace_id** to every log record. Pass `?traceId=xxx` in the WebSocket URL (e.g. `ws://host/openai?traceId=xxx`) so proxy logs can be correlated with client and backend. If omitted, the proxy uses the connection id as fallback. See [scripts/openai-proxy/README.md](../../scripts/openai-proxy/README.md).
 - **Querying:** Search or grep logs by that ID to see test-app, backend, and proxy entries for one flow.
 
 ---

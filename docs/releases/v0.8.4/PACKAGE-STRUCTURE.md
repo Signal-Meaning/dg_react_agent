@@ -1,5 +1,7 @@
 # Package Structure: @signal-meaning/voice-agent-react@v0.8.4
 
+Earlier releases were originally published under the package name `@signal-meaning/deepgram-voice-interaction-react`; the package has been renamed to `@signal-meaning/voice-agent-react`.
+
 ## Files Included in Package
 
 As defined in `package.json` "files" field:
@@ -55,7 +57,22 @@ signal-meaning-voice-agent-react-v0.8.4/
 │   ├── issues/               # Issue documentation
 │   └── migration/            # Migration guides
 ├── scripts/                   # Utility scripts
+│   ├── create-release-issue.sh
+│   ├── check-token-issues.js
+│   ├── validate-plugin.js
+│   ├── generate-test-audio.js
+│   └── [other scripts...]
 └── test-app/                 # Test application demonstrating component usage
+    ├── src/                  # Test app source code
+    │   ├── App.tsx           # Main test app component
+    │   ├── session-management.ts
+    │   └── [other files...]
+    ├── tests/                # E2E tests
+    │   ├── e2e/              # Playwright E2E tests
+    │   ├── unit/             # Unit tests
+    │   └── integration/      # Integration tests
+    ├── docs/                 # Test app documentation
+    └── [other files...]
 ```
 
 ## Package Entry Points
@@ -65,10 +82,27 @@ From `package.json`:
 - **Module (ESM)**: `dist/index.esm.js`
 - **Types**: `dist/index.d.ts`
 
+## Purpose of Each Directory
+
+- **`dist/`**: Built production code and TypeScript definitions
+- **`README.md`**: Package overview and quick start
+- **`DEVELOPMENT.md`**: Development setup and contribution guide
+- **`docs/`**: Comprehensive documentation (releases, guides, issues)
+- **`scripts/`**: Utility scripts for development and publishing
+- **`test-app/`**: Reference implementation and E2E test suite
+
+## Package Size Information
+
+<!-- Update with actual sizes when available -->
+- **Total Package Size**: [TBD]
+- **dist/**: [TBD]
+- **docs/**: [TBD]
+- **test-app/**: [TBD]
+
 ## Installation
 
 ```bash
-npm install @signal-meaning/voice-agent-react@v0.8.4
+npm install @signal-meaning/voice-agent-react@0.8.4
 ```
 
 ## Verification
@@ -76,6 +110,9 @@ npm install @signal-meaning/voice-agent-react@v0.8.4
 After installation, verify the package structure:
 
 ```bash
+# Check installed files
 ls node_modules/@signal-meaning/voice-agent-react/
+
+# Verify entry points exist
 ls node_modules/@signal-meaning/voice-agent-react/dist/
 ```
