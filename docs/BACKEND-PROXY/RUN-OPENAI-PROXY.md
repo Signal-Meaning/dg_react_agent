@@ -1,6 +1,6 @@
-# Issue #381: Run the OpenAI proxy and tests (Phase 5)
+# Run the OpenAI proxy and tests
 
-**Single reference** for environment variables, running the proxy, and running unit, integration, and E2E tests. See [PROGRESS.md](./PROGRESS.md) for phase status.
+**Single reference** for environment variables, running the OpenAI translation proxy, and running unit, integration, and E2E tests. (Originally Issue #381 Phase 5; phase status: [ISSUE-381 PROGRESS](../issues/ISSUE-381/PROGRESS.md).)
 
 ---
 
@@ -19,25 +19,26 @@
 
 **Safety – real API E2E:** Run OpenAI proxy E2E only when **OPENAI_API_KEY** is set (truthy). The proxy will not start without it. Do not run real-API E2E in environments where the key is unset or a placeholder (e.g. CI without secrets).
 
-**Note:** The test-app defaults to the OpenAI proxy when `VITE_OPENAI_PROXY_ENDPOINT` is set (e.g. by Playwright env). See [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md) for backend selection and Deepgram-only specs.
+**Note:** The test-app defaults to the OpenAI proxy when `VITE_OPENAI_PROXY_ENDPOINT` is set (e.g. by Playwright env). See [E2E-PRIORITY-RUN-LIST.md](../issues/ISSUE-381/E2E-PRIORITY-RUN-LIST.md) for backend selection and Deepgram-only specs.
 
 ---
 
 ## Run the proxy
 
-From the **project root** (repo root where `package.json` is):
+**Canonical:** Run the test-app backend (one server for Deepgram and OpenAI proxies): `cd test-app && npm run backend`. The OpenAI proxy is spawned from the **voice-agent-backend** package (Issue #445); backends must not depend on the React package to run the proxy.
+
+**Standalone (from repo root):** Run the proxy from the backend package directory:
 
 ```bash
-# With API key in .env or test-app/.env
-npm run openai-proxy
+cd packages/voice-agent-backend && npx tsx scripts/openai-proxy/run.ts
 ```
 
 - Listens on **http://localhost:8080**; WebSocket path **/openai** → `ws://localhost:8080/openai`.
-- Loads `.env` and `test-app/.env`; put `OPENAI_API_KEY=sk-...` in either.
+- Loads `.env` from the package dir or repo root; put `OPENAI_API_KEY=sk-...` in `.env` or the environment.
 - Optional: `OPENAI_PROXY_PORT=9000` to use a different port.
-- Optional: `OPENAI_PROXY_DEBUG=1 npm run openai-proxy` to log upstream→client message types (useful to confirm `response.function_call_arguments.done` is received).
+- Optional: `OPENAI_PROXY_DEBUG=1` to log upstream→client message types.
 
-See `scripts/openai-proxy/README.md` for more (translator, server, OpenTelemetry logging).
+**Integrators (e.g. voice-commerce):** Use `@signal-meaning/voice-agent-backend` only. Set spawn `cwd` to `path.dirname(require.resolve('@signal-meaning/voice-agent-backend/package.json'))` and run `npx tsx scripts/openai-proxy/run.ts`. Do not resolve or depend on `@signal-meaning/voice-agent-react` to run the proxy. See `packages/voice-agent-backend/README.md` and [OPENAI-PROXY-PACKAGING.md](../OPENAI-PROXY-PACKAGING.md).
 
 ---
 
@@ -116,7 +117,7 @@ HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright tes
 HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js --grep "Simple function calling"
 ```
 
-More commands and ordering: [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md).
+More commands and ordering: [E2E-PRIORITY-RUN-LIST.md](../issues/ISSUE-381/E2E-PRIORITY-RUN-LIST.md).
 
 ---
 
@@ -126,4 +127,4 @@ More commands and ordering: [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.m
 - **E2E tests:** Require a running proxy and `OPENAI_API_KEY`. Options:
   - **Optional CI job:** Add a job that starts the proxy (with a secret `OPENAI_API_KEY`), then runs the OpenAI proxy E2E suite. Skip the job or mark optional if the secret is not set.
   - **Manual / scheduled:** Run E2E locally or in a scheduled workflow when credentials are available.
-- **Documentation:** This file and [E2E-PRIORITY-RUN-LIST.md](./E2E-PRIORITY-RUN-LIST.md) give contributors the commands to run proxy and tests locally and in CI.
+- **Documentation:** This file and [E2E-PRIORITY-RUN-LIST.md](../issues/ISSUE-381/E2E-PRIORITY-RUN-LIST.md) give contributors the commands to run proxy and tests locally and in CI.

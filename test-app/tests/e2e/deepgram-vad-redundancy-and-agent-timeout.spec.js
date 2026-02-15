@@ -36,7 +36,7 @@ import {
   SELECTORS, waitForConnection
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks';
-import { loadAndSendAudioSample, waitForVADEvents as waitForVADEventsFixture } from './fixtures/audio-helpers.js';
+import { loadAndSendAudioSample, loadAndSendAudioSampleAt24k, waitForVADEvents as waitForVADEventsFixture } from './fixtures/audio-helpers.js';
 const {
   VADTestUtilities,
   setupVADTestEnvironment,
@@ -468,12 +468,16 @@ test.describe('VAD Redundancy and Agent State Timeout Behavior', () => {
     }
     
     // Step 5: Send audio to trigger UserStartedSpeaking (should stop timeout)
+    // Try 16k first; if no VAD event (e.g. OpenAI proxy expects 24k or timing), retry with 24k.
     console.log('Step 5: Sending audio to trigger UserStartedSpeaking...');
     await loadAndSendAudioSample(page, 'hello');
-    
-    // Wait for VAD events
-    const eventsDetected = await waitForVADEventsFixture(page, ['UserStartedSpeaking'], 10000);
-    expect(eventsDetected).toBeGreaterThan(0);
+    let eventsDetected = await waitForVADEventsFixture(page, ['UserStartedSpeaking'], 10000);
+    if (eventsDetected === 0) {
+      console.log('ℹ️  No UserStartedSpeaking with 16k; retrying with 24k (OpenAI proxy or timing)...');
+      await loadAndSendAudioSampleAt24k(page, 'hello');
+      eventsDetected = await waitForVADEventsFixture(page, ['UserStartedSpeaking'], 8000);
+    }
+    expect(eventsDetected, 'UserStartedSpeaking should be detected after sending audio').toBeGreaterThan(0);
     console.log('✅ UserStartedSpeaking detected');
     
     // Step 6: Verify timeout stops when user starts speaking (behavior-based verification)

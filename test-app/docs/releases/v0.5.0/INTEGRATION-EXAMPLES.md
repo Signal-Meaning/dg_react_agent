@@ -8,7 +8,7 @@ This guide provides real-world integration examples showing how to properly use 
 
 ```tsx
 import React, { useRef, useState, useCallback, useMemo } from 'react';
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 
 function SimpleVoiceApp() {
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
@@ -92,7 +92,7 @@ function SimpleVoiceApp() {
 
 ```tsx
 import React, { useRef, useState, useCallback, useMemo } from 'react';
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 
 interface Session {
   id: string;
@@ -249,7 +249,7 @@ function MultiSessionVoiceApp() {
 
 ```tsx
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 
 interface UserProfile {
   name: string;
@@ -471,7 +471,7 @@ function ContextAwareVoiceApp() {
 
 ```tsx
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 
 interface EnterpriseSession {
   id: string;
@@ -720,7 +720,7 @@ function EnterpriseVoiceApp() {
 
 ```tsx
 import React, { useRef, useState, useCallback, useMemo } from 'react';
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 
 interface TestSession {
   id: string;

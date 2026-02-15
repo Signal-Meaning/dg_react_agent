@@ -13,6 +13,10 @@ This directory contains comprehensive documentation for implementing and using b
 - **[Security Best Practices](./SECURITY-BEST-PRACTICES.md)** - Security guidelines and best practices for backend proxy implementation
 - **[Migration Guide](./MIGRATION-GUIDE.md)** - Step-by-step guide for migrating from direct connection to proxy mode
 
+### OpenAI proxy (translation layer)
+
+- **[Run the OpenAI proxy and tests](./RUN-OPENAI-PROXY.md)** – Env vars, how to run the proxy (canonical and standalone), unit/integration/E2E test commands, CI notes. Proxy lives in `packages/voice-agent-backend/scripts/openai-proxy/` (Issue #445).
+
 ### Implementation Guides
 
 - **[Node.js/Express Implementation](./IMPLEMENTATION-NODEJS.md)** - Complete guide for implementing backend proxy with Node.js and Express
@@ -94,7 +98,7 @@ We provide **reference proxy code** and the **interface contract** (protocol, ev
 
 ## OpenAI proxy (translation layer)
 
-The test-app can use an **OpenAI Realtime** backend via a translation proxy in `scripts/openai-proxy/`. Protocol and message ordering (client ↔ proxy ↔ OpenAI) are documented in **[scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md](../../scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md)**. The same component–proxy contract (e.g. SettingsApplied before first message) applies; see [Component–Proxy Contract](./COMPONENT-PROXY-CONTRACT.md).
+The test-app can use an **OpenAI Realtime** backend via a translation proxy in **packages/voice-agent-backend/scripts/openai-proxy/** (Issue #445). How to run it and run tests: **[RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md)**. Protocol and message ordering (client ↔ proxy ↔ OpenAI): [PROTOCOL-AND-MESSAGE-ORDERING.md](../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md). The same component–proxy contract (e.g. SettingsApplied before first message) applies; see [Component–Proxy Contract](./COMPONENT-PROXY-CONTRACT.md).
 
 ## Related Documentation
 

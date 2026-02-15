@@ -1,11 +1,13 @@
-# Package Structure: @signal-meaning/deepgram-voice-interaction-react@vX.X.X
+# Package Structure: @signal-meaning/voice-agent-react@vX.X.X
+
+Earlier releases were originally published under the package name `@signal-meaning/deepgram-voice-interaction-react`; the package has been renamed to `@signal-meaning/voice-agent-react`.
 
 ## Files Included in Package
 
 As defined in `package.json` "files" field:
 
 ```
-signal-meaning-deepgram-voice-interaction-react-vX.X.X/
+signal-meaning-voice-agent-react-vX.X.X/
 ├── dist/                      # Built component and utilities
 │   ├── index.js               # CommonJS entry point
 │   ├── index.esm.js           # ES Module entry point
@@ -104,7 +106,7 @@ From `package.json`:
 ## Installation
 
 ```bash
-npm install @signal-meaning/deepgram-voice-interaction-react@vX.X.X
+npm install @signal-meaning/voice-agent-react@vX.X.X
 ```
 
 ## Verification
@@ -113,9 +115,9 @@ After installation, verify the package structure:
 
 ```bash
 # Check installed files
-ls node_modules/@signal-meaning/deepgram-voice-interaction-react/
+ls node_modules/@signal-meaning/voice-agent-react/
 
 # Verify entry points exist
-ls node_modules/@signal-meaning/deepgram-voice-interaction-react/dist/
+ls node_modules/@signal-meaning/voice-agent-react/dist/
 ```
 

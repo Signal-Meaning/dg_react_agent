@@ -4,29 +4,28 @@
  *
  * Listens on http://localhost:8080/openai (or OPENAI_PROXY_PORT).
  * Set HTTPS=true or HTTPS=1 in .env (or env) to use HTTPS with a self-signed cert.
- * Requires OPENAI_API_KEY for upstream authentication (set in .env or test-app/.env).
+ * Requires OPENAI_API_KEY for upstream authentication.
  *
- * Run from the project root (repo root where package.json and node_modules are).
+ * Run with cwd = this package directory (voice-agent-backend) or repo root.
+ * Loads .env from cwd, parent, or repo root so OPENAI_API_KEY works in monorepo or standalone.
  *
- * Usage (standalone; for test-app use "cd test-app && npm run backend" instead):
- *   npx tsx scripts/openai-proxy/run.ts   (loads OPENAI_API_KEY from .env or test-app/.env)
+ * Usage (from backend package dir or repo root):
+ *   npx tsx scripts/openai-proxy/run.ts
  *   OPENAI_API_KEY=sk-... npx tsx scripts/openai-proxy/run.ts
  *   OPENAI_PROXY_PORT=9090 npx tsx scripts/openai-proxy/run.ts
- *   HTTPS=true npx tsx scripts/openai-proxy/run.ts   (serve over https:// with self-signed cert)
- *   OPENAI_PROXY_GREETING_TEXT_ONLY=1 npx tsx scripts/openai-proxy/run.ts   (greeting to client only; see README)
- *
- * Then run E2E with:
- *   VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npm run test:e2e -- openai-proxy-e2e
- *   (use wss:// when HTTPS=true)
  */
 
 import path from 'path';
 import https from 'https';
 import dotenv from 'dotenv';
 
-// Load .env from project root, then test-app/.env (so OPENAI_API_KEY and HTTPS in either file work)
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
-dotenv.config({ path: path.resolve(process.cwd(), 'test-app', '.env') });
+const cwd = process.cwd();
+// Load .env from cwd (package dir or repo root), then common alternate locations (monorepo)
+dotenv.config({ path: path.resolve(cwd, '.env') });
+dotenv.config({ path: path.resolve(cwd, 'test-app', '.env') });
+dotenv.config({ path: path.resolve(cwd, '..', '.env') });
+dotenv.config({ path: path.resolve(cwd, '..', '..', '.env') });
+dotenv.config({ path: path.resolve(cwd, '..', '..', 'test-app', '.env') });
 
 import { createOpenAIProxyServer } from './server';
 
@@ -37,12 +36,13 @@ const upstreamUrl =
 const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
 
 if (!apiKey || apiKey.trim().length === 0) {
-  console.error('OPENAI_API_KEY is required. Set it in .env or test-app/.env (or pass it in the environment) and run again.');
+  console.error('OPENAI_API_KEY is required. Set it in .env (or pass it in the environment) and run again.');
   process.exit(1);
 }
 
-const debug = process.env.OPENAI_PROXY_DEBUG === '1' || process.env.OPENAI_PROXY_DEBUG === 'true';
-// TODO: Not expected to keep. Diagnostic option for upstream error investigation.
+/** Issue #437: Prefer LOG_LEVEL; OPENAI_PROXY_DEBUG=1 is alias for LOG_LEVEL=debug. */
+const openaiProxyDebug = process.env.OPENAI_PROXY_DEBUG === '1' || process.env.OPENAI_PROXY_DEBUG === 'true';
+const logLevel = process.env.LOG_LEVEL ?? (openaiProxyDebug ? 'debug' : undefined);
 const greetingTextOnly = process.env.OPENAI_PROXY_GREETING_TEXT_ONLY === '1' || process.env.OPENAI_PROXY_GREETING_TEXT_ONLY === 'true';
 
 let server: ReturnType<typeof createOpenAIProxyServer>['server'] | undefined = undefined;
@@ -63,7 +63,7 @@ const { server: proxyServer } = createOpenAIProxyServer({
   path: '/openai',
   upstreamUrl,
   upstreamHeaders: { Authorization: `Bearer ${apiKey.trim()}` },
-  debug,
+  logLevel,
   greetingTextOnly,
 });
 

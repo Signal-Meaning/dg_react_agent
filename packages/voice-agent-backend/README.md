@@ -72,16 +72,20 @@ const server = http.createServer((req, res) => {
   res.writeHead(404).end();
 });
 
+// OpenAI proxy: run from this package (Issue #445). Resolve package dir so backends never depend on the React package.
+const backendPkgDir = require('path').dirname(require.resolve('@signal-meaning/voice-agent-backend/package.json'));
 await attachVoiceAgentUpgrade(server, {
   deepgram: { path: '/deepgram-proxy', apiKey: process.env.DEEPGRAM_API_KEY, verifyClient, setSecurityHeaders },
-  openai: { path: '/openai', spawn: { cwd: repoRoot, command: 'npx', args: ['tsx', 'scripts/openai-proxy/run.ts'], env: { OPENAI_API_KEY }, port: 8081 } },
+  openai: { path: '/openai', spawn: { cwd: backendPkgDir, command: 'npx', args: ['tsx', 'scripts/openai-proxy/run.ts'], env: { OPENAI_API_KEY }, port: 8081 } },
   logger: myLogger,
   https: false,
 });
 server.listen(8080);
 ```
 
-Options: **deepgram** — path, apiKey, agentUrl?, transcriptionUrl?, verifyClient?(info), setSecurityHeaders?(res). **openai** — path, proxyUrl? (forward to URL), or spawn? (cwd, command, args, env, port). **logger** — { info, warn, error, debug }. Returns a Promise that resolves to `{ shutdown() }` for graceful close.
+**Running the OpenAI proxy:** The proxy lives in this package at `scripts/openai-proxy/`. Set `cwd` to the backend package directory (e.g. `path.dirname(require.resolve('@signal-meaning/voice-agent-backend/package.json'))`) and run `npx tsx scripts/openai-proxy/run.ts`. Requires `OPENAI_API_KEY` in the environment or a `.env` file. See `scripts/openai-proxy/README.md` in this package for details. For integrators (e.g. voice-commerce): do not resolve or depend on the React package to run the proxy; see **docs/OPENAI-PROXY-PACKAGING.md** in the repo.
+
+Options: **deepgram** — path, apiKey, agentUrl?, transcriptionUrl?, verifyClient?(info), setSecurityHeaders?(res). **openai** — path, proxyUrl? (forward to URL), or spawn? (cwd, command, args, env, port), **openai.upstreamOptions?** — merged with package defaults (e.g. `rejectUnauthorized: false` when HTTPS); use for WebSocket client options such as `headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY }` for the OpenAI Realtime API (Issue #441). **logger** — { info, warn, error, debug }. Returns a Promise that resolves to `{ shutdown() }` for graceful close.
 
 ## Status
 

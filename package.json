@@ -12,7 +12,6 @@
     "README.md",
     "DEVELOPMENT.md",
     "docs",
-    "scripts",
     "test-app"
   ],
   "scripts": {
@@ -25,7 +24,7 @@
     "test:mock": "jest",
     "test:real": "RUN_REAL_API_TESTS=true jest",
     "api:fetch-spec": "npx tsx tests/api-baseline/fetch-official-specs.ts",
-    "openai-proxy:cli": "npx tsx scripts/openai-proxy/cli.ts",
+    "openai-proxy:cli": "cd packages/voice-agent-backend && npx tsx scripts/openai-proxy/cli.ts",
     "api:validate": "jest tests/voice-agent-api-validation.test.tsx",
     "test:e2e": "USE_PROXY_MODE=true playwright test",
     "test:e2e:log": "USE_PROXY_MODE=true playwright test 2>&1 | tee e2e-run.log",
@@ -46,6 +45,7 @@
     "release:issue": "./scripts/create-release-issue.sh",
     "validate:publish": "node scripts/validate-publish-auth.js",
     "validate:release-docs": "node scripts/validate-release-docs.js",
+    "validate:packaging": "jest tests/packaging",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

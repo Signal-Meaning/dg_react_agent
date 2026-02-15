@@ -2870,12 +2870,19 @@ function DeepgramVoiceInteraction(
       // If no options object provided, default to props configuration
       const hasExplicitOptions = options !== undefined;
       
-      const shouldStartTranscription = hasExplicitOptions
+      let shouldStartTranscription = hasExplicitOptions
         ? (options.transcription === true)
         : isTranscriptionConfigured;
       const shouldStartAgent = hasExplicitOptions
         ? (options.agent === true)
         : isAgentConfigured;
+
+      // OpenAI proxy: agent-only; transcript/VAD via agent connection (Issue #439). Do not request transcription.
+      const isOpenAIProxy = config.connectionMode === 'proxy' && (config.proxyEndpoint ?? '').includes('/openai');
+      if (isOpenAIProxy) {
+        shouldStartTranscription = false;
+        log('🔧 [START] OpenAI proxy detected – treating session as agent-only (transcript/VAD via agent)');
+      }
       
       log(`Service start flags: transcription=${shouldStartTranscription}, agent=${shouldStartAgent}`);
       

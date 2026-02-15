@@ -417,6 +417,74 @@ describe('Lazy Initialization Tests', () => {
     });
   });
 
+  describe('OpenAI proxy start() contract (Issue #439)', () => {
+    test('start() with no options + OpenAI proxy + transcriptionOptions does not throw and only creates agent manager', async () => {
+      const ref = React.createRef();
+      const openAIProxyEndpoint = 'wss://localhost:3001/api/openai/proxy';
+
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          proxyEndpoint={openAIProxyEndpoint}
+          agentOptions={mockAgentOptions}
+          endpointConfig={{ agentUrl: 'wss://agent.deepgram.com/v1/agent/converse' }}
+          transcriptionOptions={{ model: 'nova-2' }}
+          debug={true}
+        />
+      );
+
+      await waitFor(() => {
+        expect(ref.current).toBeTruthy();
+      });
+
+      await act(async () => {
+        await ref.current.start();
+      });
+
+      expect(WebSocketManager).toHaveBeenCalledTimes(1);
+      expect(WebSocketManager).toHaveBeenCalledWith(
+        expect.objectContaining({
+          service: 'agent'
+        })
+      );
+      expect(mockAgentManager.connect).toHaveBeenCalledTimes(1);
+      expect(mockTranscriptionManager.connect).not.toHaveBeenCalled();
+    });
+
+    test('start({ agent: true, transcription: true }) with OpenAI proxy only creates agent manager', async () => {
+      const ref = React.createRef();
+      const openAIProxyEndpoint = 'wss://localhost:3001/api/openai/proxy';
+
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          proxyEndpoint={openAIProxyEndpoint}
+          agentOptions={mockAgentOptions}
+          endpointConfig={{ agentUrl: 'wss://agent.deepgram.com/v1/agent/converse' }}
+          transcriptionOptions={{ model: 'nova-2' }}
+          debug={true}
+        />
+      );
+
+      await waitFor(() => {
+        expect(ref.current).toBeTruthy();
+      });
+
+      await act(async () => {
+        await ref.current.start({ agent: true, transcription: true });
+      });
+
+      expect(WebSocketManager).toHaveBeenCalledTimes(1);
+      expect(WebSocketManager).toHaveBeenCalledWith(
+        expect.objectContaining({
+          service: 'agent'
+        })
+      );
+      expect(mockAgentManager.connect).toHaveBeenCalledTimes(1);
+      expect(mockTranscriptionManager.connect).not.toHaveBeenCalled();
+    });
+  });
+
   describe('injectUserMessage() Lazy Creation', () => {
     test('should create agent manager when injectUserMessage() is called', async () => {
       const ref = React.createRef();

@@ -35,7 +35,7 @@ First, implement the backend proxy endpoint in your existing backend infrastruct
 #### Before (Direct Connection)
 
 ```tsx
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 
 function MyApp() {
   const agentOptions = useMemo(() => ({
@@ -56,7 +56,7 @@ function MyApp() {
 #### After (Backend Proxy)
 
 ```tsx
-import { DeepgramVoiceInteraction } from '@signal-meaning/deepgram-voice-interaction-react';
+import { DeepgramVoiceInteraction } from '@signal-meaning/voice-agent-react';
 
 function MyApp() {
   const agentOptions = useMemo(() => ({
@@ -199,6 +199,10 @@ const isProduction = process.env.NODE_ENV === 'production';
   agentOptions={agentOptions}
 />
 ```
+
+## OpenAI proxy (agent-only)
+
+When your proxy URL path contains `/openai` (e.g. `wss://localhost:3001/api/openai/proxy`), the component treats the session as **agent-only**. It does not open a separate Deepgram transcription WebSocket; transcript and VAD are delivered over the single agent connection. You can pass `transcriptionOptions` and `endpointConfig` if you like—the component will ignore transcription for that session and `start()` with no arguments will succeed. See [Issue #439](https://github.com/Signal-Meaning/dg_react_agent/issues/439).
 
 ## Common Issues and Solutions
 

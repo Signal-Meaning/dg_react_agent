@@ -17,7 +17,7 @@ const WebSocket = require('ws');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const WebSocketServer = require(path.join(path.dirname(require.resolve('ws')), 'lib', 'websocket-server.js'));
 
-const CLI_SCRIPT = path.resolve(__dirname, '../../scripts/openai-proxy/cli.ts');
+const CLI_SCRIPT = path.resolve(__dirname, '../../packages/voice-agent-backend/scripts/openai-proxy/cli.ts');
 const PROXY_PATH = '/openai';
 
 function startMinimalProxyServer(): Promise<{ server: http.Server; port: number; wss: InstanceType<typeof WebSocketServer> }> {
@@ -54,7 +54,7 @@ function startMinimalProxyServer(): Promise<{ server: http.Server; port: number;
 function runCli(args: string[], stdin?: string): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve) => {
     const child = spawn('npx', ['tsx', CLI_SCRIPT, ...args], {
-      cwd: path.resolve(__dirname, '../..'),
+      cwd: path.resolve(__dirname, '../../packages/voice-agent-backend'),
       env: { ...process.env, OPENAI_API_KEY: 'test-key-not-used' },
       stdio: stdin !== undefined ? ['pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'],
     });
