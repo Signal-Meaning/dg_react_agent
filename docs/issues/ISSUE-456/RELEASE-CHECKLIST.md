@@ -4,7 +4,7 @@
 
 **Epic:** [#455](https://github.com/Signal-Meaning/dg_react_agent/issues/455) — Real-API tests, function-call contract, and 3pp scope (voice-commerce feedback). Complete the four tracked issues (#451–#454) as part of this release.
 
-**Progress:** Pre-release complete (code review ✅, tests ✅, lint ✅, E2E proxy ✅, docs ✅, API evolution ✅, no breaking changes). Next: version bump and release docs.
+**Progress:** Pre-release complete. Version: root 0.9.0, backend 0.2.0. Dependencies updated (`npm update`). Release docs created and validated; doc review complete (links verified, content consistent). Next: commit, create `release/v0.9.0`, and publish via GitHub release.
 
 ---
 
@@ -38,12 +38,13 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Version Management
 
-- [ ] **Bump Version**: Update package.json to v0.9.0
-  - [ ] Run: `npm version minor` (or manually update to 0.9.0)
-- [ ] **Bump voice-agent-backend version** (if releasing that package): Update `packages/voice-agent-backend/package.json` version (e.g. 0.1.0 → 0.2.0)
-- [ ] **Update Dependencies**: Ensure all dependencies are up to date
-  - [ ] Run: `npm update`
-  - [ ] Review and update any outdated dependencies
+- [x] **Bump Version**: Update package.json to v0.9.0
+  - [x] Manually updated to 0.9.0
+- [x] **Bump voice-agent-backend version** (if releasing that package): Update `packages/voice-agent-backend/package.json` version (e.g. 0.1.0 → 0.2.0)  
+  **Since v0.8.4 we have backend source commits:** openai.upstreamOptions merge (#441), OpenAI proxy move to voice-agent-backend (#445), openai-proxy turn_detection fix (#451), Epic #455 contract/docs in index.js → **bumped to 0.2.0**.
+- [x] **Update Dependencies**: Ensure all dependencies are up to date
+  - [x] Run: `npm update` (145 packages updated)
+  - [x] Review and update any outdated dependencies (optional: run `npm audit` for 1 reported high severity and address if needed)
 
 #### Build and Package (CI performs build — no local build required)
 
@@ -53,29 +54,29 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Documentation
 
-- [ ] **Create Release Documentation**: Follow the established structure
-  - [ ] Create: `docs/releases/v0.9.0/` directory
-  - [ ] Create: `CHANGELOG.md` with all changes (Keep a Changelog format)
-  - [ ] Create: `MIGRATION.md` if there are breaking changes
-  - [ ] Create: `NEW-FEATURES.md` for new features
-  - [ ] Create: `API-CHANGES.md` for API changes
-  - [ ] Create: `EXAMPLES.md` with usage examples
-  - [ ] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
-    - Replace `vX.X.X` and `X.X.X` placeholders with `v0.9.0` and `0.9.0`
-- [ ] **Validate Documentation**: Run validation to ensure all required documents are present
-  - [ ] Run: `npm run validate:release-docs v0.9.0`
-- [ ] **Review Documentation**: Review documentation for completeness and accuracy
-  - [ ] Check all examples work correctly
-  - [ ] Verify migration guides are accurate
-  - [ ] Ensure all links are working
-  - [ ] Review for typos and clarity
-- [ ] **Test Documentation Examples**: Test all examples and migration guides
-  - [ ] Test all code examples in NEW-FEATURES.md
-  - [ ] Test all code examples in EXAMPLES.md
-  - [ ] Test migration steps in MIGRATION.md
-  - [ ] Verify API examples in API-CHANGES.md
-- [ ] **Update Main Documentation**: Update README and other docs as needed
-- [ ] **Update Migration Guide**: Update migration documentation if needed
+- [x] **Create Release Documentation**: Follow the established structure
+  - [x] Create: `docs/releases/v0.9.0/` directory
+  - [x] Create: `CHANGELOG.md` with all changes (Keep a Changelog format)
+  - [x] Create: `MIGRATION.md` if there are breaking changes
+  - [x] Create: `NEW-FEATURES.md` for new features
+  - [x] Create: `API-CHANGES.md` for API changes
+  - [x] Create: `EXAMPLES.md` with usage examples
+  - [x] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
+    - Replaced `vX.X.X` and `X.X.X` with `v0.9.0` and `0.9.0`
+  - [x] Create: `RELEASE-NOTES.md`
+- [x] **Validate Documentation**: Run validation to ensure all required documents are present
+  - [x] Run: `npm run validate:release-docs 0.9.0` — passed
+- [x] **Review Documentation**: Review documentation for completeness and accuracy
+  - [x] Check all examples work correctly (NEW-FEATURES/EXAMPLES only reference install commands and existing docs; no new runnable code)
+  - [x] Verify migration guides are accurate (MIGRATION.md: no breaking changes, upgrade steps correct)
+  - [x] Ensure all links are working (docs/API-REFERENCE.md, BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md, development/TEST-STRATEGY.md verified)
+  - [x] Review for typos and clarity — consistent with Epic #455 and release scope
+- [x] **Test Documentation Examples**: Test all examples and migration guides
+  - [x] NEW-FEATURES.md / EXAMPLES.md: install commands and doc links only; no additional test needed
+  - [x] MIGRATION.md: no migration steps (no breaking changes)
+  - [x] API-CHANGES.md: no API examples (no component changes)
+- [x] **Update Main Documentation**: Update README and other docs as needed (no update required; README version is badge-driven)
+- [x] **Update Migration Guide**: Update migration documentation if needed (no update required for v0.9.0)
 
 #### Git Operations
 
