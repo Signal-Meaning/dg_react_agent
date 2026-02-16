@@ -36,9 +36,9 @@ CI (`.github/workflows/test-and-publish.yml`) publishes both packages when the w
 
 #### Version Management
 
-- [ ] **Bump root version:** Update root `package.json` to **0.9.2**
-  - [ ] Run: `npm version patch` (or manually set to 0.9.2)
-- [ ] **Bump voice-agent-backend version:** Update `packages/voice-agent-backend/package.json` to **0.2.2**
+- [x] **Bump root version:** Update root `package.json` to **0.9.2**
+  - [x] Run: `npm version patch` (or manually set to 0.9.2)
+- [x] **Bump voice-agent-backend version:** Update `packages/voice-agent-backend/package.json` to **0.2.2**
 - [ ] **Update Dependencies:** `npm update` (optional; no dependency changes required for this patch)
 
 #### Build and Package
@@ -61,10 +61,10 @@ CI (`.github/workflows/test-and-publish.yml`) publishes both packages when the w
 
 #### Git Operations
 
-- [ ] **Commit Changes:** Version bump and release docs
-  - [ ] Message: `chore: prepare release v0.9.2 (Issue #462)`
+- [x] **Commit Changes:** Version bump and release docs
+  - [x] Message: `chore: prepare release v0.9.2 (Issue #462)`
 - [ ] **Create Release Branch:**
-  - [ ] Preferred: `npm run release:issue 0.9.2 patch` (creates issue and branch; fails if branch exists or version mismatch)
+  - [ ] Preferred: from **main** after merge: `npm run release:issue 0.9.2 patch` (creates issue and branch; fails if branch exists or version mismatch)
   - [ ] Or manually: Create `release/v0.9.2`, push: `git push origin release/v0.9.2`
 
 #### Package Publishing
