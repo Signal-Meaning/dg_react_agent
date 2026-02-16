@@ -52,11 +52,11 @@ For this issue:
 
 | Step | Status |
 |------|--------|
-| Implement “no session update while active response” in proxy (see [INVESTIGATION.md](./INVESTIGATION.md): set/clear `responseInProgress` for all response.create paths; when handling Settings, skip or defer session.update if `responseInProgress`) | ⬜ |
-| Send session/config updates only: on connect/session setup, or after response/turn finished (e.g. `response.done`) | ⬜ |
-| Ensure `sendFunctionCallResponse` does not trigger an immediate session update before turn is complete | ⬜ |
-| Run tests; confirm they pass (green) | ⬜ |
-| **Update README:** Mark Phase 3 complete | ⬜ |
+| Implement “no session update while active response” in proxy (see [INVESTIGATION.md](./INVESTIGATION.md): set/clear `responseInProgress` for all response.create paths; when handling Settings, skip or defer session.update if `responseInProgress`) | ✅ server.ts: Settings handler returns with SettingsApplied when `responseInProgress`; set `responseInProgress = true` on FunctionCallResponse and item.added response.create; clear on `response.output_text.done` and `response.output_audio.done`. |
+| Send session/config updates only: on connect/session setup, or after response/turn finished (e.g. `response.done`) | ✅ Gated: session.update only when `!responseInProgress` (Option B: treat Settings during active response like duplicate — send SettingsApplied, no session.update). |
+| Ensure `sendFunctionCallResponse` does not trigger an immediate session update before turn is complete | ✅ FunctionCallResponse path sets `responseInProgress = true`; Settings during that time do not send session.update. |
+| Run tests; confirm they pass (green) | ✅ Issue #459 test and full openai-proxy-integration suite (39 tests) pass. |
+| **Update README:** Mark Phase 3 complete | ✅ |
 
 ---
 

@@ -30,9 +30,9 @@ When using the **OpenAI proxy** path, the OpenAI Realtime API returns **`convers
 | Criterion              | Status   |
 |------------------------|----------|
 | Root cause identified  | ✅ Phase 1 complete; see [INVESTIGATION.md](./INVESTIGATION.md) |
-| Gating implemented     | ⬜ Not started |
+| Gating implemented     | ✅ Phase 3 complete (proxy server.ts) |
 | Tests added/updated     | ✅ Phase 2 complete; integration test added, red confirmed |
-| No regression          | ⬜ Not started |
+| No regression          | ✅ openai-proxy-integration suite passes |
 | Docs updated           | ✅ README + TRACKING + INVESTIGATION |
 | Issue closed           | ⬜ |
 
