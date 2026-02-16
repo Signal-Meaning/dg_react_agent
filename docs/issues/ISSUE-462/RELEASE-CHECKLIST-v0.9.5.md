@@ -26,37 +26,37 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.5), **@signal-mean
 
 ### Pre-Release Preparation
 
-- [ ] **Code Review Complete**: All PRs merged and code reviewed
-- [ ] **Tests Passing**
-  - [ ] Run what CI runs: `npm run lint` then `npm run test:mock`
+- [x] **Code Review Complete**: All PRs merged and code reviewed
+- [x] **Tests Passing**
+  - [x] Run what CI runs: `npm run lint` then `npm run test:mock` — **passed** (lint clean; 96 test suites passed, 28 skipped)
   - [ ] **E2E in proxy mode (optional):** `cd test-app && npm run backend` then `USE_PROXY_MODE=true npm run test:e2e` (or subset, e.g. openai-proxy-e2e)
   - [ ] **Real-API qualification (required for proxy/API behavior):** When `OPENAI_API_KEY` available: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — all in-scope tests pass. Function-call test now uses real backend HTTP (in-process minimal server).
-- [ ] **Linting Clean**: `npm run lint`
-- [ ] **Documentation Updated**: ISSUE-462 docs, VOICE-COMMERCE-FUNCTION-CALL-REPORT, .cursorrules, BACKEND-PROXY-DEFECTS
-- [ ] **API Changes Documented**: None (no component/backend API changes)
-- [ ] **Breaking Changes Documented**: None
+- [x] **Linting Clean**: `npm run lint` — **passed**
+- [x] **Documentation Updated**: ISSUE-462 docs, VOICE-COMMERCE-FUNCTION-CALL-REPORT, .cursorrules, BACKEND-PROXY-DEFECTS (done in prior commits)
+- [x] **API Changes Documented**: None (no component/backend API changes)
+- [x] **Breaking Changes Documented**: None
 
 ### Version Management
 
-- [ ] **Bump Version**: Root `package.json` → 0.9.5 (e.g. `npm version patch` or manual)
-- [ ] **Bump voice-agent-backend (optional):** `packages/voice-agent-backend/package.json` → 0.2.5 if releasing backend in lockstep
+- [x] **Bump Version**: Root `package.json` → 0.9.5 — **done**
+- [x] **Bump voice-agent-backend:** `packages/voice-agent-backend/package.json` → 0.2.5 — **done**
 - [ ] **Update Dependencies (optional):** `npm update`; review if needed
 
 ### Build and Package (CI performs build)
 
-- [ ] **Do not run build/package locally for release.** CI builds and validates on GitHub release creation.
+- [x] **Do not run build/package locally for release.** CI builds and validates on GitHub release creation.
 - [ ] **Optional local validation**: `npm run clean && npm run build && npm run validate` (do not commit dist/.tgz)
 
 ### Documentation
 
-- [ ] **Create Release Documentation**
-  - [ ] Create: `docs/releases/v0.9.5/` directory
-  - [ ] Create: `CHANGELOG.md` (Keep a Changelog; Fixed: function-call qualification uses real backend HTTP, process guards for #462)
-  - [ ] Create: `RELEASE-NOTES.md`
-  - [ ] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
-  - [ ] MIGRATION.md / NEW-FEATURES.md / API-CHANGES.md / EXAMPLES.md only if applicable
-- [ ] **Validate Documentation**: `npm run validate:release-docs 0.9.5` (if script exists)
-- [ ] **Review Documentation**: Completeness, links, typos
+- [x] **Create Release Documentation**
+  - [x] Create: `docs/releases/v0.9.5/` directory
+  - [x] Create: `CHANGELOG.md` (Keep a Changelog; Fixed: function-call qualification uses real backend HTTP, process guards for #462)
+  - [x] Create: `RELEASE-NOTES.md`
+  - [x] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
+  - [x] MIGRATION.md / NEW-FEATURES.md / API-CHANGES.md / EXAMPLES.md — not required for this patch (no API changes)
+- [x] **Validate Documentation**: `npm run validate:release-docs 0.9.5` — **passed**
+- [x] **Review Documentation**: Completeness, links, typos — done
 
 ### Git Operations
 
