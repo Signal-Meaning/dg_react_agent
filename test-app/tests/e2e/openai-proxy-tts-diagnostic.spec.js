@@ -41,7 +41,7 @@ const AGENT_RESPONSE_TIMEOUT = 25000;
 const TTS_PLAYBACK_WAIT_MS = 8000; // Wait for playback to start (audio-playing-status -> true)
 const TTS_DELIVERY_WAIT_MS = 4000;
 
-test.describe.optional('OpenAI proxy TTS diagnostic (Issue #414)', () => {
+test.describe('OpenAI proxy TTS diagnostic (Issue #414)', () => {
   test.beforeEach(() => {
     skipIfNoOpenAIProxy('Requires VITE_OPENAI_PROXY_ENDPOINT for OpenAI proxy E2E');
   });
