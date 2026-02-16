@@ -90,9 +90,9 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.5), **@signal-mean
 
 ### Post-Release
 
-- [ ] **Merge to main via PR**: `release/v0.9.5` → `main` (do not push directly to main)
+- [x] **Merge to main via PR**: `release/v0.9.5` → `main` — **PR #472 merged**
 - [ ] **Follow up with voice-commerce** (if applicable): Point to v0.9.5 and that function-call qualification now uses real backend HTTP; see ISSUE-462 docs.
-- [ ] **Close or update #462** with release and resolution
+- [x] **Close or update #462** with release and resolution — **closed** (process release; defect investigation continues)
 
 ---
 
@@ -101,7 +101,7 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.5), **@signal-mean
 - [x] Lint and test:mock pass locally (and CI)
 - [x] Release docs created and validated for v0.9.5
 - [x] GitHub release created; CI published package(s)
-- [ ] PR merged: `release/v0.9.5` → `main`
+- [x] PR merged: `release/v0.9.5` → `main`
 
 ---
 
