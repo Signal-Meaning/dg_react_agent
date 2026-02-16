@@ -4,7 +4,7 @@
 
 **Scope:** Partner-scenario coverage (E2E 6b), OpenAI proxy fix (defer `response.create` until `response.output_text.done` after function_call_output), real-API integration tests, protocol docs. See `docs/issues/ISSUE-470/SCOPE.md`.
 
-**Progress:** Release docs created. Pre-release validation run. E2E in proxy mode: 198 passed, 1 failed (test 6b), 1 flaky (TTS diagnostic #414), 45 skipped — test 6b still reports agent-error-count 1 (blocker for "all pass").
+**Progress:** Release docs created. Proxy fix (defer response.create + block item.added when pending after function_call_output) applied; E2E 6b and 3-test regression set pass. GitHub release v0.9.4 created; CI running. Next: verify CI publish, then merge release/v0.9.4 → main via PR.
 
 ---
 
@@ -23,9 +23,7 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.4), **@signal-mean
 - [ ] **Code Review Complete**: All PRs merged and code reviewed
 - [ ] **Tests Passing**
   - [x] Run what CI runs: `npm run lint` then `npm run test:mock` — **passed**
-  - [ ] **E2E in proxy mode:** Prefer **focused E2E** on critical scenarios (no need for full 245-test pass every time):
-    - **Partner scenario (6b):** `cd test-app && npm run backend` (separate terminal), then `USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b.*462"`. Must pass (0 agent errors).
-    - **Full proxy E2E** (when needed): `USE_PROXY_MODE=true npm run test:e2e` (all E2E). **Last full run:** 198 passed, 1 failed (6b), 1 flaky (TTS diagnostic), 45 skipped.
+  - [x] **E2E in proxy mode:** Focused run: 6b + regression set (3 tests) — **passed** (backend restarted with proxy fix). Optional full: `USE_PROXY_MODE=true npm run test:e2e`.
   - [ ] **Real-API qualification (proxy/API behavior release):** When `OPENAI_API_KEY` available: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — all in-scope tests pass. Optional: `cd test-app && USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b.*462"` to confirm E2E 6b GREEN.
 - [x] **Linting Clean**: `npm run lint` — no errors
 - [x] **Documentation Updated**: #470 scope docs, INVESTIGATION, PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE, TDD plans
@@ -54,22 +52,21 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.4), **@signal-mean
 
 ### Git Operations
 
-- [ ] **Commit release docs** (if not already committed): e.g. `chore: add release docs for v0.9.4`
+- [x] **Commit release docs** (if not already committed): e.g. `chore: add release docs for v0.9.4`
 - [x] **Release branch**: `release/v0.9.4` exists; push any new commits
 
 ### Package Publishing
 
 - [ ] **Publish via CI**
-  - Create GitHub release (tag `v0.9.4`, target `release/v0.9.4`) to trigger `.github/workflows/test-and-publish.yml`
-  - **Version must be 0.9.4 / 0.2.4 and committed on release branch before creating the release**
-  - Monitor CI: test job (lint, test:mock, build, validate) then publish job
-  - Verify both packages in GitHub Packages
-- [ ] **Tag**: Created with GitHub release (v0.9.4)
+  - [x] Create GitHub release (tag `v0.9.4`, target `release/v0.9.4`) — **done** ([releases/tag/v0.9.4](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.9.4))
+  - [ ] Monitor CI: test job (lint, test:mock, build, validate) then publish job
+  - [ ] Verify both packages in GitHub Packages
+- [x] **Tag**: Created with GitHub release (v0.9.4)
 - [ ] **Verify Installation** (optional): Install from registry and smoke test
 
 ### GitHub Release
 
-- [ ] **Create GitHub Release**
+- [x] **Create GitHub Release**
   - Title: `Release v0.9.4`
   - Description: CHANGELOG content (or link to docs/releases/v0.9.4/)
   - Tag: `v0.9.4`
