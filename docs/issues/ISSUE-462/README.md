@@ -36,6 +36,12 @@ We need to investigate, fix, release, then follow up with voice-commerce. **No f
 
 ---
 
+## Reopened (voice-commerce still failing)
+
+**2026-02-16:** voice-commerce reports the issue is still failing. Issue #462 is treated as **reopened**. Work is on branch **`davidrmcgee/issue462`**, updated from `main`. Re-investigation and real-API qualification required.
+
+---
+
 ## Status
 
 | Criterion              | Status   |
