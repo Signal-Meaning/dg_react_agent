@@ -10,6 +10,14 @@
 
 ---
 
+## ⚠️ Release caveat (v0.9.5 does NOT resolve the #462 defect)
+
+- **Is #462 “really” resolved?** **No.** The *defect* (voice-commerce still seeing `conversation_already_has_active_response`) is **not** fixed by this release. We changed **no proxy or component code**. v0.9.5 fixes **how we qualify** (real backend HTTP in the integration test, process guards) so we do not falsely claim the defect is fixed again. **Do not** say “fixes #462” or “resolves #462” in the GitHub release — say “process and test fixes for #462 qualification; defect investigation continues.”
+- **Thoroughly validated?** **No.** We ran lint and test:mock only. We did **not** run `USE_REAL_APIS=1` integration tests or E2E 6b (partner scenario) in this release cycle. E2E 6b was **failing** (agent-error-count 1) at v0.9.4. So the partner scenario remains RED until proven otherwise. CI will run mocks only.
+- **Antipatterns in the solution?** None in the *code* (integration test correctly uses backend HTTP; process guards are correct). The only antipattern would be **claiming** the defect is resolved or qualifying without real-API run. For this **process-only** release we are not claiming defect resolution; real-API qualification is recommended before any future release that claims to fix #462 for voice-commerce.
+
+---
+
 ## Release v0.9.5 (component) / 0.2.5 (backend) – Preparation
 
 ### Overview
