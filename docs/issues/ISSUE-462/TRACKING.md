@@ -29,8 +29,8 @@ Use this checklist to drive the fix to completion. **Update this file and [READM
 |------|--------|
 | Implement fix (proxy or component as needed) | ✅ TDD: added failing test (Issue #462: no session.update after output_audio.done until output_text.done); implemented proxy change: do not clear responseInProgress on response.output_audio.done, only on response.output_text.done (server.ts). |
 | Add/update tests per TDD; lint and test:mock and openai-proxy-integration pass | ✅ New integration test; full openai-proxy-integration suite (40 tests) passes. |
-| E2E as per release checklist | ⬜ |
-| **Update README:** Mark Phase 2 complete | ⬜ |
+| E2E as per release checklist | ⬜ Run when doing patch release (per release checklist). |
+| **Update README:** Mark Phase 2 complete | ✅ |
 
 ---
 
@@ -39,7 +39,7 @@ Use this checklist to drive the fix to completion. **Update this file and [READM
 | Step | Status |
 |------|--------|
 | Patch release (e.g. 0.9.2 / 0.2.2) and publish | ⬜ |
-| Follow up with voice-commerce with release and resolution | ⬜ |
+| Follow up with voice-commerce with release and resolution | ⬜ (only after release) |
 | Close #462 on GitHub with comment linking to `docs/issues/ISSUE-462/` | ⬜ |
 | Update #459 with resolution pointer | ⬜ |
-| **Update README:** All acceptance criteria checked | ⬜ |
+| **Update README:** All acceptance criteria checked | ⬜ (after close) |
