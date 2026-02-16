@@ -91,6 +91,7 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 - [x] **Publish to GitHub Registry**: Publish package(s) to GitHub Package Registry
   - [x] **Preferred**: Use CI build (validated CI build)
+    - **Lesson:** Version must be bumped in `package.json` (and backend if applicable) and committed on the release branch **before** creating the GitHub release; otherwise CI publishes the previous version and the release does not update. Use `npm run release:issue X.X.X minor` to create the release branch; it rejects if the branch already exists or if package.json version does not match, so the mistake is caught early.
     - Create GitHub release to trigger `.github/workflows/test-and-publish.yml`
     - CI workflow ran: test job passed, publish job published root and voice-agent-backend
     - **Monitor CI workflow**: Wait for CI build to complete successfully

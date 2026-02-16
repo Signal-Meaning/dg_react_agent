@@ -39,7 +39,7 @@ So: client sends **text** (JSON) and **binary** (PCM). The proxy never forwards 
 ### 2.2 First message: Settings → session.update
 
 1. Client sends **Settings** (text, JSON).
-2. Proxy sends **one** `session.update` to upstream (translated via `mapSettingsToSessionUpdate`) **only when the upstream has no active response** (Issue #459). If a response is in progress (e.g. after `response.create` and before `response.output_text.done` or `response.output_audio.done`), the proxy does **not** send `session.update`; it sends `SettingsApplied` to the client so the client does not block. This avoids OpenAI returning `conversation_already_has_active_response`.
+2. Proxy sends **one** `session.update` to upstream (translated via `mapSettingsToSessionUpdate`) **only when the upstream has no active response** (Issue #459, #462). The proxy treats a response as in progress from `response.create` until **`response.output_text.done`** only (Issue #462: it does *not* clear the “response active” flag on `response.output_audio.done`, because the real API may send audio.done before text.done; clearing on audio.done would allow a subsequent Settings → session.update while the API still has an active response). If a response is in progress, the proxy does **not** send `session.update`; it sends `SettingsApplied` to the client so the client does not block. This avoids OpenAI returning `conversation_already_has_active_response`.
 3. Any duplicate Settings (e.g. on reconnect) do **not** trigger a second `session.update`; the proxy sends `SettingsApplied` immediately.
 4. Proxy stores context messages (from `Settings.agent.context.messages`) and optional greeting (`Settings.agent.greeting`) for use **after** `session.updated`.
 

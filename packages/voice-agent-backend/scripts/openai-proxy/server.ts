@@ -572,7 +572,9 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           ttsChunkLengths = [];
           lastTtsChunk = null;
-          responseInProgress = false;
+          // Issue #462: do not clear responseInProgress here. Real API may send output_audio.done before
+          // output_text.done; clearing here would allow a subsequent Settings → session.update while the API
+          // still has an active response → conversation_already_has_active_response. Clear only on output_text.done.
           // No client message needed for playback; component just queues chunks. Skip forwarding.
         } else if (msg.type === 'conversation.item.created' || msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
           // Issue #388 / #414: decrement the counter once per unique item; send response.create when all pending items are confirmed.
