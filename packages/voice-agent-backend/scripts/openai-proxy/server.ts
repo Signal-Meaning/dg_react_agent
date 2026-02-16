@@ -240,6 +240,13 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             }
             return;
           }
+          // Issue #459: do not send session.update while upstream has an active response (avoids conversation_already_has_active_response).
+          if (responseInProgress) {
+            if (clientWs.readyState === WebSocket.OPEN) {
+              clientWs.send(JSON.stringify(mapSessionUpdatedToSettingsApplied()));
+            }
+            return;
+          }
           hasForwardedSessionUpdate = true;
           const settings = msg as Parameters<typeof mapSettingsToSessionUpdate>[0];
           const sessionUpdate = mapSettingsToSessionUpdate(settings);
@@ -260,6 +267,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           );
           upstream.send(JSON.stringify(itemCreate));
           upstream.send(JSON.stringify({ type: 'response.create' }));
+          responseInProgress = true;
         } else if (msg.type === 'InjectUserMessage') {
           const injectMsg = msg as Parameters<typeof mapInjectUserMessageToConversationItemCreate>[0];
           const itemCreate = mapInjectUserMessageToConversationItemCreate(injectMsg);
@@ -564,6 +572,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           ttsChunkLengths = [];
           lastTtsChunk = null;
+          responseInProgress = false;
           // No client message needed for playback; component just queues chunks. Skip forwarding.
         } else if (msg.type === 'conversation.item.created' || msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
           // Issue #388 / #414: decrement the counter once per unique item; send response.create when all pending items are confirmed.
@@ -576,6 +585,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               if (pendingItemAddedBeforeResponseCreate === 0) {
                 pendingItemAckedIds.clear();
                 upstream.send(JSON.stringify({ type: 'response.create' }));
+                responseInProgress = true;
               }
             } else if (!itemId) {
               // Fallback for events without item.id: decrement unconditionally (legacy behavior)
@@ -583,6 +593,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               if (pendingItemAddedBeforeResponseCreate === 0) {
                 pendingItemAckedIds.clear();
                 upstream.send(JSON.stringify({ type: 'response.create' }));
+                responseInProgress = true;
               }
             }
           }

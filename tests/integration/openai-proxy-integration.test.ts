@@ -553,6 +553,49 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   });
 
   /**
+   * Issue #459: Proxy must NOT send session.update to upstream while the API has an active response.
+   * Otherwise OpenAI returns conversation_already_has_active_response. Scenario: client sends
+   * InjectUserMessage first (no Settings), proxy sends item.create → mock sends item.added →
+   * proxy sends response.create (response now active). Before response completes, client sends
+   * Settings. Proxy must not send session.update until response is done (or treat as duplicate).
+   * TDD red: current proxy sends session.update when it receives that Settings → assert fails.
+   */
+  itMockOnly('Issue #459: does not send session.update while response is active (conversation_already_has_active_response)', (done) => {
+    mockReceived.length = 0;
+    receivedSessionUpdatePayloads.length = 0;
+    mockDelayResponseDoneMs = 300;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Hi' }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          mockDelayResponseDoneMs = 0;
+          const responseCreateIdx = mockReceived.findIndex((m) => m.type === 'response.create');
+          const sessionUpdateAfterResponse = responseCreateIdx >= 0 && mockReceived.slice(responseCreateIdx + 1).some((m) => m.type === 'session.update');
+          expect(sessionUpdateAfterResponse).toBe(false);
+          client.close();
+          done();
+        }
+      } catch (e) {
+        mockDelayResponseDoneMs = 0;
+        done(e as Error);
+      }
+    });
+    setTimeout(() => {
+      if (client.readyState !== WebSocket.OPEN) return;
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    }, 50);
+    client.on('error', (err) => {
+      mockDelayResponseDoneMs = 0;
+      done(err);
+    });
+  }, 5000);
+
+  /**
    * Reconnect/reload: when client sends Settings twice (e.g. test-app focus or reload), proxy must forward
    * only the first session.update to upstream. A second session.update can cause upstream (OpenAI) to return
    * "The server had an error while processing your request." This test reproduces the duplicate-Settings
