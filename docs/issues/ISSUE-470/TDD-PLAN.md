@@ -33,6 +33,8 @@ E2E runs the full partner flow: real test-app, real component, real proxy, real 
 - If the test fails: fix proxy or test-app behavior until the test passes (proxy fix for #462 is already in; failures may be environment or timing).
 - Document in `docs/issues/ISSUE-462/` or TRACKING that this E2E covers the partner scenario (flow + assertion).
 
+**Phase 1.2 outcome (2025-02):** Test was run with real OpenAI proxy (`USE_REAL_APIS=1`, `npm run test:e2e -- openai-proxy-e2e --grep "6b.*462"`). The test **failed** (RED): `agent-error-count` was 1. The Event Log showed the exact error we guard against: *"Conversation already has an active response in progress: resp_…. Wait until the response is finished before creating a new one."* So the E2E correctly reproduces the partner scenario and catches `conversation_already_has_active_response`. Investigation required to fix proxy/component and get to GREEN.
+
 ### 1.3 REFACTOR
 
 - Reuse helpers from `openai-proxy-e2e.spec.js` and `test-helpers.js` (e.g. `establishConnectionViaText`, `waitForSettingsApplied`, `sendTextMessage`, `waitForAgentResponseEnhanced`). Add a helper for “wait for function call, send response, wait for agent reply” if not already present.
@@ -64,8 +66,8 @@ This is more work than E2E (mock doesn’t drive real function-call timing; real
 
 ## Checklist (for this branch)
 
-- [ ] **Phase 1.1** — E2E test added (openai-proxy-e2e or new spec) that runs partner scenario and asserts no `conversation_already_has_active_response`.
-- [ ] **Phase 1.2** — Test passes with real OpenAI proxy (local run with OPENAI_API_KEY).
+- [x] **Phase 1.1** — E2E test added (openai-proxy-e2e or new spec) that runs partner scenario and asserts no `conversation_already_has_active_response`.
+- [ ] **Phase 1.2** — Test passes with real OpenAI proxy (local run with OPENAI_API_KEY). *Run completed; test fails with conversation_already_has_active_response (RED); investigation to follow.*
 - [ ] **Phase 1.3** — Refactor: reuse helpers; document coverage in ISSUE-462.
 - [ ] **Phase 2** (optional) — Real-API integration test for function-call path with same assertion.
 - [ ] **Phase 3** — ISSUE-462 docs updated; SCOPE.md definition-of-done (2) satisfied.
