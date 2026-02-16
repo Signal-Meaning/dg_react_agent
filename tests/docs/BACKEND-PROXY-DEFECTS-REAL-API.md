@@ -13,12 +13,14 @@
 
 1. **Backend/proxy defects:** Validation must include running the relevant tests **against the real API** (e.g. `USE_REAL_APIS=1` for openai-proxy-integration tests). Mock-only success is not sufficient for release qualification. See `.cursorrules` (Release Qualification) and `.github/ISSUE_TEMPLATE/release-checklist.md`.
 
-2. **Partner-reported defects:** In addition to the above, we **must** have coverage that exercises the **partner’s scenario**:
+2. **Function-call flow: real backend HTTP.** Any test used to qualify the function-call path (FunctionCallRequest → FunctionCallResponse → response) **must** obtain the response via a **real HTTP request to a backend** (e.g. POST /function-call), not by sending a hardcoded payload from in-test code. See `docs/issues/ISSUE-462/VOICE-COMMERCE-FUNCTION-CALL-REPORT.md`.
+
+3. **Partner-reported defects:** In addition to the above, we **must** have coverage that exercises the **partner’s scenario**:
    - **E2E:** Add or extend an E2E test in `test-app/tests/e2e/` that runs the partner’s flow (e.g. connect → Settings → user message → function call → backend HTTP → response) in proxy mode with real backend/API, and assert the defect is fixed (e.g. no `conversation_already_has_active_response`).
    - **Or integration against real API:** An integration test that reproduces the same message/timing path as the partner’s scenario against the real API (not a reduced path).
    - Document the scenario and how the new test covers it (e.g. in the issue’s docs or TRACKING.md).
 
-3. **Do not rely on a minimal probe alone for partner-reported defects.** A minimal real-API test (e.g. Settings → InjectUserMessage → second Settings) can prove one path is fixed but does **not** substitute for coverage of the partner’s actual flow (e.g. function calls, backend, UI). Add E2E or equivalent for the reported scenario.
+4. **Do not rely on a minimal probe alone for partner-reported defects.** A minimal real-API test (e.g. Settings → InjectUserMessage → second Settings) can prove one path is fixed but does **not** substitute for coverage of the partner’s actual flow (e.g. function calls, backend, UI). Add E2E or equivalent for the reported scenario.
 
 ## Reference
 

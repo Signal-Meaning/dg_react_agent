@@ -34,6 +34,7 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
   - [ ] **⚠️ REQUIRED for proxy/API behavior releases: Run real-API integration tests** (when the release fixes or touches proxy↔API message ordering, timing, or openai-proxy behavior). Mock-only success is **not** sufficient for qualification; the real API's event order and timing can differ from mocks. When `OPENAI_API_KEY` is available (see `docs/issues/ISSUE-451/SCOPE.md`):
     - [ ] Run: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
     - [ ] Verify: All in-scope tests pass against the real API (CI runs mocks only; this step validates against live OpenAI). If keys are not available, document the exception and do not claim "qualified against real API" for that release.
+    - [ ] **Function-call path:** The real-API function-call test must use **real backend HTTP** (no in-test hardcoded FunctionCallResponse). The test starts an in-process minimal backend and POSTs to it on FunctionCallRequest. See `docs/issues/ISSUE-462/VOICE-COMMERCE-FUNCTION-CALL-REPORT.md` and `.cursorrules` (Backend / Proxy Defects).
   - [ ] For other releases: Optional but recommended to run the above when keys are available.
 - [ ] **Linting Clean**: No linting errors
   - [ ] Run: `npm run lint`

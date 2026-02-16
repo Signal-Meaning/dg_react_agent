@@ -40,6 +40,8 @@ We need to investigate, fix, release, then follow up with voice-commerce. **No f
 
 **2026-02-16:** voice-commerce reports the issue is still failing. Issue #462 is treated as **reopened**. Work is on branch **`davidrmcgee/issue462`**, updated from `main`. Re-investigation and real-API qualification required.
 
+**Function-call test gap:** voice-commerce stated that our function-call implementation is in-test only (hardcoded `FunctionCallResponse` `{ time: '12:00', timezone: 'UTC' }`, no HTTP, no backend), while theirs uses the real app → POST /api/functions/search-products → SERP. **That report is correct.** See [VOICE-COMMERCE-FUNCTION-CALL-REPORT.md](./VOICE-COMMERCE-FUNCTION-CALL-REPORT.md).
+
 ---
 
 ## Status
@@ -59,6 +61,7 @@ We need to investigate, fix, release, then follow up with voice-commerce. **No f
 ## Docs in this folder
 
 - **[TRACKING.md](./TRACKING.md)** – Step-by-step tracking for investigation, fix, tests, release, and closure.
+- **[VOICE-COMMERCE-FUNCTION-CALL-REPORT.md](./VOICE-COMMERCE-FUNCTION-CALL-REPORT.md)** – Acknowledgment that our real-API function-call test is in-test only (hardcoded response, no HTTP/backend); theirs uses real app and backend HTTP. Report is correct.
 - **[ANALYSIS.md](./ANALYSIS.md)** – Log capture method, message-order excerpt, and root-cause hypothesis (responseInProgress cleared on first of output_audio.done / output_text.done).
 - **capture-issue459-test.log** – Proxy log (LOG_LEVEL=debug) from Issue #459 integration test.
 - **capture-function-call-test.log** – Proxy log (LOG_LEVEL=debug) from function-call integration test.
