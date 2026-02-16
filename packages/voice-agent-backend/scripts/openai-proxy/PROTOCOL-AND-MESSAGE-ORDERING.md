@@ -72,7 +72,7 @@ This is the single source of truth for when audio may be sent. Integration tests
 |------------------------|--------------|
 | **Settings** | Map to `session.update`; send to upstream once per connection **only when no response is active** (Issue #459). If a response is in progress, send `SettingsApplied` only (no `session.update`). On duplicate Settings, send `SettingsApplied` only (no second `session.update`). Store context and greeting when session is updated. |
 | **InjectUserMessage** | Map to `conversation.item.create` (user, `input_text`); send to upstream. Set `pendingItemAddedBeforeResponseCreate = 1`. Send **user echo** (`ConversationText` role `user`) to client. Send `response.create` only after upstream confirms the item (see §4). |
-| **FunctionCallResponse** | Map to `conversation.item.create` (function_call_output); send to upstream, then send `response.create` immediately. |
+| **FunctionCallResponse** | Map to `conversation.item.create` (function_call_output); send to upstream. **Do not** send `response.create` immediately (Issue #462 / #470): the API still has the previous response (the function-call request) active until it processes our item and sends `response.output_text.done`. Defer `response.create` until we receive that `output_text.done` (avoids `conversation_already_has_active_response`). |
 | **Other JSON** | Forward to upstream as-is (text). |
 | **Binary** | Treat as PCM; **only after session.updated** send `input_audio_buffer.append` (base64) to upstream (Issue #414: session must be configured for audio first). If binary arrives before session.updated, queue and flush when session.updated is received. Set debounce timer for `input_audio_buffer.commit` + `response.create`. Chunk size and commit timing must respect [OpenAI buffer restrictions](#35-openai-input-audio-buffer-restrictions). |
 
@@ -134,9 +134,9 @@ The proxy must **not** send `response.create` until the upstream has confirmed t
 
 - **InjectUserMessage:** Proxy sends `conversation.item.create` (user), then waits for **one** `conversation.item.added` (or `.created` / `.done`) for that item. When the counter `pendingItemAddedBeforeResponseCreate` reaches 0, the proxy sends `response.create`.
 - **Context + greeting (session.updated):** Greeting is **not** sent to upstream as an item; only context items are. So for “context only” there is no pending item and no `response.create` from that path. (If in the future we inject an assistant greeting as an item, we would set the counter to N+1 for N context items + 1 greeting and send `response.create` when all are confirmed.)
-- **FunctionCallResponse:** No wait; proxy sends `conversation.item.create` (function_call_output) then `response.create` immediately.
+- **FunctionCallResponse:** Proxy sends `conversation.item.create` (function_call_output) only. **Do not** send `response.create` until we receive `response.output_text.done` or **`response.done`** (Issue #462 / #470: API still has previous response active until then; sending response.create earlier causes `conversation_already_has_active_response`). The proxy treats either event as the signal to send the deferred `response.create` (Issue #470: `response.done` fallback for API ordering).
 
-Item confirmation is tracked by upstream event types `conversation.item.created`, `conversation.item.added`, `conversation.item.done`; each **unique item id** is counted once (see `pendingItemAckedIds` in `server.ts`).
+Item confirmation is tracked by upstream event types `conversation.item.created`, `conversation.item.added`, `conversation.item.done`; each **unique item id** is counted once (see `pendingItemAckedIds` in `server.ts`). **Issue #470:** When `pendingResponseCreateAfterFunctionCallOutput` is true, the proxy must **not** send `response.create` from the item.added path — the API may send `item.added` for the user message after `function_call_arguments.done`; sending `response.create` there would trigger `conversation_already_has_active_response`.
 
 ---
 
@@ -147,7 +147,8 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 | **session.created** | No message to client. Log only. Do not inject context or greeting. |
 | **session.updated** | Send context items to upstream (if any); send **SettingsApplied** (text); send greeting as **ConversationText** (text) if configured; no greeting to upstream. |
 | **conversation.item.created** / **.added** / **.done** | Decrement pending-item counter; when 0, send `response.create` to upstream. Forward event to client as **text**. |
-| **response.output_text.done** | Map to **ConversationText** (assistant); send as **text**. |
+| **response.output_text.done** | Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream; map to **ConversationText** (assistant); send as **text**. |
+| **response.done** | Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream (Issue #470 fallback). No client message. |
 | **response.output_audio_transcript.done** | Map to **ConversationText** (assistant); send as **text**. |
 | **response.function_call_arguments.done** | Map to **FunctionCallRequest** and **ConversationText** (assistant); send both as **text**. |
 | **response.output_audio.delta** | Decode base64 to PCM; send **binary** (raw PCM) to client only. Do not send as JSON. |
@@ -172,11 +173,18 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 
 ---
 
-## 7. References
+## 7. Protocol requirements and test coverage
+
+Protocol requirements we’ve learned (from docs and failures) and how they’re tested are documented in **docs/issues/ISSUE-470/PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE.md**. That doc also recommends re-auditing OpenAI docs/samples when changing ordering and qualifying proxy changes with real-API tests.
+
+---
+
+## 8. References
 
 - **Implementation:** `server.ts` (message handlers), `translator.ts` (mapping functions).
 - **Component contract:** [docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md](../../docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md) (readiness: SettingsApplied before first user message).
 - **Transcript and VAD mapping (OpenAI → component):** [docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md](../../docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md) §2.1 — spec for `speech_started` / `speech_stopped` → UserStartedSpeaking / UtteranceEnd.
 - **API discontinuities:** [docs/issues/ISSUE-381/API-DISCONTINUITIES.md](../../docs/issues/ISSUE-381/API-DISCONTINUITIES.md).
 - **OpenAI Realtime:** [Client events](https://platform.openai.com/docs/api-reference/realtime-client-events), [Server events](https://platform.openai.com/docs/api-reference/realtime-server-events).
+- **Protocol requirements and test matrix:** [docs/issues/ISSUE-470/PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE.md](../../docs/issues/ISSUE-470/PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE.md).
 - **Session max duration (60 min):** [Developer notes on the Realtime API](https://developers.openai.com/blog/realtime-api) — "Realtime sessions can now last up to 60 minutes." [Realtime API Session Timeout (Post GA)](https://community.openai.com/t/realtime-api-session-timeout-post-ga/1357331). See §3.8.

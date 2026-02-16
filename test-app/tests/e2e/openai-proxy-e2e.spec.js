@@ -261,6 +261,28 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await assertAgentErrorsAllowUpstreamTimeouts(page, { maxTotal: 2, maxRecoverable: 2 });
   });
 
+  /**
+   * Issue #462 / #470: Partner scenario – connect → Settings → one user message → function call
+   * → backend HTTP → FunctionCallResponse → API response. Asserts no conversation_already_has_active_response
+   * (strict 0 agent errors). Covers the voice-commerce E2E flow; see docs/issues/ISSUE-470/SCOPE.md and TDD-PLAN.md.
+   */
+  test('6b. Issue #462 / #470: function-call flow completes without conversation_already_has_active_response (partner scenario)', async ({ page }) => {
+    const { pathWithQuery, getOpenAIProxyParams, BASE_URL } = await import('./helpers/test-helpers.mjs');
+    const params = { ...getOpenAIProxyParams(), 'test-mode': 'true', 'enable-function-calling': 'true' };
+    const pathPart = pathWithQuery(params);
+    await page.goto(pathPart.startsWith('http') ? pathPart : BASE_URL + pathPart);
+    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
+    await sendTextMessage(page, 'What time is it?');
+    await waitForAgentResponseEnhanced(page, { timeout: AGENT_RESPONSE_TIMEOUT });
+    const response = await page.locator('[data-testid="agent-response"]').textContent();
+    expect(response).toBeTruthy();
+    expect(response).not.toBe('(Waiting for agent response...)');
+    // Partner scenario: no conversation_already_has_active_response; strict 0 errors.
+    await assertNoRecoverableAgentErrors(page);
+  });
+
   test('7. Reconnection with context – disconnect, reconnect; proxy sends context via conversation.item.create', async ({ page }) => {
     test.setTimeout(60000); // First message + disconnect + second message can exceed 30s
     await setupTestPageWithOpenAIProxy(page);

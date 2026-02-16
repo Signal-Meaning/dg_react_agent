@@ -151,6 +151,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     const pendingAudioQueue: Buffer[] = [];
     /** TODO: Not expected to keep. Only forward the first Settings per connection; duplicate Settings (e.g. on reconnect/reload) must not send a second session.update or upstream can error. */
     let hasForwardedSessionUpdate = false;
+    /** Issue #462 / #470: After sending function_call_output, defer response.create until we receive response.output_text.done so the API can close the previous response first (avoids conversation_already_has_active_response). */
+    let pendingResponseCreateAfterFunctionCallOutput = false;
     /** Issue #414: TTS chunk boundary diagnostic (set OPENAI_PROXY_TTS_BOUNDARY_DEBUG=1 to log same format as test-app E2E). */
     let ttsChunkLengths: number[] = [];
     let lastTtsChunk: Buffer | null = null;
@@ -240,8 +242,9 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             }
             return;
           }
-          // Issue #459: do not send session.update while upstream has an active response (avoids conversation_already_has_active_response).
-          if (responseInProgress) {
+          // Issue #459 / #462: do not send session.update while upstream has an active response (avoids conversation_already_has_active_response).
+          // Also block when we deferred response.create after function_call_output (Issue #470).
+          if (responseInProgress || pendingResponseCreateAfterFunctionCallOutput) {
             if (clientWs.readyState === WebSocket.OPEN) {
               clientWs.send(JSON.stringify(mapSessionUpdatedToSettingsApplied()));
             }
@@ -266,8 +269,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             msg as Parameters<typeof mapFunctionCallResponseToConversationItemCreate>[0]
           );
           upstream.send(JSON.stringify(itemCreate));
-          upstream.send(JSON.stringify({ type: 'response.create' }));
-          responseInProgress = true;
+          // Issue #462 / #470: Do not send response.create here. The API still has the previous response
+          // (the function-call request) active until it processes our function_call_output and sends
+          // response.output_text.done. Sending response.create now triggers conversation_already_has_active_response.
+          // Defer response.create until we receive that output_text.done (see output_text.done handler).
+          pendingResponseCreateAfterFunctionCallOutput = true;
         } else if (msg.type === 'InjectUserMessage') {
           const injectMsg = msg as Parameters<typeof mapInjectUserMessageToConversationItemCreate>[0];
           const itemCreate = mapInjectUserMessageToConversationItemCreate(injectMsg);
@@ -427,6 +433,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           flushPendingAudio();
         } else if (msg.type === 'response.output_text.done') {
           responseInProgress = false;
+          // Issue #462 / #470: After function_call_output we deferred response.create; send it now so the API can start the next turn.
+          if (pendingResponseCreateAfterFunctionCallOutput) {
+            pendingResponseCreateAfterFunctionCallOutput = false;
+            upstream.send(JSON.stringify({ type: 'response.create' }));
+            responseInProgress = true;
+          }
           const m = msg as { type: string; text?: string };
           emitLog({
             severityNumber: SeverityNumber.INFO,
@@ -576,10 +588,21 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // output_text.done; clearing here would allow a subsequent Settings → session.update while the API
           // still has an active response → conversation_already_has_active_response. Clear only on output_text.done.
           // No client message needed for playback; component just queues chunks. Skip forwarding.
+        } else if (msg.type === 'response.done') {
+          // Issue #470: API may send response.done to mark response complete (e.g. after function-call turn).
+          // If we deferred response.create after function_call_output, send it now so the next turn can start.
+          responseInProgress = false;
+          if (pendingResponseCreateAfterFunctionCallOutput) {
+            pendingResponseCreateAfterFunctionCallOutput = false;
+            upstream.send(JSON.stringify({ type: 'response.create' }));
+            responseInProgress = true;
+          }
         } else if (msg.type === 'conversation.item.created' || msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
           // Issue #388 / #414: decrement the counter once per unique item; send response.create when all pending items are confirmed.
-          // OpenAI may send .created (legacy), .added, and/or .done for the same item — only count the first event per item ID.
-          if (pendingItemAddedBeforeResponseCreate > 0) {
+          // Issue #470: do not send response.create from this path when we deferred after function_call_output — the API still has
+          // that response active; we must wait for response.output_text.done or response.done. (API may send item.added for the
+          // user message late, after function_call_arguments.done; sending response.create here would trigger conversation_already_has_active_response.)
+          if (pendingItemAddedBeforeResponseCreate > 0 && !pendingResponseCreateAfterFunctionCallOutput) {
             const itemId = (msg as { item?: { id?: string } }).item?.id;
             if (itemId && !pendingItemAckedIds.has(itemId)) {
               pendingItemAckedIds.add(itemId);

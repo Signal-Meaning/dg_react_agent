@@ -32,6 +32,8 @@ Use this checklist to drive the fix to completion. **Update this file and [READM
 | E2E as per release checklist | ⬜ Run when doing patch release (per release checklist). |
 | **Update README:** Mark Phase 2 complete | ✅ |
 
+**Partner scenario E2E coverage (Issue #470):** The voice-commerce flow (connect → Settings → one user message → function call → backend HTTP → FunctionCallResponse → API response) is covered by E2E test **6b** in `test-app/tests/e2e/openai-proxy-e2e.spec.js`: *"Issue #462 / #470: function-call flow completes without conversation_already_has_active_response (partner scenario)"*. It asserts `assertNoRecoverableAgentErrors(page)` (strict 0 errors). See `docs/issues/ISSUE-470/SCOPE.md` and `TDD-PLAN.md`. **Real-API run (Phase 1.2):** Test was run with real OpenAI proxy; it failed with the target error (*"Conversation already has an active response in progress"*), confirming RED; investigation to reach GREEN.
+
 ---
 
 ## Phase 3 – Release and follow-up

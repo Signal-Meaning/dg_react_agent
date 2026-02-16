@@ -110,6 +110,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   let mockEnforceSessionBeforeContext = false;
   /** Protocol test gap: when true, mock sends response.created (untranslated event) after session.updated so client must receive it as text. */
   let mockSendResponseCreatedAfterSessionUpdated = false;
+  /**
+   * Issue #470: when true, on function_call_output mock sends response.done only (no response.output_text.done).
+   * Asserts proxy sends response.create once when it receives response.done (fallback path).
+   */
+  let mockSendResponseDoneOnlyAfterFunctionCallOutput = false;
   /** Protocol errors detected by mock (e.g. conversation.item.create before session.updated). Tests assert this is empty. */
   const protocolErrors: Error[] = [];
   /** Records conversation.item.create payloads for assertions */
@@ -185,6 +190,21 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             receivedConversationItems.push({ type: msg.type, item: msg.item });
             itemCreateCount++;
             lastItemCreateRole = msg.item?.role;
+            // Issue #470: proxy defers response.create until output_text.done (or response.done) after function_call_output.
+            if (msg.item?.type === 'function_call_output') {
+              if (mockSendResponseDoneOnlyAfterFunctionCallOutput) {
+                socket.send(JSON.stringify({ type: 'response.done', response_id: 'resp_1' }));
+              } else {
+                socket.send(JSON.stringify({
+                  type: 'response.output_text.done',
+                  response_id: 'resp_1',
+                  item_id: 'item_1',
+                  output_index: 0,
+                  content_index: 0,
+                  text: 'Hello from mock',
+                }));
+              }
+            }
             // Issue #388: proxy sends response.create only after conversation.item.added. Mock must send item.added for user messages.
             const isUserMessage = msg.item?.type === 'message' && msg.item?.role === 'user';
             const isAssistantMessage = msg.item?.type === 'message' && msg.item?.role === 'assistant';
@@ -381,6 +401,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
 
   beforeEach(() => {
     if (useRealAPIs) jest.useRealTimers();
+    // Issue #470: reset so tests that expect output_text.done (e.g. "Hello from mock") are not affected by the response.done-only test.
+    mockSendResponseDoneOnlyAfterFunctionCallOutput = false;
   });
 
 
@@ -731,6 +753,118 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     });
     client.on('error', (err) => finish(err));
   }, useRealAPIs ? 30000 : 5000);
+
+  /**
+   * Issue #470 / TDD-PLAN-MISSING-REQUIREMENTS Phase 2: Real-API integration test for Req 1 (session.update
+   * only when no active response). Sends Settings, InjectUserMessage, then second Settings during response
+   * window; asserts no conversation_already_has_active_response. Proxy must not send session.update while
+   * response is active.
+   */
+  (useRealAPIs ? it : it.skip)('Issue #470 real-API: session.update not sent while response active (Req 1, USE_REAL_APIS=1)', (done) => {
+    let finished = false;
+    const errorsReceived: string[] = [];
+    let secondSettingsSent = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string; role?: string };
+        if (msg.type === 'Error' && msg.description) {
+          errorsReceived.push(msg.description);
+          if (msg.description.includes('conversation_already_has_active_response')) {
+            finish(new Error(`Req 1 regression: conversation_already_has_active_response: ${msg.description}`));
+            return;
+          }
+        }
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say exactly: OK' }));
+          setTimeout(() => {
+            if (client.readyState === WebSocket.OPEN && !secondSettingsSent) {
+              secondSettingsSent = true;
+              client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+            }
+          }, 150);
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          if (errorsReceived.some((d) => d.includes('conversation_already_has_active_response'))) {
+            finish(new Error('Req 1 regression: conversation_already_has_active_response before completion'));
+            return;
+          }
+          setTimeout(() => finish(), 2000);
+        }
+      } catch (e) {
+        finish(e as Error);
+      }
+    });
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (!finished) finish(new Error('Issue #470 real-API Req 1: timeout waiting for assistant response'));
+    }, 25000);
+  }, 30000);
+
+  /**
+   * Issue #470 / TDD-PLAN-MISSING-REQUIREMENTS Phase 3: Real-API test for Req 3 (response.create only
+   * after item.added). Sends Settings, InjectUserMessage; asserts we receive ConversationText (assistant)
+   * without any Error. If proxy sent response.create before item.added, the real API could error.
+   */
+  (useRealAPIs ? it : it.skip)('Issue #470 real-API: InjectUserMessage receives assistant response without error (Req 3, USE_REAL_APIS=1)', (done) => {
+    let finished = false;
+    const errorsReceived: string[] = [];
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string; role?: string; content?: string };
+        if (msg.type === 'Error' && msg.description) {
+          errorsReceived.push(msg.description);
+          finish(new Error(`Req 3: upstream error before response: ${msg.description}`));
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What is 2 plus 2?' }));
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          if (errorsReceived.length > 0) {
+            finish(new Error(`Req 3: received errors before assistant response: ${errorsReceived.join('; ')}`));
+            return;
+          }
+          expect(typeof msg.content).toBe('string');
+          expect((msg.content ?? '').length).toBeGreaterThan(0);
+          setTimeout(() => finish(), 1000);
+        }
+      } catch (e) {
+        finish(e as Error);
+      }
+    });
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (!finished) finish(new Error('Issue #470 real-API Req 3: timeout waiting for assistant response'));
+    }, 25000);
+  }, 30000);
 
   /**
    * Reconnect/reload: when client sends Settings twice (e.g. test-app focus or reload), proxy must forward
@@ -1253,6 +1387,106 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     });
     client.on('error', done);
   }, 8000);
+
+  /**
+   * Issue #470 / TDD-PLAN-MISSING-REQUIREMENTS Phase 1: Real-API integration test for function-call path (Req 4).
+   * Runs only with USE_REAL_APIS=1. Asserts that the full flow (Settings with tools → InjectUserMessage →
+   * FunctionCallRequest → FunctionCallResponse → response) completes without conversation_already_has_active_response.
+   */
+  (useRealAPIs ? it : it.skip)('Issue #470 real-API: function-call flow completes without conversation_already_has_active_response (USE_REAL_APIS=1)', (done) => {
+    const errorsReceived: string[] = [];
+    let sentFunctionCallResponse = false;
+    let receivedAssistantResponseAfterFunctionCall = false;
+    let finished = false;
+    const timeoutMs = 35000;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: {
+          think: {
+            prompt: 'You are a helpful assistant. Use tools when needed.',
+            functions: [
+              {
+                name: 'get_current_time',
+                description: 'Get the current time in a specific timezone.',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    timezone: { type: 'string', description: 'Timezone (e.g. UTC, America/New_York)' },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      }));
+    });
+
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as {
+          type?: string;
+          description?: string;
+          role?: string;
+          content?: string;
+          functions?: Array<{ id: string; name: string; arguments?: string }>;
+        };
+        if (msg.type === 'Error' && msg.description) {
+          errorsReceived.push(msg.description);
+          if (msg.description.includes('conversation_already_has_active_response')) {
+            finish(new Error(`Issue #470 regression: received conversation_already_has_active_response: ${msg.description}`));
+            return;
+          }
+        }
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What time is it?' }));
+        }
+        if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+          const fn = msg.functions[0];
+          client.send(JSON.stringify({
+            type: 'FunctionCallResponse',
+            id: fn.id,
+            name: fn.name,
+            content: JSON.stringify({ time: '12:00', timezone: 'UTC' }),
+          }));
+          sentFunctionCallResponse = true;
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant' && sentFunctionCallResponse) {
+          const bad = errorsReceived.some((d) => d.includes('conversation_already_has_active_response'));
+          if (bad) {
+            finish(new Error('Issue #470 regression: received conversation_already_has_active_response before assistant response'));
+            return;
+          }
+          receivedAssistantResponseAfterFunctionCall = true;
+          setTimeout(() => finish(), 2000);
+        }
+      } catch {
+        // ignore non-JSON
+      }
+    });
+
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (finished) return;
+      if (!receivedAssistantResponseAfterFunctionCall) {
+        const errMsg = errorsReceived.length
+          ? `Timeout; errors: ${errorsReceived.join('; ')}`
+          : 'Timeout waiting for assistant response after function call';
+        finish(new Error(`Issue #470 real-API: ${errMsg}`));
+      }
+    }, timeoutMs);
+  }, 40000);
 
   /**
    * When upstream sends response.function_call_arguments.done, proxy sends FunctionCallRequest first then ConversationText
@@ -2228,5 +2462,57 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', done);
+  }, 8000);
+
+  /**
+   * Issue #470: When upstream sends response.done (and no response.output_text.done) after function_call_output,
+   * proxy must send response.create once so the next turn can start. Tests the response.done fallback path.
+   * Placed last among mock-only tests to avoid affecting tests that expect output_text.done ("Hello from mock").
+   */
+  itMockOnly('Issue #470: after function_call_output, response.done (no output_text.done) triggers proxy to send response.create once', (done) => {
+    mockReceived.length = 0;
+    mockSendFunctionCallAfterSession = true;
+    mockSendResponseDoneOnlyAfterFunctionCallOutput = true;
+    let finished = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+      expect(responseCreateCount).toBe(1);
+      client.close();
+      done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (finished) return;
+      const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }> };
+      if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+        client.send(JSON.stringify({
+          type: 'FunctionCallResponse',
+          id: msg.functions[0].id,
+          name: msg.functions[0].name,
+          content: '{"time":"12:00"}',
+        }));
+        const deadline = Date.now() + 2000;
+        const check = () => {
+          if (finished) return;
+          const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+          if (responseCreateCount >= 1) {
+            finish();
+            return;
+          }
+          if (Date.now() < deadline) setTimeout(check, 50);
+          else {
+            finished = true;
+            done(new Error(`Expected mock to receive response.create within 2s; got ${responseCreateCount}`));
+          }
+        };
+        setTimeout(check, 200);
+      }
+    });
+    client.on('error', (err) => { if (!finished) { finished = true; done(err); } });
   }, 8000);
 });
