@@ -139,14 +139,22 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 
 - Focus on maintaining and improving test coverage
 
+## Backend / Proxy Defects — Must Engage Real APIs
+
+**Defects that involve the backend or proxy must actually engage with the real APIs presented by the provider.**
+
+- **Real API, not mock-only:** Fixes for proxy/API behavior (e.g. message ordering, session.update, responseInProgress) must be validated against the **real** upstream (e.g. OpenAI Realtime API), not only mocks. The real API’s event order and timing can differ from mocks; production failures can persist if we only tested against a mock.
+- **Partner-reported defects:** When a defect is **reported by a partner** (e.g. voice-commerce), we **must** add coverage that exercises the **reported scenario** (same flow, same provider) before considering the defect resolved and the release qualified. We may not add E2E variants for every case we develop, but **for partner-reported defects we must** — either an E2E test that runs the partner’s scenario (e.g. function-call flow, real API) or an integration test that reproduces the same message/timing path against the real API. Mock-only or a different minimal path is **not** sufficient.
+- **Lesson:** Issue #462 was reported by a partner; we fixed the proxy and added a real-API integration test that only probed Settings → InjectUserMessage → second Settings. We did **not** add E2E (or equivalent) for the partner’s scenario (function calls, backend HTTP, full flow). That was insufficient. Do not repeat.
+
 ## Release Qualification (Real API) — CRITICAL
 
 **Never qualify a release on mock-only tests when the release fixes proxy/API behavior.**
 
 - For any fix that depends on **upstream (proxy↔API) message ordering or timing** (e.g. openai-proxy, session.update, responseInProgress), we **must** run the relevant integration (and where applicable E2E) tests **against the real API** before marking the release qualified (or document an explicit exception).
-- **Mock-only success is not sufficient** for such releases: the real API's event order and timing can differ from mocks (e.g. audio.done before text.done, function-call flows), and production failures (e.g. `conversation_already_has_active_response`) can still occur if we only tested against a mock.
+- **Partner-reported defects:** Additionally, we **must** have coverage (E2E or integration against real API) that exercises the **partner’s scenario**; see “Backend / Proxy Defects” above.
 - **Required when applicable:** Before release, run e.g. `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` for proxy fixes (when OPENAI_API_KEY is available), and/or E2E in proxy mode with real backend. See release checklist and `.github/ISSUE_TEMPLATE/release-checklist.md` for the explicit qualification step.
-- **Reference:** Issue #466 (process fix after 0.9.2/0.2.2 was qualified on mock-only test; voice-commerce real-API E2E still failed).
+- **References:** Issue #466 (process fix); Issue #462 / voice-commerce (partner-reported defect; we did not add E2E for the partner’s function-call scenario).
 
 ## Publishing and Releasing
 

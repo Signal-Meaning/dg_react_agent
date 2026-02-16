@@ -31,9 +31,15 @@ Summary: **real APIs first (when available) → mocks**. **CI: mocks only.**
 - **Deepgram:** Transcript and VAD (UserStartedSpeaking, UtteranceEnd) come from the Deepgram agent/transcription streams. E2E specs that rely on these (e.g. `callback-test.spec.js`, `deepgram-vad-events-core.spec.js`) run against Deepgram only; many skip when `VITE_OPENAI_PROXY_ENDPOINT` is set (see `test-app/tests/e2e/E2E-BACKEND-MATRIX.md`).
 - **OpenAI proxy (Issue #414):** The proxy maps OpenAI Realtime `input_audio_buffer.speech_started` / `speech_stopped` to the same component contract (`UserStartedSpeaking`, `UtteranceEnd`). E2E that assert VAD when using the OpenAI proxy: `openai-proxy-e2e.spec.js` test **"5b. VAD (Issue #414)"**. Contract and TDD plan: `docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md`.
 
+## Backend / proxy defects and partner-reported defects
+
+- **Backend/proxy defects must engage real APIs.** Fixes for proxy/API behavior (e.g. message ordering, session.update) must be validated against the **real** upstream (e.g. OpenAI), not only mocks. See `.cursorrules` (Backend / Proxy Defects, Release Qualification).
+- **Partner-reported defects require coverage of the reported scenario.** When a defect is reported by a partner (e.g. voice-commerce), we **must** add E2E or equivalent real-API coverage that exercises the **partner’s scenario** (same flow, e.g. function calls, backend HTTP) before considering the defect resolved. A minimal real-API probe (e.g. Settings → InjectUserMessage → Settings) is **not** sufficient by itself. See `tests/docs/BACKEND-PROXY-DEFECTS-REAL-API.md`.
+
 ## Document references
 
 - **Integration tests (mock upstream):** `docs/issues/ISSUE-381/INTEGRATION-TEST-PLAN.md`, `tests/integration/openai-proxy-integration.test.ts`
 - **E2E tests:** `test-app/tests/e2e/`, `docs/development/TESTING-QUICK-START.md`
 - **Transcript/VAD contract (Issue #414):** `docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md`
-- **Cursor/testing rules:** `.cursorrules` (Testing Guidelines, Test run order)
+- **Backend/proxy and partner-reported defects:** `tests/docs/BACKEND-PROXY-DEFECTS-REAL-API.md`
+- **Cursor/testing rules:** `.cursorrules` (Testing Guidelines, Backend / Proxy Defects, Test run order)

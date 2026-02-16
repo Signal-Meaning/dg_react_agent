@@ -393,8 +393,13 @@ When running comprehensive test passes, reports are generated in `test-results/c
 
 See [TEST-COVERAGE-PROXY-MODE.md](./TEST-COVERAGE-PROXY-MODE.md) in this directory for detailed coverage analysis.
 
+## Backend / proxy and partner-reported defects
+
+**Defects involving the backend or proxy must engage real APIs.** When a defect is **reported by a partner**, we **must** add coverage (E2E or equivalent real-API) that exercises the **partner’s scenario** before considering the defect resolved; a minimal probe is not sufficient. See [BACKEND-PROXY-DEFECTS-REAL-API.md](./BACKEND-PROXY-DEFECTS-REAL-API.md) and `docs/development/TEST-STRATEGY.md`.
+
 ## References
 
+- [Backend/Proxy Defects and Real API](./BACKEND-PROXY-DEFECTS-REAL-API.md)
 - [Jest Documentation](https://jestjs.io/docs/getting-started)
 - [Playwright Documentation](https://playwright.dev/)
 - [WebSocket Testing Best Practices](./issues/ISSUE-341/JEST-WEBSOCKET-BEST-PRACTICES.md)
