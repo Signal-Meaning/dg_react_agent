@@ -68,20 +68,18 @@ CI (`.github/workflows/test-and-publish.yml`) publishes both packages when the w
 
 #### Package Publishing
 
-- [ ] **Publish via CI:**
-  - [ ] **Version must be bumped** on the release branch and committed before creating the GitHub release
-  - [ ] Create GitHub release (tag **v0.9.2**) to trigger `.github/workflows/test-and-publish.yml`
+- [x] **Publish via CI:**
+  - [x] **Version must be bumped** on the release branch and committed before creating the GitHub release
+  - [x] Create GitHub release (tag **v0.9.2**) to trigger `.github/workflows/test-and-publish.yml` — [Release v0.9.2](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.9.2)
   - [ ] Monitor CI: test job then publish job; both packages published
   - [ ] Verify both packages in GitHub Packages: voice-agent-react@0.9.2, voice-agent-backend@0.2.2
-- [ ] **Tag Release (after publish succeeds):**
-  - [ ] Tag: `git tag v0.9.2`
-  - [ ] Push: `git push origin v0.9.2`
+- [x] **Tag Release:** Tag v0.9.2 created when the GitHub release was created.
 - [ ] **Verify Installation:** Install @signal-meaning/voice-agent-react@0.9.2 and @signal-meaning/voice-agent-backend@0.2.2 in a test app
 
 #### GitHub Release
 
-- [ ] **Create GitHub Release:** Title “Release v0.9.2”, tag v0.9.2, description with changelog
-- [ ] **Labels:** Add release / v0.9.2 as needed
+- [x] **Create GitHub Release:** Title “Release v0.9.2”, tag v0.9.2, description with changelog
+- [ ] **Labels:** Add release / v0.9.2 as needed (optional)
 
 #### Post-Release
 
