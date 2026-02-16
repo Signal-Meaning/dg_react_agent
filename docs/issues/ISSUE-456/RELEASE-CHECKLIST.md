@@ -114,19 +114,18 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
   - [x] Description: Include changelog and migration notes (CHANGELOG.md)
   - [x] Tag: `v0.9.0`
   - [x] Target: `release/v0.9.0` branch (release created from release branch)
-- [ ] **Add Release Labels**: Label the release appropriately (if repo uses release/version labels)
-  - [ ] Add: `release` label
-  - [ ] Add: `v0.9.0` label
-- [ ] **Add Branch Labels**: Label the release branch (if repo uses branch labels)
-  - [ ] Add: `release` label to `release/v0.9.0` branch
-  - [ ] Add: `v0.9.0` label to `release/v0.9.0` branch
+- [x] **Add Release Labels**: Label the release appropriately (if repo uses release/version labels)
+  - [x] Add: `release` label (on issue #456 and PR #458)
+  - [x] Add: `v0.9.0` label (on issue #456 and PR #458)
+- [x] **Add Branch Labels**: Label the release branch (if repo uses branch labels)
+  - N/A — GitHub does not support labels on branches; applied `release` and `v0.9.0` to issue #456 and PR #458
 
 #### Post-Release
 
-- [ ] **Update Main Branch**: Merge release branch to main via Pull Request (required — do not push directly to main)
+- [x] **Update Main Branch**: Merge release branch to main via Pull Request (required — do not push directly to main)
   - [x] Open a PR: `release/v0.9.0` → `main` — [PR #458](https://github.com/Signal-Meaning/dg_react_agent/pull/458)
-  - [ ] Get review/approval if branch protection requires it
-  - [ ] Merge the PR (squash or merge commit per repo policy)
+  - [x] Get review/approval if branch protection requires it
+  - [x] Merge the PR (squash or merge commit per repo policy)
   - Do **not** `git push origin main` from a local merge — use the GitHub PR merge so branch protection is satisfied
 - [ ] **Clean Up**: Clean up release artifacts (only if you ran optional local package)
   - [ ] If you ran `npm run package:local` locally: remove any `.tgz` in repo root, or leave (they are gitignored)
