@@ -588,10 +588,21 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // output_text.done; clearing here would allow a subsequent Settings → session.update while the API
           // still has an active response → conversation_already_has_active_response. Clear only on output_text.done.
           // No client message needed for playback; component just queues chunks. Skip forwarding.
+        } else if (msg.type === 'response.done') {
+          // Issue #470: API may send response.done to mark response complete (e.g. after function-call turn).
+          // If we deferred response.create after function_call_output, send it now so the next turn can start.
+          responseInProgress = false;
+          if (pendingResponseCreateAfterFunctionCallOutput) {
+            pendingResponseCreateAfterFunctionCallOutput = false;
+            upstream.send(JSON.stringify({ type: 'response.create' }));
+            responseInProgress = true;
+          }
         } else if (msg.type === 'conversation.item.created' || msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
           // Issue #388 / #414: decrement the counter once per unique item; send response.create when all pending items are confirmed.
-          // OpenAI may send .created (legacy), .added, and/or .done for the same item — only count the first event per item ID.
-          if (pendingItemAddedBeforeResponseCreate > 0) {
+          // Issue #470: do not send response.create from this path when we deferred after function_call_output — the API still has
+          // that response active; we must wait for response.output_text.done or response.done. (API may send item.added for the
+          // user message late, after function_call_arguments.done; sending response.create here would trigger conversation_already_has_active_response.)
+          if (pendingItemAddedBeforeResponseCreate > 0 && !pendingResponseCreateAfterFunctionCallOutput) {
             const itemId = (msg as { item?: { id?: string } }).item?.id;
             if (itemId && !pendingItemAckedIds.has(itemId)) {
               pendingItemAckedIds.add(itemId);

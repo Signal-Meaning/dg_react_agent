@@ -134,9 +134,9 @@ The proxy must **not** send `response.create` until the upstream has confirmed t
 
 - **InjectUserMessage:** Proxy sends `conversation.item.create` (user), then waits for **one** `conversation.item.added` (or `.created` / `.done`) for that item. When the counter `pendingItemAddedBeforeResponseCreate` reaches 0, the proxy sends `response.create`.
 - **Context + greeting (session.updated):** Greeting is **not** sent to upstream as an item; only context items are. So for “context only” there is no pending item and no `response.create` from that path. (If in the future we inject an assistant greeting as an item, we would set the counter to N+1 for N context items + 1 greeting and send `response.create` when all are confirmed.)
-- **FunctionCallResponse:** Proxy sends `conversation.item.create` (function_call_output) only. **Do not** send `response.create` until we receive `response.output_text.done` (Issue #462 / #470: API still has previous response active until then; sending response.create earlier causes `conversation_already_has_active_response`).
+- **FunctionCallResponse:** Proxy sends `conversation.item.create` (function_call_output) only. **Do not** send `response.create` until we receive `response.output_text.done` or **`response.done`** (Issue #462 / #470: API still has previous response active until then; sending response.create earlier causes `conversation_already_has_active_response`). The proxy treats either event as the signal to send the deferred `response.create` (Issue #470: `response.done` fallback for API ordering).
 
-Item confirmation is tracked by upstream event types `conversation.item.created`, `conversation.item.added`, `conversation.item.done`; each **unique item id** is counted once (see `pendingItemAckedIds` in `server.ts`).
+Item confirmation is tracked by upstream event types `conversation.item.created`, `conversation.item.added`, `conversation.item.done`; each **unique item id** is counted once (see `pendingItemAckedIds` in `server.ts`). **Issue #470:** When `pendingResponseCreateAfterFunctionCallOutput` is true, the proxy must **not** send `response.create` from the item.added path — the API may send `item.added` for the user message after `function_call_arguments.done`; sending `response.create` there would trigger `conversation_already_has_active_response`.
 
 ---
 
@@ -147,7 +147,8 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 | **session.created** | No message to client. Log only. Do not inject context or greeting. |
 | **session.updated** | Send context items to upstream (if any); send **SettingsApplied** (text); send greeting as **ConversationText** (text) if configured; no greeting to upstream. |
 | **conversation.item.created** / **.added** / **.done** | Decrement pending-item counter; when 0, send `response.create` to upstream. Forward event to client as **text**. |
-| **response.output_text.done** | Map to **ConversationText** (assistant); send as **text**. |
+| **response.output_text.done** | Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream; map to **ConversationText** (assistant); send as **text**. |
+| **response.done** | Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream (Issue #470 fallback). No client message. |
 | **response.output_audio_transcript.done** | Map to **ConversationText** (assistant); send as **text**. |
 | **response.function_call_arguments.done** | Map to **FunctionCallRequest** and **ConversationText** (assistant); send both as **text**. |
 | **response.output_audio.delta** | Decode base64 to PCM; send **binary** (raw PCM) to client only. Do not send as JSON. |

@@ -4,7 +4,7 @@
 
 **Scope:** Partner-scenario coverage (E2E 6b), OpenAI proxy fix (defer `response.create` until `response.output_text.done` after function_call_output), real-API integration tests, protocol docs. See `docs/issues/ISSUE-470/SCOPE.md`.
 
-**Progress:** Release docs created. Pre-release validation in progress.
+**Progress:** Release docs created. Pre-release validation run. E2E in proxy mode: 198 passed, 1 failed (test 6b), 1 flaky (TTS diagnostic #414), 45 skipped — test 6b still reports agent-error-count 1 (blocker for "all pass").
 
 ---
 
@@ -23,8 +23,10 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.4), **@signal-mean
 - [ ] **Code Review Complete**: All PRs merged and code reviewed
 - [ ] **Tests Passing**
   - [x] Run what CI runs: `npm run lint` then `npm run test:mock` — **passed**
-  - [ ] **E2E in proxy mode:** `cd test-app && npm run backend` (in another terminal), then `USE_PROXY_MODE=true npm run test:e2e` — all must pass
-  - [ ] **Real-API qualification (proxy/API behavior release):** When `OPENAI_API_KEY` available: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — all in-scope tests pass. Optional: `cd test-app && USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e --grep "6b.*462"` to confirm E2E 6b GREEN
+  - [ ] **E2E in proxy mode:** Prefer **focused E2E** on critical scenarios (no need for full 245-test pass every time):
+    - **Partner scenario (6b):** `cd test-app && npm run backend` (separate terminal), then `npm run test:e2e:6b`. Must pass (0 agent errors).
+    - **Full proxy E2E** (when needed): `USE_PROXY_MODE=true npm run test:e2e` (all E2E). **Last full run:** 198 passed, 1 failed (6b), 1 flaky (TTS diagnostic), 45 skipped.
+  - [ ] **Real-API qualification (proxy/API behavior release):** When `OPENAI_API_KEY` available: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — all in-scope tests pass. Optional: `cd test-app && USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b.*462"` to confirm E2E 6b GREEN.
 - [x] **Linting Clean**: `npm run lint` — no errors
 - [x] **Documentation Updated**: #470 scope docs, INVESTIGATION, PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE, TDD plans
 - [x] **API Changes Documented**: None (no component/backend API changes)
@@ -77,6 +79,31 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.4), **@signal-mean
 
 - [ ] **Merge to main via PR**: `release/v0.9.4` → `main` (do not push directly to main)
 - [ ] **Announcement** (if applicable)
+
+---
+
+### Focused E2E (recommended)
+
+Run only the scenarios that matter for this release instead of the full suite:
+
+| Scenario | Command (from `test-app`) | Notes |
+|----------|---------------------------|--------|
+| **6b partner (Issue #462/#470)** | `npm run test:e2e:6b` | Backend must be running (`npm run backend`). Asserts 0 agent errors after function-call flow. |
+| **OpenAI proxy E2E (subset)** | `USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js` | All tests in that spec only. |
+| **Full E2E** | `USE_PROXY_MODE=true npm run test:e2e` | Full pass (~245 tests); use for final validation. |
+
+---
+
+### E2E run summary (proxy mode)
+
+| Result   | Count | Details |
+|----------|-------|---------|
+| Passed   | 198   | —       |
+| Failed   | 1     | **6b** (Issue #462/#470 partner scenario): `assertNoRecoverableAgentErrors` — `agent-error-count` "1" (expected "0"). Error at `test-helpers.js:1000` (toHaveText '0'). |
+| Flaky    | 1     | openai-proxy-tts-diagnostic.spec.js (Issue #414): TTS audio metrics (zcr/rms) — non–speech-like. |
+| Skipped  | 45    | —       |
+
+**Blocker for release:** Test 6b must show 0 agent errors (no `conversation_already_has_active_response` or other recoverable error in partner scenario).
 
 ---
 

@@ -992,12 +992,31 @@ async function getAgentState(page) {
  * handles them the same as Deepgram idle timeout (log and return; no onError). So when the
  * only upstream event is idle-timeout closure, counts stay 0 and this assertion passes.
  * Waits 3s before asserting so late-arriving events are reflected in the DOM.
+ * On failure, reads the event log and includes the last error/warning lines in the message.
  * @param {import('@playwright/test').Page} page
  */
 async function assertNoRecoverableAgentErrors(page) {
   await page.waitForTimeout(3000);
   const totalEl = page.locator('[data-testid="agent-error-count"]');
-  await expect(totalEl).toHaveText('0', { timeout: 2000 });
+  const totalText = await totalEl.textContent();
+  const total = parseInt(totalText ?? '0', 10);
+  if (total !== 0) {
+    let context = '';
+    try {
+      const eventLog = page.locator('[data-testid="event-log"] pre');
+      const logText = await eventLog.textContent({ timeout: 2000 }).catch(() => '');
+      if (logText) {
+        const lines = logText.trim().split('\n').filter(Boolean);
+        const errorLines = lines.filter((l) => /Error|Warning|conversation_already|recoverable/i.test(l)).slice(-5);
+        if (errorLines.length) context = ` Event log (last error/warning lines): ${errorLines.join(' | ')}`;
+      }
+    } catch {
+      // ignore
+    }
+    const recoverableEl = page.locator('[data-testid="recoverable-agent-error-count"]');
+    const recText = await recoverableEl.textContent().catch(() => '0');
+    expect(total, `agentErrorCount expected 0, got ${total} (recoverable: ${recText}).${context}`).toBe(0);
+  }
   const recoverableEl = page.locator('[data-testid="recoverable-agent-error-count"]');
   await expect(recoverableEl).toHaveText('0', { timeout: 2000 });
 }

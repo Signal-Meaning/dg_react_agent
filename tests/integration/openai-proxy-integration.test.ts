@@ -110,6 +110,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   let mockEnforceSessionBeforeContext = false;
   /** Protocol test gap: when true, mock sends response.created (untranslated event) after session.updated so client must receive it as text. */
   let mockSendResponseCreatedAfterSessionUpdated = false;
+  /**
+   * Issue #470: when true, on function_call_output mock sends response.done only (no response.output_text.done).
+   * Asserts proxy sends response.create once when it receives response.done (fallback path).
+   */
+  let mockSendResponseDoneOnlyAfterFunctionCallOutput = false;
   /** Protocol errors detected by mock (e.g. conversation.item.create before session.updated). Tests assert this is empty. */
   const protocolErrors: Error[] = [];
   /** Records conversation.item.create payloads for assertions */
@@ -185,16 +190,20 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             receivedConversationItems.push({ type: msg.type, item: msg.item });
             itemCreateCount++;
             lastItemCreateRole = msg.item?.role;
-            // Issue #470: proxy defers response.create until output_text.done after function_call_output. Send it so the flow completes.
+            // Issue #470: proxy defers response.create until output_text.done (or response.done) after function_call_output.
             if (msg.item?.type === 'function_call_output') {
-              socket.send(JSON.stringify({
-                type: 'response.output_text.done',
-                response_id: 'resp_1',
-                item_id: 'item_1',
-                output_index: 0,
-                content_index: 0,
-                text: 'Hello from mock',
-              }));
+              if (mockSendResponseDoneOnlyAfterFunctionCallOutput) {
+                socket.send(JSON.stringify({ type: 'response.done', response_id: 'resp_1' }));
+              } else {
+                socket.send(JSON.stringify({
+                  type: 'response.output_text.done',
+                  response_id: 'resp_1',
+                  item_id: 'item_1',
+                  output_index: 0,
+                  content_index: 0,
+                  text: 'Hello from mock',
+                }));
+              }
             }
             // Issue #388: proxy sends response.create only after conversation.item.added. Mock must send item.added for user messages.
             const isUserMessage = msg.item?.type === 'message' && msg.item?.role === 'user';
@@ -392,6 +401,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
 
   beforeEach(() => {
     if (useRealAPIs) jest.useRealTimers();
+    // Issue #470: reset so tests that expect output_text.done (e.g. "Hello from mock") are not affected by the response.done-only test.
+    mockSendResponseDoneOnlyAfterFunctionCallOutput = false;
   });
 
 
@@ -2451,5 +2462,57 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', done);
+  }, 8000);
+
+  /**
+   * Issue #470: When upstream sends response.done (and no response.output_text.done) after function_call_output,
+   * proxy must send response.create once so the next turn can start. Tests the response.done fallback path.
+   * Placed last among mock-only tests to avoid affecting tests that expect output_text.done ("Hello from mock").
+   */
+  itMockOnly('Issue #470: after function_call_output, response.done (no output_text.done) triggers proxy to send response.create once', (done) => {
+    mockReceived.length = 0;
+    mockSendFunctionCallAfterSession = true;
+    mockSendResponseDoneOnlyAfterFunctionCallOutput = true;
+    let finished = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+      expect(responseCreateCount).toBe(1);
+      client.close();
+      done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (finished) return;
+      const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }> };
+      if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+        client.send(JSON.stringify({
+          type: 'FunctionCallResponse',
+          id: msg.functions[0].id,
+          name: msg.functions[0].name,
+          content: '{"time":"12:00"}',
+        }));
+        const deadline = Date.now() + 2000;
+        const check = () => {
+          if (finished) return;
+          const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+          if (responseCreateCount >= 1) {
+            finish();
+            return;
+          }
+          if (Date.now() < deadline) setTimeout(check, 50);
+          else {
+            finished = true;
+            done(new Error(`Expected mock to receive response.create within 2s; got ${responseCreateCount}`));
+          }
+        };
+        setTimeout(check, 200);
+      }
+    });
+    client.on('error', (err) => { if (!finished) { finished = true; done(err); } });
   }, 8000);
 });
