@@ -2,7 +2,7 @@
 
 **GitHub:** [#462 Fix: conversation_already_has_active_response still occurs (reopened)](https://github.com/Signal-Meaning/dg_react_agent/issues/462)
 
-**Branch:** `davidrmcgee/issue462` → create `release/v0.9.5` when ready to release.
+**Branch:** `release/v0.9.5` created and pushed (from `davidrmcgee/issue462`). Proceed to GitHub release to trigger CI publish.
 
 **Scope:** Function-call qualification uses real backend HTTP (no in-test hardcoded FunctionCallResponse); process guards in .cursorrules, BACKEND-PROXY-DEFECTS, and release checklist; docs (VOICE-COMMERCE-FUNCTION-CALL-REPORT, README). No proxy code change in this release — test and process fixes so we do not repeat the false qualification.
 
@@ -60,9 +60,8 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.5), **@signal-mean
 
 ### Git Operations
 
-- [ ] **Commit release docs**: e.g. `chore: add release docs for v0.9.5`
-- [ ] **Create Release Branch**: From `davidrmcgee/issue462` (or from main after merge): create `release/v0.9.5`, push: `git checkout -b release/v0.9.5` then `git push origin release/v0.9.5`
-  - Or use: `npm run release:issue 0.9.5 patch` if available (creates issue and branch)
+- [x] **Commit release docs**: `chore: prepare release v0.9.5 (Issue #462)` — **done**
+- [x] **Create Release Branch**: Created `release/v0.9.5` from `davidrmcgee/issue462`, pushed `origin/release/v0.9.5` — **done**
 
 ### Package Publishing
 
@@ -91,9 +90,9 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.5), **@signal-mean
 
 ### Completion Criteria
 
-- [ ] Lint and test:mock pass locally (and CI)
-- [ ] Release docs created and validated for v0.9.5
-- [ ] GitHub release created; CI published package(s)
+- [x] Lint and test:mock pass locally (and CI)
+- [x] Release docs created and validated for v0.9.5
+- [ ] GitHub release created; CI published package(s) — **next: create release on GitHub (tag v0.9.5, target release/v0.9.5)**
 - [ ] PR merged: `release/v0.9.5` → `main`
 
 ---
