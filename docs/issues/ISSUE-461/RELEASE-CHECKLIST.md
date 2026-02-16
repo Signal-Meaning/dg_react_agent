@@ -2,7 +2,7 @@
 
 **GitHub:** [#461 Release v0.9.1: Complete Release Process and Documentation](https://github.com/Signal-Meaning/dg_react_agent/issues/461)
 
-**Progress:** _Tracking docs committed and pushed. Lint + test:mock passed. Release docs created (docs/releases/v0.9.1/). Versions bumped (root 0.9.1, backend 0.2.1). Release branch release/v0.9.1 created and pushed. Next: Run E2E in proxy mode (optional before publish); create GitHub release to trigger CI publish; after publish succeed, tag v0.9.1 and push tag; open PR release/v0.9.1 → main._
+**Progress:** _Tracking docs committed and pushed. Lint + test:mock passed. Release docs created (docs/releases/v0.9.1/). Versions bumped (root 0.9.1, backend 0.2.1). Release branch release/v0.9.1 created and pushed. GitHub release created (https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.9.1); CI test-and-publish triggered. Next: Monitor CI; after publish succeeds verify packages; open PR release/v0.9.1 → main._
 
 ---
 
@@ -117,11 +117,11 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### GitHub Release
 
-- [ ] **Create GitHub Release**: Create release on GitHub
-  - [ ] Title: **Release v0.9.1**
-  - [ ] Description: Include changelog and migration notes
-  - [ ] Tag: `v0.9.1`
-  - [ ] Target: `main` branch
+- [x] **Create GitHub Release**: Create release on GitHub
+  - [x] Title: **Release v0.9.1**
+  - [x] Description: Include changelog and migration notes
+  - [x] Tag: `v0.9.1`
+  - [x] Target: `release/v0.9.1` branch (release created from release branch)
 - [ ] **Add Release Labels**: Label the release appropriately
   - [ ] Add: `release` label
   - [ ] Add: `v0.9.1` label
