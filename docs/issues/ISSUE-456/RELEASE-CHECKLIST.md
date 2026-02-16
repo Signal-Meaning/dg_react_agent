@@ -4,7 +4,7 @@
 
 **Epic:** [#455](https://github.com/Signal-Meaning/dg_react_agent/issues/455) — Real-API tests, function-call contract, and 3pp scope (voice-commerce feedback). Complete the four tracked issues (#451–#454) as part of this release.
 
-**Progress:** Publish complete (both packages). GitHub release created; tag v0.9.0. PR #458 opened (release/v0.9.0 → main). **Remaining:** Merge PR #458, optionally add release/branch labels, optionally verify install from registry.
+**Progress:** Publish complete (both packages). GitHub release created; tag v0.9.0. PR #458 merged (release/v0.9.0 → main). **Remaining (optional):** Add release/branch labels if repo uses them; verify install from registry.
 
 ---
 
@@ -123,13 +123,13 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Post-Release
 
-- [ ] **Update Main Branch**: Merge release branch to main via Pull Request (required — do not push directly to main)
+- [x] **Update Main Branch**: Merge release branch to main via Pull Request (required — do not push directly to main)
   - [x] Open a PR: `release/v0.9.0` → `main` — [PR #458](https://github.com/Signal-Meaning/dg_react_agent/pull/458)
-  - [ ] Get review/approval if branch protection requires it
-  - [ ] Merge the PR (squash or merge commit per repo policy)
+  - [x] Get review/approval if branch protection requires it
+  - [x] Merge the PR (squash or merge commit per repo policy)
   - Do **not** `git push origin main` from a local merge — use the GitHub PR merge so branch protection is satisfied
-- [ ] **Clean Up**: Clean up release artifacts (only if you ran optional local package)
-  - [ ] If you ran `npm run package:local` locally: remove any `.tgz` in repo root, or leave (they are gitignored)
+- [x] **Clean Up**: Clean up release artifacts (only if you ran optional local package)
+  - N/A — did not run `npm run package:local` locally; no `.tgz` to remove
 - [ ] **Announcement**: Announce release (if applicable)
   - [ ] Update: Any external documentation
   - [ ] Notify: Relevant teams or users
@@ -196,9 +196,9 @@ Follow the established documentation structure in `docs/releases/`:
 
 This release is complete when:
 
-- [ ] All checklist items are completed (remaining: merge PR, optional labels/verify install)
+- [x] All required checklist items are completed (merge PR done; optional: labels, verify install, announcement)
 - [x] Package is published to GitHub Registry
 - [x] GitHub release is created (labeling optional)
 - [x] Documentation is complete and accurate
 - [x] All tests are passing
-- [ ] Package installation is verified (optional but recommended)
+- [ ] Package installation is verified (optional; run when authenticated to GitHub Package Registry)
