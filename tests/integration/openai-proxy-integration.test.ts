@@ -185,6 +185,17 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             receivedConversationItems.push({ type: msg.type, item: msg.item });
             itemCreateCount++;
             lastItemCreateRole = msg.item?.role;
+            // Issue #470: proxy defers response.create until output_text.done after function_call_output. Send it so the flow completes.
+            if (msg.item?.type === 'function_call_output') {
+              socket.send(JSON.stringify({
+                type: 'response.output_text.done',
+                response_id: 'resp_1',
+                item_id: 'item_1',
+                output_index: 0,
+                content_index: 0,
+                text: 'Hello from mock',
+              }));
+            }
             // Issue #388: proxy sends response.create only after conversation.item.added. Mock must send item.added for user messages.
             const isUserMessage = msg.item?.type === 'message' && msg.item?.role === 'user';
             const isAssistantMessage = msg.item?.type === 'message' && msg.item?.role === 'assistant';
