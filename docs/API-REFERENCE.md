@@ -1276,6 +1276,10 @@ function ServiceSpecificControlApp() {
 
 This section documents changes made to the API since the original fork (commit `7191eb4a062f35344896e873f02eba69c9c46a2d`).
 
+### v0.9.1 (Release #461)
+
+- **No component API changes.** Patch release: voice-agent-backend 0.2.1 fixes session.update race (Issue #459) so the proxy does not send `session.update` while a response is active, avoiding `conversation_already_has_active_response`. See [Release checklist #461](issues/ISSUE-461/RELEASE-CHECKLIST.md).
+
 ### v0.9.0 (Release #456)
 
 - **No component API changes.** This release focuses on real-API test requirements (`USE_REAL_APIS`), documented function-call backend contract (#452), real-API and third-party scope clarification (#453, #454), and E2E/test stability. See [Epic #455](issues/ISSUE-455/README.md) and [Release checklist #456](issues/ISSUE-456/RELEASE-CHECKLIST.md).
