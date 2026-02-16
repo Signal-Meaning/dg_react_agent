@@ -4,7 +4,7 @@
 
 **Epic:** [#455](https://github.com/Signal-Meaning/dg_react_agent/issues/455) — Real-API tests, function-call contract, and 3pp scope (voice-commerce feedback). Complete the four tracked issues (#451–#454) as part of this release.
 
-**Progress:** Pre-release complete. Version: root 0.9.0, backend 0.2.0. Dependencies updated (`npm update`). Release docs created and validated; doc review complete (links verified, content consistent). Next: commit, create `release/v0.9.0`, and publish via GitHub release.
+**Progress:** Publish complete (both packages). GitHub release created; tag v0.9.0. PR #458 opened (release/v0.9.0 → main). Next: merge PR, add labels if desired, verify install (optional).
 
 ---
 
@@ -89,50 +89,42 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Package Publishing
 
-- [ ] **Publish to GitHub Registry**: Publish package(s) to GitHub Package Registry
-  - [ ] **Preferred**: Use CI build (validated CI build)
+- [x] **Publish to GitHub Registry**: Publish package(s) to GitHub Package Registry
+  - [x] **Preferred**: Use CI build (validated CI build)
     - Create GitHub release to trigger `.github/workflows/test-and-publish.yml`
-    - CI workflow will: test (mock APIs only), build in CI, validate packages, and publish both the root package and `@signal-meaning/voice-agent-backend`. No local build required.
-    - Test job runs first: linting, mock tests, build, package validation (including voice-agent-backend pack dry-run)
-    - Publish job only runs if test job succeeds; it publishes root then voice-agent-backend (each skips if that version already exists unless force is set)
-    - All non-skipped tests must pass before publishing
+    - CI workflow ran: test job passed, publish job published root and voice-agent-backend
     - **Monitor CI workflow**: Wait for CI build to complete successfully
-      - [ ] Check GitHub Actions workflow status
-      - [ ] Verify all CI checks pass
-      - [ ] Verify both packages appear in GitHub Packages (if released)
-    - Only proceed to tagging if publish succeeds
-  - [ ] **Fallback**: Dev publish (only if CI fails)
-    - Root: Run `npm publish` from repo root
-    - Backend: Run `cd packages/voice-agent-backend && npm publish`
-    - Verify: Package(s) appear in GitHub Packages
-    - Only proceed to tagging if publish succeeds
-- [ ] **Tag Release**: Create git tag for the release (AFTER publish succeeds)
-  - [ ] Verify: Package(s) successfully published to GitHub Packages
-  - [ ] Tag: `git tag v0.9.0`
-  - [ ] Push: `git push origin v0.9.0`
-- [ ] **Verify Installation**: Test package installation from registry
+      - [x] Check GitHub Actions workflow status
+      - [x] Verify all CI checks pass
+      - [x] Verify both packages appear in GitHub Packages (if released)
+  - N/A **Fallback**: Dev publish (only if CI fails)
+- [x] **Tag Release**: Create git tag for the release (AFTER publish succeeds)
+  - [x] Verify: Package(s) successfully published to GitHub Packages
+  - [x] Tag: created via `gh release create v0.9.0` (tag v0.9.0 on remote)
+  - [x] Push: tag pushed with release
+- [ ] **Verify Installation**: Test package installation from registry (optional)
   - [ ] Test: Install from `@signal-meaning/voice-agent-react@v0.9.0`
-  - [ ] If releasing backend: Install from `@signal-meaning/voice-agent-backend@<version>` (see `packages/voice-agent-backend/README.md` for registry config)
+  - [ ] If releasing backend: Install from `@signal-meaning/voice-agent-backend@0.2.0`
   - [ ] Verify: Package(s) work correctly in test environment
 
 #### GitHub Release
 
-- [ ] **Create GitHub Release**: Create release on GitHub
-  - [ ] Title: `Release v0.9.0`
-  - [ ] Description: Include changelog and migration notes
-  - [ ] Tag: `v0.9.0`
-  - [ ] Target: `main` branch
-- [ ] **Add Release Labels**: Label the release appropriately
+- [x] **Create GitHub Release**: Create release on GitHub
+  - [x] Title: `Release v0.9.0`
+  - [x] Description: Include changelog and migration notes (CHANGELOG.md)
+  - [x] Tag: `v0.9.0`
+  - [x] Target: `release/v0.9.0` branch (release created from release branch)
+- [ ] **Add Release Labels**: Label the release appropriately (if repo uses release/version labels)
   - [ ] Add: `release` label
   - [ ] Add: `v0.9.0` label
-- [ ] **Add Branch Labels**: Label the release branch
+- [ ] **Add Branch Labels**: Label the release branch (if repo uses branch labels)
   - [ ] Add: `release` label to `release/v0.9.0` branch
   - [ ] Add: `v0.9.0` label to `release/v0.9.0` branch
 
 #### Post-Release
 
 - [ ] **Update Main Branch**: Merge release branch to main via Pull Request (required — do not push directly to main)
-  - [ ] Open a PR: `release/v0.9.0` → `main` (e.g. "Merge release/v0.9.0 into main")
+  - [x] Open a PR: `release/v0.9.0` → `main` — [PR #458](https://github.com/Signal-Meaning/dg_react_agent/pull/458)
   - [ ] Get review/approval if branch protection requires it
   - [ ] Merge the PR (squash or merge commit per repo policy)
   - Do **not** `git push origin main` from a local merge — use the GitHub PR merge so branch protection is satisfied
