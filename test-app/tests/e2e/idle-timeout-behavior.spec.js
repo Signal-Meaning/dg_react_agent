@@ -842,12 +842,17 @@ test.describe('Idle Timeout Behavior', () => {
     console.log(`  updateTimeoutBehavior calls: ${updateTimeoutBehaviorLogs.length}`);
     console.log(`  handleEvent calls: ${handleEventLogs.length}`);
     
-    // Print all IdleTimeoutService logs for debugging
+    // Print IdleTimeoutService logs for debugging (capped to avoid flooding and terminal hang)
+    const MAX_LOGS_DUMP = 40;
     if (idleTimeoutServiceLogs.length > 0) {
-      console.log('\n📋 ALL IDLE_TIMEOUT_SERVICE LOGS (chronological):');
-      idleTimeoutServiceLogs.forEach((log, i) => {
+      console.log('\n📋 IDLE_TIMEOUT_SERVICE LOGS (chronological, capped):');
+      const sliceEnd = Math.min(idleTimeoutServiceLogs.length, MAX_LOGS_DUMP);
+      idleTimeoutServiceLogs.slice(0, sliceEnd).forEach((log, i) => {
         console.log(`  ${i + 1}. ${log.text}`);
       });
+      if (idleTimeoutServiceLogs.length > MAX_LOGS_DUMP) {
+        console.log(`  ... and ${idleTimeoutServiceLogs.length - MAX_LOGS_DUMP} more (total: ${idleTimeoutServiceLogs.length})`);
+      }
     } else {
       console.log('  ⚠️  No IdleTimeoutService logs captured! This suggests debug mode might not be enabled.');
     }
@@ -1013,11 +1018,15 @@ test.describe('Idle Timeout Behavior', () => {
       console.log('   Expected: "Started idle timeout (10000ms)" log after USER_STOPPED_SPEAKING');
       console.log('   Actual: Log not found');
       
-      // Print relevant logs
-      console.log('\n📋 Relevant IdleTimeoutService logs:');
-      idleTimeoutServiceLogs.forEach((log, i) => {
+      // Print relevant logs (capped to avoid flooding)
+      const MAX_LOGS_DUMP_262 = 40;
+      console.log('\n📋 Relevant IdleTimeoutService logs (capped):');
+      idleTimeoutServiceLogs.slice(0, MAX_LOGS_DUMP_262).forEach((log, i) => {
         console.log(`  ${i + 1}. ${log.text}`);
       });
+      if (idleTimeoutServiceLogs.length > MAX_LOGS_DUMP_262) {
+        console.log(`  ... and ${idleTimeoutServiceLogs.length - MAX_LOGS_DUMP_262} more`);
+      }
     } else {
       console.log('✅ Timeout restarted after USER_STOPPED_SPEAKING');
     }
