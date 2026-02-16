@@ -1,6 +1,6 @@
 {
   "name": "@signal-meaning/voice-agent-backend",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Backend and proxy package for Deepgram and OpenAI voice agent; mountable routes for test-app and voice-commerce.",
   "main": "src/index.js",
   "bin": { "voice-agent-backend": "src/cli.js" },

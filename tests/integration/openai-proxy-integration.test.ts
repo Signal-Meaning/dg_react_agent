@@ -37,6 +37,38 @@ import {
 /** When true, proxy uses real OpenAI Realtime URL and auth; mock is not started. Requires OPENAI_API_KEY. */
 const useRealAPIs = (process.env.USE_REAL_APIS === '1' || process.env.USE_REAL_APIS === 'true') && !!process.env.OPENAI_API_KEY?.trim();
 
+/**
+ * Issue #462: Minimal in-process backend for function-call flow. Ensures we qualify on real HTTP to a backend,
+ * not in-test hardcoded FunctionCallResponse. Contract: POST /function-call with { id, name, arguments };
+ * responds with { content: string } (JSON string of result). Returns server and port; call server.close() when done.
+ */
+function createMinimalFunctionCallBackend(): Promise<{ server: http.Server; port: number }> {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      if (req.method !== 'POST' || (req.url && !req.url.startsWith('/function-call'))) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Not Found');
+        return;
+      }
+      let body = '';
+      req.on('data', (ch) => { body += ch; });
+      req.on('end', () => {
+        res.setHeader('Content-Type', 'application/json');
+        // Contract: return { content: string } — same as test-app backend (Issue #407).
+        const content = JSON.stringify({ time: '12:00', timezone: 'UTC' });
+        res.end(JSON.stringify({ content }));
+      });
+    });
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      const port = typeof addr === 'object' && addr !== null && 'port' in addr ? (addr as { port: number }).port : 0;
+      if (port) resolve({ server, port });
+      else reject(new Error('Minimal function-call backend: could not get port'));
+    });
+    server.on('error', reject);
+  });
+}
+
 /** Issue #414 RESOLUTION-PLAN: 100ms PCM at 24kHz 16-bit mono (bytes). */
 const PCM_100MS_24K_BYTES = 4800;
 
@@ -1389,104 +1421,133 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
-   * Issue #470 / TDD-PLAN-MISSING-REQUIREMENTS Phase 1: Real-API integration test for function-call path (Req 4).
-   * Runs only with USE_REAL_APIS=1. Asserts that the full flow (Settings with tools → InjectUserMessage →
-   * FunctionCallRequest → FunctionCallResponse → response) completes without conversation_already_has_active_response.
+   * Issue #470 / #462: Real-API integration test for function-call path. Uses real HTTP to a backend (no in-test
+   * hardcoded FunctionCallResponse). Partner scenario: Settings → InjectUserMessage → FunctionCallRequest →
+   * POST to backend → FunctionCallResponse → response. Asserts no conversation_already_has_active_response.
+   * Runs only with USE_REAL_APIS=1. See docs/issues/ISSUE-462/VOICE-COMMERCE-FUNCTION-CALL-REPORT.md.
    */
   (useRealAPIs ? it : it.skip)('Issue #470 real-API: function-call flow completes without conversation_already_has_active_response (USE_REAL_APIS=1)', (done) => {
     const errorsReceived: string[] = [];
     let sentFunctionCallResponse = false;
     let receivedAssistantResponseAfterFunctionCall = false;
     let finished = false;
-    const timeoutMs = 35000;
-    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const timeoutMs = 60000; // Real API function-call round-trip can exceed 35s
+    let functionCallBackend: { server: http.Server; port: number } | null = null;
+    let client: InstanceType<typeof WebSocket> | null = null;
 
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
-      try { client.close(); } catch { /* ignore */ }
+      if (functionCallBackend) {
+        try { functionCallBackend.server.close(); } catch { /* ignore */ }
+        functionCallBackend = null;
+      }
+      try { if (client) client.close(); } catch { /* ignore */ }
+      client = null;
       if (err) done(err);
       else done();
     };
 
-    client.on('open', () => {
-      client.send(JSON.stringify({
-        type: 'Settings',
-        agent: {
-          think: {
-            prompt: 'You are a helpful assistant. Use tools when needed.',
-            functions: [
-              {
-                name: 'get_current_time',
-                description: 'Get the current time in a specific timezone.',
-                parameters: {
-                  type: 'object',
-                  properties: {
-                    timezone: { type: 'string', description: 'Timezone (e.g. UTC, America/New_York)' },
-                  },
-                },
-              },
-            ],
-          },
-        },
-      }));
-    });
+    createMinimalFunctionCallBackend()
+      .then((backend) => {
+        functionCallBackend = backend;
+        client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
 
-    client.on('message', (data: Buffer) => {
-      if (data.length === 0 || data[0] !== 0x7b) return;
-      try {
-        const msg = JSON.parse(data.toString()) as {
-          type?: string;
-          description?: string;
-          role?: string;
-          content?: string;
-          functions?: Array<{ id: string; name: string; arguments?: string }>;
-        };
-        if (msg.type === 'Error' && msg.description) {
-          errorsReceived.push(msg.description);
-          if (msg.description.includes('conversation_already_has_active_response')) {
-            finish(new Error(`Issue #470 regression: received conversation_already_has_active_response: ${msg.description}`));
-            return;
-          }
-        }
-        if (msg.type === 'SettingsApplied') {
-          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What time is it?' }));
-        }
-        if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
-          const fn = msg.functions[0];
+        client.on('open', () => {
           client.send(JSON.stringify({
-            type: 'FunctionCallResponse',
-            id: fn.id,
-            name: fn.name,
-            content: JSON.stringify({ time: '12:00', timezone: 'UTC' }),
+            type: 'Settings',
+            agent: {
+              think: {
+                prompt: 'You are a helpful assistant. Use tools when needed.',
+                functions: [
+                  {
+                    name: 'get_current_time',
+                    description: 'Get the current time in a specific timezone.',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        timezone: { type: 'string', description: 'Timezone (e.g. UTC, America/New_York)' },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
           }));
-          sentFunctionCallResponse = true;
-        }
-        if (msg.type === 'ConversationText' && msg.role === 'assistant' && sentFunctionCallResponse) {
-          const bad = errorsReceived.some((d) => d.includes('conversation_already_has_active_response'));
-          if (bad) {
-            finish(new Error('Issue #470 regression: received conversation_already_has_active_response before assistant response'));
-            return;
-          }
-          receivedAssistantResponseAfterFunctionCall = true;
-          setTimeout(() => finish(), 2000);
-        }
-      } catch {
-        // ignore non-JSON
-      }
-    });
+        });
 
-    client.on('error', (err) => finish(err));
-    setTimeout(() => {
-      if (finished) return;
-      if (!receivedAssistantResponseAfterFunctionCall) {
-        const errMsg = errorsReceived.length
-          ? `Timeout; errors: ${errorsReceived.join('; ')}`
-          : 'Timeout waiting for assistant response after function call';
-        finish(new Error(`Issue #470 real-API: ${errMsg}`));
-      }
-    }, timeoutMs);
-  }, 40000);
+        client.on('message', (data: Buffer) => {
+          if (data.length === 0 || data[0] !== 0x7b) return;
+          try {
+            const msg = JSON.parse(data.toString()) as {
+              type?: string;
+              description?: string;
+              role?: string;
+              content?: string;
+              functions?: Array<{ id: string; name: string; arguments?: string }>;
+            };
+            if (msg.type === 'Error' && msg.description) {
+              errorsReceived.push(msg.description);
+              if (msg.description.includes('conversation_already_has_active_response')) {
+                finish(new Error(`Issue #470 regression: received conversation_already_has_active_response: ${msg.description}`));
+                return;
+              }
+            }
+            if (msg.type === 'SettingsApplied') {
+              client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What time is it?' }));
+            }
+            if (msg.type === 'FunctionCallRequest' && msg.functions?.length && !sentFunctionCallResponse) {
+              const fn = msg.functions[0];
+              const backendUrl = `http://127.0.0.1:${functionCallBackend!.port}/function-call`;
+              fetch(backendUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: fn.id, name: fn.name, arguments: fn.arguments ?? '{}' }),
+              })
+                .then((res) => res.json() as Promise<{ content?: string; error?: string }>)
+                .then((body) => {
+                  if (body.error) {
+                    finish(new Error(`Function-call backend returned error: ${body.error}`));
+                    return;
+                  }
+                  const content = typeof body.content === 'string' ? body.content : JSON.stringify({ time: '12:00', timezone: 'UTC' });
+                  client.send(JSON.stringify({
+                    type: 'FunctionCallResponse',
+                    id: fn.id,
+                    name: fn.name,
+                    content,
+                  }));
+                  sentFunctionCallResponse = true;
+                })
+                .catch((err) => finish(err instanceof Error ? err : new Error(String(err))));
+            }
+            if (msg.type === 'ConversationText' && msg.role === 'assistant' && sentFunctionCallResponse) {
+              const bad = errorsReceived.some((d) => d.includes('conversation_already_has_active_response'));
+              if (bad) {
+                finish(new Error('Issue #470 regression: received conversation_already_has_active_response before assistant response'));
+                return;
+              }
+              receivedAssistantResponseAfterFunctionCall = true;
+              setTimeout(() => finish(), 2000);
+            }
+          } catch {
+            // ignore non-JSON
+          }
+        });
+
+        client.on('error', (err) => finish(err));
+        setTimeout(() => {
+          if (finished) return;
+          if (!receivedAssistantResponseAfterFunctionCall) {
+            const errMsg = errorsReceived.length
+              ? `Timeout; errors: ${errorsReceived.join('; ')}`
+              : 'Timeout waiting for assistant response after function call';
+            finish(new Error(`Issue #470 real-API: ${errMsg}`));
+          }
+        }, timeoutMs);
+      })
+      .catch((err) => finish(err instanceof Error ? err : new Error(String(err))));
+  }, 70000); // Jest timeout: real-API function-call flow can be slow
 
   /**
    * When upstream sends response.function_call_arguments.done, proxy sends FunctionCallRequest first then ConversationText
