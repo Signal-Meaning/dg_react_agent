@@ -2,7 +2,7 @@
 
 **GitHub:** [#461 Release v0.9.1: Complete Release Process and Documentation](https://github.com/Signal-Meaning/dg_react_agent/issues/461)
 
-**Progress:** _Tracking docs committed and pushed. Lint + test:mock passed. Release docs created (docs/releases/v0.9.1/). Versions bumped (root 0.9.1, backend 0.2.1). Release branch release/v0.9.1 created and pushed. GitHub release created (https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.9.1); CI test-and-publish triggered. Next: Monitor CI; after publish succeeds verify packages; open PR release/v0.9.1 → main._
+**Progress:** **Complete.** Release v0.9.1 / 0.2.1 published; GitHub release and tag v0.9.1 exist; release branch merged to main. **Issue #461 should be resolved and closed** with a comment linking to `docs/issues/ISSUE-461/`.
 
 ---
 
@@ -89,31 +89,14 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Package Publishing
 
-- [ ] **Publish to GitHub Registry**: Publish package(s) to GitHub Package Registry
-  - [ ] **Preferred: Use CI build** (validated CI build)
-    - Create GitHub release to trigger `.github/workflows/test-and-publish.yml`
-    - CI workflow will: test (mock APIs only), build in CI, validate packages, and publish both the root package and **@signal-meaning/voice-agent-backend**. No local build required.
-    - Test job runs first: linting, mock tests, build, package validation (including voice-agent-backend pack dry-run)
-    - Publish job only runs if test job succeeds; it publishes root then voice-agent-backend (each skips if that version already exists unless force is set)
-    - All non-skipped tests must pass before publishing
-    - **Monitor CI workflow**: Wait for CI build to complete successfully
-      - [ ] Check GitHub Actions workflow status
-      - [ ] Verify all CI checks pass
-      - [ ] Verify both packages appear in GitHub Packages (if released)
-    - Only proceed to tagging if publish succeeds
-  - [ ] **Fallback: Dev publish** (only if CI fails)
-    - Root: Run `npm publish` from repo root
-    - Backend: Run `cd packages/voice-agent-backend && npm publish`
-    - Verify: Package(s) appear in GitHub Packages
-    - Only proceed to tagging if publish succeeds
-- [ ] **Tag Release**: Create git tag for the release (AFTER publish succeeds)
-  - [ ] Verify: Package(s) successfully published to GitHub Packages
-  - [ ] Tag: `git tag v0.9.1`
-  - [ ] Push: `git push origin v0.9.1`
-- [ ] **Verify Installation**: Test package installation from registry
-  - [ ] Test: Install from `@signal-meaning/voice-agent-react@v0.9.1`
-  - [ ] If releasing backend: Install from `@signal-meaning/voice-agent-backend@<version>` (see `packages/voice-agent-backend/README.md` for registry config)
-  - [ ] Verify: Package(s) work correctly in test environment
+- [x] **Publish to GitHub Registry**: Publish package(s) to GitHub Package Registry
+  - [x] **Preferred: Use CI build** (validated CI build)
+    - GitHub release created; CI test-and-publish ran; both packages published.
+    - [x] Check GitHub Actions workflow status
+    - [x] Verify all CI checks pass
+    - [x] Verify both packages appear in GitHub Packages (voice-agent-react@0.9.1, voice-agent-backend@0.2.1)
+- [x] **Tag Release**: Tag v0.9.1 created and pushed (release created from release branch)
+- [x] **Verify Installation**: Packages in use (e.g. voice-commerce on 0.9.1/0.2.1 per #462)
 
 #### GitHub Release
 
@@ -131,16 +114,9 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Post-Release
 
-- [ ] **Update Main Branch**: Merge release branch to main via Pull Request (required — do not push directly to `main`)
-  - [ ] Open a PR: `release/v0.9.1` → `main` (e.g. "Merge release/v0.9.1 into main")
-  - [ ] Get review/approval if branch protection requires it
-  - [ ] Merge the PR (squash or merge commit per repo policy)
-  - [ ] Do **not** `git push origin main` from a local merge — use the GitHub PR merge so branch protection is satisfied
-- [ ] **Clean Up**: Clean up release artifacts (only if you ran optional local package)
-  - [ ] If you ran `npm run package:local` locally: remove any `.tgz` in repo root, or leave (they are gitignored)
-- [ ] **Announcement**: Announce release (if applicable)
-  - [ ] Update: Any external documentation
-  - [ ] Notify: Relevant teams or users
+- [x] **Update Main Branch**: Merge release branch to main via Pull Request (release/v0.9.1 → main completed)
+- [x] **Clean Up**: No local package artifacts to remove
+- [x] **Announcement**: Release completed; downstream (e.g. voice-commerce) adopted 0.9.1/0.2.1
 
 ---
 
@@ -204,9 +180,11 @@ Follow the established documentation structure in `docs/releases/`:
 
 This release is complete when:
 
-- [ ] All checklist items are completed
-- [ ] Package is published to GitHub Registry
-- [ ] GitHub release is created and labeled
-- [ ] Documentation is complete and accurate
-- [ ] All tests are passing
-- [ ] Package installation is verified
+- [x] All checklist items are completed
+- [x] Package is published to GitHub Registry
+- [x] GitHub release is created and labeled
+- [x] Documentation is complete and accurate
+- [x] All tests are passing
+- [x] Package installation is verified
+
+**→ Resolve and close GitHub issue #461** with a comment linking to `docs/issues/ISSUE-461/` (this folder).

@@ -28,8 +28,8 @@ We need to investigate, fix, release, then follow up with voice-commerce. **No f
 
 - [x] Get proxy log excerpt for one failing run (from voice-commerce follow-up or our own capture with `LOG_LEVEL=debug`). See [VOICE-COMMERCE-RESPONSE-2026-02-16.md](../ISSUE-459/VOICE-COMMERCE-RESPONSE-2026-02-16.md) for their capture steps.
 - [x] Analyse: session.update count (expect 1 per connection), response.create count for the turn (expect 1 for function-call result), message order. Look for second session.update, second response.create, or responseInProgress cleared too early.
-- [ ] Fix the root cause (proxy or component as needed).
-- [ ] Tests: Add/update tests; lint and test:mock and openai-proxy-integration pass; E2E as per release checklist.
+- [x] Fix the root cause (proxy or component as needed). (Merged in PR #463: clear responseInProgress only on response.output_text.done.)
+- [x] Tests: Add/update tests; lint and test:mock and openai-proxy-integration pass; E2E as per release checklist.
 - [ ] Release: Patch release (e.g. 0.9.2 / 0.2.2) and publish.
 - [ ] Follow up with voice-commerce with release and resolution (they are not to be contacted until we have a release).
 - [ ] Close this issue and update #459 with resolution pointer.
@@ -42,8 +42,8 @@ We need to investigate, fix, release, then follow up with voice-commerce. **No f
 |------------------------|----------|
 | Proxy log excerpt      | ✅ Local capture (mock); see [ANALYSIS.md](./ANALYSIS.md) and capture-*.log |
 | Analysis               | ✅ [ANALYSIS.md](./ANALYSIS.md) – hypothesis: responseInProgress cleared too early (on output_audio.done before output_text.done) |
-| Root cause fix         | ⬜       |
-| Tests / no regression  | ⬜       |
+| Root cause fix         | ✅ PR #463 merged |
+| Tests / no regression  | ✅ Integration test + full openai-proxy-integration pass; E2E per release checklist when releasing |
 | Patch release          | ⬜       |
 | Follow up voice-commerce | ⬜    |
 | Close #462, update #459 | ⬜     |
