@@ -86,7 +86,7 @@ Detailed investigation notes (including CI log examples and script-fix notes) ar
 ## Release process (summary)
 
 1. **Pre-release:** Tests and lint passing; version bumps and release docs in `docs/releases/vX.X.X/` (see release checklist template).
-2. **Branch:** Create `release/vX.X.X` from the branch that has the release changes; push.
+2. **Branch:** Create `release/vX.X.X` from the branch that has the release changes; push. **Preferred:** run `npm run release:issue X.X.X minor` (or patch/major)—it creates the issue and branch and **fails** if the release branch already exists (so you don’t re-release without bumping) or if root `package.json` version doesn’t match.
 3. **NPM_TOKEN:** If expired or missing, update the **NPM_TOKEN** secret per the section above.
 4. **GitHub release:** Create a new release with tag **vX.X.X** (from branch `release/vX.X.X`). This triggers the Test and Publish workflow.
 5. **CI:** Workflow runs tests, build, then publish for root and (if version exists) backend. Monitor the run until it succeeds.

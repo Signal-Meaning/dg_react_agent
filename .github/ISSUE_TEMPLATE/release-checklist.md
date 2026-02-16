@@ -83,12 +83,13 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
   - [ ] Commit: Version bump and documentation updates
   - [ ] Message: `chore: prepare release vX.X.X`
 - [ ] **Create Release Branch**: Create a release branch for the version
-  - [ ] Create: `release/vX.X.X` branch
-  - [ ] Push: `git push origin release/vX.X.X`
+  - [ ] **Preferred**: Run `npm run release:issue X.X.X minor` (or patch/major). This creates the issue and branch; it **fails** if the release branch already exists (reminder to bump version) or if root `package.json` version does not match.
+  - [ ] Or manually: Create `release/vX.X.X` branch, push: `git push origin release/vX.X.X`
 
 #### Package Publishing
 - [ ] **Publish to GitHub Registry**: Publish package(s) to GitHub Package Registry
   - [ ] **Preferred**: Use CI build (validated CI build)
+    - **⚠️ CRITICAL: Version must be bumped** in root `package.json` (and `packages/voice-agent-backend/package.json` if releasing the backend) and **committed on the release branch** before creating the GitHub release. If you create the release without bumping, CI will build from the previous version and the published package version will not update.
     - Create GitHub release to trigger `.github/workflows/test-and-publish.yml`
     - CI workflow will: test (mock APIs only), **build in CI**, validate packages, and publish **both** the root package and `@signal-meaning/voice-agent-backend`. No local build required.
     - Test job runs first: linting, mock tests, build, package validation (including voice-agent-backend pack dry-run)
@@ -187,7 +188,7 @@ Follow the established documentation structure in `docs/releases/`:
 
 ### 🚨 Important Notes
 
-1. **Version Bump**: Use `npm version [patch/minor/major]` to automatically bump version
+1. **Version Bump**: Use `npm version [patch/minor/major]` to automatically bump version. **Bump and push to the release branch before creating the GitHub release** — otherwise the published package version will not change.
 2. **Registry**: Package is configured to publish to GitHub Package Registry
 3. **Testing**: All tests must pass before release
 4. **Documentation**: Comprehensive documentation is required

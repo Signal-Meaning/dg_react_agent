@@ -90,6 +90,20 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   /** Issue #414 3.2: when > 0, mock delays sending response completion (output_audio.delta, .done, output_text.done) by this many ms after receiving response.create. */
   let mockDelayResponseDoneMs = 0;
   /**
+   * Issue #462: when true, mock sends response.output_audio.delta + .done first, then sends response.output_text.done
+   * after mockDelayOutputTextDoneAfterAudioMs. Lets test assert proxy does not send session.update between audio.done and text.done.
+   */
+  let mockSendOnlyAudioDoneFirst = false;
+  /** Issue #462: delay (ms) before sending output_text.done when mockSendOnlyAudioDoneFirst is true. */
+  let mockDelayOutputTextDoneAfterAudioMs = 300;
+  /**
+   * Issue #462 TDD: when true, mock sends session.created then session.updated on connect (without receiving
+   * session.update). So proxy has hasSentSettingsApplied true but hasForwardedSessionUpdate false. Lets test
+   * assert that when client sends Settings after output_audio.done but before output_text.done, proxy does not
+   * send session.update (responseInProgress must stay true until output_text.done).
+   */
+  let mockSendSessionUpdatedOnConnect = false;
+  /**
    * Issue #406: when true, mock delays sending session.updated and asserts that no conversation.item.create
    * is received before session.updated was sent (catches proxy sending context before session.updated).
    */
@@ -119,6 +133,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         path: PROXY_PATH,
         upstreamUrl,
         upstreamHeaders: { Authorization: `Bearer ${apiKey}` },
+        logLevel: process.env.LOG_LEVEL ?? undefined,
       });
       mockPort = 0;
       return;
@@ -142,6 +157,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       // Issue #414: simulate real OpenAI behavior — send session.created immediately on connection
       if (mockSendSessionCreatedOnConnect) {
         socket.send(JSON.stringify({ type: 'session.created', session: { id: 'sess_mock', model: 'gpt-realtime', modalities: ['text', 'audio'] } }));
+      }
+      // Issue #462 TDD: send session.updated on connect so proxy has session ready but hasForwardedSessionUpdate still false
+      if (mockSendSessionUpdatedOnConnect) {
+        socket.send(JSON.stringify({ type: 'session.created', session: { id: 'sess_mock', model: 'gpt-realtime', modalities: ['text', 'audio'] } }));
+        socket.send(JSON.stringify({ type: 'session.updated', session: { type: 'realtime' } }));
       }
       socket.on('message', (data: Buffer) => {
         try {
@@ -313,6 +333,19 @@ describe('OpenAI proxy integration (Issue #381)', () => {
               }
               socket.send(JSON.stringify({ type: 'response.output_text.done', text: 'Hello from mock' }));
             };
+            // Issue #462: send only output_audio.done first; send output_text.done after delay so test can send Settings in between.
+            if (mockSendOnlyAudioDoneFirst) {
+              mockSendOnlyAudioDoneFirst = false;
+              const delayMs = mockDelayOutputTextDoneAfterAudioMs;
+              mockDelayOutputTextDoneAfterAudioMs = 300;
+              const pcmChunk = Buffer.alloc(320, 0);
+              socket.send(JSON.stringify({ type: 'response.output_audio.delta', delta: pcmChunk.toString('base64') }));
+              socket.send(JSON.stringify({ type: 'response.output_audio.done' }));
+              setTimeout(() => {
+                socket.send(JSON.stringify({ type: 'response.output_text.done', text: 'Hello from mock' }));
+              }, delayMs);
+              return;
+            }
             if (mockDelayResponseDoneMs > 0) {
               const delay = mockDelayResponseDoneMs;
               mockDelayResponseDoneMs = 0;
@@ -331,10 +364,12 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     });
 
     // Proxy created with default options (no greetingTextOnly); matches production when that TODO is removed.
+    // Issue #462: pass LOG_LEVEL so capture runs can emit proxy debug logs.
     createOpenAIProxyServer({
       server: proxyServer,
       path: PROXY_PATH,
       upstreamUrl: `ws://localhost:${mockPort}`,
+      logLevel: process.env.LOG_LEVEL ?? undefined,
     });
   });
 
@@ -591,6 +626,55 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     }, 50);
     client.on('error', (err) => {
       mockDelayResponseDoneMs = 0;
+      done(err);
+    });
+  }, 5000);
+
+  /**
+   * Issue #462: Proxy must NOT clear responseInProgress on response.output_audio.done alone. If the real API
+   * sends output_audio.done before output_text.done, clearing on audio.done would allow a subsequent Settings
+   * to trigger session.update while the API still has an active response → conversation_already_has_active_response.
+   * Test: mock sends session.updated on connect (so proxy never sent session.update yet; hasForwardedSessionUpdate false).
+   * Client sends InjectUserMessage only; mock sends output_audio.done then (after delay) output_text.done.
+   * Client sends Settings in between (first Settings from proxy's view). Assert: mock receives 0 session.update
+   * (proxy must not send session.update while response active; with bug we clear on audio.done and would send one).
+   */
+  itMockOnly('Issue #462: does not send session.update after output_audio.done until output_text.done (responseInProgress not cleared on audio.done alone)', (done) => {
+    mockReceived.length = 0;
+    mockSendSessionUpdatedOnConnect = true;
+    mockSendOnlyAudioDoneFirst = true;
+    mockDelayOutputTextDoneAfterAudioMs = 300;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      // Do not send Settings first; mock already sent session.updated on connect so proxy is ready.
+      client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Hi' }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
+        // After user echo, send Settings (first time from proxy's view). With bug proxy sends session.update.
+        if (msg.type === 'ConversationText' && msg.role === 'user') {
+          setTimeout(() => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+            }
+          }, 50);
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          const sessionUpdateCount = mockReceived.filter((m) => m.type === 'session.update').length;
+          expect(sessionUpdateCount).toBe(0);
+          mockSendSessionUpdatedOnConnect = false;
+          client.close();
+          done();
+        }
+      } catch (e) {
+        mockSendSessionUpdatedOnConnect = false;
+        done(e as Error);
+      }
+    });
+    client.on('error', (err) => {
+      mockSendSessionUpdatedOnConnect = false;
       done(err);
     });
   }, 5000);

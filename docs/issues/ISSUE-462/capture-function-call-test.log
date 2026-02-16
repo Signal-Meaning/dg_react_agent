@@ -1,0 +1,517 @@
+npm warn Unknown user config "always-auth". This will stop working in the next major version of npm.
+
+> @signal-meaning/voice-agent-react@0.9.1 pretest
+> npm run build
+
+npm warn Unknown env config "always-auth". This will stop working in the next major version of npm.
+npm warn Unknown user config "always-auth". This will stop working in the next major version of npm.
+
+> @signal-meaning/voice-agent-react@0.9.1 prebuild
+> echo 'Skipping validation for now'
+
+Skipping validation for now
+
+> @signal-meaning/voice-agent-react@0.9.1 build
+> rollup -c
+
+
+src/index.ts → dist/index.js...
+(!) Plugin typescript: @rollup/plugin-typescript TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/utils/function-call-logger.ts: (9:42)
+
+[7m9[0m import type { FunctionCallRequest } from '../../types';
+[7m [0m [91m                                         ~~~~~~~~~~~~~[0m
+
+(!) Plugin typescript: @rollup/plugin-typescript TS2352: Conversion of type 'AgentFunction' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'AgentFunction'.
+src/utils/function-utils.ts: (22:64)
+
+[7m22[0m     const { client_side: _client_side, ...filteredFunction } = func as Record<string, unknown>;
+[7m  [0m [91m                                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+(!) Plugin typescript: @rollup/plugin-typescript TS2352: Conversion of type '{ [x: string]: unknown; }' to type 'AgentFunction' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/utils/function-utils.ts: (25:12)
+
+[7m25[0m     return filteredFunction as AgentFunction;
+[7m  [0m [91m           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+(!) Plugin typescript: @rollup/plugin-typescript TS2352: Conversion of type '{ [x: string]: unknown; }' to type 'AgentFunction' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ [x: string]: unknown; }' is missing the following properties from type 'AgentFunction': name, description, parameters
+src/utils/function-utils.ts: (25:12)
+
+[7m25[0m     return filteredFunction as AgentFunction;
+[7m  [0m [91m           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+(!) Plugin typescript: @rollup/plugin-typescript TS2322: Type 'number' is not assignable to type 'Timeout'.
+src/utils/IdleTimeoutService.ts: (354:5)
+
+[7m354[0m     this.pollingIntervalId = window.setInterval(() => {
+[7m   [0m [91m    ~~~~~~~~~~~~~~~~~~~~~~[0m
+
+(!) Plugin typescript: @rollup/plugin-typescript TS2352: Conversion of type 'ImportMeta' to type '{ env: { DEEPGRAM_INSTRUCTIONS: string; }; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'env' is missing in type 'ImportMeta' but required in type '{ env: { DEEPGRAM_INSTRUCTIONS: string; }; }'.
+src/utils/instructions-loader.ts: (89:13)
+
+[7m89[0m     return (import.meta as { env: { DEEPGRAM_INSTRUCTIONS: string } }).env.DEEPGRAM_INSTRUCTIONS.trim();
+[7m  [0m [91m            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  [96msrc/utils/instructions-loader.ts[0m:[93m89[0m:[93m30[0m
+    [7m89[0m     return (import.meta as { env: { DEEPGRAM_INSTRUCTIONS: string } }).env.DEEPGRAM_INSTRUCTIONS.trim();
+    [7m  [0m [96m                             ~~~[0m
+    'env' is declared here.
+
+(!) Plugin typescript: @rollup/plugin-typescript TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{}'.
+  No index signature with a parameter of type 'string' was found on type '{}'.
+src/utils/plugin-validator.ts: (45:14)
+
+[7m45[0m         if (!packageJson.peerDependencies[dep]) {
+[7m  [0m [91m             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+src/utils/plugin-validator.ts: (56:13)
+
+[7m56[0m         if (packageJson.dependencies[dep]) {
+[7m  [0m [91m            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+(!) Plugin typescript: @rollup/plugin-typescript TS18046: 'data' is of type 'unknown'.
+src/utils/websocket/WebSocketManager.ts: (636:11)
+
+[7m636[0m       if (data.type === 'Results') {
+[7m   [0m [91m          ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (637:33)
+
+[7m637[0m         const hasAlternatives = data.alternatives && data.alternatives.length > 0;
+[7m   [0m [91m                                ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (637:54)
+
+[7m637[0m         const hasAlternatives = data.alternatives && data.alternatives.length > 0;
+[7m   [0m [91m                                                     ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (638:50)
+
+[7m638[0m         const hasTranscript = hasAlternatives && data.alternatives[0].transcript && data.alternatives[0].transcript.trim().length > 0;
+[7m   [0m [91m                                                 ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (638:85)
+
+[7m638[0m         const hasTranscript = hasAlternatives && data.alternatives[0].transcript && data.alternatives[0].transcript.trim().length > 0;
+[7m   [0m [91m                                                                                    ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (642:72)
+
+[7m642[0m           this.log(`Resetting idle timeout - meaningful transcript: "${data.alternatives[0].transcript}"`);
+[7m   [0m [91m                                                                       ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (671:11)
+
+[7m671[0m       if (data.type === 'InjectUserMessage') {
+[7m   [0m [91m          ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (672:45)
+
+[7m672[0m         this.options.onMeaningfulActivity?.(data.type);
+[7m   [0m [91m                                            ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (681:42)
+
+[7m681[0m       if (agentActivityMessages.includes(data.type)) {
+[7m   [0m [91m                                         ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (682:45)
+
+[7m682[0m         this.options.onMeaningfulActivity?.(data.type);
+[7m   [0m [91m                                            ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (697:11)
+
+[7m697[0m       if (data.type === 'Results') {
+[7m   [0m [91m          ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (698:33)
+
+[7m698[0m         const hasAlternatives = data.alternatives && data.alternatives.length > 0;
+[7m   [0m [91m                                ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (698:54)
+
+[7m698[0m         const hasAlternatives = data.alternatives && data.alternatives.length > 0;
+[7m   [0m [91m                                                     ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (699:50)
+
+[7m699[0m         const hasTranscript = hasAlternatives && data.alternatives[0].transcript && data.alternatives[0].transcript.trim().length > 0;
+[7m   [0m [91m                                                 ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (699:85)
+
+[7m699[0m         const hasTranscript = hasAlternatives && data.alternatives[0].transcript && data.alternatives[0].transcript.trim().length > 0;
+[7m   [0m [91m                                                                                    ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (701:76)
+
+[7m701[0m           this.options.onMeaningfulActivity?.(`Results with transcript: "${data.alternatives[0].transcript}"`);
+[7m   [0m [91m                                                                           ~~~~[0m
+
+(!) Plugin typescript: @rollup/plugin-typescript TS2339: Property 'type' does not exist on type '{}'.
+src/utils/websocket/WebSocketManager.ts: (722:76)
+
+[7m722[0m     const triggerInfo = triggerMessage ? ` (triggered by: ${triggerMessage.type || 'unknown'})` : '';
+[7m   [0m [91m                                                                           ~~~~[0m
+
+src/utils/websocket/WebSocketManager.ts: (806:24)
+
+[7m806[0m       if (data && data.type === 'Settings' && typeof window !== 'undefined') {
+[7m   [0m [91m                       ~~~~[0m
+
+(!) Plugin typescript: @rollup/plugin-typescript: Rollup 'sourcemap' option must be set to generate source maps.
+created dist/index.js in 1.3s
+
+src/index.ts → dist/index.esm.js...
+(!) Plugin typescript: @rollup/plugin-typescript: Rollup 'sourcemap' option must be set to generate source maps.
+created dist/index.esm.js in 360ms
+
+> @signal-meaning/voice-agent-react@0.9.1 postbuild
+> echo 'Build completed'
+
+Build completed
+
+> @signal-meaning/voice-agent-react@0.9.1 test
+> jest tests/integration/openai-proxy-integration.test.ts -t translates response.function_call_arguments.done to FunctionCallRequest and FunctionCallResponse --no-cache
+
+ts-jest[ts-jest-transformer] (WARN) Define `ts-jest` config under `globals` is deprecated. Please do
+transform: {
+    <transform_regex>: ['ts-jest', { /* ts-jest config goes here in Jest */ }],
+},
+See more at https://kulshekhar.github.io/ts-jest/docs/getting-started/presets#advanced
+  console.log
+    [dotenv@17.3.1] injecting env (2) from .env -- tip: ⚡️ secrets for agents: https://dotenvx.com/as2
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+  console.log
+    [dotenv@17.3.1] injecting env (25) from test-app/.env -- tip: 🛡️ auth for agents: https://vestauth.com
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+  console.dir
+    {
+      resource: {
+        attributes: {
+          'service.name': 'unknown_service:node',
+          'telemetry.sdk.language': 'nodejs',
+          'telemetry.sdk.name': 'opentelemetry',
+          'telemetry.sdk.version': '1.25.1'
+        }
+      },
+      timestamp: 1771221348510000,
+      traceId: undefined,
+      spanId: undefined,
+      traceFlags: undefined,
+      severityText: 'INFO',
+      severityNumber: 9,
+      body: 'client connected',
+      attributes: { connection_id: 'c1', trace_id: 'c1', direction: 'client' }
+    }
+
+      at ConsoleLogRecordExporter._sendLogRecords (packages/voice-agent-backend/node_modules/@opentelemetry/sdk-logs/src/export/ConsoleLogRecordExporter.ts:79:15)
+          at Array.forEach (<anonymous>)
+
+  console.dir
+    {
+      resource: {
+        attributes: {
+          'service.name': 'unknown_service:node',
+          'telemetry.sdk.language': 'nodejs',
+          'telemetry.sdk.name': 'opentelemetry',
+          'telemetry.sdk.version': '1.25.1'
+        }
+      },
+      timestamp: 1771221348515000,
+      traceId: undefined,
+      spanId: undefined,
+      traceFlags: undefined,
+      severityText: 'INFO',
+      severityNumber: 9,
+      body: 'upstream open',
+      attributes: { connection_id: 'c1', trace_id: 'c1', direction: 'upstream' }
+    }
+
+      at ConsoleLogRecordExporter._sendLogRecords (packages/voice-agent-backend/node_modules/@opentelemetry/sdk-logs/src/export/ConsoleLogRecordExporter.ts:79:15)
+          at Array.forEach (<anonymous>)
+
+  console.dir
+    {
+      resource: {
+        attributes: {
+          'service.name': 'unknown_service:node',
+          'telemetry.sdk.language': 'nodejs',
+          'telemetry.sdk.name': 'opentelemetry',
+          'telemetry.sdk.version': '1.25.1'
+        }
+      },
+      timestamp: 1771221348516000,
+      traceId: undefined,
+      spanId: undefined,
+      traceFlags: undefined,
+      severityText: 'INFO',
+      severityNumber: 9,
+      body: 'client → upstream',
+      attributes: {
+        connection_id: 'c1',
+        trace_id: 'c1',
+        direction: 'client→upstream',
+        message_type: 'Settings'
+      }
+    }
+
+      at ConsoleLogRecordExporter._sendLogRecords (packages/voice-agent-backend/node_modules/@opentelemetry/sdk-logs/src/export/ConsoleLogRecordExporter.ts:79:15)
+          at Array.forEach (<anonymous>)
+
+  console.dir
+    {
+      resource: {
+        attributes: {
+          'service.name': 'unknown_service:node',
+          'telemetry.sdk.language': 'nodejs',
+          'telemetry.sdk.name': 'opentelemetry',
+          'telemetry.sdk.version': '1.25.1'
+        }
+      },
+      timestamp: 1771221348518000,
+      traceId: undefined,
+      spanId: undefined,
+      traceFlags: undefined,
+      severityText: 'INFO',
+      severityNumber: 9,
+      body: 'upstream → client',
+      attributes: {
+        connection_id: 'c1',
+        trace_id: 'c1',
+        direction: 'upstream→client',
+        message_type: 'session.updated'
+      }
+    }
+
+      at ConsoleLogRecordExporter._sendLogRecords (packages/voice-agent-backend/node_modules/@opentelemetry/sdk-logs/src/export/ConsoleLogRecordExporter.ts:79:15)
+          at Array.forEach (<anonymous>)
+
+  console.dir
+    {
+      resource: {
+        attributes: {
+          'service.name': 'unknown_service:node',
+          'telemetry.sdk.language': 'nodejs',
+          'telemetry.sdk.name': 'opentelemetry',
+          'telemetry.sdk.version': '1.25.1'
+        }
+      },
+      timestamp: 1771221348519000,
+      traceId: undefined,
+      spanId: undefined,
+      traceFlags: undefined,
+      severityText: 'INFO',
+      severityNumber: 9,
+      body: 'upstream → client',
+      attributes: {
+        connection_id: 'c1',
+        trace_id: 'c1',
+        direction: 'upstream→client',
+        message_type: 'response.function_call_arguments.done'
+      }
+    }
+
+      at ConsoleLogRecordExporter._sendLogRecords (packages/voice-agent-backend/node_modules/@opentelemetry/sdk-logs/src/export/ConsoleLogRecordExporter.ts:79:15)
+          at Array.forEach (<anonymous>)
+
+  console.dir
+    {
+      resource: {
+        attributes: {
+          'service.name': 'unknown_service:node',
+          'telemetry.sdk.language': 'nodejs',
+          'telemetry.sdk.name': 'opentelemetry',
+          'telemetry.sdk.version': '1.25.1'
+        }
+      },
+      timestamp: 1771221348520000,
+      traceId: undefined,
+      spanId: undefined,
+      traceFlags: undefined,
+      severityText: 'INFO',
+      severityNumber: 9,
+      body: 'upstream→client: response.function_call_arguments.done → sending FunctionCallRequest + ConversationText',
+      attributes: {
+        connection_id: 'c1',
+        trace_id: 'c1',
+        direction: 'upstream→client',
+        message_type: 'response.function_call_arguments.done'
+      }
+    }
+
+      at ConsoleLogRecordExporter._sendLogRecords (packages/voice-agent-backend/node_modules/@opentelemetry/sdk-logs/src/export/ConsoleLogRecordExporter.ts:79:15)
+          at Array.forEach (<anonymous>)
+
+  console.dir
+    {
+      resource: {
+        attributes: {
+          'service.name': 'unknown_service:node',
+          'telemetry.sdk.language': 'nodejs',
+          'telemetry.sdk.name': 'opentelemetry',
+          'telemetry.sdk.version': '1.25.1'
+        }
+      },
+      timestamp: 1771221348521000,
+      traceId: undefined,
+      spanId: undefined,
+      traceFlags: undefined,
+      severityText: 'INFO',
+      severityNumber: 9,
+      body: 'client → upstream',
+      attributes: {
+        connection_id: 'c1',
+        trace_id: 'c1',
+        direction: 'client→upstream',
+        message_type: 'FunctionCallResponse'
+      }
+    }
+
+      at ConsoleLogRecordExporter._sendLogRecords (packages/voice-agent-backend/node_modules/@opentelemetry/sdk-logs/src/export/ConsoleLogRecordExporter.ts:79:15)
+          at Array.forEach (<anonymous>)
+
+  console.dir
+    {
+      resource: {
+        attributes: {
+          'service.name': 'unknown_service:node',
+          'telemetry.sdk.language': 'nodejs',
+          'telemetry.sdk.name': 'opentelemetry',
+          'telemetry.sdk.version': '1.25.1'
+        }
+      },
+      timestamp: 1771221348522000,
+      traceId: undefined,
+      spanId: undefined,
+      traceFlags: undefined,
+      severityText: 'INFO',
+      severityNumber: 9,
+      body: 'upstream → client',
+      attributes: {
+        connection_id: 'c1',
+        trace_id: 'c1',
+        direction: 'upstream→client',
+        message_type: 'response.output_text.done'
+      }
+    }
+
+      at ConsoleLogRecordExporter._sendLogRecords (packages/voice-agent-backend/node_modules/@opentelemetry/sdk-logs/src/export/ConsoleLogRecordExporter.ts:79:15)
+          at Array.forEach (<anonymous>)
+
+  console.dir
+    {
+      resource: {
+        attributes: {
+          'service.name': 'unknown_service:node',
+          'telemetry.sdk.language': 'nodejs',
+          'telemetry.sdk.name': 'opentelemetry',
+          'telemetry.sdk.version': '1.25.1'
+        }
+      },
+      timestamp: 1771221348522000,
+      traceId: undefined,
+      spanId: undefined,
+      traceFlags: undefined,
+      severityText: 'INFO',
+      severityNumber: 9,
+      body: 'upstream→client: response.output_text.done',
+      attributes: {
+        connection_id: 'c1',
+        trace_id: 'c1',
+        direction: 'upstream→client',
+        message_type: 'response.output_text.done'
+      }
+    }
+
+      at ConsoleLogRecordExporter._sendLogRecords (packages/voice-agent-backend/node_modules/@opentelemetry/sdk-logs/src/export/ConsoleLogRecordExporter.ts:79:15)
+          at Array.forEach (<anonymous>)
+
+  console.dir
+    {
+      resource: {
+        attributes: {
+          'service.name': 'unknown_service:node',
+          'telemetry.sdk.language': 'nodejs',
+          'telemetry.sdk.name': 'opentelemetry',
+          'telemetry.sdk.version': '1.25.1'
+        }
+      },
+      timestamp: 1771221348525000,
+      traceId: undefined,
+      spanId: undefined,
+      traceFlags: undefined,
+      severityText: 'INFO',
+      severityNumber: 9,
+      body: 'upstream closed',
+      attributes: {
+        connection_id: 'c1',
+        trace_id: 'c1',
+        direction: 'upstream',
+        'upstream.close_code': 1005,
+        'upstream.close_reason': ''
+      }
+    }
+
+      at ConsoleLogRecordExporter._sendLogRecords (packages/voice-agent-backend/node_modules/@opentelemetry/sdk-logs/src/export/ConsoleLogRecordExporter.ts:79:15)
+          at Array.forEach (<anonymous>)
+
+PASS tests/integration/openai-proxy-integration.test.ts
+  OpenAI proxy integration (Issue #381)
+    ✓ translates response.function_call_arguments.done to FunctionCallRequest and FunctionCallResponse to conversation.item.create (function_call_output) (22 ms)
+    ○ skipped listens on configured path and accepts WebSocket upgrade
+    ○ skipped client connecting to OpenAI proxy reaches open state (component connection-status "connected")
+    ○ skipped translates Settings to session.update and session.updated to SettingsApplied
+    ○ skipped when upstream sends error after session.updated, client receives Error (proxy forwards error)
+    ○ skipped when upstream sends input_audio_buffer.speech_started, client receives UserStartedSpeaking
+    ○ skipped when upstream sends input_audio_buffer.speech_stopped, client receives UtteranceEnd with channel and last_word_end
+    ○ skipped Issue #459: does not send session.update while response is active (conversation_already_has_active_response)
+    ○ skipped forwards only first Settings per connection (duplicate Settings get SettingsApplied but no second session.update)
+    ○ skipped translates InjectUserMessage to conversation.item.create + response.create and response.output_text.done to ConversationText
+    ○ skipped does not send input_audio_buffer.commit when total appended audio < 100ms (Issue #414 buffer too small)
+    ○ skipped Issue #414: no input_audio_buffer.append before session.updated (audio gated, queued then flushed)
+    ○ skipped Issue #414: session.update before input_audio_buffer.append in upstream order
+    ○ skipped Issue #414: firm audio connection — no Error from upstream within 12s after sending audio (mock)
+    ○ skipped Issue #414 real-API: firm audio connection — no Error from upstream within 12s after sending audio (USE_REAL_APIS=1)
+    ○ skipped Issue #414 real-API: firm audio (speech-like audio) — no Error from upstream within 12s (USE_REAL_APIS=1)
+    ○ skipped translates binary client message to input_audio_buffer.append and after debounce sends commit + response.create when ≥100ms audio
+    ○ skipped sends at most one response.create per turn until response completes (Issue #414 conversation_already_has_active_response)
+    ○ skipped Issue #414: only response.output_audio.delta is sent as binary; all other upstream messages as text (proxy wire contract)
+    ○ skipped sends binary PCM to client when upstream sends response.output_audio.delta (test-app TTS path)
+    ○ skipped sends FunctionCallRequest then ConversationText when upstream sends response.function_call_arguments.done (client receives both)
+    ○ skipped sends only ConversationText when upstream sends only output_audio_transcript.done with "Function call: ..." (no FunctionCallRequest)
+    ○ skipped sends only ConversationText when upstream sends only output_text.done with "Function call: ..." (no FunctionCallRequest)
+    ○ skipped sends ConversationText then FunctionCallRequest then ConversationText when upstream sends transcript.done then function_call_arguments.done
+    ○ skipped echoes user message as ConversationText (role user) when client sends InjectUserMessage
+    ○ skipped Issue #388: sends response.create only after receiving conversation.item.added from upstream for InjectUserMessage
+    ○ skipped sends Settings.agent.context.messages as conversation.item.create to upstream
+    ○ skipped injects agent.greeting as ConversationText to client only (not sent to upstream)
+    ○ skipped Issue #414: session.created does not trigger SettingsApplied or greeting injection (only session.updated does)
+    ○ skipped Issue #414: greeting must not send conversation.item.create or response.create to upstream
+    ○ skipped Issue #414 TDD: greeting sends nothing to upstream (text-only to client)
+    ○ skipped Issue #414 TDD: context + greeting sends only context items to upstream (greeting is text-only)
+    ○ skipped Issue #414 TDD: greeting flow must not produce upstream error (nothing sent to upstream for greeting)
+    ○ skipped Issue #414 real-API: greeting flow must not produce error (USE_REAL_APIS=1)
+    ○ skipped Issue #414: session.update uses GA audio.input (turn_detection from Settings.idleTimeoutMs + format)
+    ○ skipped Issue #414 TDD: greeting delivers text to client only (nothing to upstream)
+    ○ skipped Protocol: response.output_audio.done sends no message to client
+    ○ skipped Protocol: client message queue order (session.update then conversation.item.create)
+    ○ skipped Protocol: same item id .added + .done count once (one response.create)
+    ○ skipped Protocol: other client JSON (e.g. KeepAlive) forwarded to upstream
+    ○ skipped Protocol: other upstream event (e.g. response.created) forwarded to client as text
+    ○ skipped Protocol: conversation.item.added or .done received by client as text frame
+
+Test Suites: 1 passed, 1 total
+Tests:       41 skipped, 1 passed, 42 total
+Snapshots:   0 total
+Time:        0.734 s
+Ran all test suites matching /tests\/integration\/openai-proxy-integration.test.ts/i with tests matching "translates response.function_call_arguments.done to FunctionCallRequest and FunctionCallResponse".

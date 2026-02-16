@@ -29,6 +29,17 @@ if [[ ! "$TYPE" =~ ^(patch|minor|major)$ ]]; then
     exit 1
 fi
 
+RELEASE_BRANCH="release/v$VERSION"
+
+# Reject if release branch already exists (avoids releasing again without bumping version)
+if git ls-remote --exit-code origin "refs/heads/$RELEASE_BRANCH" 2>/dev/null; then
+    echo "❌ Error: Release branch $RELEASE_BRANCH already exists on remote."
+    echo "   This usually means v$VERSION was already released. Bump the version in package.json"
+    echo "   (and packages/voice-agent-backend/package.json if releasing the backend), then"
+    echo "   run this script again with the new version (e.g. 0.9.2)."
+    exit 1
+fi
+
 # Check if working directory is clean
 if ! git diff-index --quiet HEAD --; then
     echo "❌ Error: Working directory is dirty (has uncommitted changes)"
@@ -57,6 +68,15 @@ echo "🔄 Switching to main branch..."
 git checkout main
 git pull origin main
 
+# Require package.json version to match (ensures version was bumped and committed on main)
+ROOT_VER=$(node -e "console.log(require('./package.json').version)")
+if [ "$ROOT_VER" != "$VERSION" ]; then
+    echo "❌ Error: Root package.json version on main is $ROOT_VER but you specified v$VERSION."
+    echo "   Bump the version in package.json (and packages/voice-agent-backend/package.json"
+    echo "   if needed) to $VERSION, commit on main, then run this script again."
+    exit 1
+fi
+
 # Create the issue using GitHub CLI and capture the issue number
 # For patch releases, use the quick-release template
 if [ "$TYPE" = "patch" ]; then
@@ -78,8 +98,6 @@ echo "🔗 Issue URL: $ISSUE_URL"
 ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -o '[0-9]*$')
 
 # Create and switch to new release branch
-# For patch releases, use release/vX.X.X format as per checklist
-RELEASE_BRANCH="release/v$VERSION"
 echo "🌿 Creating release branch: $RELEASE_BRANCH"
 git checkout -b "$RELEASE_BRANCH"
 git push -u origin "$RELEASE_BRANCH"

@@ -4,7 +4,7 @@
 
 **Epic:** [#455](https://github.com/Signal-Meaning/dg_react_agent/issues/455) — Real-API tests, function-call contract, and 3pp scope (voice-commerce feedback). Complete the four tracked issues (#451–#454) as part of this release.
 
-**Progress:** Publish complete (both packages). GitHub release created; tag v0.9.0. PR #458 opened (release/v0.9.0 → main). Next: merge PR, add labels if desired, verify install (optional).
+**Progress:** Publish complete (both packages). GitHub release created; tag v0.9.0. PR #458 merged (release/v0.9.0 → main). **Remaining (optional):** Add release/branch labels if repo uses them; verify install from registry.
 
 ---
 
@@ -23,7 +23,7 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 #### Pre-Release Preparation
 
 - [x] **Code Review Complete**: All PRs merged and code reviewed
-- [ ] **Tests Passing**: All unit tests and E2E tests passing
+- [x] **Tests Passing**: All unit tests and E2E tests passing
   - [x] Run what CI runs (catches broken imports, packaging tests, etc.): `npm run lint` then `npm run test:mock`. CI uses these same commands; passing locally means the Test and Publish workflow test job should pass.
   - [x] Optionally run full suite: `npm test`
   - [x] **⚠️ CRITICAL: Run E2E tests in proxy mode** (proxy mode is the default and primary mode)
@@ -48,7 +48,7 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Build and Package (CI performs build — no local build required)
 
-- [ ] **Do not run build/package locally for release.** CI builds and validates when you create the GitHub release (see Package Publishing below).
+- [x] **Do not run build/package locally for release.** CI builds and validates when you create the GitHub release (see Package Publishing below). Build and publish were performed by CI (Test and Publish workflow).
 - [ ] **Optional local validation only**: If you want to verify build locally before pushing:
   - [ ] Run: `npm run clean` then `npm run build` then `npm run validate` (or `npm run package:local`). Do **not** commit any `.tgz` or `dist/` — they are gitignored; CI will build from source.
 
@@ -91,6 +91,7 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 - [x] **Publish to GitHub Registry**: Publish package(s) to GitHub Package Registry
   - [x] **Preferred**: Use CI build (validated CI build)
+    - **Lesson:** Version must be bumped in `package.json` (and backend if applicable) and committed on the release branch **before** creating the GitHub release; otherwise CI publishes the previous version and the release does not update. Use `npm run release:issue X.X.X minor` to create the release branch; it rejects if the branch already exists or if package.json version does not match, so the mistake is caught early.
     - Create GitHub release to trigger `.github/workflows/test-and-publish.yml`
     - CI workflow ran: test job passed, publish job published root and voice-agent-backend
     - **Monitor CI workflow**: Wait for CI build to complete successfully
@@ -123,13 +124,13 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Post-Release
 
-- [ ] **Update Main Branch**: Merge release branch to main via Pull Request (required — do not push directly to main)
+- [x] **Update Main Branch**: Merge release branch to main via Pull Request (required — do not push directly to main)
   - [x] Open a PR: `release/v0.9.0` → `main` — [PR #458](https://github.com/Signal-Meaning/dg_react_agent/pull/458)
-  - [ ] Get review/approval if branch protection requires it
-  - [ ] Merge the PR (squash or merge commit per repo policy)
+  - [x] Get review/approval if branch protection requires it
+  - [x] Merge the PR (squash or merge commit per repo policy)
   - Do **not** `git push origin main` from a local merge — use the GitHub PR merge so branch protection is satisfied
-- [ ] **Clean Up**: Clean up release artifacts (only if you ran optional local package)
-  - [ ] If you ran `npm run package:local` locally: remove any `.tgz` in repo root, or leave (they are gitignored)
+- [x] **Clean Up**: Clean up release artifacts (only if you ran optional local package)
+  - N/A — did not run `npm run package:local` locally; no `.tgz` to remove
 - [ ] **Announcement**: Announce release (if applicable)
   - [ ] Update: Any external documentation
   - [ ] Notify: Relevant teams or users
@@ -146,7 +147,7 @@ The following GitHub Actions workflows will be triggered automatically:
    - Tests package installation from tarball
 
 2. **Test and Publish Workflow** (`.github/workflows/test-and-publish.yml`):
-   - Runs on GitHub release creation (or workflow_dispatch)
+   - Runs on GitHub release creation (or workflow_dispatch). When triggered by **creating** the release, the release already exists, so the workflow’s “Create GitHub Release” step is intentionally skipped (it only runs for workflow_dispatch or push to `release/v*`).
    - **Test Job**: Runs first and includes:
      - Linting (`npm run lint`)
      - Tests with mock APIs only (`npm run test:mock` — no real API calls)
@@ -196,9 +197,9 @@ Follow the established documentation structure in `docs/releases/`:
 
 This release is complete when:
 
-- [ ] All checklist items are completed
-- [ ] Package is published to GitHub Registry
-- [ ] GitHub release is created and labeled
-- [ ] Documentation is complete and accurate
-- [ ] All tests are passing
-- [ ] Package installation is verified
+- [x] All required checklist items are completed (merge PR done; optional: labels, verify install, announcement)
+- [x] Package is published to GitHub Registry
+- [x] GitHub release is created (labeling optional)
+- [x] Documentation is complete and accurate
+- [x] All tests are passing
+- [ ] Package installation is verified (optional; run when authenticated to GitHub Package Registry)
