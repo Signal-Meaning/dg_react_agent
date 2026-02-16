@@ -63,9 +63,8 @@ CI (`.github/workflows/test-and-publish.yml`) publishes both packages when the w
 
 - [x] **Commit Changes:** Version bump and release docs
   - [x] Message: `chore: prepare release v0.9.2 (Issue #462)`
-- [ ] **Create Release Branch:**
-  - [ ] Preferred: from **main** after merge: `npm run release:issue 0.9.2 patch` (creates issue and branch; fails if branch exists or version mismatch)
-  - [ ] Or manually: Create `release/v0.9.2`, push: `git push origin release/v0.9.2`
+- [x] **Create Release Branch:**
+  - [x] From main: `npm run release:issue 0.9.2 patch` — created [#465](https://github.com/Signal-Meaning/dg_react_agent/issues/465), branch `release/v0.9.2` pushed
 
 #### Package Publishing
 
