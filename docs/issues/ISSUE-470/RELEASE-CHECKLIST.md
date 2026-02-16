@@ -24,7 +24,7 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.4), **@signal-mean
 - [ ] **Tests Passing**
   - [x] Run what CI runs: `npm run lint` then `npm run test:mock` — **passed**
   - [ ] **E2E in proxy mode:** Prefer **focused E2E** on critical scenarios (no need for full 245-test pass every time):
-    - **Partner scenario (6b):** `cd test-app && npm run backend` (separate terminal), then `npm run test:e2e:6b`. Must pass (0 agent errors).
+    - **Partner scenario (6b):** `cd test-app && npm run backend` (separate terminal), then `USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b.*462"`. Must pass (0 agent errors).
     - **Full proxy E2E** (when needed): `USE_PROXY_MODE=true npm run test:e2e` (all E2E). **Last full run:** 198 passed, 1 failed (6b), 1 flaky (TTS diagnostic), 45 skipped.
   - [ ] **Real-API qualification (proxy/API behavior release):** When `OPENAI_API_KEY` available: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — all in-scope tests pass. Optional: `cd test-app && USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b.*462"` to confirm E2E 6b GREEN.
 - [x] **Linting Clean**: `npm run lint` — no errors
@@ -88,7 +88,8 @@ Run only the scenarios that matter for this release instead of the full suite:
 
 | Scenario | Command (from `test-app`) | Notes |
 |----------|---------------------------|--------|
-| **6b partner (Issue #462/#470)** | `npm run test:e2e:6b` | Backend must be running (`npm run backend`). Asserts 0 agent errors after function-call flow. |
+| **Regression set (server.ts)** | `USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b.*462|Single message|Simple function"` | 3 tests: 6b (partner scenario), 2 (InjectUserMessage → response), 6 (function calling). Covers defer-after-function_call_output and item.added path. |
+| **6b partner (Issue #462/#470)** | `USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b.*462"` | Backend must be running (`npm run backend`). Asserts 0 agent errors after function-call flow. |
 | **OpenAI proxy E2E (subset)** | `USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js` | All tests in that spec only. |
 | **Full E2E** | `USE_PROXY_MODE=true npm run test:e2e` | Full pass (~245 tests); use for final validation. |
 
