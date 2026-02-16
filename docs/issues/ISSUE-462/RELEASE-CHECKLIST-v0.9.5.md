@@ -73,16 +73,16 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.5), **@signal-mean
 
 ### Package Publishing
 
-- [ ] **Publish via CI**
-  - [ ] Create GitHub release (tag `v0.9.5`, target `release/v0.9.5`)
-  - [ ] Monitor CI: test job (lint, test:mock, build, validate) then publish job
-  - [ ] Verify package(s) in GitHub Packages
-- [ ] **Tag**: Created with GitHub release (v0.9.5)
+- [x] **Publish via CI**
+  - [x] Create GitHub release (tag `v0.9.5`, target `release/v0.9.5`) — workflow_dispatch run 22075064956
+  - [x] Monitor CI: test job (lint, test:mock, build, validate) then publish job
+  - [x] Verify package(s) in GitHub Packages
+- [x] **Tag**: Created with GitHub release (v0.9.5)
 - [ ] **Verify Installation (optional):** Install from registry and smoke test
 
 ### GitHub Release
 
-- [ ] **Create GitHub Release**
+- [x] **Create GitHub Release**
   - Title: `Release v0.9.5`
   - Description: CHANGELOG content or link to `docs/releases/v0.9.5/`
   - Tag: `v0.9.5`
@@ -100,7 +100,7 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.5), **@signal-mean
 
 - [x] Lint and test:mock pass locally (and CI)
 - [x] Release docs created and validated for v0.9.5
-- [ ] GitHub release created; CI published package(s) — **next: create release on GitHub (tag v0.9.5, target release/v0.9.5)**
+- [x] GitHub release created; CI published package(s)
 - [ ] PR merged: `release/v0.9.5` → `main`
 
 ---
