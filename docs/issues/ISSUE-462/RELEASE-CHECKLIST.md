@@ -24,14 +24,14 @@ CI (`.github/workflows/test-and-publish.yml`) publishes both packages when the w
 
 - [x] **Code Review Complete**: PR #463 merged to main
 - [ ] **Tests Passing**: All unit tests and E2E tests passing
-  - [ ] **Run what CI runs:** `npm run lint` then `npm run test:mock`
+  - [x] **Run what CI runs:** `npm run lint` then `npm run test:mock` — passed
   - [ ] Optionally: `npm test`
   - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode**
     - [ ] Start backend: `cd test-app && npm run backend`
     - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e`
     - [ ] Verify: All tests pass in proxy mode
   - [ ] **Optional:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` when OPENAI_API_KEY available
-- [ ] **Linting Clean:** `npm run lint`
+- [x] **Linting Clean:** `npm run lint` — passed
 - [ ] **Documentation Updated**: ISSUE-462 README/TRACKING/ANALYSIS updated; release docs below
 
 #### Version Management
@@ -48,14 +48,15 @@ CI (`.github/workflows/test-and-publish.yml`) publishes both packages when the w
 
 #### Documentation
 
-- [ ] **Create Release Documentation:** `docs/releases/v0.9.2/`
-  - [ ] Create: `CHANGELOG.md` (Keep a Changelog; Fixed: conversation_already_has_active_response – Issue #462)
-  - [ ] Create: `MIGRATION.md` (no breaking changes; optional “no migration” note)
-  - [ ] Create: `NEW-FEATURES.md` (none for patch; or “N/A – patch only”)
-  - [ ] Create: `API-CHANGES.md` (none)
-  - [ ] Create: `EXAMPLES.md` (or link to existing)
-  - [ ] Create: `PACKAGE-STRUCTURE.md` from template (replace vX.X.X with v0.9.2)
-- [ ] **Validate:** `npm run validate:release-docs 0.9.2`
+- [x] **Create Release Documentation:** `docs/releases/v0.9.2/`
+  - [x] Create: `CHANGELOG.md` (Keep a Changelog; Fixed: conversation_already_has_active_response – Issue #462)
+  - [x] Create: `MIGRATION.md` (no breaking changes)
+  - [x] Create: `NEW-FEATURES.md` (patch: backend fix only)
+  - [x] Create: `API-CHANGES.md` (none for component; backend 0.2.2)
+  - [x] Create: `EXAMPLES.md` (install 0.9.2 / 0.2.2)
+  - [x] Create: `PACKAGE-STRUCTURE.md` (from template, v0.9.2)
+  - [x] Create: `RELEASE-NOTES.md`
+- [x] **Validate:** `npm run validate:release-docs 0.9.2` — passed
 - [ ] **Update Main Documentation:** README/docs as needed (e.g. version badge if applicable)
 
 #### Git Operations
