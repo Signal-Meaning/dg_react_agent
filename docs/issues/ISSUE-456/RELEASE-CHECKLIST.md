@@ -4,7 +4,7 @@
 
 **Epic:** [#455](https://github.com/Signal-Meaning/dg_react_agent/issues/455) — Real-API tests, function-call contract, and 3pp scope (voice-commerce feedback). Complete the four tracked issues (#451–#454) as part of this release.
 
-**Progress:** Lint ✅. test:mock ✅. npm test ✅. E2E proxy ✅ (244 tests, exit 0; log-capping fix in idle-timeout-behavior.spec.js). Next: version bump and release docs.
+**Progress:** Pre-release complete (code review ✅, tests ✅, lint ✅, E2E proxy ✅, docs ✅, API evolution ✅, no breaking changes). Next: version bump and release docs.
 
 ---
 
@@ -22,7 +22,7 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Pre-Release Preparation
 
-- [ ] **Code Review Complete**: All PRs merged and code reviewed
+- [x] **Code Review Complete**: All PRs merged and code reviewed
 - [ ] **Tests Passing**: All unit tests and E2E tests passing
   - [x] Run what CI runs (catches broken imports, packaging tests, etc.): `npm run lint` then `npm run test:mock`. CI uses these same commands; passing locally means the Test and Publish workflow test job should pass.
   - [x] Optionally run full suite: `npm test`
@@ -32,9 +32,9 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
     - [x] Verify: All tests pass in proxy mode before proceeding (244 tests, exit 0)
 - [x] **Linting Clean**: No linting errors
   - [x] Run: `npm run lint`
-- [ ] **Documentation Updated**: All relevant documentation updated
-- [ ] **API Changes Documented**: Any API changes appear in API-REFERENCE.md evolution section
-- [ ] **Breaking Changes Documented**: Any breaking changes identified and documented
+- [x] **Documentation Updated**: All relevant documentation updated (epic #451–#454: TEST-STRATEGY, BACKEND-FUNCTION-CALL-CONTRACT, scope docs)
+- [x] **API Changes Documented**: Any API changes appear in API-REFERENCE.md evolution section (v0.9.0: no component API changes; evolution entry added)
+- [x] **Breaking Changes Documented**: Any breaking changes identified and documented (none for v0.9.0)
 
 #### Version Management
 

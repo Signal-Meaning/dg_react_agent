@@ -1276,6 +1276,10 @@ function ServiceSpecificControlApp() {
 
 This section documents changes made to the API since the original fork (commit `7191eb4a062f35344896e873f02eba69c9c46a2d`).
 
+### v0.9.0 (Release #456)
+
+- **No component API changes.** This release focuses on real-API test requirements (`USE_REAL_APIS`), documented function-call backend contract (#452), real-API and third-party scope clarification (#453, #454), and E2E/test stability. See [Epic #455](issues/ISSUE-455/README.md) and [Release checklist #456](issues/ISSUE-456/RELEASE-CHECKLIST.md).
+
 ### Props Added Since Fork
 
 - **`onAgentStartedSpeaking`** - Agent speaking callback
