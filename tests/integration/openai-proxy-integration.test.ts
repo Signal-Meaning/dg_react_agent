@@ -744,6 +744,66 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, useRealAPIs ? 30000 : 5000);
 
   /**
+   * Issue #470 / TDD-PLAN-MISSING-REQUIREMENTS Phase 2: Real-API integration test for Req 1 (session.update
+   * only when no active response). Sends Settings, InjectUserMessage, then second Settings during response
+   * window; asserts no conversation_already_has_active_response. Proxy must not send session.update while
+   * response is active.
+   */
+  (useRealAPIs ? it : it.skip)('Issue #470 real-API: session.update not sent while response active (Req 1, USE_REAL_APIS=1)', (done) => {
+    let finished = false;
+    const errorsReceived: string[] = [];
+    let secondSettingsSent = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string; role?: string };
+        if (msg.type === 'Error' && msg.description) {
+          errorsReceived.push(msg.description);
+          if (msg.description.includes('conversation_already_has_active_response')) {
+            finish(new Error(`Req 1 regression: conversation_already_has_active_response: ${msg.description}`));
+            return;
+          }
+        }
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say exactly: OK' }));
+          setTimeout(() => {
+            if (client.readyState === WebSocket.OPEN && !secondSettingsSent) {
+              secondSettingsSent = true;
+              client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+            }
+          }, 150);
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          if (errorsReceived.some((d) => d.includes('conversation_already_has_active_response'))) {
+            finish(new Error('Req 1 regression: conversation_already_has_active_response before completion'));
+            return;
+          }
+          setTimeout(() => finish(), 2000);
+        }
+      } catch (e) {
+        finish(e as Error);
+      }
+    });
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (!finished) finish(new Error('Issue #470 real-API Req 1: timeout waiting for assistant response'));
+    }, 25000);
+  }, 30000);
+
+  /**
    * Reconnect/reload: when client sends Settings twice (e.g. test-app focus or reload), proxy must forward
    * only the first session.update to upstream. A second session.update can cause upstream (OpenAI) to return
    * "The server had an error while processing your request." This test reproduces the duplicate-Settings
