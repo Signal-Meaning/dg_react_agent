@@ -139,6 +139,15 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 
 - Focus on maintaining and improving test coverage
 
+## Release Qualification (Real API) — CRITICAL
+
+**Never qualify a release on mock-only tests when the release fixes proxy/API behavior.**
+
+- For any fix that depends on **upstream (proxy↔API) message ordering or timing** (e.g. openai-proxy, session.update, responseInProgress), we **must** run the relevant integration (and where applicable E2E) tests **against the real API** before marking the release qualified (or document an explicit exception).
+- **Mock-only success is not sufficient** for such releases: the real API's event order and timing can differ from mocks (e.g. audio.done before text.done, function-call flows), and production failures (e.g. `conversation_already_has_active_response`) can still occur if we only tested against a mock.
+- **Required when applicable:** Before release, run e.g. `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` for proxy fixes (when OPENAI_API_KEY is available), and/or E2E in proxy mode with real backend. See release checklist and `.github/ISSUE_TEMPLATE/release-checklist.md` for the explicit qualification step.
+- **Reference:** Issue #466 (process fix after 0.9.2/0.2.2 was qualified on mock-only test; voice-commerce real-API E2E still failed).
+
 ## Publishing and Releasing
 
 - **Publishing the project** (npm packages to GitHub Package Registry) and the **tokens/secrets** required are documented in **docs/PUBLISHING-AND-RELEASING.md**.

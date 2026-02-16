@@ -634,26 +634,85 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Issue #462: Proxy must NOT clear responseInProgress on response.output_audio.done alone. If the real API
    * sends output_audio.done before output_text.done, clearing on audio.done would allow a subsequent Settings
    * to trigger session.update while the API still has an active response → conversation_already_has_active_response.
-   * Test: mock sends session.updated on connect (so proxy never sent session.update yet; hasForwardedSessionUpdate false).
-   * Client sends InjectUserMessage only; mock sends output_audio.done then (after delay) output_text.done.
-   * Client sends Settings in between (first Settings from proxy's view). Assert: mock receives 0 session.update
-   * (proxy must not send session.update while response active; with bug we clear on audio.done and would send one).
+   * Runs with both mock and real API. Mock: session.updated on connect; client InjectUserMessage; mock sends
+   * audio.done then (after delay) text.done; client sends Settings in between; assert mock receives 0 session.update.
+   * Real API: Settings, InjectUserMessage, then second Settings after short delay; assert no Error containing
+   * conversation_already_has_active_response.
    */
-  itMockOnly('Issue #462: does not send session.update after output_audio.done until output_text.done (responseInProgress not cleared on audio.done alone)', (done) => {
+  it('Issue #462: does not send session.update after output_audio.done until output_text.done (responseInProgress not cleared on audio.done alone)', (done) => {
+    let client: InstanceType<typeof WebSocket>;
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      if (!useRealAPIs) mockSendSessionUpdatedOnConnect = false;
+      try { client?.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+
+    if (useRealAPIs) {
+      // Real API: proxy → live OpenAI. Send Settings, InjectUserMessage, then Settings again during response window; assert no conversation_already_has_active_response.
+      client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+      const errorsReceived: string[] = [];
+      let secondSettingsSent = false;
+
+      client.on('open', () => {
+        client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      });
+      client.on('message', (data: Buffer) => {
+        if (data.length === 0 || data[0] !== 0x7b) return;
+        try {
+          const msg = JSON.parse(data.toString()) as { type?: string; description?: string; role?: string };
+          if (msg.type === 'Error' && msg.description) {
+            errorsReceived.push(msg.description);
+            if (msg.description.includes('conversation_already_has_active_response')) {
+              finish(new Error(`Issue #462 regression: received conversation_already_has_active_response: ${msg.description}`));
+              return;
+            }
+          }
+          if (msg.type === 'SettingsApplied') {
+            client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say exactly: OK' }));
+            // Send second Settings shortly after to try to hit the response-in-progress window (real API may send audio.done before text.done).
+            setTimeout(() => {
+              if (client.readyState === WebSocket.OPEN && !secondSettingsSent) {
+                secondSettingsSent = true;
+                client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+              }
+            }, 150);
+          }
+          if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+            const bad = errorsReceived.some((d) => d.includes('conversation_already_has_active_response'));
+            if (bad) {
+              finish(new Error(`Issue #462 regression: received conversation_already_has_active_response before completion`));
+              return;
+            }
+            setTimeout(() => finish(), 2000);
+          }
+        } catch (e) {
+          finish(e as Error);
+        }
+      });
+      client.on('error', (err) => finish(err));
+      setTimeout(() => {
+        if (!finished) finish(new Error('Issue #462 real-API: timeout waiting for assistant response'));
+      }, 25000);
+      return;
+    }
+
+    // Mock path
     mockReceived.length = 0;
     mockSendSessionUpdatedOnConnect = true;
     mockSendOnlyAudioDoneFirst = true;
     mockDelayOutputTextDoneAfterAudioMs = 300;
-    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      // Do not send Settings first; mock already sent session.updated on connect so proxy is ready.
       client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Hi' }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
       try {
         const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
-        // After user echo, send Settings (first time from proxy's view). With bug proxy sends session.update.
         if (msg.type === 'ConversationText' && msg.role === 'user') {
           setTimeout(() => {
             if (client.readyState === WebSocket.OPEN) {
@@ -664,20 +723,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         if (msg.type === 'ConversationText' && msg.role === 'assistant') {
           const sessionUpdateCount = mockReceived.filter((m) => m.type === 'session.update').length;
           expect(sessionUpdateCount).toBe(0);
-          mockSendSessionUpdatedOnConnect = false;
-          client.close();
-          done();
+          finish();
         }
       } catch (e) {
-        mockSendSessionUpdatedOnConnect = false;
-        done(e as Error);
+        finish(e as Error);
       }
     });
-    client.on('error', (err) => {
-      mockSendSessionUpdatedOnConnect = false;
-      done(err);
-    });
-  }, 5000);
+    client.on('error', (err) => finish(err));
+  }, useRealAPIs ? 30000 : 5000);
 
   /**
    * Reconnect/reload: when client sends Settings twice (e.g. test-app focus or reload), proxy must forward

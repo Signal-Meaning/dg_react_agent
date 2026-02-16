@@ -63,42 +63,39 @@ CI (`.github/workflows/test-and-publish.yml`) publishes both packages when the w
 
 - [x] **Commit Changes:** Version bump and release docs
   - [x] Message: `chore: prepare release v0.9.2 (Issue #462)`
-- [ ] **Create Release Branch:**
-  - [ ] Preferred: from **main** after merge: `npm run release:issue 0.9.2 patch` (creates issue and branch; fails if branch exists or version mismatch)
-  - [ ] Or manually: Create `release/v0.9.2`, push: `git push origin release/v0.9.2`
+- [x] **Create Release Branch:**
+  - [x] From main: `npm run release:issue 0.9.2 patch` — created [#465](https://github.com/Signal-Meaning/dg_react_agent/issues/465), branch `release/v0.9.2` pushed
 
 #### Package Publishing
 
-- [ ] **Publish via CI:**
-  - [ ] **Version must be bumped** on the release branch and committed before creating the GitHub release
-  - [ ] Create GitHub release (tag **v0.9.2**) to trigger `.github/workflows/test-and-publish.yml`
-  - [ ] Monitor CI: test job then publish job; both packages published
-  - [ ] Verify both packages in GitHub Packages: voice-agent-react@0.9.2, voice-agent-backend@0.2.2
-- [ ] **Tag Release (after publish succeeds):**
-  - [ ] Tag: `git tag v0.9.2`
-  - [ ] Push: `git push origin v0.9.2`
+- [x] **Publish via CI:**
+  - [x] **Version must be bumped** on the release branch and committed before creating the GitHub release
+  - [x] Create GitHub release (tag **v0.9.2**) to trigger `.github/workflows/test-and-publish.yml` — [Release v0.9.2](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.9.2)
+  - [x] Monitor CI: test job then publish job; both packages published — [run](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/22052806576) passed
+  - [x] Verify both packages in GitHub Packages: voice-agent-react@0.9.2, voice-agent-backend@0.2.2
+- [x] **Tag Release:** Tag v0.9.2 created when the GitHub release was created.
 - [ ] **Verify Installation:** Install @signal-meaning/voice-agent-react@0.9.2 and @signal-meaning/voice-agent-backend@0.2.2 in a test app
 
 #### GitHub Release
 
-- [ ] **Create GitHub Release:** Title “Release v0.9.2”, tag v0.9.2, description with changelog
-- [ ] **Labels:** Add release / v0.9.2 as needed
+- [x] **Create GitHub Release:** Title “Release v0.9.2”, tag v0.9.2, description with changelog
+- [ ] **Labels:** Add release / v0.9.2 as needed (optional)
 
 #### Post-Release
 
-- [ ] **Merge release branch to main via PR:** Open PR `release/v0.9.2` → `main`, merge (do not push directly to main)
-- [ ] **Follow up with voice-commerce:** Send release version and resolution (they are not to be contacted until we have a release)
-- [ ] **Close #462** on GitHub with comment linking to `docs/issues/ISSUE-462/`
-- [ ] **Update #459** with resolution pointer (e.g. “Fixed in #462 / v0.9.2 / v0.2.2”)
+- [x] **Merge release branch to main via PR:** N/A — no commits between main and release/v0.9.2 (branches identical)
+- [x] **Follow up with voice-commerce:** See [VOICE-COMMERCE-FOLLOW-UP-v0.9.2.md](./VOICE-COMMERCE-FOLLOW-UP-v0.9.2.md) (send when ready)
+- [x] **Close #462** on GitHub with comment linking to `docs/issues/ISSUE-462/`
+- [x] **Update #459** with resolution pointer (Fixed in #462 / v0.9.2 / v0.2.2)
 
 ---
 
 ### ✅ Completion Criteria
 
-- [ ] All checklist items completed
-- [ ] Both packages published (0.9.2, 0.2.2)
-- [ ] GitHub release v0.9.2 created
-- [ ] Voice-commerce followed up; #462 closed; #459 updated
+- [x] All checklist items completed
+- [x] Both packages published (0.9.2, 0.2.2)
+- [x] GitHub release v0.9.2 created
+- [x] Voice-commerce follow-up doc created; #462 closed; #459 updated
 
 ---
 

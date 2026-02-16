@@ -25,6 +25,9 @@ This is a patch release for version vX.X.X of the Deepgram Voice Interaction Rea
     - [ ] Start backend: `cd test-app && npm run backend`
     - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e` (all E2E tests must pass in proxy mode)
     - [ ] Verify: All tests pass in proxy mode before proceeding
+  - [ ] **⚠️ REQUIRED if this patch fixes proxy/API behavior** (e.g. openai-proxy, message ordering, session.update timing): Run real-API integration test. Mock-only success is **not** sufficient. When `OPENAI_API_KEY` is available:
+    - [ ] Run: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
+    - [ ] Verify: All in-scope tests pass against the real API. If keys are not available, document the exception.
 - [ ] **Linting Clean**: No linting errors
   - [ ] Run: `npm run lint`
 
