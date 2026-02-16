@@ -29,10 +29,10 @@ Other documented behaviors we rely on: session max duration 60 min, idle timeout
 |-------------|--------------------|-------------------------|----------------|
 | 1 – session.update only when no active response | ✅ Issue #459 test | ✅ **Issue #470 real-API** (session.update not sent while response active) | — |
 | 2 – clear responseInProgress only on output_text.done | ✅ Issue #462 test (mock sends audio.done then delayed text.done) | ✅ Same test with USE_REAL_APIS=1 (unified #462 test) | — |
-| 3 – response.create only after item.added (InjectUserMessage) | ✅ Issue #388 test | — | Implied by openai-proxy-e2e |
+| 3 – response.create only after item.added (InjectUserMessage) | ✅ Issue #388 test | ✅ **Issue #470 real-API** (InjectUserMessage → response without error, Phase 3) | Implied by openai-proxy-e2e |
 | 4 – FunctionCallResponse: defer response.create until output_text.done | ✅ Mock sends output_text.done on function_call_output (Issue #470) | ✅ **Issue #470 real-API** (function-call flow integration test) | ✅ **Test 6b** (partner scenario) |
-| 5 – No context before session.updated | ✅ session.created vs session.updated tests | — | — |
-| 6 – No append before session.updated | ✅ Issue #414 tests | — | — |
+| 5 – No context before session.updated | ✅ session.created vs session.updated tests | Mock-only (real API does not let us delay session.updated to assert order) | — |
+| 6 – No append before session.updated | ✅ Issue #414 tests | Mock-only (real API does not let us control event order) | — |
 | 7 – Min audio before commit | ✅ Buffer too small test | — | — |
 | 8 – Only one response active | ✅ “at most one response.create per turn” test | — | Test 6b (strict 0 errors) |
 

@@ -804,6 +804,58 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 30000);
 
   /**
+   * Issue #470 / TDD-PLAN-MISSING-REQUIREMENTS Phase 3: Real-API test for Req 3 (response.create only
+   * after item.added). Sends Settings, InjectUserMessage; asserts we receive ConversationText (assistant)
+   * without any Error. If proxy sent response.create before item.added, the real API could error.
+   */
+  (useRealAPIs ? it : it.skip)('Issue #470 real-API: InjectUserMessage receives assistant response without error (Req 3, USE_REAL_APIS=1)', (done) => {
+    let finished = false;
+    const errorsReceived: string[] = [];
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string; role?: string; content?: string };
+        if (msg.type === 'Error' && msg.description) {
+          errorsReceived.push(msg.description);
+          finish(new Error(`Req 3: upstream error before response: ${msg.description}`));
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What is 2 plus 2?' }));
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          if (errorsReceived.length > 0) {
+            finish(new Error(`Req 3: received errors before assistant response: ${errorsReceived.join('; ')}`));
+            return;
+          }
+          expect(typeof msg.content).toBe('string');
+          expect((msg.content ?? '').length).toBeGreaterThan(0);
+          setTimeout(() => finish(), 1000);
+        }
+      } catch (e) {
+        finish(e as Error);
+      }
+    });
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (!finished) finish(new Error('Issue #470 real-API Req 3: timeout waiting for assistant response'));
+    }, 25000);
+  }, 30000);
+
+  /**
    * Reconnect/reload: when client sends Settings twice (e.g. test-app focus or reload), proxy must forward
    * only the first session.update to upstream. A second session.update can cause upstream (OpenAI) to return
    * "The server had an error while processing your request." This test reproduces the duplicate-Settings
