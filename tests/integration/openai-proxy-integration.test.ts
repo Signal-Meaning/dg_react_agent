@@ -1266,6 +1266,106 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
+   * Issue #470 / TDD-PLAN-MISSING-REQUIREMENTS Phase 1: Real-API integration test for function-call path (Req 4).
+   * Runs only with USE_REAL_APIS=1. Asserts that the full flow (Settings with tools → InjectUserMessage →
+   * FunctionCallRequest → FunctionCallResponse → response) completes without conversation_already_has_active_response.
+   */
+  (useRealAPIs ? it : it.skip)('Issue #470 real-API: function-call flow completes without conversation_already_has_active_response (USE_REAL_APIS=1)', (done) => {
+    const errorsReceived: string[] = [];
+    let sentFunctionCallResponse = false;
+    let receivedAssistantResponseAfterFunctionCall = false;
+    let finished = false;
+    const timeoutMs = 35000;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: {
+          think: {
+            prompt: 'You are a helpful assistant. Use tools when needed.',
+            functions: [
+              {
+                name: 'get_current_time',
+                description: 'Get the current time in a specific timezone.',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    timezone: { type: 'string', description: 'Timezone (e.g. UTC, America/New_York)' },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      }));
+    });
+
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as {
+          type?: string;
+          description?: string;
+          role?: string;
+          content?: string;
+          functions?: Array<{ id: string; name: string; arguments?: string }>;
+        };
+        if (msg.type === 'Error' && msg.description) {
+          errorsReceived.push(msg.description);
+          if (msg.description.includes('conversation_already_has_active_response')) {
+            finish(new Error(`Issue #470 regression: received conversation_already_has_active_response: ${msg.description}`));
+            return;
+          }
+        }
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What time is it?' }));
+        }
+        if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+          const fn = msg.functions[0];
+          client.send(JSON.stringify({
+            type: 'FunctionCallResponse',
+            id: fn.id,
+            name: fn.name,
+            content: JSON.stringify({ time: '12:00', timezone: 'UTC' }),
+          }));
+          sentFunctionCallResponse = true;
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant' && sentFunctionCallResponse) {
+          const bad = errorsReceived.some((d) => d.includes('conversation_already_has_active_response'));
+          if (bad) {
+            finish(new Error('Issue #470 regression: received conversation_already_has_active_response before assistant response'));
+            return;
+          }
+          receivedAssistantResponseAfterFunctionCall = true;
+          setTimeout(() => finish(), 2000);
+        }
+      } catch {
+        // ignore non-JSON
+      }
+    });
+
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (finished) return;
+      if (!receivedAssistantResponseAfterFunctionCall) {
+        const errMsg = errorsReceived.length
+          ? `Timeout; errors: ${errorsReceived.join('; ')}`
+          : 'Timeout waiting for assistant response after function call';
+        finish(new Error(`Issue #470 real-API: ${errMsg}`));
+      }
+    }, timeoutMs);
+  }, 40000);
+
+  /**
    * When upstream sends response.function_call_arguments.done, proxy sends FunctionCallRequest first then ConversationText
    * (same order as server.ts). Client must receive both so E2E capture can see FunctionCallRequest.
    * Real OpenAI may send response.output_audio_transcript.done with "Function call: ..." before or without

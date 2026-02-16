@@ -88,7 +88,7 @@
 
 ## Checklist (for implementers)
 
-- [ ] **Phase 1** — Real-API integration test for function-call path (Req 4); update matrix.
+- [x] **Phase 1** — Real-API integration test for function-call path (Req 4); update matrix.
 - [ ] **Phase 2** — Real-API integration test for session.update only when no active response (Req 1); update matrix.
 - [ ] **Phase 3** — (Optional) Real-API or stronger tests for Reqs 3, 5, 6; update matrix.
 - [ ] **Phase 4** — (Optional) Strengthen Req 7 test (min audio before commit); update matrix.
