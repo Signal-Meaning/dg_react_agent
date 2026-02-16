@@ -80,12 +80,12 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Git Operations
 
-- [ ] **Commit Changes**: Commit all release-related changes
-  - [ ] Commit: Version bump and documentation updates
-  - [ ] Message: `chore: prepare release v0.9.0`
-- [ ] **Create Release Branch**: Create a release branch for the version
-  - [ ] Create: `release/v0.9.0` branch
-  - [ ] Push: `git push origin release/v0.9.0`
+- [x] **Commit Changes**: Commit all release-related changes
+  - [x] Commit: Version bump and documentation updates
+  - [x] Message: `chore: prepare release v0.9.0`
+- [x] **Create Release Branch**: Create a release branch for the version
+  - [x] Create: `release/v0.9.0` branch
+  - [x] Push: `git push origin release/v0.9.0`
 
 #### Package Publishing
 
