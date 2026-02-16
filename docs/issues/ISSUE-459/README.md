@@ -18,7 +18,7 @@ When using the **OpenAI proxy** path, the OpenAI Realtime API returns **`convers
 
 - [ ] **Root cause identified** – Code paths that send session/config updates (e.g. Settings → `session.update`) are located in component and/or voice-agent-backend (OpenAI proxy).
 - [ ] **Gating implemented** – Session/config updates are not sent while the OpenAI Realtime API has an active response in progress.
-- [ ] **Tests added/updated** – Tests (unit and/or integration/E2E) cover the “no session update during active response” behavior; TDD: tests first, then implementation.
+- [x] **Tests added/updated** – Integration test added in `tests/integration/openai-proxy-integration.test.ts`; red confirmed (Phase 2). **TDD:** Phase 3 (implement gating) next; see [TRACKING.md](./TRACKING.md#tdd-workflow-mandatory-order).
 - [ ] **No regression** – Existing tests (mock and, where applicable, real-API) still pass.
 - [ ] **Docs updated** – This README and [TRACKING.md](./TRACKING.md) updated as work progresses; any new behavior or constraints documented where appropriate.
 - [ ] **Issue closed** – #459 closed with resolution; closure comment links to this folder.
@@ -29,11 +29,11 @@ When using the **OpenAI proxy** path, the OpenAI Realtime API returns **`convers
 
 | Criterion              | Status   |
 |------------------------|----------|
-| Root cause identified  | ⬜ Not started |
+| Root cause identified  | ✅ Phase 1 complete; see [INVESTIGATION.md](./INVESTIGATION.md) |
 | Gating implemented     | ⬜ Not started |
-| Tests added/updated     | ⬜ Not started |
+| Tests added/updated     | ✅ Phase 2 complete; integration test added, red confirmed |
 | No regression          | ⬜ Not started |
-| Docs updated           | ⬜ In progress (this README + TRACKING) |
+| Docs updated           | ✅ README + TRACKING + INVESTIGATION |
 | Issue closed           | ⬜ |
 
 ---
@@ -41,3 +41,4 @@ When using the **OpenAI proxy** path, the OpenAI Realtime API returns **`convers
 ## Docs in this folder
 
 - **[TRACKING.md](./TRACKING.md)** – Step-by-step tracking for resolving the issue (investigation, implementation, tests, closure).
+- **[INVESTIGATION.md](./INVESTIGATION.md)** – Phase 1 findings: where session.update is sent, responseInProgress gap, suggested fix (gate session.update on no active response).
