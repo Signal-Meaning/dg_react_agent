@@ -78,7 +78,13 @@ We could add an integration test that runs against the **real** API and asserts 
 
 ---
 
-## 4. References
+## 4. TDD plan for missing coverage
+
+A concrete TDD plan for adding the missing tests (real-API integration for Reqs 1 and 4, optional for 3/5/6/7) is in **[TDD-PLAN-MISSING-REQUIREMENTS.md](./TDD-PLAN-MISSING-REQUIREMENTS.md)**. It uses Red → Green → Refactor per requirement and updates this matrix as each phase is done.
+
+---
+
+## 5. References
 
 - **Our protocol doc:** `packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md`
 - **OpenAI:** Client events, Server events, Realtime conversations, Realtime VAD (links in §3.1)
