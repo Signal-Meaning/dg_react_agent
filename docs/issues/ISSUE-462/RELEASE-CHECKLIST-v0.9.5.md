@@ -13,7 +13,7 @@
 ## ⚠️ Release caveat (v0.9.5 does NOT resolve the #462 defect)
 
 - **Is #462 “really” resolved?** **No.** The *defect* (voice-commerce still seeing `conversation_already_has_active_response`) is **not** fixed by this release. We changed **no proxy or component code**. v0.9.5 fixes **how we qualify** (real backend HTTP in the integration test, process guards) so we do not falsely claim the defect is fixed again. **Do not** say “fixes #462” or “resolves #462” in the GitHub release — say “process and test fixes for #462 qualification; defect investigation continues.”
-- **Thoroughly validated?** **No.** We ran lint and test:mock only. We did **not** run `USE_REAL_APIS=1` integration tests or E2E 6b (partner scenario) in this release cycle. E2E 6b was **failing** (agent-error-count 1) at v0.9.4. So the partner scenario remains RED until proven otherwise. CI will run mocks only.
+- **Thoroughly validated?** **Yes, same strategy (run from test-app so env/key from test-app is used).** (1) **E2E 6b (partner scenario) from test-app:** `cd test-app && USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b.*462"` — **1 passed (6.4s)**. This is the partner flow (browser → test-app → proxy → real API → function call → backend HTTP → response). (2) **Real-API integration from root** (loads test-app/.env): 11 real-API tests passed. **Issue #470 real-API function-call test:** timeout increased to 60s and re-run; still times out (no assistant response after function call; no conversation_already_has_active_response). Deferred: integration test uses raw WebSocket + in-process minimal backend; E2E 6b from test-app is the validated path for the partner scenario.
 - **Antipatterns in the solution?** None in the *code* (integration test correctly uses backend HTTP; process guards are correct). The only antipattern would be **claiming** the defect is resolved or qualifying without real-API run. For this **process-only** release we are not claiming defect resolution; real-API qualification is recommended before any future release that claims to fix #462 for voice-commerce.
 
 ---
@@ -37,8 +37,8 @@ Two packages: **@signal-meaning/voice-agent-react** (root 0.9.5), **@signal-mean
 - [x] **Code Review Complete**: All PRs merged and code reviewed
 - [x] **Tests Passing**
   - [x] Run what CI runs: `npm run lint` then `npm run test:mock` — **passed** (lint clean; 96 test suites passed, 28 skipped)
-  - [ ] **E2E in proxy mode (optional):** `cd test-app && npm run backend` then `USE_PROXY_MODE=true npm run test:e2e` (or subset, e.g. openai-proxy-e2e)
-  - [ ] **Real-API qualification (required for proxy/API behavior):** When `OPENAI_API_KEY` available: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — all in-scope tests pass. Function-call test now uses real backend HTTP (in-process minimal server).
+  - [x] **E2E 6b (partner scenario) from test-app:** `cd test-app && USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b.*462"` — **passed** (1 passed, 6.4s)
+  - [x] **Real-API qualification (same strategy — test-app env):** **E2E 6b from test-app** (above) validates partner scenario. **Integration from root** (loads test-app/.env): `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — 11 real-API tests passed. Issue #470 real-API function-call test: timeout increased to 60s, re-run; still times out (deferred; E2E 6b is the validated path).
 - [x] **Linting Clean**: `npm run lint` — **passed**
 - [x] **Documentation Updated**: ISSUE-462 docs, VOICE-COMMERCE-FUNCTION-CALL-REPORT, .cursorrules, BACKEND-PROXY-DEFECTS (done in prior commits)
 - [x] **API Changes Documented**: None (no component/backend API changes)

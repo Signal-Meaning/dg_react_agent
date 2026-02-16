@@ -1431,7 +1431,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     let sentFunctionCallResponse = false;
     let receivedAssistantResponseAfterFunctionCall = false;
     let finished = false;
-    const timeoutMs = 35000;
+    const timeoutMs = 60000; // Real API function-call round-trip can exceed 35s
     let functionCallBackend: { server: http.Server; port: number } | null = null;
     let client: InstanceType<typeof WebSocket> | null = null;
 
@@ -1547,7 +1547,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         }, timeoutMs);
       })
       .catch((err) => finish(err instanceof Error ? err : new Error(String(err))));
-  }, 40000);
+  }, 70000); // Jest timeout: real-API function-call flow can be slow
 
   /**
    * When upstream sends response.function_call_arguments.done, proxy sends FunctionCallRequest first then ConversationText
