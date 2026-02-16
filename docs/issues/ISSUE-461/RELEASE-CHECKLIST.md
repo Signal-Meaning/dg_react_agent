@@ -2,7 +2,7 @@
 
 **GitHub:** [#461 Release v0.9.1: Complete Release Process and Documentation](https://github.com/Signal-Meaning/dg_react_agent/issues/461)
 
-**Progress:** _Update this line as you complete steps (e.g. “Pre-release done; version bumped; release branch pushed; CI passed; tagged; PR opened”)._
+**Progress:** _Tracking docs committed and pushed. Lint + test:mock passed. Release docs created (docs/releases/v0.9.1/). Versions bumped (root 0.9.1, backend 0.2.1). Release branch release/v0.9.1 created and pushed. Next: Run E2E in proxy mode (optional before publish); create GitHub release to trigger CI publish; after publish succeed, tag v0.9.1 and push tag; open PR release/v0.9.1 → main._
 
 ---
 
@@ -20,9 +20,9 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Pre-Release Preparation
 
-- [ ] **Code Review Complete**: All PRs merged and code reviewed
+- [x] **Code Review Complete**: All PRs merged and code reviewed
 - [ ] **Tests Passing**: All unit tests and E2E tests passing
-  - [ ] Run what CI runs (catches broken imports, packaging tests, etc.): `npm run lint` then `npm run test:mock`. CI uses these same commands; passing locally means the Test and Publish workflow test job should pass.
+  - [x] Run what CI runs (catches broken imports, packaging tests, etc.): `npm run lint` then `npm run test:mock`. CI uses these same commands; passing locally means the Test and Publish workflow test job should pass.
   - [ ] Optionally run full suite: `npm test`
   - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode** (proxy mode is the default and primary mode)
     - [ ] Start backend: `cd test-app && npm run backend`
@@ -31,19 +31,19 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
   - [ ] Optional but recommended: Run real-API integration tests (when `OPENAI_API_KEY` is available; see `docs/issues/ISSUE-451/SCOPE.md`)
     - [ ] Run: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
     - [ ] Verify: All 8 in-scope tests pass (CI runs mocks only; this step validates against live OpenAI when keys are set)
-- [ ] **Linting Clean**: No linting errors
-  - [ ] Run: `npm run lint`
-- [ ] **Documentation Updated**: All relevant documentation updated
-- [ ] **API Changes Documented**: Any API changes appear in API-REFERENCE.md evolution section
-- [ ] **Breaking Changes Documented**: Any breaking changes identified and documented
+- [x] **Linting Clean**: No linting errors
+  - [x] Run: `npm run lint`
+- [x] **Documentation Updated**: All relevant documentation updated
+- [x] **API Changes Documented**: Any API changes appear in API-REFERENCE.md evolution section
+- [x] **Breaking Changes Documented**: Any breaking changes identified and documented
 
 #### Version Management
 
-- [ ] **Bump Version**: Update package.json to v0.9.1
-  - [ ] Run: `npm version patch` (or manually update)
-- [ ] **Bump voice-agent-backend version** (if releasing that package): Update `packages/voice-agent-backend/package.json` version (e.g. 0.1.0 → 0.2.0)
-- [ ] **Update Dependencies**: Ensure all dependencies are up to date
-  - [ ] Run: `npm update`
+- [x] **Bump Version**: Update package.json to v0.9.1
+  - [x] Run: `npm version patch` (or manually update)
+- [x] **Bump voice-agent-backend version** (if releasing that package): Update `packages/voice-agent-backend/package.json` version (0.2.0 → 0.2.1)
+- [x] **Update Dependencies**: Ensure all dependencies are up to date
+  - [x] Run: `npm update`
   - [ ] Review and update any outdated dependencies
 
 #### Build and Package (CI performs build — no local build required)
@@ -54,17 +54,17 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Documentation
 
-- [ ] **Create Release Documentation**: Follow the established structure
-  - [ ] Create: `docs/releases/v0.9.1/` directory
-  - [ ] Create: `CHANGELOG.md` with all changes (Keep a Changelog format)
-  - [ ] Create: `MIGRATION.md` if there are breaking changes
-  - [ ] Create: `NEW-FEATURES.md` for new features
-  - [ ] Create: `API-CHANGES.md` for API changes
-  - [ ] Create: `EXAMPLES.md` with usage examples
-  - [ ] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
-    - Replace `v0.9.1` and `0.9.1` placeholders with actual version
-- [ ] **Validate Documentation**: Run validation to ensure all required documents are present
-  - [ ] Run: `npm run validate:release-docs v0.9.1`
+- [x] **Create Release Documentation**: Follow the established structure
+  - [x] Create: `docs/releases/v0.9.1/` directory
+  - [x] Create: `CHANGELOG.md` with all changes (Keep a Changelog format)
+  - [x] Create: `MIGRATION.md` if there are breaking changes
+  - [x] Create: `NEW-FEATURES.md` for new features
+  - [x] Create: `API-CHANGES.md` for API changes
+  - [x] Create: `EXAMPLES.md` with usage examples
+  - [x] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
+    - Replaced `v0.9.1` and `0.9.1` placeholders with actual version
+- [x] **Validate Documentation**: Run validation to ensure all required documents are present
+  - [x] Run: `npm run validate:release-docs 0.9.1`
 - [ ] **Review Documentation**: Review documentation for completeness and accuracy
   - [ ] Check all examples work correctly
   - [ ] Verify migration guides are accurate
@@ -80,12 +80,12 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 
 #### Git Operations
 
-- [ ] **Commit Changes**: Commit all release-related changes
-  - [ ] Commit: Version bump and documentation updates
-  - [ ] Message: `chore: prepare release v0.9.1`
-- [ ] **Create Release Branch**: Create a release branch for the version
-  - [ ] Create: `release/v0.9.1` branch
-  - [ ] Push: `git push origin release/v0.9.1`
+- [x] **Commit Changes**: Commit all release-related changes
+  - [x] Commit: Version bump and documentation updates
+  - [x] Message: `chore: prepare release v0.9.1`
+- [x] **Create Release Branch**: Create a release branch for the version
+  - [x] Create: `release/v0.9.1` branch
+  - [x] Push: `git push origin release/v0.9.1`
 
 #### Package Publishing
 
