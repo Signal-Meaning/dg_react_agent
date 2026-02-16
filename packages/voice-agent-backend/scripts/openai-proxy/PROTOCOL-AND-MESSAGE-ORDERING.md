@@ -39,8 +39,9 @@ So: client sends **text** (JSON) and **binary** (PCM). The proxy never forwards 
 ### 2.2 First message: Settings → session.update
 
 1. Client sends **Settings** (text, JSON).
-2. Proxy sends **one** `session.update` to upstream (translated via `mapSettingsToSessionUpdate`). Any duplicate Settings (e.g. on reconnect) do **not** trigger a second `session.update`; the proxy sends `SettingsApplied` immediately so the client does not block.
-3. Proxy stores context messages (from `Settings.agent.context.messages`) and optional greeting (`Settings.agent.greeting`) for use **after** `session.updated`.
+2. Proxy sends **one** `session.update` to upstream (translated via `mapSettingsToSessionUpdate`) **only when the upstream has no active response** (Issue #459). If a response is in progress (e.g. after `response.create` and before `response.output_text.done` or `response.output_audio.done`), the proxy does **not** send `session.update`; it sends `SettingsApplied` to the client so the client does not block. This avoids OpenAI returning `conversation_already_has_active_response`.
+3. Any duplicate Settings (e.g. on reconnect) do **not** trigger a second `session.update`; the proxy sends `SettingsApplied` immediately.
+4. Proxy stores context messages (from `Settings.agent.context.messages`) and optional greeting (`Settings.agent.greeting`) for use **after** `session.updated`.
 
 ### 2.3 Upstream: session.created vs session.updated
 
@@ -69,7 +70,7 @@ This is the single source of truth for when audio may be sent. Integration tests
 
 | Client message (text) | Proxy action |
 |------------------------|--------------|
-| **Settings** | Map to `session.update`; send to upstream once per connection. Store context and greeting. On duplicate Settings, send `SettingsApplied` only (no second `session.update`). |
+| **Settings** | Map to `session.update`; send to upstream once per connection **only when no response is active** (Issue #459). If a response is in progress, send `SettingsApplied` only (no `session.update`). On duplicate Settings, send `SettingsApplied` only (no second `session.update`). Store context and greeting when session is updated. |
 | **InjectUserMessage** | Map to `conversation.item.create` (user, `input_text`); send to upstream. Set `pendingItemAddedBeforeResponseCreate = 1`. Send **user echo** (`ConversationText` role `user`) to client. Send `response.create` only after upstream confirms the item (see §4). |
 | **FunctionCallResponse** | Map to `conversation.item.create` (function_call_output); send to upstream, then send `response.create` immediately. |
 | **Other JSON** | Forward to upstream as-is (text). |

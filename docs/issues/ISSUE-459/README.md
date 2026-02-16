@@ -16,11 +16,11 @@ When using the **OpenAI proxy** path, the OpenAI Realtime API returns **`convers
 
 ## Acceptance Criteria
 
-- [ ] **Root cause identified** – Code paths that send session/config updates (e.g. Settings → `session.update`) are located in component and/or voice-agent-backend (OpenAI proxy).
-- [ ] **Gating implemented** – Session/config updates are not sent while the OpenAI Realtime API has an active response in progress.
-- [x] **Tests added/updated** – Integration test added in `tests/integration/openai-proxy-integration.test.ts`; red confirmed (Phase 2). **TDD:** Phase 3 (implement gating) next; see [TRACKING.md](./TRACKING.md#tdd-workflow-mandatory-order).
-- [ ] **No regression** – Existing tests (mock and, where applicable, real-API) still pass.
-- [ ] **Docs updated** – This README and [TRACKING.md](./TRACKING.md) updated as work progresses; any new behavior or constraints documented where appropriate.
+- [x] **Root cause identified** – Code paths located in voice-agent-backend (OpenAI proxy); see [INVESTIGATION.md](./INVESTIGATION.md).
+- [x] **Gating implemented** – Session/config updates not sent while API has active response (proxy server.ts).
+- [x] **Tests added/updated** – Integration test; TDD red then green; see [TRACKING.md](./TRACKING.md#tdd-workflow-mandatory-order).
+- [x] **No regression** – Lint, test:mock, openai-proxy-integration pass. E2E: OpenAI proxy subset (`openai-proxy-e2e`, `openai-inject-connection-stability`) or `test-app`: `npm run test:e2e:openai`; full E2E only per release checklist.
+- [x] **Docs updated** – README, TRACKING, INVESTIGATION, [PROTOCOL-AND-MESSAGE-ORDERING.md](../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md).
 - [ ] **Issue closed** – #459 closed with resolution; closure comment links to this folder.
 
 ---
@@ -32,9 +32,9 @@ When using the **OpenAI proxy** path, the OpenAI Realtime API returns **`convers
 | Root cause identified  | ✅ Phase 1 complete; see [INVESTIGATION.md](./INVESTIGATION.md) |
 | Gating implemented     | ✅ Phase 3 complete (proxy server.ts) |
 | Tests added/updated     | ✅ Phase 2 complete; integration test added, red confirmed |
-| No regression          | ✅ openai-proxy-integration suite passes |
-| Docs updated           | ✅ README + TRACKING + INVESTIGATION |
-| Issue closed           | ⬜ |
+| No regression          | ✅ Lint, test:mock, openai-proxy-integration; E2E: OpenAI proxy subset (see TRACKING) |
+| Docs updated           | ✅ README, TRACKING, INVESTIGATION, PROTOCOL-AND-MESSAGE-ORDERING |
+| Issue closed           | ⬜ Phase 5 |
 
 ---
 

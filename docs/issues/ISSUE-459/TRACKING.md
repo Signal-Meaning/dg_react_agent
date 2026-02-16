@@ -64,10 +64,10 @@ For this issue:
 
 | Step | Status |
 |------|--------|
-| Run full test suite (lint, test:mock, E2E in proxy mode) – no regressions | ⬜ |
-| If real-API tests exist for OpenAI proxy/function-call flow, run and confirm no `conversation_already_has_active_response` | ⬜ |
-| Document any new behavior or constraints (e.g. in API-REFERENCE, BACKEND-PROXY, or this folder) | ⬜ |
-| **Update README:** All acceptance criteria checked; status table updated | ⬜ |
+| Run full test suite (lint, test:mock, E2E in proxy mode) – no regressions | ✅ Lint passed. test:mock passed (96 suites, 922 tests). openai-proxy-integration suite (39 tests) passed. **E2E:** For this fix, run the **OpenAI proxy E2E subset** only (not the full suite). From repo root: `USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e openai-inject-connection-stability`. From test-app: `npm run test:e2e:openai`. Full E2E (`USE_PROXY_MODE=true npm run test:e2e`) only when needed per release checklist. |
+| If real-API tests exist for OpenAI proxy/function-call flow, run and confirm no `conversation_already_has_active_response` | ⬜ Optional: when OPENAI_API_KEY available, run real-API integration/E2E; no code change required for this fix. |
+| Document any new behavior or constraints (e.g. in API-REFERENCE, BACKEND-PROXY, or this folder) | ✅ [PROTOCOL-AND-MESSAGE-ORDERING.md](../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) §2.2 and §3: session.update gated on no active response (Issue #459). |
+| **Update README:** All acceptance criteria checked; status table updated | ✅ |
 
 ---
 
