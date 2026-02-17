@@ -61,9 +61,8 @@ Patch release from branch `davidrmcgee/issue478`. Delivers:
 ### Git Operations
 
 - [x] **Commit release prep**: Version bump and release docs; message `chore: prepare release v0.9.6 (Issue #478)` — **done**
-- [ ] **Merge to main**: Open PR `davidrmcgee/issue478` → `main`; merge after review
-- [ ] **Create Release Branch**: Create `release/v0.9.6` from `main` (or from merged state), push: `git push origin release/v0.9.6`
-  - Or: `npm run release:issue 0.9.6 patch` (if script creates branch and issue; ensure root package.json is already 0.9.6)
+- [x] **Merge to main**: PR [#479](https://github.com/Signal-Meaning/dg_react_agent/pull/479) created; merged locally (conflicts in v0.9.6 release docs resolved: combined #473/#475 and #478); `main` pushed.
+- [x] **Create Release Branch**: `release/v0.9.6` created from `davidrmcgee/issue478`, then updated to match `main` (combined CHANGELOG/RELEASE-NOTES); pushed `origin/release/v0.9.6`.
 
 ### Package Publishing
 
@@ -85,8 +84,8 @@ Patch release from branch `davidrmcgee/issue478`. Delivers:
 
 ### Post-Release
 
-- [ ] **Merge to main via PR**: `release/v0.9.6` → `main` (do not push directly to main)
-- [ ] **Close #478** on GitHub with comment linking to `docs/issues/ISSUE-478/` and this checklist
+- [x] **Merge to main via PR**: N/A — `main` already contains release content (issue478 merged into main; `release/v0.9.6` fast-forwarded to main). No separate release→main PR needed.
+- [ ] **Close #478** on GitHub with comment linking to `docs/issues/ISSUE-478/` and this checklist (after GitHub release is created and CI publish succeeds)
 - [ ] **Announcement** (if applicable)
 
 ---
@@ -106,11 +105,11 @@ Patch release from branch `davidrmcgee/issue478`. Delivers:
 - [x] Lint and test:mock pass locally (and CI)
 - [x] E2E tests 6 and 6b pass in proxy mode
 - [x] Release docs created and validated (`npm run validate:release-docs 0.9.6`)
-- [ ] PR merged: `davidrmcgee/issue478` → `main`
-- [ ] Release branch `release/v0.9.6` created and pushed
-- [ ] GitHub release v0.9.6 created; CI published component package
-- [ ] PR merged: `release/v0.9.6` → `main`
-- [ ] #478 closed with link to this folder
+- [x] PR #479 merged: `davidrmcgee/issue478` → `main` (merged and pushed)
+- [x] Release branch `release/v0.9.6` created and pushed (in sync with main)
+- [ ] **Create GitHub release** v0.9.6 (tag `v0.9.6`, target `release/v0.9.6`) to trigger CI publish
+- [x] release/v0.9.6 and main in sync (no separate release→main PR needed)
+- [ ] #478 closed with link to this folder (after publish)
 
 ---
 
