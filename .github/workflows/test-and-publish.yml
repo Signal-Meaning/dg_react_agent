@@ -45,6 +45,9 @@ jobs:
         with:
           ref: ${{ inputs.branch || github.ref }}
 
+      - name: Run npm audit (fail on high/critical)
+        run: npm audit --audit-level=high
+
       - name: Install voice-agent-backend dependencies
         run: cd packages/voice-agent-backend && npm ci
 
