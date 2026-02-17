@@ -60,7 +60,7 @@ Patch release from branch `davidrmcgee/issue478`. Delivers:
 
 ### Git Operations
 
-- [ ] **Commit release prep**: Version bump and release docs; message e.g. `chore: prepare release v0.9.6 (Issue #478)`
+- [x] **Commit release prep**: Version bump and release docs; message `chore: prepare release v0.9.6 (Issue #478)` — **done**
 - [ ] **Merge to main**: Open PR `davidrmcgee/issue478` → `main`; merge after review
 - [ ] **Create Release Branch**: Create `release/v0.9.6` from `main` (or from merged state), push: `git push origin release/v0.9.6`
   - Or: `npm run release:issue 0.9.6 patch` (if script creates branch and issue; ensure root package.json is already 0.9.6)
