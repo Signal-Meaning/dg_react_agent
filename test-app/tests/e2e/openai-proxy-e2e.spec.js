@@ -45,6 +45,8 @@ import {
 import { loadAndSendAudioSample, loadAndSendAudioSampleAt24k, waitForVADEvents, CHUNK_20MS_16K_MONO } from './fixtures/audio-helpers.js';
 
 const AGENT_RESPONSE_TIMEOUT = 20000;
+/** Issue #478: function-call round-trip (backend + model reply) can exceed 20s; use longer wait for result content. */
+const FUNCTION_CALL_RESULT_TIMEOUT = 45000;
 
 test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   test.beforeEach(() => {
@@ -254,7 +256,10 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, "What time is it?");
     await waitForAgentResponseEnhanced(page, { timeout: AGENT_RESPONSE_TIMEOUT });
-    const response = await page.locator('[data-testid="agent-response"]').textContent();
+    // Issue #478: wait for the reply that presents the function result (not the greeting or "Function call: ...").
+    const agentResponse = page.locator('[data-testid="agent-response"]');
+    await expect(agentResponse).toHaveText(/UTC|\d{1,2}:\d{2}/, { timeout: FUNCTION_CALL_RESULT_TIMEOUT });
+    const response = await agentResponse.textContent();
     expect(response).toBeTruthy();
     expect(response).not.toBe('(Waiting for agent response...)');
     // Function-calling flow can surface transient upstream errors (e.g. tool call handling); allow up to 2 (Issue #420).
@@ -276,7 +281,10 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, 'What time is it?');
     await waitForAgentResponseEnhanced(page, { timeout: AGENT_RESPONSE_TIMEOUT });
-    const response = await page.locator('[data-testid="agent-response"]').textContent();
+    // Issue #478: wait for the reply that presents the function result (not the greeting or "Function call: ...").
+    const agentResponse = page.locator('[data-testid="agent-response"]');
+    await expect(agentResponse).toHaveText(/UTC|\d{1,2}:\d{2}/, { timeout: FUNCTION_CALL_RESULT_TIMEOUT });
+    const response = await agentResponse.textContent();
     expect(response).toBeTruthy();
     expect(response).not.toBe('(Waiting for agent response...)');
     // Partner scenario: no conversation_already_has_active_response; strict 0 errors.

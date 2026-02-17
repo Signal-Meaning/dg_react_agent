@@ -106,7 +106,7 @@ From `package.json`:
 ## Installation
 
 ```bash
-npm install @signal-meaning/voice-agent-react@v0.9.6
+npm install @signal-meaning/voice-agent-react@0.9.6
 ```
 
 ## Verification
