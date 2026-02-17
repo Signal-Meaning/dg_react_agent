@@ -35,4 +35,6 @@ Tests should assert **presentation** of the agent response:
 
 ## Tracking
 
-**Progress:** [TRACKING.md](./TRACKING.md) — checklist to add integration and E2E assertions for function-result content. Update this README and TRACKING when steps complete.
+**Progress:** [TRACKING.md](./TRACKING.md) — checklist to add integration and E2E assertions for function-result content.
+
+**Done:** Phase 1 (integration: assert assistant ConversationText includes 12:00 or UTC). Phase 2 (E2E: wait for agent-response to match /UTC|time/ then assert). Phase 3 in progress (full test run, then close #478).

@@ -1428,6 +1428,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    */
   (useRealAPIs ? it : it.skip)('Issue #470 real-API: function-call flow completes without conversation_already_has_active_response (USE_REAL_APIS=1)', (done) => {
     const errorsReceived: string[] = [];
+    const assistantContentAfterFunctionCall: string[] = [];
     let sentFunctionCallResponse = false;
     let receivedAssistantResponseAfterFunctionCall = false;
     let finished = false;
@@ -1527,8 +1528,19 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                 finish(new Error('Issue #470 regression: received conversation_already_has_active_response before assistant response'));
                 return;
               }
+              if (typeof msg.content === 'string') assistantContentAfterFunctionCall.push(msg.content);
               receivedAssistantResponseAfterFunctionCall = true;
-              setTimeout(() => finish(), 2000);
+              setTimeout(() => {
+                // Issue #478: assert the agent's reply presents the function result to the user (backend returns time 12:00, timezone UTC).
+                const includesFunctionResult = assistantContentAfterFunctionCall.some(
+                  (c) => c.includes('12:00') || c.includes('UTC'),
+                );
+                if (!includesFunctionResult) {
+                  finish(new Error(`Issue #478: assistant response did not include function result (12:00 or UTC). Received: ${assistantContentAfterFunctionCall.join(' | ')}`));
+                  return;
+                }
+                finish();
+              }, 2000);
             }
           } catch {
             // ignore non-JSON
