@@ -67,19 +67,16 @@ Patch release from branch `davidrmcgee/issue478`. Delivers:
 ### Package Publishing
 
 - [ ] **Publish via CI**
-  - [ ] Create GitHub release (tag `v0.9.6`, target `release/v0.9.6`)
+  - [x] GitHub release for v0.9.6 already exists (tag `v0.9.6`; created for prior Issue #475). Ensure release target is `release/v0.9.6` and points to commit with combined #473+#478 docs; re-run workflow if needed to publish from updated branch.
   - [ ] Monitor CI: test job (lint, test:mock, build, validate) then publish job
   - [ ] Verify root package in GitHub Packages (@signal-meaning/voice-agent-react@0.9.6)
-- [ ] **Tag**: Created with GitHub release (v0.9.6)
+- [x] **Tag**: v0.9.6 exists
 - [ ] **Verify Installation (optional):** Install @signal-meaning/voice-agent-react@0.9.6 and smoke test
 
 ### GitHub Release
 
-- [ ] **Create GitHub Release**
-  - Title: `Release v0.9.6`
-  - Description: Changelog / release notes (link to docs/releases/v0.9.6/ or paste summary)
-  - Tag: `v0.9.6`
-  - Target: `release/v0.9.6`
+- [x] **Create GitHub Release**
+  - Release v0.9.6 / tag `v0.9.6` already exists. If the release was created before this merge, edit the release to point to `release/v0.9.6` (latest) so it includes #478 and combined CHANGELOG/RELEASE-NOTES.
 - [ ] **Labels**: Add `release`, `v0.9.6` to release and/or release branch as per repo practice
 
 ### Post-Release
@@ -107,7 +104,7 @@ Patch release from branch `davidrmcgee/issue478`. Delivers:
 - [x] Release docs created and validated (`npm run validate:release-docs 0.9.6`)
 - [x] PR #479 merged: `davidrmcgee/issue478` → `main` (merged and pushed)
 - [x] Release branch `release/v0.9.6` created and pushed (in sync with main)
-- [ ] **Create GitHub release** v0.9.6 (tag `v0.9.6`, target `release/v0.9.6`) to trigger CI publish
+- [ ] **GitHub release** v0.9.6: tag exists; ensure release target is `release/v0.9.6` (with #478 + combined docs) and CI publish has run / re-run if needed
 - [x] release/v0.9.6 and main in sync (no separate release→main PR needed)
 - [ ] #478 closed with link to this folder (after publish)
 
