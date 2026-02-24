@@ -22,14 +22,14 @@
 - **When run with mock:** Test is skipped (useRealAPIs false).
 - **When run with real API:** `USE_REAL_APIS=1 OPENAI_API_KEY=... npm test -- tests/integration/openai-proxy-integration.test.ts --testNamePattern="Issue #480 real-API"` — expect **failure** (model ignores context, response does not contain "blue") until proxy is fixed.
 
-### 2. GREEN – Fix proxy (pending)
+### 2. GREEN – Fix proxy
 
-- Run real-API test to confirm RED.
-- Implement fix: e.g. if real API rejects/ignores client-sent assistant context items, send only user context items to upstream and put assistant context in instructions (or per API docs). Re-run test until it passes.
+- **Real-API run (this repo):** With `USE_REAL_APIS=1` and `OPENAI_API_KEY`, the Issue #480 real-API test **passed** (response included "blue"). So in this environment the proxy + real API appear to use context.
+- **Voice-commerce:** They still see the model ignoring prior context. So either (a) context is not reaching the proxy in their setup (e.g. Settings shape or timing), or (b) different model/instructions/region, or (c) need WebSocket trace to compare. No proxy code change was required to get GREEN locally; next step is to get a trace from voice-commerce or reproduce in a scenario that matches theirs.
 
-### 3. REFACTOR (pending)
+### 3. REFACTOR
 
-- Clean up proxy or tests as needed; ensure mock tests still pass.
+- No proxy code change; mock and real-API tests pass. Docs updated with real-API result and next steps for voice-commerce (trace / reproduce).
 
 ---
 
