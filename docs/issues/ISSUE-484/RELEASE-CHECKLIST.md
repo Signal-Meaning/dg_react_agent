@@ -21,8 +21,8 @@ This issue tracks the complete release process for version v0.9.7 of the Deepgra
 ### Pre-Release Preparation
 
 - [ ] **Code Review Complete**: All PRs merged and code reviewed
-- [ ] **Tests Passing**
-  - [ ] **Run what CI runs:** `npm run lint` then `npm run test:mock`
+- [x] **Tests Passing**
+  - [x] **Run what CI runs:** `npm run lint` then `npm run test:mock` — **passed**
   - [ ] Optionally full suite: `npm test`
   - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode**
     - [ ] Start backend: `cd test-app && npm run backend`
@@ -31,34 +31,31 @@ This issue tracks the complete release process for version v0.9.7 of the Deepgra
   - [ ] **⚠️ REQUIRED for proxy/API behavior releases:** When `OPENAI_API_KEY` is available:
     - [ ] Run: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
     - [ ] Verify: All in-scope tests pass against the real API; if keys not available, document the exception.
-- [ ] **Linting Clean**: `npm run lint`
-- [ ] **Documentation Updated**: All relevant documentation updated
-- [ ] **API Changes Documented**: Any API changes in API-REFERENCE.md evolution section
-- [ ] **Breaking Changes Documented**: Any breaking changes identified and documented
+- [x] **Linting Clean**: `npm run lint` — **no errors**
+- [x] **Documentation Updated**: Release checklist and release docs (this dir + docs/releases/v0.9.7)
+- [x] **API Changes Documented**: None (no API changes)
+- [x] **Breaking Changes Documented**: None
 
 ### Version Management
 
-- [ ] **Bump Version**: Root `package.json` → 0.9.7
-  - [ ] Run: `npm version patch` (or minor/major as appropriate)
-- [ ] **voice-agent-backend**: Bump only if releasing backend; otherwise leave at current version
+- [x] **Bump Version**: Root `package.json` → 0.9.7 — **done** (`npm version patch --no-git-tag-version`)
+- [x] **voice-agent-backend**: Leave at current version (no backend release in this cut)
 - [ ] **Update Dependencies (optional):** `npm update`; review if needed
 
 ### Build and Package (CI performs build)
 
-- [ ] **Do not run build/package locally for release.** CI builds and validates on GitHub release creation.
+- [x] **Do not run build/package locally for release.** CI builds and validates on GitHub release creation.
 - [ ] **Optional local validation**: `npm run clean && npm run build && npm run validate` (do not commit dist/.tgz)
 
 ### Documentation
 
-- [ ] **Create Release Documentation**
-  - [ ] Create: `docs/releases/v0.9.7/` directory
-  - [ ] Create: `CHANGELOG.md` (Keep a Changelog format)
-  - [ ] Create: `MIGRATION.md` if there are breaking changes
-  - [ ] Create: `NEW-FEATURES.md` for new features
-  - [ ] Create: `API-CHANGES.md` for API changes
-  - [ ] Create: `EXAMPLES.md` with usage examples
-  - [ ] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`) — replace vX.X.X and X.X.X with v0.9.7 and 0.9.7
-- [ ] **Validate Documentation**: `npm run validate:release-docs 0.9.7`
+- [x] **Create Release Documentation**
+  - [x] Create: `docs/releases/v0.9.7/` directory
+  - [x] Create: `CHANGELOG.md` (Keep a Changelog format)
+  - [x] Create: `RELEASE-NOTES.md`
+  - [x] Create: `PACKAGE-STRUCTURE.md` from template (v0.9.7)
+  - [ ] MIGRATION.md / NEW-FEATURES.md / API-CHANGES.md / EXAMPLES.md — not required for this patch
+- [x] **Validate Documentation**: `npm run validate:release-docs 0.9.7` — **passed**
 - [ ] **Review Documentation**: Completeness, links, typos
 
 ### Git Operations
@@ -92,9 +89,9 @@ This issue tracks the complete release process for version v0.9.7 of the Deepgra
 
 ### Completion Criteria
 
-- [ ] Lint and test:mock pass locally (and CI)
+- [x] Lint and test:mock pass locally (and CI)
 - [ ] E2E tests pass in proxy mode (and real-API when required for proxy/API releases)
-- [ ] Release docs created and validated (`npm run validate:release-docs 0.9.7`)
+- [x] Release docs created and validated (`npm run validate:release-docs 0.9.7`)
 - [ ] Feature branch merged to main via PR
 - [ ] Release branch `release/v0.9.7` created and pushed
 - [ ] GitHub release v0.9.7 created; CI publish succeeded
