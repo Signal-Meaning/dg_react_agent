@@ -7,7 +7,11 @@ All changes in this release are documented here. [Keep a Changelog](https://keep
 
 ## Added
 
-- **Issue #484:** Release v0.9.7 preparation; release checklist and documentation in `docs/issues/ISSUE-484/`. Update this changelog with any additional changes before publishing.
+- **Issue #484:** Release v0.9.7 preparation; release checklist and documentation in `docs/issues/ISSUE-484/`.
+
+## Fixed
+
+- **npm audit:** Resolved high (minimatch ReDoS) and moderate (ajv ReDoS) findings via `npm audit fix` so CI and consumers pass `npm audit --audit-level=high`.
 
 ## Backward Compatibility
 

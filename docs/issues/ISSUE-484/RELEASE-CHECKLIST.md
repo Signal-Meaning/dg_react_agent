@@ -60,23 +60,23 @@ This issue tracks the complete release process for version v0.9.7 of the Deepgra
 
 ### Git Operations
 
-- [ ] **Commit release prep**: Version bump and release docs; message `chore: prepare release v0.9.7 (Issue #484)`
-- [ ] **Merge to main**: Open PR from this branch to `main`; get review/approval; merge
-- [ ] **Create Release Branch**: Create `release/v0.9.7`, push: `git push origin release/v0.9.7`
+- [x] **Commit release prep**: Version bump and release docs; message `chore: prepare release v0.9.7 (Issue #484)` — **done**
+- [ ] **Merge to main**: Open PR from this branch (or release/v0.9.7) to `main`; get review/approval; merge
+- [x] **Create Release Branch**: Create `release/v0.9.7`, push — **done** (includes npm audit fix commit)
 
 ### Package Publishing
 
-- [ ] **Publish via CI**
-  - [ ] **Version must be bumped** in root `package.json` (and backend if applicable) and committed on the release branch before creating the GitHub release
-  - [ ] Create GitHub release to trigger `.github/workflows/test-and-publish.yml`
-  - [ ] Monitor CI: test job (lint, test:mock, build, validate) then publish job
-  - [ ] Verify root package in GitHub Packages (@signal-meaning/voice-agent-react@0.9.7)
-- [ ] **Tag Release** (after publish succeeds): `git tag v0.9.7` then `git push origin v0.9.7`
+- [x] **Publish via CI**
+  - [x] Version bumped and committed on release branch (incl. npm audit fix for minimatch/ajv)
+  - [x] GitHub release created to trigger `.github/workflows/test-and-publish.yml`
+  - [x] CI: test job then publish job — **both passed** (run 22373611664)
+  - [x] Root package and voice-agent-backend published to GitHub Packages
+- [x] **Tag**: v0.9.7 created with release
 - [ ] **Verify Installation (optional):** Install @signal-meaning/voice-agent-react@0.9.7 and smoke test
 
 ### GitHub Release
 
-- [ ] **Create GitHub Release**: Title `Release v0.9.7`; description from CHANGELOG; tag `v0.9.7`; target `release/v0.9.7` or `main`
+- [x] **Create GitHub Release**: Title `Release v0.9.7`; tag `v0.9.7`; target `release/v0.9.7` — **done**
 - [ ] **Labels**: Add `release`, `v0.9.7` to release and/or release branch as per repo practice
 
 ### Post-Release
@@ -93,9 +93,9 @@ This issue tracks the complete release process for version v0.9.7 of the Deepgra
 - [ ] E2E tests pass in proxy mode (and real-API when required for proxy/API releases)
 - [x] Release docs created and validated (`npm run validate:release-docs 0.9.7`)
 - [ ] Feature branch merged to main via PR
-- [ ] Release branch `release/v0.9.7` created and pushed
-- [ ] GitHub release v0.9.7 created; CI publish succeeded
-- [ ] Tag v0.9.7 pushed
+- [x] Release branch `release/v0.9.7` created and pushed
+- [x] GitHub release v0.9.7 created; CI publish succeeded
+- [x] Tag v0.9.7 created with release
 - [ ] Release branch merged to main via PR
 - [ ] #484 closed with link to this folder
 
