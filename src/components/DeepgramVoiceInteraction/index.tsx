@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useReducer, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useReducer, useRef, useState } from 'react';
 import {
   AgentState,
   AgentOptions,
@@ -444,6 +444,9 @@ function DeepgramVoiceInteraction(
     props.onIdleTimeoutActiveChange,
     effectiveIdleTimeoutMs
   );
+  const notifyIdleTimeoutUtteranceEnd = useCallback(() => {
+    handleUtteranceEnd();
+  }, [handleUtteranceEnd]);
 
   // Initialize agent state service
   const agentStateServiceRef = useRef<AgentStateService | null>(null);
@@ -1778,7 +1781,7 @@ function DeepgramVoiceInteraction(
       // than USER_STOPPED_SPEAKING events
       
       // Notify idle timeout service about UtteranceEnd
-      handleUtteranceEnd();
+      notifyIdleTimeoutUtteranceEnd();
       return;
     }
     
@@ -2658,7 +2661,7 @@ function DeepgramVoiceInteraction(
       agentStateServiceRef.current?.handleUserStoppedSpeaking();
       
       // Notify idle timeout service about UtteranceEnd
-      handleUtteranceEnd();
+      notifyIdleTimeoutUtteranceEnd();
       return;
     }
 

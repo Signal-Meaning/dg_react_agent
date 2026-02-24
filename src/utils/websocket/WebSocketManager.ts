@@ -4,6 +4,9 @@ import { AgentResponseType } from '../../types/agent';
 import { functionCallLogger } from '../function-call-logger';
 import { getLogger, type Logger } from '../logger';
 
+/** Message types that indicate agent activity for idle timeout (Issue #482). */
+const AGENT_ACTIVITY_MESSAGE_TYPES = ['AgentThinking', 'AgentStartedSpeaking', 'AgentAudioDone'] as const;
+
 /**
  * Event types emitted by the WebSocketManager
  */
@@ -676,9 +679,7 @@ export class WebSocketManager {
       // Agent activity that should keep connection alive
       // Note: These are handled by agent state changes, but we keep them here
       // as a fallback in case state hasn't updated yet
-      const agentActivityMessages = ['AgentThinking', 'AgentStartedSpeaking', 'AgentAudioDone']; // Agent responding
-      
-      if (agentActivityMessages.includes(data.type)) {
+      if (AGENT_ACTIVITY_MESSAGE_TYPES.includes(data.type as (typeof AGENT_ACTIVITY_MESSAGE_TYPES)[number])) {
         this.options.onMeaningfulActivity?.(data.type);
         return true;
       }

@@ -149,13 +149,13 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 | **session.created** | No message to client. Log only. Do not inject context or greeting. |
 | **session.updated** | Send context items to upstream (if any); send **SettingsApplied** (text); send greeting as **ConversationText** (text) if configured; no greeting to upstream. |
 | **conversation.item.created** / **.added** / **.done** | Decrement pending-item counter; when 0, send `response.create` to upstream. Forward event to client as **text**. |
-| **response.output_text.done** | Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream; map to **ConversationText** (assistant); send as **text**. |
+| **response.output_text.done** | Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream. **Issue #482:** Send **AgentStartedSpeaking** (if not yet sent for this response), then **ConversationText** (assistant), then **AgentAudioDone**; flush any buffered idle_timeout Error after. Send as **text**. |
 | **response.done** | Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream (Issue #470 fallback). No client message. |
 | **response.output_audio_transcript.done** | Map to **ConversationText** (assistant); send as **text**. |
 | **response.function_call_arguments.done** | Map to **FunctionCallRequest** and **ConversationText** (assistant); send both as **text**. |
-| **response.output_audio.delta** | Decode base64 to PCM; send **binary** (raw PCM) to client only. Do not send as JSON. |
-| **response.output_audio.done** | No message to client (playback is driven by chunks). Optional: boundary debug logging. |
-| **error** | Map to **Error** (component shape); send as **text**. **Expected closures** (not treated as errors): (1) [Session max duration (60 min)](#38-session-maximum-duration-60-minutes-and-expected-closure) → log INFO, code `session_max_duration`. (2) [Idle timeout](#39-idle-timeout-expected-closure-not-an-error) (message "The server had an error while processing your request") → log INFO, code `idle_timeout`. Client treats both as normal closure (no error surfaced). |
+| **response.output_audio.delta** | **Issue #482:** If first output for this response, send **AgentStartedSpeaking** (text). Decode base64 to PCM; send **binary** (raw PCM) to client. Do not send as JSON. |
+| **response.output_audio.done** | **Issue #482:** Send **AgentAudioDone** (text). No other client message (playback is driven by chunks). Optional: boundary debug logging. |
+| **error** | Map to **Error** (component shape). **Issue #482:** If idle_timeout and response is in progress, **buffer** the Error and send after the next `response.output_text.done` (so client receives ConversationText before Error). Otherwise send as **text** immediately. **Expected closures** (not treated as errors): (1) [Session max duration (60 min)](#38-session-maximum-duration-60-minutes-and-expected-closure) → log INFO, code `session_max_duration`. (2) [Idle timeout](#39-idle-timeout-expected-closure-not-an-error) → log INFO, code `idle_timeout`. Client treats both as normal closure (no error surfaced). |
 | **input_audio_buffer.speech_started** / **speech_stopped** (and transcript if available) | Map to component transcript/VAD contract (**UserStartedSpeaking**, **UtteranceEnd**, etc.). Full mapping spec: [docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md](../../docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md) §2.1. Implemented in `server.ts`. |
 | **Any other upstream event** | Forward to client as **text** (same JSON). |
 
@@ -168,8 +168,10 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 | SettingsApplied | Text | After session.updated |
 | ConversationText (user) | Text | After InjectUserMessage (echo) |
 | ConversationText (assistant) | Text | From output_text.done, output_audio_transcript.done, function_call_arguments.done, or greeting |
+| AgentStartedSpeaking | Text | Issue #482: before first response output (first output_audio.delta or before ConversationText from output_text.done) so component sees "agent active" and does not fire client idle timeout |
+| AgentAudioDone | Text | Issue #482: on response.output_audio.done or after ConversationText from response.output_text.done so component sees response complete |
 | FunctionCallRequest | Text | From response.function_call_arguments.done |
-| Error | Text | From upstream error (expected closures `idle_timeout` / `session_max_duration` sent with that code; client treats as normal closure) |
+| Error | Text | From upstream error; Issue #482: idle_timeout may be buffered until after ConversationText when response in progress (expected closures; client treats as normal closure) |
 | (binary PCM) | Binary | From response.output_audio.delta only |
 | (other) | Text | Forwarded upstream events (e.g. conversation.item.added) |
 
