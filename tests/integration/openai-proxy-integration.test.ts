@@ -2629,6 +2629,117 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
+   * Issue #482 TDD (CAUSE-INVESTIGATION): Proxy must send AgentStartedSpeaking so the component sees "agent active"
+   * and does not fire client idle timeout. Client must receive AgentStartedSpeaking before ConversationText
+   * (assistant) for the same turn.
+   */
+  itMockOnly('Issue #482 TDD: client receives AgentStartedSpeaking before ConversationText (assistant) for same turn', (done) => {
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const received: Array<{ type: string; role?: string }> = [];
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
+        if (msg.type) {
+          received.push({ type: msg.type, role: msg.role });
+          if (msg.type === 'SettingsApplied') {
+            client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hi' }));
+          }
+          const startedIdx = received.findIndex((m) => m.type === 'AgentStartedSpeaking');
+          const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+          if (startedIdx >= 0 && ctIdx >= 0) {
+            expect(startedIdx).toBeLessThan(ctIdx);
+            finish();
+          }
+        }
+      } catch {
+        // ignore
+      }
+    });
+    setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      const startedIdx = received.findIndex((m) => m.type === 'AgentStartedSpeaking');
+      const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+      try {
+        expect(received.some((m) => m.type === 'AgentStartedSpeaking')).toBe(true);
+        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
+        expect(startedIdx).toBeLessThan(ctIdx);
+      } catch (e) {
+        done(e as Error);
+        return;
+      }
+      client.close();
+      done();
+    }, 5000);
+    client.on('error', (err) => finish(err));
+  }, 8000);
+
+  /**
+   * Issue #482 TDD (CAUSE-INVESTIGATION): Proxy must send AgentAudioDone when response completes so the
+   * component can treat agent output as complete (idle timeout sees "agent produced output").
+   */
+  itMockOnly('Issue #482 TDD: client receives AgentAudioDone when response completes (output_text.done)', (done) => {
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const received: Array<{ type: string; role?: string }> = [];
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
+        if (msg.type) {
+          received.push({ type: msg.type, role: msg.role });
+          if (msg.type === 'SettingsApplied') {
+            client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hi' }));
+          }
+          const hasCT = received.some((m) => m.type === 'ConversationText' && m.role === 'assistant');
+          const hasDone = received.some((m) => m.type === 'AgentAudioDone');
+          if (hasCT && hasDone) {
+            finish();
+          }
+        }
+      } catch (e) {
+        finish(e as Error);
+      }
+    });
+    setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      try {
+        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
+        expect(received.some((m) => m.type === 'AgentAudioDone')).toBe(true);
+      } catch (e) {
+        done(e as Error);
+        return;
+      }
+      client.close();
+      done();
+    }, 5000);
+    client.on('error', (err) => finish(err));
+  }, 8000);
+
+  /**
    * Issue #482 (voice-commerce #956): When upstream sends error (idle_timeout), the client must receive
    * ConversationText (assistant) before Error so the UI can show the assistant bubble before the connection
    * closes. Runs with real API first (USE_REAL_APIS=1), then with mock. Real API: send message, wait for

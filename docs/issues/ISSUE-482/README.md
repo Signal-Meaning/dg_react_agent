@@ -12,6 +12,8 @@ When using the **OpenAI proxy** (`wss://backend/api/openai/proxy`), the agent ma
 
 **Expected:** If the agent has finished speaking or completed a function call, the corresponding assistant message bubble should appear before or regardless of a subsequent `idle_timeout`/WebSocket close.
 
+**Objective (broader):** Identify why the component can **disconnect (idle timeout) despite the agent or user being active** — so that we can fix both “bubble never appears” and “timeout while active.” See **[CAUSE-INVESTIGATION.md](./CAUSE-INVESTIGATION.md)** for identified causes (proxy not sending agent-activity messages, ConversationText not resetting client timeout, server idle definition, message ordering).
+
 ---
 
 ## Observed sequence (voice-commerce)
