@@ -2,6 +2,8 @@
 
 **GitHub:** [#480](https://github.com/Signal-Meaning/dg_react_agent/issues/480)
 
+**Next step:** Request that voice-commerce capture and share a WebSocket trace (see README § "Request to voice-commerce" for draft text). No further proxy change until we see their trace or confirm context is missing.
+
 ---
 
 ## TDD workflow

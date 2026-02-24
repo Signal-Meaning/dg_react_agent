@@ -6,6 +6,12 @@
 
 ---
 
+## What we're doing
+
+We investigated why **voice-commerce** sees the model ignore prior context when using the OpenAI proxy, even though they pass `agentOptions.context` and our real-API integration test (same proxy, same API) shows context working. We requested a WebSocket trace; they shared it. **Finding:** in that trace no Settings message includes conversation history for the follow-up (only one Settings on connect, then two InjectUserMessages), so the proxy never received `agent.context.messages` for "how about green?". When a reconnection is made, the app must send context in Settings (pass `agentOptions.context` with the conversation history so the new connection gets it). No further trace request needed (see [Trace analysis](#trace-analysis-2026-02-24) below).
+
+---
+
 ## Summary
 
 When the app sends **Settings** with `context.messages` (conversation history), the **OpenAI translation proxy** must make that history available to the OpenAI model (e.g. via session/conversation items) so that follow-up user messages are contextualized without the app mutating message text.
@@ -49,11 +55,52 @@ The proxy sends both **user and assistant** context messages to upstream as `con
 
 ## Tasks / next steps
 
-- [ ] **WebSocket trace:** Confirm with voice-commerce (or capture ourselves) that the first message after connect is Settings with `agent.context.messages` and that the proxy sends `conversation.item.create` after `session.updated`.
-- [x] **Real-API integration test (TDD RED):** Added in `tests/integration/openai-proxy-integration.test.ts`: `Issue #480 real-API: Settings with context.messages + follow-up yields contextualized response (USE_REAL_APIS=1)`. Sends context (user + assistant re "favorite color is blue"), then "What is my favorite color?"; asserts response includes "blue". See [TRACKING.md](./TRACKING.md).
-- [x] **TDD GREEN:** Real-API test was run with `USE_REAL_APIS=1` and **passed** (response included "blue"). Proxy currently sends context; no change required for this test. Voice-commerce still sees context ignored — next: WebSocket trace from their side or reproduce their scenario.
-- [ ] **Fix or document:** From trace + real-API test, either fix the proxy or document the limitation and recommend prepending when using the proxy until supported.
-- [ ] **Document for partners:** How to pass `agentOptions.context` and that the proxy translates it so prepending is unnecessary once the fix is in place.
+- [x] **Request WebSocket trace from voice-commerce:** Done; trace received and analyzed (see [Trace analysis](#trace-analysis-2026-02-24) above).
+- [x] **Real-API integration test (TDD RED):** Added in `tests/integration/openai-proxy-integration.test.ts`. See [TRACKING.md](./TRACKING.md).
+- [x] **TDD GREEN:** Real-API test passed in our env; proxy sends context.
+- [x] **Trace analysis:** No Settings with `agent.context.messages` for the follow-up in this trace; single connection, no second Settings. Recommendation: when a reconnection is made, app must pass `agentOptions.context` with conversation history.
+- [ ] **Respond to voice-commerce:** Share the finding and recommendation (when reconnecting, pass context in Settings; or we support mid-session Settings with context if they need follow-ups without reconnecting).
+- [x] **Clarify docs and test-app:** Done. test-app README § "When is context sent to the backend?", "Basic Context Handling", "Reconnection Patterns", and "Important Notes"; PROTOCOL-AND-MESSAGE-ORDERING § 2.2; RUN-OPENAI-PROXY and BACKEND-PROXY README updated (see [Documentation and test-app clarity](#documentation-and-test-app-clarity)).
+- [ ] **Document for partners:** How to pass `agentOptions.context` and that when a reconnection is made, context must be in the Settings message the proxy receives.
+
+---
+
+## Trace analysis (2026-02-24)
+
+Voice-commerce shared a trace: **3 client-sent frames** on one connection.
+
+| # | Message            | Content |
+|---|--------------------|--------|
+| 1 | **Settings**       | Body truncated. Visible: `agent.think.prompt` (instructions mentioning "conversation context"), `agent.idleTimeoutMs`, `audio`, etc. **`agent.context` / `agent.context.messages` not visible** in the truncated payload. |
+| 2 | InjectUserMessage  | `"I need blue suede shoes"` |
+| 3 | InjectUserMessage  | `"[Context: User previously said: \"I need blue suede shoes\".] how about green?"` (prepend workaround) |
+
+**Finding:** In this trace, **no Settings message contains conversation history for the follow-up.** There is only one Settings (on connect). When the user sends "how about green?", the app does **not** send a second Settings with `agent.context.messages` containing the first turn (user "I need blue suede shoes" + assistant response). So the proxy never receives context for that follow-up; the model cannot see prior turns because the app never sent them in Settings.
+
+**Root cause (app/protocol):** Context is sent to the proxy only in a **Settings** message (with `agent.context.messages`), and Settings is sent when a connection is established. Our proxy forwards only the first Settings per connection (no second `session.update`). So on a single connection, the backend never receives updated context. The trace shows a single connection and no second Settings, so context was never provided for "how about green?". When a reconnection does happen, the app must pass `agentOptions.context` with the conversation history so the new connection’s first message is Settings with context.
+
+**Recommendation to voice-commerce:** When a reconnection is made (e.g. connection dropped, user returns to the app), the app **must** pass `agentOptions.context` with the conversation history so that the first message on the new connection is Settings with `agent.context.messages`. Otherwise the new connection has no context. If you need the model to see prior turns on a follow-up without reconnecting, we’d need to support and apply a mid-session Settings update with context (proxy + component change).
+
+**Optional:** If they can share the **full** first Settings frame (untruncated), we can confirm whether `agent.context` was present but empty on connect.
+
+---
+
+## Follow-up (optional)
+
+If voice-commerce can share the **full** first Settings frame (untruncated), we can confirm whether `agent.context` was present but empty on initial connect. Otherwise the next step is to **respond to voice-commerce** with the finding and recommendation (when reconnecting, pass context in Settings; or we implement mid-session Settings with context if they need follow-ups without reconnecting).
+
+---
+
+## Documentation and test-app clarity
+
+**Our documentation and test-app sample are not clear enough on when context is sent and how to retain it with the OpenAI proxy.**
+
+- **What we say today:** test-app README says "Pass conversation history through `agentOptions.context`. The component will automatically include it in the Settings message" and "Reconnection: … Context is preserved through agentOptions." We do **not** clearly state that:
+  1. **Settings is sent once per connection** (when the WebSocket connects). The backend receives context only from that first Settings message.
+  2. **If the app stays on one connection** and sends a follow-up (e.g. "how about green?" after "I need blue suede shoes"), the backend never receives an updated context — no second Settings is sent.
+  3. **When a reconnection is made** (e.g. connection dropped, user returns), the app **must** pass `agentOptions.context` with the conversation history so that the new connection’s first message is Settings with `agent.context.messages`. Our E2E context-retention tests demonstrate this: when they reconnect, they pass context so the new connection gets it.
+- **"Basic Context Handling" in test-app README** shows injecting context via `injectMessage` after start; that sends user messages, not context in Settings, and can be read as "inject history after connect" rather than "send history in the Settings that goes out on connect/reconnect."
+- **Recommendation:** Clarify in test-app README (and optionally in BACKEND-PROXY or OPENAI proxy docs) that: (1) context is sent to the backend only in the **first** Settings message per connection; (2) when a reconnection is made, the app must pass `agentOptions.context` with the conversation history so the new connection gets context; (3) if follow-ups on the same connection need to be contextualized without reconnecting, we’d need mid-session Settings support.
 
 ---
 

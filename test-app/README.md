@@ -92,46 +92,39 @@ The test-app demonstrates proper session management patterns that align with Dee
 
 The component enables applications to maintain conversation context across reconnections, but this is handled at the application layer, not within the component itself.
 
+#### When is context sent to the backend?
+
+Context is sent to the backend **only in the first Settings message per connection** — i.e. when the WebSocket connects and the component sends Settings. If the app stays on the same connection and sends a follow-up user message (e.g. "how about green?" after "I need blue suede shoes"), the backend does **not** receive an updated context; no second Settings is sent.
+
+**When a reconnection is made** (e.g. connection dropped, user returns): the app **must** pass `agentOptions.context` with the conversation history so that the new connection’s first message is Settings with `agent.context.messages`. Otherwise the new connection has no context. The test-app and E2E context-retention tests demonstrate this: when they reconnect, they pass context so the new connection gets it. See [Reconnection Patterns](#reconnection-patterns) below.
+
 #### Basic Context Handling
+
+Pass conversation history in `agentOptions.context` so the component includes it in the Settings message sent when the connection is established (or when you reconnect). The shape is `context: { messages: Array<{ type: 'History', role: 'user' | 'assistant', content: string }> }`.
 
 ```tsx
 function VoiceApp() {
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const voiceRef = useRef<DeepgramVoiceInteractionHandle>(null);
 
-  const startWithContext = async () => {
-    // Generate session ID if needed
-    const currentSessionId = sessionId || generateSessionId();
-    setSessionId(currentSessionId);
-    
-    // Start the component
-    await voiceRef.current?.start();
-    
-    // Inject conversation context if needed
-    if (conversationHistory.length > 0) {
-      conversationHistory.forEach(message => {
-        voiceRef.current?.injectMessage(message.role, message.content);
-      });
-    }
+  // Build agentOptions with context so the component sends it in Settings on connect/reconnect
+  const agentOptions = {
+    // ...other options...
+    context: conversationHistory.length > 0 ? {
+      messages: conversationHistory.map(m => ({
+        type: 'History',
+        role: m.role,
+        content: m.content
+      }))
+    } : undefined
   };
 
   const handleAgentUtterance = (utterance: LLMResponse) => {
-    // Store in application's session management
-    setConversationHistory(prev => [...prev, {
-      role: 'agent',
-      content: utterance.text,
-      timestamp: Date.now()
-    }]);
+    setConversationHistory(prev => [...prev, { role: 'agent', content: utterance.text, timestamp: Date.now() }]);
   };
 
   const handleUserMessage = (message: UserMessageResponse) => {
-    // Store in application's session management
-    setConversationHistory(prev => [...prev, {
-      role: 'user',
-      content: message.text,
-      timestamp: Date.now()
-    }]);
+    setConversationHistory(prev => [...prev, { role: 'user', content: message.text, timestamp: Date.now() }]);
   };
 
   return (
@@ -145,6 +138,8 @@ function VoiceApp() {
   );
 }
 ```
+
+**Note:** `injectMessage` sends a user or assistant message as a new turn; it does **not** put context into the Settings that the backend uses. Backend context must be provided via `agentOptions.context` and is sent only when the component sends Settings (on connect or when you reconnect).
 
 #### Advanced Session Management
 
@@ -203,24 +198,25 @@ const updateAgentContext = () => {
 
 ### Reconnection Patterns
 
-The test-app demonstrates proper reconnection patterns that preserve context:
+The test-app demonstrates proper reconnection patterns that preserve context. When a reconnection is made (e.g. after a disconnect or when the user returns), the backend receives context only in the **first** Settings message on the new connection. So you **must** pass `agentOptions.context` with the current conversation history when you call `start()` after a reconnect; otherwise the new connection has no context.
 
 ```tsx
 const handleReconnection = async () => {
-  // Stop current connection
   await voiceRef.current?.stop();
-  
-  // Context is automatically included in agentOptions.context
-  // Just restart the connection
+  // Ensure agentOptions.context includes current conversation history (from state/ref).
+  // On start(), the component sends Settings with that context to the backend.
   await voiceRef.current?.start();
 };
 ```
 
+The E2E tests `context-retention-agent-usage` and `context-retention-with-function-calling` follow this flow: they disconnect, then reconnect with updated `agentOptions.context`, so the new connection’s first message is Settings with context.
+
 ## Important Notes
 
 - **Session Management**: The component does not manage conversation history or session state internally. This is an application-layer concern.
-- **Context Preservation**: Pass conversation history through `agentOptions.context`. The component will automatically include it in the Settings message.
-- **Reconnection**: Always call `start()` after `stop()` to establish a new connection. Context is preserved through agentOptions.
+- **Context Preservation**: Pass conversation history through `agentOptions.context`. The component includes it in the **Settings** message. Settings is sent **once per connection** (when the connection is established).
+- **Follow-up messages and context**: On a single connection, the backend receives context only in the first Settings; it does not receive updated context for later messages. To have the model see prior turns without reconnecting would require mid-session Settings support (not currently implemented).
+- **When reconnecting**: Call `start()` after `stop()` to establish a new connection. You **must** pass `agentOptions.context` with the conversation history so the new connection’s first message is Settings with context.
 - **State Management**: Monitor connection states through the `onConnectionStateChange` callback.
 
 ## Testing Features
