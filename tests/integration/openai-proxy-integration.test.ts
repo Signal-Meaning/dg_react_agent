@@ -147,6 +147,12 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Asserts proxy sends response.create once when it receives response.done (fallback path).
    */
   let mockSendResponseDoneOnlyAfterFunctionCallOutput = false;
+  /**
+   * Issue #482 (voice-commerce #956): when true, on response.create mock sends error (idle_timeout) BEFORE
+   * response.output_text.done. Reproduces upstream closing before final assistant message; proxy must still
+   * deliver ConversationText (assistant) before Error so the UI can show the bubble.
+   */
+  let mockSendIdleTimeoutBeforeOutputTextDone = false;
   /** Protocol errors detected by mock (e.g. conversation.item.create before session.updated). Tests assert this is empty. */
   const protocolErrors: Error[] = [];
   /** Records conversation.item.create payloads for assertions */
@@ -385,6 +391,19 @@ describe('OpenAI proxy integration (Issue #381)', () => {
               }
               socket.send(JSON.stringify({ type: 'response.output_text.done', text: 'Hello from mock' }));
             };
+            // Issue #482: upstream sends idle_timeout before output_text.done (voice-commerce #956 scenario).
+            if (mockSendIdleTimeoutBeforeOutputTextDone) {
+              mockSendIdleTimeoutBeforeOutputTextDone = false;
+              socket.send(JSON.stringify({
+                type: 'error',
+                error: {
+                  message: 'The server had an error while processing your request. Sorry about that! Please contact us through our help center at help.openai.com if the error persists.',
+                  code: 'server_error',
+                },
+              }));
+              socket.send(JSON.stringify({ type: 'response.output_text.done', text: 'Hello from mock' }));
+              return;
+            }
             // Issue #462: send only output_audio.done first; send output_text.done after delay so test can send Settings in between.
             if (mockSendOnlyAudioDoneFirst) {
               mockSendOnlyAudioDoneFirst = false;
@@ -2607,6 +2626,129 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', done);
+  }, 8000);
+
+  /**
+   * Issue #482 (voice-commerce #956): When upstream sends error (idle_timeout), the client must receive
+   * ConversationText (assistant) before Error so the UI can show the assistant bubble before the connection
+   * closes. Runs with real API first (USE_REAL_APIS=1), then with mock. Real API: send message, wait for
+   * response and idle_timeout; assert order. Mock: sends error then output_text.done; same assertion.
+   */
+  (useRealAPIs ? it : it.skip)('Issue #482 real-API: client receives ConversationText (assistant) before Error (idle_timeout) (USE_REAL_APIS=1)', (done) => {
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const received: Array<{ type: string; role?: string; code?: string }> = [];
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Say hi briefly.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; code?: string };
+        if (msg.type) {
+          received.push({ type: msg.type, role: msg.role, code: msg.code });
+          if (msg.type === 'SettingsApplied') {
+            client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Hi' }));
+          }
+          const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === 'idle_timeout');
+          if (errIdx >= 0) {
+            const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+            try {
+              expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
+              expect(ctIdx).toBeLessThan(errIdx);
+            } catch (e) {
+              finish(e as Error);
+              return;
+            }
+            finish();
+          }
+        }
+      } catch {
+        // ignore
+      }
+    });
+    setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+      const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === 'idle_timeout');
+      try {
+        expect(errIdx).toBeGreaterThanOrEqual(0);
+        expect(ctIdx).toBeGreaterThanOrEqual(0);
+        expect(ctIdx).toBeLessThan(errIdx);
+      } catch (e) {
+        done(e as Error);
+        return;
+      }
+      client.close();
+      done();
+    }, 25000);
+    client.on('error', (err) => finish(err));
+  }, 30000);
+
+  /**
+   * Issue #482 mock: same assertion as real-API test. Mock sends error (idle_timeout) then response.output_text.done
+   * so proxy currently forwards Error first; test fails until proxy sends ConversationText before Error.
+   */
+  itMockOnly('Issue #482: client receives ConversationText (assistant) before Error (idle_timeout) when upstream sends error before output_text.done', (done) => {
+    mockSendIdleTimeoutBeforeOutputTextDone = true;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const received: Array<{ type: string; role?: string; code?: string }> = [];
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; code?: string };
+        if (msg.type) {
+          received.push({ type: msg.type, role: msg.role, code: msg.code });
+          if (msg.type === 'SettingsApplied') {
+            client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hi' }));
+          }
+          const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+          const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === 'idle_timeout');
+          if (ctIdx >= 0 && errIdx >= 0) {
+            expect(ctIdx).toBeLessThan(errIdx);
+            finish();
+          }
+        }
+      } catch {
+        // ignore
+      }
+    });
+    setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+      const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === 'idle_timeout');
+      try {
+        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
+        expect(received.some((m) => m.type === 'Error' && m.code === 'idle_timeout')).toBe(true);
+        expect(ctIdx).toBeLessThan(errIdx);
+      } catch (e) {
+        done(e as Error);
+        return;
+      }
+      client.close();
+      done();
+    }, 5000);
+    client.on('error', (err) => finish(err));
   }, 8000);
 
   /**
