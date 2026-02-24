@@ -33,6 +33,7 @@ import {
   mapContextMessageToConversationItemCreate,
   mapGreetingToConversationText,
   mapErrorToComponentError,
+  type ComponentError,
   isIdleTimeoutClosure,
   isSessionMaxDurationError,
   binaryToInputAudioBufferAppend,
@@ -156,11 +157,33 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     /** Issue #482: Have we sent AgentStartedSpeaking for the current response? So component sees "agent active" before ConversationText (avoids client idle timeout). Reset when response ends. */
     let hasSentAgentStartedSpeakingForCurrentResponse = false;
     /** Issue #482: Buffer idle_timeout Error and send after ConversationText so client can show assistant bubble before close. */
-    let pendingIdleTimeoutError: { type: 'Error'; description: string; code: string } | null = null;
+    let pendingIdleTimeoutError: ComponentError | null = null;
     /** Issue #414: TTS chunk boundary diagnostic (set OPENAI_PROXY_TTS_BOUNDARY_DEBUG=1 to log same format as test-app E2E). */
     let ttsChunkLengths: number[] = [];
     let lastTtsChunk: Buffer | null = null;
     const ttsBoundaryDebug = process.env.OPENAI_PROXY_TTS_BOUNDARY_DEBUG === '1';
+
+    /** Issue #482: Response lifecycle helpers so agent-activity and idle_timeout buffering stay DRY. */
+    const onResponseStarted = (): void => {
+      responseInProgress = true;
+      hasSentAgentStartedSpeakingForCurrentResponse = false;
+    };
+    const onResponseEnded = (): void => {
+      responseInProgress = false;
+      hasSentAgentStartedSpeakingForCurrentResponse = false;
+    };
+    const sendAgentStartedSpeakingIfNeeded = (): void => {
+      if (!hasSentAgentStartedSpeakingForCurrentResponse && clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(JSON.stringify({ type: 'AgentStartedSpeaking' }));
+        hasSentAgentStartedSpeakingForCurrentResponse = true;
+      }
+    };
+    const flushPendingIdleTimeoutError = (): void => {
+      if (pendingIdleTimeoutError && clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(JSON.stringify(pendingIdleTimeoutError));
+        pendingIdleTimeoutError = null;
+      }
+    };
 
     const scheduleAudioCommit = () => {
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
@@ -186,8 +209,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           });
           upstream.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
           upstream.send(JSON.stringify({ type: 'response.create' }));
-          responseInProgress = true;
-          hasSentAgentStartedSpeakingForCurrentResponse = false; // Issue #482: new response
+          onResponseStarted();
           hasPendingAudio = false;
           pendingAudioBytes = 0;
         }
@@ -437,14 +459,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // Issue #414: session is now configured for audio; send any append chunks queued before session.updated.
           flushPendingAudio();
         } else if (msg.type === 'response.output_text.done') {
-          responseInProgress = false;
-          hasSentAgentStartedSpeakingForCurrentResponse = false; // Issue #482: response ended
+          onResponseEnded();
           // Issue #462 / #470: After function_call_output we deferred response.create; send it now so the API can start the next turn.
           if (pendingResponseCreateAfterFunctionCallOutput) {
             pendingResponseCreateAfterFunctionCallOutput = false;
             upstream.send(JSON.stringify({ type: 'response.create' }));
-            responseInProgress = true;
-            hasSentAgentStartedSpeakingForCurrentResponse = false;
+            onResponseStarted();
           }
           const m = msg as { type: string; text?: string };
           emitLog({
@@ -453,19 +473,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             body: `upstream→client: ${msg.type}${m.text?.startsWith('Function call:') ? ' (transcript-like)' : ''}`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
-          // Issue #482: Send AgentStartedSpeaking before ConversationText so component sees "agent active" (avoids client idle timeout).
-          if (!hasSentAgentStartedSpeakingForCurrentResponse) {
-            clientWs.send(JSON.stringify({ type: 'AgentStartedSpeaking' }));
-            hasSentAgentStartedSpeakingForCurrentResponse = true;
-          }
+          sendAgentStartedSpeakingIfNeeded();
           const conversationText = mapOutputTextDoneToConversationText(msg as Parameters<typeof mapOutputTextDoneToConversationText>[0]);
           clientWs.send(JSON.stringify(conversationText));
           clientWs.send(JSON.stringify({ type: 'AgentAudioDone' }));
-          // Issue #482: Flush buffered idle_timeout Error so client receives ConversationText before Error.
-          if (pendingIdleTimeoutError && clientWs.readyState === WebSocket.OPEN) {
-            clientWs.send(JSON.stringify(pendingIdleTimeoutError));
-            pendingIdleTimeoutError = null;
-          }
+          flushPendingIdleTimeoutError();
         } else if (msg.type === 'response.output_audio_transcript.done') {
           const m = msg as { type: string; transcript?: string };
           emitLog({
@@ -485,11 +497,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             body: `upstream→client: ${msg.type} → sending FunctionCallRequest + ConversationText`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
-          // Issue #482: Send AgentStartedSpeaking before FunctionCallRequest so component sees "agent active" (same as other response outputs).
-          if (!hasSentAgentStartedSpeakingForCurrentResponse) {
-            clientWs.send(JSON.stringify({ type: 'AgentStartedSpeaking' }));
-            hasSentAgentStartedSpeakingForCurrentResponse = true;
-          }
+          sendAgentStartedSpeakingIfNeeded();
           const functionCallRequest = mapFunctionCallArgumentsDoneToFunctionCallRequest(
             msg as Parameters<typeof mapFunctionCallArgumentsDoneToFunctionCallRequest>[0]
           );
@@ -577,11 +585,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           if (delta && typeof delta === 'string') {
             const pcm = Buffer.from(delta, 'base64');
             if (pcm.length > 0) {
-              // Issue #482: Send AgentStartedSpeaking before first audio chunk so component sees "agent active".
-              if (!hasSentAgentStartedSpeakingForCurrentResponse) {
-                clientWs.send(JSON.stringify({ type: 'AgentStartedSpeaking' }));
-                hasSentAgentStartedSpeakingForCurrentResponse = true;
-              }
+              sendAgentStartedSpeakingIfNeeded();
               if (ttsBoundaryDebug && lastTtsChunk !== null) {
                 const bufA = lastTtsChunk;
                 const bufB = pcm;
@@ -625,13 +629,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         } else if (msg.type === 'response.done') {
           // Issue #470: API may send response.done to mark response complete (e.g. after function-call turn).
           // If we deferred response.create after function_call_output, send it now so the next turn can start.
-          responseInProgress = false;
-          hasSentAgentStartedSpeakingForCurrentResponse = false; // Issue #482: response ended
+          onResponseEnded();
           if (pendingResponseCreateAfterFunctionCallOutput) {
             pendingResponseCreateAfterFunctionCallOutput = false;
             upstream.send(JSON.stringify({ type: 'response.create' }));
-            responseInProgress = true;
-            hasSentAgentStartedSpeakingForCurrentResponse = false;
+            onResponseStarted();
           }
         } else if (msg.type === 'conversation.item.created' || msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
           // Issue #388 / #414: decrement the counter once per unique item; send response.create when all pending items are confirmed.
@@ -646,8 +648,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               if (pendingItemAddedBeforeResponseCreate === 0) {
                 pendingItemAckedIds.clear();
                 upstream.send(JSON.stringify({ type: 'response.create' }));
-                responseInProgress = true;
-                hasSentAgentStartedSpeakingForCurrentResponse = false; // Issue #482: new response
+                onResponseStarted();
               }
             } else if (!itemId) {
               // Fallback for events without item.id: decrement unconditionally (legacy behavior)
@@ -655,8 +656,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               if (pendingItemAddedBeforeResponseCreate === 0) {
                 pendingItemAckedIds.clear();
                 upstream.send(JSON.stringify({ type: 'response.create' }));
-                responseInProgress = true;
-                hasSentAgentStartedSpeakingForCurrentResponse = false; // Issue #482: new response
+                onResponseStarted();
               }
             }
           }
@@ -674,11 +674,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
 
     upstream.on('close', (code: number, reason?: Buffer) => {
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
-      // Issue #482: Flush buffered idle_timeout Error so client receives it before we close the client.
-      if (pendingIdleTimeoutError && clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(JSON.stringify(pendingIdleTimeoutError));
-        pendingIdleTimeoutError = null;
-      }
+      flushPendingIdleTimeoutError();
       // Issue #406: if upstream closed before we sent SettingsApplied, notify the client so the host sees a clear error instead of only "connection closed"
       if (!hasSentSettingsApplied && clientWs.readyState === WebSocket.OPEN) {
         const reasonStr = reason && reason.length > 0 ? reason.toString() : '';
