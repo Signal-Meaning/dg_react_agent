@@ -24,7 +24,6 @@ import {
   setupComponentAndConnect,
   simulateConnection,
   simulateConnectionClose,
-  waitForEventListener,
   waitForSettingsSent,
   MOCK_API_KEY,
   waitFor,
@@ -104,9 +103,14 @@ describe('onContextWarning Callback Tests (Issue #480)', () => {
   it('should NOT call onContextWarning when reconnecting with context (agentOptions.context.messages.length > 0)', async () => {
     const onContextWarning = jest.fn();
     const ref = React.createRef<DeepgramVoiceInteractionHandle>();
-    const agentOptions = createMockAgentOptions();
-    (agentOptions as any).context = {
-      messages: [{ role: 'user', content: 'Hello' }, { role: 'assistant', content: 'Hi there' }],
+    const agentOptions = {
+      ...createMockAgentOptions(),
+      context: {
+        messages: [
+          { type: 'History', role: 'user' as const, content: 'Hello' },
+          { type: 'History', role: 'assistant' as const, content: 'Hi there' },
+        ],
+      },
     };
 
     render(
