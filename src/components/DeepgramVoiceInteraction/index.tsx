@@ -138,6 +138,7 @@ function DeepgramVoiceInteraction(
     onAgentSpeaking,
     onAgentAudioChunk,
     onSettingsApplied,
+    onContextWarning,
     onFunctionCallRequest,
     debug,
     // Declarative props (Issue #305)
@@ -172,8 +173,8 @@ function DeepgramVoiceInteraction(
   // Issue #307: Fix closure issue where sendAgentSettings captures stale agentOptions
   const agentOptionsRef = useRef<typeof agentOptions>(agentOptions);
   
-  // Ref to track connection type immediately and synchronously
-  const isNewConnectionRef = useRef<boolean>(true);
+  // Set on 'connected' so sendAgentSettings (possibly async) and Welcome handler know first connection vs reconnection (Issue #480).
+  const isReconnectionRef = useRef<boolean>(false);
 
   // Track mount state to handle React StrictMode double-invocation
   // StrictMode will call cleanup then immediately re-run the effect
@@ -815,9 +816,10 @@ function DeepgramVoiceInteraction(
             log('Agent state:', event.state);
             if (event.state === 'connected') {
               logger.info('🔗 [Protocol] Agent WebSocket connected');
-              
+              const isReconnection = event.isReconnection ?? false;
+              isReconnectionRef.current = isReconnection;
               // Handle reconnection logic
-              if (event.isReconnection) {
+              if (isReconnection) {
                 log('Agent WebSocket reconnected - resetting greeting state');
                 dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
                 dispatch({ type: 'RESET_GREETING_STATE' });
@@ -1076,9 +1078,6 @@ function DeepgramVoiceInteraction(
     const previousMountId = mountIdRef.current;
     mountIdRef.current = currentMountId;
     isMountedRef.current = true;
-    
-    // Initialize connection type ref for first connection
-    isNewConnectionRef.current = true;
     
     // Check if we're in a CI environment or package import context
     const isCIEnvironment = typeof process !== 'undefined' && (process.env.CI === 'true' || process.env.NODE_ENV === 'test');
@@ -1823,6 +1822,12 @@ function DeepgramVoiceInteraction(
       }
       return;
     }
+
+    // Issue #480: On reconnection, warn if app did not provide context so the new connection has no prior conversation history
+    const hasConversationContext = (currentAgentOptions.context?.messages?.length ?? 0) > 0;
+    if (isReconnectionRef.current && !hasConversationContext) {
+      onContextWarning?.();
+    }
     
     // Record when settings were sent (but don't mark as applied until SettingsApplied is received)
     settingsSentTimeRef.current = Date.now();
@@ -2169,7 +2174,7 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'WELCOME_RECEIVED', received: true });
         
         // Only trigger greeting for new connections, not reconnections
-        if (isNewConnectionRef.current) {
+        if (!isReconnectionRef.current) {
           log('New connection - triggering greeting flow');
           dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: true });
         } else {

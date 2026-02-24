@@ -99,7 +99,7 @@ We provide **reference proxy code** and the **interface contract** (protocol, ev
 
 ## OpenAI proxy (translation layer)
 
-The test-app can use an **OpenAI Realtime** backend via a translation proxy in **packages/voice-agent-backend/scripts/openai-proxy/** (Issue #445). How to run it and run tests: **[RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md)**. Protocol and message ordering (client ↔ proxy ↔ OpenAI): [PROTOCOL-AND-MESSAGE-ORDERING.md](../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md). The same component–proxy contract (e.g. SettingsApplied before first message) applies; see [Component–Proxy Contract](./COMPONENT-PROXY-CONTRACT.md).
+The test-app can use an **OpenAI Realtime** backend via a translation proxy in **packages/voice-agent-backend/scripts/openai-proxy/** (Issue #445). How to run it and run tests: **[RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md)**. Protocol and message ordering (client ↔ proxy ↔ OpenAI): [PROTOCOL-AND-MESSAGE-ORDERING.md](../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md). The same component–proxy contract (e.g. SettingsApplied before first message) applies; see [Component–Proxy Contract](./COMPONENT-PROXY-CONTRACT.md). **Context:** The proxy receives context only in the first Settings per connection. When a reconnection is made, the app must pass `agentOptions.context` with the conversation history so the new connection’s first message is Settings with context. See PROTOCOL-AND-MESSAGE-ORDERING § 2.2 and test-app README § "When is context sent to the backend?".
 
 ## Related Documentation
 

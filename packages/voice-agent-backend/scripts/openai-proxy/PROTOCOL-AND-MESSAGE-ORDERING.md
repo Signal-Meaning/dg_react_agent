@@ -43,6 +43,8 @@ So: client sends **text** (JSON) and **binary** (PCM). The proxy never forwards 
 3. Any duplicate Settings (e.g. on reconnect) do **not** trigger a second `session.update`; the proxy sends `SettingsApplied` immediately.
 4. Proxy stores context messages (from `Settings.agent.context.messages`) and optional greeting (`Settings.agent.greeting`) for use **after** `session.updated`.
 
+**Context and reconnection:** The client sends **Settings** only when a connection is established (or when the component (re)connects). The proxy does **not** receive a second Settings mid-session for the same connection (and would not send a second `session.update` if it did). So on a single connection, the model only has whatever context was in the **first** Settings. **When** a reconnection is made (e.g. connection dropped, user returns), the app **must** pass `agentOptions.context` with the conversation history so that the new connection’s first message is Settings with `agent.context.messages`; otherwise the new connection has no context. See [Issue #480](https://github.com/Signal-Meaning/dg_react_agent/issues/480) and test-app README § "When is context sent to the backend?" and "Reconnection Patterns".
+
 ### 2.3 Upstream: session.created vs session.updated
 
 - **session.created** – Sent by OpenAI **immediately** after the WebSocket connects, **before** the client’s `session.update` is processed. The proxy **does not** send `SettingsApplied`, inject context, or inject greeting on `session.created`. Doing so would send `conversation.item.create` to an unconfigured session and cause upstream errors (Issue #414).

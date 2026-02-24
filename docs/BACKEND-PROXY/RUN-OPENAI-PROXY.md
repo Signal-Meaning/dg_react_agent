@@ -109,6 +109,7 @@ HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai npx playwright tes
 ```
 
 - Passes when the real API sends `response.function_call_arguments.done`; asserts client receives FunctionCallRequest and handler is invoked, then context retained after reconnect.
+- **Context when reconnecting:** The proxy receives context only in the first Settings per connection. When a reconnection is made, the app must pass `agentOptions.context` with the conversation history so the new connection’s first message is Settings with context. See [PROTOCOL-AND-MESSAGE-ORDERING.md](../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) § 2.2 and test-app README § "When is context sent to the backend?".
 - Long timeout (120s); run with proxy restarted if you previously saw only ConversationText (transcript-only).
 
 ### Single test by title
