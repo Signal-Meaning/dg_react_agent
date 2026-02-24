@@ -138,6 +138,7 @@ function DeepgramVoiceInteraction(
     onAgentSpeaking,
     onAgentAudioChunk,
     onSettingsApplied,
+    onContextWarning,
     onFunctionCallRequest,
     debug,
     // Declarative props (Issue #305)
@@ -174,6 +175,8 @@ function DeepgramVoiceInteraction(
   
   // Ref to track connection type immediately and synchronously
   const isNewConnectionRef = useRef<boolean>(true);
+  // Ref set on 'connected' so sendAgentSettings (possibly async) knows if this is a reconnection (Issue #480 context warning)
+  const isReconnectionRef = useRef<boolean>(false);
 
   // Track mount state to handle React StrictMode double-invocation
   // StrictMode will call cleanup then immediately re-run the effect
@@ -815,9 +818,11 @@ function DeepgramVoiceInteraction(
             log('Agent state:', event.state);
             if (event.state === 'connected') {
               logger.info('🔗 [Protocol] Agent WebSocket connected');
-              
+              const isReconnection = event.isReconnection ?? false;
+              isReconnectionRef.current = isReconnection;
+              isNewConnectionRef.current = !isReconnection;
               // Handle reconnection logic
-              if (event.isReconnection) {
+              if (isReconnection) {
                 log('Agent WebSocket reconnected - resetting greeting state');
                 dispatch({ type: 'CONNECTION_TYPE_CHANGE', isNew: false });
                 dispatch({ type: 'RESET_GREETING_STATE' });
@@ -1822,6 +1827,14 @@ function DeepgramVoiceInteraction(
         logConsole('debug','🔧 [sendAgentSettings] globalSettingsSent:', windowWithGlobals.globalSettingsSent);
       }
       return;
+    }
+
+    // Issue #480: On reconnection, warn if app did not provide context (conversation history) so the new connection has no prior context
+    if (isReconnectionRef.current) {
+      const hasContext = currentAgentOptions.context?.messages && currentAgentOptions.context.messages.length > 0;
+      if (!hasContext) {
+        onContextWarning?.();
+      }
     }
     
     // Record when settings were sent (but don't mark as applied until SettingsApplied is received)

@@ -195,6 +195,12 @@ export interface DeepgramVoiceInteractionProps {
    * for audio data processing. This replaces the need to poll internal state via getState().
    */
   onSettingsApplied?: () => void;
+
+  /**
+   * Called when the component sends Settings on a reconnection but agentOptions.context is missing or has no messages.
+   * The app can use this to warn the user or log that the new connection has no conversation context (Issue #480).
+   */
+  onContextWarning?: () => void;
   
   /**
    * Called when a client-side function call is requested by the agent.

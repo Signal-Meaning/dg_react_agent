@@ -76,19 +76,39 @@ export async function waitForEventListener(
 
 /**
  * Simulate connection state change to 'connected'
+ * @param options.isReconnection - When true, event.isReconnection is set (Issue #480 context warning tests)
  */
 export async function simulateConnection(
   eventListener: ((event: any) => void) | undefined,
-  mockWebSocketManager?: MockWebSocketManager
+  mockWebSocketManager?: MockWebSocketManager,
+  options?: { isReconnection?: boolean }
 ): Promise<void> {
   if (eventListener) {
     await act(async () => {
-      eventListener({ type: 'state', state: 'connected' });
+      const event: { type: string; state: string; isReconnection?: boolean } = { type: 'state', state: 'connected' };
+      if (options?.isReconnection !== undefined) {
+        event.isReconnection = options.isReconnection;
+      }
+      eventListener(event);
     });
     // Ensure mock manager state is updated
     if (mockWebSocketManager) {
       mockWebSocketManager.getState.mockReturnValue('connected');
     }
+  }
+}
+
+/**
+ * Simulate connection close (resets hasSentSettingsRef / globalSettingsSent so next connect can send Settings again).
+ * Used for reconnection flows (e.g. Issue #480 onContextWarning tests).
+ */
+export async function simulateConnectionClose(
+  eventListener: ((event: any) => void) | undefined
+): Promise<void> {
+  if (eventListener) {
+    await act(async () => {
+      eventListener({ type: 'state', state: 'closed' });
+    });
   }
 }
 
