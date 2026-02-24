@@ -23,10 +23,10 @@ This issue tracks the complete release process for version v0.9.7 of the Deepgra
 - [ ] **Code Review Complete**: All PRs merged and code reviewed
 - [x] **Tests Passing**
   - [x] **Run what CI runs:** `npm run lint` then `npm run test:mock` — **passed**
-  - [ ] Optionally full suite: `npm test`
-  - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode**
+  - [x] Optionally full suite: `npm test` — **passed**
+  - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode** (run to completion before publish)
     - [ ] Start backend: `cd test-app && npm run backend`
-    - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e`
+    - [ ] Run: `USE_PROXY_MODE=true npm run test:e2e` (245 tests; allow ~10+ min)
     - [ ] Verify: All tests pass in proxy mode before proceeding
   - [ ] **⚠️ REQUIRED for proxy/API behavior releases:** When `OPENAI_API_KEY` is available:
     - [ ] Run: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
@@ -56,7 +56,7 @@ This issue tracks the complete release process for version v0.9.7 of the Deepgra
   - [x] Create: `PACKAGE-STRUCTURE.md` from template (v0.9.7)
   - [ ] MIGRATION.md / NEW-FEATURES.md / API-CHANGES.md / EXAMPLES.md — not required for this patch
 - [x] **Validate Documentation**: `npm run validate:release-docs 0.9.7` — **passed**
-- [ ] **Review Documentation**: Completeness, links, typos
+- [x] **Review Documentation**: Completeness, links, typos — **reviewed**
 
 ### Git Operations
 
