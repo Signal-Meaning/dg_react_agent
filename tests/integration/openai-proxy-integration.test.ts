@@ -1794,6 +1794,78 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
+   * Issue #480: Real-API test for context. Only runs with USE_REAL_APIS=1 and OPENAI_API_KEY.
+   * Sends Settings with agent.context.messages (user + assistant), then InjectUserMessage with
+   * a follow-up that only makes sense with context. Asserts the model's response is contextualized
+   * (includes "blue"). When the real API ignores context, this test fails (RED). Fix proxy so
+   * context is available to the model (GREEN).
+   */
+  (useRealAPIs ? it : it.skip)('Issue #480 real-API: Settings with context.messages + follow-up yields contextualized response (USE_REAL_APIS=1)', (done) => {
+    let finished = false;
+    const errorsReceived: string[] = [];
+    let assistantContent: string | null = null;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: {
+          think: { prompt: 'You are a helpful assistant. Answer briefly.' },
+          context: {
+            messages: [
+              { type: 'History', role: 'user', content: 'Remember my favorite color is blue.' },
+              { type: 'History', role: 'assistant', content: "I'll remember that your favorite color is blue." },
+            ],
+          },
+        },
+      }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string; role?: string; content?: string };
+        if (msg.type === 'Error' && msg.description) {
+          errorsReceived.push(msg.description);
+          finish(new Error(`Issue #480 real-API: upstream error: ${msg.description}`));
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What is my favorite color?' }));
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant' && typeof msg.content === 'string') {
+          assistantContent = msg.content;
+          if (errorsReceived.length > 0) {
+            finish(new Error(`Issue #480 real-API: received errors before assistant response: ${errorsReceived.join('; ')}`));
+            return;
+          }
+          expect(assistantContent.length).toBeGreaterThan(0);
+          expect(assistantContent.toLowerCase()).toContain('blue');
+          setTimeout(() => finish(), 500);
+        }
+      } catch (e) {
+        finish(e as Error);
+      }
+    });
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (!finished) {
+        finish(new Error(
+          `Issue #480 real-API: timeout. Context may be ignored by model. ` +
+          `assistantContent=${assistantContent ?? 'null'}, errors=${errorsReceived.length}`
+        ));
+      }
+    }, 25000);
+  }, 30000);
+
+  /**
    * Greeting (Issue #381): When Settings includes agent.greeting, after session.updated the proxy
    * sends SettingsApplied, then injects the greeting as ConversationText (assistant) to the client
    * and as conversation.item.create (assistant) to upstream.

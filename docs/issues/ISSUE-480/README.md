@@ -50,8 +50,9 @@ The proxy sends both **user and assistant** context messages to upstream as `con
 ## Tasks / next steps
 
 - [ ] **WebSocket trace:** Confirm with voice-commerce (or capture ourselves) that the first message after connect is Settings with `agent.context.messages` and that the proxy sends `conversation.item.create` after `session.updated`.
-- [ ] **Real-API integration test:** Add a test that runs with `USE_REAL_APIS=1`: send Settings with `agent.context.messages`, then InjectUserMessage; assert the model response is contextualized (or at least that no error occurs and context items are sent).
-- [ ] **Fix or document:** From trace + real-API test, either fix the proxy (e.g. only user context to upstream and assistant context in instructions, or other approach per API behavior) or document the limitation and recommend prepending when using the proxy until supported.
+- [x] **Real-API integration test (TDD RED):** Added in `tests/integration/openai-proxy-integration.test.ts`: `Issue #480 real-API: Settings with context.messages + follow-up yields contextualized response (USE_REAL_APIS=1)`. Sends context (user + assistant re "favorite color is blue"), then "What is my favorite color?"; asserts response includes "blue". See [TRACKING.md](./TRACKING.md).
+- [ ] **TDD GREEN:** Run with `USE_REAL_APIS=1` to confirm RED; fix proxy so test passes (e.g. only user context to upstream if API ignores assistant context).
+- [ ] **Fix or document:** From trace + real-API test, either fix the proxy or document the limitation and recommend prepending when using the proxy until supported.
 - [ ] **Document for partners:** How to pass `agentOptions.context` and that the proxy translates it so prepending is unnecessary once the fix is in place.
 
 ---
