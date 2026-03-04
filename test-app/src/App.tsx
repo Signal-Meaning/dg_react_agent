@@ -21,6 +21,7 @@ import { getFunctionDefinitions } from './utils/functionDefinitions';
 import { getFunctionCallBackendBaseUrl, forwardFunctionCallToBackend } from './utils/functionCallBackend';
 import type { AgentFunction } from '../../src/types/agent';
 import { getLogger } from '../../src/utils/logger';
+import { generateSessionId } from './session-management';
 
 // Type declaration for E2E test support
 // Only used in test-app for E2E testing, not part of the component's public API
@@ -117,6 +118,8 @@ function App() {
     transcription: 'closed' // Initialize transcription state to track it properly
   });
   const [hasSentSettingsDom, setHasSentSettingsDom] = useState(false);
+  /** Session ID for current agent connection; set when agent connects, cleared when closed (Settings panel). */
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [micLoading, setMicLoading] = useState(false);
   
@@ -649,7 +652,11 @@ function App() {
       ...prev,
       [service]: state
     }));
-    // Component logs connection state; no redundant addLog here
+    // Session ID: set when agent connects, clear when closed (for Settings panel)
+    if (service === 'agent') {
+      if (state === 'connected') setSessionId(generateSessionId());
+      if (state === 'closed') setSessionId(null);
+    }
     // Reset hasSentSettings mirror on agent disconnect/stop for clean reconnect assertions
     if (service === 'agent' && state === 'closed') {
       setHasSentSettingsDom(false);
@@ -1249,13 +1256,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             Stop
           </button>
         )}
-        {/* Agent connection status moved here for quick visibility during tests */}
-        <div style={{ fontSize: '14px' }}>
-          Agent Connection: <strong data-testid="connection-status">{connectionStates.agent}</strong>
-        </div>
-        <div style={{ fontSize: '14px' }}>
-          Transcription Connection: <strong data-testid="transcription-connection-status">{connectionStates.transcription}</strong>
-        </div>
         <div style={{ fontSize: '14px' }}>
           Settings Applied: <strong data-testid="has-sent-settings">{String(hasSentSettingsDom)}</strong>
         </div>
@@ -1323,6 +1323,36 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             micEnabled ? 'Disable Mic' : 'Enable Mic'
           )}
         </button>
+      </div>
+
+      {/* Settings panel: Session pane (rehomed from Admin); disconnect only when session active and not production */}
+      <div data-testid="settings-panel" style={{ marginTop: '20px', border: '1px solid #ccc', padding: '10px', pointerEvents: 'auto' }}>
+        <h3>Settings</h3>
+        <div data-testid="session-pane" style={{ marginBottom: '10px' }}>
+          <h4 style={{ margin: '0 0 8px 0', fontSize: '14px' }}>Session</h4>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+            <span>ID: <strong data-testid="session-id">{sessionId ?? '—'}</strong></span>
+            <span>
+              {connectionStates.agent === 'connected' && !import.meta.env.PROD ? (
+                <button
+                  type="button"
+                  onClick={stopInteraction}
+                  style={{ padding: '6px 12px', pointerEvents: 'auto' }}
+                  data-testid="session-disconnect-button"
+                >
+                  Active (click to disconnect)
+                </button>
+              ) : (
+                <span data-testid="session-state-inactive">{connectionStates.agent ?? '—'}</span>
+              )}
+            </span>
+          </div>
+          {/* Kept for E2E: tests target these; refactor or remove tests that rely on STT/TTS connection display — see test-app/tests/e2e/REFACTOR-CONNECTION-STATUS-TESTS.md */}
+          <div style={{ fontSize: '12px', color: '#666', marginTop: '6px' }}>
+            <span data-testid="connection-status" aria-hidden="true">{connectionStates.agent}</span>
+            <span data-testid="transcription-connection-status" aria-hidden="true" style={{ marginLeft: '8px' }}>{connectionStates.transcription}</span>
+          </div>
+        </div>
       </div>
       
       {isRecording && (

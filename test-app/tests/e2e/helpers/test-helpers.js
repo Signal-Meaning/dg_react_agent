@@ -956,22 +956,43 @@ async function assertConnectionState(page, expect, expectedState, options = {}) 
 }
 
 /**
- * Disconnect the component (simulates stop button or network issue)
+ * Disconnect via Settings panel Session (Session active → click to disconnect).
+ * Use this when the session is active (connected) and not recording; prefers the Settings Session disconnect button.
  * @param {import('@playwright/test').Page} page
  */
-async function disconnectComponent(page) {
-  const stopButton = page.locator('[data-testid="stop-button"]');
-  if (await stopButton.isVisible({ timeout: 1000 })) {
-    await stopButton.click();
-  }
-  
-  // Wait for connection to close
+async function disconnectViaSettingsSession(page) {
+  const sessionDisconnectBtn = page.locator('[data-testid="session-disconnect-button"]');
+  await sessionDisconnectBtn.waitFor({ state: 'visible', timeout: 5000 });
+  await sessionDisconnectBtn.click();
   await page.waitForFunction(
     () => {
       const statusEl = document.querySelector('[data-testid="connection-status"]');
       return statusEl && statusEl.textContent === 'closed';
     },
-    { timeout: 5000 }
+    { timeout: 10000 }
+  );
+}
+
+/**
+ * Disconnect the component (Stop when recording, otherwise Settings Session disconnect).
+ * Prefer Stop when recording; otherwise use the Settings panel Session "Active (click to disconnect)" button.
+ * @param {import('@playwright/test').Page} page
+ */
+async function disconnectComponent(page) {
+  const stopButton = page.locator('[data-testid="stop-button"]');
+  const sessionDisconnectButton = page.locator('[data-testid="session-disconnect-button"]');
+  if (await stopButton.isVisible({ timeout: 1000 })) {
+    await stopButton.click();
+  } else if (await sessionDisconnectButton.isVisible({ timeout: 1000 })) {
+    await sessionDisconnectButton.click();
+  }
+
+  await page.waitForFunction(
+    () => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      return statusEl && statusEl.textContent === 'closed';
+    },
+    { timeout: 30000 }
   );
 }
 
@@ -1719,7 +1740,8 @@ export {
   waitForAgentResponseEnhanced, // Enhanced version with options object
   waitForTranscript, // Wait for transcript to appear in the UI
   assertConnectionState, // Assert connection is in expected state (with automatic waiting)
-  disconnectComponent, // Disconnect the component (stop button or simulate network issue)
+  disconnectComponent, // Disconnect the component (stop button or Settings Session disconnect)
+  disconnectViaSettingsSession, // Disconnect via Settings panel Session "Active (click to disconnect)" button
   getAgentState, // Get current agent state from UI
   assertNoRecoverableAgentErrors, // Assert no recoverable upstream errors (fail E2E on regression)
   assertAgentErrorsAllowUpstreamTimeouts, // Allow up to 1 upstream timeout error (OpenAI proxy: no-message / idle_timeout)

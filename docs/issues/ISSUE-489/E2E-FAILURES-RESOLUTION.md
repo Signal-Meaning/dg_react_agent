@@ -1,8 +1,63 @@
 # Issue #489: E2E Failures to Resolve (Proxy Mode)
 
-**Context:** Run `USE_PROXY_MODE=true npm run test:e2e` from `test-app/`. Summary: **19 failed**, 23 skipped, 203 passed (7.4m).
+**Context:** Run `USE_PROXY_MODE=true npm run test:e2e` from `test-app/`. Original run: **19 failed**, 23 skipped, 203 passed (7.4m).
 
 This document tracks the failing E2E tests and resolution steps for the v0.9.8 release (Issue #489).
+
+---
+
+## Latest E2E run (partial, after Issue #482/#489 fix)
+
+**Run:** Partial run (suite cut short). **6 failed**, 5 interrupted, 64 passed (~2m).
+
+| Result | Count |
+|--------|--------|
+| Failed | 6 |
+| Interrupted | 5 |
+| Passed | 64 |
+| Skipped / did not run | 155+ |
+
+**The 6 failures in this run:**
+
+| # | Spec / test | Error (summary) | In original 19? |
+|---|-------------|------------------|------------------|
+| 1 | context-retention-agent-usage › should retain context when disconnecting and reconnecting - agent uses context | `waitForFunction` 30s exceeded (disconnectComponent: wait for status `'closed'`) | Yes — (d) |
+| 2 | context-retention-agent-usage › should verify context format in Settings message | Same: wait for `'closed'` 30s | Yes — (d) |
+| 3 | deepgram-greeting-idle-timeout › should timeout after greeting completes (Issue #139) | `expect(timeoutResult.closed).toBe(true)` — received false | Yes — (b) |
+| 4 | deepgram-greeting-idle-timeout › should timeout after initial greeting on page load | Same: timeoutResult.closed false | Yes — (b) |
+| 5 | deepgram-manual-vad-workflow › should handle complete manual workflow: speak → silence → timeout | `waitForFunction` 10s (assertConnectionState) exceeded | Yes — (b) |
+| 6 | deepgram-text-session-flow › should auto-connect and re-establish connection when WebSocket is closed | `waitForFunction` 30s exceeded (disconnectComponent: wait for `'closed'`) | Yes — (d) |
+
+All 6 are in our original triage list. So no new failure modes appeared; the same tests still fail.
+
+### Why these 6 still appear unaddressed
+
+- **Issue #482/#489 fix in place:** We fixed (1) proxy to send `AgentAudioDone` on `response.done` (and on `output_text.done` / `output_audio.done`) and (2) component to transition to idle when it receives `AgentAudioDone` in speaking state. That addresses **conversation response** flows where the upstream sends a full response lifecycle. Logs from this run show `AgentAudioDone` is received and IdleTimeoutService is triggered in at least one test (e.g. WebSocket timing test completed successfully with “triggered by: AgentAudioDone”).
+
+- **Why (b) greeting tests (3, 4) still fail:** The fix applies to **response** completion (user message → model response → `response.output_text.done` / `response.output_audio.done` / `response.done`). The **greeting** in proxy mode is sent as **ConversationText only** (injected to client; no upstream “response” for the greeting text). So the proxy typically does **not** send `AgentAudioDone` after the greeting. The component never transitions to idle after “greeting completes,” so the idle timeout never starts and the connection never closes. **Greeting is a different code path** and was not in scope for the Issue #482 proxy fix. To fix 3 and 4 we need either: proxy sends `AgentAudioDone` (or equivalent) after injecting the greeting ConversationText, or tests/expectations are adjusted for “no timeout after greeting” in proxy mode.
+
+- **Why (d) reconnection/context tests (1, 2, 6) still fail:** These tests call `disconnectComponent()` and wait for connection status `'closed'` (e.g. 30s). They are **(d) reconnection/context**: the test expects to disconnect (simulate idle timeout or close) and then see `'closed'` so it can continue (e.g. re-establish). Our fix only ensures **idle timeout can start** after agent response (and greeting path is separate). It does **not** change how or how quickly the component reaches `'closed'` when the test triggers a disconnect, or how reconnection is signaled. So if the test’s “disconnect” step doesn’t actually close the connection in proxy mode, or the UI doesn’t show `'closed'` in time, the test still times out. Addressing these requires proxy/test work on **reconnection and when status becomes 'closed'**, not the AgentAudioDone/response-completion path.
+
+- **Why (b) manual VAD (5) still fails:** The test does: speak (“wait one moment”) → stay silent (expect UtteranceEnd) → wait for connection to close. In the run, “UtteranceEnd status: Not detected” appeared, so the “silence → timeout” flow may not complete as the test expects (e.g. no UtteranceEnd in proxy/VAD path, or timing). Even with AgentAudioDone in place for the **agent** response, if the test never gets to “agent finished” (e.g. no agent reply, or no AgentAudioDone for that reply), or if the disconnect/close expectation is strict, the test can still fail. So (5) can remain (b)-like (idle timeout not firing) or (c) (test/env: UtteranceEnd or close timing).
+
+**Summary:** The 6 failures in this run are the **same categories** as in the original triage. The Issue #482/#489 fix targets **conversation response → AgentAudioDone → idle → timeout** and does not yet cover **greeting injection** (3, 4), **reconnection/closed** behavior (1, 2, 6), or the **manual VAD** flow (5) which may also depend on greeting or reconnection/close behavior.
+
+### Failure details from Playwright report
+
+Source: `test-app/test-results/results.json` and `test-app/test-results/*/error-context.md` (page snapshot at failure).
+
+| # | Spec / test | Error (exact) | Location | Page state at failure |
+|---|-------------|----------------|----------|------------------------|
+| 1 | context-retention-agent-usage › should retain context when disconnecting and reconnecting - agent uses context | `TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.` | `test-helpers.js:969` (disconnectComponent) → `context-retention-agent-usage.spec.js:103` | Agent Connection: **connected**; agentState: idle; Timeout Active: false. Status never became `'closed'`. |
+| 2 | context-retention-agent-usage › should verify context format in Settings message | Same: `Timeout 30000ms exceeded` at disconnectComponent | `test-helpers.js:969` → `context-retention-agent-usage.spec.js:362` | Agent Connection: **connected** (OpenAI proxy); agentState: idle. Wait for `'closed'` never satisfied. |
+| 3 | deepgram-greeting-idle-timeout › should timeout after greeting completes (Issue #139) | `Error: expect(received).toBe(expected) // Object.is equality` — Expected: **true**, Received: **false** | `deepgram-greeting-idle-timeout.spec.js:79` — `expect(timeoutResult.closed).toBe(true)` | Agent Connection: **connected**; agentState: idle; Timeout Active: false. Greeting shown ("Hello! How can I assist you today?"). Connection never closed within poll window. |
+| 4 | deepgram-greeting-idle-timeout › should timeout after initial greeting on page load | Same: `expect(timeoutResult.closed).toBe(true)` — received false | `deepgram-greeting-idle-timeout.spec.js:168` | Same: connected, idle, Timeout Active: false; greeting in Conversation History. |
+| 5 | deepgram-manual-vad-workflow › should handle complete manual workflow: speak → silence → timeout | `TimeoutError: page.waitForFunction: Timeout 10000ms exceeded.` | `test-helpers.js:945` (assertConnectionState) → `deepgram-manual-vad-workflow.spec.js:84` | User Started Speaking: 20:44:10, User Stopped Speaking: 20:44:11, **Utterance End: Not detected**. Agent responded ("What's your project about..."). Test expected connection state (e.g. `'closed'`) within 10s; not reached. |
+| 6 | deepgram-text-session-flow › should auto-connect and re-establish connection when WebSocket is closed | `TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.` | `test-helpers.js:969` (disconnectComponent) → `deepgram-text-session-flow.spec.js:42` | After first message sent and agent responded, test calls disconnectComponent and waits for `'closed'`; status stayed connected. |
+
+**Helper involved:** `disconnectComponent()` in `test-app/tests/e2e/helpers/test-helpers.js` (lines 967–972) waits for `[data-testid="connection-status"]` text to equal `'closed'`. All (d) failures and (6) time out there because the UI never shows `'closed'` within the timeout.
+
+---
 
 ### Why the same 19?
 **Why 19 still fail:** Of the 19 failures, 6 are **(d) reconnection/context** (context-retention, text-session-flow, openai-proxy-e2e)—unrelated to idle timeout. The remaining **(b)** idle-timeout failures are because the component never transitions to idle: it only does so when the audio manager reports playback stopped (`isPlaying: false`). **The proxy (and translators) that this project promotes for other teams to use are our responsibility.** If that proxy does not send `AgentAudioDone` when the upstream response completes, we need to fix it (Issue #482). Until the proxy we promote sends `AgentAudioDone` correctly, the (b) failures will persist.
@@ -113,6 +168,8 @@ The component was closing the connection on idle timeout **while the agent was s
 
 **Order of work:** Address (b) first so idle-timeout E2E can pass; then (d) and (c); then full re-run and doc update.
 
+**Note (partial run after #482/#489 fix):** A partial E2E run still showed 6 failures (same tests as above). See [Latest E2E run (partial)](#latest-e2e-run-partial-after-issue-482489-fix) and [Why these 6 still appear unaddressed](#why-these-6-still-appear-unaddressed) for why greeting (3, 4), reconnection/closed (1, 2, 6), and manual VAD (5) are not yet fixed by the response-lifecycle AgentAudioDone change.
+
 ---
 
 ## Action plan and progress
@@ -138,7 +195,8 @@ The component was closing the connection on idle timeout **while the agent was s
 
 ### Step 4: Re-run and document (after fixes)
 
-- [ ] After applying fixes, run full E2E again; update this doc with resolved/remaining failures and notes.
+- [x] **Partial re-run (after #482/#489 fix):** Run cut short; 6 failed, 5 interrupted, 64 passed. Same 6 tests as in triage (1–6 in table above). Documented in [Latest E2E run (partial)](#latest-e2e-run-partial-after-issue-482489-fix) and [Why these 6 still appear unaddressed](#why-these-6-still-appear-unaddressed).
+- [ ] After addressing greeting path, reconnection/closed, and any test env: run full E2E again; update this doc with resolved/remaining failures and notes.
 
 ---
 
@@ -185,6 +243,38 @@ Failure details were taken from the **existing** run’s `test-app/test-results/
 - [ ] **Greeting/VAD/text flow (3–5):** Verify greeting and manual VAD/text flows against current component and proxy behavior.
 - [ ] **Function call proxy (11):** Verify onFunctionCallRequest in proxy mode; fix test or implementation.
 - [ ] **Re-run:** After fixes, run full E2E suite again and update this doc (mark resolved, add notes).
+
+---
+
+## Regression and proxy testing
+
+There is concern that **basic invariants for idle timeout behavior** have a serious regression that was not present in a recent prior release. The likely cause is a **flaw in our proxy implementation lacking sufficient testing**: the proxy (and its contract with the component) was not covered by tests that enforce “response complete → AgentAudioDone → idle → timeout can start” and “greeting complete → idle timeout can start.” Going forward we should add **proxy- and integration-level tests** that encode these invariants so regressions are caught before E2E.
+
+---
+
+## Proposed next steps
+
+1. **Greeting path (tests 3, 4)**  
+   Have the proxy send `AgentAudioDone` (or a synthetic “greeting complete” signal) after sending the greeting `ConversationText` to the client, so the component can transition to idle and the idle timeout can start. Implement in the backend that serves the test-app (e.g. Deepgram proxy or shared proxy in `packages/voice-agent-backend` if it serves greeting). Document in BACKEND-PROXY that greeting injection should be followed by AgentAudioDone (or equivalent) when the app relies on idle timeout after greeting.
+
+2. **Reconnection / `disconnectComponent` (tests 1, 2, 6)**  
+   The tests **explicitly disconnect** by clicking the Stop button, then wait for connection status to become `'closed'`. They do **not** rely on idle timeout to close first.  
+   - **What the test does:**  
+     - **context-retention (1):** Send first message → agent responds → **disconnectComponent(page)** → wait → reconnect by sending another message → assert context in Settings.  
+     - **context-retention (2):** Same flow with OpenAI proxy; after reconnect, assert context format in Settings.  
+     - **text-session-flow (6):** Establish connection → send first message → agent responds → **disconnectComponent(page)** (“Disconnect to simulate idle timeout”) → send second message to trigger auto-connect → assert response.  
+   - **Helper** (`test-app/tests/e2e/helpers/test-helpers.js`): `disconnectComponent(page)` clicks `[data-testid="stop-button"]` if visible (1s), then waits for `[data-testid="connection-status"]` text to equal `'closed'` (helper uses 5s; test timeout may be 30s).  
+   - **Failure:** After clicking Stop, status never becomes `'closed'` within the wait. So either (a) the stop button is not visible/clicked in proxy mode, or (b) the component does not update connection-status to `'closed'` when the agent WebSocket closes in proxy mode.  
+   - **If the spec or test flow is unclear,** ask or surface the full test (e.g. `context-retention-agent-usage.spec.js` lines 85–104 and 349–366, `deepgram-text-session-flow.spec.js` lines 26–52). Then fix: ensure Stop actually closes the agent connection and the component reflects `'closed'`; verify reconnection and context flow.
+
+3. **Manual VAD (test 5)**  
+   Proceed as planned: investigate why UtteranceEnd is not detected (proxy VAD mapping / test audio); ensure agent response gets AgentAudioDone so idle timeout can start; confirm test timeout/polling.
+
+4. **Full E2E re-run and release**  
+   - **Prerequisite:** Unit and integration tests must be **fully passing** before running full E2E (e.g. `npm run lint` then `npm run test:mock` or `npm test` as per release checklist).  
+   - After implementing greeting (and reconnection/VAD) fixes, run full `USE_PROXY_MODE=true npm run test:e2e` from `test-app/`.  
+   - Update this doc: mark resolved tests, add any new failures to the triage table, and refresh “Proposed next steps” if needed.  
+   - Per release checklist: E2E in proxy mode must pass before publishing.
 
 ---
 

@@ -79,6 +79,8 @@ function createDeepgramWss(options) {
     const deepgramWs = new WebSocket(deepgramUrl.toString(), ['token', apiKey.trim()]);
     const messageQueue = [];
     const deepgramMessageQueue = [];
+    /** Issue #489: send AgentAudioDone after first assistant ConversationText (greeting) so idle timeout can start */
+    let sentAgentAudioDoneAfterFirstAssistantText = false;
 
     const forwardQueuedDeepgramMessages = () => {
       if (clientWs.readyState === WebSocket.OPEN && deepgramMessageQueue.length > 0) {
@@ -101,6 +103,15 @@ function createDeepgramWss(options) {
       if (clientWs.readyState === WebSocket.OPEN) {
         try {
           clientWs.send(data, { binary: isBinary });
+          if (!isBinary && !sentAgentAudioDoneAfterFirstAssistantText) {
+            try {
+              const msg = typeof data === 'string' ? JSON.parse(data) : JSON.parse(data.toString());
+              if (msg && msg.type === 'ConversationText' && msg.role === 'assistant') {
+                sentAgentAudioDoneAfterFirstAssistantText = true;
+                clientWs.send(JSON.stringify({ type: 'AgentAudioDone' }), { binary: false });
+              }
+            } catch (_) { /* not JSON or parse error: ignore */ }
+          }
         } catch (e) {
           deepgramMessageQueue.push({ data, isBinary });
         }

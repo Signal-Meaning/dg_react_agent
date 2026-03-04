@@ -458,6 +458,9 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             // The greeting text is shown immediately in the UI; the model sees the greeting text in
             // its instructions (if configured) so it knows it already greeted the user.
             clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting)));
+            // Issue #489: Send AgentAudioDone after greeting so the component can transition to idle
+            // and the idle timeout can start (E2E "timeout after greeting" tests).
+            sendAgentAudioDoneIfNeeded();
             emitLog({
               severityNumber: SeverityNumber.INFO,
               severityText: 'INFO',
