@@ -4,6 +4,10 @@
 
 This document tracks the failing E2E tests and resolution steps for the v0.9.8 release (Issue #489).
 
+### Why the same 19 after the AgentAudioDone fallback?
+
+The fallback (transition to idle 500ms after `AgentAudioDone` when in `speaking`) only runs when: (1) the proxy sends `AgentAudioDone` when the response completes, and (2) the component is already in `speaking`. If the proxy does not send `AgentAudioDone` for the flows under test (e.g. greeting or text-only response), we never enter the fallback and state may never become idle, so the idle timeout still does not start. Of the 19 failures, 6 are **(d) reconnection/context** (context-retention, text-session-flow, openai-proxy-e2e)—unrelated to idle timeout. The remaining **(b)** idle-timeout failures likely need the test-app proxy to send `AgentAudioDone` when the upstream response completes (Issue #482) for the fallback to take effect; until then, or if the proxy sends it only in some paths, the same 19 can persist.
+
 ---
 
 ## Bigger picture: defect and test inadequacy
@@ -176,4 +180,5 @@ Failure details were taken from the **existing** run’s `test-app/test-results/
 
 - **Run from:** `test-app/` with backend running if required (`npm run backend`).
 - **Report (use existing run):** Open `test-app/playwright-report/index.html` in a browser, or from `test-app/` run `npx playwright show-report`. The report shows per-test failure details (assertion, received vs expected, stack). No need to re-run E2E only to get details.
+- **Failure artifacts (traces/screenshots):** Off by default. To collect them for a run, set `PW_ARTIFACTS_ON_FAILURE=1` (e.g. `PW_ARTIFACTS_ON_FAILURE=1 npm run test:e2e` from `test-app/`).
 - **Reference:** Release checklist in [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md); E2E in proxy mode is a pre-release requirement.
