@@ -287,8 +287,10 @@ describe('Unified Timeout Coordination Integration', () => {
       jest.advanceTimersByTime(10000);
       expect(mockOnTimeout).not.toHaveBeenCalled();
       
-      // Function call completes - should re-enable timeout behavior
+      // Function call completes - app sent result; Issue #487: we are now "waiting for next agent message"
       idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-1' });
+      // Simulate next agent message received (e.g. final response); then timeout may start
+      idleTimeoutService.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
       
       // Now timeout should start and fire after idle period
       jest.advanceTimersByTime(5000);
@@ -321,8 +323,9 @@ describe('Unified Timeout Coordination Integration', () => {
       jest.advanceTimersByTime(5000);
       expect(mockOnTimeout).not.toHaveBeenCalled();
       
-      // Second function call completes - now timeout should start
+      // Second function call completes - now waiting for next agent message (Issue #487)
       idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-2' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
       
       // Now timeout should fire after idle period
       jest.advanceTimersByTime(5000);
@@ -341,8 +344,9 @@ describe('Unified Timeout Coordination Integration', () => {
       jest.advanceTimersByTime(5000);
       expect(mockOnTimeout).not.toHaveBeenCalled();
       
-      // Function call completes
+      // Function call completes; Issue #487: then next agent message received
       idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-1' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
       
       // Timeout should now be active and fire after idle period
       jest.advanceTimersByTime(5000);
@@ -371,8 +375,9 @@ describe('Unified Timeout Coordination Integration', () => {
       jest.advanceTimersByTime(5000);
       expect(mockOnTimeout).not.toHaveBeenCalled();
       
-      // Function call completes
+      // Function call completes; Issue #487: next agent message received
       idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-1' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
       
       // Now timeout should fire
       jest.advanceTimersByTime(5000);
@@ -391,11 +396,85 @@ describe('Unified Timeout Coordination Integration', () => {
       jest.advanceTimersByTime(5000);
       expect(mockOnTimeout).not.toHaveBeenCalled();
       
-      // Function call completes
+      // Function call completes; Issue #487: next agent message received
       idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-1' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
       
       // Now timeout should start and fire
       jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * Issue #487 (voice-commerce #1058): Idle timeout must NOT fire while waiting for next
+     * agent message after the app has sent a function result. The agent is still busy
+     * (model has not yet sent the next function call or final response).
+     */
+    test('should NOT timeout after function result until next agent message is received', () => {
+      const timeoutMs = 5000;
+      // 1. Establish session with user activity and idle state
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+
+      // 2. Model sends function call → app will send result
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'create_mandate' });
+
+      // 3. App sends function result (no further messages; model has not sent next message yet)
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'create_mandate' });
+
+      // 4. Wait just under idle timeout - no further messages sent or received
+      jest.advanceTimersByTime(timeoutMs - 1);
+
+      // 5. ASSERT: connection must still be open (timeout must NOT have fired)
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+
+      // 6. Simulate next agent message received (e.g. next FunctionCallRequest)
+      idleTimeoutService.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
+
+      // 7. Now timeout may start; after full period it should fire
+      jest.advanceTimersByTime(timeoutMs);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * Asserts closure and idle timeout behavior when several function calls are in flight:
+     * each STARTED must have a matching COMPLETED; timeout must not fire until all are completed
+     * and the next agent message is received.
+     */
+    test('should track closure and idle timeout with a few functions in parallel', () => {
+      const timeoutMs = 5000;
+      // 1. Establish session with user activity and idle state
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+
+      // 2. Start three function calls in parallel (e.g. one request with functions [a, b, c])
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'call-a' });
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'call-b' });
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'call-c' });
+
+      // 3. While any call is active, timeout must not fire
+      jest.advanceTimersByTime(timeoutMs + 1000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+
+      // 4. Complete in non-sequential order (stress closure: set 3→2→1→0)
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-b' });
+      jest.advanceTimersByTime(1000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-a' });
+      jest.advanceTimersByTime(1000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'call-c' });
+      // 5. All completed → now "waiting for next agent message"; timeout still must not start until that message
+      jest.advanceTimersByTime(timeoutMs - 1);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+
+      // 6. Next agent message received → closure complete; timeout may start
+      idleTimeoutService.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
+      jest.advanceTimersByTime(timeoutMs);
       expect(mockOnTimeout).toHaveBeenCalledTimes(1);
     });
   });
