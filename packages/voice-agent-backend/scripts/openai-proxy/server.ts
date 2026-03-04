@@ -156,6 +156,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let pendingResponseCreateAfterFunctionCallOutput = false;
     /** Issue #482: Have we sent AgentStartedSpeaking for the current response? So component sees "agent active" before ConversationText (avoids client idle timeout). Reset when response ends. */
     let hasSentAgentStartedSpeakingForCurrentResponse = false;
+    /** Issue #482 / #489: Have we sent AgentAudioDone for the current response? Sent on output_text.done and output_audio.done; also send on response.done if not yet sent so component can transition to idle. */
+    let hasSentAgentAudioDoneForCurrentResponse = false;
     /** Issue #482: Buffer idle_timeout Error and send after ConversationText so client can show assistant bubble before close. */
     let pendingIdleTimeoutError: ComponentError | null = null;
     /** Issue #414: TTS chunk boundary diagnostic (set OPENAI_PROXY_TTS_BOUNDARY_DEBUG=1 to log same format as test-app E2E). */
@@ -167,10 +169,18 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     const onResponseStarted = (): void => {
       responseInProgress = true;
       hasSentAgentStartedSpeakingForCurrentResponse = false;
+      hasSentAgentAudioDoneForCurrentResponse = false;
     };
     const onResponseEnded = (): void => {
       responseInProgress = false;
       hasSentAgentStartedSpeakingForCurrentResponse = false;
+      hasSentAgentAudioDoneForCurrentResponse = false;
+    };
+    const sendAgentAudioDoneIfNeeded = (): void => {
+      if (!hasSentAgentAudioDoneForCurrentResponse && clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(JSON.stringify({ type: 'AgentAudioDone' }));
+        hasSentAgentAudioDoneForCurrentResponse = true;
+      }
     };
     const sendAgentStartedSpeakingIfNeeded = (): void => {
       if (!hasSentAgentStartedSpeakingForCurrentResponse && clientWs.readyState === WebSocket.OPEN) {
@@ -476,7 +486,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           sendAgentStartedSpeakingIfNeeded();
           const conversationText = mapOutputTextDoneToConversationText(msg as Parameters<typeof mapOutputTextDoneToConversationText>[0]);
           clientWs.send(JSON.stringify(conversationText));
-          clientWs.send(JSON.stringify({ type: 'AgentAudioDone' }));
+          sendAgentAudioDoneIfNeeded();
           flushPendingIdleTimeoutError();
         } else if (msg.type === 'response.output_audio_transcript.done') {
           const m = msg as { type: string; transcript?: string };
@@ -622,11 +632,13 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           ttsChunkLengths = [];
           lastTtsChunk = null;
           // Issue #482: Notify component that agent audio for this response is done (so idle timeout sees activity).
-          clientWs.send(JSON.stringify({ type: 'AgentAudioDone' }));
+          sendAgentAudioDoneIfNeeded();
           // Issue #462: do not clear responseInProgress here. Real API may send output_audio.done before
           // output_text.done; clearing here would allow a subsequent Settings → session.update while the API
           // still has an active response → conversation_already_has_active_response. Clear only on output_text.done.
         } else if (msg.type === 'response.done') {
+          // Issue #482 / #489: Ensure client gets AgentAudioDone so component can transition to idle (e.g. when API sends response.done without output_text.done/output_audio.done).
+          sendAgentAudioDoneIfNeeded();
           // Issue #470: API may send response.done to mark response complete (e.g. after function-call turn).
           // If we deferred response.create after function_call_output, send it now so the next turn can start.
           onResponseEnded();

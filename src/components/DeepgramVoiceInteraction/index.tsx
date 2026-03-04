@@ -2242,20 +2242,28 @@ function DeepgramVoiceInteraction(
       logConsole('debug','🔊 [AGENT EVENT] AgentAudioDone received');
       logConsole('debug','🎯 [AGENT] AgentAudioDone received - audio generation complete, playback may continue');
       sleepLog('AgentAudioDone received - audio generation complete, but playback may continue');
-      
+
+      // Issue #482 / #489: Transition to idle when in speaking so idle timeout can start. In proxy mode
+      // playback may never report isPlaying: false; AgentAudioDone is the contract for "response complete."
+      if (stateRef.current.agentState === 'speaking') {
+        logConsole('debug','🎯 [AGENT] AgentAudioDone - transitioning to idle (response complete)');
+        agentStateServiceRef.current?.handleAudioPlaybackChange(false);
+        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+      }
+
       // Track agent silent for greeting state
       if (state.greetingInProgress) {
         dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
         dispatch({ type: 'GREETING_STARTED', started: false });
       }
-      
+
       // Reset user speaking state when agent finishes speaking
       // This is important for text-based interactions where no UtteranceEnd is received
       dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
       if (stateRef.current.isUserSpeaking) {
         onUserStoppedSpeaking?.();
       }
-      
+
       return;
     }
     
