@@ -496,6 +496,51 @@ describe('Unified Timeout Coordination Integration', () => {
     });
   });
 
+  /**
+   * Issue #489: stateGetter and updateStateDirectly — isolate greeting idle timeout E2E failures.
+   * The hook passes a stateGetter so the service can read latest component state; if that ref is stale,
+   * canStartTimeout() sees wrong isPlaying and never starts the timeout. These tests lock in the
+   * contract so we can fail in unit tests instead of only in E2E.
+   */
+  describe('Issue #489: stateGetter and updateStateDirectly (greeting idle timeout)', () => {
+    test('updateStateDirectly with idle + isPlaying false after user activity should start timeout and fire', () => {
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'startAudioCapture' });
+      idleTimeoutService.updateStateDirectly({
+        agentState: 'idle',
+        isPlaying: false,
+        isUserSpeaking: false,
+      });
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    test('when stateGetter returns idle + !isPlaying, checkAndStartTimeoutIfNeeded path should start timeout', () => {
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.setStateGetter(() => ({
+        agentState: 'idle',
+        isPlaying: false,
+        isUserSpeaking: false,
+      }));
+      idleTimeoutService.updateStateDirectly({ agentState: 'idle', isPlaying: false });
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    test('after agent was speaking (isPlaying true), updateStateDirectly idle + isPlaying false should start timeout', () => {
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'speaking' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: true });
+      jest.advanceTimersByTime(1000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+      idleTimeoutService.updateStateDirectly({ agentState: 'idle', isPlaying: false });
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('Backward Compatibility', () => {
     test('should maintain existing API compatibility', () => {
       // Test that all existing methods still work

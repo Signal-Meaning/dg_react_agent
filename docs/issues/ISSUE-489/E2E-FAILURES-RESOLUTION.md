@@ -59,6 +59,35 @@ Source: `test-app/test-results/results.json` and `test-app/test-results/*/error-
 
 ---
 
+## Latest run: two greeting idle-timeout tests still failing (post–Session/Deepgram proxy fixes)
+
+**Run:** E2E from `test-app/` (e.g. `npm run test:e2e` with grep or full suite). **2 failed**, 7 passed in the relevant subset.
+
+| Test | Error | Page state at failure (from error-context.md) |
+|------|--------|-------------------------------------------------|
+| deepgram-greeting-idle-timeout › should timeout after greeting completes (Issue #139) | `expect(timeoutResult.closed).toBe(true)` — received false | agentState: **idle**; **Timeout Active: false**; Agent Response: "Hello! How can I assist you today?"; Session: Active (click to disconnect); connection-status: connected |
+| deepgram-greeting-idle-timeout › should timeout after initial greeting on page load | Same | Same pattern: idle, **Timeout Active: false**, greeting in Conversation History, connection stays connected |
+
+### Inspection (Playwright error-context.md)
+
+- **agentState: idle** — Component correctly transitions to idle after greeting (AgentAudioDone path).
+- **Timeout Active: false** — IdleTimeoutService never started the countdown, so the connection never closed.
+- **Root cause:** `IdleTimeoutService.canStartTimeout()` requires `!state.isPlaying` (and other conditions). On AgentAudioDone we dispatched `AGENT_STATE_CHANGE` to `idle` but did **not** set `isPlaying` to false. So the service saw `agentState === 'idle'` but `isPlaying` still true (or never updated) and refused to start the timeout.
+
+### Fix applied (component)
+
+- In the AgentAudioDone handler, when transitioning to idle (either from `speaking` or `listening`), also **dispatch `PLAYBACK_STATE_CHANGE` with `isPlaying: false`** so that `IdleTimeoutService`’s `canStartTimeout()` passes and the 10s idle timeout starts.
+- File: `src/components/DeepgramVoiceInteraction/index.tsx` (AgentAudioDone block).
+
+### Next steps
+
+1. **Re-run the two greeting tests** to confirm they pass:  
+   `npm run test:e2e -- --grep "should timeout after greeting completes|should timeout after initial greeting on page load"` from `test-app/`.
+2. If they still fail, verify **hasSeenUserActivityThisSession** for the greeting-only flow: the service requires `hasSeenUserActivityThisSession` to start the timeout; it is set on USER_STARTED/STOPPED_SPEAKING or MEANINGFUL_USER_ACTIVITY. For “connect via mic → greeting only” (no user speech), ensure something (e.g. connection established or first agent message) sets this so the timeout can start after the greeting.
+3. **Remaining 6 (original triage):** After greeting (3, 4) are fixed, continue with reconnection/closed (1, 2, 6), manual VAD (5), and full E2E re-run + doc update.
+
+---
+
 ### Why the same 19?
 **Why 19 still fail:** Of the 19 failures, 6 are **(d) reconnection/context** (context-retention, text-session-flow, openai-proxy-e2e)—unrelated to idle timeout. The remaining **(b)** idle-timeout failures are because the component never transitions to idle: it only does so when the audio manager reports playback stopped (`isPlaying: false`). **The proxy (and translators) that this project promotes for other teams to use are our responsibility.** If that proxy does not send `AgentAudioDone` when the upstream response completes, we need to fix it (Issue #482). Until the proxy we promote sends `AgentAudioDone` correctly, the (b) failures will persist.
 

@@ -2245,9 +2245,18 @@ function DeepgramVoiceInteraction(
 
       // Issue #482 / #489: Transition to idle when in speaking so idle timeout can start. In proxy mode
       // playback may never report isPlaying: false; AgentAudioDone is the contract for "response complete."
-      if (stateRef.current.agentState === 'speaking') {
+      // Also transition when 'listening' so greeting/response that sends AgentAudioDone before playback
+      // starts (e.g. proxy injects it after first ConversationText, or audio disabled in E2E) still starts idle timeout.
+      // IdleTimeoutService requires isPlaying: false to start the timeout; set it so timeout can run (E2E greeting tests).
+      const agentState = stateRef.current.agentState;
+      if (agentState === 'speaking') {
         logConsole('debug','🎯 [AGENT] AgentAudioDone - transitioning to idle (response complete)');
         agentStateServiceRef.current?.handleAudioPlaybackChange(false);
+        dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
+        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+      } else if (agentState === 'listening') {
+        logConsole('debug','🎯 [AGENT] AgentAudioDone while listening - transitioning to idle (greeting/response done before playback)');
+        dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
         dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
       }
 

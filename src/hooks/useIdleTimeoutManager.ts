@@ -92,6 +92,9 @@ export function useIdleTimeoutManager(
   useEffect(() => {
     if (!serviceRef.current) return;
 
+    // Keep stateGetter's ref in sync so IdleTimeoutService sees latest state (fixes greeting idle timeout E2E)
+    currentStateRef.current = state;
+
     const currentState = {
       isUserSpeaking: state.isUserSpeaking,
       agentState: state.agentState,
