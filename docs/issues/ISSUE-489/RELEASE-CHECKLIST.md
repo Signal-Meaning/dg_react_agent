@@ -20,8 +20,8 @@ This is a patch release for version v0.9.8 of the Deepgram Voice Interaction Rea
 
 ### Pre-Release
 
-- [ ] **Tests Passing**: All tests passing
-  - [ ] Run: `npm run lint` then `npm run test:mock` (what CI runs)
+- [x] **Tests Passing**: All tests passing
+  - [x] Run: `npm run lint` then `npm run test:mock` (what CI runs) — **passed**
   - [ ] Optionally full suite: `npm test`
   - [ ] **⚠️ CRITICAL: Run E2E tests in proxy mode** (proxy mode is the default and primary mode)
     - [ ] Start backend: `cd test-app && npm run backend`
@@ -30,37 +30,33 @@ This is a patch release for version v0.9.8 of the Deepgram Voice Interaction Rea
   - [ ] **⚠️ REQUIRED if this patch fixes proxy/API behavior** (e.g. openai-proxy, message ordering, session.update timing): Run real-API integration test. Mock-only success is **not** sufficient. When `OPENAI_API_KEY` is available:
     - [ ] Run: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
     - [ ] Verify: All in-scope tests pass against the real API. If keys are not available, document the exception.
-- [ ] **Linting Clean**: No linting errors
-  - [ ] Run: `npm run lint`
+- [x] **Linting Clean**: No linting errors
+  - [x] Run: `npm run lint` — **passed**
 
 ### Version & Build (CI performs build — no local build required)
 
-- [ ] **Bump Version**: Update to v0.9.8
-  - [ ] Run: `npm version patch --no-git-tag-version` (or `npm version patch` if committing immediately)
-  - [ ] Commit version bump when ready for release branch
-- [ ] **Do not run build/package locally for release.** CI builds and validates when you create the GitHub release (see Publish below).
+- [x] **Bump Version**: Update to v0.9.8 — **done** (package.json)
+- [x] **Do not run build/package locally for release.** CI builds and validates when you create the GitHub release (see Publish below).
 - [ ] **Optional**: Run `npm run build` or `npm run package:local` locally to verify; do **not** commit any `.tgz` (gitignored).
 
 ### Documentation
 
-- [ ] **⚠️ CRITICAL: Create Release Documentation BEFORE Publishing** ⚠️
-  - [ ] Create: `docs/releases/v0.9.8/` directory
-  - [ ] Create: `CHANGELOG.md` with all changes (Keep a Changelog format)
-  - [ ] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
-    - Replace `vX.X.X` and `X.X.X` placeholders with v0.9.8 and 0.9.8
-  - [ ] Create: `RELEASE-NOTES.md` (optional but standard)
-- [ ] **Validate Documentation**: Run validation to ensure all required documents are present
-  - [ ] Run: `npm run validate:release-docs 0.9.8` (version without "v" prefix)
-- [ ] **Update Version**: Update version references in docs
-- [ ] **⚠️ DO NOT proceed to Release section until documentation is complete** ⚠️
+- [x] **⚠️ CRITICAL: Create Release Documentation BEFORE Publishing** ⚠️
+  - [x] Create: `docs/releases/v0.9.8/` directory
+  - [x] Create: `CHANGELOG.md` with all changes (Keep a Changelog format)
+  - [x] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
+  - [x] Create: `RELEASE-NOTES.md` (optional but standard)
+- [x] **Validate Documentation**: Run validation to ensure all required documents are present
+  - [x] Run: `npm run validate:release-docs 0.9.8` — **passed**
+- [x] **Update Version**: Version references in docs (v0.9.8 / 0.9.8)
+- [x] **⚠️ DO NOT proceed to Release section until documentation is complete** ⚠️ — **done**
 
 ### Release
 
-- [ ] **Commit Changes**: Commit all release-related changes (including documentation)
-  - [ ] Commit: Version bump and release docs; message e.g. `chore: prepare release v0.9.8 (Issue #489)`
-- [ ] **Create Release Branch**: Create a release branch for the version
-  - [ ] Create: `git checkout -b release/v0.9.8` (from current working branch or main)
-  - [ ] Push: `git push origin release/v0.9.8`
+- [x] **Commit Changes**: Commit all release-related changes (including documentation)
+  - [x] Commit: `chore: prepare release v0.9.8 (Issue #489)` — **pushed**
+- [x] **Create Release Branch**: Create a release branch for the version
+  - [x] Branch: `release/v0.9.8` created and pushed
 - [ ] **Publish**: Publish to GitHub Registry
   - [ ] **⚠️ Documentation must be committed to release branch BEFORE creating GitHub release** ⚠️
   - [ ] **Preferred**: Use CI build (create GitHub release to trigger `.github/workflows/test-and-publish.yml`)
