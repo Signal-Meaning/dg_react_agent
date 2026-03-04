@@ -380,6 +380,8 @@ function DeepgramVoiceInteraction(
   // Track if we've notified onAgentStateChange('speaking') for the current playback cycle
   // This prevents duplicate callbacks when both AgentStartedSpeaking and playback events fire
   const hasNotifiedSpeakingForPlaybackRef = useRef<boolean>(false);
+  /** Issue #489: Fallback timeout to transition to idle when AgentAudioDone is received but playback never fires isPlaying:false (e.g. proxy mode). */
+  const agentAudioDoneIdleFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevIsPlayingRef = useRef<boolean | undefined>(undefined);
   
   // VAD event tracking for redundancy detection
@@ -1221,6 +1223,10 @@ function DeepgramVoiceInteraction(
       if (cleanupTimeoutRef.current) {
         clearTimeout(cleanupTimeoutRef.current);
         cleanupTimeoutRef.current = null;
+      }
+      if (agentAudioDoneIdleFallbackRef.current) {
+        clearTimeout(agentAudioDoneIdleFallbackRef.current);
+        agentAudioDoneIdleFallbackRef.current = null;
       }
       
       cleanupTimeoutRef.current = setTimeout(() => {
@@ -2256,9 +2262,19 @@ function DeepgramVoiceInteraction(
         onUserStoppedSpeaking?.();
       }
       
-      // DON'T re-enable idle timeout resets on AgentAudioDone
-      // This is the generation event, not the playback event
-      // The actual playback completion is handled by the audio manager
+      // Issue #489 (E2E regression): In proxy mode playback may never fire isPlaying:false, so
+      // idle timeout never starts. Fallback: if we're in speaking, schedule transition to idle
+      // after a short delay so timeout can start when playback doesn't signal completion.
+      if (stateRef.current.agentState === 'speaking') {
+        if (agentAudioDoneIdleFallbackRef.current) clearTimeout(agentAudioDoneIdleFallbackRef.current);
+        agentAudioDoneIdleFallbackRef.current = setTimeout(() => {
+          agentAudioDoneIdleFallbackRef.current = null;
+          if (stateRef.current.agentState !== 'speaking') return;
+          logConsole('debug','🎯 [AGENT] AgentAudioDone fallback - transitioning to idle (playback did not signal stop)');
+          agentStateServiceRef.current?.handleAudioPlaybackChange(false);
+          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+        }, 500);
+      }
       return;
     }
     
@@ -3417,6 +3433,10 @@ function DeepgramVoiceInteraction(
         // It handles cases where AgentStartedSpeaking message isn't received or is delayed
         // This works for transitions from: idle -> speaking, thinking -> speaking, listening -> speaking
         if (event.isPlaying) {
+          if (agentAudioDoneIdleFallbackRef.current) {
+            clearTimeout(agentAudioDoneIdleFallbackRef.current);
+            agentAudioDoneIdleFallbackRef.current = null;
+          }
           const currentState = stateRef.current.agentState;
           if (currentState !== 'speaking') {
             logConsole('debug',`🎯 [AGENT] Audio playback started - transitioning from ${currentState} to speaking`);
@@ -3440,6 +3460,10 @@ function DeepgramVoiceInteraction(
         // Transition agent to idle when audio playback stops
         // Only transition if we're currently in speaking state (prevents invalid transitions)
         if (!event.isPlaying) {
+          if (agentAudioDoneIdleFallbackRef.current) {
+            clearTimeout(agentAudioDoneIdleFallbackRef.current);
+            agentAudioDoneIdleFallbackRef.current = null;
+          }
           const currentState = stateRef.current.agentState;
           if (currentState === 'speaking') {
             logConsole('debug','🎯 [AGENT] Audio playback finished - transitioning agent from speaking to idle');
