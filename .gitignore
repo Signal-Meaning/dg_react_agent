@@ -36,6 +36,10 @@ e2e-proxy-run.log
 *.swo
 .DS_Store 
 
+# Playwright project-local browsers (binaries; use playwright:install-browsers)
+.playwright-browsers/
+test-app/.playwright-browsers/
+
 # Test results
 test-results/
 test-reports/

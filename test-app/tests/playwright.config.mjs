@@ -6,6 +6,12 @@ import { fileURLToPath } from 'url';
 
 // Load test-app/.env so HTTPS and proxy settings are available regardless of cwd
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Project-local browsers: so agent sandbox and local runs share one install (Cursor sandbox can't write to ~/Library/Caches/ms-playwright)
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, '..', '.playwright-browsers');
+}
+
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 // Respect HTTPS from .env (Vite and proxy use it when started). Test uses same scheme so baseURL matches server.
