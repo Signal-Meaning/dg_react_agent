@@ -4,9 +4,8 @@
 
 This document tracks the failing E2E tests and resolution steps for the v0.9.8 release (Issue #489).
 
-### Why the same 19 after the AgentAudioDone fallback?
-
-The fallback (transition to idle 500ms after `AgentAudioDone` when in `speaking`) only runs when: (1) the proxy sends `AgentAudioDone` when the response completes, and (2) the component is already in `speaking`. If the proxy does not send `AgentAudioDone` for the flows under test (e.g. greeting or text-only response), we never enter the fallback and state may never become idle, so the idle timeout still does not start. Of the 19 failures, 6 are **(d) reconnection/context** (context-retention, text-session-flow, openai-proxy-e2e)—unrelated to idle timeout. The remaining **(b)** idle-timeout failures likely need the test-app proxy to send `AgentAudioDone` when the upstream response completes (Issue #482) for the fallback to take effect; until then, or if the proxy sends it only in some paths, the same 19 can persist.
+### Why the same 19?
+**Why 19 still fail:** Of the 19 failures, 6 are **(d) reconnection/context** (context-retention, text-session-flow, openai-proxy-e2e)—unrelated to idle timeout. The remaining **(b)** idle-timeout failures are because the component never transitions to idle: it only does so when the audio manager reports playback stopped (`isPlaying: false`). **The proxy (and translators) that this project promotes for other teams to use are our responsibility.** If that proxy does not send `AgentAudioDone` when the upstream response completes, we need to fix it (Issue #482). Until the proxy we promote sends `AgentAudioDone` correctly, the (b) failures will persist.
 
 ---
 
@@ -103,6 +102,19 @@ The component was closing the connection on idle timeout **while the agent was s
 
 ---
 
+## Plan for addressing the 19 failures
+
+| Priority | Category | Tests | Action |
+|----------|----------|-------|--------|
+| 1 | **(b) Idle timeout (12)** | 3, 4, 5?, 7, 8, 9, 10, 12, 13?, 14, 18, 19 | Fix the proxy we promote so it sends `AgentAudioDone` when the upstream response completes (Issue #482). Component transitions to idle only when playback stops or when it receives `AgentAudioDone`; without it, idle timeout never starts. |
+| 2 | **(d) Reconnection/context (6)** | 1, 2, 6, 15, 16, 17 | Verify proxy reconnection and context retention; fix proxy or align test expectations (e.g. when connection reaches `'closed'` after disconnect). |
+| 3 | **(c) Test/env (1)** | 11 | Verify `onFunctionCallRequest` in proxy mode; fix proxy or test (timeout/selector). |
+| 4 | **Re-run and document** | All | Run `USE_PROXY_MODE=true npm run test:e2e` from `test-app/`; update this doc with resolved/remaining failures and notes. |
+
+**Order of work:** Address (b) first so idle-timeout E2E can pass; then (d) and (c); then full re-run and doc update.
+
+---
+
 ## Action plan and progress
 
 ### Step 1: Strengthen test pyramid (Issue #487 scenario at component level)
@@ -120,7 +132,7 @@ The component was closing the connection on idle timeout **while the agent was s
 ### Step 3: Fix or adjust
 
 - [ ] For (a): Fix component/proxy wiring so idle timeout does not fire until next agent message after function result.
-- [x] **For (b) TDD:** Regression test added in `tests/integration/unified-timeout-coordination.test.js`: “should start and fire timeout when idle with no function call (no AGENT_MESSAGE_RECEIVED needed)”. IdleTimeoutService already allows timeout to start without AGENT_MESSAGE_RECEIVED when no function call occurred. E2E (b) failures are likely because in proxy mode the **component state** (agentState, isPlaying) never reaches idle/false, so the hook never emits the events that start the timeout. **Fix applied:** AgentAudioDone fallback in `DeepgramVoiceInteraction/index.tsx`: when we receive `AgentAudioDone` and agent state is `speaking`, we schedule a 500ms fallback to transition to idle (so idle timeout can start if playback never fires `isPlaying: false`, e.g. in proxy mode). Fallback is cleared when playback starts/stops or on unmount. Proxy must send `AgentAudioDone` when response completes (Issue #482). **Next:** Re-run E2E in proxy mode to confirm (b) failures are reduced or resolved.
+- [x] **For (b) TDD:** Regression test in `unified-timeout-coordination.test.js` (see above). **Fix required in our proxy:** The proxy (and translators) that this project promotes for other teams to use are our responsibility. That proxy must send `AgentAudioDone` when the upstream response completes (Issue #482) so the component can transition to idle and the idle timeout can start. Until we fix the proxy we promote, the (b) idle-timeout failures will persist.
 - [ ] For (c): Update tests or stabilize env (timeouts, selectors, proxy).
 - [ ] For (d): Address reconnection/context in separate follow-up if needed.
 
