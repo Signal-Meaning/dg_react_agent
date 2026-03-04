@@ -8,13 +8,24 @@
 import { expect } from '@playwright/test';
 
 /**
- * Wait for idle timeout to fire and connection to close
+ * Reset the E2E diagnostic flag (Issue #489). Call before waiting for idle timeout so we only detect this run's timeout.
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ */
+export async function resetIdleTimeoutFiredDiagnostic(page) {
+  await page.evaluate(() => {
+    if (typeof window !== 'undefined') window.__idleTimeoutFired__ = false;
+  });
+}
+
+/**
+ * Wait for idle timeout to fire and/or connection to close
+ * Uses window.__idleTimeoutFired__ (set by component when timeout callback runs) as diagnostic.
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {Object} options - Configuration options
  * @param {number} options.expectedTimeout - Expected timeout in ms (default: 10000)
  * @param {number} options.maxWaitTime - Maximum wait time in ms (default: expectedTimeout + 5000)
  * @param {number} options.checkInterval - Interval to check status in ms (default: 1000)
- * @returns {Promise<{actualTimeout: number, expectedTimeout: number, closed: boolean}>}
+ * @returns {Promise<{actualTimeout: number, expectedTimeout: number, closed: boolean, timeoutFired: boolean, elapsed: number}>}
  */
 export async function waitForIdleTimeout(page, options = {}) {
   const {
@@ -26,33 +37,50 @@ export async function waitForIdleTimeout(page, options = {}) {
   const startTime = Date.now();
   const maxChecks = Math.ceil(maxWaitTime / checkInterval);
   let connectionClosed = false;
+  let timeoutFired = false;
   let closeTime = null;
+  let timeoutFiredTime = null;
 
   for (let i = 0; i < maxChecks; i++) {
     await page.waitForTimeout(checkInterval);
-    
+
     const currentStatus = await page.locator('[data-testid="connection-status"]').textContent();
+    const fired = await page.evaluate(() => (typeof window !== 'undefined' && window.__idleTimeoutFired__) === true);
     const elapsed = Date.now() - startTime;
-    
+
+    if (fired && timeoutFiredTime === null) {
+      timeoutFired = true;
+      timeoutFiredTime = Date.now();
+      console.log(`🔔 Diagnostic: idle timeout fired at +${elapsed}ms`);
+    }
     if (currentStatus === 'closed') {
       connectionClosed = true;
       closeTime = Date.now();
       console.log(`✅ Connection closed after ${elapsed}ms (expected: ~${expectedTimeout}ms)`);
       break;
     }
-    
+
     // Log progress every 5 seconds
     if (i % 5 === 0 && elapsed > 0) {
-      console.log(`⏳ +${elapsed}ms: Connection still ${currentStatus}`);
+      console.log(`⏳ +${elapsed}ms: Connection still ${currentStatus}${timeoutFired ? ', timeout already fired' : ''}`);
     }
   }
 
-  const actualTimeout = closeTime ? closeTime - startTime : null;
+  if (!timeoutFired && !connectionClosed) {
+    const fired = await page.evaluate(() => (typeof window !== 'undefined' && window.__idleTimeoutFired__) === true);
+    if (fired) {
+      timeoutFired = true;
+      timeoutFiredTime = timeoutFiredTime ?? Date.now();
+    }
+  }
+
+  const actualTimeout = (closeTime ?? timeoutFiredTime) ? ((closeTime ?? timeoutFiredTime) - startTime) : null;
 
   return {
     actualTimeout,
     expectedTimeout,
     closed: connectionClosed,
+    timeoutFired,
     elapsed: Date.now() - startTime
   };
 }

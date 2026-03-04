@@ -30,7 +30,7 @@ import {
   establishConnectionViaMicrophone
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks';
-import { waitForIdleTimeout, verifyIdleTimeoutTiming } from './fixtures/idle-timeout-helpers';
+import { waitForIdleTimeout, verifyIdleTimeoutTiming, resetIdleTimeoutFiredDiagnostic } from './fixtures/idle-timeout-helpers';
 
 test.describe('Greeting Idle Timeout', () => {
   
@@ -66,7 +66,9 @@ test.describe('Greeting Idle Timeout', () => {
     // Step 4: Wait for agent greeting to complete
     console.log('Step 4: Waiting for agent to finish speaking greeting...');
     await waitForAgentGreeting(page, 15000);
-    
+
+    await resetIdleTimeoutFiredDiagnostic(page);
+
     // Step 5: Wait for agent connection to close (should happen ~10 seconds after step 4)
     console.log('Step 5: Waiting for connection to close after idle timeout...');
     const timeoutResult = await waitForIdleTimeout(page, {
@@ -74,8 +76,12 @@ test.describe('Greeting Idle Timeout', () => {
       maxWaitTime: 20000,
       checkInterval: 1000
     });
-    
-    // Validate the timing
+
+    // Diagnostic (Issue #489): did the idle timeout callback fire?
+    expect(timeoutResult.timeoutFired, 'Idle timeout should fire (diagnostic: __idleTimeoutFired__)').toBe(true);
+    if (!timeoutResult.closed && timeoutResult.timeoutFired) {
+      console.log('⚠️ Diagnostic: timeout fired but connection status did not become closed');
+    }
     expect(timeoutResult.closed).toBe(true);
     expect(timeoutResult.actualTimeout).toBeLessThan(15000); // 10s + 5s buffer
     verifyIdleTimeoutTiming(timeoutResult.actualTimeout, 10000, 5000);
@@ -154,6 +160,8 @@ test.describe('Greeting Idle Timeout', () => {
     // Wait for initial greeting to complete
     await waitForAgentGreeting(page, 10000);
 
+    await resetIdleTimeoutFiredDiagnostic(page);
+
     // Check AudioContext state
     const audioState = await page.evaluate(() => window.audioContext?.state);
     console.log(`AudioContext state after greeting: ${audioState}`);
@@ -164,9 +172,13 @@ test.describe('Greeting Idle Timeout', () => {
       maxWaitTime: 15000,
       checkInterval: 1000
     });
-    
+
+    expect(timeoutResult.timeoutFired, 'Idle timeout should fire (diagnostic: __idleTimeoutFired__)').toBe(true);
+    if (!timeoutResult.closed && timeoutResult.timeoutFired) {
+      console.log('⚠️ Diagnostic: timeout fired but connection status did not become closed');
+    }
     expect(timeoutResult.closed).toBe(true);
-    
+
     // Fail if timeout is too early (should be ~10 seconds, not 1 second)
     // Minimum acceptable: 8 seconds (allowing 2s tolerance), maximum: 15 seconds
     expect(timeoutResult.actualTimeout).toBeGreaterThanOrEqual(8000);

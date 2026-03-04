@@ -2260,6 +2260,11 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
       }
 
+      // Issue #489: Ensure IdleTimeoutService sees meaningful activity so it can start the timeout.
+      // When agent was speaking/listening, WebSocketManager has idleTimeoutDisabled and skips
+      // onMeaningfulActivity for AgentAudioDone; calling here guarantees hasSeenUserActivityThisSession.
+      handleMeaningfulActivity('AgentAudioDone');
+
       // Track agent silent for greeting state
       if (state.greetingInProgress) {
         dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });

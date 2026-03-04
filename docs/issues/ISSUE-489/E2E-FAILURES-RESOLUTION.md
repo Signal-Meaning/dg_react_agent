@@ -79,11 +79,54 @@ Source: `test-app/test-results/results.json` and `test-app/test-results/*/error-
 - In the AgentAudioDone handler, when transitioning to idle (either from `speaking` or `listening`), also **dispatch `PLAYBACK_STATE_CHANGE` with `isPlaying: false`** so that `IdleTimeoutService`’s `canStartTimeout()` passes and the 10s idle timeout starts.
 - File: `src/components/DeepgramVoiceInteraction/index.tsx` (AgentAudioDone block).
 
+---
+
+## Latest E2E run: 2 failed (timeout-fired diagnostic)
+
+**Run:** `npm run test:e2e -- --grep "context-retention-agent-usage|deepgram-text-session-flow|deepgram-greeting-idle-timeout"` from `test-app/`. **2 failed**, 7 passed. Context-retention test **passed** (agent used context; "blue" referenced).
+
+### Detailed results (from terminal and error-context.md)
+
+| Test | Assertion | Received | Page snapshot (error-context.md) |
+|------|-----------|----------|----------------------------------|
+| deepgram-greeting-idle-timeout › should timeout after greeting completes (Issue #139) | `expect(timeoutResult.timeoutFired).toBe(true)` | **false** | agentState: **idle**; Audio Playing: **false**; **Timeout Active: false**; User Started/Stopped Speaking: **Not detected**; connection-status: connected; Conversation History: assistant "Hello! How can I assist you today?" |
+| deepgram-greeting-idle-timeout › should timeout after initial greeting on page load | Same | **false** | Same: idle, Audio Playing false, Timeout Active false, User Not detected, greeting in Conversation History |
+
+So **`__idleTimeoutFired__` never became true** — the idle timeout callback never ran. Therefore the timeout either never started or was cleared before firing; given we waited ~20s, it never started. `canStartTimeout()` was false for the whole wait.
+
+### Root cause (revised)
+
+`IdleTimeoutService.canStartTimeout()` requires **`hasSeenUserActivityThisSession`** (and idle, !isPlaying, etc.). That flag is set only on `MEANINGFUL_USER_ACTIVITY`, which is emitted when the hook's `handleMeaningfulActivity` is called. The only caller in the greeting flow is **WebSocketManager** via `options.onMeaningfulActivity` when it receives AgentThinking, AgentStartedSpeaking, or AgentAudioDone — but only when **`!this.idleTimeoutDisabled`**. When the agent is speaking or listening, the component has disabled idle timeout resets (`idleTimeoutDisabled === true`). In `WebSocketManager` message handling, when `idleTimeoutDisabled` is true the code path **skips** `isMeaningfulUserActivity(data)` and never calls `onMeaningfulActivity`. So when AgentAudioDone arrives (agent was just speaking/listening), the manager does not call `handleMeaningfulActivity`, so the service never gets `MEANINGFUL_USER_ACTIVITY`, so `hasSeenUserActivityThisSession` stays false and the timeout never starts.
+
+### Fix applied (component, Issue #489)
+
+- In the **AgentAudioDone** handler, after transitioning to idle (and dispatching `PLAYBACK_STATE_CHANGE` + `AGENT_STATE_CHANGE`), **call `handleMeaningfulActivity('AgentAudioDone')`** so that `IdleTimeoutService` always receives `MEANINGFUL_USER_ACTIVITY` and sets `hasSeenUserActivityThisSession`, regardless of the manager's `idleTimeoutDisabled` state.
+- File: `src/components/DeepgramVoiceInteraction/index.tsx` (AgentAudioDone block).
+
+### Deepgram proxy path for AgentAudioDone (trace)
+
+**File:** `packages/voice-agent-backend/src/attach-upgrade.js` (Deepgram client ↔ Deepgram upstream).
+
+- **Per-connection state:** `sentAgentAudioDoneAfterFirstAssistantText = false` (line 83).
+- **On every message from Deepgram → client** (lines 102–121):
+  1. Forward the message: `clientWs.send(data, { binary: isBinary })`.
+  2. If the message is text and the flag is still false: parse JSON; if `msg.type === 'ConversationText' && msg.role === 'assistant'`, set the flag and send `{ type: 'AgentAudioDone' }` to the client (lines 109–111).
+- **Order seen by the client:** (1) one `ConversationText` (assistant) — e.g. greeting — then (2) `AgentAudioDone`, in the same sync block. So the component should receive both and, on AgentAudioDone, transition to idle and set `isPlaying: false` so the idle timeout can start.
+
+**OpenAI proxy path** (test-app in OpenAI proxy mode): `packages/voice-agent-backend/scripts/openai-proxy/server.ts` sends AgentAudioDone after greeting via `sendAgentAudioDoneIfNeeded()` (e.g. after `mapGreetingToConversationText`), and on `response.output_text.done` / `response.done` etc.
+
+### E2E diagnostic (greeting idle-timeout)
+
+If the two greeting idle-timeout E2E tests still fail (connection never closes) after the component/hook fixes:
+
+1. **Confirm the client receives AgentAudioDone in E2E.** Use existing WebSocket capture in test-app E2E (e.g. `installWebSocketCapture()` or equivalent). In the greeting test, after the greeting appears, assert that at least one message with `type: 'AgentAudioDone'` was received on the agent WebSocket. If AgentAudioDone never appears, the proxy or the test's proxy path (Deepgram vs OpenAI) may not be sending it in that run.
+2. **Timeout-fired diagnostic (implemented).** The component sets `window.__idleTimeoutFired__ = true` when the idle timeout callback runs (`useIdleTimeoutManager`). E2E resets it with `resetIdleTimeoutFiredDiagnostic(page)` before waiting; `waitForIdleTimeout()` returns `timeoutFired` and the greeting tests assert on it. That distinguishes "timeout never started" from "timeout started but connection close not reflected in UI."
+
 ### Next steps
 
 1. **Re-run the two greeting tests** to confirm they pass:  
    `npm run test:e2e -- --grep "should timeout after greeting completes|should timeout after initial greeting on page load"` from `test-app/`.
-2. If they still fail, verify **hasSeenUserActivityThisSession** for the greeting-only flow: the service requires `hasSeenUserActivityThisSession` to start the timeout; it is set on USER_STARTED/STOPPED_SPEAKING or MEANINGFUL_USER_ACTIVITY. For “connect via mic → greeting only” (no user speech), ensure something (e.g. connection established or first agent message) sets this so the timeout can start after the greeting.
+2. If they still fail, run the **E2E diagnostic** above (WebSocket capture for AgentAudioDone; timeout-fired diagnostic is already asserted in the greeting tests).
 3. **Remaining 6 (original triage):** After greeting (3, 4) are fixed, continue with reconnection/closed (1, 2, 6), manual VAD (5), and full E2E re-run + doc update.
 
 ---
@@ -304,6 +347,48 @@ There is concern that **basic invariants for idle timeout behavior** have a seri
    - After implementing greeting (and reconnection/VAD) fixes, run full `USE_PROXY_MODE=true npm run test:e2e` from `test-app/`.  
    - Update this doc: mark resolved tests, add any new failures to the triage table, and refresh “Proposed next steps” if needed.  
    - Per release checklist: E2E in proxy mode must pass before publishing.
+
+---
+
+## Isolation strategy: unit and integration first
+
+**Run unit and integration tests until they are all passing before re-running E2E.**
+
+1. **Greeting idle-timeout integration tests** (`tests/integration/issue-489-greeting-idle-timeout-component.test.tsx`):
+   - **With explicit user activity:** connect → `onMeaningfulActivity('test')` → AgentStartedSpeaking → AgentAudioDone → advance timers → assert `close()`.
+   - **Greeting-only (no explicit user activity):** connect → AgentStartedSpeaking → AgentAudioDone only (no call to `onMeaningfulActivity` from test). The component must call `handleMeaningfulActivity('AgentAudioDone')` so `hasSeenUserActivityThisSession` is set and the timeout can start. Advance timers → assert `close()`. This isolates the E2E path: if this passes, the component path is correct; if E2E still fails, the cause is outside the component (e.g. proxy not sending AgentAudioDone, or test-app bundle not updated).
+
+2. **IdleTimeoutService unit tests** (`tests/integration/unified-timeout-coordination.test.js`): Issue #489 block (stateGetter, updateStateDirectly, timeout starts after idle + isPlaying false).
+
+3. **Commands (from repo root):**
+   - Greeting + timeout coordination:  
+     `npm test -- tests/integration/issue-489-greeting-idle-timeout-component.test.tsx tests/integration/unified-timeout-coordination.test.js`
+   - Full unit + integration (exclude e2e):  
+     `npm test -- --testPathIgnorePatterns='e2e|playwright'`
+
+4. **When unit and integration are green,** then run E2E. If the two greeting E2E tests still fail, the failure is likely: client never receives `AgentAudioDone` in the browser (Deepgram proxy or upstream message format), or the test-app is serving a bundle that doesn’t include the latest component.
+
+---
+
+## Next steps (concise)
+
+1. **Keep unit and integration green** before each E2E run (see “Isolation strategy” above).
+
+2. **Re-run greeting idle-timeout E2E** only after that:  
+   From `test-app/`: `npm run test:e2e -- --grep "should timeout after greeting completes|should timeout after initial greeting on page load"`  
+   If they still fail, use WebSocket capture to confirm whether the client receives `AgentAudioDone`.
+
+2. **If greeting tests still fail**  
+   Use WebSocket capture in the greeting test to confirm the client receives a message with `type: 'AgentAudioDone'`. If it never arrives, fix the Deepgram proxy or the conditions under which it sends AgentAudioDone (e.g. upstream greeting message format).
+
+3. **Remaining E2E (outside this run)**  
+   - **Context-retention:** Last run **passed** (agent used context; "blue" referenced). No change needed for that test.  
+   - **Reconnection/closed (disconnectComponent):** If other specs still wait for status `'closed'` after Stop and time out, address in a follow-up (ensure Stop closes the agent connection and UI reflects it).  
+   - **Manual VAD:** Investigate UtteranceEnd / close timing if that spec still fails.
+
+4. **Playwright in Cursor**  
+   Use `docs/development/TODO-PLAYWRIGHT-CURSOR.md` and compare with the project where Playwright works so E2E can be run from Cursor when needed.
+
 
 ---
 

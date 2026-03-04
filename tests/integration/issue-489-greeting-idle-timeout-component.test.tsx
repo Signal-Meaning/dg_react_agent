@@ -101,4 +101,48 @@ describe('Issue #489: Greeting idle timeout (component integration)', () => {
 
     expect(mockWebSocketManager.close).toHaveBeenCalled();
   });
+
+  /**
+   * Greeting-only flow: NO explicit onMeaningfulActivity from test.
+   * Only AgentStartedSpeaking + AgentAudioDone. The component must call
+   * handleMeaningfulActivity('AgentAudioDone') so hasSeenUserActivityThisSession
+   * is set and the timeout can start. Isolates E2E failure (timeout never fires).
+   */
+  it('should close connection after AgentAudioDone without explicit user activity (component must call handleMeaningfulActivity)', async () => {
+    const agentOptions = createAgentOptions({ idleTimeoutMs: IDLE_TIMEOUT_MS });
+    const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+
+    render(
+      <DeepgramVoiceInteraction
+        ref={ref}
+        apiKey={MOCK_API_KEY}
+        agentOptions={agentOptions}
+      />
+    );
+
+    await setupComponentAndConnect(ref, mockWebSocketManager);
+    const eventListener = await waitForEventListener(mockWebSocketManager);
+
+    // Do NOT call onMeaningfulActivity - simulate greeting-only (connect → greeting → AgentAudioDone)
+    // 1. Simulate greeting: agent started speaking, then done
+    act(() => {
+      eventListener?.({ type: 'message', data: { type: 'AgentStartedSpeaking' } });
+    });
+    act(() => {
+      eventListener?.({ type: 'message', data: { type: 'AgentAudioDone' } });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockWebSocketManager.close).not.toHaveBeenCalled();
+
+    // 2. Advance past idle timeout; close() must be called (component must have set hasSeenUserActivity via handleMeaningfulActivity('AgentAudioDone'))
+    act(() => {
+      jest.advanceTimersByTime(IDLE_TIMEOUT_MS + TIMEOUT_BUFFER_MS);
+    });
+
+    expect(mockWebSocketManager.close).toHaveBeenCalled();
+  });
 });
