@@ -116,7 +116,7 @@ The component was closing the connection on idle timeout **while the agent was s
 ### Step 3: Fix or adjust
 
 - [ ] For (a): Fix component/proxy wiring so idle timeout does not fire until next agent message after function result.
-- [ ] For (b): Narrow or correct “waiting for next agent message” so timeout can still start in non–function-call flows.
+- [x] **For (b) TDD:** Regression test added in `tests/integration/unified-timeout-coordination.test.js`: “should start and fire timeout when idle with no function call (no AGENT_MESSAGE_RECEIVED needed)”. IdleTimeoutService already allows timeout to start without AGENT_MESSAGE_RECEIVED when no function call occurred. E2E (b) failures are likely because in proxy mode the **component state** (agentState, isPlaying) never reaches idle/false, so the hook never emits the events that start the timeout. **Next:** Ensure proxy or component transitions to idle when response completes (e.g. playback end or AgentAudioDone fallback); or adjust E2E/test-app to match current behavior.
 - [ ] For (c): Update tests or stabilize env (timeouts, selectors, proxy).
 - [ ] For (d): Address reconnection/context in separate follow-up if needed.
 
