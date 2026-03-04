@@ -26,7 +26,9 @@ export type IdleTimeoutEvent =
   | { type: 'PLAYBACK_STATE_CHANGED'; isPlaying: boolean }
   | { type: 'MEANINGFUL_USER_ACTIVITY'; activity: string }
   | { type: 'FUNCTION_CALL_STARTED'; functionCallId: string }
-  | { type: 'FUNCTION_CALL_COMPLETED'; functionCallId: string };
+  | { type: 'FUNCTION_CALL_COMPLETED'; functionCallId: string }
+  /** Issue #487: Clears "waiting for next agent message after function result" so timeout may start again. */
+  | { type: 'AGENT_MESSAGE_RECEIVED' };
 
 export class IdleTimeoutService {
   private static readonly POLLING_INTERVAL_MS = 200;
@@ -41,6 +43,8 @@ export class IdleTimeoutService {
   private stateGetter?: () => IdleTimeoutState | null; // Callback to get current state from component
   // Issue #373: Track active function calls to prevent idle timeout during execution
   private activeFunctionCalls: Set<string> = new Set();
+  /** Issue #487 (voice-commerce #1058): After app sends function result, agent is still busy until next agent message. */
+  private waitingForNextAgentMessageAfterFunctionResult = false;
   private logger: Logger;
   /** Pause timeout until first user activity (speaking, sending text, etc.). After any such event, timeout is allowed to run when conditions are idle. */
   private hasSeenUserActivityThisSession = false;
@@ -220,12 +224,24 @@ export class IdleTimeoutService {
         // Issue #373: Function call completed - remove from active set
         this.activeFunctionCalls.delete(event.functionCallId);
         this.log(`FUNCTION_CALL_COMPLETED: ${event.functionCallId} (active calls: ${this.activeFunctionCalls.size})`);
-        // If no more active function calls, re-enable timeout based on current state
+        // Issue #487 (voice-commerce #1058): App sent function result; agent is still busy until next agent message.
         if (this.activeFunctionCalls.size === 0) {
-          // No active function calls - update timeout behavior based on current state
+          this.waitingForNextAgentMessageAfterFunctionResult = true;
+          this.log('Waiting for next agent message after function result - idle timeout will not start');
+        }
+        // If no more active function calls, update behavior (timeout still must not start until AGENT_MESSAGE_RECEIVED)
+        if (this.activeFunctionCalls.size === 0) {
           this.updateTimeoutBehavior();
         }
-        // If there are still active calls, keep timeout disabled
+        break;
+
+      case 'AGENT_MESSAGE_RECEIVED':
+        // Issue #487: Next agent message received; no longer waiting. Timeout may start if otherwise idle.
+        if (this.waitingForNextAgentMessageAfterFunctionResult) {
+          this.waitingForNextAgentMessageAfterFunctionResult = false;
+          this.log('AGENT_MESSAGE_RECEIVED - no longer waiting for next agent message');
+        }
+        this.updateTimeoutBehavior();
         break;
     }
 
@@ -260,7 +276,8 @@ export class IdleTimeoutService {
            !state.isUserSpeaking &&
            !state.isPlaying &&
            !this.isDisabled &&
-           !this.hasActiveFunctionCalls();
+           !this.hasActiveFunctionCalls() &&
+           !this.waitingForNextAgentMessageAfterFunctionResult;
   }
 
   /**
@@ -271,7 +288,8 @@ export class IdleTimeoutService {
            this.currentState.agentState === 'thinking' ||
            this.currentState.agentState === 'speaking' ||
            this.currentState.isPlaying ||
-           this.hasActiveFunctionCalls();
+           this.hasActiveFunctionCalls() ||
+           this.waitingForNextAgentMessageAfterFunctionResult;
   }
 
   /**
@@ -291,7 +309,7 @@ export class IdleTimeoutService {
         this.log('updateTimeoutBehavior() - conditions met, starting timeout');
         this.startTimeout();
       } else {
-        this.log(`updateTimeoutBehavior() - conditions not met for starting timeout: agentState=${this.currentState.agentState}, isUserSpeaking=${this.currentState.isUserSpeaking}, isPlaying=${this.currentState.isPlaying}, hasActiveFunctionCalls=${this.hasActiveFunctionCalls()}`);
+        this.log(`updateTimeoutBehavior() - conditions not met for starting timeout: agentState=${this.currentState.agentState}, isUserSpeaking=${this.currentState.isUserSpeaking}, isPlaying=${this.currentState.isPlaying}, hasActiveFunctionCalls=${this.hasActiveFunctionCalls()}, waitingForNextAgentMessage=${this.waitingForNextAgentMessageAfterFunctionResult}`);
       }
     }
     

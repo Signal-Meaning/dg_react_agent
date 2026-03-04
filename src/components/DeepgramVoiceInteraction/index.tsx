@@ -437,7 +437,7 @@ function DeepgramVoiceInteraction(
   
   // Initialize idle timeout manager
   const effectiveIdleTimeoutMs = agentOptions?.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
-  const { handleMeaningfulActivity, handleUtteranceEnd, handleFunctionCallStarted, handleFunctionCallCompleted } = useIdleTimeoutManager(
+  const { handleMeaningfulActivity, handleUtteranceEnd, handleFunctionCallStarted, handleFunctionCallCompleted, handleNextAgentMessageReceived } = useIdleTimeoutManager(
     state,
     agentManagerRef,
     props.debug,
@@ -2064,6 +2064,8 @@ function DeepgramVoiceInteraction(
 
   // Handle agent messages - only relevant if agent is configured
   const handleAgentMessage = (data: unknown) => {
+    // Issue #487: Any agent message clears "waiting for next message after function result" so idle timeout may start when truly idle
+    handleNextAgentMessageReceived();
     // Debug: Log all agent messages with type
     const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as { type?: string }).type || 'unknown' : 'unknown';
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);

@@ -201,10 +201,18 @@ export function useIdleTimeoutManager(
     }
   }, []);
 
+  /** Issue #487: Notify idle timeout that next agent message was received (clears "waiting after function result"). */
+  const handleNextAgentMessageReceived = useCallback(() => {
+    if (serviceRef.current) {
+      serviceRef.current.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
+    }
+  }, []);
+
   return {
     handleMeaningfulActivity,
     handleUtteranceEnd,
     handleFunctionCallStarted,
     handleFunctionCallCompleted,
+    handleNextAgentMessageReceived,
   };
 }
