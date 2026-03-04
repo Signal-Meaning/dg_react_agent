@@ -129,6 +129,33 @@ If the two greeting idle-timeout E2E tests still fail (connection never closes) 
 2. If they still fail, run the **E2E diagnostic** above (WebSocket capture for AgentAudioDone; timeout-fired diagnostic is already asserted in the greeting tests).
 3. **Remaining 6 (original triage):** After greeting (3, 4) are fixed, continue with reconnection/closed (1, 2, 6), manual VAD (5), and full E2E re-run + doc update.
 
+### Resolving the final 2 failures (greeting idle-timeout)
+
+The two failing tests are:
+
+- `deepgram-greeting-idle-timeout › should timeout after greeting completes (Issue #139)`
+- `deepgram-greeting-idle-timeout › should timeout after initial greeting on page load`
+
+**Cause:** `__idleTimeoutFired__` stays false because the idle timeout callback never runs. `IdleTimeoutService.canStartTimeout()` only becomes true when (among other things) the client has received `AgentAudioDone` (so agent is idle and playback is done) and the service has seen `MEANINGFUL_USER_ACTIVITY` (so the component must call `handleMeaningfulActivity` in the AgentAudioDone path). In proxy mode the **greeting** is often sent as ConversationText only; if the proxy does not send `AgentAudioDone` after that greeting, the component never transitions to “idle + not playing” and never feeds the activity that allows the timeout to start.
+
+**Resolution options:**
+
+1. **Fix the proxy (recommended for product behavior):** Ensure the proxy sends `AgentAudioDone` after the greeting is delivered (e.g. after injecting ConversationText for the greeting).  
+   - **Deepgram proxy:** `packages/voice-agent-backend/src/attach-upgrade.js` already sends AgentAudioDone after the first assistant ConversationText; confirm E2E uses that path and that the message order is correct.  
+   - **OpenAI proxy:** `packages/voice-agent-backend/scripts/openai-proxy/server.ts` uses `sendAgentAudioDoneIfNeeded()` after greeting; confirm it is called and that the client receives it before the test waits for the timeout.
+
+2. **Fix the component so timeout can start after greeting without AgentAudioDone:** If the greeting is delivered only as ConversationText (no TTS/audio), the component could treat “first assistant message rendered” as “greeting done” and dispatch the same events (e.g. PLAYBACK_STATE_CHANGE + AGENT_STATE_CHANGE + handleMeaningfulActivity) so `IdleTimeoutService` starts the 10s idle timeout. This is a larger change and may duplicate logic; prefer fixing the proxy when possible.
+
+3. **Adjust the tests (if greeting path is out of scope):** Skip or relax these two tests when running in proxy mode with “greeting-only” (no AgentAudioDone), and document that idle timeout after greeting is only asserted in Deepgram-direct or when the proxy sends AgentAudioDone after greeting. Use `test.skip()` with a condition (e.g. `skipIfOpenAIProxy` or env flag) so the rest of the suite still runs.
+
+**Verification:** After applying (1) or (2), run:
+
+```bash
+cd test-app && npm run test:e2e -- --grep "should timeout after greeting completes|should timeout after initial greeting on page load"
+```
+
+Use the E2E WebSocket capture to confirm the client receives `AgentAudioDone` (or equivalent) after the greeting in the failing scenario.
+
 ---
 
 ### Why the same 19?
