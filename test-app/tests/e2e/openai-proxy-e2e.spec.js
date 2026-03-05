@@ -333,18 +333,18 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   /**
-   * Lengthy response: user asks for a long poem; after 15s the assistant is still speaking,
-   * assistant content is in the DOM, and the agent remains connected.
-   * Requires app idle timeout >= 15s so the connection is not closed by idle timeout before 15s.
+   * Lengthy response: user asks for a long poem; after (IDLE_TIMEOUT + 15s) we assert the agent
+   * is still connected and has content in the DOM (aligned with other idle-timeout behavior tests).
+   * Requires app idle timeout >= 15s so the "lengthy response" observation is achievable.
    */
-  test('8b. Lengthy response – after 15s agent still speaking, content in DOM, connection connected', async ({ page }) => {
-    test.setTimeout(60000);
+  test('8b. Lengthy response – after IDLE_TIMEOUT+15s agent still connected, content in DOM', async ({ page }) => {
+    test.setTimeout(90000);
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
 
     const idleMs = await page.evaluate(() => (typeof window !== 'undefined' && window.__idleTimeoutMs) ? window.__idleTimeoutMs : 10000);
-    test.skip(idleMs < 15000, `Test requires idle timeout >= 15s to stay connected for 15s; app has ${idleMs}ms (e.g. Playwright 1s). Run with E2E_USE_EXISTING_SERVER=1 and 10s+ idle, or VITE_IDLE_TIMEOUT_MS=20000.`);
+    test.skip(idleMs < 15000, `Test requires idle timeout >= 15s; app has ${idleMs}ms. Run with E2E_USE_EXISTING_SERVER=1 and 10s+ idle, or VITE_IDLE_TIMEOUT_MS=20000.`);
 
     const poemPrompt = 'Tell me rather lengthy and boring poem about a woodchuck named Barney.';
     await sendTextMessage(page, poemPrompt);
@@ -355,10 +355,11 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
       { timeout: 30000 }
     );
 
-    // Wait 15 seconds while agent may still be speaking (or may have finished a shorter poem)
-    await page.waitForTimeout(15000);
+    // Wait IDLE_TIMEOUT + 15s (like other idle-timeout behavior tests) then assert still connected
+    const waitMs = idleMs + 15000;
+    await page.waitForTimeout(waitMs);
 
-    // After 15s: connection must stay connected and we must have non-empty agent content.
+    // After wait: connection must stay connected and we must have non-empty agent content.
     // Agent state may be 'speaking' (long poem still going) or 'idle' (model finished before 15s).
     const connectionStatus = await page.locator('[data-testid="connection-status"]').textContent();
     expect(connectionStatus?.trim()).toBe('connected');
@@ -395,6 +396,13 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     expect(r2).toBeTruthy();
     expect(r2.length).toBeGreaterThan(0);
 
+    // Ensure app has synced conversation to DOM so component/app have context for reconnect (Issue #490 / test 9a)
+    await page.waitForFunction(
+      () => (document.querySelectorAll('[data-testid^="conversation-message-"]').length >= 4),
+      { timeout: 5000 }
+    ).catch(() => {});
+    await page.waitForTimeout(300);
+
     await disconnectComponent(page);
     await page.waitForTimeout(1000);
 
@@ -405,7 +413,9 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const settingsMessages = (wsData?.sent || []).filter(m => m.type === 'Settings');
     const lastSettings = settingsMessages[settingsMessages.length - 1];
     const contextInSettings = lastSettings?.data?.agent?.context;
-    const hasContext = Array.isArray(contextInSettings) ? contextInSettings.length > 0 : !!contextInSettings;
+    // Context can be { messages: [...] } (API shape) or legacy array
+    const contextMessages = contextInSettings?.messages ?? (Array.isArray(contextInSettings) ? contextInSettings : []);
+    const hasContext = !!(Array.isArray(contextMessages) && contextMessages.length > 0) || !!(contextInSettings && !Array.isArray(contextInSettings) && (contextInSettings.messages?.length ?? 0) > 0);
 
     const getAgentOptionsDebug = await page.evaluate(() => window.__lastGetAgentOptionsDebug);
     const wsInstanceCount = await page.evaluate(() => window.__capturedWebSocketCount || 0);
@@ -418,8 +428,8 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
       hasContext,
       'Settings on reconnect must include agent.context so session can be retained (Issue #489 / test 9 isolation)'
     ).toBe(true);
-    if (Array.isArray(contextInSettings)) {
-      expect(contextInSettings.length).toBeGreaterThan(0);
+    if (Array.isArray(contextMessages) && contextMessages.length > 0) {
+      expect(contextMessages.length).toBeGreaterThan(0);
     }
   });
 
@@ -445,6 +455,13 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     expect(r2).toBeTruthy();
     expect(r2.length).toBeGreaterThan(0);
 
+    // Ensure app has synced conversation to DOM so context is available on reconnect (Issue #490)
+    await page.waitForFunction(
+      () => (document.querySelectorAll('[data-testid^="conversation-message-"]').length >= 4),
+      { timeout: 5000 }
+    ).catch(() => {});
+    await page.waitForTimeout(300);
+
     await disconnectComponent(page);
     await page.waitForTimeout(1000);
 
@@ -459,8 +476,9 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const settingsMessages = (wsData?.sent || []).filter(m => m.type === 'Settings');
     const lastSettings = settingsMessages[settingsMessages.length - 1];
     const contextInSettings = lastSettings?.data?.agent?.context;
-    const hasContext = Array.isArray(contextInSettings) ? contextInSettings.length > 0 : !!contextInSettings;
-    console.log('[Repro test 9] Settings on reconnect:', hasContext ? `context present (${Array.isArray(contextInSettings) ? contextInSettings.length : 1} items)` : 'NO context');
+    const contextMessages = contextInSettings?.messages ?? (Array.isArray(contextInSettings) ? contextInSettings : []);
+    const hasContext = !!(Array.isArray(contextMessages) && contextMessages.length > 0) || !!(contextInSettings && !Array.isArray(contextInSettings) && (contextInSettings.messages?.length ?? 0) > 0);
+    console.log('[Repro test 9] Settings on reconnect:', hasContext ? `context present (${Array.isArray(contextMessages) ? contextMessages.length : (contextInSettings?.messages?.length ?? 0)} items)` : 'NO context');
     if (!hasContext && trimmed === 'Hello! How can I assist you today?') {
       expect(hasContext, 'Session not retained: Settings on reconnect did not include context; fix app/proxy to send context on reconnect').toBe(true);
     }

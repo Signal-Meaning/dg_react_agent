@@ -85,6 +85,10 @@ The following tests were added first and currently **fail** until the component 
 - **Types:** `src/types/index.ts` – added `restoredAgentContext?: AgentOptions['context']` and `onAgentOptionsUsedForSettings?: (options: AgentOptions) => void`.
 - **Test-app:** `test-app/src/App.tsx` – passes `restoredAgentContext={(window as TestWindow).__e2eRestoredAgentContext}` for E2E.
 
+### Follow-up: E2E 9/9a and context-retention
+
+After implementation, openai-proxy-e2e test 9a (“Settings on reconnect include context”) and sometimes test 9 can still fail in full-suite or CI when the component sends Settings without context. The component now prefers `fromHistory ?? fromApp ?? fromRestored` and falls back to `agentOptionsRef.current?.context` when `getAgentOptions` returns no context. If both are empty (e.g. conversation state not yet synced to the component or app), Settings go out without context. E2E changes made to reduce flakiness: 500ms wait before disconnect, wait for conversation DOM (≥4 messages), and robust `hasContext` for `agent.context` as `{ messages: [...] }`. See Issue #489 doc for full trace. TTS diagnostic failure (openai-proxy-tts-diagnostic) is separate (binary/playback) and may be environment-dependent.
+
 ---
 
 ## 6. References

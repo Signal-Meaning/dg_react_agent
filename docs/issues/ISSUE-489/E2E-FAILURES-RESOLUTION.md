@@ -2,7 +2,7 @@
 
 **Context:** Run `USE_PROXY_MODE=true npm run test:e2e` from `test-app/`. Original run: **19 failed**, 23 skipped, 203 passed (7.4m).
 
-This document tracks the failing E2E tests and resolution steps for the v0.9.8 release (Issue #489).
+This document tracks the failing E2E tests and resolution steps for the v0.9.8 release (Issue #489). For the refactor that made the **component** own and build `agent.context` when sending Settings (and related test 9/9a behavior), see **Issue #490:** `docs/issues/ISSUE-490/REFACTOR-CONTEXT-OWNERSHIP.md`.
 
 ---
 
@@ -27,7 +27,7 @@ This document tracks the failing E2E tests and resolution steps for the v0.9.8 r
 
 All of the above have been run successfully with the existing server (default 10s idle). The greeting-idle-timeout spec scales with `window.__idleTimeoutMs` and passes with either 1s or 10s idle.
 
-**Note:** A **full** E2E run (`USE_PROXY_MODE=true npm run test:e2e`) may still report failures in other specs (e.g. context-retention when run in same suite as OpenAI proxy tests, idle-timeout-behavior timing, openai-proxy-e2e lengthy response / session retained). See [Latest full E2E run](#latest-full-e2e-run) below.
+**Note:** A **full** E2E run (`USE_PROXY_MODE=true npm run test:e2e`) may still report failures in other specs (e.g. openai-proxy-e2e test 9a, context-retention-with-function-calling, idle-timeout-behavior, openai-proxy-tts-diagnostic). See [Latest full E2E run](#latest-full-e2e-run) and [Trace / Issue #490](#issue-490-component-owned-context-and-tests-99a) below.
 
 ---
 
@@ -41,16 +41,16 @@ All of the above have been run successfully with the existing server (default 10
 | Passed | 218 |
 | Skipped | 23 |
 
-**The 4 failures:**
+**The 4 failures (representative):**
 
 | # | Spec / test | Error (summary) |
 |---|-------------|------------------|
-| 1 | context-retention-agent-usage › should retain context when disconnecting and reconnecting - agent uses context | (Failure in full run; passes in focused grep run. May be order/env or OpenAI vs Deepgram proxy.) |
-| 2 | idle-timeout-behavior › should restart timeout after USER_STOPPED_SPEAKING when agent is idle - reproduces Issue #262/#430 | `expect(actualTimeout).toBeGreaterThanOrEqual(9000)` — received 8052 (connection closed at ~8s; test expects 9–15s). |
-| 3 | openai-proxy-e2e › 8b. Lengthy response – after 15s agent still speaking, content in DOM, connection connected | `expect(connectionStatus).toBe('connected')` — received `'closed'` (idle timeout closed connection before 15s). |
-| 4 | openai-proxy-e2e › 9. Repro – after disconnect and reconnect (same page), session retained; response must not be stale or greeting | Got greeting "Hello! How can I assist you today?" as response instead of session-retained answer. |
+| 1 | context-retention-with-function-calling › should retain context when disconnecting and reconnecting with function calling enabled | Context or format assertion on reconnect; may pass with sync/timing mitigations (see [Trace / Issue #490](#issue-490-component-owned-context-and-tests-99a)). |
+| 2 | openai-proxy-e2e › 9a. Isolation – Settings on reconnect include context | `hasContext` false: last Settings on reconnect missing `agent.context`; timing/sync so component and app both have empty context at send time (see [Trace](#trace-where-agentcontext-is-built-and-sent)). |
+| 3 | openai-proxy-e2e › 9. Repro – after disconnect and reconnect (same page), session retained | Greeting as response instead of session-retained; when context was not sent, assertion fails with “Settings on reconnect did not include context”. |
+| 4 | openai-proxy-tts-diagnostic › diagnose TTS path: binary received and playback status | Binary/playback assertion; environment- or backend-dependent, separate from context. |
 
-**Summary:** (2) and (3) are idle-timeout timing: test expects connection to stay open longer, or close in a tighter band. (4) is session/context retention after reconnect (OpenAI proxy). (1) passes in focused run; full-suite order or backend may matter. For release verification, the **spot-check** (grep for the 6 triage specs) confirms proxy-mode idle and reconnection behavior; full-suite failures are documented here for follow-up.
+Other failures in some runs: **idle-timeout-behavior** (timing band), **openai-proxy-e2e 8b** (idle timeout closes before 15s), **context-retention-agent-usage** (full-suite order). **Summary:** (2) and (3) are context-on-reconnect; (1) related; (4) TTS. For release verification, run the **spot-check** (grep for the 6 triage specs); full-suite failures are documented here and in Issue #490 follow-up.
 
 ---
 
@@ -60,16 +60,16 @@ All of the above have been run successfully with the existing server (default 10
 
 | # | Failing step | Used elsewhere? | Why it might fail only here |
 |---|----------------|------------------|------------------------------|
-| 1 | **disconnectComponent(page)** → `waitForFunction` 30s for `connection-status === 'closed'` | Yes: openai-proxy-e2e (tests 2, 3, 8, **9**, 10), context-retention (both tests), context-retention-with-function-calling, greeting-audio-timing, deepgram-text-session-flow | In test 9 we get past disconnect (status becomes 'closed') and then fail on response content. So the **same helper works in test 9** but not in context-retention in the full run. Likely causes: (a) **test order** – context-retention may run in a different worker or after different tests when the page/proxy is in a state where stop or session-disconnect doesn’t lead to 'closed' within 30s; (b) **OpenAI vs Deepgram** – context-retention uses `hasOpenAIProxyEndpoint()` and runs with OpenAI proxy when that env is set; (c) **timing/race** – right after first response we wait 2s then disconnect; the component or proxy might still be finalizing and not react to the click. |
+| 1 | **disconnectComponent(page)** → `waitForFunction` 30s for `connection-status === 'closed'` | Yes: openai-proxy-e2e (tests 2, 3, 8, **9**, 10), context-retention (both tests), context-retention-with-function-calling, greeting-audio-timing, deepgram-text-session-flow | In test 9 we get past disconnect (status becomes 'closed') and then fail on response content. So the **same helper works in test 9** but not in context-retention in the full run. Likely causes: (a) **test order** – context-retention may run in a different worker or after different tests when the page/proxy is in a state where the disconnect/stop action doesn’t produce 'closed' before the helper times out. **Expected behavior:** Clicking the disconnect (stop) button should produce an updated connection status (e.g. 'closed') **within 500ms**; the 30s in the helper is a safety timeout, not the expected delay. (b) **OpenAI proxy** – we are only concerned with OpenAI proxy at this time; context-retention runs with OpenAI proxy when `hasOpenAIProxyEndpoint()` is set. (c) **Timing/race – why we wait 2s before disconnect:** We wait 2s after the first response so that (1) the agent has finished sending the final response segment and the component has processed it, (2) the test-app’s conversation state (e.g. `conversationForDisplay`) and the component’s internal history can sync, (3) any post-response UI or proxy finalization can complete, and (4) the user-initiated disconnect then runs against a stable state so the component and proxy react predictably. Without this buffer, disconnecting immediately after the first response can race with response finalization or state updates, so the disconnect/stop might not be processed and the connection status may not transition to 'closed'. |
 | 2 | **waitForIdleTimeout** then `expect(actualTimeout).toBeGreaterThanOrEqual(9000)` | Same helper used in other idle-timeout-behavior tests (e.g. 7000–35000 band). This test uses **hardcoded** 10000/9000/15000. | **actualTimeout** is “time from **start of wait** to close.” The 10s idle timer **restarts** at Step 5 (USER_STOPPED_SPEAKING); we then do Step 6 and **start** waitForIdleTimeout. There is a 1–2s gap between “timeout restarted” and “we started waiting,” so close can occur ~8s into the wait (10s total from restart). The assertion is **wrong**: it assumes the full 10s runs after the wait begins. Test is **not** isolated from IDLE_TIMEOUT behavior – it’s a **timing assertion bug** (should use app’s `window.__idleTimeoutMs` and a tolerance). |
-| 3 | After **waitForTimeout(15000)** → `expect(connectionStatus).toBe('connected')` | No other test asserts “still connected after 15s” in this way. | **Idle timeout closes the connection.** When the app uses 1s idle (Playwright-started server), the agent may finish the “lengthy” response in &lt;15s; 1s after agent goes idle the connection closes. So by 15s we’re often **closed**. With 10s idle we might still be connected if the agent finished late. So (3) is **idle timeout behavior as expected** – the test is incompatible with short idle; it should skip when `window.__idleTimeoutMs < 15000` or require a longer idle for this test. |
+| 3 | After **waitForTimeout(…)** → `expect(connectionStatus).toBe('connected')` | No other test asserts "still connected" after a fixed 15s in this way. | **Idle timeout closes the connection.** The test should be adjusted like the other idle-timeout behavior tests: use a wait of **IDLE_TIMEOUT + 15s** (i.e. `idleMs + 15000` ms) so the observation period scales with the app's idle timeout. Then assert connection still connected and content present; skip when `idleMs < 15000` so the "lengthy response" observation (15s) is achievable without idle closing first. |
 | 4 | After **sendMessageAndWaitForResponse(…'What famous people lived there?')** → expect response not to be greeting | context-retention and other specs assert on response content after reconnect; they use **getCapturedWebSocketData** to verify Settings on reconnect includes context. | Test 9 does **not** currently check whether context was sent in Settings on reconnect. So we don’t know if: (A) app/proxy didn’t send context → upstream started a new session (greeting), or (B) context was sent but upstream ignored it. **Isolation:** Add a check (e.g. install WebSocket capture, after reconnect inspect last Settings message for context). If context is present but we still get greeting → bug is upstream. If context is absent → bug is app or proxy not sending context on reconnect. |
 
 **Recommended next steps:**
 
-- **#1 (context-retention):** Run in isolation with OpenAI proxy: `USE_PROXY_MODE=1 VITE_OPENAI_PROXY_ENDPOINT=... npm run test:e2e -- --grep "context-retention-agent-usage"`. Run again **without** `VITE_OPENAI_PROXY_ENDPOINT` (Deepgram only) to see if failure is OpenAI-specific. Compare: does disconnectComponent see 'closed' in Deepgram-only runs? **Done:** Both isolation runs passed (with and without OpenAI proxy). So failure #1 in the full run is likely **test order / full-suite environment** (e.g. worker order, timing, or shared state when run with the rest of the suite), not OpenAI vs Deepgram.
+- **#1 (context-retention):** Run in isolation with OpenAI proxy (we are only concerned with OpenAI at this time): `USE_PROXY_MODE=1 VITE_OPENAI_PROXY_ENDPOINT=... npm run test:e2e -- --grep "context-retention-agent-usage"`. **Done:** Isolation run with OpenAI proxy passed. Failure #1 in the full run is likely **test order / full-suite environment** (worker order, timing, or shared state). Disconnect/stop should produce status 'closed' within **500ms**; if the helper times out at 30s, the disconnect path or status update is not reacting in time.
 - **#2 (idle-timeout-behavior):** Fix assertion to use `window.__idleTimeoutMs` and a tolerance (e.g. actualTimeout ≥ idleMs − 2000, ≤ idleMs + 5000) so the test is correct when the wait starts shortly after the timeout restarts.
-- **#3 (8b):** Skip test when `window.__idleTimeoutMs < 15000` (or run this test with a longer idle env) so “connection still connected after 15s” is achievable.
+- **#3 (8b):** Adjust like other idle-timeout behavior tests: wait **idleMs + 15000** ms (IDLE_TIMEOUT + 15s), then assert connection still connected and content present; skip when `window.__idleTimeoutMs < 15000`.
 - **#4 (test 9):** Add WebSocket capture and assert or log whether Settings on reconnect included context; add a targeted test or doc note for “session retained after reconnect” (context sent vs upstream behavior).
 
 **Test 9 isolation (implemented):** Test 9 now installs WebSocket capture, then after the “What famous people lived there?” response it inspects the last sent Settings message for `agent.context`. If the response is the greeting and context was **not** sent → assertion fails with “Settings on reconnect did not include context” (app/proxy bug). If context **was** sent but response is still the greeting → logs “Context was sent but upstream returned greeting” (upstream/session bug). This isolates whether the failure is in the app/proxy (not sending context) or upstream (ignoring context).
@@ -94,21 +94,30 @@ We rely on the **component** to include `agent.context` in the Settings message;
 1. **Test-app (App.tsx)**  
    - **Built:** `memoizedAgentOptions` (useMemo) sets `context: getContextForSettings(conversationForDisplay, () => deepgramRef.current?.getConversationHistory() ?? [])`.  
    - **Source:** `getContextForSettings` (test-app `utils/context-for-settings.ts`) prefers `conversationForDisplay`; if empty, uses the ref callback (component’s `getConversationHistory()`).  
-   - **When:** Context is computed at **render time** when the useMemo runs (deps: `loadedInstructions`, `conversationForDisplay`, `urlParamsString`). So the **latest** context the component can send is whatever the app last passed in `agentOptions` (and the component stores in `agentOptionsRef`).
+   - **When:** Context is computed at **render time** when the useMemo runs (deps: `loadedInstructions`, `conversationForDisplay`, `urlParamsString`). The app also supplies **getAgentOptions(getConversationHistory)** so the component can request options at send time.
 
-2. **Component (DeepgramVoiceInteraction/index.tsx)**  
-   - **Sent:** On connection (and only once per connection), `sendAgentSettings()` builds the Settings message and sets `context: currentAgentOptions.context` (line ~1920).  
-   - **Source:** `currentAgentOptions` is read from `agentOptionsRef.current`, which is updated in a useEffect when `agentOptions` (props) change.  
-   - **When:** Settings are sent ~50ms after the WebSocket reaches OPEN (setTimeout in the connection-state handler). So there is a **timing window**: the app may not have re-rendered with updated `conversationForDisplay` (or the ref may be read before the component’s conversationHistory has committed) before the component sends Settings.
+2. **Component (DeepgramVoiceInteraction/index.tsx)** — **post–Issue #490**  
+   - **Sent:** On connection (once per connection), `sendAgentSettings()` builds **effective context** and sets `context: effectiveContext` in the Settings message.  
+   - **Source (effective context):** The component now **owns** context resolution (Issue #490): `effectiveContext = fromHistory ?? fromApp ?? fromRestored`, where:
+     - **fromHistory:** Built from `conversationHistoryRef.current` (component’s in-memory history, updated when `conversationStorage` is set and ConversationText is received).
+     - **fromApp:** From `getAgentOptions?.(() => conversationHistoryRef.current)` at send time, or from `agentOptionsRef.current?.context` when getAgentOptions returns no context (fallback so last-rendered app options are used on reconnect).
+     - **fromRestored:** From the `restoredAgentContext` prop (for reconnect-after-reload when the app persists and restores context).
+   - **When:** Settings are sent ~50ms after the WebSocket reaches OPEN (setTimeout in the connection-state handler). So there is still a **timing window**: if neither the component’s ref nor the app’s options (or ref fallback) have context at that moment, Settings go out without context.
 
 3. **Proxy (voice-agent-backend openai-proxy server.ts)**  
    - **Received:** On `msg.type === 'Settings'`, reads `contextMessages = settings.agent?.context?.messages`.  
    - **Used:** If `contextMessages?.length`, pushes `conversation.item.create` items to `pendingContextItems` and sends them to the upstream after `session.updated`.  
-   - **Improvement:** The proxy already forwards context when present; no change needed there. The failure (test 9a: “NO context”) is that the **client** sends Settings **without** context.
+   - The proxy forwards context when present; the failure (test 9a: “NO context”) is that the **client** sometimes sends Settings **without** context when all three sources (history, app, restored) are empty at send time.
 
-**Conclusion:** Context is built in the **app** and passed via **props**; the **component** only forwards it. On reconnect, the component can send Settings with stale/empty context if the app has not yet passed options with context (e.g. `conversationForDisplay` and ref both empty at the moment the useMemo ran, or the component’s 50ms send happens before the app re-renders with synced state).
+**Conclusion:** The component now builds effective context from its own history, app-supplied options (or ref fallback), and optional restored context (Issue #490). On reconnect, if the component’s `conversationHistoryRef` is empty and the app has not yet passed (or the component has not yet stored) options with context, Settings can still go out without context; test 9a can therefore remain flaky in full-suite or when conversation state has not synced in time.
 
-**Fix (test-app):** When agent connection becomes `connected`, an effect syncs `conversationForDisplay` from `deepgramRef.current?.getConversationHistory()` so the next render has history and `memoizedAgentOptions.context` is populated before the component sends Settings (~50ms after OPEN). Optionally the component could support a **getAgentOptions**-style callback so the app supplies options at send time.
+**Fixes in place:** (1) Test-app: when connection becomes `connected`, an effect syncs `conversationForDisplay` from `deepgramRef.current?.getConversationHistory()`. (2) Test-app: `getAgentOptions` supplies options at send time with context from `getContextForSettings(conversationForDisplay, getter)`. (3) Component (Issue #490): uses `fromHistory ?? fromApp ?? fromRestored` and falls back to `agentOptionsRef.current?.context` when getAgentOptions returns no context. (4) E2E tests 9/9a: wait for conversation DOM (≥4 messages) and short delay before disconnect; assert `agent.context` as `{ messages: [...] }` for hasContext.
+
+### Issue #490 (component-owned context) and tests 9/9a
+
+**Refactor (Issue #490):** The component now builds and owns effective `agent.context` when sending Settings, and can publish it via `onAgentOptionsUsedForSettings` and accept `restoredAgentContext` for reconnect-after-reload. See **docs/issues/ISSUE-490/REFACTOR-CONTEXT-OWNERSHIP.md**.
+
+**Tests 9 and 9a:** Test **9** (“Repro – session retained”) can pass when the post-reconnect response is not the greeting. Test **9a** (“Isolation – Settings on reconnect include context”) asserts that the last Settings message sent on reconnect includes `agent.context`; it can still **fail** in full-suite or CI when, at the moment Settings are sent, the component’s history ref and the app’s options (and ref fallback) are all empty (timing/sync). E2E mitigations: wait for conversation to appear in the DOM before disconnect, and robust `hasContext` for the API shape `agent.context = { messages: [...] }`. For release verification, run the triage specs in isolation; 9/9a may pass when run alone or with a real backend.
 
 ---
 

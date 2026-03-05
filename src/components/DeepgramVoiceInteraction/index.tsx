@@ -1823,14 +1823,16 @@ function DeepgramVoiceInteraction(
     // up-to-date context. Pass component's current history getter so app need not rely on ref timing.
     const baseAgentOptions = getAgentOptions?.(() => conversationHistoryRef.current) ?? agentOptionsRef.current;
 
-    // Issue #490: Component-owned context. Prefer: in-memory history, then restored (for reconnect-after-reload),
-    // then app (getAgentOptions/agentOptions). So when history is empty we use restored if provided.
+    // Issue #490: Component-owned context. Prefer: in-memory history, then app (getAgentOptions at send time),
+    // then restored (for reconnect-after-reload). When ref is empty, use app-supplied context so reconnect
+    // still gets context from conversationForDisplay/getAgentOptions (avoids E2E 9/9a regression).
     const fromHistory = conversationHistoryRef.current?.length
       ? { messages: conversationHistoryRef.current.map((m) => ({ type: 'History' as const, role: m.role, content: m.content })) }
       : undefined;
+    // When getAgentOptions returns no context (e.g. timing), fall back to last-rendered options so reconnect still gets context (E2E 9/9a).
+    const fromApp = baseAgentOptions?.context?.messages?.length ? baseAgentOptions.context : (agentOptionsRef.current?.context?.messages?.length ? agentOptionsRef.current.context : undefined);
     const fromRestored = restoredAgentContextRef.current?.messages?.length ? restoredAgentContextRef.current : undefined;
-    const fromApp = baseAgentOptions?.context?.messages?.length ? baseAgentOptions.context : undefined;
-    const effectiveContext = fromHistory ?? fromRestored ?? fromApp ?? undefined;
+    const effectiveContext = fromHistory ?? fromApp ?? fromRestored ?? undefined;
     const currentAgentOptions: typeof baseAgentOptions = baseAgentOptions
       ? { ...baseAgentOptions, context: effectiveContext }
       : undefined;
