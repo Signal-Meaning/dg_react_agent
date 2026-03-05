@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useReducer, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useLayoutEffect, useImperativeHandle, useReducer, useRef, useState } from 'react';
 import {
   AgentState,
   AgentOptions,
@@ -48,6 +48,11 @@ const DEFAULT_ENDPOINTS = {
   transcriptionUrl: 'wss://api.deepgram.com/v1/listen',
   agentUrl: 'wss://agent.deepgram.com/v1/agent/converse',
 };
+
+// Issue #489/9a: Last persisted history (module-level) so sendAgentSettings can include context after remount
+// when in-memory refs are empty. Updated in the persist effect and ConversationText handler.
+const lastPersistedHistoryForReconnectRef: { current: ConversationMessage[] } = { current: [] };
+const lastUsedStorageKeyRef: { current: string } = { current: 'dg_conversation' };
 
 /**
  * DeepgramVoiceInteraction component
@@ -165,6 +170,12 @@ function DeepgramVoiceInteraction(
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   // Ref so callbacks receive up-to-date history (handleAgentMessage closure can be stale) — Issue #414
   const conversationHistoryRef = useRef<ConversationMessage[]>([]);
+  // Issue #489/9a: Ref updated every render and in layout effect so sendAgentSettings (called from async connection handler) sees latest state.
+  const latestConversationHistoryRef = useRef<ConversationMessage[]>(conversationHistory);
+  latestConversationHistoryRef.current = conversationHistory;
+  useLayoutEffect(() => {
+    latestConversationHistoryRef.current = conversationHistory;
+  }, [conversationHistory]);
 
   // Internal state
   const [state, dispatch] = useReducer(stateReducer, initialState);
@@ -191,6 +202,7 @@ function DeepgramVoiceInteraction(
   // Issue #406: Restore conversation from storage on mount when conversationStorage is provided
   useEffect(() => {
     if (!conversationStorage) return;
+    lastUsedStorageKeyRef.current = CONVERSATION_STORAGE_KEY;
     conversationStorage.getItem(CONVERSATION_STORAGE_KEY).then((raw) => {
       if (!raw) return;
       try {
@@ -210,7 +222,9 @@ function DeepgramVoiceInteraction(
   // Issue #406: Persist conversation when it changes (and storage is provided)
   useEffect(() => {
     if (!conversationStorage || conversationHistory.length === 0) return;
+    lastUsedStorageKeyRef.current = CONVERSATION_STORAGE_KEY;
     const toStore = conversationHistory.slice(-MAX_CONVERSATION_STORED);
+    lastPersistedHistoryForReconnectRef.current = toStore;
     conversationStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(toStore)).catch(() => { /* ignore */ });
   }, [conversationStorage, CONVERSATION_STORAGE_KEY, conversationHistory]);
 
@@ -1819,15 +1833,44 @@ function DeepgramVoiceInteraction(
 
   // Send agent settings after connection is established - only if agent is configured
   const sendAgentSettings = () => {
-    // Issue #307 / #489: Prefer getAgentOptions at send time so app can supply options with
-    // up-to-date context. Pass component's current history getter so app need not rely on ref timing.
-    const baseAgentOptions = getAgentOptions?.(() => conversationHistoryRef.current) ?? agentOptionsRef.current;
+    // Issue #489/9a: Invariant — use the ref updated every render so context is never stale (sendAgentSettings can run from async connection handler before useEffect sync runs).
+    conversationHistoryRef.current = latestConversationHistoryRef.current;
+    const latestHistory = latestConversationHistoryRef.current;
+    // After remount, in-memory ref can be empty; use last persisted history, then sync read from localStorage (Issue #489/9a).
+    let sourceForHistory: ConversationMessage[] | undefined = latestHistory?.length
+      ? latestHistory
+      : (lastPersistedHistoryForReconnectRef.current?.length ? lastPersistedHistoryForReconnectRef.current : undefined);
+    if (!sourceForHistory?.length && typeof localStorage !== 'undefined') {
+      const keysToTry = [lastUsedStorageKeyRef.current, 'dg_voice_conversation', 'dg_conversation'];
+      for (const key of keysToTry) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw) as Array<{ role?: string; content?: string; timestamp?: number }>;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const valid = parsed.filter(
+                (m): m is ConversationMessage =>
+                  (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
+              ).map((m) => ({ role: m.role as ConversationMessage['role'], content: m.content!, timestamp: m.timestamp }));
+              if (valid.length > 0) {
+                sourceForHistory = valid;
+                break;
+              }
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    }
 
-    // Issue #490: Component-owned context. Prefer: in-memory history, then app (getAgentOptions at send time),
-    // then restored (for reconnect-after-reload). When ref is empty, use app-supplied context so reconnect
-    // still gets context from conversationForDisplay/getAgentOptions (avoids E2E 9/9a regression).
-    const fromHistory = conversationHistoryRef.current?.length
-      ? { messages: conversationHistoryRef.current.map((m) => ({ type: 'History' as const, role: m.role, content: m.content })) }
+    // Issue #307 / #489: Prefer getAgentOptions at send time so app can supply options with
+    // up-to-date context. Pass getter that returns current history (in-memory or last persisted).
+    const baseAgentOptions = getAgentOptions?.(() => sourceForHistory ?? []) ?? agentOptionsRef.current;
+
+    // Issue #490: Component-owned context. Prefer: in-memory history (or last persisted), then app, then restored.
+    const fromHistory = sourceForHistory?.length
+      ? { messages: sourceForHistory.map((m) => ({ type: 'History' as const, role: m.role, content: m.content })) }
       : undefined;
     // When getAgentOptions returns no context (e.g. timing), fall back to last-rendered options so reconnect still gets context (E2E 9/9a).
     const fromApp = baseAgentOptions?.context?.messages?.length ? baseAgentOptions.context : (agentOptionsRef.current?.context?.messages?.length ? agentOptionsRef.current.context : undefined);
@@ -2352,6 +2395,8 @@ function DeepgramVoiceInteraction(
         updatedHistory = [...latest, newEntry];
         conversationHistoryRef.current = updatedHistory;
         setConversationHistory((prev) => [...prev, newEntry]);
+        // Issue #489/9a: Keep module-level ref in sync so reconnect has context even after remount
+        lastPersistedHistoryForReconnectRef.current = updatedHistory.slice(-MAX_CONVERSATION_STORED);
       }
 
       if (data.role === 'assistant') {

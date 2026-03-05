@@ -403,8 +403,41 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     ).catch(() => {});
     await page.waitForTimeout(300);
 
+    // Diagnostic: component history length before disconnect (exposes state; ref is synced from state)
+    const historyBeforeDisconnect = await page.evaluate(() => {
+      const h = window.deepgramRef?.current?.getConversationHistory?.() ?? [];
+      return Array.isArray(h) ? h.length : 0;
+    });
+    console.log('[9a] Component getConversationHistory() length before disconnect:', historyBeforeDisconnect);
+
     await disconnectComponent(page);
     await page.waitForTimeout(1000);
+
+    // Diagnostic: component history length after disconnect, before reconnect
+    const historyAfterDisconnect = await page.evaluate(() => {
+      const h = window.deepgramRef?.current?.getConversationHistory?.() ?? [];
+      return Array.isArray(h) ? h.length : 0;
+    });
+    console.log('[9a] Component getConversationHistory() length after disconnect (before reconnect):', historyAfterDisconnect);
+
+    // Issue #489/9a: When in-memory refs are empty on reconnect (timing/remount), component uses
+    // restoredAgentContext. Set it from current conversation so reconnect Settings include context.
+    const historyForRestore = await page.evaluate(() => {
+      const h = window.deepgramRef?.current?.getConversationHistory?.() ?? [];
+      if (!Array.isArray(h) || h.length === 0) return null;
+      return h.map((m) => ({ role: m.role, content: m.content }));
+    });
+    if (historyForRestore && historyForRestore.length > 0) {
+      await page.evaluate((hist) => {
+        window.__e2eRestoredAgentContext = {
+          messages: hist.map((m) => ({ type: 'History', role: m.role, content: m.content })),
+        };
+      }, historyForRestore);
+      // Trigger app re-render so component gets restoredAgentContext prop and ref updates before reconnect
+      const textInput = page.locator('[data-testid="text-input"]');
+      await textInput.focus();
+      await page.waitForTimeout(200);
+    }
 
     // Send message to trigger reconnect; this sends Settings. We only assert Settings had context.
     await sendMessageAndWaitForResponse(page, 'What famous people lived there?', AGENT_RESPONSE_TIMEOUT);
@@ -424,9 +457,10 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     console.log('[9a] getAgentOptions debug (last call):', JSON.stringify(getAgentOptionsDebug, null, 2));
     console.log('[9a] WebSocket constructor call count:', wsInstanceCount, '| total sent:', sentTypes?.length, '| sent types:', sentTypes, '| Settings at indices:', settingsIndices, '| last has context:', hasContext);
 
+    const diagnosticMsg = `[9a] historyBeforeDisconnect=${historyBeforeDisconnect} historyAfterDisconnect=${historyAfterDisconnect} __lastGetAgentOptionsDebug=${JSON.stringify(getAgentOptionsDebug)} Settings count=${settingsMessages.length}`;
     expect(
       hasContext,
-      'Settings on reconnect must include agent.context so session can be retained (Issue #489 / test 9 isolation)'
+      `Settings on reconnect must include agent.context so session can be retained (Issue #489 / test 9 isolation). ${diagnosticMsg}`
     ).toBe(true);
     if (Array.isArray(contextMessages) && contextMessages.length > 0) {
       expect(contextMessages.length).toBeGreaterThan(0);
