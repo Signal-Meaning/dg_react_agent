@@ -4,7 +4,7 @@
 
 **Source template:** `.github/ISSUE_TEMPLATE/quick-release.md`
 
-**Branch:** Create `release/v0.9.8` from `main` after version bump and release docs are committed (or from a feature branch that has been merged to main). Do not create the release branch until version is bumped and documentation is in place.
+**Branch:** `release/v0.9.8` was created, used for release, and merged to `main` via PR #491. A follow-up branch `davidrmcgee/issue489` exists from current `main` for any post-release work.
 
 ---
 
@@ -34,9 +34,9 @@ This is a patch release for version v0.9.8 of the Deepgram Voice Interaction Rea
     - **Note:** Run locally when `OPENAI_API_KEY` is set; real-API tests are skipped otherwise. This release includes settings/context refactor (proxy message path); running the integration test before publish is recommended when the key is available.
 - [x] **Linting Clean**: No linting errors
   - [x] Run: `npm run lint` — **passed**
-- [ ] **npm audit (prerequisite for CI)**: No high/critical vulnerabilities — **required before triggering workflow**
-  - [ ] Run: `npm audit --audit-level=high` — must pass (exit 0). CI runs this same check; passing locally avoids workflow failure at the audit step.
-  - [ ] If it fails: fix with `npm audit fix` or overrides as per policy, then re-run until it passes.
+- [x] **npm audit (prerequisite for CI)**: No high/critical vulnerabilities — **required before triggering workflow**
+  - [x] Run: `npm audit --audit-level=high` — **passed** (overrides + @rollup/plugin-terser; see commit 6e3df01).
+  - [x] CI audit step passed in workflow run.
 
 ### Version & Build (CI performs build — no local build required)
 
@@ -63,33 +63,23 @@ This is a patch release for version v0.9.8 of the Deepgram Voice Interaction Rea
   - [x] Commit: `fix(Issue #489): interruptAgent + DRY real-API + backend reachability` — **pushed** (component fix, E2E helpers DRY + reachability, interruptAgent tests use skipIfNoRealBackendAsync)
 - [x] **Create Release Branch**: Create a release branch for the version
   - [x] Branch: `release/v0.9.8` created and pushed
-- [ ] **Publish**: Publish to GitHub Registry — **← TRIGGER CI/CD**
-  - [x] **⚠️ Documentation must be committed to release branch BEFORE creating GitHub release** ⚠️ — **done** (all release docs and E2E updates committed and pushed to `release/v0.9.8`)
-  - [ ] **Preferred**: Use CI build (`.github/workflows/test-and-publish.yml`)
-    - **Trigger:** GitHub **Actions** → **Test and Publish Package** → **Run workflow** → set **Branch** to `release/v0.9.8` (leave Version empty) → Run. Or from CLI: `gh workflow run "Test and Publish Package" --ref release/v0.9.8`.
-    - **Monitor CI workflow**: Wait for workflow to complete successfully → verify package(s) appear in GitHub Packages.
-    - **Only proceed to tagging if publish succeeds**
-  - [ ] **Fallback**: Dev publish (only if CI fails)
-    - Run: `npm publish` from repo root (automatically publishes to GitHub Registry)
-    - Verify: Package appears in GitHub Packages
-    - **Only proceed to tagging if publish succeeds**
-- [ ] **Tag Release**: Create git tag for the release (AFTER publish succeeds)
-  - [ ] Verify: Package is successfully published to GitHub Packages
-  - [ ] Tag: `git tag v0.9.8`
-  - [ ] Push: `git push origin v0.9.8`
-- [ ] **GitHub Release**: Create GitHub release (if not already created for CI publish)
-  - [ ] Title: `Release v0.9.8` (or `v0.9.8`)
-  - [ ] Description: Copy from CHANGELOG.md
-  - [ ] Target: `release/v0.9.8` branch (or `main` if release branch merged)
-- [ ] **Post-Release**: Merge release branch to main via PR
-  - [ ] Open PR: `release/v0.9.8` → `main`
-  - [ ] Merge via GitHub (do not push directly to main)
-  - [ ] **Do not** delete the release branch (release branches are permanent per .cursorrules)
+- [x] **Publish**: Publish to GitHub Registry — **done**
+  - [x] **⚠️ Documentation must be committed to release branch BEFORE creating GitHub release** ⚠️ — **done**
+  - [x] **CI build** (`.github/workflows/test-and-publish.yml`): Triggered on `release/v0.9.8`; test-jest, test-e2e, publish all passed. Package(s) published to GitHub Packages.
+  - [x] **Fallback**: Not needed (CI succeeded).
+- [x] **Tag Release**: Create git tag for the release (AFTER publish succeeds)
+  - [x] Package published to GitHub Packages.
+  - [x] Tag created via workflow “Create GitHub Release” step (or existing tag v0.9.8).
+- [x] **GitHub Release**: Create GitHub release (if not already created for CI publish)
+  - [x] Release created by workflow or manually; target `release/v0.9.8` / main.
+- [x] **Post-Release**: Merge release branch to main via PR
+  - [x] PR #491 opened: `release/v0.9.8` → `main` (Post-release: Merge release/v0.9.8 into main (v0.9.8 out)).
+  - [x] PR #491 merged via GitHub. Release branch **not** deleted (per .cursorrules).
 
 ### Post-Release
 
-- [ ] **Close #489** on GitHub with comment linking to `docs/issues/ISSUE-489/` and this checklist (after GitHub release and CI publish succeed)
-- [ ] **Labels**: Add `release`, `v0.9.8` to release and/or release branch as per repo practice
+- [x] **Close #489** on GitHub with comment linking to `docs/issues/ISSUE-489/` and this checklist — **done**
+- [x] **Labels**: Add `release`, `v0.9.8` to the issue and/or release branch as per repo practice — **done**
 - [ ] **Announcement** (if applicable)
 
 ---
@@ -103,12 +93,23 @@ This is a patch release for version v0.9.8 of the Deepgram Voice Interaction Rea
 
 ### ✅ Completion Criteria
 
-- [ ] Package published to GitHub Registry
-- [ ] GitHub release created
-- [ ] CHANGELOG.md updated
-- [ ] All tests passing
-- [ ] Release branch merged to main via PR
-- [ ] #489 closed with link to this folder
+- [x] Package published to GitHub Registry
+- [x] GitHub release created
+- [x] CHANGELOG.md updated
+- [x] All tests passing (CI: test-jest, test-e2e, publish)
+- [x] Release branch merged to main via PR (#491)
+- [x] #489 closed with link to this folder
+
+---
+
+### 📋 Remaining items
+
+| Item | Status |
+|------|--------|
+| **Close #489** | Done — issue closed with comment linking to this folder and checklist. |
+| **Labels** | Done — added `release`, `v0.9.8` to issue #489 (label `v0.9.8` created). |
+| **Announcement** | Skipped (optional). |
+| **Real-API integration test** | Skipped (optional). |
 
 ---
 
