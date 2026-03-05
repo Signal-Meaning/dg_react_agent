@@ -31,6 +31,7 @@ This is a patch release for version v0.9.8 of the Deepgram Voice Interaction Rea
   - [ ] **⚠️ REQUIRED if this patch fixes proxy/API behavior:** Run real-API integration test when `OPENAI_API_KEY` is available. When running:
     - [ ] Run: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
     - [ ] Verify: All in-scope tests pass against the real API. If keys are not available, document the exception.
+    - **Note:** Run locally when `OPENAI_API_KEY` is set; real-API tests are skipped otherwise. This release includes settings/context refactor (proxy message path); running the integration test before publish is recommended when the key is available.
 - [x] **Linting Clean**: No linting errors
   - [x] Run: `npm run lint` — **passed**
 
@@ -58,14 +59,12 @@ This is a patch release for version v0.9.8 of the Deepgram Voice Interaction Rea
   - [x] Commit: `chore: prepare release v0.9.8 (Issue #489)` — **pushed**
 - [x] **Create Release Branch**: Create a release branch for the version
   - [x] Branch: `release/v0.9.8` created and pushed
-- [ ] **Publish**: Publish to GitHub Registry
-  - [ ] **⚠️ Documentation must be committed to release branch BEFORE creating GitHub release** ⚠️
-  - [ ] **Preferred**: Use CI build (create GitHub release to trigger `.github/workflows/test-and-publish.yml`)
-    - Create GitHub release (this triggers CI; CI builds from source and publishes)
-    - **Monitor CI workflow**: Wait for CI build to complete successfully
-      - Check GitHub Actions workflow status
-      - Verify all CI checks pass
-      - Verify package(s) appear in GitHub Packages
+- [ ] **Publish**: Publish to GitHub Registry — **← NEXT STEP**
+  - [x] **⚠️ Documentation must be committed to release branch BEFORE creating GitHub release** ⚠️ — **done** (all release docs and E2E updates committed and pushed to `release/v0.9.8`)
+  - [ ] **Preferred**: Use CI build (`.github/workflows/test-and-publish.yml`)
+    - **Option A:** GitHub **Actions** → **Test and Publish Package** → **Run workflow** → set **Branch** to `release/v0.9.8` (leave Version empty to use package.json 0.9.8) → Run. Workflow runs Jest, build, then publish.
+    - **Option B:** Create a **GitHub release** (tag `v0.9.8` from branch `release/v0.9.8`) if your process uses release creation to trigger the workflow.
+    - **Monitor CI workflow**: Wait for workflow to complete successfully → verify package(s) appear in GitHub Packages.
     - **Only proceed to tagging if publish succeeds**
   - [ ] **Fallback**: Dev publish (only if CI fails)
     - Run: `npm publish` from repo root (automatically publishes to GitHub Registry)
