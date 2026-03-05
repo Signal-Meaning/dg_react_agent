@@ -10,6 +10,13 @@ These E2E tests use **REAL Deepgram WebSocket connections**, not mocks. This pro
 - **OpenAI proxy specs only:** `npm run test:e2e:openai` (requires `VITE_OPENAI_PROXY_ENDPOINT` or default). Runs the 4 OpenAI-only specs plus the callback suite (`callback-test.spec.js`); all must pass (Issue #414).
 - **Deepgram-backed specs only:** `npm run test:e2e:deepgram` (use `VITE_DEEPGRAM_PROXY_ENDPOINT`; do not set `VITE_OPENAI_PROXY_ENDPOINT`). Runs all specs except the 4 OpenAI-only ones (includes the callback suite).
 
+## Playwright and Cursor Agent
+
+- **Runner behavior:** Playwright uses a **project-local** browser install at `test-app/.playwright-browsers`. The npm scripts set `PLAYWRIGHT_BROWSERS_PATH` to that directory (absolute) **before** starting Playwright, so both Cursor’s agent sandbox and local runs use the same install. (Playwright reads this env when its module loads, so it must be set in the script, not only in the config.)
+- **Why “reinstall browsers?”:** Cursor’s agent runs in a sandbox that can only read/write the workspace and `/tmp`. It cannot write to the default Playwright cache (e.g. `~/Library/Caches/ms-playwright` on macOS). Using a project-local path fixes that.
+- **One-time setup:** From **test-app** run `npm run playwright:install-browsers` (or from repo root: `npm run playwright:install-browsers`). If the agent runs in sandbox with no network, run that once locally; the next `npm run test:e2e` will use the existing binaries.
+- **Scripts:** All `test:e2e*` and related Playwright scripts in `test-app/package.json` (and root `package.json` when running from root) set `PLAYWRIGHT_BROWSERS_PATH` so the path is correct regardless of cwd. The config files also set it when unset, as a fallback when running `npx playwright test ...` directly.
+
 ## Setup
 
 ### 1. Get a Deepgram API Key
@@ -56,6 +63,23 @@ npx playwright test --grep "Timeout"        # All timeout-related tests
 npx playwright test --grep "Idle Timeout"   # Idle timeout specific tests
 npx playwright test --grep "Microphone"     # All microphone tests
 ```
+
+### Proxy-mode E2E: idle timeout and reconnection specs
+
+With **USE_PROXY_MODE=true** (default for full E2E), these specs validate idle timeout and reconnection behavior; they have been verified passing with both 1s idle (Playwright-started dev server) and 10s idle (existing server with default frontend):
+
+- **deepgram-greeting-idle-timeout** — Idle timeout after greeting (Issue #139); scales with `window.__idleTimeoutMs` (1s or 10s).
+- **deepgram-manual-vad-workflow** — Speak → silence → timeout (manual VAD).
+- **context-retention-agent-usage** — Context retained after disconnect/reconnect; Settings format.
+- **deepgram-text-session-flow** — Auto-connect and re-establish when WebSocket closes; rapid/sequential message exchange.
+
+Optional spot-check (from `test-app`):
+
+```bash
+USE_PROXY_MODE=true npm run test:e2e -- --grep "deepgram-greeting-idle-timeout|context-retention-agent-usage|deepgram-text-session-flow|deepgram-manual-vad-workflow"
+```
+
+With an existing server (e.g. default 10s idle): `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- --grep "deepgram-greeting-idle-timeout"`. See [E2E-FAILURES-RESOLUTION.md](../../../docs/issues/ISSUE-489/E2E-FAILURES-RESOLUTION.md) for current status and verification commands.
 
 ### E2E navigation: use baseURL (relative URLs)
 

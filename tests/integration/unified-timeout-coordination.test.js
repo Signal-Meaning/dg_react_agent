@@ -442,6 +442,23 @@ describe('Unified Timeout Coordination Integration', () => {
      * each STARTED must have a matching COMPLETED; timeout must not fire until all are completed
      * and the next agent message is received.
      */
+    /**
+     * Regression test for Issue #489 E2E failures: when no function call has ever occurred,
+     * timeout must start and fire without requiring AGENT_MESSAGE_RECEIVED. (AGENT_MESSAGE_RECEIVED
+     * is only required after FUNCTION_CALL_COMPLETED to clear waitingForNextAgentMessage.)
+     */
+    test('should start and fire timeout when idle with no function call (no AGENT_MESSAGE_RECEIVED needed)', () => {
+      // No FUNCTION_CALL_STARTED/COMPLETED in this flow (e.g. greeting-only or text-only session)
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+
+      // Do NOT send AGENT_MESSAGE_RECEIVED - timeout should still start and fire
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
     test('should track closure and idle timeout with a few functions in parallel', () => {
       const timeoutMs = 5000;
       // 1. Establish session with user activity and idle state
@@ -475,6 +492,51 @@ describe('Unified Timeout Coordination Integration', () => {
       // 6. Next agent message received → closure complete; timeout may start
       idleTimeoutService.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
       jest.advanceTimersByTime(timeoutMs);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  /**
+   * Issue #489: stateGetter and updateStateDirectly — isolate greeting idle timeout E2E failures.
+   * The hook passes a stateGetter so the service can read latest component state; if that ref is stale,
+   * canStartTimeout() sees wrong isPlaying and never starts the timeout. These tests lock in the
+   * contract so we can fail in unit tests instead of only in E2E.
+   */
+  describe('Issue #489: stateGetter and updateStateDirectly (greeting idle timeout)', () => {
+    test('updateStateDirectly with idle + isPlaying false after user activity should start timeout and fire', () => {
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'startAudioCapture' });
+      idleTimeoutService.updateStateDirectly({
+        agentState: 'idle',
+        isPlaying: false,
+        isUserSpeaking: false,
+      });
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    test('when stateGetter returns idle + !isPlaying, checkAndStartTimeoutIfNeeded path should start timeout', () => {
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.setStateGetter(() => ({
+        agentState: 'idle',
+        isPlaying: false,
+        isUserSpeaking: false,
+      }));
+      idleTimeoutService.updateStateDirectly({ agentState: 'idle', isPlaying: false });
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      jest.advanceTimersByTime(5000);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    test('after agent was speaking (isPlaying true), updateStateDirectly idle + isPlaying false should start timeout', () => {
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'speaking' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: true });
+      jest.advanceTimersByTime(1000);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+      idleTimeoutService.updateStateDirectly({ agentState: 'idle', isPlaying: false });
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true);
+      jest.advanceTimersByTime(5000);
       expect(mockOnTimeout).toHaveBeenCalledTimes(1);
     });
   });

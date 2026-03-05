@@ -1,5 +1,11 @@
 // @ts-check
+const path = require('path');
 const { defineConfig, devices } = require('@playwright/test');
+
+// Project-local browsers: so agent sandbox and local runs share one install (Cursor sandbox can't write to ~/Library/Caches/ms-playwright)
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, 'test-app', '.playwright-browsers');
+}
 
 // Load environment variables from .env file
 require('dotenv').config({ path: './test-app/.env' });

@@ -1,8 +1,33 @@
 # Backend Proxy Documentation
 
-**Issue #242** - Backend Proxy Support for Secure API Key Management
+This directory describes the **backend proxies and translators** used with the `DeepgramVoiceInteraction` React component: what they are, what this project provides, and how to implement or use them.
 
-This directory contains comprehensive documentation for implementing and using backend proxy mode with the `DeepgramVoiceInteraction` component.
+## Overview: what are the backend proxies?
+
+The React component connects to a **WebSocket endpoint** to run the voice agent. That endpoint can be:
+
+1. **Deepgram directly** (direct mode) — the component connects to Deepgram using an API key. The key is passed from the frontend; suitable for development or low-risk use.
+2. **Your backend** (proxy mode) — the component connects to a WebSocket URL you provide (e.g. `wss://your-api.com/deepgram-proxy`). Your backend then talks to Deepgram (or to another provider). This keeps API keys and secrets on the server and gives you control over auth, logging, and routing.
+
+The **backend proxy** is the server-side code that:
+
+- Accepts a WebSocket connection from the component.
+- Speaks the **same protocol** the component expects (Deepgram Voice Agent message types: Settings, SettingsApplied, ConversationText, AgentAudioDone, etc.).
+- Forwards messages to and from an upstream provider (Deepgram or, via a translator, another API such as OpenAI Realtime).
+
+So there are two main patterns:
+
+- **Deepgram proxy** — Your backend holds the Deepgram API key and forwards client ↔ Deepgram. The protocol is unchanged; you are just moving the connection and credentials to your server.
+- **Translation proxy (e.g. OpenAI)** — Your backend talks to a different upstream (e.g. OpenAI Realtime API) and **translates** between that API’s protocol and the component’s protocol. The component still sees the same message types (SettingsApplied, AgentAudioDone, etc.); the proxy is responsible for mapping upstream events to that contract.
+
+This repo **promotes and maintains** proxy and translator code that we document and ship for other teams to use. References in this doc to “the proxy” or “our proxy” mean that promoted code (e.g. in `packages/voice-agent-backend/` or the patterns in the implementation guides), not a specific deployment like the test-app’s local backend. **The dg_react_agent team is responsible for the correctness of that proxy/translator code against the component’s protocol** (message types, ordering, and lifecycle such as SettingsApplied and AgentAudioDone). Integrators who use or adapt the code we provide can rely on us to maintain it; third-party implementations are outside our support scope (see [Support scope](#support-scope) below).
+
+### What this repo provides
+
+- **Interface contract** — The specification of the WebSocket protocol between component and proxy (message types, ordering, readiness). See [Interface Contract](./INTERFACE-CONTRACT.md) and [Component–Proxy Contract](./COMPONENT-PROXY-CONTRACT.md).
+- **Reference implementations** — Guides for implementing a proxy in your stack: [Node.js/Express](./IMPLEMENTATION-NODEJS.md), [Python/FastAPI](./IMPLEMENTATION-FASTAPI.md), [Python/Django](./IMPLEMENTATION-DJANGO.md).
+- **OpenAI translation proxy** — Code that translates between the component protocol and the OpenAI Realtime API, in `packages/voice-agent-backend/scripts/openai-proxy/`. See [Run the OpenAI proxy](./RUN-OPENAI-PROXY.md).
+- **Test-app backend** — A single server used by the test-app that hosts both a Deepgram proxy and the OpenAI proxy (and optional function endpoints) for development and E2E testing. See [Test-app backend](#test-app-backend-single-server) below.
 
 ## Documentation Files
 
@@ -40,6 +65,10 @@ The test-app uses **one backend server** that hosts both Deepgram and OpenAI pro
 ### Component–Proxy Contract (All Proxies)
 
 The component speaks **one protocol** (Deepgram Voice Agent message types). Whether the proxy talks to Deepgram directly or to another service (e.g. OpenAI via a translation layer), the **readiness contract** is the same: the component must receive **SettingsApplied** before sending the first user message, and the proxy must send it and keep the connection open. See [Component–Proxy Contract](./COMPONENT-PROXY-CONTRACT.md).
+
+### Idle timeout and greeting (AgentAudioDone)
+
+The component starts its **idle timeout** only when the agent is idle (not speaking, not playing). That can happen in two ways: (1) the proxy sends **AgentAudioDone** after response or greeting **audio** — then the component transitions to idle and starts the timer; (2) for **text-only** greeting or turns (e.g. `ConversationText` assistant with no binary), the component has a built-in path that transitions to idle after a short defer, so the proxy does **not** need to send `AgentAudioDone`. Our **Deepgram proxy** (`packages/voice-agent-backend/src/attach-upgrade.js`) sends `AgentAudioDone` after the first assistant `ConversationText` **only when** it has already forwarded at least one binary message in that connection; for text-only greeting the component’s text-only path handles it. See [Component–Proxy Contract § Idle timeout and agent completion](./COMPONENT-PROXY-CONTRACT.md#idle-timeout-and-agent-completion-agentaudiodone--text-only-path).
 
 ### Interface Contract, Not New Service
 

@@ -79,6 +79,9 @@ function createDeepgramWss(options) {
     const deepgramWs = new WebSocket(deepgramUrl.toString(), ['token', apiKey.trim()]);
     const messageQueue = [];
     const deepgramMessageQueue = [];
+    /** Issue #489: send AgentAudioDone after first assistant ConversationText so idle timeout can start. Only send after we have forwarded at least one binary (audio) so we do not signal "done" before greeting audio arrives; if Deepgram sends ConversationText before audio, the component uses its text-only path (ConversationText → defer → idle). */
+    let sentAgentAudioDoneAfterFirstAssistantText = false;
+    let hasForwardedBinaryInThisConnection = false;
 
     const forwardQueuedDeepgramMessages = () => {
       if (clientWs.readyState === WebSocket.OPEN && deepgramMessageQueue.length > 0) {
@@ -101,6 +104,21 @@ function createDeepgramWss(options) {
       if (clientWs.readyState === WebSocket.OPEN) {
         try {
           clientWs.send(data, { binary: isBinary });
+          if (isBinary) {
+            hasForwardedBinaryInThisConnection = true;
+          }
+          if (!isBinary && !sentAgentAudioDoneAfterFirstAssistantText) {
+            try {
+              const msg = typeof data === 'string' ? JSON.parse(data) : JSON.parse(data.toString());
+              if (msg && msg.type === 'ConversationText' && msg.role === 'assistant') {
+                sentAgentAudioDoneAfterFirstAssistantText = true;
+                // Only send AgentAudioDone if we have already forwarded audio (so we do not signal "done" before audio arrives and cancel the idle timer when audio then starts)
+                if (hasForwardedBinaryInThisConnection) {
+                  clientWs.send(JSON.stringify({ type: 'AgentAudioDone' }), { binary: false });
+                }
+              }
+            } catch (_) { /* not JSON or parse error: ignore */ }
+          }
         } catch (e) {
           deepgramMessageQueue.push({ data, isBinary });
         }

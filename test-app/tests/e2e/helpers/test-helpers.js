@@ -30,17 +30,59 @@ export function hasRealAPIKey() {
 }
 
 /**
- * Skip test if real API key is not available
- * Use this at the test definition level, not inside the test function
+ * Check if OpenAI API key is available (for proxy calling real OpenAI).
+ * Used when USE_REAL_APIS=1 or when determining if we have a real OpenAI backend.
+ * @returns {boolean} True if OPENAI_API_KEY or VITE_OPENAI_API_KEY is set and non-placeholder
+ */
+export function hasOpenAIKey() {
+  const key = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+  if (!key || typeof key !== 'string') return false;
+  const trimmed = key.trim();
+  if (trimmed === '') return false;
+  if (trimmed === 'your-openai-api-key-here' || trimmed.startsWith('sk-test')) return false;
+  return trimmed.length >= 10;
+}
+
+/**
+ * Check if we have at least one real backend available (Deepgram or OpenAI proxy).
+ * DRY: single source of truth for "can run this test against a real API".
+ * - Deepgram: VITE_DEEPGRAM_API_KEY (hasRealAPIKey())
+ * - OpenAI proxy: hasOpenAIProxyEndpoint() and, when USE_REAL_APIS=1, hasOpenAIKey()
+ * @returns {boolean} True if tests can run against a real backend
+ */
+export function hasRealBackend() {
+  if (hasRealAPIKey()) return true;
+  if (!hasOpenAIProxyEndpoint()) return false;
+  if (process.env.USE_REAL_APIS === 'true' || process.env.USE_REAL_APIS === '1') {
+    return hasOpenAIKey();
+  }
+  return true; // proxy endpoint available, mocks may be used
+}
+
+/**
+ * Skip test if no real backend is available (Deepgram key or OpenAI proxy with key when USE_REAL_APIS).
+ * Use for backend-agnostic tests that work with either Deepgram or OpenAI proxy.
+ * @param {string} reason - Optional reason for skipping
+ */
+export function skipIfNoRealBackend(reason = 'Requires real API (VITE_DEEPGRAM_API_KEY or OpenAI proxy with key when USE_REAL_APIS=1)') {
+  if (!hasRealBackend()) {
+    test.skip(true, reason);
+  }
+}
+
+/**
+ * Skip test if real API is not available.
+ * Uses hasRealBackend() so tests run when either Deepgram or OpenAI proxy (with key when USE_REAL_APIS) is configured.
+ * For Deepgram-only tests, also call skipIfOpenAIProxy().
  * @param {string} reason - Optional reason for skipping
  * @example
  * test('my test', async ({ page }) => {
- *   skipIfNoRealAPI('Requires real Deepgram API key');
+ *   skipIfNoRealAPI('Requires real API');
  *   // ... test code
  * });
  */
-export function skipIfNoRealAPI(reason = 'Requires real Deepgram API key') {
-  if (!hasRealAPIKey()) {
+export function skipIfNoRealAPI(reason = 'Requires real API (Deepgram key or OpenAI proxy with key when USE_REAL_APIS=1)') {
+  if (!hasRealBackend()) {
     test.skip(true, reason);
   }
 }
@@ -92,6 +134,117 @@ export function skipIfNoOpenAIProxy(reason = 'Requires VITE_OPENAI_PROXY_ENDPOIN
 export function skipIfOpenAIProxy(reason = 'Deepgram-only test; skip when using OpenAI proxy') {
   if (hasOpenAIProxyEndpoint()) {
     test.skip(true, reason);
+  }
+}
+
+/**
+ * Check if Deepgram proxy is configured (app would connect to /deepgram-proxy).
+ * Same server (PROXY_PORT) can host both /openai and /deepgram-proxy.
+ * @returns {boolean} True if VITE_DEEPGRAM_PROXY_ENDPOINT set or USE_PROXY_MODE + E2E_BACKEND=deepgram
+ */
+export function hasDeepgramProxyEndpoint() {
+  const endpoint = process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || process.env.VITE_PROXY_ENDPOINT;
+  if (typeof endpoint === 'string' && endpoint.trim().length > 0) return true;
+  if (process.env.USE_PROXY_MODE === 'true' || process.env.USE_PROXY_MODE === '1') {
+    if (process.env.E2E_BACKEND === 'deepgram') return true;
+  }
+  return false;
+}
+
+/**
+ * Probe backend WebSocket path (TCP to port, then WebSocket to path).
+ * Matches e2e-check-existing-server.mjs: backend "reports state" by accepting connections.
+ * @param {number} port - Backend port (default 8080)
+ * @param {string} path - WebSocket path (e.g. '/openai' or '/deepgram-proxy')
+ * @returns {Promise<boolean>} True if connection accepted (open or 400/Unexpected server response)
+ */
+async function probeProxyWebSocket(port, path) {
+  const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
+  const net = await import('net');
+  const tcpOk = await new Promise((resolve, reject) => {
+    const socket = net.default.connect(port, '127.0.0.1', () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.on('error', reject);
+    socket.setTimeout(3000, () => {
+      socket.destroy();
+      reject(new Error('timeout'));
+    });
+  }).catch(() => false);
+  if (!tcpOk) return false;
+  const wsScheme = useHttps ? 'wss' : 'ws';
+  const wsUrl = `${wsScheme}://127.0.0.1:${port}${path}`;
+  const WebSocket = (await import('ws')).default;
+  return new Promise((resolve) => {
+    const opts = useHttps ? { rejectUnauthorized: false } : {};
+    const ws = new WebSocket(wsUrl, opts);
+    const t = setTimeout(() => {
+      ws.removeAllListeners();
+      ws.terminate();
+      resolve(false);
+    }, 5000);
+    ws.on('open', () => {
+      clearTimeout(t);
+      ws.close();
+      resolve(true);
+    });
+    ws.on('error', (err) => {
+      clearTimeout(t);
+      const msg = err?.message || String(err);
+      if (msg.includes('400') || msg.includes('Unexpected server response')) resolve(true);
+      else resolve(false);
+    });
+  });
+}
+
+async function isOpenAIProxyReachable() {
+  const port = parseInt(process.env.PROXY_PORT || '8080', 10);
+  return probeProxyWebSocket(port, '/openai');
+}
+
+async function isDeepgramProxyReachable() {
+  const port = parseInt(process.env.PROXY_PORT || '8080', 10);
+  return probeProxyWebSocket(port, '/deepgram-proxy');
+}
+
+/**
+ * Check if the real backend is reachable (not just keys configured).
+ * Probes the backend that the test would use:
+ * - OpenAI proxy: WebSocket /openai on PROXY_PORT.
+ * - Deepgram proxy: WebSocket /deepgram-proxy on PROXY_PORT.
+ * - Direct Deepgram (no proxy): no local backend to probe; returns true when hasRealAPIKey().
+ * Use with skipIfNoRealBackendAsync() so tests skip when backend is down.
+ * @returns {Promise<boolean>} True if backend is reachable or we cannot probe (e.g. direct Deepgram)
+ */
+export async function isRealBackendReachable() {
+  if (hasOpenAIProxyEndpoint()) return await isOpenAIProxyReachable();
+  if (hasDeepgramProxyEndpoint()) return await isDeepgramProxyReachable();
+  if (hasRealAPIKey()) return true;
+  return false;
+}
+
+/**
+ * Skip test if no real backend or if backend is not reachable (probes backend when OpenAI proxy).
+ * Call at the start of tests that require a real, reachable backend (not just keys).
+ * @param {string} reason - Optional reason for skipping when config missing
+ * @example
+ * test('needs real backend', async ({ page }) => {
+ *   await skipIfNoRealBackendAsync();
+ *   // ... test code
+ * });
+ */
+export async function skipIfNoRealBackendAsync(reason = 'Requires real API and backend must be reachable') {
+  if (!hasRealBackend()) {
+    test.skip(true, reason);
+    return;
+  }
+  const reachable = await isRealBackendReachable();
+  if (!reachable) {
+    test.skip(
+      true,
+      'Real backend (proxy) is not reachable. Start it with: cd test-app && npm run backend'
+    );
   }
 }
 
@@ -394,37 +547,50 @@ async function sendTextMessage(page, message) {
 async function installWebSocketCapture(page) {
   await page.addInitScript(() => {
     const OriginalWebSocket = window.WebSocket;
+    window.capturedSentMessages = window.capturedSentMessages || [];
+    window.__capturedWebSocketCount = 0;
+
+    function captureSend(data) {
+      try {
+        const parsed = JSON.parse(data);
+        window.capturedSentMessages.push({
+          timestamp: new Date().toISOString(),
+          type: parsed.type,
+          data: parsed
+        });
+        console.log('WebSocket send:', parsed.type, parsed);
+      } catch (e) {
+        window.capturedSentMessages.push({
+          timestamp: new Date().toISOString(),
+          type: 'binary',
+          size: data.byteLength || data.length
+        });
+      }
+    }
+
+    // Issue #489: Patch prototype.send so every WebSocket's sends are captured, including
+    // instances created via a cached original constructor (e.g. reconnects). See
+    // tests/unit/websocket-capture.test.js.
+    const originalSend = OriginalWebSocket.prototype.send;
+    OriginalWebSocket.prototype.send = function(data) {
+      captureSend(data);
+      return originalSend.call(this, data);
+    };
+
     window.WebSocket = function(url, protocols) {
-      console.log('WebSocket created:', { url, protocols });
+      window.__capturedWebSocketCount = (window.__capturedWebSocketCount || 0) + 1;
+      console.log('WebSocket created:', { url, protocols, instanceNumber: window.__capturedWebSocketCount });
       window.capturedWebSocketUrl = url;
       window.capturedWebSocketProtocols = protocols;
-      
       const ws = new OriginalWebSocket(url, protocols);
-      const originalSend = ws.send;
-      
-      // Capture sent messages
+
+      // Issue #489: Wrap this instance's send so we capture even if app uses a cached constructor.
+      const origSend = ws.send.bind(ws);
       ws.send = function(data) {
-        try {
-          const parsed = JSON.parse(data);
-          window.capturedSentMessages = window.capturedSentMessages || [];
-          window.capturedSentMessages.push({
-            timestamp: new Date().toISOString(),
-            type: parsed.type,
-            data: parsed
-          });
-          console.log('WebSocket send:', parsed.type, parsed);
-        } catch (e) {
-          // Not JSON, might be binary audio data
-          window.capturedSentMessages = window.capturedSentMessages || [];
-          window.capturedSentMessages.push({
-            timestamp: new Date().toISOString(),
-            type: 'binary',
-            size: data.byteLength || data.length
-          });
-        }
-        return originalSend.call(this, data);
+        captureSend(data);
+        return origSend(data);
       };
-      
+
       // Capture received messages
       ws.addEventListener('message', (event) => {
         try {
@@ -956,22 +1122,43 @@ async function assertConnectionState(page, expect, expectedState, options = {}) 
 }
 
 /**
- * Disconnect the component (simulates stop button or network issue)
+ * Disconnect via Settings panel Session (Session active → click to disconnect).
+ * Use this when the session is active (connected) and not recording; prefers the Settings Session disconnect button.
  * @param {import('@playwright/test').Page} page
  */
-async function disconnectComponent(page) {
-  const stopButton = page.locator('[data-testid="stop-button"]');
-  if (await stopButton.isVisible({ timeout: 1000 })) {
-    await stopButton.click();
-  }
-  
-  // Wait for connection to close
+async function disconnectViaSettingsSession(page) {
+  const sessionDisconnectBtn = page.locator('[data-testid="session-disconnect-button"]');
+  await sessionDisconnectBtn.waitFor({ state: 'visible', timeout: 5000 });
+  await sessionDisconnectBtn.click();
   await page.waitForFunction(
     () => {
       const statusEl = document.querySelector('[data-testid="connection-status"]');
       return statusEl && statusEl.textContent === 'closed';
     },
-    { timeout: 5000 }
+    { timeout: 10000 }
+  );
+}
+
+/**
+ * Disconnect the component (Stop when recording, otherwise Settings Session disconnect).
+ * Prefer Stop when recording; otherwise use the Settings panel Session "Active (click to disconnect)" button.
+ * @param {import('@playwright/test').Page} page
+ */
+async function disconnectComponent(page) {
+  const stopButton = page.locator('[data-testid="stop-button"]');
+  const sessionDisconnectButton = page.locator('[data-testid="session-disconnect-button"]');
+  if (await stopButton.isVisible({ timeout: 1000 })) {
+    await stopButton.click();
+  } else if (await sessionDisconnectButton.isVisible({ timeout: 1000 })) {
+    await sessionDisconnectButton.click();
+  }
+
+  await page.waitForFunction(
+    () => {
+      const statusEl = document.querySelector('[data-testid="connection-status"]');
+      return statusEl && statusEl.textContent === 'closed';
+    },
+    { timeout: 30000 }
   );
 }
 
@@ -1690,7 +1877,7 @@ async function writeTranscriptToFile(transcript, options = {}) {
 }
 
 export {
-  // hasRealAPIKey, skipIfNoRealAPI, hasOpenAIProxyEndpoint, skipIfNoOpenAIProxy, skipIfOpenAIProxy are already exported inline above
+  // hasRealAPIKey, hasOpenAIKey, hasRealBackend, skipIfNoRealBackend, skipIfNoRealAPI, hasOpenAIProxyEndpoint, hasDeepgramProxyEndpoint, skipIfNoOpenAIProxy, skipIfOpenAIProxy, isRealBackendReachable, skipIfNoRealBackendAsync are already exported inline above
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   setupTestPageWithDeepgramProxy, // Navigate to test app with Deepgram proxy (VITE_DEEPGRAM_PROXY_ENDPOINT)
@@ -1719,7 +1906,8 @@ export {
   waitForAgentResponseEnhanced, // Enhanced version with options object
   waitForTranscript, // Wait for transcript to appear in the UI
   assertConnectionState, // Assert connection is in expected state (with automatic waiting)
-  disconnectComponent, // Disconnect the component (stop button or simulate network issue)
+  disconnectComponent, // Disconnect the component (stop button or Settings Session disconnect)
+  disconnectViaSettingsSession, // Disconnect via Settings panel Session "Active (click to disconnect)" button
   getAgentState, // Get current agent state from UI
   assertNoRecoverableAgentErrors, // Assert no recoverable upstream errors (fail E2E on regression)
   assertAgentErrorsAllowUpstreamTimeouts, // Allow up to 1 upstream timeout error (OpenAI proxy: no-message / idle_timeout)

@@ -1,9 +1,8 @@
 name: Test and Publish Package
 
-# No push trigger: we do not run CI/CD on every merge to main (see docs/issues/ISSUE-448).
+# Automatic triggers disabled; run manually via Actions tab or when creating a release.
+# Previously: release types [published]. Re-enable that block to run on GitHub release publish.
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       test_only:
@@ -96,71 +95,53 @@ jobs:
           cd packages/voice-agent-backend
           npm pack --dry-run
 
-  # E2E tests temporarily disabled in CI
-  # test-e2e:
-  #   name: Playwright E2E Tests
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     contents: read
-  #   
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #       with:
-  #         ref: ${{ inputs.branch || github.ref }}
-  #     
-  #     - name: Setup Node.js
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '20'
-  #         
-  #     - name: Install dependencies
-  #       run: npm ci
-  #       
-  #     - name: Build package
-  #       run: npm run build
-  #       
-  #     - name: Install test-app dependencies
-  #       run: |
-  #         cd test-app
-  #         npm ci
-  #       
-  #     - name: Install Playwright browsers (Chromium only)
-  #       run: |
-  #         cd test-app
-  #         npx playwright install chromium --with-deps
-  #     
-  #     - name: Verify test-app can start dev server
-  #       run: |
-  #         cd test-app
-  #         timeout 30 npm run dev &
-  #         sleep 10
-  #         curl -f http://localhost:5173 || (echo "❌ Dev server failed to start" && exit 1)
-  #         pkill -f "vite" || true
-  #         echo "✅ Dev server starts successfully"
-  #       
-  #     - name: Run Playwright E2E tests (CI-safe only)
-  #       run: |
-  #         cd test-app
-  #         # Run only CI-safe E2E tests (core functionality without audio/microphone dependencies)
-  #         # Use --config to ensure webServer config is loaded
-  #         npx playwright test --config=tests/playwright.config.mjs \
-  #           tests/e2e/api-key-validation.spec.js \
-  #           tests/e2e/text-only-conversation.spec.js \
-  #           tests/e2e/lazy-initialization-e2e.spec.js \
-  #           tests/e2e/page-content.spec.js \
-  #           tests/e2e/deepgram-ux-protocol.spec.js \
-  #           tests/e2e/protocol-validation-modes.spec.js
-  #       env:
-  #         CI: true
-  #         VITE_DEEPGRAM_API_KEY: ${{ secrets.VITE_DEEPGRAM_API_KEY }}
-  #         VITE_DEEPGRAM_PROJECT_ID: ${{ secrets.VITE_DEEPGRAM_PROJECT_ID }}
-  #         VITE_BASE_URL: 'http://localhost:5173'
+  test-e2e:
+    name: E2E Tests (mocks, no real APIs)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Prelim (Node, install, build)
+        uses: Signal-Meaning/dg_react_agent/.github/actions/prelim@main
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Install test-app dependencies
+        run: |
+          cd test-app
+          npm ci
+
+      - name: Install Playwright browsers (Chromium only)
+        run: |
+          cd test-app
+          npx playwright install chromium --with-deps
+
+      - name: Run Playwright E2E tests (mocks only, CI-safe subset)
+        run: |
+          cd test-app
+          # Proxy mode: backend mocks upstream; no real Deepgram/OpenAI keys required.
+          USE_PROXY_MODE=true CI=true E2E_USE_HTTP=1 npx playwright test --config=tests/playwright.config.mjs \
+            tests/e2e/api-key-validation.spec.js \
+            tests/e2e/lazy-initialization-e2e.spec.js \
+            tests/e2e/page-content.spec.js \
+            tests/e2e/deepgram-ux-protocol.spec.js \
+            tests/e2e/protocol-validation-modes.spec.js
+        env:
+          CI: true
+          USE_PROXY_MODE: true
+          E2E_USE_HTTP: '1'
+          # No real API keys: mocks only
+          VITE_BASE_URL: 'http://localhost:5173'
 
   publish:
     name: Publish Package
     runs-on: ubuntu-latest
-    needs: [test-jest] # test-e2e temporarily disabled
+    needs: [test-jest, test-e2e]
     if: success() && (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.test_only != true) || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v')))
     permissions:
       contents: write   # read + write for creating release tag and GitHub Release

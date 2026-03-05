@@ -6,6 +6,7 @@ import {
   LLMResponse,
   UserMessageResponse,
   AgentState,
+  AgentOptions,
   ConnectionState,
   ServiceType,
   DeepgramError,
@@ -18,9 +19,11 @@ import {
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 import { ClosureIssueTestPage } from './closure-issue-test-page';
 import { getFunctionDefinitions } from './utils/functionDefinitions';
+import { getContextForSettings } from './utils/context-for-settings';
 import { getFunctionCallBackendBaseUrl, forwardFunctionCallToBackend } from './utils/functionCallBackend';
 import type { AgentFunction } from '../../src/types/agent';
 import { getLogger } from '../../src/utils/logger';
+import { generateSessionId } from './session-management';
 
 // Type declaration for E2E test support
 // Only used in test-app for E2E testing, not part of the component's public API
@@ -60,6 +63,12 @@ declare global {
     __testGetInterruptAgent?: () => boolean;
     __testGetStartAudioCapture?: () => boolean;
     __testConversationHistory?: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: number }>; // Issue #362: Expose conversation history for E2E tests
+    /** Idle timeout (ms) used by the component; exposed for E2E (e.g. deepgram-greeting-idle-timeout.spec.js). */
+    __idleTimeoutMs?: number;
+    /** Issue #489: Last getAgentOptions call debug (E2E test 9a). */
+    __lastGetAgentOptionsDebug?: { fromComponent: number; fromRef: number; fromStorage: number; conversationForDisplay: number; contextMsgCount: number; source: string };
+    /** Issue #490: E2E-only. When set, app passes this as restoredAgentContext to the component. */
+    __e2eRestoredAgentContext?: AgentOptions['context'];
   }
 }
 
@@ -117,6 +126,8 @@ function App() {
     transcription: 'closed' // Initialize transcription state to track it properly
   });
   const [hasSentSettingsDom, setHasSentSettingsDom] = useState(false);
+  /** Session ID for current agent connection; set when agent connects, cleared when closed (Settings panel). */
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [micLoading, setMicLoading] = useState(false);
   
@@ -134,6 +145,15 @@ function App() {
     }, 300);
     return () => clearTimeout(t);
   }, []);
+
+  // Issue #489: When agent connection becomes connected (including reconnect), sync conversation from ref
+  // so memoizedAgentOptions.context is populated before the component sends Settings (~50ms after OPEN).
+  useEffect(() => {
+    if (connectionStates.agent !== 'connected') return;
+    const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
+    if (fromRef.length === 0) return;
+    setConversationForDisplay((prev) => (prev.length >= fromRef.length ? prev : fromRef));
+  }, [connectionStates.agent]);
 
   // Expose conversation history to window for E2E testing (Issue #362)
   useEffect(() => {
@@ -473,16 +493,68 @@ function App() {
       ...(import.meta.env.VITE_IDLE_TIMEOUT_MS
         ? { idleTimeoutMs: Number(import.meta.env.VITE_IDLE_TIMEOUT_MS) }
         : {}),
-      // Pass conversation history as context (from component ref via conversationForDisplay)
-      context: conversationForDisplay.length > 0 ? {
-        messages: conversationForDisplay.map(message => ({
-          type: "History",
-          role: message.role,
-          content: message.content
-        }))
-      } : undefined
+      // Pass conversation history as context for session retention on reconnect (Issue #489 / E2E test 9).
+      // Prefer conversationForDisplay (synced from callbacks); fallback to component ref so we always
+      // send context when the component has history, even if callbacks haven't updated app state yet.
+      context: getContextForSettings(conversationForDisplay, () => deepgramRef.current?.getConversationHistory() ?? []) as AgentOptions['context']
     };
   }, [loadedInstructions, conversationForDisplay, urlParamsString]); // Include urlParamsString to recompute when URL params change
+
+  // Expose idle timeout for E2E so specs can align waits with app (no real-API-only; works with proxy/mock or real backend)
+  useEffect(() => {
+    const testWindow = window as TestWindow;
+    testWindow.__idleTimeoutMs = memoizedAgentOptions.idleTimeoutMs ?? 10000;
+  }, [memoizedAgentOptions]);
+
+  // Issue #489: Supply options at send time so Settings on reconnect include up-to-date context.
+  // Component may pass its current history getter; fallback to ref, then sync read from storage
+  // (component restores from storage async, so on reconnect ref can still be empty).
+  const getAgentOptions = useCallback((
+    getConversationHistory?: () => Array<{ role: ConversationRole; content: string; timestamp?: number }>
+  ) => {
+    const fromComponent = getConversationHistory?.() ?? [];
+    const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
+    let fromStorage: Array<{ role: string; content: string }> = [];
+    if (fromComponent.length === 0 && fromRef.length === 0 && typeof localStorage !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(CONVERSATION_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as Array<{ role?: string; content?: string }>;
+          if (Array.isArray(parsed)) {
+            fromStorage = parsed.filter(
+              (m): m is { role: string; content: string } =>
+                (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
+            );
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    const context = getContextForSettings(
+      conversationForDisplay,
+      () => (fromComponent.length > 0 ? fromComponent : fromRef.length > 0 ? fromRef : fromStorage)
+    ) as AgentOptions['context'];
+    const contextMsgCount = context?.messages?.length ?? 0;
+    const source = contextMsgCount > 0
+      ? (conversationForDisplay.length > 0 ? 'display' : fromComponent.length > 0 ? 'component' : fromRef.length > 0 ? 'ref' : fromStorage.length > 0 ? 'storage' : 'display')
+      : 'none';
+    const debug = {
+      fromComponent: fromComponent.length,
+      fromRef: fromRef.length,
+      fromStorage: fromStorage.length,
+      conversationForDisplay: conversationForDisplay.length,
+      contextMsgCount,
+      source,
+    };
+    if (import.meta.env.DEV || (typeof window !== 'undefined' && window.location.search.includes('contextDebug=1'))) {
+      console.log('[getAgentOptions]', debug);
+    }
+    if (typeof window !== 'undefined') {
+      (window as TestWindow).__lastGetAgentOptionsDebug = debug;
+    }
+    return { ...memoizedAgentOptions, context };
+  }, [memoizedAgentOptions, conversationForDisplay]);
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
@@ -649,7 +721,11 @@ function App() {
       ...prev,
       [service]: state
     }));
-    // Component logs connection state; no redundant addLog here
+    // Session ID: set when agent connects, clear when closed (for Settings panel)
+    if (service === 'agent') {
+      if (state === 'connected') setSessionId(generateSessionId());
+      if (state === 'closed') setSessionId(null);
+    }
     // Reset hasSentSettings mirror on agent disconnect/stop for clean reconnect assertions
     if (service === 'agent' && state === 'closed') {
       setHasSentSettingsDom(false);
@@ -1041,6 +1117,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         )}
         transcriptionOptions={memoizedTranscriptionOptions}
         agentOptions={memoizedAgentOptions}
+        getAgentOptions={getAgentOptions}
+        restoredAgentContext={typeof window !== 'undefined' ? (window as TestWindow).__e2eRestoredAgentContext : undefined}
         endpointConfig={memoizedEndpointConfig}
         onReady={handleReady}
         onTranscriptUpdate={handleTranscriptUpdate}
@@ -1249,13 +1327,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             Stop
           </button>
         )}
-        {/* Agent connection status moved here for quick visibility during tests */}
-        <div style={{ fontSize: '14px' }}>
-          Agent Connection: <strong data-testid="connection-status">{connectionStates.agent}</strong>
-        </div>
-        <div style={{ fontSize: '14px' }}>
-          Transcription Connection: <strong data-testid="transcription-connection-status">{connectionStates.transcription}</strong>
-        </div>
         <div style={{ fontSize: '14px' }}>
           Settings Applied: <strong data-testid="has-sent-settings">{String(hasSentSettingsDom)}</strong>
         </div>
@@ -1323,6 +1394,36 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             micEnabled ? 'Disable Mic' : 'Enable Mic'
           )}
         </button>
+      </div>
+
+      {/* Settings panel: Session pane (rehomed from Admin); disconnect only when session active and not production */}
+      <div data-testid="settings-panel" style={{ marginTop: '20px', border: '1px solid #ccc', padding: '10px', pointerEvents: 'auto' }}>
+        <h3>Settings</h3>
+        <div data-testid="session-pane" style={{ marginBottom: '10px' }}>
+          <h4 style={{ margin: '0 0 8px 0', fontSize: '14px' }}>Session</h4>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+            <span>ID: <strong data-testid="session-id">{sessionId ?? '—'}</strong></span>
+            <span>
+              {connectionStates.agent === 'connected' && !import.meta.env.PROD ? (
+                <button
+                  type="button"
+                  onClick={stopInteraction}
+                  style={{ padding: '6px 12px', pointerEvents: 'auto' }}
+                  data-testid="session-disconnect-button"
+                >
+                  Active (click to disconnect)
+                </button>
+              ) : (
+                <span data-testid="session-state-inactive">{connectionStates.agent ?? '—'}</span>
+              )}
+            </span>
+          </div>
+          {/* Kept for E2E: tests target these; refactor or remove tests that rely on STT/TTS connection display — see test-app/tests/e2e/REFACTOR-CONNECTION-STATUS-TESTS.md */}
+          <div style={{ fontSize: '12px', color: '#666', marginTop: '6px' }}>
+            <span data-testid="connection-status" aria-hidden="true">{connectionStates.agent}</span>
+            <span data-testid="transcription-connection-status" aria-hidden="true" style={{ marginLeft: '8px' }}>{connectionStates.transcription}</span>
+          </div>
+        </div>
       </div>
       
       {isRecording && (

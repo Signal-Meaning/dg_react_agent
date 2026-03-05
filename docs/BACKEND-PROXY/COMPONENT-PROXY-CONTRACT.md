@@ -28,6 +28,18 @@ If the proxy never sends `SettingsApplied` (e.g. because the upstream closes bef
 
 The component delivers **`FunctionCallRequest`** to the host via `onFunctionCallRequest`. The **proxy** only forwards messages; it does **not** execute function logic. For production, the host should execute function calls on the **app backend** (e.g. HTTP `POST /function-call`), not in the browser: frontend forwards the request to the backend, backend runs common handlers (neither Deepgram- nor OpenAI-specific), frontend sends `FunctionCallResponse` with the result. See [Backend function-call contract](./BACKEND-FUNCTION-CALL-CONTRACT.md).
 
+## Idle timeout and agent completion (AgentAudioDone / text-only path)
+
+The component starts its **idle timeout** (after which it may close the connection) only when the agent is considered **idle** — i.e. not speaking and not playing audio. That transition can happen in two ways:
+
+1. **Audio path:** The proxy sends **`AgentAudioDone`** after the agent has finished sending audio for a turn (e.g. after a response or greeting that included binary audio). The component then transitions to idle and starts the idle timer.
+2. **Text-only path:** When the proxy sends **`ConversationText` (role: assistant)** and **no** binary audio follows (e.g. greeting as text only), the component uses an internal path: after a short defer, if the agent is still in “listening” (no `AgentStartedSpeaking` received), it treats agent activity as ended, transitions to idle, and starts the idle timer. So the proxy **does not** need to send `AgentAudioDone` for text-only greeting or text-only turns.
+
+**Proxy guidance:**
+
+- **When your upstream sends both audio and then ConversationText (assistant):** Send `AgentAudioDone` after that ConversationText so the component can transition to idle and the idle timeout can start. Do **not** send `AgentAudioDone` before any audio has been forwarded for that turn, or the component may start the timer and then receive audio and cancel it.
+- **When your upstream sends only ConversationText (assistant)** (e.g. greeting as text, no TTS): You may omit `AgentAudioDone`; the component’s text-only path will transition to idle. Our Deepgram proxy follows this: it sends `AgentAudioDone` after the first assistant `ConversationText` only if it has already forwarded at least one binary message in that connection. See `packages/voice-agent-backend/src/attach-upgrade.js` and [E2E-FAILURES-RESOLUTION.md](../issues/ISSUE-489/E2E-FAILURES-RESOLUTION.md) for the rationale and tests.
+
 ## Summary
 
 | Aspect | Contract |
@@ -35,6 +47,7 @@ The component delivers **`FunctionCallRequest`** to the host via `onFunctionCall
 | **Protocol** | Component speaks one protocol (Deepgram Voice Agent message types). Proxies either forward it (Deepgram) or translate to/from another API (e.g. OpenAI Realtime). |
 | **Readiness** | Session is ready for the first user message only after the component has received **SettingsApplied** (or equivalent). Proxies must send it and keep the connection open until the host can send. |
 | **First message** | The component will not send `InjectUserMessage` until Settings are confirmed. Proxies must not close the connection before sending `SettingsApplied`. |
+| **Idle timeout** | Component starts idle timer only when agent is idle. Send **AgentAudioDone** after response/greeting **audio**; for **text-only** greeting or turns, the component transitions to idle via its text-only path — proxy may omit AgentAudioDone. |
 | **Function calls** | Host should execute functions on the app backend (proxies not involved). Frontend forwards `FunctionCallRequest` → backend executes → frontend sends `FunctionCallResponse`. |
 
 Tests that enforce this contract (for either proxy):

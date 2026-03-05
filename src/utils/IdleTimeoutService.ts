@@ -46,7 +46,7 @@ export class IdleTimeoutService {
   /** Issue #487 (voice-commerce #1058): After app sends function result, agent is still busy until next agent message. */
   private waitingForNextAgentMessageAfterFunctionResult = false;
   private logger: Logger;
-  /** Pause timeout until first user activity (speaking, sending text, etc.). After any such event, timeout is allowed to run when conditions are idle. */
+  /** Pause timeout until first user activity (speaking, typing/sending text, etc.). After any such event, timeout is allowed to run when conditions are idle. */
   private hasSeenUserActivityThisSession = false;
 
   constructor(config: IdleTimeoutConfig) {
@@ -267,7 +267,7 @@ export class IdleTimeoutService {
 
   /**
    * Check if timeout can start based on current state.
-   * Timeout is paused until first user activity (speaking, sending text, etc.);
+   * Timeout is paused until first user activity (speaking, typing/sending text, etc.);
    * after that, it can start when conditions are idle.
    */
   private canStartTimeout(state: IdleTimeoutState = this.currentState): boolean {

@@ -6,6 +6,12 @@ import { fileURLToPath } from 'url';
 
 // Load test-app/.env so HTTPS and proxy settings are available regardless of cwd
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Project-local browsers: so agent sandbox and local runs share one install (Cursor sandbox can't write to ~/Library/Caches/ms-playwright)
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, '..', '.playwright-browsers');
+}
+
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 // Respect HTTPS from .env (Vite and proxy use it when started). Test uses same scheme so baseURL matches server.
@@ -22,6 +28,8 @@ console.log('Playwright baseURL:', baseURL);
 console.log('Playwright HTTPS:', useHttps, '| proxy endpoints:', `${proxyBase}/deepgram-proxy`, `${proxyBase}/openai`);
 const ENABLE_AUDIO = process.env.PW_ENABLE_AUDIO === 'true';
 console.log('PW_ENABLE_AUDIO:', ENABLE_AUDIO);
+// By default do not collect failure artifacts (trace/screenshot). Set PW_ARTIFACTS_ON_FAILURE=1 to enable.
+const artifactsOnFailure = process.env.PW_ARTIFACTS_ON_FAILURE === '1' || process.env.PW_ARTIFACTS_ON_FAILURE === 'true';
 
 /**
  * @see https://playwright.dev/docs/test-configuration
@@ -73,14 +81,10 @@ export default defineConfig({
     /* This helps when running all tests together where API may be slower */
     actionTimeout: 30000, // 30 seconds for actions
 
-    /* Collect trace on first failure so you can inspect with npx playwright show-trace. See https://playwright.dev/docs/trace-viewer */
-    trace: 'retain-on-first-failure',
-    
-    /* Record video on failure - disabled by default */
+    /* Trace/screenshot on failure only when requested (PW_ARTIFACTS_ON_FAILURE=1). Default: off for faster runs. */
+    trace: artifactsOnFailure ? 'retain-on-first-failure' : 'off',
     video: 'off',
-    
-    /* Take screenshot on failure */
-    screenshot: 'only-on-failure',
+    screenshot: artifactsOnFailure ? 'only-on-failure' : 'off',
     
     /* Grant microphone permissions automatically for VAD tests */
     permissions: ['microphone'],
@@ -142,7 +146,8 @@ export default defineConfig({
               VITE_BASE_URL: process.env.VITE_BASE_URL || baseURL,
               VITE_DEEPGRAM_PROXY_ENDPOINT: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || `${proxyBase}/deepgram-proxy`,
               VITE_OPENAI_PROXY_ENDPOINT: process.env.VITE_OPENAI_PROXY_ENDPOINT || `${proxyBase}/openai`,
-              VITE_IDLE_TIMEOUT_MS: process.env.VITE_IDLE_TIMEOUT_MS || '30000',
+              // E2E default 1s so greeting-idle-timeout tests finish within test timeout; override with VITE_IDLE_TIMEOUT_MS if needed. Test-app default (when run outside E2E) is 10s via component DEFAULT_IDLE_TIMEOUT_MS.
+              VITE_IDLE_TIMEOUT_MS: process.env.VITE_IDLE_TIMEOUT_MS || '1000',
             },
           },
           {

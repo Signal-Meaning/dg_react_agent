@@ -11,6 +11,10 @@ This guide explains how to develop, test, and package the `dg_react_agent` libra
 
 The original component provided basic microphone functionality via `startAudioCapture()` method, which is preserved in this fork. Additional microphone control features like `toggleMic()` and `microphoneEnabled` prop were added post-fork and may be causing connection issues in E2E tests.
 
+## **Team responsibility: proxies and translators**
+
+The dg_react_agent team is responsible for the **proxy and translator code that this project promotes for other teams to use**. When we document, ship, or recommend a proxy (or OpenAI/translation layer), we own its correctness against the component’s protocol (e.g. sending `AgentAudioDone` when the upstream response completes). See [Backend Proxy documentation](../BACKEND-PROXY/README.md#team-responsibility-proxies-and-translators) for the full statement.
+
 ## **Quick Start**
 
 ```bash

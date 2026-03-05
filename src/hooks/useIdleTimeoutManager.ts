@@ -48,6 +48,10 @@ export function useIdleTimeoutManager(
 
     serviceRef.current.onTimeout(() => {
       logger.info('Idle timeout reached - closing agent connection');
+      // E2E diagnostic (Issue #489): expose so tests can assert timeout fired even if close not yet reflected in UI
+      if (typeof window !== 'undefined') {
+        (window as unknown as { __idleTimeoutFired__?: boolean }).__idleTimeoutFired__ = true;
+      }
       agentManagerRef.current?.close();
     });
 
@@ -91,6 +95,9 @@ export function useIdleTimeoutManager(
   // Handle state changes
   useEffect(() => {
     if (!serviceRef.current) return;
+
+    // Keep stateGetter's ref in sync so IdleTimeoutService sees latest state (fixes greeting idle timeout E2E)
+    currentStateRef.current = state;
 
     const currentState = {
       isUserSpeaking: state.isUserSpeaking,

@@ -33,7 +33,6 @@ import { useCallbackRef, useBooleanDeclarativeProp } from '../../hooks/declarati
 import { AgentStateService } from '../../services/AgentStateService';
 import { DEFAULT_IDLE_TIMEOUT_MS } from '../../constants/voice-agent';
 import { compareAgentOptionsIgnoringContext, hasDependencyChanged } from '../../utils/option-comparison';
-import { filterFunctionsForSettings } from '../../utils/function-utils';
 import { functionCallLogger } from '../../utils/function-call-logger';
 import {
   hasSettingsBeenSent,
@@ -42,12 +41,19 @@ import {
   WindowWithDeepgramGlobals
 } from '../../utils/component-helpers';
 import { getLogger } from '../../utils/logger';
+import { buildSettingsMessage } from '../../utils/buildSettingsMessage';
+import { useSettingsContext } from '../../hooks/useSettingsContext';
 
 // Default endpoints
 const DEFAULT_ENDPOINTS = {
   transcriptionUrl: 'wss://api.deepgram.com/v1/listen',
   agentUrl: 'wss://agent.deepgram.com/v1/agent/converse',
 };
+
+// Issue #489/9a: Last persisted history (module-level) so sendAgentSettings can include context after remount
+// when in-memory refs are empty. Updated in the persist effect and ConversationText handler.
+const lastPersistedHistoryForReconnectRef: { current: ConversationMessage[] } = { current: [] };
+const lastUsedStorageKeyRef: { current: string } = { current: 'dg_conversation' };
 
 /**
  * DeepgramVoiceInteraction component
@@ -152,6 +158,9 @@ function DeepgramVoiceInteraction(
     startAudioCapture: startAudioCaptureProp,
     conversationStorage,
     conversationStorageKey,
+    getAgentOptions,
+    restoredAgentContext,
+    onAgentOptionsUsedForSettings,
   } = props;
 
   const DEFAULT_CONVERSATION_STORAGE_KEY = 'dg_conversation';
@@ -162,6 +171,7 @@ function DeepgramVoiceInteraction(
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   // Ref so callbacks receive up-to-date history (handleAgentMessage closure can be stale) — Issue #414
   const conversationHistoryRef = useRef<ConversationMessage[]>([]);
+  // Phase 3 refactor: single "latest history" ref — conversationHistoryRef is updated by effect (state) and ConversationText handler; hook uses it for getHistoryForSettings (no separate latestConversationHistoryRef).
 
   // Internal state
   const [state, dispatch] = useReducer(stateReducer, initialState);
@@ -172,6 +182,9 @@ function DeepgramVoiceInteraction(
   // Ref to hold the latest agentOptions value, avoiding stale closures in callbacks
   // Issue #307: Fix closure issue where sendAgentSettings captures stale agentOptions
   const agentOptionsRef = useRef<typeof agentOptions>(agentOptions);
+
+  // Issue #490: Ref for restoredAgentContext so sendAgentSettings (called from connection handler) sees latest
+  const restoredAgentContextRef = useRef(restoredAgentContext);
   
   // Set on 'connected' so sendAgentSettings (possibly async) and Welcome handler know first connection vs reconnection (Issue #480).
   const isReconnectionRef = useRef<boolean>(false);
@@ -185,6 +198,7 @@ function DeepgramVoiceInteraction(
   // Issue #406: Restore conversation from storage on mount when conversationStorage is provided
   useEffect(() => {
     if (!conversationStorage) return;
+    lastUsedStorageKeyRef.current = CONVERSATION_STORAGE_KEY;
     conversationStorage.getItem(CONVERSATION_STORAGE_KEY).then((raw) => {
       if (!raw) return;
       try {
@@ -204,7 +218,9 @@ function DeepgramVoiceInteraction(
   // Issue #406: Persist conversation when it changes (and storage is provided)
   useEffect(() => {
     if (!conversationStorage || conversationHistory.length === 0) return;
+    lastUsedStorageKeyRef.current = CONVERSATION_STORAGE_KEY;
     const toStore = conversationHistory.slice(-MAX_CONVERSATION_STORED);
+    lastPersistedHistoryForReconnectRef.current = toStore;
     conversationStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(toStore)).catch(() => { /* ignore */ });
   }, [conversationStorage, CONVERSATION_STORAGE_KEY, conversationHistory]);
 
@@ -381,7 +397,20 @@ function DeepgramVoiceInteraction(
   // This prevents duplicate callbacks when both AgentStartedSpeaking and playback events fire
   const hasNotifiedSpeakingForPlaybackRef = useRef<boolean>(false);
   const prevIsPlayingRef = useRef<boolean | undefined>(undefined);
-  
+
+  /** Deferred "text-only agent done" (ConversationText while listening, no audio follows). Cleared when AgentStartedSpeaking fires. */
+  const textOnlyAgentDoneTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const TEXT_ONLY_AGENT_DONE_DEFER_MS = 200;
+
+  useEffect(() => {
+    return () => {
+      if (textOnlyAgentDoneTimeoutIdRef.current !== null) {
+        clearTimeout(textOnlyAgentDoneTimeoutIdRef.current);
+        textOnlyAgentDoneTimeoutIdRef.current = null;
+      }
+    };
+  }, []);
+
   // VAD event tracking for redundancy detection
   const vadEventHistory = useRef<Array<{ type: string; speechDetected: boolean; timestamp: number; source: string }>>([]);
   
@@ -1483,6 +1512,26 @@ function DeepgramVoiceInteraction(
     agentOptionsRef.current = agentOptions;
   }, [agentOptions]);
 
+  // Issue #490: So sendAgentSettings (in connection handler) sees latest restored context
+  useEffect(() => {
+    restoredAgentContextRef.current = restoredAgentContext;
+  }, [restoredAgentContext]);
+
+  // Phase 4 refactor: context resolution for Settings (Issue #489 / REFACTORING-PLAN-release-v0.9.8).
+  const getItemForSettings = useCallback(
+    (k: string) => (typeof localStorage !== 'undefined' ? localStorage.getItem(k) : null),
+    []
+  );
+  const { getContextForSend } = useSettingsContext({
+    latestHistoryRef: conversationHistoryRef as React.MutableRefObject<ConversationMessage[] | undefined>,
+    lastPersistedHistoryRef: lastPersistedHistoryForReconnectRef as React.MutableRefObject<ConversationMessage[] | undefined>,
+    storageKeys: [lastUsedStorageKeyRef.current, 'dg_voice_conversation', 'dg_conversation'],
+    getItem: getItemForSettings,
+    getAgentOptions: getAgentOptions ?? (() => undefined),
+    agentOptionsRef,
+    restoredAgentContextRef: restoredAgentContextRef as React.MutableRefObject<import('../../types').AgentOptions['context'] | undefined>,
+  });
+
   // Notify ready state changes ONLY when the value actually changes
   useEffect(() => {
     if (onReady && state.isReady !== prevIsReadyRef.current) {
@@ -1795,9 +1844,12 @@ function DeepgramVoiceInteraction(
 
   // Send agent settings after connection is established - only if agent is configured
   const sendAgentSettings = () => {
-    // Issue #307: Use ref to access latest agentOptions value (fixes closure issue)
-    const currentAgentOptions = agentOptionsRef.current;
-    
+    // Phase 4 refactor: resolve context and base options via hook (Issue #489 / REFACTORING-PLAN-release-v0.9.8). Phase 3: no ref sync — conversationHistoryRef is the single latest-history ref (updated by effect + ConversationText handler).
+    const { effectiveContext, baseAgentOptions } = getContextForSend();
+    const currentAgentOptions = baseAgentOptions
+      ? { ...baseAgentOptions, context: effectiveContext }
+      : undefined;
+
     if (debug) {
       logConsole('debug','🔧 [sendAgentSettings] Called');
       logConsole('debug',`🔧 [sendAgentSettings] agentManagerRef.current: ${!!agentManagerRef.current}`);
@@ -1807,14 +1859,14 @@ function DeepgramVoiceInteraction(
       logConsole('debug',`🔧 [sendAgentSettings] hasSentSettings: ${state.hasSentSettings}`);
       logConsole('debug',`🔧 [sendAgentSettings] hasSentSettingsRef.current: ${hasSentSettingsRef.current}`);
     }
-    
+
     if (!agentManagerRef.current || !currentAgentOptions) {
       if (debug) {
         logConsole('debug','🔧 [sendAgentSettings] Cannot send agent settings: agent manager not initialized or agentOptions not provided');
       }
       return;
     }
-    
+
     // Check if settings have already been sent (welcome-first behavior)
     // Use both ref and global flag to avoid stale closure issues and cross-component duplicates
     if (hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent) {
@@ -1826,87 +1878,38 @@ function DeepgramVoiceInteraction(
       return;
     }
 
-    // Issue #480: On reconnection, warn if app did not provide context so the new connection has no prior conversation history
-    const hasConversationContext = (currentAgentOptions.context?.messages?.length ?? 0) > 0;
+    // Issue #480: On reconnection, warn if we have no context so the new connection has no prior conversation history
+    const hasConversationContext = (effectiveContext?.messages?.length ?? 0) > 0;
     if (isReconnectionRef.current && !hasConversationContext) {
       onContextWarning?.();
     }
-    
+
     // Record when settings were sent (but don't mark as applied until SettingsApplied is received)
     settingsSentTimeRef.current = Date.now();
-    
+
     if (debug) {
       logConsole('debug','🔧 [sendAgentSettings] Settings message sent, waiting for SettingsApplied confirmation');
     }
-    
-    // Build the Settings message based on agentOptions
-    // Deepgram Voice Agent API does not support agent.idleTimeoutMs; only include it for OpenAI proxy (session.update)
+
+    // Phase 2 refactor: build Settings payload via pure function (Issue #489 / REFACTORING-PLAN-release-v0.9.8).
     const isOpenAIProxy = (configRef.current?.proxyEndpoint ?? '').includes('/openai');
-    const settingsMessage = {
-      type: 'Settings',
-      audio: {
-        input: {
-          encoding: 'linear16',
-          sample_rate: 16000
-        },
-        output: {
-          encoding: 'linear16',
-          sample_rate: 24000
-        }
+    const settingsMessage = buildSettingsMessage(
+      {
+        language: currentAgentOptions.language,
+        instructions: currentAgentOptions.instructions,
+        voice: currentAgentOptions.voice,
+        thinkProviderType: currentAgentOptions.thinkProviderType,
+        thinkModel: currentAgentOptions.thinkModel,
+        thinkEndpointUrl: currentAgentOptions.thinkEndpointUrl,
+        thinkApiKey: currentAgentOptions.thinkApiKey,
+        functions: currentAgentOptions.functions,
+        listenModel: currentAgentOptions.listenModel,
+        greeting: currentAgentOptions.greeting,
+        idleTimeoutMs: currentAgentOptions.idleTimeoutMs,
+        context: effectiveContext,
       },
-      agent: {
-        ...(isOpenAIProxy ? { idleTimeoutMs: currentAgentOptions.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS } : {}),
-        language: currentAgentOptions.language || 'en',
-        // Issue #299: Only include listen provider when listenModel is explicitly provided
-        // This allows text-only interactions (via injectUserMessage) without triggering
-        // CLIENT_MESSAGE_TIMEOUT errors
-        ...(currentAgentOptions.listenModel ? {
-          listen: {
-            provider: {
-              type: 'deepgram',
-              model: currentAgentOptions.listenModel
-            }
-          }
-        } : {}),
-        think: {
-          provider: {
-            type: currentAgentOptions.thinkProviderType || 'open_ai',
-            model: currentAgentOptions.thinkModel || 'gpt-4o-mini'
-          },
-          prompt: currentAgentOptions.instructions || 'You are a helpful voice assistant.',
-          ...(currentAgentOptions.thinkEndpointUrl && currentAgentOptions.thinkApiKey ? {
-            endpoint: {
-              url: currentAgentOptions.thinkEndpointUrl,
-              headers: {
-                authorization: `bearer ${currentAgentOptions.thinkApiKey}`,
-              },
-            }
-          } : {}),
-          // Include functions if provided in agentOptions
-          // Functions without endpoint are client-side (executed by the client)
-          // Functions with endpoint are server-side (executed by the server)
-          // Filter out client_side property - it's not part of Settings message per Deepgram API spec
-          // Issue #307: Use currentAgentOptions from ref to avoid closure issue
-          ...(currentAgentOptions.functions && currentAgentOptions.functions.length > 0 ? {
-            functions: filterFunctionsForSettings(currentAgentOptions.functions)
-          } : {})
-        },
-        // Include speak provider for TTS
-        speak: {
-          provider: {
-            type: 'deepgram',
-            model: currentAgentOptions.voice || 'aura-asteria-en'
-          }
-        },
-        // Issue #234: Only include greeting if context is not provided or context.messages is empty
-        // When context with existing messages is provided, this is a reconnection and greeting should be omitted
-        // to avoid duplicate greeting on reconnection
-        ...(currentAgentOptions.context?.messages && currentAgentOptions.context.messages.length > 0 
-          ? {} 
-          : { greeting: currentAgentOptions.greeting }),
-        context: currentAgentOptions.context // Context is already in Deepgram API format
-      }
-    };
+      { isOpenAIProxy, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
     
     if (debug) {
       logConsole('debug','📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
@@ -1915,7 +1918,7 @@ function DeepgramVoiceInteraction(
         hasSpeakProvider: 'speak' in settingsMessage.agent,
         speakModel: settingsMessage.agent.speak?.provider?.model,
         greetingIncluded: 'greeting' in settingsMessage.agent,
-        greetingPreview: (settingsMessage.agent.greeting || '').slice(0, 60),
+        greetingPreview: String(settingsMessage.agent.greeting || '').slice(0, 60),
       functionsCount: currentAgentOptions.functions?.length || 0,
       functionsIncluded: !!(currentAgentOptions.functions && currentAgentOptions.functions.length > 0),
       functionsStructure: currentAgentOptions.functions?.map(f => ({
@@ -1994,6 +1997,9 @@ function DeepgramVoiceInteraction(
       }
       return;
     }
+
+    // Issue #490: Publish the options (including context) used so the app can persist for restore
+    onAgentOptionsUsedForSettings?.(currentAgentOptions);
 
     if (debug) {
       logConsole('debug','🔧 [sendAgentSettings] Flags set before send (Issue #399 race protection)');
@@ -2225,6 +2231,11 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentStartedSpeaking') {
+      // Cancel any deferred "text-only agent done" so we don't transition to idle when audio is about to play
+      if (textOnlyAgentDoneTimeoutIdRef.current !== null) {
+        clearTimeout(textOnlyAgentDoneTimeoutIdRef.current);
+        textOnlyAgentDoneTimeoutIdRef.current = null;
+      }
       logConsole('debug','🗣️ [AGENT EVENT] AgentStartedSpeaking received');
       logConsole('debug','🎯 [AGENT] AgentStartedSpeaking received - transitioning to speaking state');
       sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
@@ -2242,23 +2253,42 @@ function DeepgramVoiceInteraction(
       logConsole('debug','🔊 [AGENT EVENT] AgentAudioDone received');
       logConsole('debug','🎯 [AGENT] AgentAudioDone received - audio generation complete, playback may continue');
       sleepLog('AgentAudioDone received - audio generation complete, but playback may continue');
-      
+
+      // Issue #482 / #489: Transition to idle when in speaking so idle timeout can start. In proxy mode
+      // playback may never report isPlaying: false; AgentAudioDone is the contract for "response complete."
+      // Also transition when 'listening' so greeting/response that sends AgentAudioDone before playback
+      // starts (e.g. proxy injects it after first ConversationText, or audio disabled in E2E) still starts idle timeout.
+      // IdleTimeoutService requires isPlaying: false to start the timeout; set it so timeout can run (E2E greeting tests).
+      const agentState = stateRef.current.agentState;
+      if (agentState === 'speaking') {
+        logConsole('debug','🎯 [AGENT] AgentAudioDone - transitioning to idle (response complete)');
+        agentStateServiceRef.current?.handleAudioPlaybackChange(false);
+        dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
+        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+      } else if (agentState === 'listening') {
+        logConsole('debug','🎯 [AGENT] AgentAudioDone while listening - transitioning to idle (greeting/response done before playback)');
+        dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
+        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+      }
+
+      // Issue #489: Ensure IdleTimeoutService sees meaningful activity so it can start the timeout.
+      // When agent was speaking/listening, WebSocketManager has idleTimeoutDisabled and skips
+      // onMeaningfulActivity for AgentAudioDone; calling here guarantees hasSeenUserActivityThisSession.
+      handleMeaningfulActivity('AgentAudioDone');
+
       // Track agent silent for greeting state
       if (state.greetingInProgress) {
         dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
         dispatch({ type: 'GREETING_STARTED', started: false });
       }
-      
+
       // Reset user speaking state when agent finishes speaking
       // This is important for text-based interactions where no UtteranceEnd is received
       dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
       if (stateRef.current.isUserSpeaking) {
         onUserStoppedSpeaking?.();
       }
-      
-      // DON'T re-enable idle timeout resets on AgentAudioDone
-      // This is the generation event, not the playback event
-      // The actual playback completion is handled by the audio manager
+
       return;
     }
     
@@ -2286,9 +2316,36 @@ function DeepgramVoiceInteraction(
         updatedHistory = [...latest, newEntry];
         conversationHistoryRef.current = updatedHistory;
         setConversationHistory((prev) => [...prev, newEntry]);
+        // Issue #489/9a: Keep module-level ref in sync so reconnect has context even after remount
+        lastPersistedHistoryForReconnectRef.current = updatedHistory.slice(-MAX_CONVERSATION_STORED);
       }
 
       if (data.role === 'assistant') {
+        // Idle timeout: greeting is agent activity (disables/resets timeout while active). When greeting has no
+        // audio, "agent activity ended" once the text is delivered. Schedule a short deferral; if AgentStartedSpeaking
+        // does not fire, no audio will play for this message → transition to idle and allow idle timeout to start.
+        if (textOnlyAgentDoneTimeoutIdRef.current !== null) {
+          clearTimeout(textOnlyAgentDoneTimeoutIdRef.current);
+        }
+        textOnlyAgentDoneTimeoutIdRef.current = setTimeout(() => {
+          textOnlyAgentDoneTimeoutIdRef.current = null;
+          if (stateRef.current.agentState === 'speaking' || stateRef.current.agentState === 'thinking') {
+            return; // Audio/response in progress; AgentAudioDone or playback will end it
+          }
+          logConsole('debug','🎯 [AGENT] ConversationText (assistant) - no audio followed; agent activity ended (text-only)');
+          dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
+          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+          setTimeout(() => handleMeaningfulActivity('ConversationText'), 50);
+          if (stateRef.current.greetingInProgress) {
+            dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
+            dispatch({ type: 'GREETING_STARTED', started: false });
+          }
+          dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
+          if (stateRef.current.isUserSpeaking) {
+            onUserStoppedSpeaking?.();
+          }
+        }, TEXT_ONLY_AGENT_DONE_DEFER_MS);
+
         const response: LLMResponse = {
           type: 'llm',
           text: content,
@@ -3125,6 +3182,10 @@ function DeepgramVoiceInteraction(
     }
     
     clearAudio();
+    // Ensure playback state is false so UI and onPlaybackStateChange reflect interrupt immediately.
+    // AudioManager.clearAudioQueue() also emits playing=false when wasPlaying, but dispatching here
+    // guarantees the update (e.g. E2E audio-playing-status) without relying on emit timing/race.
+    dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
     const previousBlockingState = allowAgentRef.current;
     allowAgentRef.current = BLOCK_AUDIO;
     if (props.debug) {
@@ -3380,7 +3441,7 @@ function DeepgramVoiceInteraction(
     // This prevents idle timeout from firing during the gap between message send and agent response
     // Deepgram may not always send AgentThinking message, so we proactively enter thinking state
     transitionToThinkingState('User message sent (injectUserMessage)', false); // Don't maintain keepalive (agent will handle it)
-    
+    // Typing (sending text) is user activity: WebSocketManager.sendJSON calls onMeaningfulActivity for InjectUserMessage
     agentManagerRef.current.sendJSON({
       type: 'InjectUserMessage',
       content: message

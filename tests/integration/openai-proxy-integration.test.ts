@@ -1942,6 +1942,51 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   });
 
   /**
+   * Issue #489 TDD (E2E greeting idle timeout): After the proxy sends greeting as ConversationText,
+   * it must send AgentAudioDone so the component can transition to idle and the idle timeout can start.
+   * Without this, E2E "timeout after greeting" tests fail in proxy mode.
+   */
+  itMockOnly('Issue #489 TDD: client receives AgentAudioDone after greeting ConversationText (idle timeout can start)', (done) => {
+    mockReceived.length = 0;
+    protocolErrors.length = 0;
+    const greeting = 'Hello! How can I help you today?';
+    const clientMessages: Array<{ type: string; role?: string; content?: string }> = [];
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: { think: { prompt: 'Hi' }, greeting },
+      }));
+    });
+    client.on('message', (data: Buffer) => {
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string };
+        if (msg.type) clientMessages.push(msg);
+      } catch {
+        // ignore
+      }
+    });
+    timeoutId = setTimeout(() => {
+      client.close();
+      try {
+        const greetingMsg = clientMessages.find((m) => m.type === 'ConversationText' && m.role === 'assistant' && m.content === greeting);
+        expect(greetingMsg).toBeDefined();
+        const agentAudioDoneAfterGreeting = clientMessages.some((m) => m.type === 'AgentAudioDone');
+        expect(agentAudioDoneAfterGreeting).toBe(true);
+        expect(protocolErrors).toHaveLength(0);
+        done();
+      } catch (err) {
+        done(err);
+      }
+    }, 2000);
+    client.on('error', (err: Error) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      done(err);
+    });
+  });
+
+  /**
    * Issue #414: session.created must NOT trigger SettingsApplied or context/greeting injection.
    * OpenAI sends session.created immediately on WebSocket open, BEFORE our session.update is
    * processed. If the proxy injects context/greeting on session.created, the upstream receives

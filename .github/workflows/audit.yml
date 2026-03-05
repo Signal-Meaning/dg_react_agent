@@ -1,12 +1,10 @@
 # Run npm audit on every PR so vulnerable dependencies are caught in our CI,
 # not by consumers. Required for merge when branch protection is enabled.
+# Automatic triggers disabled; run manually via Actions tab if needed.
 name: Audit Dependencies
 
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   audit:

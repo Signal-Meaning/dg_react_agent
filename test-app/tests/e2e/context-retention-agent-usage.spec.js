@@ -397,4 +397,59 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     
     console.log('✅ Context format verification PASSED');
   });
+
+  /**
+   * Issue #490: When the app passes restoredAgentContext and the user reconnects,
+   * the component must include that context in the next Settings message.
+   * This test sets window.__e2eRestoredAgentContext (test-app passes it as restoredAgentContext),
+   * then disconnects and reconnects, and asserts Settings on reconnect include the restored context.
+   * Fails until the component implements restoredAgentContext (TDD).
+   */
+  test('Issue #490: when app provides restoredAgentContext, Settings on reconnect include it', async ({ page }) => {
+    skipIfNoRealAPI('Requires real Deepgram API key');
+    await installWebSocketCapture(page);
+    if (hasOpenAIProxyEndpoint()) {
+      await setupTestPageWithOpenAIProxy(page);
+    } else {
+      await setupTestPage(page);
+    }
+
+    const restoredContext = {
+      messages: [
+        { type: 'History', role: 'user', content: 'E2E restored user message.' },
+        { type: 'History', role: 'assistant', content: 'E2E restored assistant reply.' },
+      ],
+    };
+
+    await page.evaluate((ctx) => {
+      window.__e2eRestoredAgentContext = ctx;
+    }, restoredContext);
+
+    let textInput = page.locator('[data-testid="text-input"]');
+    await textInput.waitFor({ state: 'visible', timeout: 10000 });
+    await textInput.focus();
+    await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
+    await waitForConnection(page, 30000);
+    // Disconnect immediately so no ConversationText (e.g. greeting) has been added to
+    // conversationHistoryRef; then on reconnect the component uses restoredAgentContext.
+    await disconnectComponent(page);
+    await page.waitForTimeout(1000);
+
+    await sendMessageAndWaitForResponse(page, 'Reconnect with restored context');
+    await waitForSettingsApplied(page);
+
+    const wsData = await getCapturedWebSocketData(page);
+    const settingsMessages = wsData.sent.filter(msg => msg.type === 'Settings');
+    const lastSettings = settingsMessages[settingsMessages.length - 1];
+    const contextInSettings = lastSettings?.data?.agent?.context;
+
+    expect(lastSettings).toBeDefined();
+    expect(contextInSettings).toBeDefined();
+    expect(contextInSettings.messages).toBeDefined();
+    expect(Array.isArray(contextInSettings.messages)).toBe(true);
+    expect(contextInSettings.messages.length).toBeGreaterThanOrEqual(2);
+    const contents = contextInSettings.messages.map(m => m.content);
+    expect(contents).toContain('E2E restored user message.');
+    expect(contents).toContain('E2E restored assistant reply.');
+  });
 });

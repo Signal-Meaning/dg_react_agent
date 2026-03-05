@@ -802,11 +802,16 @@ test.describe('Idle Timeout Behavior', () => {
     // Give a moment for events to propagate and timeout to potentially start
     await page.waitForTimeout(500);
     
+    // Use app's idle so test works with 1s or 10s; allow tolerance for "start of wait" vs "start of timeout"
+    const idleMs = await page.evaluate(() => (typeof window !== 'undefined' && window.__idleTimeoutMs) ? window.__idleTimeoutMs : 10000);
+    const TOLERANCE_MS = 2000;
+    const minActualMs = Math.max(0, idleMs - TOLERANCE_MS);
+    const maxActualMs = Math.min(35000, idleMs + 5000);
     // Now wait for connection to close (or not) - this will capture logs during the wait
     console.log('\nStep 5: Waiting for connection to close via idle timeout...');
     const timeoutResult = await waitForIdleTimeout(page, {
-      expectedTimeout: 10000,
-      maxWaitTime: 30000, // Extended wait to see if it ever closes
+      expectedTimeout: idleMs,
+      maxWaitTime: idleMs + 15000,
       checkInterval: 2000
     });
     
@@ -895,8 +900,8 @@ test.describe('Idle Timeout Behavior', () => {
     expect(startedTimeoutLog).toBeTruthy();
     expect(timeoutReachedLog).toBeTruthy();
     expect(timeoutResult.closed).toBe(true);
-    expect(timeoutResult.actualTimeout).toBeGreaterThanOrEqual(9000);
-    expect(timeoutResult.actualTimeout).toBeLessThanOrEqual(15000);
+    expect(timeoutResult.actualTimeout, `actualTimeout should be >= ${minActualMs}ms (idle ${idleMs}ms minus tolerance)`).toBeGreaterThanOrEqual(minActualMs);
+    expect(timeoutResult.actualTimeout, `actualTimeout should be <= ${maxActualMs}ms`).toBeLessThanOrEqual(maxActualMs);
     
     console.log('\n✅ Test passed: IdleTimeoutService correctly starts timeout countdown!');
   });
@@ -1035,16 +1040,29 @@ test.describe('Idle Timeout Behavior', () => {
     expect(restartedTimeoutLog).toBeTruthy();
     
     // Step 6: Verify timeout fires
-    console.log('Step 6: Waiting for timeout to fire...');
+    // Use app's idle so test works with 1s (Playwright) or 10s (existing server). actualTimeout is
+    // "time from start of wait to close" – we started waiting ~1–2s after the timeout restarted,
+    // so allow tolerance: actualTimeout >= idleMs - 2000, <= idleMs + 5000 (cap 20000).
+    const idleMs = await page.evaluate(() => (typeof window !== 'undefined' && window.__idleTimeoutMs) ? window.__idleTimeoutMs : 10000);
+    const TIMING_TOLERANCE_MS = 2000;
+    const minActualMs = Math.max(0, idleMs - TIMING_TOLERANCE_MS);
+    const maxActualMs = Math.min(20000, idleMs + 5000);
+    console.log(`Step 6: Waiting for timeout to fire (app idle=${idleMs}ms, expect close in ${minActualMs}-${maxActualMs}ms)...`);
     const timeoutResult = await waitForIdleTimeout(page, {
-      expectedTimeout: 10000,
-      maxWaitTime: 20000,
+      expectedTimeout: idleMs,
+      maxWaitTime: idleMs + 10000,
       checkInterval: 1000
     });
     
     expect(timeoutResult.closed).toBe(true);
-    expect(timeoutResult.actualTimeout).toBeGreaterThanOrEqual(9000);
-    expect(timeoutResult.actualTimeout).toBeLessThanOrEqual(15000);
+    expect(
+      timeoutResult.actualTimeout,
+      `actualTimeout ${timeoutResult.actualTimeout}ms should be >= ${minActualMs}ms (idle ${idleMs}ms minus tolerance ${TIMING_TOLERANCE_MS}ms)`
+    ).toBeGreaterThanOrEqual(minActualMs);
+    expect(
+      timeoutResult.actualTimeout,
+      `actualTimeout ${timeoutResult.actualTimeout}ms should be <= ${maxActualMs}ms`
+    ).toBeLessThanOrEqual(maxActualMs);
     
     console.log('\n✅ Test passed: Timeout correctly restarts after USER_STOPPED_SPEAKING!');
   });

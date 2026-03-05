@@ -298,6 +298,9 @@ test.describe('Context Retention with Function Calling (Issue #362)', () => {
     // Wait a bit to ensure conversationHistory is updated
     await page.waitForTimeout(2000);
     
+    // Allow app to sync conversationForDisplay from callbacks before disconnect (Issue #490)
+    await page.waitForTimeout(500);
+
     // Step 2b: Disconnect agent
     console.log('⏸️ Step 2b: Disconnecting agent');
     await disconnectComponent(page);

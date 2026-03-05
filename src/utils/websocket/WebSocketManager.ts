@@ -670,7 +670,7 @@ export class WebSocketManager {
     
     // For agent service, reset on activity indicators
     if (this.options.service === 'agent') {
-      // User text injection (explicit user activity)
+      // Typing (sending text) is user activity
       if (data.type === 'InjectUserMessage') {
         this.options.onMeaningfulActivity?.(data.type);
         return true;
