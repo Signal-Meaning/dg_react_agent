@@ -73,6 +73,20 @@ Exact names and types to be decided at implementation time; the important part i
 
 ---
 
+## 5a. Tests added (TDD – RED first)
+
+The following tests were added first and currently **fail** until the component implements the refactor:
+
+- **Unit:** `tests/component-owned-context-490.test.tsx`
+  - `onAgentOptionsUsedForSettings` is called with the options used when sending Settings.
+  - `restoredAgentContext` is used in Settings when in-memory history is empty (first connect and on reconnect).
+  - Component builds `agent.context` from `conversationHistoryRef` when no `getAgentOptions` and no `restoredAgentContext`.
+- **E2E:** `test-app/tests/e2e/context-retention-agent-usage.spec.js` – test "Issue #490: when app provides restoredAgentContext, Settings on reconnect include it". Uses `window.__e2eRestoredAgentContext`; test-app passes it as `restoredAgentContext`; asserts last Settings include restored messages.
+- **Types:** `src/types/index.ts` – added `restoredAgentContext?: AgentOptions['context']` and `onAgentOptionsUsedForSettings?: (options: AgentOptions) => void`.
+- **Test-app:** `test-app/src/App.tsx` – passes `restoredAgentContext={(window as TestWindow).__e2eRestoredAgentContext}` for E2E.
+
+---
+
 ## 6. References
 
 - **Issue #489 (E2E / context on reconnect):** `docs/issues/ISSUE-489/E2E-FAILURES-RESOLUTION.md`

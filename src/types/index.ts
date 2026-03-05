@@ -146,6 +146,19 @@ export interface DeepgramVoiceInteractionProps {
    * component uses the latest agentOptions prop.
    */
   getAgentOptions?: (getConversationHistory?: () => ConversationMessage[]) => AgentOptions | undefined;
+
+  /**
+   * Issue #490: Optional restored context (or options) from the app for reconnect after reload/failure.
+   * When provided, the component uses this when building agent.context for the next Settings
+   * if in-memory conversation history is empty or not yet restored.
+   */
+  restoredAgentContext?: AgentOptions['context'];
+
+  /**
+   * Issue #490: Called when the component has sent a Settings message, with the options
+   * (including context) that were used. The app can persist this for restore on reload/reconnect.
+   */
+  onAgentOptionsUsedForSettings?: (options: AgentOptions) => void;
   
   /**
    * Configuration for API endpoints

@@ -67,6 +67,8 @@ declare global {
     __idleTimeoutMs?: number;
     /** Issue #489: Last getAgentOptions call debug (E2E test 9a). */
     __lastGetAgentOptionsDebug?: { fromComponent: number; fromRef: number; fromStorage: number; conversationForDisplay: number; contextMsgCount: number; source: string };
+    /** Issue #490: E2E-only. When set, app passes this as restoredAgentContext to the component. */
+    __e2eRestoredAgentContext?: AgentOptions['context'];
   }
 }
 
@@ -1116,6 +1118,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         transcriptionOptions={memoizedTranscriptionOptions}
         agentOptions={memoizedAgentOptions}
         getAgentOptions={getAgentOptions}
+        restoredAgentContext={typeof window !== 'undefined' ? (window as TestWindow).__e2eRestoredAgentContext : undefined}
         endpointConfig={memoizedEndpointConfig}
         onReady={handleReady}
         onTranscriptUpdate={handleTranscriptUpdate}
