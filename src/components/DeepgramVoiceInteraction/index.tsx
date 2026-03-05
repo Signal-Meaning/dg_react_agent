@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useEffect, useLayoutEffect, useImperativeHandle, useReducer, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useReducer, useRef, useState } from 'react';
 import {
   AgentState,
   AgentOptions,
@@ -171,12 +171,7 @@ function DeepgramVoiceInteraction(
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   // Ref so callbacks receive up-to-date history (handleAgentMessage closure can be stale) — Issue #414
   const conversationHistoryRef = useRef<ConversationMessage[]>([]);
-  // Issue #489/9a: Ref updated every render and in layout effect so sendAgentSettings (called from async connection handler) sees latest state.
-  const latestConversationHistoryRef = useRef<ConversationMessage[]>(conversationHistory);
-  latestConversationHistoryRef.current = conversationHistory;
-  useLayoutEffect(() => {
-    latestConversationHistoryRef.current = conversationHistory;
-  }, [conversationHistory]);
+  // Phase 3 refactor: single "latest history" ref — conversationHistoryRef is updated by effect (state) and ConversationText handler; hook uses it for getHistoryForSettings (no separate latestConversationHistoryRef).
 
   // Internal state
   const [state, dispatch] = useReducer(stateReducer, initialState);
@@ -1528,7 +1523,7 @@ function DeepgramVoiceInteraction(
     []
   );
   const { getContextForSend } = useSettingsContext({
-    latestHistoryRef: latestConversationHistoryRef as React.MutableRefObject<ConversationMessage[] | undefined>,
+    latestHistoryRef: conversationHistoryRef as React.MutableRefObject<ConversationMessage[] | undefined>,
     lastPersistedHistoryRef: lastPersistedHistoryForReconnectRef as React.MutableRefObject<ConversationMessage[] | undefined>,
     storageKeys: [lastUsedStorageKeyRef.current, 'dg_voice_conversation', 'dg_conversation'],
     getItem: getItemForSettings,
@@ -1849,9 +1844,7 @@ function DeepgramVoiceInteraction(
 
   // Send agent settings after connection is established - only if agent is configured
   const sendAgentSettings = () => {
-    // Issue #489/9a: Invariant — keep ref in sync so callbacks see latest (sendAgentSettings can run from async connection handler).
-    conversationHistoryRef.current = latestConversationHistoryRef.current;
-    // Phase 4 refactor: resolve context and base options via hook (Issue #489 / REFACTORING-PLAN-release-v0.9.8).
+    // Phase 4 refactor: resolve context and base options via hook (Issue #489 / REFACTORING-PLAN-release-v0.9.8). Phase 3: no ref sync — conversationHistoryRef is the single latest-history ref (updated by effect + ConversationText handler).
     const { effectiveContext, baseAgentOptions } = getContextForSend();
     const currentAgentOptions = baseAgentOptions
       ? { ...baseAgentOptions, context: effectiveContext }

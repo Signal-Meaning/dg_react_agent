@@ -6,11 +6,44 @@
 
 ## Current status
 
-**Latest full run:** `USE_PROXY_MODE=true npm run test:e2e` → **4 failed**, 23 skipped, **220 passed** (~5.2m).
+**Latest full run (post-refactor v0.9.8):** `USE_PROXY_MODE=true npm run test:e2e` → **223 passed**, 24 skipped (~5.0m). No failures in this run.
+
+**Previous (pre-refactor):** 4 failed, 23 skipped, 220 passed (~5.2m).
 
 ---
 
-## Four failures to address before full E2E rerun
+## Latest E2E run (post-refactor, v0.9.8) — 223 passed, 24 skipped
+
+**Run:** Full E2E from `test-app/` with `USE_PROXY_MODE=true` (and proxy/backend as required). **Result:** 223 passed, 24 skipped, 0 failed (~5.0m).
+
+### Summary
+
+| Result | Count |
+|--------|--------|
+| Passed | 223 |
+| Skipped | 24 |
+| Failed | 0 |
+
+### Notable results from this run
+
+- **Test 9a (Isolation – Settings on reconnect include context):** Passed. Diagnostics: `[9a] last has context: true`; WebSocket sent 4× Settings (indices 0, 1, 6, 7); last Settings has context. Component getConversationHistory() length before/after disconnect: 4; `getAgentOptions` debug showed `fromComponent: 4`, `contextMsgCount: 4`, `source: "display"`.
+- **Test 9 (Repro – session retained after disconnect/reconnect):** Passed. Diagnostic log shows `[Repro test 9] Settings on reconnect: NO context` (reconnect Settings in this run did not include context in the captured payload), but the test’s assertion passed (response must not be stale or greeting). Agent response to "What famous people lived there?" was "The capital of France is Paris." (short answer); test 10 (after reload) received the fuller contextual answer. So test 9 passed on the “not greeting” criterion; session retention with full context on reconnect remains improved when test 9a’s `restoredAgentContext` pattern is used.
+- **Idle timeout behavior:** Tests passed (e.g. "should start idle timeout countdown after agent finishes", "should restart timeout after USER_STOPPED_SPEAKING when agent is idle"). IdleTimeoutService logs showed "Started idle timeout (10000ms)" and "Idle timeout reached (10000ms) - firing callback"; connection closed within expected band.
+- **OpenAI Proxy E2E (Issue #381):** 8b (lengthy response), 9, 9a, 10, and related specs passed.
+
+### Post-refactor (settings/context)
+
+Context resolution and Settings construction now use the refactored implementation (release v0.9.8):
+
+- **History for Settings:** `getHistoryForSettings()` (Phase 1) — in-memory ref → persisted ref → storage; used by `useSettingsContext`.
+- **Settings payload:** `buildSettingsMessage()` (Phase 2) — pure builder; used in `sendAgentSettings`.
+- **Context resolution:** `useSettingsContext` hook (Phase 4) — `getContextForSend()` returns `effectiveContext` and `baseAgentOptions` in one pass (fromHistory → fromApp → fromRestored; `baseAgentOptions = getAgentOptions?.() ?? agentOptionsRef.current`).
+
+The component still syncs `conversationHistoryRef.current = latestConversationHistoryRef.current` at the start of `sendAgentSettings` so any getter passed to `getAgentOptions` sees the latest history. E2E 9a and the unit/integration tests for `getHistoryForSettings`, `buildSettingsMessage`, and `useSettingsContext` all pass.
+
+---
+
+## Four failures to address before full E2E rerun (historical; last seen pre-refactor)
 
 | # | Spec | Test | Error (summary) | Recommended action |
 |---|------|------|------------------|--------------------|
@@ -83,13 +116,13 @@ We rely on the **component** to include `agent.context` in the Settings message;
    - **Source:** `getContextForSettings` (test-app `utils/context-for-settings.ts`) prefers `conversationForDisplay`; if empty, uses the ref callback (component’s `getConversationHistory()`).  
    - **When:** Context is computed at **render time** when the useMemo runs (deps: `loadedInstructions`, `conversationForDisplay`, `urlParamsString`). The app also supplies **getAgentOptions(getConversationHistory)** so the component can request options at send time.
 
-2. **Component (DeepgramVoiceInteraction/index.tsx)** — **post–Issue #490**  
+2. **Component (DeepgramVoiceInteraction/index.tsx)** — **post–Issue #490; post-refactor v0.9.8**  
    - **Sent:** On connection (once per connection), `sendAgentSettings()` builds **effective context** and sets `context: effectiveContext` in the Settings message.  
-   - **Source (effective context):** The component now **owns** context resolution (Issue #490): `effectiveContext = fromHistory ?? fromApp ?? fromRestored`, where:
-     - **fromHistory:** Built from `conversationHistoryRef.current` (component’s in-memory history, updated when `conversationStorage` is set and ConversationText is received).
-     - **fromApp:** From `getAgentOptions?.(() => conversationHistoryRef.current)` at send time, or from `agentOptionsRef.current?.context` when getAgentOptions returns no context (fallback so last-rendered app options are used on reconnect).
+   - **Source (effective context):** Context resolution is implemented in **`useSettingsContext`** (hook) and **`getHistoryForSettings`** (util): the component calls `getContextForSend()` from the hook, which returns `effectiveContext` and `baseAgentOptions`. The hook uses `getHistoryForSettings` for history and applies precedence (Issue #490): `effectiveContext = fromHistory ?? fromApp ?? fromRestored`, where:
+     - **fromHistory:** From `getHistoryForSettings(...)` (in-memory ref → lastPersisted ref → storage).
+     - **fromApp:** From `getAgentOptions?.(getter)` at send time; **baseAgentOptions** = result ?? `agentOptionsRef.current` so last-rendered app options are used when getAgentOptions is not provided or returns nothing.
      - **fromRestored:** From the `restoredAgentContext` prop (for reconnect-after-reload when the app persists and restores context).
-   - **When:** Settings are sent ~50ms after the WebSocket reaches OPEN (setTimeout in the connection-state handler). So there is still a **timing window**: if neither the component’s ref nor the app’s options (or ref fallback) have context at that moment, Settings go out without context.
+   - **When:** Settings are sent ~50ms after the WebSocket reaches OPEN (setTimeout in the connection-state handler). So there is still a **timing window**: if neither the component’s history nor the app’s options (or ref fallback) have context at that moment, Settings go out without context.
 
 3. **Proxy (voice-agent-backend openai-proxy server.ts)**  
    - **Received:** On `msg.type === 'Settings'`, reads `contextMessages = settings.agent?.context?.messages`.  

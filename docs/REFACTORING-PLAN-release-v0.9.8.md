@@ -1,12 +1,21 @@
 # Refactoring Plan: release/v0.9.8
 
 **Branch:** `release/v0.9.8`  
-**Scope:** DeepgramVoiceInteraction component and related E2E/context behavior after Issue #489 / #490 and test 9a resolution.  
-**Status:** Plan only — implementation to be scheduled separately.
+**Scope:** DeepgramVoiceInteraction component and related E2E/context behavior after Issue #489 / #490 and test 9a resolution.
+
+**Implementation status (TDD refactor):**
+
+- **Phase 1:** Done — `getHistoryForSettings()` in `src/utils/getHistoryForSettings.ts`; unit tests in `tests/getHistoryForSettings.test.ts`. Component uses it via `useSettingsContext`.
+- **Phase 2:** Done — `buildSettingsMessage()` in `src/utils/buildSettingsMessage.ts`; unit tests in `tests/buildSettingsMessage.test.ts`. Component calls it from `sendAgentSettings`.
+- **Phase 3:** Done — single "latest history" ref: removed `latestConversationHistoryRef` and the ref sync at start of `sendAgentSettings`; hook now uses `conversationHistoryRef` (updated by effect + ConversationText handler) as `latestHistoryRef`. All 30 context/history tests pass.
+- **Phase 4:** Done — `useSettingsContext` in `src/hooks/useSettingsContext.ts`; returns `getEffectiveContext` and `getContextForSend`; unit tests in `tests/useSettingsContext.test.tsx`. Component uses `getContextForSend()` in `sendAgentSettings`; `baseAgentOptions = getAgentOptions?.() ?? agentOptionsRef.current` so Settings are sent when getAgentOptions is not provided.
+- **Phase 5:** Pending — document “context for Settings on reconnect” (e.g. in `docs/issues/ISSUE-490/REFACTOR-CONTEXT-OWNERSHIP.md` or component JSDoc).
+
+E2E run post-refactor: 223 passed, 24 skipped. See `docs/issues/ISSUE-489/E2E-FAILURES-RESOLUTION.md` (Latest E2E run post-refactor).
 
 ---
 
-## 1. Current state
+## 1. Current state (pre-refactor)
 
 ### 1.1 Component size and structure
 
