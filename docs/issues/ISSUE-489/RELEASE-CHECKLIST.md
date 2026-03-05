@@ -27,7 +27,7 @@ This is a patch release for version v0.9.8 of the Deepgram Voice Interaction Rea
     - [x] Run: `npm run test:e2e` from test-app (proxy is default).
     - [x] **Latest full run:** 223+ passed, 24 skipped, **2 failed** (see below). Core flows (openai-proxy-e2e 9/9a/10, idle timeout, context-retention) pass.
     - **2 remaining E2E failures** (documented in [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md)): (1) **declarative-props-api.spec.js** — `interruptAgent prop › should interrupt TTS when interruptAgent prop is true` (real-API/timing; race fix applied; skipped in CI). (2) **openai-proxy-tts-diagnostic.spec.js** — `diagnose TTS path` (env/backend-dependent).
-    - **Real-API E2E run (two specs):** Ran `npm run test:e2e -- ... --grep "interruptAgent prop is true|diagnose TTS path"` from repo root with real proxy/backend. **Result:** TTS diagnostic **passed** (7.7s); interruptAgent test **skipped** (skipIfNoRealAPI or backend not configured for that spec). See [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md).
+    - **Real-API E2E run:** TTS diagnostic passes with real proxy; interruptAgent tests use `skipIfNoRealBackendAsync()` (probe backend). Component fix: `interruptAgent()` dispatches `PLAYBACK_STATE_CHANGE` so `audio-playing-status` updates. E2E interruptAgent describe: 2 tests passed (callback, clear); 1 skipped in CI by design. See [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md).
   - [ ] **⚠️ REQUIRED if this patch fixes proxy/API behavior:** Run real-API integration test when `OPENAI_API_KEY` is available. When running:
     - [ ] Run: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
     - [ ] Verify: All in-scope tests pass against the real API. If keys are not available, document the exception.
@@ -57,13 +57,13 @@ This is a patch release for version v0.9.8 of the Deepgram Voice Interaction Rea
 
 - [x] **Commit Changes**: Commit all release-related changes (including documentation)
   - [x] Commit: `chore: prepare release v0.9.8 (Issue #489)` — **pushed**
+  - [x] Commit: `fix(Issue #489): interruptAgent + DRY real-API + backend reachability` — **pushed** (component fix, E2E helpers DRY + reachability, interruptAgent tests use skipIfNoRealBackendAsync)
 - [x] **Create Release Branch**: Create a release branch for the version
   - [x] Branch: `release/v0.9.8` created and pushed
-- [ ] **Publish**: Publish to GitHub Registry — **← NEXT STEP**
+- [ ] **Publish**: Publish to GitHub Registry — **← TRIGGER CI/CD**
   - [x] **⚠️ Documentation must be committed to release branch BEFORE creating GitHub release** ⚠️ — **done** (all release docs and E2E updates committed and pushed to `release/v0.9.8`)
   - [ ] **Preferred**: Use CI build (`.github/workflows/test-and-publish.yml`)
-    - **Option A:** GitHub **Actions** → **Test and Publish Package** → **Run workflow** → set **Branch** to `release/v0.9.8` (leave Version empty to use package.json 0.9.8) → Run. Workflow runs Jest, build, then publish.
-    - **Option B:** Create a **GitHub release** (tag `v0.9.8` from branch `release/v0.9.8`) if your process uses release creation to trigger the workflow.
+    - **Trigger:** GitHub **Actions** → **Test and Publish Package** → **Run workflow** → set **Branch** to `release/v0.9.8` (leave Version empty) → Run. Or from CLI: `gh workflow run "Test and Publish Package" --ref release/v0.9.8`.
     - **Monitor CI workflow**: Wait for workflow to complete successfully → verify package(s) appear in GitHub Packages.
     - **Only proceed to tagging if publish succeeds**
   - [ ] **Fallback**: Dev publish (only if CI fails)
