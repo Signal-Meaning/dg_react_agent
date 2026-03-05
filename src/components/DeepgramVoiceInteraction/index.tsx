@@ -33,7 +33,6 @@ import { useCallbackRef, useBooleanDeclarativeProp } from '../../hooks/declarati
 import { AgentStateService } from '../../services/AgentStateService';
 import { DEFAULT_IDLE_TIMEOUT_MS } from '../../constants/voice-agent';
 import { compareAgentOptionsIgnoringContext, hasDependencyChanged } from '../../utils/option-comparison';
-import { filterFunctionsForSettings } from '../../utils/function-utils';
 import { functionCallLogger } from '../../utils/function-call-logger';
 import {
   hasSettingsBeenSent,
@@ -42,6 +41,8 @@ import {
   WindowWithDeepgramGlobals
 } from '../../utils/component-helpers';
 import { getLogger } from '../../utils/logger';
+import { buildSettingsMessage } from '../../utils/buildSettingsMessage';
+import { useSettingsContext } from '../../hooks/useSettingsContext';
 
 // Default endpoints
 const DEFAULT_ENDPOINTS = {
@@ -1521,6 +1522,21 @@ function DeepgramVoiceInteraction(
     restoredAgentContextRef.current = restoredAgentContext;
   }, [restoredAgentContext]);
 
+  // Phase 4 refactor: context resolution for Settings (Issue #489 / REFACTORING-PLAN-release-v0.9.8).
+  const getItemForSettings = useCallback(
+    (k: string) => (typeof localStorage !== 'undefined' ? localStorage.getItem(k) : null),
+    []
+  );
+  const { getContextForSend } = useSettingsContext({
+    latestHistoryRef: latestConversationHistoryRef as React.MutableRefObject<ConversationMessage[] | undefined>,
+    lastPersistedHistoryRef: lastPersistedHistoryForReconnectRef as React.MutableRefObject<ConversationMessage[] | undefined>,
+    storageKeys: [lastUsedStorageKeyRef.current, 'dg_voice_conversation', 'dg_conversation'],
+    getItem: getItemForSettings,
+    getAgentOptions: getAgentOptions ?? (() => undefined),
+    agentOptionsRef,
+    restoredAgentContextRef: restoredAgentContextRef as React.MutableRefObject<import('../../types').AgentOptions['context'] | undefined>,
+  });
+
   // Notify ready state changes ONLY when the value actually changes
   useEffect(() => {
     if (onReady && state.isReady !== prevIsReadyRef.current) {
@@ -1833,50 +1849,11 @@ function DeepgramVoiceInteraction(
 
   // Send agent settings after connection is established - only if agent is configured
   const sendAgentSettings = () => {
-    // Issue #489/9a: Invariant — use the ref updated every render so context is never stale (sendAgentSettings can run from async connection handler before useEffect sync runs).
+    // Issue #489/9a: Invariant — keep ref in sync so callbacks see latest (sendAgentSettings can run from async connection handler).
     conversationHistoryRef.current = latestConversationHistoryRef.current;
-    const latestHistory = latestConversationHistoryRef.current;
-    // After remount, in-memory ref can be empty; use last persisted history, then sync read from localStorage (Issue #489/9a).
-    let sourceForHistory: ConversationMessage[] | undefined = latestHistory?.length
-      ? latestHistory
-      : (lastPersistedHistoryForReconnectRef.current?.length ? lastPersistedHistoryForReconnectRef.current : undefined);
-    if (!sourceForHistory?.length && typeof localStorage !== 'undefined') {
-      const keysToTry = [lastUsedStorageKeyRef.current, 'dg_voice_conversation', 'dg_conversation'];
-      for (const key of keysToTry) {
-        try {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const parsed = JSON.parse(raw) as Array<{ role?: string; content?: string; timestamp?: number }>;
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              const valid = parsed.filter(
-                (m): m is ConversationMessage =>
-                  (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
-              ).map((m) => ({ role: m.role as ConversationMessage['role'], content: m.content!, timestamp: m.timestamp }));
-              if (valid.length > 0) {
-                sourceForHistory = valid;
-                break;
-              }
-            }
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-
-    // Issue #307 / #489: Prefer getAgentOptions at send time so app can supply options with
-    // up-to-date context. Pass getter that returns current history (in-memory or last persisted).
-    const baseAgentOptions = getAgentOptions?.(() => sourceForHistory ?? []) ?? agentOptionsRef.current;
-
-    // Issue #490: Component-owned context. Prefer: in-memory history (or last persisted), then app, then restored.
-    const fromHistory = sourceForHistory?.length
-      ? { messages: sourceForHistory.map((m) => ({ type: 'History' as const, role: m.role, content: m.content })) }
-      : undefined;
-    // When getAgentOptions returns no context (e.g. timing), fall back to last-rendered options so reconnect still gets context (E2E 9/9a).
-    const fromApp = baseAgentOptions?.context?.messages?.length ? baseAgentOptions.context : (agentOptionsRef.current?.context?.messages?.length ? agentOptionsRef.current.context : undefined);
-    const fromRestored = restoredAgentContextRef.current?.messages?.length ? restoredAgentContextRef.current : undefined;
-    const effectiveContext = fromHistory ?? fromApp ?? fromRestored ?? undefined;
-    const currentAgentOptions: typeof baseAgentOptions = baseAgentOptions
+    // Phase 4 refactor: resolve context and base options via hook (Issue #489 / REFACTORING-PLAN-release-v0.9.8).
+    const { effectiveContext, baseAgentOptions } = getContextForSend();
+    const currentAgentOptions = baseAgentOptions
       ? { ...baseAgentOptions, context: effectiveContext }
       : undefined;
 
@@ -1921,74 +1898,25 @@ function DeepgramVoiceInteraction(
       logConsole('debug','🔧 [sendAgentSettings] Settings message sent, waiting for SettingsApplied confirmation');
     }
 
-    // Build the Settings message based on agentOptions (use effective context from above)
-    // Deepgram Voice Agent API does not support agent.idleTimeoutMs; only include it for OpenAI proxy (session.update)
+    // Phase 2 refactor: build Settings payload via pure function (Issue #489 / REFACTORING-PLAN-release-v0.9.8).
     const isOpenAIProxy = (configRef.current?.proxyEndpoint ?? '').includes('/openai');
-    const settingsMessage = {
-      type: 'Settings',
-      audio: {
-        input: {
-          encoding: 'linear16',
-          sample_rate: 16000
-        },
-        output: {
-          encoding: 'linear16',
-          sample_rate: 24000
-        }
+    const settingsMessage = buildSettingsMessage(
+      {
+        language: currentAgentOptions.language,
+        instructions: currentAgentOptions.instructions,
+        voice: currentAgentOptions.voice,
+        thinkProviderType: currentAgentOptions.thinkProviderType,
+        thinkModel: currentAgentOptions.thinkModel,
+        thinkEndpointUrl: currentAgentOptions.thinkEndpointUrl,
+        thinkApiKey: currentAgentOptions.thinkApiKey,
+        functions: currentAgentOptions.functions,
+        listenModel: currentAgentOptions.listenModel,
+        greeting: currentAgentOptions.greeting,
+        idleTimeoutMs: currentAgentOptions.idleTimeoutMs,
+        context: effectiveContext,
       },
-      agent: {
-        ...(isOpenAIProxy ? { idleTimeoutMs: currentAgentOptions.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS } : {}),
-        language: currentAgentOptions.language || 'en',
-        // Issue #299: Only include listen provider when listenModel is explicitly provided
-        // This allows text-only interactions (via injectUserMessage) without triggering
-        // CLIENT_MESSAGE_TIMEOUT errors
-        ...(currentAgentOptions.listenModel ? {
-          listen: {
-            provider: {
-              type: 'deepgram',
-              model: currentAgentOptions.listenModel
-            }
-          }
-        } : {}),
-        think: {
-          provider: {
-            type: currentAgentOptions.thinkProviderType || 'open_ai',
-            model: currentAgentOptions.thinkModel || 'gpt-4o-mini'
-          },
-          prompt: currentAgentOptions.instructions || 'You are a helpful voice assistant.',
-          ...(currentAgentOptions.thinkEndpointUrl && currentAgentOptions.thinkApiKey ? {
-            endpoint: {
-              url: currentAgentOptions.thinkEndpointUrl,
-              headers: {
-                authorization: `bearer ${currentAgentOptions.thinkApiKey}`,
-              },
-            }
-          } : {}),
-          // Include functions if provided in agentOptions
-          // Functions without endpoint are client-side (executed by the client)
-          // Functions with endpoint are server-side (executed by the server)
-          // Filter out client_side property - it's not part of Settings message per Deepgram API spec
-          // Issue #307: Use currentAgentOptions from ref to avoid closure issue
-          ...(currentAgentOptions.functions && currentAgentOptions.functions.length > 0 ? {
-            functions: filterFunctionsForSettings(currentAgentOptions.functions)
-          } : {})
-        },
-        // Include speak provider for TTS
-        speak: {
-          provider: {
-            type: 'deepgram',
-            model: currentAgentOptions.voice || 'aura-asteria-en'
-          }
-        },
-        // Issue #234: Only include greeting if context is not provided or context.messages is empty
-        // When context with existing messages is provided, this is a reconnection and greeting should be omitted
-        // to avoid duplicate greeting on reconnection
-        ...(effectiveContext?.messages && effectiveContext.messages.length > 0
-          ? {}
-          : { greeting: currentAgentOptions.greeting }),
-        context: effectiveContext // Issue #490: use component-owned effective context
-      }
-    };
+      { isOpenAIProxy, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
     
     if (debug) {
       logConsole('debug','📤 [Protocol] Sending agent settings with context (correct Deepgram API format):', { 
@@ -1997,7 +1925,7 @@ function DeepgramVoiceInteraction(
         hasSpeakProvider: 'speak' in settingsMessage.agent,
         speakModel: settingsMessage.agent.speak?.provider?.model,
         greetingIncluded: 'greeting' in settingsMessage.agent,
-        greetingPreview: (settingsMessage.agent.greeting || '').slice(0, 60),
+        greetingPreview: String(settingsMessage.agent.greeting || '').slice(0, 60),
       functionsCount: currentAgentOptions.functions?.length || 0,
       functionsIncluded: !!(currentAgentOptions.functions && currentAgentOptions.functions.length > 0),
       functionsStructure: currentAgentOptions.functions?.map(f => ({

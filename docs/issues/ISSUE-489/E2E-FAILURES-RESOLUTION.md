@@ -1,60 +1,47 @@
 # Issue #489: E2E Failures to Resolve (Proxy Mode)
 
-**Context:** Run `USE_PROXY_MODE=true npm run test:e2e` from `test-app/`. Original run: **19 failed**, 23 skipped, 203 passed (7.4m).
-
-This document tracks the failing E2E tests and resolution steps for the v0.9.8 release (Issue #489). For the refactor that made the **component** own and build `agent.context` when sending Settings (and related test 9/9a behavior), see **Issue #490:** `docs/issues/ISSUE-490/REFACTOR-CONTEXT-OWNERSHIP.md`.
+**Context:** Run `USE_PROXY_MODE=true npm run test:e2e` from `test-app/`. This doc focuses on **current** failures to address before a full E2E rerun. Component-owned context: **Issue #490** — `docs/issues/ISSUE-490/REFACTOR-CONTEXT-OWNERSHIP.md`.
 
 ---
 
-## Current status (post–greeting-idle and proxy fixes)
+## Current status
 
-**As of the latest runs** (with `E2E_USE_EXISTING_SERVER=1` and frontend on default 10s idle, or with Playwright-started server at 1s idle), **all 6 previously failing tests in the triage list now pass**:
-
-| # | Spec / test | Status |
-|---|-------------|--------|
-| 1 | context-retention-agent-usage › should retain context when disconnecting and reconnecting - agent uses context | **Passing** |
-| 2 | context-retention-agent-usage › should verify context format in Settings message | **Passing** |
-| 3 | deepgram-greeting-idle-timeout › should timeout after greeting completes (Issue #139) | **Passing** |
-| 4 | deepgram-greeting-idle-timeout › should timeout after initial greeting on page load | **Passing** |
-| 5 | deepgram-manual-vad-workflow › should handle complete manual workflow: speak → silence → timeout | **Passing** |
-| 6 | deepgram-text-session-flow › should auto-connect and re-establish connection when WebSocket is closed | **Passing** |
-
-**Verification commands (from `test-app/`):**
-
-- Greeting idle-timeout: `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- --grep "deepgram-greeting-idle-timeout"`
-- Manual VAD: `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- --grep "deepgram-manual-vad-workflow"`
-- Reconnection/context: `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- --grep "context-retention-agent-usage|deepgram-text-session-flow"`
-
-All of the above have been run successfully with the existing server (default 10s idle). The greeting-idle-timeout spec scales with `window.__idleTimeoutMs` and passes with either 1s or 10s idle.
-
-**Note:** A **full** E2E run (`USE_PROXY_MODE=true npm run test:e2e`) may still report failures in other specs (e.g. openai-proxy-e2e test 9a, context-retention-with-function-calling, idle-timeout-behavior, openai-proxy-tts-diagnostic). See [Latest full E2E run](#latest-full-e2e-run) and [Trace / Issue #490](#issue-490-component-owned-context-and-tests-99a) below.
+**Latest full run:** `USE_PROXY_MODE=true npm run test:e2e` → **4 failed**, 23 skipped, **220 passed** (~5.2m).
 
 ---
 
-## Latest full E2E run
+## Four failures to address before full E2E rerun
 
-**Run:** Full suite from `test-app/`: `USE_PROXY_MODE=true npm run test:e2e`. **4 failed**, 23 skipped, **218 passed** (~5.1m).
+| # | Spec | Test | Error (summary) | Recommended action |
+|---|------|------|------------------|--------------------|
+| 1 | **agent-state-transitions.spec.js** | should transition: idle → speaking → idle | State or TTS assertion fails (user types message, expects speaking then idle). | Confirm TTS unmuted and agent responds with audio; relax or fix state-timing assertion if needed. |
+| 2 | **context-retention-agent-usage.spec.js** | should retain context when disconnecting and reconnecting - agent uses context | In full suite: often disconnectComponent timeout (status never `'closed'`) or response assertion. | Same pattern as test 9a: set `window.__e2eRestoredAgentContext` before reconnect and ensure disconnect completes; or increase disconnect wait / stabilize order. |
+| 3 | **openai-proxy-e2e.spec.js** | **8b.** Lengthy response – after IDLE_TIMEOUT+15s agent still connected, content in DOM | `waitForSettingsApplied(page, 15000)` times out: `[data-testid="has-sent-settings"]` stays `"false"`. | SettingsApplied not received within 15s. Increase timeout (e.g. 25s), or skip when proxy/env is slow; ensure proxy sends SettingsApplied after session.updated. |
+| 4 | **openai-proxy-tts-diagnostic.spec.js** | diagnose TTS path: binary received and playback status | Binary/playback assertion fails. | Environment- or backend-dependent. Skip in CI or mark optional; fix when TTS path is in scope. |
 
-| Result | Count |
-|--------|--------|
-| Failed | 4 |
-| Passed | 218 |
-| Skipped | 23 |
-
-**The 4 failures (representative):**
-
-| # | Spec / test | Error (summary) |
-|---|-------------|------------------|
-| 1 | context-retention-with-function-calling › should retain context when disconnecting and reconnecting with function calling enabled | Context or format assertion on reconnect; may pass with sync/timing mitigations (see [Trace / Issue #490](#issue-490-component-owned-context-and-tests-99a)). |
-| 2 | openai-proxy-e2e › 9a. Isolation – Settings on reconnect include context | `hasContext` false: last Settings on reconnect missing `agent.context`; timing/sync so component and app both have empty context at send time (see [Trace](#trace-where-agentcontext-is-built-and-sent)). |
-| 3 | openai-proxy-e2e › 9. Repro – after disconnect and reconnect (same page), session retained | Greeting as response instead of session-retained; when context was not sent, assertion fails with “Settings on reconnect did not include context”. |
-| 4 | openai-proxy-tts-diagnostic › diagnose TTS path: binary received and playback status | Binary/playback assertion; environment- or backend-dependent, separate from context. |
-
-Other failures in some runs: **idle-timeout-behavior** (timing band), **openai-proxy-e2e 8b** (idle timeout closes before 15s), **context-retention-agent-usage** (full-suite order). **Summary:** (2) and (3) are context-on-reconnect; (1) related; (4) TTS. For release verification, run the **spot-check** (grep for the 6 triage specs); full-suite failures are documented here and in Issue #490 follow-up.
+**Test 9 (Repro – session retained):** In the same run, test 9 logs "Settings on reconnect: NO context" and the response is the stale "Paris" one-liner. Test **9a** passes because it sets `window.__e2eRestoredAgentContext` before reconnect. **Action:** Apply the same `restoredAgentContext` setup in test 9 (before the "What famous people lived there?" send) so the component sends context on reconnect and the session-retained assertion can pass.
 
 ---
 
-## Investigation: Where do these fail? Is that step in other tests? Why here?
+## Before full E2E rerun — checklist
+
+1. **openai-proxy-e2e 8b:** Fix or relax `waitForSettingsApplied` (longer timeout or skip when proxy is slow).
+2. **openai-proxy-e2e test 9:** Add `window.__e2eRestoredAgentContext` (and focus + short wait) before reconnect message, mirroring test 9a.
+3. **context-retention-agent-usage:** Ensure disconnect completes (or use same restored-context pattern); run in isolation to confirm.
+4. **agent-state-transitions:** Fix or skip idle→speaking→idle if TTS/state timing is flaky in CI.
+5. **openai-proxy-tts-diagnostic:** Skip or mark optional in CI; document as environment-dependent.
+
+---
+
+## Background (short)
+
+- **Test 9a** passes: it sets `window.__e2eRestoredAgentContext` from `getConversationHistory()` before reconnect so the component receives `restoredAgentContext` and sends Settings with `agent.context`. See test 9a in `test-app/tests/e2e/openai-proxy-e2e.spec.js`.
+- **Test 9** does not set that; on reconnect the component may send Settings without context, so the response is the greeting or stale and the test fails. Aligning test 9 with 9a's restored-context step fixes the "session retained" assertion.
+- **8b** fails at the first step (waitForSettingsApplied), not during the lengthy poem; the proxy or env may not emit SettingsApplied within 15s.
+
+---
+
+## Investigation (historical): Where do these fail? Is that step in other tests? Why here?
 
 **Failure location and reuse:**
 
