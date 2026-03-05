@@ -478,14 +478,17 @@ function App() {
       ...(import.meta.env.VITE_IDLE_TIMEOUT_MS
         ? { idleTimeoutMs: Number(import.meta.env.VITE_IDLE_TIMEOUT_MS) }
         : {}),
-      // Pass conversation history as context (from component ref via conversationForDisplay)
-      context: conversationForDisplay.length > 0 ? {
-        messages: conversationForDisplay.map(message => ({
-          type: "History",
-          role: message.role,
-          content: message.content
-        }))
-      } : undefined
+      // Pass conversation history as context for session retention on reconnect (Issue #489 / E2E test 9).
+      // Prefer conversationForDisplay (synced from callbacks); fallback to component ref so we always
+      // send context when the component has history, even if callbacks haven't updated app state yet.
+      context: (() => {
+        const fromDisplay = conversationForDisplay;
+        const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
+        const history = fromDisplay.length > 0 ? fromDisplay : fromRef;
+        return history.length > 0
+          ? { messages: history.map((message: { role: ConversationRole; content: string }) => ({ type: "History", role: message.role, content: message.content })) }
+          : undefined;
+      })()
     };
   }, [loadedInstructions, conversationForDisplay, urlParamsString]); // Include urlParamsString to recompute when URL params change
 
