@@ -18,6 +18,7 @@ The repository publishes **two packages** to **GitHub Package Registry**:
 **CI does the build and publish.** When you create a GitHub release (or run the workflow manually), `.github/workflows/test-and-publish.yml` runs: it tests (mock), builds, validates, then publishes both packages. You do **not** run `npm publish` locally for releases; the workflow uses the **NPM_TOKEN** secret to authenticate.
 
 - **Release flow:** Bump versions → create release docs → create `release/vX.X.X` branch → create GitHub release (tag from that branch) → CI runs and publishes.
+- **CI/CD runs on release branches only — never on main.** Always trigger the workflow from a `release/vX.X.X` branch (Actions → Run workflow → Branch: release/vX.X.X, or `gh workflow run "Test and Publish Package" --ref release/vX.X.X`). Do not run the publish workflow against `main`.
 - **Versioning:** Root and backend have **independent versions** (each has its own `package.json` version). A release can include the component only, the backend only, or both.
 
 ---

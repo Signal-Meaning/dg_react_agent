@@ -34,6 +34,9 @@ This is a patch release for version v0.9.8 of the Deepgram Voice Interaction Rea
     - **Note:** Run locally when `OPENAI_API_KEY` is set; real-API tests are skipped otherwise. This release includes settings/context refactor (proxy message path); running the integration test before publish is recommended when the key is available.
 - [x] **Linting Clean**: No linting errors
   - [x] Run: `npm run lint` — **passed**
+- [ ] **npm audit (prerequisite for CI)**: No high/critical vulnerabilities — **required before triggering workflow**
+  - [ ] Run: `npm audit --audit-level=high` — must pass (exit 0). CI runs this same check; passing locally avoids workflow failure at the audit step.
+  - [ ] If it fails: fix with `npm audit fix` or overrides as per policy, then re-run until it passes.
 
 ### Version & Build (CI performs build — no local build required)
 

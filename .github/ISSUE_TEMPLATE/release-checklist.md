@@ -38,6 +38,9 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
   - [ ] For other releases: Optional but recommended to run the above when keys are available.
 - [ ] **Linting Clean**: No linting errors
   - [ ] Run: `npm run lint`
+- [ ] **npm audit (prerequisite for CI)**: No high/critical vulnerabilities — **required before triggering workflow**
+  - [ ] Run: `npm audit --audit-level=high` — must pass (exit 0). CI runs this same check; passing locally avoids workflow failure at the audit step.
+  - [ ] If it fails: fix with `npm audit fix` or overrides as per policy, then re-run until it passes.
 - [ ] **Documentation Updated**: All relevant documentation updated
 - [ ] **API Changes Documented**: Any API changes appear in API-REFERENCE.md evolution section
 - [ ] **Breaking Changes Documented**: Any breaking changes identified and documented

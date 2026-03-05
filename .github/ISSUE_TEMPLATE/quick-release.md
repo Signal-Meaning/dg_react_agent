@@ -30,6 +30,9 @@ This is a patch release for version vX.X.X of the Deepgram Voice Interaction Rea
     - [ ] Verify: All in-scope tests pass against the real API. If keys are not available, document the exception.
 - [ ] **Linting Clean**: No linting errors
   - [ ] Run: `npm run lint`
+- [ ] **npm audit (prerequisite for CI)**: No high/critical vulnerabilities — **required before triggering workflow**
+  - [ ] Run: `npm audit --audit-level=high` — must pass (exit 0). CI runs this same check; passing locally avoids workflow failure at the audit step.
+  - [ ] If it fails: fix with `npm audit fix` or overrides as per policy, then re-run until it passes.
 
 #### Version & Build (CI performs build — no local build required)
 - [ ] **Bump Version**: Update to vX.X.X
