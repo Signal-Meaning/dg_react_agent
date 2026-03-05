@@ -152,6 +152,7 @@ function DeepgramVoiceInteraction(
     startAudioCapture: startAudioCaptureProp,
     conversationStorage,
     conversationStorageKey,
+    getAgentOptions,
   } = props;
 
   const DEFAULT_CONVERSATION_STORAGE_KEY = 'dg_conversation';
@@ -1808,8 +1809,9 @@ function DeepgramVoiceInteraction(
 
   // Send agent settings after connection is established - only if agent is configured
   const sendAgentSettings = () => {
-    // Issue #307: Use ref to access latest agentOptions value (fixes closure issue)
-    const currentAgentOptions = agentOptionsRef.current;
+    // Issue #307 / #489: Prefer getAgentOptions at send time so app can supply options with
+    // up-to-date context. Pass component's current history getter so app need not rely on ref timing.
+    const currentAgentOptions = getAgentOptions?.(() => conversationHistoryRef.current) ?? agentOptionsRef.current;
     
     if (debug) {
       logConsole('debug','🔧 [sendAgentSettings] Called');

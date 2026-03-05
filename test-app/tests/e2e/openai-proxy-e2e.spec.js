@@ -375,6 +375,55 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   /**
+   * Isolation for test 9: After disconnect and reconnect (same page), the Settings message sent
+   * on reconnect MUST include agent.context. This test asserts only that; it does not assert
+   * on the response content. If this test fails → app/proxy did not send context (our side).
+   * If this test passes but test 9 fails → context was sent but upstream returned greeting.
+   */
+  test('9a. Isolation – Settings on reconnect include context (prerequisite for session retention)', async ({ page }) => {
+    test.setTimeout(90000);
+    await installWebSocketCapture(page);
+    await setupTestPageWithOpenAIProxy(page);
+    await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
+
+    const r1 = await sendMessageAndWaitForResponse(page, 'What is the capital of France?', AGENT_RESPONSE_TIMEOUT);
+    expect(r1).toBeTruthy();
+    expect(r1.length).toBeGreaterThan(0);
+
+    const r2 = await sendMessageAndWaitForResponse(page, 'Sorry, what was that?', AGENT_RESPONSE_TIMEOUT);
+    expect(r2).toBeTruthy();
+    expect(r2.length).toBeGreaterThan(0);
+
+    await disconnectComponent(page);
+    await page.waitForTimeout(1000);
+
+    // Send message to trigger reconnect; this sends Settings. We only assert Settings had context.
+    await sendMessageAndWaitForResponse(page, 'What famous people lived there?', AGENT_RESPONSE_TIMEOUT);
+
+    const wsData = await getCapturedWebSocketData(page);
+    const settingsMessages = (wsData?.sent || []).filter(m => m.type === 'Settings');
+    const lastSettings = settingsMessages[settingsMessages.length - 1];
+    const contextInSettings = lastSettings?.data?.agent?.context;
+    const hasContext = Array.isArray(contextInSettings) ? contextInSettings.length > 0 : !!contextInSettings;
+
+    const getAgentOptionsDebug = await page.evaluate(() => window.__lastGetAgentOptionsDebug);
+    const wsInstanceCount = await page.evaluate(() => window.__capturedWebSocketCount || 0);
+    const sentTypes = (wsData?.sent || []).map(m => m.type);
+    const settingsIndices = sentTypes.map((t, i) => t === 'Settings' ? i : -1).filter(i => i >= 0);
+    console.log('[9a] getAgentOptions debug (last call):', JSON.stringify(getAgentOptionsDebug, null, 2));
+    console.log('[9a] WebSocket constructor call count:', wsInstanceCount, '| total sent:', sentTypes?.length, '| sent types:', sentTypes, '| Settings at indices:', settingsIndices, '| last has context:', hasContext);
+
+    expect(
+      hasContext,
+      'Settings on reconnect must include agent.context so session can be retained (Issue #489 / test 9 isolation)'
+    ).toBe(true);
+    if (Array.isArray(contextInSettings)) {
+      expect(contextInSettings.length).toBeGreaterThan(0);
+    }
+  });
+
+  /**
    * Session state is retained from one connection to the next unless a test stipulates otherwise.
    * This test does NOT stipulate a session change (no reload). It verifies that after disconnect
    * and reconnect on the same page, the next user message receives a response that reflects the

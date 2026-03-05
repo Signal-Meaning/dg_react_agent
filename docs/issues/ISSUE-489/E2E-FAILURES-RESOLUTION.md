@@ -67,7 +67,7 @@ All of the above have been run successfully with the existing server (default 10
 
 **Recommended next steps:**
 
-- **#1 (context-retention):** Run in isolation with OpenAI proxy: `USE_PROXY_MODE=1 VITE_OPENAI_PROXY_ENDPOINT=... npm run test:e2e -- --grep "context-retention-agent-usage"`. Run again **without** `VITE_OPENAI_PROXY_ENDPOINT` (Deepgram only) to see if failure is OpenAI-specific. Compare: does disconnectComponent see 'closed' in Deepgram-only runs?
+- **#1 (context-retention):** Run in isolation with OpenAI proxy: `USE_PROXY_MODE=1 VITE_OPENAI_PROXY_ENDPOINT=... npm run test:e2e -- --grep "context-retention-agent-usage"`. Run again **without** `VITE_OPENAI_PROXY_ENDPOINT` (Deepgram only) to see if failure is OpenAI-specific. Compare: does disconnectComponent see 'closed' in Deepgram-only runs? **Done:** Both isolation runs passed (with and without OpenAI proxy). So failure #1 in the full run is likely **test order / full-suite environment** (e.g. worker order, timing, or shared state when run with the rest of the suite), not OpenAI vs Deepgram.
 - **#2 (idle-timeout-behavior):** Fix assertion to use `window.__idleTimeoutMs` and a tolerance (e.g. actualTimeout ≥ idleMs − 2000, ≤ idleMs + 5000) so the test is correct when the wait starts shortly after the timeout restarts.
 - **#3 (8b):** Skip test when `window.__idleTimeoutMs < 15000` (or run this test with a longer idle env) so “connection still connected after 15s” is achievable.
 - **#4 (test 9):** Add WebSocket capture and assert or log whether Settings on reconnect included context; add a targeted test or doc note for “session retained after reconnect” (context sent vs upstream behavior).
@@ -86,6 +86,29 @@ All of the above have been run successfully with the existing server (default 10
 **Narrowed (unit test added):** A new unit test **`tests/reconnect-settings-context-isolation.test.tsx`** does: connect with no context → disconnect → update agentOptions to include context (re-render) → reconnect → assert the **second** Settings message has `agent.context`. This test **passes**: the component sends Settings with context on reconnect when agentOptions are updated before reconnect. So the **component is not the bug**; the defect is in the **test-app**: the app is not passing agentOptions with context when the user reconnects (e.g. `conversationForDisplay` is empty or not yet updated when the component connects and sends Settings). Fix should target test-app (or the pattern of when conversationForDisplay is set and when agentOptions are read for the reconnection flow).
 
 **Root cause (test-app):** In the test-app, `agentOptions.context` was built **only** from `conversationForDisplay` state. That state is updated only by (1) the one-time 300ms sync from `deepgramRef.current?.getConversationHistory()` on mount, and (2) `onAgentUtterance` / `onUserMessage` callbacks. So if callbacks have not run yet (or React has not committed that state update before the user reconnects), `conversationForDisplay` can still be empty when the component reconnects and sends Settings. The **component** keeps its internal `conversationHistory` across disconnect (it is not cleared), so the canonical history lives in the component; the test-app’s `conversationForDisplay` can lag or stay empty. **Fix applied:** When building `memoizedAgentOptions.context`, the test-app now falls back to `deepgramRef.current?.getConversationHistory() ?? []` when `conversationForDisplay` is empty, so Settings on reconnect include context whenever the component has history, even if the app state has not been updated by callbacks yet.
+
+### Trace: Where agent.context is built and sent
+
+We rely on the **component** to include `agent.context` in the Settings message; the **proxy** forwards it. Tracing the flow:
+
+1. **Test-app (App.tsx)**  
+   - **Built:** `memoizedAgentOptions` (useMemo) sets `context: getContextForSettings(conversationForDisplay, () => deepgramRef.current?.getConversationHistory() ?? [])`.  
+   - **Source:** `getContextForSettings` (test-app `utils/context-for-settings.ts`) prefers `conversationForDisplay`; if empty, uses the ref callback (component’s `getConversationHistory()`).  
+   - **When:** Context is computed at **render time** when the useMemo runs (deps: `loadedInstructions`, `conversationForDisplay`, `urlParamsString`). So the **latest** context the component can send is whatever the app last passed in `agentOptions` (and the component stores in `agentOptionsRef`).
+
+2. **Component (DeepgramVoiceInteraction/index.tsx)**  
+   - **Sent:** On connection (and only once per connection), `sendAgentSettings()` builds the Settings message and sets `context: currentAgentOptions.context` (line ~1920).  
+   - **Source:** `currentAgentOptions` is read from `agentOptionsRef.current`, which is updated in a useEffect when `agentOptions` (props) change.  
+   - **When:** Settings are sent ~50ms after the WebSocket reaches OPEN (setTimeout in the connection-state handler). So there is a **timing window**: the app may not have re-rendered with updated `conversationForDisplay` (or the ref may be read before the component’s conversationHistory has committed) before the component sends Settings.
+
+3. **Proxy (voice-agent-backend openai-proxy server.ts)**  
+   - **Received:** On `msg.type === 'Settings'`, reads `contextMessages = settings.agent?.context?.messages`.  
+   - **Used:** If `contextMessages?.length`, pushes `conversation.item.create` items to `pendingContextItems` and sends them to the upstream after `session.updated`.  
+   - **Improvement:** The proxy already forwards context when present; no change needed there. The failure (test 9a: “NO context”) is that the **client** sends Settings **without** context.
+
+**Conclusion:** Context is built in the **app** and passed via **props**; the **component** only forwards it. On reconnect, the component can send Settings with stale/empty context if the app has not yet passed options with context (e.g. `conversationForDisplay` and ref both empty at the moment the useMemo ran, or the component’s 50ms send happens before the app re-renders with synced state).
+
+**Fix (test-app):** When agent connection becomes `connected`, an effect syncs `conversationForDisplay` from `deepgramRef.current?.getConversationHistory()` so the next render has history and `memoizedAgentOptions.context` is populated before the component sends Settings (~50ms after OPEN). Optionally the component could support a **getAgentOptions**-style callback so the app supplies options at send time.
 
 ---
 

@@ -139,6 +139,15 @@ export interface DeepgramVoiceInteractionProps {
   agentOptions?: AgentOptions; // Uses imported AgentOptions
   
   /**
+   * Optional getter for agent options at send time (e.g. when sending Settings on reconnect).
+   * When provided, the component calls this when building the Settings message and may pass
+   * a function that returns the component's current conversation history so the app can
+   * build context without relying on ref timing. If not provided or returns undefined, the
+   * component uses the latest agentOptions prop.
+   */
+  getAgentOptions?: (getConversationHistory?: () => ConversationMessage[]) => AgentOptions | undefined;
+  
+  /**
    * Configuration for API endpoints
    */
   endpointConfig?: EndpointConfig;

@@ -394,37 +394,50 @@ async function sendTextMessage(page, message) {
 async function installWebSocketCapture(page) {
   await page.addInitScript(() => {
     const OriginalWebSocket = window.WebSocket;
+    window.capturedSentMessages = window.capturedSentMessages || [];
+    window.__capturedWebSocketCount = 0;
+
+    function captureSend(data) {
+      try {
+        const parsed = JSON.parse(data);
+        window.capturedSentMessages.push({
+          timestamp: new Date().toISOString(),
+          type: parsed.type,
+          data: parsed
+        });
+        console.log('WebSocket send:', parsed.type, parsed);
+      } catch (e) {
+        window.capturedSentMessages.push({
+          timestamp: new Date().toISOString(),
+          type: 'binary',
+          size: data.byteLength || data.length
+        });
+      }
+    }
+
+    // Issue #489: Patch prototype.send so every WebSocket's sends are captured, including
+    // instances created via a cached original constructor (e.g. reconnects). See
+    // tests/unit/websocket-capture.test.js.
+    const originalSend = OriginalWebSocket.prototype.send;
+    OriginalWebSocket.prototype.send = function(data) {
+      captureSend(data);
+      return originalSend.call(this, data);
+    };
+
     window.WebSocket = function(url, protocols) {
-      console.log('WebSocket created:', { url, protocols });
+      window.__capturedWebSocketCount = (window.__capturedWebSocketCount || 0) + 1;
+      console.log('WebSocket created:', { url, protocols, instanceNumber: window.__capturedWebSocketCount });
       window.capturedWebSocketUrl = url;
       window.capturedWebSocketProtocols = protocols;
-      
       const ws = new OriginalWebSocket(url, protocols);
-      const originalSend = ws.send;
-      
-      // Capture sent messages
+
+      // Issue #489: Wrap this instance's send so we capture even if app uses a cached constructor.
+      const origSend = ws.send.bind(ws);
       ws.send = function(data) {
-        try {
-          const parsed = JSON.parse(data);
-          window.capturedSentMessages = window.capturedSentMessages || [];
-          window.capturedSentMessages.push({
-            timestamp: new Date().toISOString(),
-            type: parsed.type,
-            data: parsed
-          });
-          console.log('WebSocket send:', parsed.type, parsed);
-        } catch (e) {
-          // Not JSON, might be binary audio data
-          window.capturedSentMessages = window.capturedSentMessages || [];
-          window.capturedSentMessages.push({
-            timestamp: new Date().toISOString(),
-            type: 'binary',
-            size: data.byteLength || data.length
-          });
-        }
-        return originalSend.call(this, data);
+        captureSend(data);
+        return origSend(data);
       };
-      
+
       // Capture received messages
       ws.addEventListener('message', (event) => {
         try {

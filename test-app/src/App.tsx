@@ -6,6 +6,7 @@ import {
   LLMResponse,
   UserMessageResponse,
   AgentState,
+  AgentOptions,
   ConnectionState,
   ServiceType,
   DeepgramError,
@@ -18,6 +19,7 @@ import {
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 import { ClosureIssueTestPage } from './closure-issue-test-page';
 import { getFunctionDefinitions } from './utils/functionDefinitions';
+import { getContextForSettings } from './utils/context-for-settings';
 import { getFunctionCallBackendBaseUrl, forwardFunctionCallToBackend } from './utils/functionCallBackend';
 import type { AgentFunction } from '../../src/types/agent';
 import { getLogger } from '../../src/utils/logger';
@@ -63,6 +65,8 @@ declare global {
     __testConversationHistory?: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: number }>; // Issue #362: Expose conversation history for E2E tests
     /** Idle timeout (ms) used by the component; exposed for E2E (e.g. deepgram-greeting-idle-timeout.spec.js). */
     __idleTimeoutMs?: number;
+    /** Issue #489: Last getAgentOptions call debug (E2E test 9a). */
+    __lastGetAgentOptionsDebug?: { fromComponent: number; fromRef: number; fromStorage: number; conversationForDisplay: number; contextMsgCount: number; source: string };
   }
 }
 
@@ -139,6 +143,15 @@ function App() {
     }, 300);
     return () => clearTimeout(t);
   }, []);
+
+  // Issue #489: When agent connection becomes connected (including reconnect), sync conversation from ref
+  // so memoizedAgentOptions.context is populated before the component sends Settings (~50ms after OPEN).
+  useEffect(() => {
+    if (connectionStates.agent !== 'connected') return;
+    const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
+    if (fromRef.length === 0) return;
+    setConversationForDisplay((prev) => (prev.length >= fromRef.length ? prev : fromRef));
+  }, [connectionStates.agent]);
 
   // Expose conversation history to window for E2E testing (Issue #362)
   useEffect(() => {
@@ -481,14 +494,7 @@ function App() {
       // Pass conversation history as context for session retention on reconnect (Issue #489 / E2E test 9).
       // Prefer conversationForDisplay (synced from callbacks); fallback to component ref so we always
       // send context when the component has history, even if callbacks haven't updated app state yet.
-      context: (() => {
-        const fromDisplay = conversationForDisplay;
-        const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
-        const history = fromDisplay.length > 0 ? fromDisplay : fromRef;
-        return history.length > 0
-          ? { messages: history.map((message: { role: ConversationRole; content: string }) => ({ type: "History", role: message.role, content: message.content })) }
-          : undefined;
-      })()
+      context: getContextForSettings(conversationForDisplay, () => deepgramRef.current?.getConversationHistory() ?? []) as AgentOptions['context']
     };
   }, [loadedInstructions, conversationForDisplay, urlParamsString]); // Include urlParamsString to recompute when URL params change
 
@@ -497,6 +503,56 @@ function App() {
     const testWindow = window as TestWindow;
     testWindow.__idleTimeoutMs = memoizedAgentOptions.idleTimeoutMs ?? 10000;
   }, [memoizedAgentOptions]);
+
+  // Issue #489: Supply options at send time so Settings on reconnect include up-to-date context.
+  // Component may pass its current history getter; fallback to ref, then sync read from storage
+  // (component restores from storage async, so on reconnect ref can still be empty).
+  const getAgentOptions = useCallback((
+    getConversationHistory?: () => Array<{ role: ConversationRole; content: string; timestamp?: number }>
+  ) => {
+    const fromComponent = getConversationHistory?.() ?? [];
+    const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
+    let fromStorage: Array<{ role: string; content: string }> = [];
+    if (fromComponent.length === 0 && fromRef.length === 0 && typeof localStorage !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(CONVERSATION_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as Array<{ role?: string; content?: string }>;
+          if (Array.isArray(parsed)) {
+            fromStorage = parsed.filter(
+              (m): m is { role: string; content: string } =>
+                (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
+            );
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    const context = getContextForSettings(
+      conversationForDisplay,
+      () => (fromComponent.length > 0 ? fromComponent : fromRef.length > 0 ? fromRef : fromStorage)
+    ) as AgentOptions['context'];
+    const contextMsgCount = context?.messages?.length ?? 0;
+    const source = contextMsgCount > 0
+      ? (conversationForDisplay.length > 0 ? 'display' : fromComponent.length > 0 ? 'component' : fromRef.length > 0 ? 'ref' : fromStorage.length > 0 ? 'storage' : 'display')
+      : 'none';
+    const debug = {
+      fromComponent: fromComponent.length,
+      fromRef: fromRef.length,
+      fromStorage: fromStorage.length,
+      conversationForDisplay: conversationForDisplay.length,
+      contextMsgCount,
+      source,
+    };
+    if (import.meta.env.DEV || (typeof window !== 'undefined' && window.location.search.includes('contextDebug=1'))) {
+      console.log('[getAgentOptions]', debug);
+    }
+    if (typeof window !== 'undefined') {
+      (window as TestWindow).__lastGetAgentOptionsDebug = debug;
+    }
+    return { ...memoizedAgentOptions, context };
+  }, [memoizedAgentOptions, conversationForDisplay]);
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({
@@ -1059,6 +1115,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         )}
         transcriptionOptions={memoizedTranscriptionOptions}
         agentOptions={memoizedAgentOptions}
+        getAgentOptions={getAgentOptions}
         endpointConfig={memoizedEndpointConfig}
         onReady={handleReady}
         onTranscriptUpdate={handleTranscriptUpdate}
