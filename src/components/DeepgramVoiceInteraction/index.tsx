@@ -3182,6 +3182,10 @@ function DeepgramVoiceInteraction(
     }
     
     clearAudio();
+    // Ensure playback state is false so UI and onPlaybackStateChange reflect interrupt immediately.
+    // AudioManager.clearAudioQueue() also emits playing=false when wasPlaying, but dispatching here
+    // guarantees the update (e.g. E2E audio-playing-status) without relying on emit timing/race.
+    dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
     const previousBlockingState = allowAgentRef.current;
     allowAgentRef.current = BLOCK_AUDIO;
     if (props.debug) {

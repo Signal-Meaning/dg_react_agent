@@ -25,6 +25,7 @@
 import { test, expect } from '@playwright/test';
 import {
   skipIfNoRealAPI,
+  skipIfNoRealBackendAsync,
   hasOpenAIProxyEndpoint,
   skipIfOpenAIProxy,
   establishConnectionViaText,
@@ -431,7 +432,7 @@ test.describe('Declarative Props API - Issue #305', () => {
   test.describe('interruptAgent prop (replaces interruptAgent method)', () => {
     test('should interrupt TTS when interruptAgent prop is true', async ({ page }) => {
       test.skip(!!process.env.CI, 'Skipped in CI: real-API dependent, timing-sensitive (Issue #305)');
-      skipIfNoRealAPI();
+      await skipIfNoRealBackendAsync();
 
       await page.goto('/?test-mode=true');
 
@@ -486,8 +487,8 @@ test.describe('Declarative Props API - Issue #305', () => {
     });
     
     test('should trigger onAgentInterrupted callback when TTS is interrupted', async ({ page }) => {
-      skipIfNoRealAPI();
-      
+      await skipIfNoRealBackendAsync();
+
       await page.goto('/?test-mode=true');
       
       await page.waitForSelector('[data-testid="deepgram-component"]', { timeout: 5000 }).catch(() => {});
@@ -542,8 +543,8 @@ test.describe('Declarative Props API - Issue #305', () => {
     });
     
     test('should clear interruptAgent after onAgentInterrupted is called', async ({ page }) => {
-      skipIfNoRealAPI();
-      
+      await skipIfNoRealBackendAsync();
+
       await page.goto('/?test-mode=true');
       
       await page.waitForSelector('[data-testid="deepgram-component"]', { timeout: 5000 }).catch(() => {});

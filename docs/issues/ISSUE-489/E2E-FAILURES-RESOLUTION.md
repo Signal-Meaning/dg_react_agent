@@ -55,6 +55,7 @@ The test sets `window.__testInterruptAgent = true` and `window.__testInterruptAg
 - **Skip in CI:** Test now calls `test.skip(!!process.env.CI, '…')` so it does not run in CI (real-API dependent, timing-sensitive).
 - **Timeout:** Left at 10s for “wait for TTS interrupted” (increasing to 20s does not help; the issue was the race, not latency).
 - **Race fix:** Wait for `__testInterruptAgentSet === false` after setting the flag, in all three interruptAgent tests in this spec.
+- **Component fix:** In `interruptAgent()`, the component now **dispatches `PLAYBACK_STATE_CHANGE, isPlaying: false`** immediately after `clearAudio()`. Previously, playback state only updated when the AudioManager emitted `playing: false` (and only if `wasPlaying` was true). Dispatching in the component guarantees the UI and `onPlaybackStateChange(false)` reflect the interrupt without relying on AudioManager emit timing, so `audio-playing-status` becomes `'false'` reliably for the E2E test.
 
 ### If it still fails locally
 
