@@ -430,8 +430,8 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     await textInput.focus();
     await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
     await waitForConnection(page, 30000);
-    await waitForSettingsApplied(page);
-
+    // Disconnect immediately so no ConversationText (e.g. greeting) has been added to
+    // conversationHistoryRef; then on reconnect the component uses restoredAgentContext.
     await disconnectComponent(page);
     await page.waitForTimeout(1000);
 

@@ -153,6 +153,8 @@ function DeepgramVoiceInteraction(
     conversationStorage,
     conversationStorageKey,
     getAgentOptions,
+    restoredAgentContext,
+    onAgentOptionsUsedForSettings,
   } = props;
 
   const DEFAULT_CONVERSATION_STORAGE_KEY = 'dg_conversation';
@@ -173,6 +175,9 @@ function DeepgramVoiceInteraction(
   // Ref to hold the latest agentOptions value, avoiding stale closures in callbacks
   // Issue #307: Fix closure issue where sendAgentSettings captures stale agentOptions
   const agentOptionsRef = useRef<typeof agentOptions>(agentOptions);
+
+  // Issue #490: Ref for restoredAgentContext so sendAgentSettings (called from connection handler) sees latest
+  const restoredAgentContextRef = useRef(restoredAgentContext);
   
   // Set on 'connected' so sendAgentSettings (possibly async) and Welcome handler know first connection vs reconnection (Issue #480).
   const isReconnectionRef = useRef<boolean>(false);
@@ -1497,6 +1502,11 @@ function DeepgramVoiceInteraction(
     agentOptionsRef.current = agentOptions;
   }, [agentOptions]);
 
+  // Issue #490: So sendAgentSettings (in connection handler) sees latest restored context
+  useEffect(() => {
+    restoredAgentContextRef.current = restoredAgentContext;
+  }, [restoredAgentContext]);
+
   // Notify ready state changes ONLY when the value actually changes
   useEffect(() => {
     if (onReady && state.isReady !== prevIsReadyRef.current) {
@@ -1811,8 +1821,20 @@ function DeepgramVoiceInteraction(
   const sendAgentSettings = () => {
     // Issue #307 / #489: Prefer getAgentOptions at send time so app can supply options with
     // up-to-date context. Pass component's current history getter so app need not rely on ref timing.
-    const currentAgentOptions = getAgentOptions?.(() => conversationHistoryRef.current) ?? agentOptionsRef.current;
-    
+    const baseAgentOptions = getAgentOptions?.(() => conversationHistoryRef.current) ?? agentOptionsRef.current;
+
+    // Issue #490: Component-owned context. Prefer: in-memory history, then restored (for reconnect-after-reload),
+    // then app (getAgentOptions/agentOptions). So when history is empty we use restored if provided.
+    const fromHistory = conversationHistoryRef.current?.length
+      ? { messages: conversationHistoryRef.current.map((m) => ({ type: 'History' as const, role: m.role, content: m.content })) }
+      : undefined;
+    const fromRestored = restoredAgentContextRef.current?.messages?.length ? restoredAgentContextRef.current : undefined;
+    const fromApp = baseAgentOptions?.context?.messages?.length ? baseAgentOptions.context : undefined;
+    const effectiveContext = fromHistory ?? fromRestored ?? fromApp ?? undefined;
+    const currentAgentOptions: typeof baseAgentOptions = baseAgentOptions
+      ? { ...baseAgentOptions, context: effectiveContext }
+      : undefined;
+
     if (debug) {
       logConsole('debug','🔧 [sendAgentSettings] Called');
       logConsole('debug',`🔧 [sendAgentSettings] agentManagerRef.current: ${!!agentManagerRef.current}`);
@@ -1822,14 +1844,14 @@ function DeepgramVoiceInteraction(
       logConsole('debug',`🔧 [sendAgentSettings] hasSentSettings: ${state.hasSentSettings}`);
       logConsole('debug',`🔧 [sendAgentSettings] hasSentSettingsRef.current: ${hasSentSettingsRef.current}`);
     }
-    
+
     if (!agentManagerRef.current || !currentAgentOptions) {
       if (debug) {
         logConsole('debug','🔧 [sendAgentSettings] Cannot send agent settings: agent manager not initialized or agentOptions not provided');
       }
       return;
     }
-    
+
     // Check if settings have already been sent (welcome-first behavior)
     // Use both ref and global flag to avoid stale closure issues and cross-component duplicates
     if (hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent) {
@@ -1841,20 +1863,20 @@ function DeepgramVoiceInteraction(
       return;
     }
 
-    // Issue #480: On reconnection, warn if app did not provide context so the new connection has no prior conversation history
-    const hasConversationContext = (currentAgentOptions.context?.messages?.length ?? 0) > 0;
+    // Issue #480: On reconnection, warn if we have no context so the new connection has no prior conversation history
+    const hasConversationContext = (effectiveContext?.messages?.length ?? 0) > 0;
     if (isReconnectionRef.current && !hasConversationContext) {
       onContextWarning?.();
     }
-    
+
     // Record when settings were sent (but don't mark as applied until SettingsApplied is received)
     settingsSentTimeRef.current = Date.now();
-    
+
     if (debug) {
       logConsole('debug','🔧 [sendAgentSettings] Settings message sent, waiting for SettingsApplied confirmation');
     }
-    
-    // Build the Settings message based on agentOptions
+
+    // Build the Settings message based on agentOptions (use effective context from above)
     // Deepgram Voice Agent API does not support agent.idleTimeoutMs; only include it for OpenAI proxy (session.update)
     const isOpenAIProxy = (configRef.current?.proxyEndpoint ?? '').includes('/openai');
     const settingsMessage = {
@@ -1916,10 +1938,10 @@ function DeepgramVoiceInteraction(
         // Issue #234: Only include greeting if context is not provided or context.messages is empty
         // When context with existing messages is provided, this is a reconnection and greeting should be omitted
         // to avoid duplicate greeting on reconnection
-        ...(currentAgentOptions.context?.messages && currentAgentOptions.context.messages.length > 0 
-          ? {} 
+        ...(effectiveContext?.messages && effectiveContext.messages.length > 0
+          ? {}
           : { greeting: currentAgentOptions.greeting }),
-        context: currentAgentOptions.context // Context is already in Deepgram API format
+        context: effectiveContext // Issue #490: use component-owned effective context
       }
     };
     
@@ -2009,6 +2031,9 @@ function DeepgramVoiceInteraction(
       }
       return;
     }
+
+    // Issue #490: Publish the options (including context) used so the app can persist for restore
+    onAgentOptionsUsedForSettings?.(currentAgentOptions);
 
     if (debug) {
       logConsole('debug','🔧 [sendAgentSettings] Flags set before send (Issue #399 race protection)');

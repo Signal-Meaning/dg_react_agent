@@ -83,6 +83,7 @@ describe('Issue #490: Component-owned agent context', () => {
         if (m?.type === 'Settings') {
           settingsSent.push({ type: m.type, agent: m.agent ? { context: m.agent.context } : undefined });
         }
+        return true; // so component calls onAgentOptionsUsedForSettings after send
       });
 
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
@@ -204,12 +205,28 @@ describe('Issue #490: Component-owned agent context', () => {
         }
       });
 
+      // conversationStorage so ConversationText updates conversationHistoryRef (component only appends when storage is set)
+      const storage = new Map<string, string>();
+      const conversationStorage = {
+        getItem: (key: string) => Promise.resolve(storage.get(key) ?? null),
+        setItem: (key: string, value: string) => {
+          storage.set(key, value);
+          return Promise.resolve();
+        },
+        removeItem: (key: string) => {
+          storage.delete(key);
+          return Promise.resolve();
+        },
+      };
+
       const ref = React.createRef<DeepgramVoiceInteractionHandle>();
       render(
         <DeepgramVoiceInteraction
           ref={ref}
           apiKey={MOCK_API_KEY}
           agentOptions={optionsWithoutContext}
+          conversationStorage={conversationStorage}
+          conversationStorageKey="test-490"
         />
       );
       await waitFor(() => expect(ref.current).toBeTruthy());
@@ -221,25 +238,25 @@ describe('Issue #490: Component-owned agent context', () => {
       await simulateConnection(eventListener, mockWebSocketManager);
       await waitForSettingsSent(mockWebSocketManager);
 
-      // Simulate ConversationText to populate component's conversation history
+      // Simulate ConversationText (pass parsed object; handler expects object after manager parse)
       await act(async () => {
         eventListener({
           type: 'message',
-          data: JSON.stringify({
+          data: {
             type: 'ConversationText',
             role: 'user',
             content: 'What is the capital of France?',
-          }),
+          },
         });
       });
       await act(async () => {
         eventListener({
           type: 'message',
-          data: JSON.stringify({
+          data: {
             type: 'ConversationText',
             role: 'assistant',
             content: 'Paris.',
-          }),
+          },
         });
       });
       await simulateSettingsApplied(eventListener);
