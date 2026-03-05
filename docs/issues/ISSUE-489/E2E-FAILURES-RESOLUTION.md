@@ -6,6 +6,76 @@ This document tracks the failing E2E tests and resolution steps for the v0.9.8 r
 
 ---
 
+## Current status (post–greeting-idle and proxy fixes)
+
+**As of the latest runs** (with `E2E_USE_EXISTING_SERVER=1` and frontend on default 10s idle, or with Playwright-started server at 1s idle), **all 6 previously failing tests in the triage list now pass**:
+
+| # | Spec / test | Status |
+|---|-------------|--------|
+| 1 | context-retention-agent-usage › should retain context when disconnecting and reconnecting - agent uses context | **Passing** |
+| 2 | context-retention-agent-usage › should verify context format in Settings message | **Passing** |
+| 3 | deepgram-greeting-idle-timeout › should timeout after greeting completes (Issue #139) | **Passing** |
+| 4 | deepgram-greeting-idle-timeout › should timeout after initial greeting on page load | **Passing** |
+| 5 | deepgram-manual-vad-workflow › should handle complete manual workflow: speak → silence → timeout | **Passing** |
+| 6 | deepgram-text-session-flow › should auto-connect and re-establish connection when WebSocket is closed | **Passing** |
+
+**Verification commands (from `test-app/`):**
+
+- Greeting idle-timeout: `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- --grep "deepgram-greeting-idle-timeout"`
+- Manual VAD: `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- --grep "deepgram-manual-vad-workflow"`
+- Reconnection/context: `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- --grep "context-retention-agent-usage|deepgram-text-session-flow"`
+
+All of the above have been run successfully with the existing server (default 10s idle). The greeting-idle-timeout spec scales with `window.__idleTimeoutMs` and passes with either 1s or 10s idle.
+
+**Note:** A **full** E2E run (`USE_PROXY_MODE=true npm run test:e2e`) may still report failures in other specs (e.g. context-retention when run in same suite as OpenAI proxy tests, idle-timeout-behavior timing, openai-proxy-e2e lengthy response / session retained). See [Latest full E2E run](#latest-full-e2e-run) below.
+
+---
+
+## Latest full E2E run
+
+**Run:** Full suite from `test-app/`: `USE_PROXY_MODE=true npm run test:e2e`. **4 failed**, 23 skipped, **218 passed** (~5.1m).
+
+| Result | Count |
+|--------|--------|
+| Failed | 4 |
+| Passed | 218 |
+| Skipped | 23 |
+
+**The 4 failures:**
+
+| # | Spec / test | Error (summary) |
+|---|-------------|------------------|
+| 1 | context-retention-agent-usage › should retain context when disconnecting and reconnecting - agent uses context | (Failure in full run; passes in focused grep run. May be order/env or OpenAI vs Deepgram proxy.) |
+| 2 | idle-timeout-behavior › should restart timeout after USER_STOPPED_SPEAKING when agent is idle - reproduces Issue #262/#430 | `expect(actualTimeout).toBeGreaterThanOrEqual(9000)` — received 8052 (connection closed at ~8s; test expects 9–15s). |
+| 3 | openai-proxy-e2e › 8b. Lengthy response – after 15s agent still speaking, content in DOM, connection connected | `expect(connectionStatus).toBe('connected')` — received `'closed'` (idle timeout closed connection before 15s). |
+| 4 | openai-proxy-e2e › 9. Repro – after disconnect and reconnect (same page), session retained; response must not be stale or greeting | Got greeting "Hello! How can I assist you today?" as response instead of session-retained answer. |
+
+**Summary:** (2) and (3) are idle-timeout timing: test expects connection to stay open longer, or close in a tighter band. (4) is session/context retention after reconnect (OpenAI proxy). (1) passes in focused run; full-suite order or backend may matter. For release verification, the **spot-check** (grep for the 6 triage specs) confirms proxy-mode idle and reconnection behavior; full-suite failures are documented here for follow-up.
+
+---
+
+## Investigation: Where do these fail? Is that step in other tests? Why here?
+
+**Failure location and reuse:**
+
+| # | Failing step | Used elsewhere? | Why it might fail only here |
+|---|----------------|------------------|------------------------------|
+| 1 | **disconnectComponent(page)** → `waitForFunction` 30s for `connection-status === 'closed'` | Yes: openai-proxy-e2e (tests 2, 3, 8, **9**, 10), context-retention (both tests), context-retention-with-function-calling, greeting-audio-timing, deepgram-text-session-flow | In test 9 we get past disconnect (status becomes 'closed') and then fail on response content. So the **same helper works in test 9** but not in context-retention in the full run. Likely causes: (a) **test order** – context-retention may run in a different worker or after different tests when the page/proxy is in a state where stop or session-disconnect doesn’t lead to 'closed' within 30s; (b) **OpenAI vs Deepgram** – context-retention uses `hasOpenAIProxyEndpoint()` and runs with OpenAI proxy when that env is set; (c) **timing/race** – right after first response we wait 2s then disconnect; the component or proxy might still be finalizing and not react to the click. |
+| 2 | **waitForIdleTimeout** then `expect(actualTimeout).toBeGreaterThanOrEqual(9000)` | Same helper used in other idle-timeout-behavior tests (e.g. 7000–35000 band). This test uses **hardcoded** 10000/9000/15000. | **actualTimeout** is “time from **start of wait** to close.” The 10s idle timer **restarts** at Step 5 (USER_STOPPED_SPEAKING); we then do Step 6 and **start** waitForIdleTimeout. There is a 1–2s gap between “timeout restarted” and “we started waiting,” so close can occur ~8s into the wait (10s total from restart). The assertion is **wrong**: it assumes the full 10s runs after the wait begins. Test is **not** isolated from IDLE_TIMEOUT behavior – it’s a **timing assertion bug** (should use app’s `window.__idleTimeoutMs` and a tolerance). |
+| 3 | After **waitForTimeout(15000)** → `expect(connectionStatus).toBe('connected')` | No other test asserts “still connected after 15s” in this way. | **Idle timeout closes the connection.** When the app uses 1s idle (Playwright-started server), the agent may finish the “lengthy” response in &lt;15s; 1s after agent goes idle the connection closes. So by 15s we’re often **closed**. With 10s idle we might still be connected if the agent finished late. So (3) is **idle timeout behavior as expected** – the test is incompatible with short idle; it should skip when `window.__idleTimeoutMs < 15000` or require a longer idle for this test. |
+| 4 | After **sendMessageAndWaitForResponse(…'What famous people lived there?')** → expect response not to be greeting | context-retention and other specs assert on response content after reconnect; they use **getCapturedWebSocketData** to verify Settings on reconnect includes context. | Test 9 does **not** currently check whether context was sent in Settings on reconnect. So we don’t know if: (A) app/proxy didn’t send context → upstream started a new session (greeting), or (B) context was sent but upstream ignored it. **Isolation:** Add a check (e.g. install WebSocket capture, after reconnect inspect last Settings message for context). If context is present but we still get greeting → bug is upstream. If context is absent → bug is app or proxy not sending context on reconnect. |
+
+**Recommended next steps:**
+
+- **#1 (context-retention):** Run in isolation with OpenAI proxy: `USE_PROXY_MODE=1 VITE_OPENAI_PROXY_ENDPOINT=... npm run test:e2e -- --grep "context-retention-agent-usage"`. Run again **without** `VITE_OPENAI_PROXY_ENDPOINT` (Deepgram only) to see if failure is OpenAI-specific. Compare: does disconnectComponent see 'closed' in Deepgram-only runs?
+- **#2 (idle-timeout-behavior):** Fix assertion to use `window.__idleTimeoutMs` and a tolerance (e.g. actualTimeout ≥ idleMs − 2000, ≤ idleMs + 5000) so the test is correct when the wait starts shortly after the timeout restarts.
+- **#3 (8b):** Skip test when `window.__idleTimeoutMs < 15000` (or run this test with a longer idle env) so “connection still connected after 15s” is achievable.
+- **#4 (test 9):** Add WebSocket capture and assert or log whether Settings on reconnect included context; add a targeted test or doc note for “session retained after reconnect” (context sent vs upstream behavior).
+
+**Test 9 isolation (implemented):** Test 9 now installs WebSocket capture, then after the “What famous people lived there?” response it inspects the last sent Settings message for `agent.context`. If the response is the greeting and context was **not** sent → assertion fails with “Settings on reconnect did not include context” (app/proxy bug). If context **was** sent but response is still the greeting → logs “Context was sent but upstream returned greeting” (upstream/session bug). This isolates whether the failure is in the app/proxy (not sending context) or upstream (ignoring context).
+
+---
+
 ## Latest E2E run (partial, after Issue #482/#489 fix)
 
 **Run:** Partial run (suite cut short). **6 failed**, 5 interrupted, 64 passed (~2m).
@@ -157,9 +227,12 @@ If Deepgram sends **ConversationText (greeting) before** the greeting audio (bin
 
 ---
 
-## Latest successful run: 9 passed (context-retention, text-session-flow, greeting-idle-timeout)
+## Latest successful run: 9 passed (context-retention, text-session-flow, greeting-idle-timeout) + manual-vad 3 passed
 
-**Run:** `npm run test:e2e -- --grep "context-retention-agent-usage|deepgram-text-session-flow|deepgram-greeting-idle-timeout"` from `test-app/` with `USE_PROXY_MODE=true`. **9 passed**, 30.6s.
+**Runs from `test-app/` with `USE_PROXY_MODE=true` (and optionally `E2E_USE_EXISTING_SERVER=1` with frontend on default 10s idle):**
+
+- **context-retention-agent-usage | deepgram-text-session-flow | deepgram-greeting-idle-timeout:** `--grep "context-retention-agent-usage|deepgram-text-session-flow|deepgram-greeting-idle-timeout"` → **9 passed** (~16–40s).
+- **deepgram-manual-vad-workflow:** `--grep "deepgram-manual-vad-workflow"` → **3 passed** (~31s).
 
 ### Config and defaults
 
@@ -185,7 +258,7 @@ If Deepgram sends **ConversationText (greeting) before** the greeting audio (bin
 
 ### Observation (Step 9 timing)
 
-In the first greeting test, after reconnecting and sending "hi", the second wait for connection close saw the connection close in ~1s instead of ~10s. That suggests either (a) the app's idle for that connection was 1s (e.g. env or reconnection path), or (b) the backend/proxy closed the connection for another reason. The spec now **fails** if the close time is not within 1s of the expected idle (e.g. 1027ms when expected ~10s will fail with a clear assertion). So if the app reports 10s idle but the connection closes at ~1s, the test will fail and the cause (wrong idle source or early backend close) can be investigated.
+In the first greeting test, after reconnecting and sending "hi", the second wait for connection close can vary (e.g. ~1s when app had 1s idle, ~10–11s when app had 10s idle). The spec asserts close time is within 2s of the expected idle (TIMING_TOLERANCE_MS); if the app reports 10s idle but the connection closes at ~1s, the test fails and the cause can be investigated.
 
 ---
 

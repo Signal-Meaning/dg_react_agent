@@ -66,6 +66,10 @@ The test-app uses **one backend server** that hosts both Deepgram and OpenAI pro
 
 The component speaks **one protocol** (Deepgram Voice Agent message types). Whether the proxy talks to Deepgram directly or to another service (e.g. OpenAI via a translation layer), the **readiness contract** is the same: the component must receive **SettingsApplied** before sending the first user message, and the proxy must send it and keep the connection open. See [Component–Proxy Contract](./COMPONENT-PROXY-CONTRACT.md).
 
+### Idle timeout and greeting (AgentAudioDone)
+
+The component starts its **idle timeout** only when the agent is idle (not speaking, not playing). That can happen in two ways: (1) the proxy sends **AgentAudioDone** after response or greeting **audio** — then the component transitions to idle and starts the timer; (2) for **text-only** greeting or turns (e.g. `ConversationText` assistant with no binary), the component has a built-in path that transitions to idle after a short defer, so the proxy does **not** need to send `AgentAudioDone`. Our **Deepgram proxy** (`packages/voice-agent-backend/src/attach-upgrade.js`) sends `AgentAudioDone` after the first assistant `ConversationText` **only when** it has already forwarded at least one binary message in that connection; for text-only greeting the component’s text-only path handles it. See [Component–Proxy Contract § Idle timeout and agent completion](./COMPONENT-PROXY-CONTRACT.md#idle-timeout-and-agent-completion-agentaudiodone--text-only-path).
+
 ### Interface Contract, Not New Service
 
 **Important**: This is **not a new service to deploy**. Instead, it's an **interface contract** that developers implement in their existing backend infrastructure by adding a WebSocket proxy endpoint.

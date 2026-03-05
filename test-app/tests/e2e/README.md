@@ -64,6 +64,23 @@ npx playwright test --grep "Idle Timeout"   # Idle timeout specific tests
 npx playwright test --grep "Microphone"     # All microphone tests
 ```
 
+### Proxy-mode E2E: idle timeout and reconnection specs
+
+With **USE_PROXY_MODE=true** (default for full E2E), these specs validate idle timeout and reconnection behavior; they have been verified passing with both 1s idle (Playwright-started dev server) and 10s idle (existing server with default frontend):
+
+- **deepgram-greeting-idle-timeout** — Idle timeout after greeting (Issue #139); scales with `window.__idleTimeoutMs` (1s or 10s).
+- **deepgram-manual-vad-workflow** — Speak → silence → timeout (manual VAD).
+- **context-retention-agent-usage** — Context retained after disconnect/reconnect; Settings format.
+- **deepgram-text-session-flow** — Auto-connect and re-establish when WebSocket closes; rapid/sequential message exchange.
+
+Optional spot-check (from `test-app`):
+
+```bash
+USE_PROXY_MODE=true npm run test:e2e -- --grep "deepgram-greeting-idle-timeout|context-retention-agent-usage|deepgram-text-session-flow|deepgram-manual-vad-workflow"
+```
+
+With an existing server (e.g. default 10s idle): `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- --grep "deepgram-greeting-idle-timeout"`. See [E2E-FAILURES-RESOLUTION.md](../../../docs/issues/ISSUE-489/E2E-FAILURES-RESOLUTION.md) for current status and verification commands.
+
 ### E2E navigation: use baseURL (relative URLs)
 
 **Do not hardcode `http://localhost:5173` in specs or helpers.** The app may run over HTTPS when `HTTPS=true` in `test-app/.env`. Playwright’s `baseURL` is set in `playwright.config.mjs` (http or https). Use relative paths so navigation always matches the server:

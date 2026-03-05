@@ -40,6 +40,8 @@ import {
   getAgentState,
   assertNoRecoverableAgentErrors,
   assertAgentErrorsAllowUpstreamTimeouts,
+  installWebSocketCapture,
+  getCapturedWebSocketData,
   SELECTORS,
 } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, loadAndSendAudioSampleAt24k, waitForVADEvents, CHUNK_20MS_16K_MONO } from './fixtures/audio-helpers.js';
@@ -333,12 +335,16 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   /**
    * Lengthy response: user asks for a long poem; after 15s the assistant is still speaking,
    * assistant content is in the DOM, and the agent remains connected.
+   * Requires app idle timeout >= 15s so the connection is not closed by idle timeout before 15s.
    */
   test('8b. Lengthy response – after 15s agent still speaking, content in DOM, connection connected', async ({ page }) => {
     test.setTimeout(60000);
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
+
+    const idleMs = await page.evaluate(() => (typeof window !== 'undefined' && window.__idleTimeoutMs) ? window.__idleTimeoutMs : 10000);
+    test.skip(idleMs < 15000, `Test requires idle timeout >= 15s to stay connected for 15s; app has ${idleMs}ms (e.g. Playwright 1s). Run with E2E_USE_EXISTING_SERVER=1 and 10s+ idle, or VITE_IDLE_TIMEOUT_MS=20000.`);
 
     const poemPrompt = 'Tell me rather lengthy and boring poem about a woodchuck named Barney.';
     await sendTextMessage(page, poemPrompt);
@@ -377,6 +383,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
    */
   test('9. Repro – after disconnect and reconnect (same page), session retained; response must not be stale or greeting', async ({ page }) => {
     test.setTimeout(90000);
+    await installWebSocketCapture(page);
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
@@ -397,6 +404,21 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     expect(response.length).toBeGreaterThan(0);
     console.log('[Repro test 9] Agent response to "What famous people lived there?":', JSON.stringify(response));
     const trimmed = response.trim();
+
+    // Isolate session retention: did we send context in Settings on reconnect?
+    const wsData = await getCapturedWebSocketData(page);
+    const settingsMessages = (wsData?.sent || []).filter(m => m.type === 'Settings');
+    const lastSettings = settingsMessages[settingsMessages.length - 1];
+    const contextInSettings = lastSettings?.data?.agent?.context;
+    const hasContext = Array.isArray(contextInSettings) ? contextInSettings.length > 0 : !!contextInSettings;
+    console.log('[Repro test 9] Settings on reconnect:', hasContext ? `context present (${Array.isArray(contextInSettings) ? contextInSettings.length : 1} items)` : 'NO context');
+    if (!hasContext && trimmed === 'Hello! How can I assist you today?') {
+      expect(hasContext, 'Session not retained: Settings on reconnect did not include context; fix app/proxy to send context on reconnect').toBe(true);
+    }
+    if (hasContext && trimmed === 'Hello! How can I assist you today?') {
+      console.log('[Repro test 9] Context was sent but upstream returned greeting (possible upstream/session bug)');
+    }
+
     expect(
       trimmed,
       'Must not get greeting as response to "What famous people lived there?" (session retained)'
