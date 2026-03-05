@@ -61,6 +61,8 @@ declare global {
     __testGetInterruptAgent?: () => boolean;
     __testGetStartAudioCapture?: () => boolean;
     __testConversationHistory?: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: number }>; // Issue #362: Expose conversation history for E2E tests
+    /** Idle timeout (ms) used by the component; exposed for E2E (e.g. deepgram-greeting-idle-timeout.spec.js). */
+    __idleTimeoutMs?: number;
   }
 }
 
@@ -486,6 +488,12 @@ function App() {
       } : undefined
     };
   }, [loadedInstructions, conversationForDisplay, urlParamsString]); // Include urlParamsString to recompute when URL params change
+
+  // Expose idle timeout for E2E so specs can align waits with app (no real-API-only; works with proxy/mock or real backend)
+  useEffect(() => {
+    const testWindow = window as TestWindow;
+    testWindow.__idleTimeoutMs = memoizedAgentOptions.idleTimeoutMs ?? 10000;
+  }, [memoizedAgentOptions]);
 
   // Memoize endpoint config to point to custom endpoint URLs
   const memoizedEndpointConfig = useMemo(() => ({

@@ -381,7 +381,20 @@ function DeepgramVoiceInteraction(
   // This prevents duplicate callbacks when both AgentStartedSpeaking and playback events fire
   const hasNotifiedSpeakingForPlaybackRef = useRef<boolean>(false);
   const prevIsPlayingRef = useRef<boolean | undefined>(undefined);
-  
+
+  /** Deferred "text-only agent done" (ConversationText while listening, no audio follows). Cleared when AgentStartedSpeaking fires. */
+  const textOnlyAgentDoneTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const TEXT_ONLY_AGENT_DONE_DEFER_MS = 200;
+
+  useEffect(() => {
+    return () => {
+      if (textOnlyAgentDoneTimeoutIdRef.current !== null) {
+        clearTimeout(textOnlyAgentDoneTimeoutIdRef.current);
+        textOnlyAgentDoneTimeoutIdRef.current = null;
+      }
+    };
+  }, []);
+
   // VAD event tracking for redundancy detection
   const vadEventHistory = useRef<Array<{ type: string; speechDetected: boolean; timestamp: number; source: string }>>([]);
   
@@ -2225,6 +2238,11 @@ function DeepgramVoiceInteraction(
     }
     
     if (data.type === 'AgentStartedSpeaking') {
+      // Cancel any deferred "text-only agent done" so we don't transition to idle when audio is about to play
+      if (textOnlyAgentDoneTimeoutIdRef.current !== null) {
+        clearTimeout(textOnlyAgentDoneTimeoutIdRef.current);
+        textOnlyAgentDoneTimeoutIdRef.current = null;
+      }
       logConsole('debug','🗣️ [AGENT EVENT] AgentStartedSpeaking received');
       logConsole('debug','🎯 [AGENT] AgentStartedSpeaking received - transitioning to speaking state');
       sleepLog('Dispatching AGENT_STATE_CHANGE to speaking');
@@ -2308,6 +2326,31 @@ function DeepgramVoiceInteraction(
       }
 
       if (data.role === 'assistant') {
+        // Idle timeout: greeting is agent activity (disables/resets timeout while active). When greeting has no
+        // audio, "agent activity ended" once the text is delivered. Schedule a short deferral; if AgentStartedSpeaking
+        // does not fire, no audio will play for this message → transition to idle and allow idle timeout to start.
+        if (textOnlyAgentDoneTimeoutIdRef.current !== null) {
+          clearTimeout(textOnlyAgentDoneTimeoutIdRef.current);
+        }
+        textOnlyAgentDoneTimeoutIdRef.current = setTimeout(() => {
+          textOnlyAgentDoneTimeoutIdRef.current = null;
+          if (stateRef.current.agentState === 'speaking' || stateRef.current.agentState === 'thinking') {
+            return; // Audio/response in progress; AgentAudioDone or playback will end it
+          }
+          logConsole('debug','🎯 [AGENT] ConversationText (assistant) - no audio followed; agent activity ended (text-only)');
+          dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
+          dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+          setTimeout(() => handleMeaningfulActivity('ConversationText'), 50);
+          if (stateRef.current.greetingInProgress) {
+            dispatch({ type: 'GREETING_PROGRESS_CHANGE', inProgress: false });
+            dispatch({ type: 'GREETING_STARTED', started: false });
+          }
+          dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
+          if (stateRef.current.isUserSpeaking) {
+            onUserStoppedSpeaking?.();
+          }
+        }, TEXT_ONLY_AGENT_DONE_DEFER_MS);
+
         const response: LLMResponse = {
           type: 'llm',
           text: content,
@@ -3399,7 +3442,7 @@ function DeepgramVoiceInteraction(
     // This prevents idle timeout from firing during the gap between message send and agent response
     // Deepgram may not always send AgentThinking message, so we proactively enter thinking state
     transitionToThinkingState('User message sent (injectUserMessage)', false); // Don't maintain keepalive (agent will handle it)
-    
+    // Typing (sending text) is user activity: WebSocketManager.sendJSON calls onMeaningfulActivity for InjectUserMessage
     agentManagerRef.current.sendJSON({
       type: 'InjectUserMessage',
       content: message
