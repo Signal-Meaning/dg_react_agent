@@ -6,7 +6,7 @@
  */
 
 import { getLogger } from './logger';
-import type { FunctionCallRequest } from '../../types';
+import type { FunctionCallRequest } from '../types';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 

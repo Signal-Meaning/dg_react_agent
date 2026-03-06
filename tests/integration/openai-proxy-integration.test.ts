@@ -15,6 +15,9 @@
  * Run order: integration tests first against real APIs (when keys available), then mocks.
  * CI runs mocks only.
  *
+ * With USE_REAL_APIS=1 this file logs each test name as it runs (beforeEach). For more
+ * Jest output use: npm test -- --verbose tests/integration/openai-proxy-integration.test.ts
+ *
  * @jest-environment node
  */
 
@@ -30,6 +33,7 @@ const WebSocket = require('ws');
 // Load WebSocketServer from ws package (Jest resolve may not expose ws/lib/*)
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const WebSocketServer = require(path.join(path.dirname(require.resolve('ws')), 'lib', 'websocket-server.js'));
+import { DEFAULT_SERVER_TIMEOUT_MS, NO_SERVER_TIMEOUT_MS, SERVER_TIMEOUT_ERROR_CODE } from '../../src/constants/voice-agent';
 import {
   createOpenAIProxyServer,
 } from '../../packages/voice-agent-backend/scripts/openai-proxy/server';
@@ -164,6 +168,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   const receivedSessionUpdatePayloads: Array<{ type: string; session?: { turn_detection?: unknown; [key: string]: unknown } }> = [];
 
   beforeAll(async () => {
+    if (useRealAPIs) process.stdout.write('[openai-proxy-integration] beforeAll: starting proxy...\n');
     proxyServer = http.createServer((_req, res) => {
       res.writeHead(404);
       res.end();
@@ -182,6 +187,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         logLevel: process.env.LOG_LEVEL ?? undefined,
       });
       mockPort = 0;
+      if (useRealAPIs) process.stdout.write(`[openai-proxy-integration] beforeAll: proxy ready on port ${proxyPort}. Use --verbose to see each test name as it runs.\n`);
       return;
     }
 
@@ -452,7 +458,12 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 10000);
 
   beforeEach(() => {
-    if (useRealAPIs) jest.useRealTimers();
+    if (useRealAPIs) {
+      jest.useRealTimers();
+      // Stream test name so real-API runs show progress (Jest default reporter does not print names until test completes).
+      const name = (typeof expect.getState === 'function' && expect.getState().currentTestName) || 'unknown';
+      process.stdout.write(`[openai-proxy-integration] Running: ${name}\n`);
+    }
     // Issue #470: reset so tests that expect output_text.done (e.g. "Hello from mock") are not affected by the response.done-only test.
     mockSendResponseDoneOnlyAfterFunctionCallOutput = false;
   });
@@ -3088,6 +3099,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     setTimeout(() => {
       if (finished) return;
       finished = true;
+      try { client.close(); } catch { /* ignore */ }
       const startedIdx = received.findIndex((m) => m.type === 'AgentStartedSpeaking');
       const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
       try {
@@ -3098,7 +3110,6 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         done(e as Error);
         return;
       }
-      client.close();
       done();
     }, 5000);
     client.on('error', (err) => finish(err));
@@ -3144,6 +3155,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     setTimeout(() => {
       if (finished) return;
       finished = true;
+      try { client.close(); } catch { /* ignore */ }
       try {
         expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
         expect(received.some((m) => m.type === 'AgentAudioDone')).toBe(true);
@@ -3151,7 +3163,6 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         done(e as Error);
         return;
       }
-      client.close();
       done();
     }, 5000);
     client.on('error', (err) => finish(err));
@@ -3162,8 +3173,13 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * ConversationText (assistant) before Error so the UI can show the assistant bubble before the connection
    * closes. Runs with real API first (USE_REAL_APIS=1), then with mock. Real API: send message, wait for
    * response and idle_timeout; assert order. Mock: sends error then output_text.done; same assertion.
+   *
+   * Server timeout: When the server closes due to its inactivity limit it sends error code
+   * SERVER_TIMEOUT_ERROR_CODE ('idle_timeout'). We wait DEFAULT_SERVER_TIMEOUT_MS + 5s for that.
+   * Skip when real API has no server timeout (NO_SERVER_TIMEOUT_MS), e.g. OpenAI with turn_detection: null.
    */
-  (useRealAPIs ? it : it.skip)('Issue #482 real-API: client receives ConversationText (assistant) before Error (idle_timeout) (USE_REAL_APIS=1)', (done) => {
+  const realAPIServerTimeoutMs = NO_SERVER_TIMEOUT_MS; // OpenAI with turn_detection: null has no server timeout
+  (useRealAPIs && realAPIServerTimeoutMs === NO_SERVER_TIMEOUT_MS ? it.skip : it)('Issue #482 real-API: client receives ConversationText (assistant) before Error (idle_timeout) (USE_REAL_APIS=1)', (done) => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; role?: string; code?: string }> = [];
     let finished = false;
@@ -3174,8 +3190,12 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       if (err) done(err);
       else done();
     };
+    // Include idleTimeoutMs so proxy can send it when API supports it; server may still use its default when turn_detection is null.
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Say hi briefly.' } } }));
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: { think: { prompt: 'Say hi briefly.' }, idleTimeoutMs: 15000 },
+      }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -3186,7 +3206,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           if (msg.type === 'SettingsApplied') {
             client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Hi' }));
           }
-          const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === 'idle_timeout');
+          const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === SERVER_TIMEOUT_ERROR_CODE);
           if (errIdx >= 0) {
             const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
             try {
@@ -3203,11 +3223,13 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         // ignore
       }
     });
+    const serverTimeoutDeadlineMs = DEFAULT_SERVER_TIMEOUT_MS + 5000;
     setTimeout(() => {
       if (finished) return;
       finished = true;
+      try { client.close(); } catch { /* ignore */ }
       const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
-      const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === 'idle_timeout');
+      const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === SERVER_TIMEOUT_ERROR_CODE);
       try {
         expect(errIdx).toBeGreaterThanOrEqual(0);
         expect(ctIdx).toBeGreaterThanOrEqual(0);
@@ -3216,11 +3238,10 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         done(e as Error);
         return;
       }
-      client.close();
       done();
-    }, 25000);
+    }, serverTimeoutDeadlineMs);
     client.on('error', (err) => finish(err));
-  }, 30000);
+  }, DEFAULT_SERVER_TIMEOUT_MS + 10000);
 
   /**
    * Issue #489 PROTOCOL-ASSURANCE-GAPS: With real API, for a turn (InjectUserMessage → response), client receives

@@ -32,9 +32,13 @@ This doc records the **two recurring real-API integration test failures**, their
 
 **Test:** `Issue #482 real-API: client receives ConversationText (assistant) before Error (idle_timeout) (USE_REAL_APIS=1)`
 
-**What the test does:** Connects, sends Settings, on SettingsApplied sends InjectUserMessage "Hi", then expects to receive (1) at least one ConversationText (assistant), (2) an Error with `code: 'idle_timeout'`, and (3) ConversationText before that Error. After 25s it asserts `errIdx >= 0`; failure is `errIdx === -1` (no such Error received).
+**What the test does:** Connects, sends Settings (including `agent.idleTimeoutMs` when we support sending it), on SettingsApplied sends InjectUserMessage "Hi", then expects to receive (1) at least one ConversationText (assistant), (2) an Error with `code: 'idle_timeout'`, and (3) ConversationText before that Error. The test waits up to **65s** for the server idle timeout. Failure was `errIdx === -1` (no such Error received within the wait).
 
-**Observed failure:** `expect(errIdx).toBeGreaterThanOrEqual(0)` — no Error with `code === 'idle_timeout'` was received.
+**Server timeout (API code `idle_timeout` = SERVER_TIMEOUT_ERROR_CODE):** The timeout is the **server** (API) idle timeout, not the client’s. We map it from the Deepgram-style protocol: the component sends `Settings.agent.idleTimeoutMs` and the proxy is intended to send `idle_timeout_ms` in `session.update` when the API supports it (PROTOCOL-AND-MESSAGE-ORDERING.md §3.9). **OpenAI:** The Realtime API only accepts `idle_timeout_ms` under `turn_detection: { type: 'server_vad', ... }`. We use `turn_detection: null` (so we control commit/response.create), so we do not currently send `idle_timeout_ms`; the server may use its own default (e.g. ~60s, or none). **Deepgram:** Server timeout was 60s. The test uses `DEFAULT_SERVER_TIMEOUT_MS` (60s) and waits `DEFAULT_SERVER_TIMEOUT_MS + 5s`; the API sends `SERVER_TIMEOUT_ERROR_CODE` when the server timeout fires (see `src/constants/voice-agent.ts`).
+
+**OpenAI Realtime API (from official docs):** `idle_timeout_ms` is configurable only when using **Server VAD** (`turn_detection: { type: 'server_vad', ... }`). When set, it is optional with **minimum 5000, maximum 30000** (5s–30s). Docs: "Idle timeout is currently only supported for server_vad mode." With **`turn_detection: null`** (our proxy), there is no way to set it and **no published default**; the API may never send `idle_timeout` in that configuration. The test is skipped for real API (see test file).
+
+**Observed failure:** `expect(errIdx).toBeGreaterThanOrEqual(0)` — no Error with `code === 'idle_timeout'` received within 65s. Confirms API does not send idle_timeout when turn_detection is null.
 
 **Error handling requirement:** The proxy must use **structured codes** for all errors and events: (1) **Codes from the API** — map upstream `error` (and any other events that carry a code) using the API's structured payload (e.g. `event.error?.code`), not message text. (2) **Codes from the proxy** — when the proxy sends messages to the client (e.g. `Error` with `code`), use defined codes from the protocol, not free-form text. The proxy should **avoid using text strings from messages** (API or client) for control flow or mapping if at all possible; prefer structured fields (codes, types, event names). See protocol requirement **Error handling** in [PROTOCOL-SPECIFICATION.md](../../../tests/integration/PROTOCOL-SPECIFICATION.md) and PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE.
 
@@ -44,19 +48,31 @@ This doc records the **two recurring real-API integration test failures**, their
 
 2. **OpenAI Realtime API:** The proxy must use the API’s **structured error codes** (e.g. `event.error?.code`) for all error mapping, including idle timeout → `idle_timeout`; avoid inferring from message text. Same for any other codes the API emits. **Action:** Re-review the [OpenAI Realtime API server events](https://platform.openai.com/docs/api-reference/realtime-server-events) (and error payload) for the error event shape and any documented code for idle timeout. Align `isIdleTimeoutClosure` and `mapErrorToComponentError` to use the API’s code; add or update tests to assert the code the API sends.
 
-3. **Test assumption:** The test assumes that within 25s the API will close the connection due to idle and that the proxy will receive an error, map it to `idle_timeout`, and send Error to the client. If the API never sends that error in this scenario (e.g. different idle behavior, or no idle timeout in the test window), the test cannot pass. **Do not fix by increasing the 25s timeout.** Instead: (a) Confirm from the API spec when and how idle timeout is signaled; (b) If the API has a configurable idle timeout (e.g. in `session.update`), ensure we set it so the test can reliably trigger it; (c) If the test is meant to run only when the API actually sends an idle-timeout closure, document that and consider skipping or conditioning the test when the API behavior cannot be triggered (e.g. no idle timeout in the plan).
+3. **Test assumption:** The test waits up to **65s** for the server to close due to idle and send an error that the proxy maps to `idle_timeout`. This allows for a ~60s server default (e.g. Deepgram-like). If the API never sends that error (e.g. no idle timeout when `turn_detection: null`), the test will still fail. (a) Confirm from the API spec when and how idle timeout is signaled; (b) OpenAI accepts `idle_timeout_ms` only under `turn_detection: { type: 'server_vad', ... }`; with `turn_detection: null` the server may use a default or none; (c) When the API supports a session-level or other configurable idle timeout we can set it from Settings so the test triggers within a known window.
 
 4. **Alignment:** Keep [PROTOCOL-AND-MESSAGE-ORDERING.md](../../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) §3.9 and §3.7 aligned with the current API. Use upstream **structured codes** for all error mapping (idle_timeout, session_max_duration, and any other codes the API emits); proxy should avoid message text for control flow. Update `isIdleTimeoutClosure` and `mapErrorToComponentError` to use codes. Same principle applies to any codes the proxy emits to the client.
 
 ---
 
-## 3. Policy: No timeout increases
+## 3. Test suite hang (regression): open client on failure
+
+**Symptom:** With `USE_REAL_APIS=1`, the integration test run appeared to hang (no PASS/FAIL output, or process did not exit after tests).
+
+**Root cause:** Some real-API tests use a `setTimeout` that on failure calls `done(e)` (or asserts and then `done(e)` in a catch) **without closing the client WebSocket**. When the test fails (e.g. Issue #482: no `idle_timeout` Error received within 25s), the client connection stayed open. After all tests, `afterAll` calls `proxyServer.close()`; the server’s close callback does not run until all connections are closed, so the run could hang or the process could fail to exit due to open handles.
+
+**Tests fixed:** (1) **Issue #482 real-API** (client receives ConversationText before Error idle_timeout): timeout callback now closes the client at the start, then runs assertions and calls `done()` or `done(e)`. (2) **Issue #489 real-API** (AgentStartedSpeaking before ConversationText): same pattern. (3) **Issue #482 TDD** (AgentAudioDone when response completes): same pattern for consistency. In all such tests, the timeout callback must close the client **before** any path that calls `done()` (success or failure) so the proxy server can shut down and the process can exit.
+
+**Prevention:** In any test that opens a WebSocket client and uses a timeout (or other path) that may call `done(error)`, ensure the client is closed on every exit path (e.g. use a shared `finish(err?)` that closes the client and then calls `done`, or close the client at the start of the timeout callback before asserting).
+
+---
+
+## 4. Policy: No timeout increases
 
 We do **not** fix real-API test failures by increasing deadlines (e.g. 10s → 30s for SettingsApplied, or 25s → 60s for idle_timeout). The goal is to have tests that **correctly observe** the events the API and proxy produce and that are **aligned with the OpenAI Realtime API** and our protocol docs. If the test fails, the next step is to (1) confirm what the API actually sends (e.g. with logging or a minimal trace), (2) align proxy and docs with the spec, and (3) ensure the test asserts on the right events in the right order.
 
 ---
 
-## 4. Alignment checklist (OpenAI Realtime API ↔ proxy ↔ component)
+## 5. Alignment checklist (OpenAI Realtime API ↔ proxy ↔ component)
 
 - [ ] **session.update / session.updated:** API sends `session.updated` after client `session.update`. Proxy sends SettingsApplied only on `session.updated`. Doc: PROTOCOL-AND-MESSAGE-ORDERING.md §2.2, §2.3.
 - [ ] **Idle timeout and all error codes:** Use API structured codes for all error mapping; proxy avoids message text. Proxy-emitted codes (to client) should also be from the protocol, not free-form. Doc: §3.9, §3.7; COMPONENT-PROXY-CONTRACT "Codes over message text."
@@ -64,7 +80,7 @@ We do **not** fix real-API test failures by increasing deadlines (e.g. 10s → 3
 
 ---
 
-## 5. Answers (from project references and spec)
+## 6. Answers (from project references and spec)
 
 **Spec clarity**
 

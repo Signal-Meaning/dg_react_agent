@@ -38,11 +38,12 @@ export class PluginValidator {
     };
 
     // Check peer dependencies
-    if (!packageJson.peerDependencies) {
+    const peerDeps = packageJson.peerDependencies as Record<string, string> | undefined;
+    if (!peerDeps) {
       errors.push('Missing peerDependencies section');
     } else {
       for (const dep of this.REQUIRED_PEER_DEPS) {
-        if (!packageJson.peerDependencies[dep]) {
+        if (!peerDeps[dep]) {
           errors.push(`Missing peer dependency: ${dep}`);
         } else {
           requirements.properPeerDeps = true;
@@ -51,9 +52,10 @@ export class PluginValidator {
     }
 
     // Check that React is not in dependencies
-    if (packageJson.dependencies) {
+    const deps = packageJson.dependencies as Record<string, string> | undefined;
+    if (deps) {
       for (const dep of this.FORBIDDEN_BUNDLED_DEPS) {
-        if (packageJson.dependencies[dep]) {
+        if (deps[dep]) {
           errors.push(`React should not be bundled in dependencies: ${dep}`);
         }
       }

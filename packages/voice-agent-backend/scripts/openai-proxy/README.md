@@ -47,7 +47,7 @@ That starts the backend server which hosts `/openai` (and `/deepgram-proxy`). Th
 
 **Greeting-text-only (diagnostic):** Set `OPENAI_PROXY_GREETING_TEXT_ONLY=1` so the proxy sends the greeting to the client only (UI shows it) and does not send `conversation.item.create` (greeting) to OpenAI. If the error stops, the greeting injection was the cause. (Testing showed the error can persist without it, so the trigger may be elsewhere.)
 
-**Idle timeout:** The proxy sends **`idle_timeout_ms`** in `session.update` from **Settings.agent.idleTimeoutMs** (shared with the component; no separate env var). When the upstream closes due to idle timeout, the proxy logs at INFO ("expected idle timeout closure") and sends code **`idle_timeout`**; the component treats it as expected closure. See PROTOCOL-AND-MESSAGE-ORDERING.md §3.9.
+**Idle timeout:** We use **`turn_detection: null`** (client/proxy controls commit), so the **OpenAI server has no server idle timeout**; we convey that as **`NO_SERVER_TIMEOUT_MS`** (`-1`). The component's client idle timeout (Settings.agent.idleTimeoutMs) is separate. When the upstream does send an idle timeout closure, the proxy maps it to code **`idle_timeout`**; the component treats it as expected closure. See PROTOCOL-AND-MESSAGE-ORDERING.md §3.9.
 
 Run OpenAI proxy E2E tests (test-app must be served; Playwright starts it via `webServer`):
    ```bash

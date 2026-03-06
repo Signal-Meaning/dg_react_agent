@@ -178,6 +178,8 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
     // Use turn_detection: null so the server does NOT auto-commit the audio buffer; only the proxy sends
     // input_audio_buffer.commit + response.create. With server_vad enabled the server commits on VAD and
     // our commit then sees "buffer too small ... 0.00ms" (Issue #414, PROTOCOL §3.6). See Issue #451 Phase 2.
+    // With turn_detection: null the OpenAI server has no server idle timeout (idle_timeout_ms only under server_vad).
+    // We convey "no server timeout" as -1 (NO_SERVER_TIMEOUT_MS). See PROTOCOL-AND-MESSAGE-ORDERING.md §3.9.
     audio: {
       input: {
         turn_detection: null,

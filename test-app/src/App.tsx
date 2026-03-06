@@ -399,29 +399,19 @@ function App() {
           return;
         }
 
-        // Use the instructions-loader utility which handles:
-        // 1. Environment variable override (VITE_DEEPGRAM_INSTRUCTIONS)
-        // 2. File loading (instructions.txt)
-        // 3. Graceful fallback to default instructions
+        // Loader: env override (VITE_DEFAULT_INSTRUCTIONS) → file → default
         const instructions = await loadInstructionsFromFile();
-        
+
         setLoadedInstructions(instructions);
         addLog(`Loaded instructions via loader: ${instructions.substring(0, 50)}...`);
       } catch (error) {
         sessionLogger.error('Failed to load instructions', { error: error instanceof Error ? error.message : String(error) });
         addLog(`Failed to load instructions: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        
-        // Fallback to environment variable directly if loader fails
-        const envInstructions = import.meta.env.VITE_DEEPGRAM_INSTRUCTIONS;
-        if (envInstructions && envInstructions.trim()) {
-          setLoadedInstructions(envInstructions.trim());
-          addLog(`Using fallback env instructions: ${envInstructions.substring(0, 50)}...`);
-        } else {
-          // Final fallback to default
-          const defaultInstructions = 'You are a helpful voice assistant. Keep your responses concise and informative.';
-          setLoadedInstructions(defaultInstructions);
-          addLog(`Using default instructions: ${defaultInstructions.substring(0, 50)}...`);
-        }
+
+        const { getDefaultInstructions } = await import('../../src/utils/instructions-loader');
+        const defaultInstructions = getDefaultInstructions();
+        setLoadedInstructions(defaultInstructions);
+        addLog(`Using default instructions: ${defaultInstructions.substring(0, 50)}...`);
       } finally {
         setInstructionsLoading(false);
         hasLoadedInstructions.current = true;
@@ -429,7 +419,7 @@ function App() {
     };
 
     loadInstructions();
-  }, [addLog]); // Include addLog in dependencies
+  }, [addLog, sessionLogger]);
 
   const memoizedTranscriptionOptions = useMemo(() => {
     const interimResults = import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS !== 'false';

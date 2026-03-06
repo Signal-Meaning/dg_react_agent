@@ -31,7 +31,7 @@ import {
 import { useIdleTimeoutManager } from '../../hooks/useIdleTimeoutManager';
 import { useCallbackRef, useBooleanDeclarativeProp } from '../../hooks/declarative-props';
 import { AgentStateService } from '../../services/AgentStateService';
-import { DEFAULT_IDLE_TIMEOUT_MS } from '../../constants/voice-agent';
+import { DEFAULT_IDLE_TIMEOUT_MS, SERVER_TIMEOUT_ERROR_CODE, SESSION_MAX_DURATION_ERROR_CODE } from '../../constants/voice-agent';
 import { compareAgentOptionsIgnoringContext, hasDependencyChanged } from '../../utils/option-comparison';
 import { functionCallLogger } from '../../utils/function-call-logger';
 import {
@@ -2639,15 +2639,14 @@ function DeepgramVoiceInteraction(
         return;
       }
 
-      // Expected closure events (not errors): idle timeout and session max duration.
-      // Proxy sends code idle_timeout or session_max_duration; treat as normal connection closure.
-      // Fallback: same message without code (e.g. older proxy) is also treated as expected idle-timeout closure.
+      // Expected closure: server timeout (API code idle_timeout) or session max duration.
+      // SERVER_TIMEOUT_ERROR_CODE = server closed due to its inactivity limit; distinct from client idle timeout.
       const isExpectedClosure =
-        errorCode === 'idle_timeout' ||
-        errorCode === 'session_max_duration' ||
+        errorCode === SERVER_TIMEOUT_ERROR_CODE ||
+        errorCode === SESSION_MAX_DURATION_ERROR_CODE ||
         errorMessage.includes('The server had an error while processing your request');
       if (isExpectedClosure) {
-        log('[Agent] Expected closure:', errorCode || 'idle_timeout', errorMessage);
+        log('[Agent] Expected closure:', errorCode || SERVER_TIMEOUT_ERROR_CODE, errorMessage);
         return;
       }
       
