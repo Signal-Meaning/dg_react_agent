@@ -290,41 +290,72 @@ export function mapFunctionCallResponseToConversationItemCreate(
   };
 }
 
+/** Protocol-defined component error codes for expected closures (Issue #489, codes over message text). */
+const COMPONENT_CODE_IDLE_TIMEOUT = 'idle_timeout';
+const COMPONENT_CODE_SESSION_MAX_DURATION = 'session_max_duration';
+
 /**
- * Detect expected "session hit the maximum duration of 60 minutes" event.
- * Per PROTOCOL-AND-MESSAGE-ORDERING.md §3.8 this is expected when session reaches server limit.
+ * Map API error code to component code. Pass-through for known protocol codes and any other API code.
+ * Single source of truth for API code → component code (DRY).
  */
-export function isSessionMaxDurationError(event: OpenAIErrorEvent): boolean {
-  const msg = event.error?.message ?? '';
-  return typeof msg === 'string' && msg.includes('maximum duration') && msg.includes('60 minutes');
+function mapApiErrorCodeToComponentCode(apiCode: string): string {
+  if (apiCode === COMPONENT_CODE_IDLE_TIMEOUT || apiCode === COMPONENT_CODE_SESSION_MAX_DURATION) {
+    return apiCode;
+  }
+  return apiCode;
 }
 
 /**
- * Detect expected idle-timeout closure. The upstream sends a generic "server had an error" message
- * when the session is closed due to idle timeout; we treat this as a normal closing event, not an error.
- * Per Issue #414 / PASSING-VS-FAILING-TESTS-THEORY.md and RESOLUTION-PLAN.
+ * Legacy fallback: infer component code from message when API does not send error.code.
+ * Avoid using for control flow when API provides structured code. See PROTOCOL-AND-MESSAGE-ORDERING §3.9.
+ */
+function legacyInferCodeFromMessage(event: OpenAIErrorEvent): string | undefined {
+  const msg = event.error?.message ?? '';
+  if (typeof msg !== 'string') return undefined;
+  if (msg.includes('maximum duration') && msg.includes('60 minutes')) {
+    return COMPONENT_CODE_SESSION_MAX_DURATION;
+  }
+  if (msg.includes('The server had an error while processing your request')) {
+    return COMPONENT_CODE_IDLE_TIMEOUT;
+  }
+  return undefined;
+}
+
+/**
+ * Get component error code from upstream error event. Prefers API structured code (event.error?.code);
+ * uses legacy message fallback only when code is absent. Issue #489, codes over message text.
+ */
+export function getComponentErrorCode(event: OpenAIErrorEvent): string {
+  const apiCode = event.error?.code;
+  if (apiCode !== undefined && apiCode !== '') {
+    return mapApiErrorCodeToComponentCode(apiCode);
+  }
+  return legacyInferCodeFromMessage(event) ?? 'unknown';
+}
+
+/**
+ * Detect expected "session hit the maximum duration of 60 minutes" event.
+ * Per PROTOCOL-AND-MESSAGE-ORDERING.md §3.8. Implemented via getComponentErrorCode (DRY).
+ */
+export function isSessionMaxDurationError(event: OpenAIErrorEvent): boolean {
+  return getComponentErrorCode(event) === COMPONENT_CODE_SESSION_MAX_DURATION;
+}
+
+/**
+ * Detect expected idle-timeout closure. Implemented via getComponentErrorCode (DRY).
+ * Legacy: upstream may send generic message when code absent; we prefer API code when present.
  */
 export function isIdleTimeoutClosure(event: OpenAIErrorEvent): boolean {
-  const msg = event.error?.message ?? '';
-  return typeof msg === 'string' && msg.includes('The server had an error while processing your request');
+  return getComponentErrorCode(event) === COMPONENT_CODE_IDLE_TIMEOUT;
 }
 
 /**
  * Map OpenAI error event → component Error.
- * Expected closures (session max duration, idle timeout) are mapped to distinct codes so the client
- * can treat them as normal closure rather than an error. Session max duration → `session_max_duration`;
- * idle timeout closure → `idle_timeout`.
+ * Uses getComponentErrorCode (code-first, then legacy message fallback). Issue #489, DRY.
  */
 export function mapErrorToComponentError(event: OpenAIErrorEvent): ComponentError {
   const msg = event.error?.message ?? 'Unknown error';
-  let code: string;
-  if (isSessionMaxDurationError(event)) {
-    code = 'session_max_duration';
-  } else if (isIdleTimeoutClosure(event)) {
-    code = 'idle_timeout';
-  } else {
-    code = event.error?.code ?? 'unknown';
-  }
+  const code = getComponentErrorCode(event);
   return { type: 'Error', description: String(msg), code };
 }
 

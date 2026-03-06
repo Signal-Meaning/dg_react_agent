@@ -218,6 +218,76 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.description).toBe('Unknown error');
       expect(out.code).toBe('unknown');
     });
+
+    /** Issue #489 TDD: codes over message text — prefer API structured code; legacy message fallback when code absent */
+    describe('Error mapping (codes over message text, Issue #489)', () => {
+      it('uses event.error.code when present: idle_timeout → component code idle_timeout', () => {
+        const event = {
+          type: 'error' as const,
+          error: { code: 'idle_timeout', message: 'Any message' },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('idle_timeout');
+        expect(out.type).toBe('Error');
+      });
+
+      it('uses event.error.code when present: session_max_duration → component code session_max_duration', () => {
+        const event = {
+          type: 'error' as const,
+          error: { code: 'session_max_duration', message: 'Any message' },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('session_max_duration');
+      });
+
+      it('passes through other API codes (e.g. rate_limit_exceeded)', () => {
+        const event = {
+          type: 'error' as const,
+          error: { code: 'rate_limit_exceeded', message: 'Rate limit exceeded' },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('rate_limit_exceeded');
+      });
+
+      it('legacy fallback: when error.code absent and message matches idle timeout string, returns idle_timeout', () => {
+        const event = {
+          type: 'error' as const,
+          error: { message: 'The server had an error while processing your request' },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('idle_timeout');
+      });
+
+      it('legacy fallback: when error.code absent and message matches session max duration, returns session_max_duration', () => {
+        const event = {
+          type: 'error' as const,
+          error: { message: 'Your session hit the maximum duration of 60 minutes.' },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('session_max_duration');
+      });
+
+      it('when error.code absent and message does not match legacy strings, returns unknown', () => {
+        const event = {
+          type: 'error' as const,
+          error: { message: 'Some other error' },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('unknown');
+      });
+
+      it('prefers event.error.code over message: when code is rate_limit_exceeded and message matches idle string, returns rate_limit_exceeded', () => {
+        const event = {
+          type: 'error' as const,
+          error: {
+            code: 'rate_limit_exceeded',
+            message: 'The server had an error while processing your request',
+          },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('rate_limit_exceeded');
+      });
+    });
   });
 
   describe('5. Function call response (FunctionCallResponse → conversation.item.create)', () => {

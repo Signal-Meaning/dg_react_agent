@@ -4,8 +4,8 @@ import { AgentResponseType } from '../../types/agent';
 import { functionCallLogger } from '../function-call-logger';
 import { getLogger, type Logger } from '../logger';
 
-/** Message types that indicate agent activity for idle timeout (Issue #482). */
-const AGENT_ACTIVITY_MESSAGE_TYPES = ['AgentThinking', 'AgentStartedSpeaking', 'AgentAudioDone'] as const;
+/** Message types that indicate agent activity for idle timeout (Issue #482). AgentDone = semantic agent done; AgentAudioDone = receipt complete (legacy). */
+const AGENT_ACTIVITY_MESSAGE_TYPES = ['AgentThinking', 'AgentStartedSpeaking', 'AgentDone', 'AgentAudioDone'] as const;
 
 /**
  * Event types emitted by the WebSocketManager
@@ -71,6 +71,13 @@ export interface WebSocketManagerOptions {
    * Callback for meaningful user activity (for idle timeout management)
    */
   onMeaningfulActivity?: (activity: string) => void;
+
+  /**
+   * Issue #487: Called whenever the manager emits an agent message (type 'message') to the component.
+   * Single path: only the manager invokes this when it emits, so no code path can deliver agent
+   * messages without triggering idle-timeout notification. Used for agent service only.
+   */
+  onAgentMessageReceived?: () => void;
 }
 
 /**
@@ -246,6 +253,9 @@ export class WebSocketManager {
             
             // Route as 'message' event (same as text JSON messages)
             this.log(`📨 [WEBSOCKET.onmessage] About to emit message event with type: ${messageType} (from binary ${source})`);
+            if (this.options.service === 'agent') {
+              this.options.onAgentMessageReceived?.();
+            }
             this.emit({ type: 'message', data });
             this.log(`📨 [WEBSOCKET.onmessage] Emit completed for message type: ${messageType} (from binary ${source})`);
             return;
@@ -396,6 +406,9 @@ export class WebSocketManager {
               }
               
               this.log(`📨 [WEBSOCKET.onmessage] About to emit message event with type:`, data.type);
+              if (this.options.service === 'agent') {
+                this.options.onAgentMessageReceived?.();
+              }
               this.emit({ type: 'message', data });
               this.log(`📨 [WEBSOCKET.onmessage] Emit completed for message type:`, data.type);
             } catch (error) {

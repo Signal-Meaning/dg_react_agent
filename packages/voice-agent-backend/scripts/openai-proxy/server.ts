@@ -34,8 +34,6 @@ import {
   mapGreetingToConversationText,
   mapErrorToComponentError,
   type ComponentError,
-  isIdleTimeoutClosure,
-  isSessionMaxDurationError,
   binaryToInputAudioBufferAppend,
   mapInputAudioTranscriptionCompletedToTranscript,
   mapInputAudioTranscriptionDeltaToTranscript,
@@ -156,7 +154,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let pendingResponseCreateAfterFunctionCallOutput = false;
     /** Issue #482: Have we sent AgentStartedSpeaking for the current response? So component sees "agent active" before ConversationText (avoids client idle timeout). Reset when response ends. */
     let hasSentAgentStartedSpeakingForCurrentResponse = false;
-    /** Issue #482 / #489: Have we sent AgentAudioDone for the current response? Sent on output_text.done and output_audio.done; also send on response.done if not yet sent so component can transition to idle. */
+    /** Issue #482 / #489: Have we sent AgentAudioDone for the current response? AgentAudioDone = receipt complete only (legacy); we also send AgentDone for semantic "agent done" so the wire has the correct signal. See docs/issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md. */
     let hasSentAgentAudioDoneForCurrentResponse = false;
     /** Issue #482: Buffer idle_timeout Error and send after ConversationText so client can show assistant bubble before close. */
     let pendingIdleTimeoutError: ComponentError | null = null;
@@ -176,8 +174,17 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       hasSentAgentStartedSpeakingForCurrentResponse = false;
       hasSentAgentAudioDoneForCurrentResponse = false;
     };
+    /**
+     * Send agent-done signals to client once per response so the component can transition to idle and start idle timeout.
+     * We send both:
+     * - AgentDone: semantic "agent done for the turn" (preferred; aligned with docs).
+     * - AgentAudioDone: legacy receipt-complete only (NOT playback complete); kept for API compatibility. In comments always refer to it as "receipt complete."
+     * Called from: response.output_text.done, response.output_audio.done, response.done (fallback for function-call turn).
+     * If the client never receives these after a function result, the upstream API is not sending one of those three events (or is very slow).
+     */
     const sendAgentAudioDoneIfNeeded = (): void => {
       if (!hasSentAgentAudioDoneForCurrentResponse && clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(JSON.stringify({ type: 'AgentDone' }));
         clientWs.send(JSON.stringify({ type: 'AgentAudioDone' }));
         hasSentAgentAudioDoneForCurrentResponse = true;
       }
@@ -311,6 +318,14 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // response.output_text.done. Sending response.create now triggers conversation_already_has_active_response.
           // Defer response.create until we receive that output_text.done (see output_text.done handler).
           pendingResponseCreateAfterFunctionCallOutput = true;
+          // Issue #487 / voice-commerce: Signal "agent is working" so the component can clear "waiting for next
+          // agent message" and allow idle timeout to run once the turn completes. Without this, the client only
+          // clears when we forward response.output_text.done or response.done; if the API is slow or order
+          // differs, the connection never idles. Sending AgentThinking here lets the component transition to
+          // thinking and IdleTimeoutService to clear waitingForNextAgentMessageAfterFunctionResult.
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(JSON.stringify({ type: 'AgentThinking', content: '' }));
+          }
         } else if (msg.type === 'InjectUserMessage') {
           const injectMsg = msg as Parameters<typeof mapInjectUserMessageToConversationItemCreate>[0];
           const itemCreate = mapInjectUserMessageToConversationItemCreate(injectMsg);
@@ -480,10 +495,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             onResponseStarted();
           }
           const m = msg as { type: string; text?: string };
+          const isFunctionCallTranscript = m.text?.startsWith('Function call:');
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: `upstream→client: ${msg.type}${m.text?.startsWith('Function call:') ? ' (transcript-like)' : ''}`,
+            body: `Received response.output_text.done from upstream${isFunctionCallTranscript ? ' (transcript-like)' : ''} — sending ConversationText + AgentAudioDone. E2E: if neither this nor response.done appears after a function call, the real API is not sending completion.`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
           sendAgentStartedSpeakingIfNeeded();
@@ -520,16 +536,13 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           );
           clientWs.send(JSON.stringify(conversationText));
         } else if (msg.type === 'error') {
-          const isSessionMaxDuration = isSessionMaxDurationError(msg as Parameters<typeof isSessionMaxDurationError>[0]);
-          const isIdleTimeout = isIdleTimeoutClosure(msg as Parameters<typeof isIdleTimeoutClosure>[0]);
-          const isExpectedClosure = isSessionMaxDuration || isIdleTimeout;
+          const componentError = mapErrorToComponentError(msg as Parameters<typeof mapErrorToComponentError>[0]);
+          const isExpectedClosure =
+            componentError.code === 'idle_timeout' || componentError.code === 'session_max_duration';
           {
-            const logBody = isSessionMaxDuration
-              ? `expected session limit: ${msg.error?.message ?? 'session max duration'}`
-              : isIdleTimeout
-                ? `expected idle timeout closure: ${msg.error?.message ?? 'idle timeout'}`
-                : (msg.error?.message ?? String(msg));
-            const closureCode = isSessionMaxDuration ? 'session_max_duration' : isIdleTimeout ? 'idle_timeout' : (msg.error?.code ?? '');
+            const logBody = isExpectedClosure
+              ? `expected closure (${componentError.code}): ${msg.error?.message ?? componentError.code}`
+              : (msg.error?.message ?? String(msg));
             emitLog({
               severityNumber: isExpectedClosure ? SeverityNumber.INFO : SeverityNumber.ERROR,
               severityText: isExpectedClosure ? 'INFO' : 'ERROR',
@@ -538,14 +551,13 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
                 ...connectionAttrs,
                 [ATTR_DIRECTION]: 'upstream→client',
                 [ATTR_MESSAGE_TYPE]: 'error',
-                [ATTR_ERROR_CODE]: closureCode,
+                [ATTR_ERROR_CODE]: componentError.code,
                 [ATTR_ERROR_MESSAGE]: msg.error?.message ?? '',
               },
             });
           }
-          const componentError = mapErrorToComponentError(msg as Parameters<typeof mapErrorToComponentError>[0]);
           // Issue #482: Buffer idle_timeout only when a response is in progress (we may still get output_text.done); otherwise send immediately.
-          if (isIdleTimeout && responseInProgress && clientWs.readyState === WebSocket.OPEN) {
+          if (componentError.code === 'idle_timeout' && responseInProgress && clientWs.readyState === WebSocket.OPEN) {
             pendingIdleTimeoutError = componentError;
           } else {
             clientWs.send(JSON.stringify(componentError));
@@ -641,6 +653,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // still has an active response → conversation_already_has_active_response. Clear only on output_text.done.
         } else if (msg.type === 'response.done') {
           // Issue #482 / #489: Ensure client gets AgentAudioDone so component can transition to idle (e.g. when API sends response.done without output_text.done/output_audio.done).
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: 'Received response.done from upstream — sending AgentAudioDone to client (idle timeout can start). E2E: if this never appears after a function call, the real API is not sending response.done.',
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.done' },
+          });
           sendAgentAudioDoneIfNeeded();
           // Issue #470: API may send response.done to mark response complete (e.g. after function-call turn).
           // If we deferred response.create after function_call_output, send it now so the next turn can start.

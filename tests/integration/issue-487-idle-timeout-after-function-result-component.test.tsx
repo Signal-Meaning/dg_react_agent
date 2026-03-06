@@ -37,8 +37,12 @@ const { AudioManager } = require('../../src/utils/audio/AudioManager');
 const IDLE_TIMEOUT_MS = 10000;
 const WAIT_MS = IDLE_TIMEOUT_MS - 500; // Just under idle timeout
 
+type MockWsWithOptions = ReturnType<typeof createMockWebSocketManager> & {
+  _constructorOptions?: { onMeaningfulActivity?: (activity: string) => void };
+};
+
 describe('Issue #487: Idle timeout after function result (component integration)', () => {
-  let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
+  let mockWebSocketManager: MockWsWithOptions;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
 
   beforeEach(() => {
@@ -46,9 +50,12 @@ describe('Issue #487: Idle timeout after function result (component integration)
     jest.clearAllMocks();
     resetTestState();
 
-    mockWebSocketManager = createMockWebSocketManager();
+    mockWebSocketManager = createMockWebSocketManager() as MockWsWithOptions;
     mockAudioManager = createMockAudioManager();
-    WebSocketManager.mockImplementation(() => mockWebSocketManager);
+    WebSocketManager.mockImplementation((options: any) => {
+      mockWebSocketManager._constructorOptions = options;
+      return mockWebSocketManager;
+    });
     AudioManager.mockImplementation(() => mockAudioManager);
   });
 
@@ -115,5 +122,89 @@ describe('Issue #487: Idle timeout after function result (component integration)
 
     // Connection must still be open: component must NOT have closed due to idle timeout
     expect(mockWebSocketManager.close).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Idle is enabled when the agent is done for the turn. When muted, "done" is when text is displayed
+   * (ConversationText assistant); we must not insist on audio. This test: after function result,
+   * AgentThinking → ConversationText (assistant) with no AgentAudioDone should still allow transition
+   * to idle so idle timeout can run.
+   */
+  it('should close connection after function result when ConversationText (assistant) received (do not insist on audio when muted)', async () => {
+    const functions: AgentFunction[] = [
+      {
+        name: 'test_fn',
+        description: 'Test',
+        parameters: { type: 'object', properties: {} },
+      },
+    ];
+    const agentOptions = createAgentOptions({
+      functions,
+      idleTimeoutMs: IDLE_TIMEOUT_MS,
+    });
+    const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+
+    render(
+      <DeepgramVoiceInteraction
+        ref={ref}
+        apiKey={MOCK_API_KEY}
+        agentOptions={agentOptions}
+        onFunctionCallRequest={(functionCall, sendResponse) => {
+          sendResponse({ id: functionCall.id, result: { ok: true } });
+        }}
+      />
+    );
+
+    await setupComponentAndConnect(ref, mockWebSocketManager);
+    const eventListener = await waitForEventListener(mockWebSocketManager);
+
+    // 1. User activity so IdleTimeoutService allows timeout to start later
+    act(() => {
+      mockWebSocketManager._constructorOptions?.onMeaningfulActivity?.('test');
+    });
+
+    // 2. FunctionCallRequest → app sends FunctionCallResponse
+    act(() => {
+      eventListener?.({
+        type: 'message',
+        data: {
+          type: 'FunctionCallRequest',
+          functions: [{ id: 'fc-1', name: 'test_fn', arguments: '{}', client_side: true }],
+        },
+      });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // 3. AgentThinking (proxy sent after FunctionCallResponse) → component in "thinking"
+    act(() => {
+      eventListener?.({ type: 'message', data: { type: 'AgentThinking', content: '' } });
+    });
+
+    // 4. ConversationText (assistant) — no AgentAudioDone (text-only / API did not send response.done)
+    act(() => {
+      eventListener?.({
+        type: 'message',
+        data: { type: 'ConversationText', role: 'assistant', content: 'Done.' },
+      });
+    });
+
+    // 5. Advance past text-only defer (200ms) so component transitions thinking → idle
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockWebSocketManager.close).not.toHaveBeenCalled();
+
+    // 6. Advance past idle timeout; connection should close (component must not insist on AgentAudioDone)
+    act(() => {
+      jest.advanceTimersByTime(IDLE_TIMEOUT_MS + 500);
+    });
+
+    expect(mockWebSocketManager.close).toHaveBeenCalled();
   });
 });

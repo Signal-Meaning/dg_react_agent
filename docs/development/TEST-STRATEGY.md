@@ -26,6 +26,10 @@ Summary: **real APIs first (when available) → mocks**. **CI: mocks only.**
 
 - **When real APIs are requested:** Set **`USE_REAL_APIS=1`** and **`OPENAI_API_KEY`** (in `.env`, `test-app/.env`, or env), then run e.g. `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`. Mock-only tests are skipped; the rest run against the live OpenAI Realtime API. Optional: `OPENAI_REALTIME_URL` to override the upstream URL.
 
+- **Filtering by name does not enable real APIs.** Using **`--testNamePattern=real-API`** (or similar) only selects which tests run; it does **not** set `USE_REAL_APIS=1`. To run tests against the real API you must set the env var. Without it, real-API tests are skipped (they use `(useRealAPIs ? it : it.skip)`). So a run with `--testNamePattern=real-API` but without `USE_REAL_APIS=1` will skip those tests, not run them against the live API.
+
+- **Do not fix real-API test failures by increasing timeouts.** If a real-API test fails due to timeout (e.g. "did not receive SettingsApplied within 10s" or "Timeout waiting for assistant response"), the root cause is likely incorrect observation of events, proxy/API misalignment with the OpenAI Realtime API spec, or test assumptions that don't match the API contract. Focus on aligning tests and proxy with the spec and on correctly observing events; do not relax or increase test timeouts as a fix. See `docs/issues/ISSUE-489/REAL-API-TEST-FAILURES.md` when investigating failures.
+
 ## Transcript / VAD and backends
 
 - **Deepgram:** Transcript and VAD (UserStartedSpeaking, UtteranceEnd) come from the Deepgram agent/transcription streams. E2E specs that rely on these (e.g. `callback-test.spec.js`, `deepgram-vad-events-core.spec.js`) run against Deepgram only; many skip when `VITE_OPENAI_PROXY_ENDPOINT` is set (see `test-app/tests/e2e/E2E-BACKEND-MATRIX.md`).
@@ -38,6 +42,7 @@ Summary: **real APIs first (when available) → mocks**. **CI: mocks only.**
 
 ## Document references
 
+- **Real-API test failures (do not fix by increasing timeouts):** `docs/issues/ISSUE-489/REAL-API-TEST-FAILURES.md` — investigation, alignment with OpenAI Realtime API, and open questions on spec clarity and test coverage.
 - **Integration tests (mock upstream):** `docs/issues/ISSUE-381/INTEGRATION-TEST-PLAN.md`, `tests/integration/openai-proxy-integration.test.ts`
 - **E2E tests:** `test-app/tests/e2e/`, `docs/development/TESTING-QUICK-START.md`
 - **Transcript/VAD contract (Issue #414):** `docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md`

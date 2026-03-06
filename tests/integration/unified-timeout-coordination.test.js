@@ -494,6 +494,66 @@ describe('Unified Timeout Coordination Integration', () => {
       jest.advanceTimersByTime(timeoutMs);
       expect(mockOnTimeout).toHaveBeenCalledTimes(1);
     });
+
+    /**
+     * Issue #487: When we get a signal that the agent is working (AGENT_STATE_CHANGED to thinking
+     * or speaking), we clear "waiting for next message" so we're ready to accept the reply; we don't
+     * need to wait for the actual message. Timeout stays disabled while agent is thinking/speaking.
+     */
+    test('should clear waiting-for-next-message when agent enters thinking (signal agent is working)', () => {
+      const timeoutMs = 5000;
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'fc-1' });
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'fc-1' });
+      // No AGENT_MESSAGE_RECEIVED; instead backend sends AgentThinking (component emits AGENT_STATE_CHANGED thinking)
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'thinking' });
+      // Now "waiting" should be cleared; agent is thinking so timeout still disabled
+      jest.advanceTimersByTime(timeoutMs);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      jest.advanceTimersByTime(timeoutMs);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * Max-wait fallback: if backend never sends a "working" signal or message after function result,
+     * we clear the "waiting" flag after maxWaitForAgentReplyMs (capped at timeoutMs) so idle timeout
+     * can start and the connection can close (avoids hanging forever).
+     */
+    test('should start and fire timeout after maxWaitForAgentReplyMs when no agent message arrives', () => {
+      const timeoutMs = 5000;
+      const maxWaitMs = 2000;
+      const serviceWithMaxWait = new IdleTimeoutService({
+        timeoutMs,
+        debug: true,
+        maxWaitForAgentReplyMs: maxWaitMs,
+      });
+      serviceWithMaxWait.onTimeout(mockOnTimeout);
+
+      serviceWithMaxWait.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      serviceWithMaxWait.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      serviceWithMaxWait.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      serviceWithMaxWait.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+
+      serviceWithMaxWait.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'fc-1' });
+      serviceWithMaxWait.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'fc-1' });
+      // Do NOT send AGENT_MESSAGE_RECEIVED (simulate backend never sending reply)
+
+      jest.advanceTimersByTime(maxWaitMs - 1);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+
+      jest.advanceTimersByTime(1); // max-wait fires, clears "waiting" flag
+      jest.advanceTimersByTime(timeoutMs); // idle timeout now starts and fires
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+
+      serviceWithMaxWait.destroy();
+    });
   });
 
   /**

@@ -7,6 +7,13 @@
  * define what any backend proxy must accept and emit. See
  * docs/issues/ISSUE-381/API-DISCONTINUITIES.md for the full contract and mapping to
  * other backends (e.g. OpenAI Realtime).
+ *
+ * --- Agent-done terms (definitions in code for consistency with docs) ---
+ * - Agent done: The agent has finished this turn's output; idle timer may start.
+ *   Unmuted = end of audio for the turn. Muted = when assistant text is displayed.
+ * - Receipt complete: All output for this turn has been received from upstream.
+ * - Playback complete: The device has finished playing the agent's audio.
+ * See docs/issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md.
  */
 
 /**
@@ -43,6 +50,16 @@ export enum AgentResponseType {
   FUNCTION_CALL_REQUEST = 'FunctionCallRequest',
   FUNCTION_CALL_RESPONSE = 'FunctionCallResponse',
   AGENT_STARTED_SPEAKING = 'AgentStartedSpeaking',
+  /**
+   * Semantic "agent done" for the turn. Prefer this when the proxy can signal doneness explicitly.
+   * Idle timer may start when the component receives this.
+   */
+  AGENT_DONE = 'AgentDone',
+  /**
+   * Legacy wire event: agent turn output RECEIPT complete (upstream finished sending).
+   * NOT playback complete. Name is historical; prefer AgentDone for semantic doneness when supported.
+   * See docs/issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md.
+   */
   AGENT_AUDIO_DONE = 'AgentAudioDone',
   ERROR = 'Error',
   WARNING = 'Warning'
@@ -313,7 +330,19 @@ export interface AgentStartedSpeakingResponse {
 }
 
 /**
- * Agent audio done notification
+ * Semantic "agent done" for the turn. Proxy sends this when the agent has finished this turn's output
+ * (so idle timer may start). Use when the proxy can trap the signal (e.g. after last binary audio or
+ * upstream completion). Prefer over AgentAudioDone when both are supported.
+ */
+export interface AgentDoneResponse {
+  type: AgentResponseType.AGENT_DONE;
+}
+
+/**
+ * Legacy: agent turn output RECEIPT complete only. Upstream has finished sending; playback may still be in progress.
+ * Do not use to mean "playback finished." For semantic "agent done" use AgentDone when the proxy supports it.
+ * Wire name 'AgentAudioDone' kept for API compatibility.
+ * @see docs/issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md
  */
 export interface AgentAudioDoneResponse {
   type: AgentResponseType.AGENT_AUDIO_DONE;
@@ -365,6 +394,7 @@ export type AgentIncomingMessage =
   | FunctionCallRequestResponse
   | FunctionCallResponseFromServer
   | AgentStartedSpeakingResponse
+  | AgentDoneResponse
   | AgentAudioDoneResponse
   | ErrorResponse
   | WarningResponse;

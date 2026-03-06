@@ -10,6 +10,11 @@ import { getLogger, type Logger } from './logger';
 export interface IdleTimeoutConfig {
   timeoutMs: number;
   debug?: boolean;
+  /**
+   * Max ms to wait for a signal that the agent is working (or the next message) after the app
+   * sends a function result. When not set, defaults to 500. Capped at timeoutMs. Set to 0 to disable (wait indefinitely).
+   */
+  maxWaitForAgentReplyMs?: number;
 }
 
 export interface IdleTimeoutState {
@@ -39,12 +44,21 @@ export class IdleTimeoutService {
   private currentState: IdleTimeoutState;
   private onTimeoutCallback?: () => void;
   private onStateChangeCallback?: (state: IdleTimeoutState) => void;
-  private pollingIntervalId: ReturnType<typeof setInterval> | null = null;
+  private pollingIntervalId: number | null = null;
   private stateGetter?: () => IdleTimeoutState | null; // Callback to get current state from component
   // Issue #373: Track active function calls to prevent idle timeout during execution
   private activeFunctionCalls: Set<string> = new Set();
-  /** Issue #487 (voice-commerce #1058): After app sends function result, agent is still busy until next agent message. */
+  /**
+   * Issue #487: After the app sends a function result, we block the idle timer until we have
+   * a signal that the agent has become active (so we're not closing before the reply). Cleared when:
+   * (1) AGENT_STATE_CHANGED to 'thinking' or 'speaking' — agent became active (primary).
+   * (2) AGENT_MESSAGE_RECEIVED — invoked only by WebSocketManager when it emits a message (single path).
+   * (3) Max-wait fallback (capped at timeoutMs) — if backend sends no signal, we allow the
+   *     idle timer to start after at most one idle-timeout period so the connection can close.
+   */
   private waitingForNextAgentMessageAfterFunctionResult = false;
+  /** Fallback timer: clear "waiting" after at most timeoutMs so we don't wait forever. */
+  private maxWaitForAgentReplyTimeoutId: number | null = null;
   private logger: Logger;
   /** Pause timeout until first user activity (speaking, typing/sending text, etc.). After any such event, timeout is allowed to run when conditions are idle. */
   private hasSeenUserActivityThisSession = false;
@@ -151,6 +165,15 @@ export class IdleTimeoutService {
         this.currentState.agentState = event.state;
         // Log state to debug timeout not starting
         this.log(`AGENT_STATE_CHANGED: state=${event.state}, isPlaying=${this.currentState.isPlaying}, isUserSpeaking=${this.currentState.isUserSpeaking}`);
+
+        // Issue #487: Agent became active (thinking/speaking) — clear "waiting after function result". Timeout is already disabled by shouldDisableTimeoutResets for thinking/speaking.
+        if (event.state === 'thinking' || event.state === 'speaking') {
+          this.stopMaxWaitForAgentReplyTimer();
+          if (this.waitingForNextAgentMessageAfterFunctionResult) {
+            this.waitingForNextAgentMessageAfterFunctionResult = false;
+            this.log('AGENT_STATE_CHANGED to ' + event.state + ' - agent became active, no longer waiting');
+          }
+        }
         
         // Issue #373: CRITICAL FIX - If agent enters thinking state, immediately stop any running timeout
         // This prevents timeout from firing during agent thinking phase (before function calls)
@@ -228,8 +251,9 @@ export class IdleTimeoutService {
         if (this.activeFunctionCalls.size === 0) {
           this.waitingForNextAgentMessageAfterFunctionResult = true;
           this.log('Waiting for next agent message after function result - idle timeout will not start');
+          this.startMaxWaitForAgentReplyTimer();
         }
-        // If no more active function calls, update behavior (timeout still must not start until AGENT_MESSAGE_RECEIVED)
+        // If no more active function calls, update behavior (timeout still must not start until AGENT_MESSAGE_RECEIVED or max-wait fires)
         if (this.activeFunctionCalls.size === 0) {
           this.updateTimeoutBehavior();
         }
@@ -237,6 +261,7 @@ export class IdleTimeoutService {
 
       case 'AGENT_MESSAGE_RECEIVED':
         // Issue #487: Next agent message received; no longer waiting. Timeout may start if otherwise idle.
+        this.stopMaxWaitForAgentReplyTimer();
         if (this.waitingForNextAgentMessageAfterFunctionResult) {
           this.waitingForNextAgentMessageAfterFunctionResult = false;
           this.log('AGENT_MESSAGE_RECEIVED - no longer waiting for next agent message');
@@ -267,8 +292,9 @@ export class IdleTimeoutService {
 
   /**
    * Check if timeout can start based on current state.
-   * Timeout is paused until first user activity (speaking, typing/sending text, etc.);
-   * after that, it can start when conditions are idle.
+   * Timeout is paused until first user activity; after that it can start when conditions are idle.
+   * waitingForNextAgentMessageAfterFunctionResult: block until we have a signal that the agent
+   * is working (thinking/speaking) or any agent message, or the max-wait fallback (capped at timeoutMs).
    */
   private canStartTimeout(state: IdleTimeoutState = this.currentState): boolean {
     return this.hasSeenUserActivityThisSession &&
@@ -373,6 +399,35 @@ export class IdleTimeoutService {
       this.checkAndStartTimeoutIfNeeded();
     }, IdleTimeoutService.POLLING_INTERVAL_MS);
     this.log('Started polling for idle timeout conditions');
+  }
+
+  /** Default max-wait for agent reply after function result (ms). Short fallback so we don't block idle timeout long if backend never sends. */
+  private static readonly DEFAULT_MAX_WAIT_FOR_AGENT_REPLY_MS = 500;
+
+  /**
+   * Start max-wait timer: if no "agent working" signal or message arrives within the window,
+   * clear the "waiting" flag so idle timeout can start. Capped at timeoutMs.
+   */
+  private startMaxWaitForAgentReplyTimer(): void {
+    this.stopMaxWaitForAgentReplyTimer();
+    const configured = this.config.maxWaitForAgentReplyMs ?? IdleTimeoutService.DEFAULT_MAX_WAIT_FOR_AGENT_REPLY_MS;
+    const ms = Math.min(configured, this.config.timeoutMs);
+    if (ms <= 0) return;
+    this.maxWaitForAgentReplyTimeoutId = window.setTimeout(() => {
+      this.maxWaitForAgentReplyTimeoutId = null;
+      if (this.waitingForNextAgentMessageAfterFunctionResult) {
+        this.waitingForNextAgentMessageAfterFunctionResult = false;
+        this.log('Max wait for agent reply reached - allowing idle timeout to start (backend did not send reply in time)');
+        this.updateTimeoutBehavior();
+      }
+    }, ms);
+  }
+
+  private stopMaxWaitForAgentReplyTimer(): void {
+    if (this.maxWaitForAgentReplyTimeoutId !== null) {
+      window.clearTimeout(this.maxWaitForAgentReplyTimeoutId);
+      this.maxWaitForAgentReplyTimeoutId = null;
+    }
   }
 
   /**
@@ -509,6 +564,7 @@ export class IdleTimeoutService {
    */
   public destroy(): void {
     this.stopTimeout();
+    this.stopMaxWaitForAgentReplyTimer();
     this.onTimeoutCallback = undefined;
     this.onStateChangeCallback = undefined;
   }

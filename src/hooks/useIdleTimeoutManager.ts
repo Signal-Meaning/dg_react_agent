@@ -208,8 +208,12 @@ export function useIdleTimeoutManager(
     }
   }, []);
 
-  /** Issue #487: Notify idle timeout that next agent message was received (clears "waiting after function result"). */
-  const handleNextAgentMessageReceived = useCallback(() => {
+  /**
+   * Issue #487: Notify idle timeout that an agent message was received.
+   * Passed to WebSocketManager as onAgentMessageReceived; the manager calls it when it emits a message (single path).
+   * Clears "waiting for agent after function result." See docs/issues/ISSUE-489/IDLE-TIMEOUT-AFTER-FUNCTION-RESULT-DESIGN.md.
+   */
+  const notifyAgentMessageReceived = useCallback(() => {
     if (serviceRef.current) {
       serviceRef.current.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
     }
@@ -220,6 +224,6 @@ export function useIdleTimeoutManager(
     handleUtteranceEnd,
     handleFunctionCallStarted,
     handleFunctionCallCompleted,
-    handleNextAgentMessageReceived,
+    notifyAgentMessageReceived,
   };
 }
