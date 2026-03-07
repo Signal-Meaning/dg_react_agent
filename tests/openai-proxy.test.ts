@@ -16,6 +16,7 @@ import {
   mapContextMessageToConversationItemCreate,
   mapGreetingToConversationItemCreate,
   mapGreetingToConversationText,
+  mapConversationItemAddedToConversationText,
   mapErrorToComponentError,
   binaryToInputAudioBufferAppend,
 } from '../packages/voice-agent-backend/scripts/openai-proxy/translator';
@@ -338,6 +339,46 @@ describe('OpenAI proxy translator (Issue #381)', () => {
         role: 'assistant',
         content: 'Hi there!',
       });
+    });
+
+    it('maps conversation.item.added (assistant, content array with part.text) to ConversationText', () => {
+      const event = {
+        type: 'conversation.item.added' as const,
+        item: { id: 'item_1', type: 'message', role: 'assistant' as const, content: [{ type: 'output_text', text: 'The capital is Paris.' }] },
+      };
+      const out = mapConversationItemAddedToConversationText(event);
+      expect(out).toEqual({ type: 'ConversationText', role: 'assistant', content: 'The capital is Paris.' });
+    });
+
+    it('maps conversation.item.added (assistant, content as single object with .text) to ConversationText', () => {
+      const event = {
+        type: 'conversation.item.added' as const,
+        item: { id: 'item_1', role: 'assistant' as const, content: { type: 'output_text', text: 'Hello.' } },
+      };
+      const out = mapConversationItemAddedToConversationText(event);
+      expect(out).toEqual({ type: 'ConversationText', role: 'assistant', content: 'Hello.' });
+    });
+
+    it('maps conversation.item.added (assistant, part with output_text object) to ConversationText', () => {
+      const event = {
+        type: 'conversation.item.added' as const,
+        item: { id: 'item_1', role: 'assistant' as const, content: [{ output_text: { text: 'From output_text.' } }] },
+      };
+      const out = mapConversationItemAddedToConversationText(event);
+      expect(out).toEqual({ type: 'ConversationText', role: 'assistant', content: 'From output_text.' });
+    });
+
+    it('mapConversationItemAddedToConversationText returns null for non-assistant role', () => {
+      const event = {
+        type: 'conversation.item.added' as const,
+        item: { id: 'item_1', role: 'user' as const, content: [{ text: 'User said this.' }] },
+      };
+      expect(mapConversationItemAddedToConversationText(event)).toBeNull();
+    });
+
+    it('mapConversationItemAddedToConversationText returns null for empty or missing content', () => {
+      expect(mapConversationItemAddedToConversationText({ type: 'conversation.item.added', item: { role: 'assistant', content: [] } })).toBeNull();
+      expect(mapConversationItemAddedToConversationText({ type: 'conversation.item.added', item: { role: 'assistant' } })).toBeNull();
     });
   });
 

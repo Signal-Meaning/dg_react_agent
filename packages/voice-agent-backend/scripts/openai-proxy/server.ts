@@ -13,6 +13,7 @@ import path from 'path';
 // Use require so we get CJS WebSocket; Server is on WebSocket.Server in ws/index.js
 // Under Jest/ts-jest the default export may not have .Server, so load Server from lib
 /** Minimal type for ws WebSocket .on(); TS may infer DOM WebSocket which lacks .on(). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- ws .on() callback args vary by event (message, close, etc.)
 type WsLike = { on(event: string, cb: (...args: any[]) => void): void };
 type WsServerConstructor = new (options: object) => { on(event: string, cb: (...args: unknown[]) => void): void; close(): void };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -485,7 +486,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // Issue #414: session is now configured for audio; send any append chunks queued before session.updated.
           flushPendingAudio();
         } else if (msg.type === 'response.output_text.done') {
-          // response.output_text.done is a control signal only. Assistant content comes from conversation.item.added only (protocol).
+          // response.output_text.done is a control signal only. Assistant content comes from conversation.item.added only (primary pipeline).
           onResponseEnded();
           // Issue #462 / #470: After function_call_output we deferred response.create; send it now so the API can start the next turn.
           if (pendingResponseCreateAfterFunctionCallOutput) {
@@ -602,8 +603,6 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               if (ttsBoundaryDebug && lastTtsChunk !== null) {
                 const bufA = lastTtsChunk;
                 const bufB = pcm;
-                const lastBytesA = bufA.length >= 2 ? [bufA[bufA.length - 2], bufA[bufA.length - 1]] : (bufA.length === 1 ? [bufA[0]] : []);
-                const firstBytesB = bufB.length >= 2 ? [bufB[0], bufB[1]] : (bufB.length === 1 ? [bufB[0]] : []);
                 const lastSampleLE = bufA.length >= 2 ? bufA.readInt16LE(bufA.length - 2) : undefined;
                 const firstSampleLE = bufB.length >= 2 ? bufB.readInt16LE(0) : undefined;
                 let carriedPlusFirst: number | undefined;
@@ -681,11 +680,30 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               }
             }
           }
-          // conversation.item.added (assistant message) is the protocol-defined source for assistant text. Control signals (e.g. output_text.done) are not content.
+          // conversation.item.added (assistant message) is the protocol-defined source for assistant text.
           if (msg.type === 'conversation.item.added' && clientWs.readyState === WebSocket.OPEN) {
             const conversationText = mapConversationItemAddedToConversationText(msg as Parameters<typeof mapConversationItemAddedToConversationText>[0]);
             if (conversationText) {
               clientWs.send(JSON.stringify(conversationText));
+            } else {
+              // Log actual API shape when mapper returns null so we can align mapper with real API (Issue #489 / TDD-PLAN-ALL-MESSAGES-IN-HISTORY).
+              const MAX_LOG_PAYLOAD = 2000;
+              const eventShape = JSON.stringify(msg);
+              const truncated = eventShape.length > MAX_LOG_PAYLOAD ? eventShape.slice(0, MAX_LOG_PAYLOAD) + '…' : eventShape;
+              emitLog({
+                severityNumber: SeverityNumber.INFO,
+                severityText: 'INFO',
+                body: `conversation.item.added did not map to ConversationText; actual API shape (use to align mapper): ${truncated}`,
+                attributes: {
+                  ...connectionAttrs,
+                  [ATTR_DIRECTION]: 'upstream→client',
+                  [ATTR_MESSAGE_TYPE]: 'conversation.item.added',
+                  itemRole: (msg as { item?: { role?: string } }).item?.role ?? '(missing)',
+                  itemContentType: Array.isArray((msg as { item?: { content?: unknown } }).item?.content)
+                    ? 'array'
+                    : typeof (msg as { item?: { content?: unknown } }).item?.content,
+                },
+              });
             }
           }
           // Issue #414: send as text so component routes as message, not binary (audio)

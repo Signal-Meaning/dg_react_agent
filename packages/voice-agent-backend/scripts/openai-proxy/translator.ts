@@ -274,22 +274,45 @@ export function mapFunctionCallArgumentsDoneToConversationText(
 }
 
 /**
+ * Extract a single text string from a content part (OpenAI Realtime API can use different shapes).
+ * Primary: part.text. Also: part.output_text (object with .text), part.input_text (object with .text), part.content (string).
+ */
+function extractTextFromContentPart(part: unknown): string | null {
+  if (!part || typeof part !== 'object') return null;
+  const p = part as Record<string, unknown>;
+  if (typeof p.text === 'string' && p.text.trim()) return p.text.trim();
+  if (p.output_text && typeof p.output_text === 'object' && typeof (p.output_text as { text?: string }).text === 'string') {
+    const t = (p.output_text as { text: string }).text.trim();
+    if (t) return t;
+  }
+  if (p.input_text && typeof p.input_text === 'object' && typeof (p.input_text as { text?: string }).text === 'string') {
+    const t = (p.input_text as { text: string }).text.trim();
+    if (t) return t;
+  }
+  if (typeof p.content === 'string' && p.content.trim()) return p.content.trim();
+  return null;
+}
+
+/**
  * Map OpenAI conversation.item.added (assistant message with content) → component ConversationText (assistant).
- * This is the protocol-defined source for assistant text. Returns null when the item is not an assistant
+ * This is the primary pipeline for assistant text. Returns null when the item is not an assistant
  * message or has no extractable text content. Issue #489.
+ * Handles multiple API shapes: content as array of { text }, { type, text }, { output_text: { text } }, or single object.
  */
 export function mapConversationItemAddedToConversationText(
   event: OpenAIConversationItemAdded
 ): ComponentConversationText | null {
   const item = event.item;
-  if (!item || item.role !== 'assistant') return null;
+  if (!item) return null;
+  const role = item.role;
+  if (role !== 'assistant') return null;
   const content = item.content;
-  if (!Array.isArray(content) || content.length === 0) return null;
+  const contentArray = Array.isArray(content) ? content : content && typeof content === 'object' ? [content] : [];
+  if (contentArray.length === 0) return null;
   const parts: string[] = [];
-  for (const part of content) {
-    if (part && typeof part.text === 'string' && part.text.trim()) {
-      parts.push(part.text.trim());
-    }
+  for (const part of contentArray) {
+    const text = extractTextFromContentPart(part);
+    if (text) parts.push(text);
   }
   if (parts.length === 0) return null;
   return {

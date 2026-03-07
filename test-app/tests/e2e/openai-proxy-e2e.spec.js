@@ -676,6 +676,21 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     ).catch(() => {});
     await page.waitForTimeout(300);
 
+    // TDD all-messages-in-history (Issue #489): Before disconnect, DOM must show all turns.
+    // After 2 user messages and 2 assistant replies we expect ≥2 assistant and ≥2 user (plus greeting = 1st assistant).
+    const historyBeforeDisconnect = page.locator('[data-testid="conversation-history"]');
+    const itemsBefore = await historyBeforeDisconnect.locator('li[data-role]').all();
+    const assistantCountBefore = (await Promise.all(itemsBefore.map((el) => el.getAttribute('data-role')))).filter((r) => r === 'assistant').length;
+    const userCountBefore = (await Promise.all(itemsBefore.map((el) => el.getAttribute('data-role')))).filter((r) => r === 'user').length;
+    expect(
+      assistantCountBefore,
+      'All assistant and user messages must appear in chat history (TDD-PLAN-ALL-MESSAGES-IN-HISTORY). After 2 exchanges we need ≥2 assistant messages (greeting + 2 replies).'
+    ).toBeGreaterThanOrEqual(2);
+    expect(
+      userCountBefore,
+      'All assistant and user messages must appear in chat history. After 2 exchanges we need ≥2 user messages.'
+    ).toBeGreaterThanOrEqual(2);
+
     await disconnectComponent(page);
     await page.waitForTimeout(1000);
 
@@ -684,6 +699,20 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     expect(response.length).toBeGreaterThan(0);
     console.log('[Repro test 9] Agent response to "What famous people lived there?":', JSON.stringify(response));
     const trimmed = response.trim();
+
+    // Capture conversation history in DOM order for review (assistant and user messages as shown)
+    const history = page.locator('[data-testid="conversation-history"]');
+    const messageItems = await history.locator('li[data-role]').all();
+    const conversationInOrder = await Promise.all(
+      messageItems.map(async (el, i) => {
+        const role = await el.getAttribute('data-role');
+        const text = (await el.textContent()) || '';
+        const content = text.replace(/^(user|assistant):\s*/i, '').trim().replace(/\s+/g, ' ');
+        return { index: i + 1, role, content: content.slice(0, 200) + (content.length > 200 ? '...' : '') };
+      })
+    );
+    const conversationSummary = conversationInOrder.map(({ index, role, content }) => `  ${index}. ${role}: ${content}`).join('\n');
+    console.log('[Repro test 9] Conversation history (DOM order, ' + conversationInOrder.length + ' messages):\n' + conversationSummary);
 
     // Isolate session retention: did we send context in Settings on reconnect?
     const wsData = await getCapturedWebSocketData(page);
@@ -698,20 +727,26 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     }
     if (hasContext && trimmed === 'Hello! How can I assist you today?') {
       console.log('[Repro test 9] Context was sent but upstream returned greeting (possible upstream/session bug)');
+      const assistantCount = conversationInOrder.filter((m) => m.role === 'assistant').length;
+      if (assistantCount === 1) {
+        console.log(
+          '[Repro test 9] Diagnostic: DOM has only 1 assistant message (the greeting). ' +
+            'The two prior assistant replies (Paris answer, "Sorry what was that?" reply) are missing. ' +
+            'Upstream may not be sending ConversationText for assistant turns, so context sent on reconnect had no assistant replies (3 items = greeting + 2 user messages).'
+        );
+      }
     }
 
-    expect(
-      trimmed,
-      'Must not get greeting as response to "What famous people lived there?" (session retained)'
-    ).not.toBe('Hello! How can I assist you today?');
+    const greetingErrMsg = 'Must not get greeting as response to "What famous people lived there?" (session retained). '
+      + 'Conversation in DOM order:\n' + conversationSummary;
+    expect(trimmed, greetingErrMsg).not.toBe('Hello! How can I assist you today?');
     // Issue #414 NEXT-STEPS step 3 (B): Accept response that references topic, is substantive, or is Paris one-liner.
     const referencesTopic = /famous|people|lived/i.test(trimmed);
     const substantive = trimmed.length > 50;
     const knownShortAnswer = trimmed === 'The capital of France is Paris.';
-    expect(
-      referencesTopic || substantive || knownShortAnswer,
-      'Response should reference the question (famous/people/lived), be substantive (>50 chars), or be the known short Paris answer'
-    ).toBe(true);
+    const contentErrMsg = 'Response should reference the question (famous/people/lived), be substantive (>50 chars), or be the known short Paris answer. '
+      + 'Conversation in DOM order:\n' + conversationSummary;
+    expect(referencesTopic || substantive || knownShortAnswer, contentErrMsg).toBe(true);
   });
 
   /**

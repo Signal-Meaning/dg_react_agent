@@ -70,6 +70,15 @@ So for 9:
 
 With the test-order fix, 9a and 9b pass—so we consistently send context on reconnect. Test 9 (Repro) remains blocked on **upstream**: the proxy or OpenAI Realtime API must forward and use `agent.context` so the API returns a contextual reply instead of the greeting.
 
+### 4.1. What the DOM conversation shows when 9 fails
+
+When the test fails, the **conversation history in the DOM** (captured in order for review) often shows only **4 messages**: 1 assistant (the greeting), 3 user. The two assistant replies (Paris answer, "Sorry what was that?" reply) are **missing**. That implies:
+
+- The component only ever received **ConversationText** for: greeting, user echo 1, user echo 2, user echo 3 (and then the duplicate greeting as the "response").
+- So **ConversationText for the two substantive assistant turns was not received** (or not sent by the proxy/API). The context we sent on reconnect therefore had **3 items** = greeting + 2 user messages, with **no assistant replies**. The API then had no prior assistant content in context and returned the greeting again.
+
+The test now logs a **diagnostic** when this pattern is detected (context sent, greeting returned, only 1 assistant message in DOM), so runs point to this incomplete-context explanation.
+
 ---
 
 ## 5. Summary table
