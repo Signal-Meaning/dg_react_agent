@@ -53,10 +53,6 @@ const DEFAULT_ENDPOINTS = {
 // Issue #489: storage key last used by this page (module-level for backward compat; component also sets it).
 const lastUsedStorageKeyRef: { current: string } = { current: 'dg_conversation' };
 
-// TODO(ISSUE-489): Remove dgInstanceCounter and dgInstanceIdRef after 9a E2E passes with OpenAI. See TDD-PLAN §12 Priority 3 step 8.
-// Issue #489 Priority 1: diagnostic instance counter to trace which component instance sends Settings on reconnect.
-let dgInstanceCounter = 0;
-
 /**
  * DeepgramVoiceInteraction component
  * 
@@ -201,9 +197,6 @@ function DeepgramVoiceInteraction(
   // We use this to avoid closing connections during StrictMode cleanup
   const isMountedRef = useRef(true);
   const mountIdRef = useRef<string>('0');
-  // TODO(ISSUE-489): Remove after 9a E2E passes with OpenAI. See TDD-PLAN §12 Priority 3 step 8.
-  // Issue #489 Priority 1: numeric instance id for diagnostic logging (which instance sends Settings on reconnect).
-  const dgInstanceIdRef = useRef<number>(0);
 
   // Issue #406: Restore conversation from storage on mount when conversationStorage is provided
   useEffect(() => {
@@ -883,7 +876,6 @@ function DeepgramVoiceInteraction(
                                   wsState === 1 ? 'OPEN' :
                                   wsState === 2 ? 'CLOSING' :
                                   wsState === 3 ? 'CLOSED' : 'UNKNOWN';
-              logConsole('info', `[ISSUE-489] checkAndSend: instanceId=${dgInstanceIdRef.current} wsState=${wsState} (${wsStateName}) hasManager=${!!agentManagerRef.current}`);
               if (config.debug) {
                 logConsole('debug','🔧 [Connection State] Checking WebSocket state:', wsState, `(${wsStateName})`);
               }
@@ -916,8 +908,6 @@ function DeepgramVoiceInteraction(
                     }
                   }
                 }
-                const preloadLen = lastPersistedHistoryForReconnectRef.current?.length ?? 0;
-                logConsole('info', `[ISSUE-489] Connection handler sending Settings: instanceId=${dgInstanceIdRef.current} preloadRefLength=${preloadLen}`);
                 if (config.debug) {
                   logConsole('debug','🔧 [Connection State] WebSocket is OPEN, sending Settings');
                 }
@@ -928,7 +918,6 @@ function DeepgramVoiceInteraction(
                 }
                 setTimeout(checkAndSend!, 50);
               } else {
-                logConsole('info', `[ISSUE-489] checkAndSend: wsState not OPEN, skipping send: wsState=${wsState} (${wsStateName})`);
                 if (config.debug) {
                   logConsole('error','🔧 [Connection State] WebSocket is', wsStateName, '- cannot send Settings');
                 }
@@ -938,14 +927,11 @@ function DeepgramVoiceInteraction(
           if (stateChanged || reconnectionWithoutClosed) {
             log('Agent state:', event.state);
             if (event.state === 'connected') {
-              // TODO(ISSUE-489): Remove after 9a resolved. Confirm whether this handler runs for second connection.
-              logConsole('info', `[ISSUE-489] Agent 'connected' event received: instanceId=${dgInstanceIdRef.current}`);
               // Issue #489: Treat as reconnection if manager says so OR we saw a close in this component instance.
               // New WebSocketManager on reconnect has hasEverConnected=false so event.isReconnection is false;
               // without this, we skip localStorage preload and Settings go out with empty context (OpenAI path).
               const isReconnection = event.isReconnection ?? hadAgentConnectionClosedRef.current;
               isReconnectionRef.current = isReconnection;
-              logConsole('info', `[ISSUE-489] connected state: hasSentSettingsRef=${hasSentSettingsRef.current} globalSettingsSent=${windowWithGlobals.globalSettingsSent} hadAgentConnectionClosedRef=${hadAgentConnectionClosedRef.current} isReconnection=${isReconnection}`);
               if (isReconnection) hadAgentConnectionClosedRef.current = false;
               logger.info('🔗 [Protocol] Agent WebSocket connected');
               // Issue #489: On reconnection, reset "already sent" flags so the new connection sends Settings
@@ -985,9 +971,14 @@ function DeepgramVoiceInteraction(
                   }
                 }
                 const preloadLen = lastPersistedHistoryForReconnectRef.current?.length ?? 0;
-                logConsole('info', `[ISSUE-489] reconnect preload: preloadRefLength=${preloadLen}`);
-                // Issue #489: Schedule send from reconnection block so second connection always attempts Settings.
-                if (checkAndSend) setTimeout(checkAndSend, 50);
+                // Issue #489: When we have preloaded context and the new manager's WebSocket is already OPEN,
+                // send Settings synchronously so the second Settings definitely uses this ref (avoids timeout/closure issues in E2E).
+                const wsReady = agentManagerRef.current?.getReadyState() === 1;
+                if (preloadLen > 0 && wsReady) {
+                  sendAgentSettings();
+                } else if (checkAndSend) {
+                  setTimeout(checkAndSend, 50);
+                }
               }
               // Handle reconnection logic
               if (isReconnection) {
@@ -1111,12 +1102,10 @@ function DeepgramVoiceInteraction(
               if (checkAndSend) setTimeout(checkAndSend, 50);
             } else if (state.hasSentSettings) {
               log('Connection established but settings already sent, skipping');
-              logConsole('info', `[ISSUE-489] Settings skipped (state.hasSentSettings): instanceId=${dgInstanceIdRef.current}`);
               if (config.debug) {
                 logConsole('debug','🔧 [Connection State] ⚠️ Settings already sent, skipping');
               }
             } else {
-              logConsole('info', `[ISSUE-489] Settings skipped (flags): instanceId=${dgInstanceIdRef.current} hasSentSettingsRef=${hasSentSettingsRef.current} globalSettingsSent=${windowWithGlobals.globalSettingsSent}`);
               if (config.debug) {
                 logConsole('debug','🔧 [Connection State] ⚠️ Settings not sent - blocked by flags:', {
                   hasSentSettingsRef: hasSentSettingsRef.current,
@@ -1248,11 +1237,6 @@ function DeepgramVoiceInteraction(
     const previousMountId = mountIdRef.current;
     mountIdRef.current = currentMountId;
     isMountedRef.current = true;
-    // TODO(ISSUE-489): Remove after 9a E2E passes with OpenAI. See TDD-PLAN §12 Priority 3 step 8.
-    // Issue #489 Priority 1: assign instance id for reconnect diagnostic logging
-    dgInstanceCounter += 1;
-    dgInstanceIdRef.current = dgInstanceCounter;
-    
     // Check if we're in a CI environment or package import context
     const isCIEnvironment = typeof process !== 'undefined' && (process.env.CI === 'true' || process.env.NODE_ENV === 'test');
     const isPackageImport = typeof window === 'undefined' || !window.document;
@@ -1994,20 +1978,12 @@ function DeepgramVoiceInteraction(
       (lastPersistedHistoryForReconnectRef.current?.length ?? 0) > 0;
     const shouldLoadFromStorage =
       !hasInMemory || isReconnectionRef.current;
-    const convRefLen = conversationHistoryRef.current?.length ?? 0;
-    const preloadRefLenBefore = lastPersistedHistoryForReconnectRef.current?.length ?? 0;
-    // TODO(ISSUE-489): Remove after 9a E2E passes with OpenAI.
-    logConsole(
-      'info',
-      `[ISSUE-489] sendAgentSettings pre: instanceId=${dgInstanceIdRef.current} hasInMemory=${hasInMemory} isReconnection=${isReconnectionRef.current} shouldLoadFromStorage=${shouldLoadFromStorage} convRefLen=${convRefLen} preloadRefLenBefore=${preloadRefLenBefore}`
-    );
     if (shouldLoadFromStorage && typeof getItemForSettings === 'function') {
       const keys = [
         lastUsedStorageKeyRef.current,
         'dg_voice_conversation',
         'dg_conversation',
       ].filter(Boolean) as string[];
-      let loadedFromKey: string | null = null;
       for (const key of keys) {
         try {
           const raw = getItemForSettings(key);
@@ -2027,7 +2003,6 @@ function DeepgramVoiceInteraction(
                 lastPersistedHistoryForReconnectRef.current = valid.slice(
                   -MAX_CONVERSATION_STORED
                 );
-                loadedFromKey = key;
                 break;
               }
             }
@@ -2036,19 +2011,46 @@ function DeepgramVoiceInteraction(
           /* ignore */
         }
       }
-      const preloadRefLenAfter = lastPersistedHistoryForReconnectRef.current?.length ?? 0;
-      logConsole(
-        'info',
-        `[ISSUE-489] sendAgentSettings syncLoad: loadedFromKey=${loadedFromKey ?? 'none'} preloadRefLenAfter=${preloadRefLenAfter}`
-      );
+    }
+
+    // Issue #489: On reconnect, ensure ref is populated from localStorage in this tick right before getContextForSend,
+    // so the hook or our fallback below sees context (E2E can have timing where the earlier sync load used different key or ref wasn't visible).
+    if (isReconnectionRef.current && typeof localStorage !== 'undefined') {
+      const keys = [lastUsedStorageKeyRef.current, 'dg_voice_conversation', 'dg_conversation'];
+      for (const key of keys) {
+        if (!key) continue;
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw) as unknown;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const valid = parsed.filter(
+                (m): m is ConversationMessage =>
+                  m &&
+                  typeof m === 'object' &&
+                  (m as ConversationMessage).role !== undefined &&
+                  ((m as ConversationMessage).role === 'user' || (m as ConversationMessage).role === 'assistant') &&
+                  typeof (m as ConversationMessage).content === 'string'
+              );
+              if (valid.length > 0) {
+                lastPersistedHistoryForReconnectRef.current = valid.slice(-MAX_CONVERSATION_STORED);
+                break;
+              }
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
     }
 
     // Phase 4 refactor: resolve context and base options via hook (Issue #489 / REFACTORING-PLAN-release-v0.9.8). Phase 3: no ref sync — conversationHistoryRef is the single latest-history ref (updated by effect + ConversationText handler).
     let { effectiveContext, baseAgentOptions } = getContextForSend();
-    // Issue #489: On reconnect, hook may not see the ref we just set (e.g. same tick). If we have
-    // loaded from storage into lastPersistedHistoryForReconnectRef, use it when effectiveContext is empty.
+    // Issue #489: If hook returned empty context but we have history in lastPersistedHistoryForReconnectRef
+    // (e.g. reconnect preload or sync load above), use it so Settings always get context when we have data.
+    // Apply whenever effectiveContext is empty and ref has messages (not only isReconnection) so any code path
+    // that sends Settings with empty context still attaches context when the ref was populated.
     if (
-      isReconnectionRef.current &&
       (!effectiveContext?.messages?.length) &&
       (lastPersistedHistoryForReconnectRef.current?.length ?? 0) > 0
     ) {
@@ -2064,13 +2066,6 @@ function DeepgramVoiceInteraction(
     const currentAgentOptions = baseAgentOptions
       ? { ...baseAgentOptions, context: effectiveContext }
       : undefined;
-
-    // TODO(ISSUE-489): Remove this block after 9a E2E passes with OpenAI. See TDD-PLAN §12 Priority 3 step 8.
-    // Issue #489 Priority 1: diagnostic — confirm context and preload ref at send (remove after 9a resolved)
-    const effLen = effectiveContext?.messages?.length ?? 0;
-    const preloadLen = lastPersistedHistoryForReconnectRef.current?.length ?? 0;
-    const diagMsg = `[ISSUE-489] sendAgentSettings: instanceId=${dgInstanceIdRef.current} effectiveContextMessages=${effLen} preloadRefLength=${preloadLen}`;
-    logConsole('info', diagMsg);
 
     if (debug) {
       logConsole('debug','🔧 [sendAgentSettings] Called');
@@ -2097,7 +2092,6 @@ function DeepgramVoiceInteraction(
       currentManager != null && currentManager === lastManagerThatSentSettingsRef.current;
     const flagsSaySent = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
     if (flagsSaySent && alreadySentForThisManager) {
-      logConsole('info', `[ISSUE-489] sendAgentSettings skipped (already sent): instanceId=${dgInstanceIdRef.current} hasSentSettingsRef=${hasSentSettingsRef.current} globalSettingsSent=${windowWithGlobals.globalSettingsSent}`);
       if (debug) {
         logConsole('debug','🔧 [sendAgentSettings] Settings already sent (via ref or global), skipping');
         logConsole('debug','🔧 [sendAgentSettings] hasSentSettingsRef.current:', hasSentSettingsRef.current);

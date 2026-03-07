@@ -12,7 +12,7 @@ With an existing dev server and backend, add `E2E_USE_EXISTING_SERVER=1` if you 
 
 **Issue-373 (idle timeout after function calls):** **Resolved.** E2E “should re-enable idle timeout after function calls complete” passes with real APIs after component/hook/IdleTimeoutService fixes (see [TDD-PLAN-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md](./TDD-PLAN-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md)).
 
-**Without real APIs:** A full E2E run with default/mock configuration yields **9 failures** (see “E2E run without real APIs” below). Those tests are skipped via `skipUnlessRealAPIs()` when `USE_REAL_APIS` is not set. **With real APIs:** a full run with `USE_REAL_APIS=1` yields **12 failures**; see "E2E run WITH real APIs" and [TDD-PLAN-REAL-API-E2E-FAILURES.md](./TDD-PLAN-REAL-API-E2E-FAILURES.md).
+**Without real APIs:** A full E2E run with default/mock configuration yields **9 failures** (see “E2E run without real APIs” below). Those tests are skipped via `skipUnlessRealAPIs()` when `USE_REAL_APIS` is not set. **With real APIs:** a full run with `USE_REAL_APIS=1` previously yielded **12 failures**; **9a (context on reconnect) is resolved** (2026-03-07, see [TDD-PLAN-9A-CONTEXT-ON-RECONNECT.md](./TDD-PLAN-9A-CONTEXT-ON-RECONNECT.md)). Re-run to confirm updated counts. See "E2E run WITH real APIs" and [TDD-PLAN-REAL-API-E2E-FAILURES.md](./TDD-PLAN-REAL-API-E2E-FAILURES.md).
 
 ---
 
@@ -24,7 +24,7 @@ With an existing dev server and backend, add `E2E_USE_EXISTING_SERVER=1` if you 
 |----------|--------|
 | **Passing** | Most OpenAI proxy E2E and **issue-373** “re-enable idle timeout” (resolved). Connection, single message, multi-turn, greeting, reconnection, basic audio, VAD, long-running function call, thinking phase, concurrent function calls. |
 | **Latest result** | **211 passed**, **12 failed**, 25 skipped (7.8m). |
-| **Failing** | **12 tests** (see "E2E run WITH real APIs" below): callback-test (onPlaybackStateChange), context-retention (3), issue-373 (long-running function call), openai-proxy-e2e (3, 3b, 6, 6b, 9a, 9), openai-proxy-tts-diagnostic (1). Test 10 skipped (§5). |
+| **Failing** | **12 tests** (pre-9a fix); **9a resolved** 2026-03-07. Remaining: callback-test (onPlaybackStateChange), context-retention (2,3,4 — unblocked by 9a, re-run to confirm), issue-373 (long-running), openai-proxy-e2e (3, 3b, 6, 6b, 9, 9a green), openai-proxy-tts-diagnostic (1). See TDD-PLAN-REAL-API-E2E-FAILURES.md. |
 | **Skipped** | Various mock-only or conditional skips (e.g. interruptAgent in CI). |
 
 **Playwright E2E (proxy mode, without real APIs / default run):**
@@ -57,8 +57,8 @@ When running the full E2E suite from `test-app` **with** `USE_REAL_APIS=1`, the 
 | 7 | openai-proxy-e2e.spec.js | **3b. Multi-turn after disconnect** – session history preserved | Conversation history after disconnect+reconnect: expected 2 user + 3 assistant; count or content differs. |
 | 8 | openai-proxy-e2e.spec.js | **6. Simple function calling** – assert response in `[data-testid="agent-response"]` | Expected pattern `/\d{1,2}:\d{2}|UTC/`. **Received:** `"Hello! How can I assist you today?"` (greeting). `toHaveText` timeout 45s; test timeout 60s. Locator resolved ~18× to greeting. Error context: `test-results/openai-proxy-e2e-OpenAI-Pr-acd4e-data-testid-agent-response--chromium/error-context.md`. |
 | 9 | openai-proxy-e2e.spec.js | **6b. Issue #462 / #470** – function-call flow (partner scenario) | Same as test 6: expected time/UTC. **Received:** greeting. Error context: `test-results/openai-proxy-e2e-OpenAI-Pr-dd25c--response-partner-scenario--chromium/error-context.md`. |
-| 10 | openai-proxy-e2e.spec.js | **9a. Isolation** – Settings on reconnect include context | Settings on reconnect must include `agent.context`. **Diagnostic:** `getConversationHistory()` length before/after disconnect = 3; `__lastGetAgentOptionsDebug` = `{"fromComponent":0,"fromRef":0,"fromStorage":0,"conversationForDisplay":0,"contextMsgCount":0,"source":"none"}`; WebSocket sent types: `Settings`, `Settings`, `InjectUserMessage`×4, `ping`×2 — **last Settings has context: false**. Error context: `test-results/openai-proxy-e2e-OpenAI-Pr-50f9d-site-for-session-retention--chromium/error-context.md`. |
-| 11 | openai-proxy-e2e.spec.js | **9. Repro** – after disconnect and reconnect, session retained; response must not be stale or greeting | Session not retained: Settings on reconnect did not include context. Agent response to "What famous people lived there?" remained `"Hello! How can I assist you today?"`. Error context: `test-results/openai-proxy-e2e-OpenAI-Pr-ecf79-st-not-be-stale-or-greeting--chromium/error-context.md`. |
+| 10 | openai-proxy-e2e.spec.js | **9a. Isolation** – Settings on reconnect include context | **Resolved 2026-03-07.** Settings on reconnect now include `agent.context` (reconnect preload + sync send; ref fallback in component). Passes OpenAI and Deepgram. See [TDD-PLAN-9A-CONTEXT-ON-RECONNECT.md](./TDD-PLAN-9A-CONTEXT-ON-RECONNECT.md). |
+| 11 | openai-proxy-e2e.spec.js | **9. Repro** – after disconnect and reconnect, session retained; response must not be stale or greeting | Unblocked by 9a fix; re-run to confirm. Previously: session not retained when Settings on reconnect lacked context. |
 | 12 | openai-proxy-tts-diagnostic.spec.js | diagnose TTS path: binary received and playback status after agent response | Asserts: binary count ≥ 1, no JSON as binary, handleAgentAudio called, playback started if binary received, AudioContext runnable, PCM speech-like. One of these fails (env/timing or proxy/component). |
 
 ### Breakdown by category
@@ -78,8 +78,8 @@ Tests 6, 7: multi-turn (3) expects second agent response; 3b expects exactly 2 u
 **OpenAI proxy – function-call reply (2)**  
 Tests 8, 9: agent-response must show time/UTC after "What time is it?" and function call. With real API, UI often stays on greeting; no second assistant message with time.
 
-**OpenAI proxy – context on reconnect (2)**  
-Tests 10, 11: Settings on reconnect must include `agent.context` (9a); after reconnect, response must not be greeting (9). getAgentOptions/source "none" and missing context indicate app or component not supplying context on reconnect.
+**OpenAI proxy – context on reconnect (2)**
+**9a resolved 2026-03-07.** Test 10 (9a) passes. Test 11 (9) unblocked by same fix; re-run to confirm.
 
 ### How to reproduce
 

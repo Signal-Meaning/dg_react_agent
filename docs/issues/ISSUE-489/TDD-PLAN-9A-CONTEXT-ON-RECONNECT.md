@@ -11,8 +11,8 @@
 | Phase    | What | Status |
 |----------|------|--------|
 | **RED**  | 9a E2E fails with OpenAI (last Settings have no `agent.context`). Unit tests already encode “context from storage when refs empty” (first connection, after remount). | Done (established) |
-| **GREEN**| Fix: In `sendAgentSettings()`, when refs are empty **or on reconnect**, sync-load from localStorage into `lastPersistedHistoryForReconnectRef` before `getContextForSend()`. Unit tests pass. 9a E2E still failing (see [§ E2E run result](#e2e-run-result)). | In progress |
-| **REFACTOR** | Remove 9a diagnostics and TODOs from component (step 4). | Not started |
+| **GREEN**| Fix: Reconnect preload + synchronous send when ref populated and ws OPEN; ref fallback and forced preload in `sendAgentSettings()`. Unit tests pass. **9a E2E passes** (see [§ E2E run result – 9a passed](#e2e-run-result--9a-passed)). | Done |
+| **REFACTOR** | Remove 9a diagnostics and TODOs from component (step 4). | Done |
 
 **Tests that define the behavior:**
 
@@ -29,10 +29,10 @@
 |---|------|------------------------|--------|--------|
 | **1** | Confirm 9a fails with OpenAI and capture diagnostics | RED | [x] Done | Run 9a E2E; `[ISSUE-489]` logs show second Settings without context. See [§ Repro](#repro). |
 | **2** | Unit/integration test inventory green | — | [x] Done | `reconnect-settings-context-isolation.test.tsx`, `useSettingsContext.test.tsx`, etc. See [§ Test inventory](#test-inventory). |
-| **3** | Implement fix: guarantee context from storage when refs empty or on reconnect | GREEN | [ ] In progress | In `sendAgentSettings()`, sync-load from storage when refs are empty **or** `isReconnectionRef.current`. Run 9a with OpenAI to confirm. See [§ Fix (Green)](#fix-green). E2E run: still red (see [§ E2E run result](#e2e-run-result)). |
-| **4** | Remove 9a diagnostics and TODOs from component | REFACTOR | [ ] Remaining | After step 3 is stable green: remove `[ISSUE-489]` logs, `dgInstanceCounter`, `dgInstanceIdRef`, `TODO(ISSUE-489)`. See [§ Success criteria](#success-criteria). |
+| **3** | Implement fix: guarantee context from storage when refs empty or on reconnect | GREEN | [x] Done | Reconnect preload + sync send when ref populated and ws OPEN; ref fallback and forced preload in `sendAgentSettings()`. 9a E2E passes. See [§ Fix (Green)](#fix-green) and [§ E2E run result – 9a passed](#e2e-run-result--9a-passed). |
+| **4** | Remove 9a diagnostics and TODOs from component | REFACTOR | [x] Done | Removed `[ISSUE-489]` logs, `dgInstanceCounter`, `dgInstanceIdRef`, `TODO(ISSUE-489)`; fixed unused vars. |
 
-**Current focus:** Step 3 — 9a E2E still fails after sync-load fix. Next: run sync load **on reconnect** as well (not only when refs empty); re-run 9a. Then step 4.
+**Current focus:** 9a complete. Step 4 refactor done. Return to [TDD-PLAN-REAL-API-E2E-FAILURES.md](./TDD-PLAN-REAL-API-E2E-FAILURES.md) for the rest of the 12-test plan.
 
 ---
 
@@ -95,14 +95,36 @@ There were **no** `[ISSUE-489]` logs for the second connection, even though the 
 
 **Revised interpretation:** Flags are correct on second `connected` (refs reset, `isReconnection=true`), so the “schedule checkAndSend” branch should be taken. The second Settings is present in the captured sent list, so *some* path is sending it. The only caller of `sendAgentSettings()` is the connection handler’s `checkAndSend` when `wsState === 1`. So either: (A) the second `checkAndSend` runs but its logs are not forwarded (e.g. timing or execution context), and it sends Settings with **empty** context (preload/ref or hook not seeing storage/window); or (B) another code path sends a second Settings (no other path found in component). **Conclusion:** Assume (A): second Settings is sent by our path but with empty context. So the fix must ensure (1) we reliably schedule send on reconnect (e.g. schedule from the reconnection block as well), and (2) when we send on reconnect, context is non-empty (reconnect preload into ref, and/or hook’s `getContextForSend` seeing `lastPersistedHistoryRef` or window fallbacks).
 
+**Safeguards added (post–reconnect preload):**
+- **Ref fallback broadened:** In `sendAgentSettings()`, use `lastPersistedHistoryForReconnectRef` whenever `effectiveContext` is empty and the ref has messages (no longer require `isReconnectionRef.current`). Any code path that would send Settings with empty context now attaches context from the ref when available.
+- **Forced sync preload before getContextForSend:** When `isReconnectionRef.current` is true, sync-read from `localStorage` (keys: `lastUsedStorageKeyRef`, `dg_voice_conversation`, `dg_conversation`) into `lastPersistedHistoryForReconnectRef` immediately before calling `getContextForSend()`, so the hook or the ref fallback sees context in the same tick.
+- **Synchronous send on reconnect:** When `isReconnection` is true and the reconnect preload populated the ref (`preloadRefLength > 0`) and the new manager’s WebSocket is already OPEN (`getReadyState() === 1`), call `sendAgentSettings()` **synchronously** from the reconnection block instead of only scheduling `setTimeout(checkAndSend, 50)`. The second Settings is then sent in the same tick as the `'connected'` event using the ref we just set, avoiding timeout/closure issues that prevented the deferred send from logging or seeing context in E2E.
+
+---
+
+## E2E run result – 9a passed (2026-03-07)
+
+**Command (from test-app):** `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js -g "9a"`
+
+**Outcome:** **Passed.** Last Settings has `agent.context`; test passed in 34.4s.
+
+**Console output (order preserved):**
+- First connection: `Agent 'connected'` → `checkAndSend` → `Connection handler sending Settings` → `sendAgentSettings` (effectiveContextMessages=0).
+- After disconnect: history before/after = 3, `__e2eRestoredAgentContext` has 3 messages.
+- Second connection: `Agent 'connected'` → `connected state: … isReconnection=true` → `reconnect preload: preloadRefLength=3` → **`reconnect sync send: preloadRefLength=3 wsOPEN=true`** → `sendAgentSettings pre` (hasInMemory=true, convRefLen=3, preloadRefLenBefore=3) → `sendAgentSettings syncLoad: loadedFromKey=dg_voice_conversation` → `sendAgentSettings: effectiveContextMessages=3 preloadRefLength=3` → `Settings skipped (flags)` (later block correctly skips).
+
+**Result:** Settings at indices 0, 1, 8, 9; **last has context: true**. getAgentOptions debug: contextMsgCount=3, source=component.
+
+**Deepgram run (2026-03-07):** 9a also passes with Deepgram proxy. Command: `E2E_BACKEND=deepgram USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js -g "9a"`. Proxy endpoints used: `ws://localhost:8080/deepgram-proxy` (Deepgram), `ws://localhost:8080/openai` (OpenAI). Console showed first connection (preloadRefLength=0, effectiveContextMessages=0), then after disconnect/reconnect second connection (preloadRefLength=4, effectiveContextMessages=4). WebSocket sent types included Settings at indices 0, 1, 6, 7; **last has context: true**; 1 passed (4.8s). No regression.
+
 ---
 
 ## Success criteria (all must be met)
 
-- [ ] 9a passes with `USE_REAL_APIS=1` and the **OpenAI** proxy (from test-app).
-- [ ] No regression: 9a still passes with Deepgram.
-- [ ] Jest tests in `useSettingsContext.test.tsx` and `reconnect-settings-context-isolation.test.tsx` still pass.
-- [ ] Step 4 complete: diagnostics and TODOs related to 9a removed from the component.
+- [x] 9a passes with `USE_REAL_APIS=1` and the **OpenAI** proxy (from test-app).
+- [x] No regression: 9a passes with Deepgram (`E2E_BACKEND=deepgram USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js -g "9a"`).
+- [x] Jest tests in `useSettingsContext.test.tsx` and `reconnect-settings-context-isolation.test.tsx` still pass.
+- [x] Step 4 complete: diagnostics and TODOs related to 9a removed from the component.
 
 ---
 
@@ -123,7 +145,9 @@ No dependency on the app’s `getAgentOptions`. On reconnect we always refresh f
 
 **Manager-scoped tracking (avoid races):** We key "already sent" to the **manager instance**, not only to the flags. `lastManagerThatSentSettingsRef` holds the WebSocketManager that last sent Settings. In `sendAgentSettings()`, we skip only when the flags say sent **and** the current manager is that same instance (`currentManager === lastManagerThatSentSettingsRef.current`). So a new connection (new WebSocketManager) always sends, regardless of whether the previous connection's 'closed' has fired. We set the ref when we send; we clear it on 'closed', in stop(), and in effect cleanup. This prevents contention and avoids relying on event order.
 
-**Verification:** Run from test-app: `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js -g "9a"` (with backend running). 9a must pass.
+**Synchronous send on reconnect (fix that made 9a pass):** In the reconnection block, after preloading from localStorage into `lastPersistedHistoryForReconnectRef`, if `preloadLen > 0` and `agentManagerRef.current?.getReadyState() === 1` (WebSocket already OPEN), call `sendAgentSettings()` immediately instead of only scheduling `setTimeout(checkAndSend, 50)`. The second Settings is then sent in the same tick with the ref we just populated, so it includes context. If the socket is not OPEN yet or preload is empty, keep the deferred `setTimeout(checkAndSend, 50)`.
+
+**Verification:** Run from test-app: `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js -g "9a"` (with backend running). 9a passes (confirmed 2026-03-07).
 
 ---
 
@@ -193,11 +217,9 @@ Also: `dgInstanceCounter`, `dgInstanceIdRef`, `TODO(ISSUE-489)` comments. Remove
 
 ## Next steps (proposed)
 
-1. **Schedule send from reconnection block (reliable second send):** Define `checkAndSend` when `event.state === 'connected'` at the start of state handling so both the stateChanged/reconnection block and the “Send settings message” block can use it. When `isReconnection` is true, after the reconnect preload, call `setTimeout(checkAndSend, 50)` from the reconnection block so the second connection’s send is scheduled even if the later “Send settings message” block is not reached or its timeout is not observed. This guarantees we attempt to send Settings on reconnect from the same code path that runs for the first connection.
-2. **Log reconnect preload result:** After the reconnect preload in the stateChanged block, log `[ISSUE-489] reconnect preload: preloadRefLength=N` so we can confirm the ref is populated before any scheduled `checkAndSend` runs.
-3. **Verify context source on second send:** When `sendAgentSettings` runs with `isReconnectionRef.current === true`, ensure `getContextForSend()` sees context: either from `lastPersistedHistoryForReconnectRef` (reconnect preload) or from the hook’s window fallbacks (`__e2eRestoredAgentContext` / `__appLastKnownConversation`). The hook already uses these; if the ref is still empty in E2E, consider whether `conversationStorage` / `getItem` in the hook use the same key as the test’s `setConversationInLocalStorage` (test uses `dg_voice_conversation`; component uses `getItemForSettings` → `localStorage.getItem` and keys include `dg_voice_conversation`).
-4. **If 9a still fails:** Capture a trace or run with `--headed` and confirm in DevTools that the second `checkAndSend` runs and what `effectiveContextMessages` is in `sendAgentSettings` for the second connection. If context is still 0, add a one-off log in the hook’s `getContextForSend` (or in the component after `getContextForSend`) to see which branch (fromHistory / fromApp / fromRestored / window) is used.
-5. **After 9a passes:** Mark step 3 [x], run 9a with Deepgram to confirm no regression, then do step 4 (refactor: remove all ISSUE-489 diagnostics and TODOs).
+1. **Step 4 (refactor):** Remove all `[ISSUE-489]` logs, `dgInstanceCounter`, `dgInstanceIdRef`, and `TODO(ISSUE-489)` comments from the component. See § Diagnostics (remove in step 4).
+2. **Before release:** Run 9a with Deepgram to confirm no regression (with Deepgram proxy/backend as applicable).
+3. **Return to main plan:** Return to [TDD-PLAN-REAL-API-E2E-FAILURES.md](./TDD-PLAN-REAL-API-E2E-FAILURES.md) for the rest of the 12-test plan.
 
 
 ---
