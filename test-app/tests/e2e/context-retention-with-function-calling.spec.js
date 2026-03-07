@@ -30,6 +30,7 @@ import {
   installWebSocketCapture,
   getCapturedWebSocketData,
   skipIfNoRealAPI,
+  skipUnlessRealAPIs,
   waitForFunctionCall,
   waitForConnection
 } from './helpers/test-helpers.js';
@@ -38,6 +39,7 @@ import { pathWithQuery, getOpenAIProxyParams, getE2EBackend } from './helpers/te
 test.describe('Context Retention with Function Calling (Issue #362)', () => {
   
   test('should retain context when disconnecting and reconnecting with function calling enabled', async ({ page }) => {
+    skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     skipIfNoRealAPI('Requires real API key');
     // Run with OpenAI proxy for this investigation (FunctionCallRequest capture); skip when Deepgram backend
     if (getE2EBackend() === 'deepgram') {

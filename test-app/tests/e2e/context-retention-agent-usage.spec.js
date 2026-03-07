@@ -28,6 +28,7 @@ import {
   installWebSocketCapture,
   getCapturedWebSocketData,
   skipIfNoRealAPI,
+  skipUnlessRealAPIs,
   waitForConnection,
   hasOpenAIProxyEndpoint,
   setupTestPageWithOpenAIProxy
@@ -37,6 +38,7 @@ import { setupTestPage } from './helpers/test-helpers.mjs';
 test.describe('Context Retention - Agent Usage (Issue #362)', () => {
   
   test('should retain context when disconnecting and reconnecting - agent uses context', async ({ page }) => {
+    skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     skipIfNoRealAPI('Requires real Deepgram API key');
     
     console.log('🧪 Testing context retention - agent should use context after reconnection');
@@ -406,6 +408,7 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
    * Fails until the component implements restoredAgentContext (TDD).
    */
   test('Issue #490: when app provides restoredAgentContext, Settings on reconnect include it', async ({ page }) => {
+    skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     skipIfNoRealAPI('Requires real Deepgram API key');
     await installWebSocketCapture(page);
     if (hasOpenAIProxyEndpoint()) {

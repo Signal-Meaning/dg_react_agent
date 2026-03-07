@@ -8,15 +8,11 @@ With an existing dev server and backend, add `E2E_USE_EXISTING_SERVER=1` if you 
 
 ---
 
-## Current focus: single remaining failure
+## Current focus
 
-**Primary remaining failure:** **Issue-373 — should re-enable idle timeout after function calls complete** (`issue-373-idle-timeout-during-function-calls.spec.js`).
+**Issue-373 (idle timeout after function calls):** **Resolved.** E2E “should re-enable idle timeout after function calls complete” passes with real APIs after component/hook/IdleTimeoutService fixes (see [TDD-PLAN-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md](./TDD-PLAN-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md)).
 
-- **Observed:** Component receives `AgentAudioDone` (`__agentAudioDoneReceived__ === true`), but idle timeout never fires (`__idleTimeoutFired__ === false`) and connection does not close.
-- **Done so far:** Proxy sends completion (Phase 1 logs confirm); component clears waiting flag and transitions to idle on AgentAudioDone; we added `pushIdleStateToIdleTimeoutService()` so IdleTimeoutService gets idle state before `handleMeaningfulActivity`. E2E still fails: timeout does not start or does not fire within the test window.
-- **Next:** Debug why, after AgentAudioDone and state sync, the IdleTimeoutService does not start or fire the idle timeout in this E2E path (e.g. `canStartTimeout`, `waitingForNextAgentMessageAfterFunctionResult`, or test timeout vs. configured idle_timeout).
-
-Other failing tests (openai-proxy-e2e 3b, 6, 6b) remain documented below; resolution is deferred until the issue-373 idle-timeout behavior is fixed.
+**Without real APIs:** A full E2E run with default/mock configuration yields **9 failures** (see “E2E run without real APIs” below). These are a different set from the real-API failures and are expected when the proxy/upstream do not emulate full API behavior.
 
 ---
 
@@ -26,16 +22,70 @@ Other failing tests (openai-proxy-e2e 3b, 6, 6b) remain documented below; resolu
 
 | Result   | Notes |
 |----------|--------|
-| **Passing** | Most OpenAI proxy E2E and issue-373 tests pass (e.g. connection, single message, multi-turn, greeting, reconnection, basic audio, VAD, long-running function call, thinking phase, concurrent function calls). |
-| **Failing** | **4 tests** fail consistently with real API (see "Current E2E failures" below): issue-373 re-enable idle timeout; openai-proxy-e2e 3b (multi-turn after disconnect), 6, 6b (function-call agent response). Test 10 is skipped (§5). |
+| **Passing** | Most OpenAI proxy E2E and **issue-373** “re-enable idle timeout” (resolved). Connection, single message, multi-turn, greeting, reconnection, basic audio, VAD, long-running function call, thinking phase, concurrent function calls. |
+| **Failing** | **3 tests** fail consistently with real API (see “Current E2E failures” below): openai-proxy-e2e 3b (multi-turn after disconnect), 6, 6b (function-call agent response). Test 10 is skipped (§5). |
 | **Skipped** | Various mock-only or conditional skips (e.g. interruptAgent in CI). |
+
+**Playwright E2E (proxy mode, without real APIs / default run):**
+
+| Result   | Notes |
+|----------|--------|
+| **Run** | `npm run test:e2e` from test-app (no `USE_REAL_APIS=1`). Backend/proxy use defaults; no live OpenAI. |
+| **Result** | **214 passed**, **9 failed**, 25 skipped (latest report). |
+| **Failures** | See “E2E run without real APIs” below for the 9 failures and breakdown. |
 
 **Integration tests (Jest, real API):**  
 `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — **17 passed**, including the critical real-API tests that prove the **proxy sends completion** to the client. One of these explicitly proves the client **does** receive `AgentAudioDone` after sending `FunctionCallResponse` (see below).
 
 ---
 
-## Integration tests prove proxy sends “done” (real API)
+## E2E run without real APIs (latest Playwright report)
+
+When running the full E2E suite from `test-app` **without** `USE_REAL_APIS=1` (default/mock configuration), the latest run reported **9 failed**, 214 passed, 25 skipped. The backend and proxy do not use the real OpenAI API, so failures are expected where tests assume real upstream behavior (e.g. function-call reply with time, session history, context on reconnect).
+
+### Summary of the 9 failures
+
+| # | Spec | Test | Assertion / error |
+|---|------|------|-------------------|
+| 1 | context-retention-agent-usage.spec.js | should retain context when disconnecting and reconnecting – agent uses context | Context retention / session after disconnect+reconnect. |
+| 2 | context-retention-agent-usage.spec.js | Issue #490: when app provides restoredAgentContext, Settings on reconnect include it | Settings on reconnect must include `restoredAgentContext` / context. |
+| 3 | context-retention-with-function-calling.spec.js | should retain context when disconnecting and reconnecting with function calling enabled | Context retention with function calling. |
+| 4 | openai-proxy-e2e.spec.js | **3. Multi-turn** – sequential messages, second agent response appears | Second agent response (after second user message) does not appear as expected. |
+| 5 | openai-proxy-e2e.spec.js | **3b. Multi-turn after disconnect** – session history preserved (disconnect WS between 3 & 4) | Conversation history after disconnect+reconnect: expected 2 user + 3 assistant; count or content differs. |
+| 6 | openai-proxy-e2e.spec.js | **6. Simple function calling** – assert response in `[data-testid="agent-response"]` | Expected `agent-response` to match `/\d{1,2}:\d{2}|UTC/`. **Received:** `"Hello! How can I assist you today?"` (greeting). Timeout 45s. |
+| 7 | openai-proxy-e2e.spec.js | **6b. Issue #462 / #470** – function-call flow (partner scenario) | Same as test 6: expected time/UTC pattern. **Received:** `"Hello! How can I assist you today?"`. Test timeout 60s exceeded. |
+| 8 | openai-proxy-e2e.spec.js | **9a. Isolation** – Settings on reconnect include context (prerequisite for session retention) | Settings on reconnect must include `agent.context`. Diagnostic: `__lastGetAgentOptionsDebug` source `"none"`, `last has context: false`. History before/after disconnect: 3; Settings count 2. |
+| 9 | openai-proxy-e2e.spec.js | **9. Repro** – after disconnect and reconnect (same page), session retained; response must not be stale or greeting | Session not retained: Settings on reconnect did not include context. Agent response to "What famous people lived there?" remained `"Hello! How can I assist you today?"`. |
+
+### Breakdown by category
+
+**Context / session retention (5 failures)**  
+Tests 1, 2, 3, 8, 9 expect that after disconnect and reconnect, either (a) the app sends context (e.g. `restoredAgentContext` or conversation history) in Settings, or (b) the proxy/upstream returns session so the UI shows non-greeting content. Without real APIs, the mock backend does not provide session/context on reconnect, so Settings go out without context (`getAgentOptions` source `"none"`, `last has context: false`) and the agent reply stays the greeting.
+
+**Multi-turn (2 failures)**  
+Tests 4 and 5 expect a second agent reply (test 3) or correct conversation history after disconnect (test 3b). With the default/mock setup, the second message or history after reconnect does not match the test's expectations (e.g. wrong assistant count or no second response).
+
+**Function-call reply content (2 failures)**  
+Tests 6 and 6b expect `[data-testid="agent-response"]` to match the time/UTC pattern after "What time is it?" and the function call. Without real APIs, the upstream does not return the model's natural-language reply with the time; the UI never leaves the greeting (`"Hello! How can I assist you today?"`), so the assertion fails (and test 6b hits the 60s timeout).
+
+### How to reproduce
+
+From `test-app`:
+
+```bash
+npm run test:e2e
+```
+
+No `USE_REAL_APIS=1`. Use `E2E_USE_EXISTING_SERVER=1` if dev server and backend are already running.  
+To open the last HTML report: `npx playwright show-report` (or `npm run test:e2e:report`).
+
+### Skip when run without real APIs
+
+These 9 tests call `skipUnlessRealAPIs()` and are **skipped** when `USE_REAL_APIS` is not set (e.g. default `npm run test:e2e`). They run only when `USE_REAL_APIS=1` (or `true`) so the full suite passes in CI or local runs without real upstream. The helper is in `test-app/tests/e2e/helpers/test-helpers.js`; each test shows reason: *"Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489)."*
+
+---
+
+## Integration tests prove proxy sends "done" (real API)
 
 The openai-proxy integration suite includes **real-API** tests that run against the live OpenAI proxy and upstream. These show that the **client receives** the completion signals the component needs to transition to idle:
 
@@ -51,7 +101,7 @@ So at the **wire level**, with real APIs, the client **does** get “done” fro
 
 ## Current E2E failures (real API run)
 
-When running from test-app with real APIs (`USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js issue-373-idle-timeout-during-function-calls.spec.js`), **4 tests** fail (test 10 is skipped; see §5). For each we give root cause and how similar passing tests differ.
+When running from test-app with real APIs (`USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js issue-373-idle-timeout-during-function-calls.spec.js`), **3 tests** fail (test 10 is skipped; see §5). Issue-373 “re-enable idle timeout” is resolved. For each we give root cause and how similar passing tests differ.
 
 ### 1. Issue-373: should re-enable idle timeout after function calls complete
 
@@ -290,13 +340,13 @@ Per the component–proxy contract, **upstream events must map to appropriate co
 | 4 | openai-proxy-e2e.spec.js | 6b. Partner scenario – function-call flow | **Failing** | Same as test 6; sometimes API fallback message instead of time (see §4). |
 | 5 | openai-proxy-e2e.spec.js | 3b. Multi-turn after disconnect | **Failing** | History has 5 assistant messages, test expects 3 (see §2). |
 | 6 | openai-proxy-e2e.spec.js | 10. Repro – after reload | **Skipped** | Timing/state after reload+disconnect+send; agent-response never leaves placeholder/greeting within 20s. Reason documented in §5; test skipped in spec. |
-| 7 | issue-373-idle-timeout-during-function-calls.spec.js | should re-enable idle timeout after function calls complete | **Failing (focus)** | **Single remaining focus.** AgentAudioDone received; state sync in place; idle timeout still does not fire. Debug IdleTimeoutService start/fire in this E2E path (see Current focus above and §1). |
+| 7 | issue-373-idle-timeout-during-function-calls.spec.js | should re-enable idle timeout after function calls complete | **Resolved** | Component/hook/IdleTimeoutService fixes; E2E passes with real APIs (see TDD-PLAN-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md). |
 
 ---
 
 ## Plan to resolve remaining failures
 
-Test 10 is **skipped** (see §5); the plan below covers the **four remaining failing tests** (§1–§4). Execute in order where steps depend on prior steps.
+Test 10 is **skipped** (see §5); the plan below covers the **three remaining failing tests** (openai-proxy-e2e 3b, 6, 6b — §2–§4). Execute in order where steps depend on prior steps.
 
 ### Phase 1: Confirm root causes with proxy logging
 

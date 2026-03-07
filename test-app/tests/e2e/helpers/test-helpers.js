@@ -138,6 +138,17 @@ export function skipIfOpenAIProxy(reason = 'Deepgram-only test; skip when using 
 }
 
 /**
+ * Skip test when not running with real APIs (USE_REAL_APIS not set).
+ * Use for E2E tests that require real upstream (e.g. OpenAI) and fail with mocks/default backend.
+ * @param {string} reason - Optional reason for skipping
+ */
+export function skipUnlessRealAPIs(reason = 'Requires USE_REAL_APIS=1; skipped when run without real APIs') {
+  if (process.env.USE_REAL_APIS !== 'true' && process.env.USE_REAL_APIS !== '1') {
+    test.skip(true, reason);
+  }
+}
+
+/**
  * Check if Deepgram proxy is configured (app would connect to /deepgram-proxy).
  * Same server (PROXY_PORT) can host both /openai and /deepgram-proxy.
  * @returns {boolean} True if VITE_DEEPGRAM_PROXY_ENDPOINT set or USE_PROXY_MODE + E2E_BACKEND=deepgram

@@ -29,6 +29,7 @@
 import { test, expect } from '@playwright/test';
 import {
   skipIfNoOpenAIProxy,
+  skipUnlessRealAPIs,
   setupTestPageWithOpenAIProxy,
   waitForSettingsApplied,
   establishConnectionViaText,
@@ -111,6 +112,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   test('3. Multi-turn – sequential messages, second agent response appears', async ({ page }) => {
+    skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
@@ -145,6 +147,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   test('3b. Multi-turn after disconnect – session history preserved (disconnect WS between 3 & 4)', async ({ page }) => {
+    skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     await setupTestPageWithOpenAIProxy(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
@@ -258,6 +261,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   test('6. Simple function calling – trigger function call; assert response in [data-testid="agent-response"]', async ({ page }, testInfo) => {
+    skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     const { pathWithQuery, getOpenAIProxyParams, BASE_URL } = await import('./helpers/test-helpers.mjs');
     const params = { ...getOpenAIProxyParams(), 'test-mode': 'true', 'enable-function-calling': 'true' };
     const pathPart = pathWithQuery(params);
@@ -290,6 +294,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
    * (strict 0 agent errors). Covers the voice-commerce E2E flow; see docs/issues/ISSUE-470/SCOPE.md and TDD-PLAN.md.
    */
   test('6b. Issue #462 / #470: function-call flow completes without conversation_already_has_active_response (partner scenario)', async ({ page }, testInfo) => {
+    skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     const { pathWithQuery, getOpenAIProxyParams, BASE_URL } = await import('./helpers/test-helpers.mjs');
     const params = { ...getOpenAIProxyParams(), 'test-mode': 'true', 'enable-function-calling': 'true' };
     const pathPart = pathWithQuery(params);
@@ -402,6 +407,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
    * If this test passes but test 9 fails → context was sent but upstream returned greeting.
    */
   test('9a. Isolation – Settings on reconnect include context (prerequisite for session retention)', async ({ page }) => {
+    skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     test.setTimeout(90000);
     await installWebSocketCapture(page);
     await setupTestPageWithOpenAIProxy(page);
@@ -495,6 +501,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
    * See E2E-FAILURE-REVIEW.md §3 and OPENAI-REALTIME-AUDIO-TESTING.md.
    */
   test('9. Repro – after disconnect and reconnect (same page), session retained; response must not be stale or greeting', async ({ page }) => {
+    skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     test.setTimeout(90000);
     await installWebSocketCapture(page);
     await setupTestPageWithOpenAIProxy(page);
