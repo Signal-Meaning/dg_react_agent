@@ -109,6 +109,35 @@ export class IdleTimeoutService {
   public updateStateDirectly(state: Partial<IdleTimeoutState>): void {
     const prevState = { ...this.currentState };
     
+    // Issue #489: When we have an active timeout and this update would disable resets (and thus
+    // stop the timeout), the state may be stale (e.g. hook effect ran with pre-commit state).
+    // Defer: re-read from stateGetter next tick and then run updateTimeoutBehavior, so we don't
+    // stop the timeout on stale state. If state is still "blocking" after the tick, we'll stop then.
+    const wouldDisable =
+      (state.agentState !== undefined && state.agentState !== 'idle' && state.agentState !== 'listening') ||
+      (state.isPlaying !== undefined && state.isPlaying) ||
+      (state.isUserSpeaking !== undefined && state.isUserSpeaking);
+    if (this.timeoutId !== null && wouldDisable) {
+      this.log('updateStateDirectly() would disable resets while timeout active; deferring to next tick and re-reading state');
+      window.setTimeout(() => {
+        if (this.stateGetter) {
+          const s = this.stateGetter();
+          if (s) {
+            const deferredWouldDisable =
+              (s.agentState !== 'idle' && s.agentState !== 'listening') || s.isPlaying || s.isUserSpeaking;
+            if (deferredWouldDisable) {
+              this.log('updateStateDirectly() deferred: stateGetter still blocking, skip merge to avoid stopping timeout on stale state');
+              return;
+            }
+            this.currentState = s;
+            this.log(`updateStateDirectly() deferred: synced from stateGetter agentState=${s.agentState}, isPlaying=${s.isPlaying}, isUserSpeaking=${s.isUserSpeaking}`);
+          }
+        }
+        this.updateTimeoutBehavior();
+      }, 0);
+      return;
+    }
+    
     if (state.agentState !== undefined) {
       this.currentState.agentState = state.agentState;
     }
@@ -155,7 +184,7 @@ export class IdleTimeoutService {
       case 'USER_STARTED_SPEAKING':
         this.hasSeenUserActivityThisSession = true;
         this.currentState.isUserSpeaking = true;
-        this.disableResets();
+        this.disableResets(false); // Always stop when user speaks
         break;
         
       case 'USER_STOPPED_SPEAKING':
@@ -180,12 +209,15 @@ export class IdleTimeoutService {
           }
         }
         
-        // Issue #373: CRITICAL FIX - If agent enters thinking state, immediately stop any running timeout
-        // This prevents timeout from firing during agent thinking phase (before function calls)
+        // Issue #373: If agent enters thinking state, stop any running timeout (unless we might have
+        // stale state from the hook - Issue #489: when we have a timeout we skip stop to avoid
+        // clearing a timeout we just started after AgentAudioDone).
         if (event.state === 'thinking') {
-          this.log('Agent entered thinking state - immediately stopping any running timeout');
-          this.stopTimeout(); // Stop timeout immediately, don't wait for updateTimeoutBehavior
-          this.disableResets(); // Disable resets to prevent timeout from restarting
+          this.log('Agent entered thinking state - stopping any running timeout unless skip (active timeout)');
+          if (this.timeoutId === null) {
+            this.stopTimeout();
+          }
+          this.disableResets(this.timeoutId !== null); // skip stop when timeout active (may be stale)
         }
         
         // CRITICAL: If agent becomes idle and playback has stopped, ensure timeout starts
@@ -339,7 +371,13 @@ export class IdleTimeoutService {
     this.log(`updateTimeoutBehavior() called with state: isUserSpeaking=${this.currentState.isUserSpeaking}, agentState=${this.currentState.agentState}, isPlaying=${this.currentState.isPlaying}, isDisabled=${this.isDisabled}`);
     // Issue #373: Also disable timeout if there are active function calls
     if (this.shouldDisableTimeoutResets()) {
-      this.disableResets();
+      // Issue #489: When blocking reason is only isPlaying/agentState (often stale from hook effect),
+      // do not stop an active timeout; only stop when user speaking, function calls, or waiting.
+      const onlyPlaybackOrAgentState =
+        !this.currentState.isUserSpeaking &&
+        !this.hasActiveFunctionCalls() &&
+        !this.waitingForNextAgentMessageAfterFunctionResult;
+      this.disableResets(onlyPlaybackOrAgentState);
     } else {
       this.enableResets();
       // Start timeout when all conditions are idle
@@ -372,17 +410,25 @@ export class IdleTimeoutService {
     if (this.stateGetter) {
       const componentState = this.stateGetter();
       if (componentState) {
-        // Update our state from component state
-        this.currentState = componentState;
-        stateToCheck = componentState;
-        this.log(`checkAndStartTimeoutIfNeeded() - synced state from component: agentState=${componentState.agentState}, isPlaying=${componentState.isPlaying}, isUserSpeaking=${componentState.isUserSpeaking}`);
+        // Issue #489: When we have an active timeout, do not overwrite with component state that
+        // says isUserSpeaking: true. The component may not have committed USER_SPEAKING_STATE_CHANGE(false)
+        // yet (e.g. after AgentAudioDone we dispatch it after handleMeaningfulActivity), so stateGetter
+        // can return stale isUserSpeaking and we would incorrectly stop the timeout we just started.
+        if (this.timeoutId !== null && componentState.isUserSpeaking) {
+          this.log('checkAndStartTimeoutIfNeeded() - have active timeout and stateGetter says user speaking; skip overwrite to avoid stopping on stale state');
+        } else {
+          this.currentState = componentState;
+          stateToCheck = componentState;
+          this.log(`checkAndStartTimeoutIfNeeded() - synced state from component: agentState=${componentState.agentState}, isPlaying=${componentState.isPlaying}, isUserSpeaking=${componentState.isUserSpeaking}`);
+        }
       }
     }
     
     // Issue #373: Also check that there are no active function calls
     const shouldStartTimeout = this.canStartTimeout(stateToCheck);
     
-    // CRITICAL: If user is speaking, stop timeout immediately (don't wait for events)
+    // CRITICAL: If user is speaking, stop timeout immediately (don't wait for events).
+    // Only stop when we've actually synced state that says user speaking (not when we skipped overwrite above).
     if (stateToCheck.isUserSpeaking && this.timeoutId !== null) {
       this.log('checkAndStartTimeoutIfNeeded() - user is speaking, stopping timeout');
       this.stopTimeout(); // Stop the timeout
@@ -458,11 +504,19 @@ export class IdleTimeoutService {
   /**
    * Disable idle timeout resets (during activity)
    */
-  private disableResets(): void {
+  /**
+   * @param skipStopIfTimeoutActive - When true and we have an active timeout, set isDisabled but do not
+   * stop the timeout (Issue #489: avoids stopping on stale isPlaying/agentState from the hook's effect).
+   * When false or from USER_STARTED_SPEAKING, always stop. Pass true only when blocking reason is
+   * solely isPlaying or agentState (thinking/speaking); pass false for function calls, waiting, or isUserSpeaking.
+   */
+  private disableResets(skipStopIfTimeoutActive: boolean = false): void {
     this.log('disableResets() called');
     if (!this.isDisabled) {
       this.isDisabled = true;
-      this.stopTimeout();
+      if (!skipStopIfTimeoutActive || this.timeoutId === null) {
+        this.stopTimeout();
+      }
       this.log('Disabled idle timeout resets - activity detected');
     }
   }
@@ -511,6 +565,10 @@ export class IdleTimeoutService {
       this.onTimeoutCallback?.();
     }, this.config.timeoutMs);
     this.log(`Started idle timeout (${this.config.timeoutMs}ms)`);
+    // E2E diagnostic (Issue #489): expose so tests can assert timeout was started
+    if (typeof window !== 'undefined') {
+      (window as unknown as { __idleTimeoutStarted__?: boolean }).__idleTimeoutStarted__ = true;
+    }
     // Keep polling active even after timeout starts - we need it to detect when user starts speaking
     // and stop the timeout. Polling will be stopped when timeout fires or is manually stopped.
     // Don't call stopPolling() here - let it continue to monitor state changes
@@ -525,6 +583,10 @@ export class IdleTimeoutService {
       window.clearTimeout(this.timeoutId);
       this.timeoutId = null;
       this.log('Stopped idle timeout');
+      // E2E diagnostic (Issue #489): timeout was running and got cleared (so it will not fire)
+      if (typeof window !== 'undefined') {
+        (window as unknown as { __idleTimeoutStopped__?: boolean }).__idleTimeoutStopped__ = true;
+      }
     } else {
       this.log('No timeout to stop (timeoutId is null)');
     }

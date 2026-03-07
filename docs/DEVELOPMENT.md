@@ -21,10 +21,10 @@ The dg_react_agent team is responsible for the **proxy and translator code that 
 # Install dependencies
 npm install
 
-# Run tests
+# Run tests (uses source; no build required)
 npm test
 
-# Build the package
+# Build the package (required only for CI/publish or local .tgz)
 npm run build
 
 # Create local package for testing
@@ -33,6 +33,8 @@ npm run package:local
 # Start development mode
 npm run dev
 ```
+
+**Build and dist:** In development you use **source** only. The test-app imports the component via relative paths (`../../src/...`), and Jest compiles TypeScript from source. You do **not** need to run `npm run build` to run tests or the test-app. The **dist** output is for **CI and publishing** (e.g. `prepublishOnly` and workflows run build). To validate the built package locally, run `npm run test:dist`.
 
 ## **Quick Release to Parent Project**
 

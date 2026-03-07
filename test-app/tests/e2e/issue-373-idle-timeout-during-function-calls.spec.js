@@ -737,12 +737,20 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
 
     const idleTimeoutFiredFlag = await page.evaluate(() => (window).__idleTimeoutFired__ === true);
     const agentAudioDoneReceived = await page.evaluate(() => (window).__agentAudioDoneReceived__ === true);
+    const idleTimeoutStarted = await page.evaluate(() => (window).__idleTimeoutStarted__ === true);
+    const idleTimeoutStopped = await page.evaluate(() => (window).__idleTimeoutStopped__ === true);
+    const idleTimeoutMs = await page.evaluate(() => (typeof window !== 'undefined' && window.__idleTimeoutMs) ? window.__idleTimeoutMs : null);
 
     console.log('\n📊 Test Results:');
     console.log(`  AgentAudioDone received (component): ${agentAudioDoneReceived}`);
+    console.log(`  Idle timeout started (__idleTimeoutStarted__): ${idleTimeoutStarted}`);
+    console.log(`  Idle timeout stopped before fire (__idleTimeoutStopped__): ${idleTimeoutStopped}`);
+    console.log(`  Idle timeout ms (app): ${idleTimeoutMs ?? 'not set'}`);
     console.log(`  Timeout fired (console): ${timeoutFired}`);
     console.log(`  Timeout fired (__idleTimeoutFired__): ${idleTimeoutFiredFlag}`);
     console.log(`  Connection closes detected: ${connectionCloses.length}`);
+    // Diagnostic: if __idleTimeoutStarted__ is false, timeout was never started (e.g. canStartTimeout blocked).
+    // To verify proxy sent completion, from repo root: grep -n -E 'AgentAudioDone|response\.done|output_text\.done' docs/issues/ISSUE-489/phase1-proxy.log
 
     // Confirm component received AgentAudioDone from proxy (Phase 1 verification).
     expect(agentAudioDoneReceived, 'Component must receive AgentAudioDone from proxy after function-call turn so idle timeout can start.').toBe(true);

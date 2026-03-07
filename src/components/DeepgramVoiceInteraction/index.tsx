@@ -2277,11 +2277,10 @@ function DeepgramVoiceInteraction(
         dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
       }
 
-      // Issue #489: Push the state we just dispatched into the service so it sees idle in this tick
-      // (React state updates are async). Then notify activity so the service can start the timeout.
-      if (agentState === 'speaking' || agentState === 'listening' || agentState === 'thinking') {
-        pushIdleStateToIdleTimeoutService();
-      }
+      // Issue #489: Always push idle into the service so it can start the timeout (React state updates
+      // are async). If we only push when agentState is speaking/listening/thinking, then when
+      // agentState is already 'idle' the service may keep stale state (e.g. 'thinking') and never start.
+      pushIdleStateToIdleTimeoutService();
       handleMeaningfulActivity(eventType);
 
       // TODO(issue-489): Remove before concluding Issue #489 — E2E flag to confirm proxy → component AgentAudioDone delivery.

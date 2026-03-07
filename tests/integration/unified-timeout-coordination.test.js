@@ -546,6 +546,46 @@ describe('Unified Timeout Coordination Integration', () => {
     });
 
     /**
+     * Issue #489: When component does NOT push idle state before AgentAudioDone (e.g. agentState already 'idle'),
+     * the service may still have stale agentState 'thinking'. MEANINGFUL_USER_ACTIVITY(AgentAudioDone) alone
+     * then does not start the timeout because isAgentIdle(currentState) is false.
+     */
+    test('AgentAudioDone without prior idle state push (stale thinking) does NOT start timeout', () => {
+      const timeoutMs = 5000;
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'fc-1' });
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'fc-1' });
+      // Simulate stale service state (component never pushed idle; e.g. agentState was already 'idle')
+      idleTimeoutService.updateStateDirectly({ agentState: 'thinking', isPlaying: false });
+      // Only AgentAudioDone — no state push; service still has agentState 'thinking'
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'AgentAudioDone' });
+      jest.advanceTimersByTime(timeoutMs);
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Issue #489: When component pushes idle (updateStateDirectly) before AgentAudioDone, the service
+     * sees idle and starts the timeout. This is the desired behavior; component must always push.
+     */
+    test('AgentAudioDone with prior updateStateDirectly(idle) starts timeout and it fires', () => {
+      const timeoutMs = 5000;
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'fc-1' });
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'fc-1' });
+      // Simulate component always pushing idle before handleMeaningfulActivity(AgentAudioDone)
+      idleTimeoutService.updateStateDirectly({ agentState: 'idle', isPlaying: false });
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'AgentAudioDone' });
+      jest.advanceTimersByTime(timeoutMs);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    /**
      * Max-wait fallback: if backend never sends a "working" signal or message after function result,
      * we clear the "waiting" flag after maxWaitForAgentReplyMs (capped at timeoutMs) so idle timeout
      * can start and the connection can close (avoids hanging forever).
