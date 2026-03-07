@@ -7,6 +7,7 @@
 
 import { useCallback, type MutableRefObject } from 'react';
 import { getHistoryForSettings } from '../utils/getHistoryForSettings';
+import { getLogger } from '../utils/logger';
 import type { ConversationMessage, AgentOptions } from '../types';
 
 export type AgentContextMessage = { type: 'History'; role: 'user' | 'assistant'; content: string };
@@ -128,7 +129,9 @@ export function useSettingsContext(params: UseSettingsContextParams): UseSetting
         : fromWindowE2E;
 
     if (fromWindowE2E && fromRestored === fromWindowE2E) {
-      console.log('[9a getContextForSend] Using window.__e2eRestoredAgentContext fallback, messageCount:', fromWindowE2E.messages?.length);
+      getLogger().debug('[9a getContextForSend] Using window.__e2eRestoredAgentContext fallback', {
+        messageCount: fromWindowE2E.messages?.length,
+      });
     }
 
     const effectiveContext = (fromHistory ?? fromApp ?? (fromRestored as AgentContext | undefined)) ?? undefined;
