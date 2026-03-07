@@ -135,13 +135,13 @@ describe('Reconnect Settings context isolation (test 9)', () => {
     expect(secondSettings.agent?.context).toBeDefined();
     const ctx = secondSettings.agent?.context as { messages?: unknown[] } | undefined;
     expect(ctx?.messages).toBeDefined();
-    expect(Array.isArray(ctx?.messages) && ctx.messages.length).toBeGreaterThan(0);
+    expect((ctx?.messages?.length ?? 0)).toBeGreaterThan(0);
   });
 
   /**
-   * Exposes defect: when refs are empty (e.g. first connection or after remount), the component
-   * must still send Settings with agent.context from localStorage so session can be retained.
-   * If getHistoryForSettings → getItem is not used or storageKeys are wrong, this fails.
+   * TDD (Issue #489): When refs are empty and storage has conversation, Settings must include
+   * agent.context from storage so the hook alone is enough (OpenAI path same as Deepgram).
+   * Guaranteed by sync load from storage at the start of sendAgentSettings() when refs are empty.
    */
   it('sends Settings with agent.context from localStorage when refs are empty on first connection', async () => {
     if (typeof localStorage === 'undefined') return;
@@ -165,14 +165,66 @@ describe('Reconnect Settings context isolation (test 9)', () => {
     );
     await waitFor(() => expect(ref.current).toBeTruthy());
 
-    const eventListener = await setupComponentAndConnect(ref, mockWebSocketManager);
+    await setupComponentAndConnect(ref, mockWebSocketManager);
     expect(settingsSent.length).toBeGreaterThanOrEqual(1);
     const firstSettings = settingsSent[0];
     expect(firstSettings.agent?.context).toBeDefined();
     const ctx = firstSettings.agent?.context as { messages?: Array<{ role: string; content: string }> } | undefined;
     expect(ctx?.messages).toBeDefined();
-    expect(Array.isArray(ctx?.messages) && ctx.messages.length).toBe(2);
+    expect(ctx?.messages?.length).toBe(2);
     expect(ctx?.messages?.[0].role).toBe('user');
+    expect(ctx?.messages?.[0].content).toBe('Stored user message.');
+  });
+
+  /**
+   * TDD (Issue #489 / 9a): After remount, refs are empty but localStorage has prior conversation.
+   * The first Settings on the new connection must include agent.context from storage (same session).
+   * Guaranteed by sync load in sendAgentSettings() when refs are empty—no dependency on getAgentOptions.
+   */
+  it('sends Settings with agent.context from localStorage on new connection after remount (refs empty, storage has prior conversation)', async () => {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(storedConversation));
+
+    const settingsSent: Array<{ type: string; agent?: { context?: unknown } }> = [];
+    mockWebSocketManager.sendJSON.mockImplementation((msg: unknown) => {
+      const m = msg as { type: string; agent?: { context?: unknown } };
+      if (m?.type === 'Settings') {
+        settingsSent.push({ type: m.type, agent: m.agent ? { context: m.agent.context } : undefined });
+      }
+    });
+
+    const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+    const { unmount } = render(
+      <DeepgramVoiceInteraction
+        ref={ref}
+        apiKey={MOCK_API_KEY}
+        agentOptions={optionsWithoutContext}
+      />
+    );
+    await waitFor(() => expect(ref.current).toBeTruthy());
+
+    unmount();
+    resetTestState();
+    mockWebSocketManager.sendJSON.mockClear();
+    settingsSent.length = 0;
+
+    const ref2 = React.createRef<DeepgramVoiceInteractionHandle>();
+    render(
+      <DeepgramVoiceInteraction
+        ref={ref2}
+        apiKey={MOCK_API_KEY}
+        agentOptions={optionsWithoutContext}
+      />
+    );
+    await waitFor(() => expect(ref2.current).toBeTruthy());
+
+    await setupComponentAndConnect(ref2, mockWebSocketManager);
+    expect(settingsSent.length).toBeGreaterThanOrEqual(1);
+    const firstSettings = settingsSent[0];
+    expect(firstSettings.agent?.context).toBeDefined();
+    const ctx = firstSettings.agent?.context as { messages?: Array<{ role: string; content: string }> } | undefined;
+    expect(ctx?.messages).toBeDefined();
+    expect(ctx?.messages?.length).toBe(2);
     expect(ctx?.messages?.[0].content).toBe('Stored user message.');
   });
 
@@ -220,7 +272,7 @@ describe('Reconnect Settings context isolation (test 9)', () => {
     const firstSettings = settingsSent[0];
     expect(firstSettings.agent?.context).toBeDefined();
     const ctx = firstSettings.agent?.context as { messages?: Array<{ role: string; content: string }> } | undefined;
-    expect(Array.isArray(ctx?.messages) && ctx.messages.length).toBe(2);
+    expect(ctx?.messages?.length).toBe(2);
     expect(ctx?.messages?.[0].content).toBe('E2E restored user.');
   });
 
@@ -260,13 +312,13 @@ describe('Reconnect Settings context isolation (test 9)', () => {
     );
     await waitFor(() => expect(ref.current).toBeTruthy());
 
-    const eventListener = await setupComponentAndConnect(ref, mockWebSocketManager);
+    await setupComponentAndConnect(ref, mockWebSocketManager);
     expect(settingsSent.length).toBeGreaterThanOrEqual(1);
     const firstSettings = settingsSent[0];
     expect(firstSettings.agent?.context).toBeDefined();
     const ctx = firstSettings.agent?.context as { messages?: Array<{ role: string; content: string }> } | undefined;
     expect(ctx?.messages).toBeDefined();
-    expect(Array.isArray(ctx?.messages) && ctx.messages.length).toBe(2);
+    expect(ctx?.messages?.length).toBe(2);
     expect(ctx?.messages?.[0].content).toBe('E2E restored user.');
   });
 });

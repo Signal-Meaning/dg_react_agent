@@ -149,6 +149,11 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 
 - Focus on maintaining and improving test coverage
 
+## Proxy / upstream: errors and protocol
+
+- **When upstream produces an error, surface the error.** Do not add fallbacks (e.g. turning errors into synthetic content or success). If you want a fallback, the user will ask for one explicitly.
+- **Do not invent responses to make tests pass.** Fix the real cause (upstream, protocol, or test expectations); do not fabricate or “make up” messages so that a test turns green.
+
 ## Backend / Proxy Defects — Must Engage Real APIs
 
 **Defects that involve the backend or proxy must actually engage with the real APIs presented by the provider.**

@@ -313,6 +313,47 @@ const SELECTORS = {
 };
 
 /**
+ * Storage key for conversation history (must match test-app CONVERSATION_STORAGE_KEY).
+ * Used by setConversationInLocalStorage and getConversationStorageCheck (Issue #489/9a).
+ */
+const CONVERSATION_STORAGE_KEY = 'dg_voice_conversation';
+
+/**
+ * Set conversation history in localStorage so component getHistoryForSettings (getItem) finds it on reconnect.
+ * @param {import('@playwright/test').Page} page
+ * @param {Array<{ role: string; content: string }>} history - Array of { role, content } messages
+ */
+async function setConversationInLocalStorage(page, history) {
+  await page.evaluate(
+    ({ key, hist }) => {
+      try {
+        localStorage.setItem(key, JSON.stringify(hist));
+      } catch (_) {}
+    },
+    { key: CONVERSATION_STORAGE_KEY, hist: history }
+  );
+}
+
+/**
+ * Check that conversation is present in localStorage (for 9a reconnect context).
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<{ ok: boolean; length?: number; reason?: string }>}
+ */
+async function getConversationStorageCheck(page) {
+  return await page.evaluate((key) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return { ok: false, reason: 'no raw' };
+      const parsed = JSON.parse(raw);
+      const ok = Array.isArray(parsed) && parsed.length > 0;
+      return { ok, length: Array.isArray(parsed) ? parsed.length : 0 };
+    } catch (e) {
+      return { ok: false, reason: String(e && e.message) };
+    }
+  }, CONVERSATION_STORAGE_KEY);
+}
+
+/**
  * Navigate to the test app and wait for it to load.
  * Uses relative path so Playwright's baseURL (http or https from config) is applied.
  * @param {import('@playwright/test').Page} page
@@ -1932,6 +1973,9 @@ export {
   waitForAgentGreeting, // Wait for agent to finish speaking its greeting message
   waitForGreetingIfPresent, // Safely wait for greeting if it plays, otherwise continue (doesn't fail if no greeting)
   sendTextMessage, // Send a text message through the UI and wait for input to clear
+  CONVERSATION_STORAGE_KEY, // Storage key for conversation (matches test-app; use with LS helpers)
+  setConversationInLocalStorage, // Set conversation in localStorage for reconnect context (9a)
+  getConversationStorageCheck, // Check conversation in localStorage { ok, length?, reason? }
   installWebSocketCapture, // Install WebSocket message capture in browser context for testing
   getCapturedWebSocketData, // Retrieve captured WebSocket messages and their counts
   getTtsFirstChunkBase64, // Get first TTS binary chunk as base64 for audio-quality check (Issue #414)

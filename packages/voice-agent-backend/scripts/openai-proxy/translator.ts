@@ -143,12 +143,6 @@ export interface OpenAIConversationItemAdded {
   };
 }
 
-/** OpenAI server event: response.output_text.done */
-export interface OpenAIOutputTextDone {
-  type: 'response.output_text.done';
-  text?: string;
-}
-
 /** OpenAI server event: response.output_audio_transcript.done (transcript of model's speech) */
 export interface OpenAIOutputAudioTranscriptDone {
   type: 'response.output_audio_transcript.done';
@@ -230,17 +224,6 @@ export function mapInjectUserMessageToConversationItemCreate(msg: ComponentInjec
  */
 export function mapSessionUpdatedToSettingsApplied(_event?: OpenAISessionUpdated): ComponentSettingsApplied {
   return { type: 'SettingsApplied' };
-}
-
-/**
- * Map OpenAI response.output_text.done → component ConversationText (assistant).
- */
-export function mapOutputTextDoneToConversationText(event: OpenAIOutputTextDone): ComponentConversationText {
-  return {
-    type: 'ConversationText',
-    role: 'assistant',
-    content: event.text ?? '',
-  };
 }
 
 /**

@@ -15,7 +15,6 @@
 - `mapSessionUpdatedToSettingsApplied(event)` – OpenAI `session.updated` → component SettingsApplied
 - `mapGreetingToConversationItemCreate(greeting)` – greeting string → OpenAI `conversation.item.create` (assistant); used after session.updated (Issue #381)
 - `mapGreetingToConversationText(greeting)` – greeting string → component ConversationText (assistant); sent to component after session.updated
-- `mapOutputTextDoneToConversationText(event)` – OpenAI `response.output_text.done` → component ConversationText
 - `mapErrorToComponentError(event)` – OpenAI `error` → component Error
 
 ## Server

@@ -53,6 +53,10 @@ const DEFAULT_ENDPOINTS = {
 // Issue #489: storage key last used by this page (module-level for backward compat; component also sets it).
 const lastUsedStorageKeyRef: { current: string } = { current: 'dg_conversation' };
 
+// TODO(ISSUE-489): Remove dgInstanceCounter and dgInstanceIdRef after 9a E2E passes with OpenAI. See TDD-PLAN §12 Priority 3 step 8.
+// Issue #489 Priority 1: diagnostic instance counter to trace which component instance sends Settings on reconnect.
+let dgInstanceCounter = 0;
+
 /**
  * DeepgramVoiceInteraction component
  * 
@@ -197,6 +201,9 @@ function DeepgramVoiceInteraction(
   // We use this to avoid closing connections during StrictMode cleanup
   const isMountedRef = useRef(true);
   const mountIdRef = useRef<string>('0');
+  // TODO(ISSUE-489): Remove after 9a E2E passes with OpenAI. See TDD-PLAN §12 Priority 3 step 8.
+  // Issue #489 Priority 1: numeric instance id for diagnostic logging (which instance sends Settings on reconnect).
+  const dgInstanceIdRef = useRef<number>(0);
 
   // Issue #406: Restore conversation from storage on mount when conversationStorage is provided
   useEffect(() => {
@@ -1020,6 +1027,11 @@ function DeepgramVoiceInteraction(
                       }
                     }
                   }
+                  // TODO(ISSUE-489): Remove this block and dgInstanceCounter/dgInstanceIdRef after 9a E2E passes with OpenAI. See TDD-PLAN §12 Priority 3 step 8.
+                  // Issue #489 Priority 1: diagnostic — trace second Settings on reconnect (remove after 9a resolved)
+                  const preloadLen = lastPersistedHistoryForReconnectRef.current.length;
+                  const diagMsg = `[ISSUE-489] Connection handler sending Settings: instanceId=${dgInstanceIdRef.current} preloadRefLength=${preloadLen}`;
+                  logConsole('info', diagMsg);
                   if (config.debug) {
                     logConsole('debug','🔧 [Connection State] WebSocket is OPEN, sending Settings');
                   }
@@ -1177,6 +1189,10 @@ function DeepgramVoiceInteraction(
     const previousMountId = mountIdRef.current;
     mountIdRef.current = currentMountId;
     isMountedRef.current = true;
+    // TODO(ISSUE-489): Remove after 9a E2E passes with OpenAI. See TDD-PLAN §12 Priority 3 step 8.
+    // Issue #489 Priority 1: assign instance id for reconnect diagnostic logging
+    dgInstanceCounter += 1;
+    dgInstanceIdRef.current = dgInstanceCounter;
     
     // Check if we're in a CI environment or package import context
     const isCIEnvironment = typeof process !== 'undefined' && (process.env.CI === 'true' || process.env.NODE_ENV === 'test');
@@ -1911,11 +1927,60 @@ function DeepgramVoiceInteraction(
 
   // Send agent settings after connection is established - only if agent is configured
   const sendAgentSettings = () => {
+    // Guarantee context loads from storage when in-memory refs are empty or on reconnect, so the hook alone
+    // is enough for Settings context on any backend (OpenAI proxy same as Deepgram). See ISSUE-489 / TDD-PLAN-9A.
+    const hasInMemory =
+      (conversationHistoryRef.current?.length ?? 0) > 0 ||
+      (lastPersistedHistoryForReconnectRef.current?.length ?? 0) > 0;
+    const shouldLoadFromStorage =
+      !hasInMemory || isReconnectionRef.current;
+    if (shouldLoadFromStorage && typeof getItemForSettings === 'function') {
+      const keys = [
+        lastUsedStorageKeyRef.current,
+        'dg_voice_conversation',
+        'dg_conversation',
+      ].filter(Boolean) as string[];
+      for (const key of keys) {
+        try {
+          const raw = getItemForSettings(key);
+          if (raw) {
+            const parsed = JSON.parse(raw) as unknown;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const valid = parsed.filter(
+                (m): m is ConversationMessage =>
+                  m &&
+                  typeof m === 'object' &&
+                  (m as ConversationMessage).role !== undefined &&
+                  ((m as ConversationMessage).role === 'user' ||
+                    (m as ConversationMessage).role === 'assistant') &&
+                  typeof (m as ConversationMessage).content === 'string'
+              );
+              if (valid.length > 0) {
+                lastPersistedHistoryForReconnectRef.current = valid.slice(
+                  -MAX_CONVERSATION_STORED
+                );
+                break;
+              }
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
     // Phase 4 refactor: resolve context and base options via hook (Issue #489 / REFACTORING-PLAN-release-v0.9.8). Phase 3: no ref sync — conversationHistoryRef is the single latest-history ref (updated by effect + ConversationText handler).
     const { effectiveContext, baseAgentOptions } = getContextForSend();
     const currentAgentOptions = baseAgentOptions
       ? { ...baseAgentOptions, context: effectiveContext }
       : undefined;
+
+    // TODO(ISSUE-489): Remove this block after 9a E2E passes with OpenAI. See TDD-PLAN §12 Priority 3 step 8.
+    // Issue #489 Priority 1: diagnostic — confirm context and preload ref at send (remove after 9a resolved)
+    const effLen = effectiveContext?.messages?.length ?? 0;
+    const preloadLen = lastPersistedHistoryForReconnectRef.current.length;
+    const diagMsg = `[ISSUE-489] sendAgentSettings: instanceId=${dgInstanceIdRef.current} effectiveContextMessages=${effLen} preloadRefLength=${preloadLen}`;
+    logConsole('info', diagMsg);
 
     if (debug) {
       logConsole('debug','🔧 [sendAgentSettings] Called');

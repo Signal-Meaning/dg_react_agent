@@ -485,6 +485,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // Issue #414: session is now configured for audio; send any append chunks queued before session.updated.
           flushPendingAudio();
         } else if (msg.type === 'response.output_text.done') {
+          // response.output_text.done is a control signal only. Assistant content comes from conversation.item.added only (protocol).
           onResponseEnded();
           // Issue #462 / #470: After function_call_output we deferred response.create; send it now so the API can start the next turn.
           if (pendingResponseCreateAfterFunctionCallOutput) {
@@ -495,11 +496,10 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: `response.output_text.done → control only (AgentAudioDone); assistant text from conversation.item.added`,
+            body: 'response.output_text.done → control (AgentAudioDone only; assistant text from conversation.item.added)',
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
           sendAgentStartedSpeakingIfNeeded();
-          // Issue #489 Phase 2: Do not map control events to ConversationText. Assistant content only from conversation.item.added.
           sendAgentAudioDoneIfNeeded();
           flushPendingIdleTimeoutError();
         } else if (msg.type === 'response.output_audio_transcript.done') {
@@ -681,7 +681,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               }
             }
           }
-          // Issue #489: conversation.item.added (assistant message) is the protocol-defined source for assistant text.
+          // conversation.item.added (assistant message) is the protocol-defined source for assistant text. Control signals (e.g. output_text.done) are not content.
           if (msg.type === 'conversation.item.added' && clientWs.readyState === WebSocket.OPEN) {
             const conversationText = mapConversationItemAddedToConversationText(msg as Parameters<typeof mapConversationItemAddedToConversationText>[0]);
             if (conversationText) {

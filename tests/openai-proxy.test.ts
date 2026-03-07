@@ -9,7 +9,6 @@ import {
   mapSettingsToSessionUpdate,
   mapInjectUserMessageToConversationItemCreate,
   mapSessionUpdatedToSettingsApplied,
-  mapOutputTextDoneToConversationText,
   mapOutputAudioTranscriptDoneToConversationText,
   mapFunctionCallArgumentsDoneToFunctionCallRequest,
   mapFunctionCallArgumentsDoneToConversationText,
@@ -107,22 +106,6 @@ describe('OpenAI proxy translator (Issue #381)', () => {
     it('maps session.updated to SettingsApplied', () => {
       const out = mapSessionUpdatedToSettingsApplied({ type: 'session.updated', session: {} });
       expect(out).toEqual({ type: 'SettingsApplied' });
-    });
-
-    it('maps response.output_text.done to ConversationText (assistant)', () => {
-      const event = { type: 'response.output_text.done' as const, text: 'Hello there!' };
-      const out = mapOutputTextDoneToConversationText(event);
-      expect(out).toEqual({
-        type: 'ConversationText',
-        role: 'assistant',
-        content: 'Hello there!',
-      });
-    });
-
-    it('maps response.output_text.done with missing text to empty content', () => {
-      const event = { type: 'response.output_text.done' as const };
-      const out = mapOutputTextDoneToConversationText(event);
-      expect(out.content).toBe('');
     });
 
     it('maps response.output_audio_transcript.done to ConversationText (assistant)', () => {

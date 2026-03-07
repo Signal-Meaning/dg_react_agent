@@ -23,6 +23,8 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      // Logging must go through shared logger (pico/OTel). No direct console in application source.
+      'no-console': 'warn',
     },
   },
 )

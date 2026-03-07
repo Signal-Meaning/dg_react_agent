@@ -42,6 +42,9 @@ import {
   getAgentState,
   assertNoRecoverableAgentErrors,
   assertAgentErrorsAllowUpstreamTimeouts,
+  CONVERSATION_STORAGE_KEY,
+  setConversationInLocalStorage,
+  getConversationStorageCheck,
   installWebSocketCapture,
   getCapturedWebSocketData,
   SELECTORS,
@@ -444,9 +447,9 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
       return h.map((m) => ({ role: m.role, content: m.content }));
     });
     if (!historyForRestore || historyForRestore.length === 0) {
-      historyForRestore = await page.evaluate(() => {
+      historyForRestore = await page.evaluate((key) => {
         try {
-          const raw = localStorage.getItem('dg_voice_conversation');
+          const raw = localStorage.getItem(key);
           if (!raw) return null;
           const parsed = JSON.parse(raw);
           if (!Array.isArray(parsed) || parsed.length === 0) return null;
@@ -457,9 +460,10 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
         } catch {
           return null;
         }
-      });
+      }, CONVERSATION_STORAGE_KEY);
     }
     if (historyForRestore && historyForRestore.length > 0) {
+      await setConversationInLocalStorage(page, historyForRestore);
       await page.evaluate((hist) => {
         const e2eContext = { messages: hist.map((m) => ({ type: 'History', role: m.role, content: m.content })) };
         const appConversation = hist.map((m) => ({ role: m.role, content: m.content }));
@@ -468,6 +472,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
           w.__e2eRestoredAgentContext = e2eContext;
           w.__appLastKnownConversation = appConversation;
         }
+        window.dispatchEvent(new Event('e2e-restored-context-set'));
       }, historyForRestore);
     }
 
@@ -482,21 +487,21 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     console.log('[9a] Component getConversationHistory() length after disconnect (before reconnect):', historyAfterDisconnect);
 
     if (historyForRestore && historyForRestore.length > 0) {
-      // Ensure window context still set after disconnect (no-op if already set)
+      await setConversationInLocalStorage(page, historyForRestore);
       await page.evaluate((hist) => {
-        const e2eContext = { messages: hist.map((m) => ({ type: 'History', role: m.role, content: m.content })) };
-        const appConversation = hist.map((m) => ({ role: m.role, content: m.content }));
         for (const w of [window, window.top]) {
           if (w && !w.document) continue;
-          w.__e2eRestoredAgentContext = e2eContext;
-          w.__appLastKnownConversation = appConversation;
+          w.__e2eRestoredAgentContext = { messages: hist.map((m) => ({ type: 'History', role: m.role, content: m.content })) };
+          w.__appLastKnownConversation = hist.map((m) => ({ role: m.role, content: m.content }));
         }
+        window.dispatchEvent(new Event('e2e-restored-context-set'));
       }, historyForRestore);
-      await page.evaluate(() => window.dispatchEvent(new Event('e2e-restored-context-set')));
-      await page.waitForTimeout(100);
+      await page.waitForTimeout(400);
       const textInput = page.locator('[data-testid="text-input"]');
       await textInput.focus();
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(300);
+      const storageCheck = await getConversationStorageCheck(page);
+      expect(storageCheck.ok, `9a: localStorage should have conversation before reconnect (${JSON.stringify(storageCheck)})`).toBe(true);
     }
 
     // Diagnostic (9a): confirm __e2eRestoredAgentContext is set and still present before we send (reconnect)
@@ -506,6 +511,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
         messageCount: window.__e2eRestoredAgentContext?.messages?.length ?? 0,
       }));
       console.log('[9a] Before sendMessageAndWaitForResponse: __e2eRestoredAgentContext', e2eRestoredCheck);
+      await page.evaluate(() => { window.__getAgentOptionsCallCount = 0; });
     }
 
     // Send message to trigger reconnect; this sends Settings. We only assert Settings had context.
@@ -520,6 +526,11 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     const hasContext = !!(Array.isArray(contextMessages) && contextMessages.length > 0) || !!(contextInSettings && !Array.isArray(contextInSettings) && (contextInSettings.messages?.length ?? 0) > 0);
 
     const getAgentOptionsDebug = await page.evaluate(() => window.__lastGetAgentOptionsDebug);
+    const getAgentOptionsCallInfo = await page.evaluate(() => ({
+      callCount: window.__getAgentOptionsCallCount ?? null,
+      lastWindowIsTop: window.__getAgentOptionsLastWindowIsTop ?? null,
+    }));
+    console.log('[9a] getAgentOptions call info:', getAgentOptionsCallInfo);
     const wsInstanceCount = await page.evaluate(() => window.__capturedWebSocketCount || 0);
     const sentTypes = (wsData?.sent || []).map(m => m.type);
     const settingsIndices = sentTypes.map((t, i) => t === 'Settings' ? i : -1).filter(i => i >= 0);
@@ -534,6 +545,93 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     if (Array.isArray(contextMessages) && contextMessages.length > 0) {
       expect(contextMessages.length).toBeGreaterThan(0);
     }
+  });
+
+  /**
+   * Proves the root cause of 9a: the code path that builds and sends the second Settings (on the
+   * connection that opens after disconnect) must call the app's getAgentOptions (e.g. via
+   * getContextForSend()). This test resets __getAgentOptionsCallCount before triggering reconnect,
+   * then asserts that the count is >= 1 after reconnect. It fails today (count stays 0) and
+   * passes when the component is fixed to call getAgentOptions when building Settings on reconnect.
+   */
+  test('9b. getAgentOptions must be called when building Settings on reconnect (Issue #489 root cause)', async ({ page }) => {
+    skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
+    test.setTimeout(90000);
+    await installWebSocketCapture(page);
+    await setupTestPageForBackend(page);
+    await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
+
+    await sendMessageAndWaitForResponse(page, 'What is the capital of France?', AGENT_RESPONSE_TIMEOUT);
+    await sendMessageAndWaitForResponse(page, 'Sorry, what was that?', AGENT_RESPONSE_TIMEOUT);
+
+    await page.waitForFunction(
+      () => (document.querySelectorAll('[data-testid^="conversation-message-"]').length >= 4),
+      { timeout: 5000 }
+    ).catch(() => {});
+    await page.waitForTimeout(300);
+
+    let historyForRestore = await page.evaluate(() => {
+      const h = window.deepgramRef?.current?.getConversationHistory?.() ?? [];
+      if (!Array.isArray(h) || h.length === 0) return null;
+      return h.map((m) => ({ role: m.role, content: m.content }));
+    });
+    if (!historyForRestore || historyForRestore.length === 0) {
+      historyForRestore = await page.evaluate((key) => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed) || parsed.length === 0) return null;
+          const valid = parsed.filter(
+            (m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
+          );
+          return valid.length > 0 ? valid.map((m) => ({ role: m.role, content: m.content })) : null;
+        } catch {
+          return null;
+        }
+      }, CONVERSATION_STORAGE_KEY);
+    }
+    if (historyForRestore && historyForRestore.length > 0) {
+      await setConversationInLocalStorage(page, historyForRestore);
+    }
+
+    await disconnectComponent(page);
+    await page.waitForTimeout(1000);
+
+    if (historyForRestore && historyForRestore.length > 0) {
+      await setConversationInLocalStorage(page, historyForRestore);
+      await page.evaluate((hist) => {
+        for (const w of [window, window.top]) {
+          if (w && !w.document) continue;
+          w.__e2eRestoredAgentContext = { messages: hist.map((m) => ({ type: 'History', role: m.role, content: m.content })) };
+          w.__appLastKnownConversation = hist.map((m) => ({ role: m.role, content: m.content }));
+        }
+        window.dispatchEvent(new Event('e2e-restored-context-set'));
+      }, historyForRestore);
+      await page.waitForTimeout(400);
+      const textInput = page.locator('[data-testid="text-input"]');
+      await textInput.focus();
+      await page.waitForTimeout(300);
+    }
+
+    await page.evaluate(() => { window.__getAgentOptionsCallCount = 0; });
+
+    await sendMessageAndWaitForResponse(page, 'What famous people lived there?', AGENT_RESPONSE_TIMEOUT);
+
+    const getAgentOptionsCallInfo = await page.evaluate(() => ({
+      callCount: window.__getAgentOptionsCallCount ?? null,
+      lastWindowIsTop: window.__getAgentOptionsLastWindowIsTop ?? null,
+    }));
+    const wsData = await getCapturedWebSocketData(page);
+    const settingsMessages = (wsData?.sent || []).filter(m => m.type === 'Settings');
+
+    expect(
+      getAgentOptionsCallInfo.callCount,
+      'Component must call getAgentOptions when building Settings on reconnect (Issue #489). '
+      + 'Right now the path that sends the second Settings does not invoke the app callback, so context is never supplied. '
+      + `callCount after reconnect=${getAgentOptionsCallInfo.callCount} (expected >= 1), Settings count=${settingsMessages.length}`
+    ).toBeGreaterThanOrEqual(1);
   });
 
   /**

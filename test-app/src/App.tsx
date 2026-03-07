@@ -88,6 +88,79 @@ type TranscriptHistoryEntry = {
 /** Issue #406: Storage key for conversation (component persists via conversationStorage). */
 const CONVERSATION_STORAGE_KEY = 'dg_voice_conversation';
 
+/** Issue #489/9a: Read and validate conversation from localStorage. Returns valid messages or null. */
+function getValidConversationFromStorage(key: string): Array<{ role: 'user' | 'assistant'; content: string }> | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Array<{ role?: string; content?: string }>;
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    const valid = parsed.filter(
+      (m): m is { role: 'user' | 'assistant'; content: string } =>
+        (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
+    );
+    return valid.length > 0 ? valid : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Issue #489: Resolve agent context from ordered sources. Returns context, source label, and counts for debugging. */
+function resolveAgentContextFromSources(params: {
+  fromComponent: Array<{ role: string; content: string }>;
+  fromRef: Array<{ role: string; content: string }>;
+  fromLastKnown: Array<{ role: string; content: string }>;
+  fromWindowApp: Array<{ role: string; content: string }>;
+  fromStorage: Array<{ role: string; content: string }>;
+  conversationForDisplay: Array<{ role: ConversationRole; content: string; timestamp?: number }>;
+  e2eRestored: AgentOptions['context'] | undefined;
+}): { context: AgentOptions['context']; source: string; counts: Record<string, number> } {
+  const { fromComponent, fromRef, fromLastKnown, fromWindowApp, fromStorage, conversationForDisplay, e2eRestored } = params;
+  const candidates: Array<{ history: Array<{ role: string; content: string }>; source: string }> = [
+    { history: fromComponent, source: 'component' },
+    { history: fromRef, source: 'ref' },
+    { history: fromLastKnown, source: 'lastKnown' },
+    { history: fromWindowApp, source: 'windowApp' },
+    { history: fromStorage, source: 'storage' },
+  ];
+  const chosen = candidates.find((c) => c.history.length > 0);
+  const historyForContext = chosen?.history ?? [];
+  const historySource = chosen?.source ?? 'none';
+
+  let context = getContextForSettings(
+    conversationForDisplay,
+    () => historyForContext
+  ) as AgentOptions['context'];
+
+  if ((context?.messages?.length ?? 0) === 0 && e2eRestored?.messages?.length) {
+    context = e2eRestored;
+  }
+
+  const contextMsgCount = context?.messages?.length ?? 0;
+  const source = contextMsgCount === 0
+    ? 'none'
+    : context === e2eRestored
+      ? 'e2eRestored'
+      : conversationForDisplay.length > 0
+        ? 'display'
+        : historySource;
+
+  return {
+    context,
+    source,
+    counts: {
+      fromComponent: fromComponent.length,
+      fromRef: fromRef.length,
+      fromLastKnown: fromLastKnown.length,
+      fromWindowApp: fromWindowApp.length,
+      fromStorage: fromStorage.length,
+      conversationForDisplay: conversationForDisplay.length,
+      contextMsgCount,
+    },
+  };
+}
+
 /** Issue #406: localStorage-backed ConversationStorage for the component (test-app uses component storage + getConversationHistory). */
 const localStorageConversationStorage: ConversationStorage = {
   getItem: (key: string) => Promise.resolve(typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null),
@@ -142,10 +215,17 @@ function App() {
   // Issue #406: Conversation for display and context — synced from component ref (component owns persistence via conversationStorage)
   const [conversationForDisplay, setConversationForDisplay] = useState<Array<{ role: ConversationRole; content: string; timestamp?: number }>>([]);
 
-  // Issue #489/9a: E2E test sets window.__e2eRestoredAgentContext then dispatches this event so we re-render and pass it as restoredAgentContext
+  // Issue #489/9a: E2E test sets window.__e2eRestoredAgentContext and localStorage then dispatches this event so we re-render and getAgentOptions has context on reconnect.
   const [, setE2eRestoredContextTick] = useState(0);
   useEffect(() => {
-    const handler = () => setE2eRestoredContextTick((t) => t + 1);
+    const handler = () => {
+      setE2eRestoredContextTick((t) => t + 1);
+      const valid = getValidConversationFromStorage(CONVERSATION_STORAGE_KEY);
+      if (valid && valid.length > 0) {
+        lastKnownConversationRef.current = valid;
+        setConversationForDisplay((prev) => (prev.length >= valid.length ? prev : valid));
+      }
+    };
     window.addEventListener('e2e-restored-context-set', handler);
     return () => window.removeEventListener('e2e-restored-context-set', handler);
   }, []);
@@ -512,69 +592,50 @@ function App() {
   }, [memoizedAgentOptions]);
 
   // Issue #489: Supply options at send time so Settings on reconnect include up-to-date context.
-  // Component may pass its current history getter; fallback to ref, then sync read from storage
-  // (component restores from storage async, so on reconnect ref can still be empty).
+  // 1) Gather history from five sources (component getter, ref, lastKnown, window, storage).
+  // 2) Resolve context via resolveAgentContextFromSources (precedence + getContextForSettings + E2E fallback).
+  // 3) Write E2E debug globals and return options with context.
   const getAgentOptions = useCallback((
     getConversationHistory?: () => Array<{ role: ConversationRole; content: string; timestamp?: number }>
   ) => {
     const fromComponent = getConversationHistory?.() ?? [];
     const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
     const fromLastKnown = lastKnownConversationRef.current ?? [];
-    const fromWindowApp: Array<{ role: string; content: string }> =
-      (typeof window !== 'undefined' ? (window as TestWindow).__appLastKnownConversation : undefined) ?? [];
-    let fromStorage: Array<{ role: string; content: string }> = [];
-    if (fromComponent.length === 0 && fromRef.length === 0 && typeof localStorage !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(CONVERSATION_STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as Array<{ role?: string; content?: string }>;
-          if (Array.isArray(parsed)) {
-            fromStorage = parsed.filter(
-              (m): m is { role: string; content: string } =>
-                (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
-            );
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    // Issue #489/9a: When component ref/state are empty on reconnect (e.g. OpenAI path), use last known conversation (ref or window so it survives remount).
-    const historyForContext =
-      fromComponent.length > 0 ? fromComponent
-      : fromRef.length > 0 ? fromRef
-      : fromLastKnown.length > 0 ? fromLastKnown
-      : fromWindowApp.length > 0 ? fromWindowApp
-      : fromStorage;
-    let context = getContextForSettings(
+    const win = typeof window !== 'undefined' ? (window as TestWindow) : undefined;
+    const topWin = win?.top && win.top !== win ? (win.top as TestWindow) : win;
+    const fromWindowApp = (win?.__appLastKnownConversation ?? topWin?.__appLastKnownConversation) ?? [];
+    const fromStorage = (fromComponent.length === 0 && fromRef.length === 0)
+      ? (getValidConversationFromStorage(CONVERSATION_STORAGE_KEY) ?? [])
+      : [];
+    const e2eRestored = win?.__e2eRestoredAgentContext ?? topWin?.__e2eRestoredAgentContext;
+
+    const { context, source, counts } = resolveAgentContextFromSources({
+      fromComponent,
+      fromRef,
+      fromLastKnown,
+      fromWindowApp,
+      fromStorage,
       conversationForDisplay,
-      () => historyForContext
-    ) as AgentOptions['context'];
-    // Issue #489/9a: E2E fallback – when ref/component/storage are empty on reconnect, use
-    // window.__e2eRestoredAgentContext so Settings on reconnect include context (test sets this before reconnect).
-    const e2eRestored =
-      typeof window !== 'undefined' ? (window as TestWindow).__e2eRestoredAgentContext : undefined;
-    if ((context?.messages?.length ?? 0) === 0 && e2eRestored?.messages?.length) {
-      context = e2eRestored;
-    }
-    const contextMsgCount = context?.messages?.length ?? 0;
-    const source = contextMsgCount > 0
-      ? (context === e2eRestored ? 'e2eRestored' : conversationForDisplay.length > 0 ? 'display' : fromComponent.length > 0 ? 'component' : fromRef.length > 0 ? 'ref' : fromLastKnown.length > 0 ? 'lastKnown' : fromWindowApp.length > 0 ? 'windowApp' : fromStorage.length > 0 ? 'storage' : 'display')
-      : 'none';
+      e2eRestored,
+    });
+
     const debug = {
-      fromComponent: fromComponent.length,
-      fromRef: fromRef.length,
-      fromLastKnown: fromLastKnown.length,
-      fromWindowApp: fromWindowApp.length,
-      fromStorage: fromStorage.length,
-      conversationForDisplay: conversationForDisplay.length,
-      contextMsgCount,
+      fromComponent: counts.fromComponent,
+      fromRef: counts.fromRef,
+      fromLastKnown: counts.fromLastKnown,
+      fromWindowApp: counts.fromWindowApp,
+      fromStorage: counts.fromStorage,
+      conversationForDisplay: counts.conversationForDisplay,
+      contextMsgCount: counts.contextMsgCount,
       source,
     };
     if (import.meta.env.DEV || (typeof window !== 'undefined' && window.location.search.includes('contextDebug=1'))) {
       console.log('[getAgentOptions]', debug);
     }
     if (typeof window !== 'undefined') {
+      const w = window as TestWindow & { __getAgentOptionsCallCount?: number; __getAgentOptionsLastWindowIsTop?: boolean };
+      w.__getAgentOptionsCallCount = (w.__getAgentOptionsCallCount ?? 0) + 1;
+      w.__getAgentOptionsLastWindowIsTop = w === w.top;
       (window as TestWindow).__lastGetAgentOptionsDebug = debug;
     }
     return { ...memoizedAgentOptions, context };
