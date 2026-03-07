@@ -413,6 +413,13 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     test.setTimeout(90000);
     await installWebSocketCapture(page);
+    // Forward browser console lines containing [ISSUE-489] to terminal for 9a diagnostics
+    page.on('console', (msg) => {
+      const text = msg.text();
+      if (text && text.includes('[ISSUE-489]')) {
+        console.log('[page console]', text);
+      }
+    });
     await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);

@@ -28,6 +28,7 @@ import {
   setupComponentAndConnect,
   simulateConnectionClose,
   simulateConnection,
+  waitForEventListener,
   waitForSettingsSent,
 } from './utils/component-test-helpers';
 
@@ -126,6 +127,70 @@ describe('Reconnect Settings context isolation (test 9)', () => {
 
     // 4) Reconnect -> component should send second Settings WITH context (from agentOptionsRef.current)
     await simulateConnection(eventListener, mockWebSocketManager);
+    await waitFor(
+      () => expect(settingsSent.length).toBeGreaterThanOrEqual(2),
+      { timeout: 3000 }
+    );
+
+    const secondSettings = settingsSent[settingsSent.length - 1];
+    expect(secondSettings.agent?.context).toBeDefined();
+    const ctx = secondSettings.agent?.context as { messages?: unknown[] } | undefined;
+    expect(ctx?.messages).toBeDefined();
+    expect((ctx?.messages?.length ?? 0)).toBeGreaterThan(0);
+  });
+
+  /**
+   * TDD (Issue #489 / 9a): Race fix — when stop() is called we set hadAgentConnectionClosedRef so the
+   * next 'connected' (e.g. from a new WebSocket) is treated as reconnection even if 'closed' has not
+   * fired yet. Without this, E2E 9a can fail: disconnect → user triggers reconnect → new 'connected'
+   * arrives before old socket's 'closed' → we skip sending Settings (flags still true).
+   * Test: stop() then simulate 'connected' without simulating 'closed'; assert second Settings is sent.
+   */
+  it('sends second Settings after stop() when next connected fires before closed (race fix for 9a)', async () => {
+    const settingsSent: Array<{ type: string; agent?: { context?: unknown } }> = [];
+    mockWebSocketManager.sendJSON.mockImplementation((msg: unknown) => {
+      const m = msg as { type: string; agent?: { context?: unknown } };
+      if (m?.type === 'Settings') {
+        settingsSent.push({ type: m.type, agent: m.agent ? { context: m.agent.context } : undefined });
+      }
+    });
+
+    const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+    const setOptionsWithContextRef = { current: null as (() => void) | null };
+    const Wrapper = () => {
+      const [agentOptions, setAgentOptions] = useState<typeof optionsWithoutContext>(optionsWithoutContext);
+      setOptionsWithContextRef.current = () => setAgentOptions(optionsWithContext as typeof optionsWithoutContext);
+      return (
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={agentOptions}
+        />
+      );
+    };
+
+    render(<Wrapper />);
+    await waitFor(() => expect(ref.current).toBeTruthy());
+
+    const eventListener = await setupComponentAndConnect(ref, mockWebSocketManager);
+    expect(settingsSent.length).toBeGreaterThanOrEqual(1);
+    expect(settingsSent[0].agent?.context).toBeFalsy();
+
+    await act(async () => {
+      setOptionsWithContextRef.current?.();
+    });
+
+    await act(async () => {
+      await ref.current?.stop();
+    });
+
+    // Simulate reconnect: start again so component creates a new manager (same mock); then
+    // simulate 'connected' so when checkAndSend runs it has agentManagerRef.current set.
+    await act(async () => {
+      await ref.current?.start({ agent: true });
+    });
+    const eventListenerAfterReconnect = await waitForEventListener(mockWebSocketManager);
+    await simulateConnection(eventListenerAfterReconnect, mockWebSocketManager);
     await waitFor(
       () => expect(settingsSent.length).toBeGreaterThanOrEqual(2),
       { timeout: 3000 }
@@ -277,22 +342,21 @@ describe('Reconnect Settings context isolation (test 9)', () => {
   });
 
   /**
-   * Exposes defect: when refs and getAgentOptions are empty, the component must still send
-   * Settings with agent.context from window.__e2eRestoredAgentContext (E2E fallback).
-   * If the hook fallback is not used in the component path or result is dropped, this fails.
+   * When refs and storage are empty, the app can pass restoredAgentContext (e.g. from
+   * window.__e2eRestoredAgentContext). The hook's getContextForSend uses restoredAgentContextRef;
+   * component must send that context in Settings.
    */
-  it('sends Settings with agent.context from window.__e2eRestoredAgentContext when refs and storage are empty', async () => {
+  it('sends Settings with agent.context from restoredAgentContext prop when refs and storage are empty', async () => {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem('dg_conversation');
     }
-    const e2eContext = {
+    const restoredContext = {
       messages: [
         { type: 'History' as const, role: 'user' as const, content: 'E2E restored user.' },
         { type: 'History' as const, role: 'assistant' as const, content: 'E2E restored assistant.' },
       ],
     };
-    (window as unknown as { __e2eRestoredAgentContext: typeof e2eContext }).__e2eRestoredAgentContext = e2eContext;
 
     const settingsSent: Array<{ type: string; agent?: { context?: unknown } }> = [];
     mockWebSocketManager.sendJSON.mockImplementation((msg: unknown) => {
@@ -308,6 +372,7 @@ describe('Reconnect Settings context isolation (test 9)', () => {
         ref={ref}
         apiKey={MOCK_API_KEY}
         agentOptions={optionsWithoutContext}
+        restoredAgentContext={restoredContext}
       />
     );
     await waitFor(() => expect(ref.current).toBeTruthy());
