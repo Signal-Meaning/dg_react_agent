@@ -1,28 +1,28 @@
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
-import DeepgramVoiceInteraction from '../../src/components/DeepgramVoiceInteraction';
-import { 
-  DeepgramVoiceInteractionHandle,
-  TranscriptResponse,
-  LLMResponse,
-  UserMessageResponse,
-  AgentState,
-  AgentOptions,
-  ConnectionState,
-  ServiceType,
-  DeepgramError,
-  ConversationRole,
-  AudioConstraints,
-  FunctionCallRequest,
-  FunctionCallResponse,
-  ConversationStorage
-} from '../../src/types';
+import {
+  DeepgramVoiceInteraction,
+  type DeepgramVoiceInteractionHandle,
+  type TranscriptResponse,
+  type LLMResponse,
+  type UserMessageResponse,
+  type AgentState,
+  type AgentOptions,
+  type ConnectionState,
+  type ServiceType,
+  type DeepgramError,
+  type ConversationRole,
+  type AudioConstraints,
+  type FunctionCallRequest,
+  type FunctionCallResponse,
+  type ConversationStorage,
+  type AgentFunction,
+  getLogger,
+} from '@signal-meaning/voice-agent-react';
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 import { ClosureIssueTestPage } from './closure-issue-test-page';
 import { getFunctionDefinitions } from './utils/functionDefinitions';
 import { getContextForSettings } from './utils/context-for-settings';
 import { getFunctionCallBackendBaseUrl, forwardFunctionCallToBackend } from './utils/functionCallBackend';
-import type { AgentFunction } from '../../src/types/agent';
-import { getLogger } from '../../src/utils/logger';
 import { generateSessionId } from './session-management';
 
 // Type declaration for E2E test support
@@ -137,6 +137,14 @@ function App() {
   
   // Issue #406: Conversation for display and context — synced from component ref (component owns persistence via conversationStorage)
   const [conversationForDisplay, setConversationForDisplay] = useState<Array<{ role: ConversationRole; content: string; timestamp?: number }>>([]);
+
+  // Issue #489/9a: E2E test sets window.__e2eRestoredAgentContext then dispatches this event so we re-render and pass it as restoredAgentContext
+  const [, setE2eRestoredContextTick] = useState(0);
+  useEffect(() => {
+    const handler = () => setE2eRestoredContextTick((t) => t + 1);
+    window.addEventListener('e2e-restored-context-set', handler);
+    return () => window.removeEventListener('e2e-restored-context-set', handler);
+  }, []);
 
   // Sync conversation from component after it restores from storage (ref may not have data until restore completes)
   useEffect(() => {
@@ -521,13 +529,20 @@ function App() {
         /* ignore */
       }
     }
-    const context = getContextForSettings(
+    let context = getContextForSettings(
       conversationForDisplay,
       () => (fromComponent.length > 0 ? fromComponent : fromRef.length > 0 ? fromRef : fromStorage)
     ) as AgentOptions['context'];
+    // Issue #489/9a: E2E fallback – when ref/component/storage are empty on reconnect, use
+    // window.__e2eRestoredAgentContext so Settings on reconnect include context (test sets this before reconnect).
+    const e2eRestored =
+      typeof window !== 'undefined' ? (window as TestWindow).__e2eRestoredAgentContext : undefined;
+    if ((context?.messages?.length ?? 0) === 0 && e2eRestored?.messages?.length) {
+      context = e2eRestored;
+    }
     const contextMsgCount = context?.messages?.length ?? 0;
     const source = contextMsgCount > 0
-      ? (conversationForDisplay.length > 0 ? 'display' : fromComponent.length > 0 ? 'component' : fromRef.length > 0 ? 'ref' : fromStorage.length > 0 ? 'storage' : 'display')
+      ? (context === e2eRestored ? 'e2eRestored' : conversationForDisplay.length > 0 ? 'display' : fromComponent.length > 0 ? 'component' : fromRef.length > 0 ? 'ref' : fromStorage.length > 0 ? 'storage' : 'display')
       : 'none';
     const debug = {
       fromComponent: fromComponent.length,

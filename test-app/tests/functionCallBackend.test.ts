@@ -4,7 +4,7 @@
  */
 
 import { forwardFunctionCallToBackend, getFunctionCallBackendBaseUrl } from '../src/utils/functionCallBackend';
-import type { FunctionCallRequest, FunctionCallResponse } from '../../src/types';
+import type { FunctionCallRequest, FunctionCallResponse } from '@signal-meaning/voice-agent-react';
 
 describe('functionCallBackend (Issue #407)', () => {
   const originalFetch = globalThis.fetch;

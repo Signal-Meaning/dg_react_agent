@@ -3,7 +3,7 @@
  * Contract: docs/BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md
  */
 
-import type { FunctionCallRequest, FunctionCallResponse } from '../../../src/types';
+import type { FunctionCallRequest, FunctionCallResponse } from '@signal-meaning/voice-agent-react';
 
 /**
  * Derive HTTP(S) base URL from the WebSocket proxy endpoint for POST /function-call.

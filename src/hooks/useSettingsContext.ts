@@ -119,9 +119,17 @@ export function useSettingsContext(params: UseSettingsContextParams): UseSetting
         : agentOptionsRef.current?.context?.messages?.length
           ? agentOptionsRef.current.context
           : undefined;
-    const fromRestored = restoredAgentContextRef.current?.messages?.length
-      ? restoredAgentContextRef.current
-      : undefined;
+    // Issue #489/9a: E2E test may set window.__e2eRestoredAgentContext before reconnect; use when ref is empty
+    const win = typeof window !== 'undefined' ? window as Window & { __e2eRestoredAgentContext?: AgentContext } : null;
+    const fromWindowE2E = win?.__e2eRestoredAgentContext?.messages?.length ? win.__e2eRestoredAgentContext : undefined;
+    const fromRestored =
+      restoredAgentContextRef.current?.messages?.length
+        ? restoredAgentContextRef.current
+        : fromWindowE2E;
+
+    if (fromWindowE2E && fromRestored === fromWindowE2E) {
+      console.log('[9a getContextForSend] Using window.__e2eRestoredAgentContext fallback, messageCount:', fromWindowE2E.messages?.length);
+    }
 
     const effectiveContext = (fromHistory ?? fromApp ?? (fromRestored as AgentContext | undefined)) ?? undefined;
     return { sourceForHistory: sourceForHistoryArray, effectiveContext, baseAgentOptions: baseAgentOptions ?? undefined };

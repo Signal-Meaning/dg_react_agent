@@ -1,6 +1,10 @@
+import path from 'path'
+import { fileURLToPath } from 'url'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import basicSsl from '@vitejs/plugin-basic-ssl'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // If localhost doesn't work in the browser (e.g. resolves to IPv6 ::1), use 127.0.0.1
 // or add "127.0.0.1 localhost" to /etc/hosts so localhost resolves to IPv4.
@@ -27,6 +31,12 @@ export default defineConfig(({ mode }) => {
       localhostHint(),
       ...(useHttps ? [basicSsl({ name: 'test-app' })] : []),
     ],
+    // Resolve package to repo source so dev/E2E never use built dist (file:../ would use dist by default)
+    resolve: {
+      alias: {
+        '@signal-meaning/voice-agent-react': path.resolve(__dirname, '..', 'src'),
+      },
+    },
     server: {
       host: true, // listen on all interfaces (E2E, curl, etc.)
       port: 5173,

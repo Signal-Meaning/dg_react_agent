@@ -1,4 +1,4 @@
-import type { AgentFunction } from '../../../src/types/agent';
+import type { AgentFunction } from '@signal-meaning/voice-agent-react';
 
 /**
  * Factory function for generating function definitions for Deepgram Voice Agent.

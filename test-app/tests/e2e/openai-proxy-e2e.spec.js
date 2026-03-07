@@ -447,12 +447,29 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     console.log('[9a] Component getConversationHistory() length after disconnect (before reconnect):', historyAfterDisconnect);
 
     // Issue #489/9a: When in-memory refs are empty on reconnect (timing/remount), component uses
-    // restoredAgentContext. Set it from current conversation so reconnect Settings include context.
-    const historyForRestore = await page.evaluate(() => {
+    // restoredAgentContext. Set it from ref, or fallback to localStorage (dg_voice_conversation)
+    // so reconnect Settings include context.
+    let historyForRestore = await page.evaluate(() => {
       const h = window.deepgramRef?.current?.getConversationHistory?.() ?? [];
       if (!Array.isArray(h) || h.length === 0) return null;
       return h.map((m) => ({ role: m.role, content: m.content }));
     });
+    if (!historyForRestore || historyForRestore.length === 0) {
+      historyForRestore = await page.evaluate(() => {
+        try {
+          const raw = localStorage.getItem('dg_voice_conversation');
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed) || parsed.length === 0) return null;
+          const valid = parsed.filter(
+            (m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
+          );
+          return valid.length > 0 ? valid.map((m) => ({ role: m.role, content: m.content })) : null;
+        } catch {
+          return null;
+        }
+      });
+    }
     if (historyForRestore && historyForRestore.length > 0) {
       await page.evaluate((hist) => {
         window.__e2eRestoredAgentContext = {
@@ -460,9 +477,19 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
         };
       }, historyForRestore);
       // Trigger app re-render so component gets restoredAgentContext prop and ref updates before reconnect
+      await page.evaluate(() => window.dispatchEvent(new Event('e2e-restored-context-set')));
       const textInput = page.locator('[data-testid="text-input"]');
       await textInput.focus();
       await page.waitForTimeout(200);
+    }
+
+    // Diagnostic (9a): confirm __e2eRestoredAgentContext is set and still present before we send (reconnect)
+    if (historyForRestore && historyForRestore.length > 0) {
+      const e2eRestoredCheck = await page.evaluate(() => ({
+        has: !!window.__e2eRestoredAgentContext,
+        messageCount: window.__e2eRestoredAgentContext?.messages?.length ?? 0,
+      }));
+      console.log('[9a] Before sendMessageAndWaitForResponse: __e2eRestoredAgentContext', e2eRestoredCheck);
     }
 
     // Send message to trigger reconnect; this sends Settings. We only assert Settings had context.

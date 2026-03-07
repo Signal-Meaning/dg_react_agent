@@ -15,7 +15,7 @@
 | Phase | Description | Red | Green | Refactor | Notes |
 |-------|-------------|-----|-------|----------|--------|
 | 1 | Playback / TTS (tests 1, 12) | [x] | [~] | [ ] | **Flaky.** Full run with real APIs: both failed. Isolated re-run: both passed. Often pass without real APIs (proxy/mock path). Treat as flaky; do not block on Phase 1. |
-| 2 | Context retention (tests 2, 3, 4) | [ ] | [ ] | [ ] | **Next:** Phase 2 — context on reconnect (app/component supply agent.context in Settings). |
+| 2 | Context retention (tests 2, 3, 4) | [x] | [~] | [ ] | **Green in progress:** sync localStorage write on ConversationText; preload before sendAgentSettings on reconnection; **9a E2E fallback:** if ref empty after disconnect, set __e2eRestoredAgentContext from localStorage `dg_voice_conversation` so reconnect Settings get context. |
 | 3 | Issue-373 long-running (test 5) | [ ] | [ ] | [ ] | |
 | 4 | Multi-turn / history (tests 6, 7) | [ ] | [ ] | [ ] | |
 | 5 | Function-call reply (tests 8, 9) | [ ] | [ ] | [ ] | |
@@ -88,7 +88,14 @@ For each fix:
 
 **Tests:** context-retention-agent-usage (2 tests), context-retention-with-function-calling (1 test).
 
-**Red:** Run with real APIs; confirm tests 2, 3, 4 fail. Diagnostics: getAgentOptions/source "none", Settings on reconnect without context.
+**Red:** [x] 9a still fails: `__lastGetAgentOptionsDebug` source "none", fromComponent/fromRef/fromStorage 0 at last getAgentOptions call (app’s getAgentOptions; component’s getContextForSend still sees empty history).
+
+**Green (applied, 9a still failing):**
+- Sync `localStorage.setItem(CONVERSATION_STORAGE_KEY, …)` when appending ConversationText (so storage has history before any close).
+- On agent connection **closed**, preload `lastPersistedHistoryForReconnectRef` from localStorage (keys: lastUsed, dg_voice_conversation, dg_conversation).
+- On agent **connected** when **reconnection**, preload from localStorage into `lastPersistedHistoryForReconnectRef` **before** `sendAgentSettings()` (avoids race where new WS opens before old WS ‘closed’).
+
+**Next:** If 9a still fails, component may be remounting (module-level ref reset) or storage key mismatch; ensure test-app and component use same key (`dg_voice_conversation`) and consider passing `restoredAgentContext` from app from `getConversationHistory()` before reconnect send.
 
 **Investigation:**
 

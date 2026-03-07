@@ -11,12 +11,12 @@
  */
 
 import { useRef, useState, useMemo, useCallback, useEffect } from 'react';
-import DeepgramVoiceInteraction from '../../src/components/DeepgramVoiceInteraction';
-import { 
-  DeepgramVoiceInteractionHandle,
-  AgentOptions,
-  AgentFunction
-} from '../../src/types';
+import {
+  DeepgramVoiceInteraction,
+  type DeepgramVoiceInteractionHandle,
+  type AgentOptions,
+  type AgentFunction,
+} from '@signal-meaning/voice-agent-react';
 
 // Expose update function to window for E2E tests
 declare global {

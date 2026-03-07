@@ -883,6 +883,33 @@ function DeepgramVoiceInteraction(
             windowWithGlobals.globalSettingsSent = false; // Reset global flag when connection closes
             pendingInjectUserMessagesRef.current = []; // Issue #433: clear queue on close
             settingsSentTimeRef.current = null; // Reset settings time
+            // Issue #489 Phase 2: Preload lastPersistedHistoryForReconnectRef from sync storage on close so
+            // the next reconnect's sendAgentSettings sees context (getHistoryForSettings falls back to storage
+            // when latestHistory and lastPersistedHistory are empty; async persist may not have flushed yet).
+            if (typeof localStorage !== 'undefined') {
+              const key = lastUsedStorageKeyRef.current || CONVERSATION_STORAGE_KEY;
+              try {
+                const raw = localStorage.getItem(key);
+                if (raw) {
+                  const parsed = JSON.parse(raw) as unknown;
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    const valid = parsed.filter(
+                      (m): m is ConversationMessage =>
+                        m &&
+                        typeof m === 'object' &&
+                        (m as ConversationMessage).role !== undefined &&
+                        ((m as ConversationMessage).role === 'user' || (m as ConversationMessage).role === 'assistant') &&
+                        typeof (m as ConversationMessage).content === 'string'
+                    );
+                    if (valid.length > 0) {
+                      lastPersistedHistoryForReconnectRef.current = valid.slice(-MAX_CONVERSATION_STORED);
+                    }
+                  }
+                }
+              } catch {
+                /* ignore */
+              }
+            }
             if (config.debug) {
               logConsole('debug','🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
             }
@@ -954,6 +981,36 @@ function DeepgramVoiceInteraction(
                 }
                 
                 if (wsState === 1) { // OPEN
+                  // Issue #489 Phase 2: On reconnection, preload lastPersistedHistory from sync storage
+                  // before sendAgentSettings so getHistoryForSettings sees context (close may not have fired yet).
+                  if (isReconnectionRef.current && typeof localStorage !== 'undefined') {
+                    const keys = [lastUsedStorageKeyRef.current, 'dg_voice_conversation', 'dg_conversation'];
+                    for (const key of keys) {
+                      if (!key) continue;
+                      try {
+                        const raw = localStorage.getItem(key);
+                        if (raw) {
+                          const parsed = JSON.parse(raw) as unknown;
+                          if (Array.isArray(parsed) && parsed.length > 0) {
+                            const valid = parsed.filter(
+                              (m): m is ConversationMessage =>
+                                m &&
+                                typeof m === 'object' &&
+                                (m as ConversationMessage).role !== undefined &&
+                                ((m as ConversationMessage).role === 'user' || (m as ConversationMessage).role === 'assistant') &&
+                                typeof (m as ConversationMessage).content === 'string'
+                            );
+                            if (valid.length > 0) {
+                              lastPersistedHistoryForReconnectRef.current = valid.slice(-MAX_CONVERSATION_STORED);
+                              break;
+                            }
+                          }
+                        }
+                      } catch {
+                        /* ignore */
+                      }
+                    }
+                  }
                   if (config.debug) {
                     logConsole('debug','🔧 [Connection State] WebSocket is OPEN, sending Settings');
                   }
@@ -2328,7 +2385,18 @@ function DeepgramVoiceInteraction(
         conversationHistoryRef.current = updatedHistory;
         setConversationHistory((prev) => [...prev, newEntry]);
         // Issue #489/9a: Keep module-level ref in sync so reconnect has context even after remount
-        lastPersistedHistoryForReconnectRef.current = updatedHistory.slice(-MAX_CONVERSATION_STORED);
+        const toStore = updatedHistory.slice(-MAX_CONVERSATION_STORED);
+        lastPersistedHistoryForReconnectRef.current = toStore;
+        // Issue #489 Phase 2: Sync write to localStorage so preload on connection close sees latest
+        // (async conversationStorage.setItem may not have flushed before close).
+        if (typeof localStorage !== 'undefined') {
+          try {
+            localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(toStore));
+            lastUsedStorageKeyRef.current = CONVERSATION_STORAGE_KEY;
+          } catch {
+            /* ignore quota / private mode */
+          }
+        }
       }
 
       if (data.role === 'assistant') {
