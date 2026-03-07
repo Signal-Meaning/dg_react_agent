@@ -12,7 +12,7 @@ With an existing dev server and backend, add `E2E_USE_EXISTING_SERVER=1` if you 
 
 **Issue-373 (idle timeout after function calls):** **Resolved.** E2E “should re-enable idle timeout after function calls complete” passes with real APIs after component/hook/IdleTimeoutService fixes (see [TDD-PLAN-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md](./TDD-PLAN-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md)).
 
-**Without real APIs:** A full E2E run with default/mock configuration yields **9 failures** (see “E2E run without real APIs” below). These are a different set from the real-API failures and are expected when the proxy/upstream do not emulate full API behavior.
+**Without real APIs:** A full E2E run with default/mock configuration yields **9 failures** (see “E2E run without real APIs” below). Those tests are skipped via `skipUnlessRealAPIs()` when `USE_REAL_APIS` is not set. **With real APIs:** a full run with `USE_REAL_APIS=1` yields **12 failures**; see "E2E run WITH real APIs" and [TDD-PLAN-REAL-API-E2E-FAILURES.md](./TDD-PLAN-REAL-API-E2E-FAILURES.md).
 
 ---
 
@@ -23,7 +23,8 @@ With an existing dev server and backend, add `E2E_USE_EXISTING_SERVER=1` if you 
 | Result   | Notes |
 |----------|--------|
 | **Passing** | Most OpenAI proxy E2E and **issue-373** “re-enable idle timeout” (resolved). Connection, single message, multi-turn, greeting, reconnection, basic audio, VAD, long-running function call, thinking phase, concurrent function calls. |
-| **Failing** | **3 tests** fail consistently with real API (see “Current E2E failures” below): openai-proxy-e2e 3b (multi-turn after disconnect), 6, 6b (function-call agent response). Test 10 is skipped (§5). |
+| **Latest result** | **211 passed**, **12 failed**, 25 skipped (7.8m). |
+| **Failing** | **12 tests** (see "E2E run WITH real APIs" below): callback-test (onPlaybackStateChange), context-retention (3), issue-373 (long-running function call), openai-proxy-e2e (3, 3b, 6, 6b, 9a, 9), openai-proxy-tts-diagnostic (1). Test 10 skipped (§5). |
 | **Skipped** | Various mock-only or conditional skips (e.g. interruptAgent in CI). |
 
 **Playwright E2E (proxy mode, without real APIs / default run):**
@@ -36,6 +37,59 @@ With an existing dev server and backend, add `E2E_USE_EXISTING_SERVER=1` if you 
 
 **Integration tests (Jest, real API):**  
 `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — **17 passed**, including the critical real-API tests that prove the **proxy sends completion** to the client. One of these explicitly proves the client **does** receive `AgentAudioDone` after sending `FunctionCallResponse` (see below).
+
+---
+
+## E2E run WITH real APIs (latest Playwright report)
+
+When running the full E2E suite from `test-app` **with** `USE_REAL_APIS=1`, the latest run reported **12 failed**, 211 passed, 25 skipped (7.8m). Failures span callback, context retention, issue-373 (long-running function call), openai-proxy-e2e (multi-turn, function-call reply, session/context on reconnect), and TTS diagnostic.
+
+### Summary of the 12 failures
+
+| # | Spec | Test | Assertion / error (from Playwright report) |
+|---|------|------|--------------------------------------------|
+| 1 | callback-test.spec.js | should test onPlaybackStateChange callback with agent response | Expects `audio-playing-status` to go true then false after agent response; likely timeout on `waitForAudioPlaybackStart` (35s) or `finalAudioStatus` not `'false'`. |
+| 2 | context-retention-agent-usage.spec.js | should retain context when disconnecting and reconnecting – agent uses context | Context retention / agent uses context after reconnect. |
+| 3 | context-retention-agent-usage.spec.js | Issue #490: when app provides restoredAgentContext, Settings on reconnect include it | Settings on reconnect must include restored context. |
+| 4 | context-retention-with-function-calling.spec.js | should retain context when disconnecting and reconnecting with function calling enabled | Context retention with function calling. |
+| 5 | issue-373-idle-timeout-during-function-calls.spec.js | should NOT timeout during long-running function call execution | Connection must stay open during 12s function call; may be failing on connection close or assertion. |
+| 6 | openai-proxy-e2e.spec.js | **3. Multi-turn** – sequential messages, second agent response appears | Second agent response (2 user + 3 assistant) does not appear as expected. |
+| 7 | openai-proxy-e2e.spec.js | **3b. Multi-turn after disconnect** – session history preserved | Conversation history after disconnect+reconnect: expected 2 user + 3 assistant; count or content differs. |
+| 8 | openai-proxy-e2e.spec.js | **6. Simple function calling** – assert response in `[data-testid="agent-response"]` | Expected pattern `/\d{1,2}:\d{2}|UTC/`. **Received:** `"Hello! How can I assist you today?"` (greeting). `toHaveText` timeout 45s; test timeout 60s. Locator resolved ~18× to greeting. Error context: `test-results/openai-proxy-e2e-OpenAI-Pr-acd4e-data-testid-agent-response--chromium/error-context.md`. |
+| 9 | openai-proxy-e2e.spec.js | **6b. Issue #462 / #470** – function-call flow (partner scenario) | Same as test 6: expected time/UTC. **Received:** greeting. Error context: `test-results/openai-proxy-e2e-OpenAI-Pr-dd25c--response-partner-scenario--chromium/error-context.md`. |
+| 10 | openai-proxy-e2e.spec.js | **9a. Isolation** – Settings on reconnect include context | Settings on reconnect must include `agent.context`. **Diagnostic:** `getConversationHistory()` length before/after disconnect = 3; `__lastGetAgentOptionsDebug` = `{"fromComponent":0,"fromRef":0,"fromStorage":0,"conversationForDisplay":0,"contextMsgCount":0,"source":"none"}`; WebSocket sent types: `Settings`, `Settings`, `InjectUserMessage`×4, `ping`×2 — **last Settings has context: false**. Error context: `test-results/openai-proxy-e2e-OpenAI-Pr-50f9d-site-for-session-retention--chromium/error-context.md`. |
+| 11 | openai-proxy-e2e.spec.js | **9. Repro** – after disconnect and reconnect, session retained; response must not be stale or greeting | Session not retained: Settings on reconnect did not include context. Agent response to "What famous people lived there?" remained `"Hello! How can I assist you today?"`. Error context: `test-results/openai-proxy-e2e-OpenAI-Pr-ecf79-st-not-be-stale-or-greeting--chromium/error-context.md`. |
+| 12 | openai-proxy-tts-diagnostic.spec.js | diagnose TTS path: binary received and playback status after agent response | Asserts: binary count ≥ 1, no JSON as binary, handleAgentAudio called, playback started if binary received, AudioContext runnable, PCM speech-like. One of these fails (env/timing or proxy/component). |
+
+### Breakdown by category
+
+**Playback / TTS (2)**  
+Tests 1 (callback onPlaybackStateChange) and 12 (TTS diagnostic): depend on audio playback starting and stopping, binary TTS delivery, and component playback path. Failures can be timing (playback not started within wait), proxy not sending PCM, or component not updating playback state.
+
+**Context / session retention (3)**  
+Tests 2, 3, 4: after disconnect and reconnect, context must be sent in Settings or agent must use context in reply. App/component must pass context (e.g. `restoredAgentContext` or conversation history) on reconnect.
+
+**Issue-373 – long-running function call (1)**  
+Test 5: connection must not close during a 12s in-browser function call. May fail if idle timeout or upstream closes the connection before the function completes.
+
+**OpenAI proxy – multi-turn and history (2)**  
+Tests 6, 7: multi-turn (3) expects second agent response; 3b expects exactly 2 user + 3 assistant after disconnect. Real API or proxy may return different history counts.
+
+**OpenAI proxy – function-call reply (2)**  
+Tests 8, 9: agent-response must show time/UTC after "What time is it?" and function call. With real API, UI often stays on greeting; no second assistant message with time.
+
+**OpenAI proxy – context on reconnect (2)**  
+Tests 10, 11: Settings on reconnect must include `agent.context` (9a); after reconnect, response must not be greeting (9). getAgentOptions/source "none" and missing context indicate app or component not supplying context on reconnect.
+
+### How to reproduce
+
+From `test-app`:
+
+```bash
+USE_REAL_APIS=1 npm run test:e2e
+```
+
+Add `E2E_USE_EXISTING_SERVER=1` if dev server and backend are already running. **Open last report:** `npx playwright show-report` (serves at http://localhost:9323). If the browser upgrades localhost to HTTPS or port 9323 is in use, open the report as a file: from `test-app` run `open playwright-report/index.html`, or in the browser open `file:///…/test-app/playwright-report/index.html`. Per-test artifacts (screenshots, traces, `error-context.md`) are under `test-app/test-results/`; paths appear in the failure output.
 
 ---
 
@@ -101,7 +155,7 @@ So at the **wire level**, with real APIs, the client **does** get “done” fro
 
 ## Current E2E failures (real API run)
 
-When running from test-app with real APIs (`USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js issue-373-idle-timeout-during-function-calls.spec.js`), **3 tests** fail (test 10 is skipped; see §5). Issue-373 “re-enable idle timeout” is resolved. For each we give root cause and how similar passing tests differ.
+When running from test-app with real APIs (`USE_REAL_APIS=1 npm run test:e2e`), **12 tests** fail (test 10 is skipped; see §5). Issue-373 "re-enable idle timeout" is resolved. Full list and breakdown in "E2E run WITH real APIs" above; resolution plan: [TDD-PLAN-REAL-API-E2E-FAILURES.md](./TDD-PLAN-REAL-API-E2E-FAILURES.md). Below: detailed root cause for openai-proxy and issue-373 items.
 
 ### 1. Issue-373: should re-enable idle timeout after function calls complete
 
@@ -426,7 +480,8 @@ After a run from `test-app/`:
 
 - **Open last HTML report:**  
   `cd test-app && npx playwright show-report`  
-  (or `npm run test:e2e:report`). This serves the last generated report (e.g. from `test-app/playwright-report/` or `test-app/test-results/`) and opens it in the browser.
+  (or `npm run test:e2e:report`). This serves the last generated report at **http://localhost:9323**.  
+  **If the browser upgrades localhost to HTTPS** (Safari/Chrome) or port 9323 is in use, open the report as a file instead: from `test-app` run `open playwright-report/index.html` (macOS), or open `file:///…/test-app/playwright-report/index.html` in the browser (e.g. `file:///Users/…/dg_react_agent/test-app/playwright-report/index.html`).
 
 - **Error context for a failing test:**  
   Playwright may write an `error-context.md` (and related artifacts) under `test-app/test-results/` for the failing run (e.g. `test-results/.../error-context.md`). Paths are shown in the failure output (e.g. `Error Context: test-results/openai-proxy-e2e-...-chromium/error-context.md`). Inspect that path after a run for screenshots, traces, and assertion details.
