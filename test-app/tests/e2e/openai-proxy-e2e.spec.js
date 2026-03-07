@@ -504,24 +504,26 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
         window.dispatchEvent(new Event('e2e-restored-context-set'));
       }, historyForRestore);
       await page.waitForTimeout(400);
-      const textInput = page.locator('[data-testid="text-input"]');
-      await textInput.focus();
-      await page.waitForTimeout(300);
       const storageCheck = await getConversationStorageCheck(page);
       expect(storageCheck.ok, `9a: localStorage should have conversation before reconnect (${JSON.stringify(storageCheck)})`).toBe(true);
     }
 
-    // Diagnostic (9a): confirm __e2eRestoredAgentContext is set and still present before we send (reconnect)
+    // Diagnostic (9a): confirm __e2eRestoredAgentContext is set before we trigger reconnect
     if (historyForRestore && historyForRestore.length > 0) {
       const e2eRestoredCheck = await page.evaluate(() => ({
         has: !!window.__e2eRestoredAgentContext,
         messageCount: window.__e2eRestoredAgentContext?.messages?.length ?? 0,
       }));
-      console.log('[9a] Before sendMessageAndWaitForResponse: __e2eRestoredAgentContext', e2eRestoredCheck);
+      console.log('[9a] Before focus (reconnect): __e2eRestoredAgentContext', e2eRestoredCheck);
+      // Issue #489: Reset BEFORE focus so the getAgentOptions call that builds the second Settings is the one we count.
       await page.evaluate(() => { window.__getAgentOptionsCallCount = 0; });
     }
 
-    // Send message to trigger reconnect; this sends Settings. We only assert Settings had context.
+    // Trigger reconnect (focus); then send message. Second Settings is sent on reconnect (focus).
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.focus();
+    await page.waitForTimeout(300);
+
     await sendMessageAndWaitForResponse(page, 'What famous people lived there?', AGENT_RESPONSE_TIMEOUT);
 
     const wsData = await getCapturedWebSocketData(page);
@@ -617,12 +619,15 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
         window.dispatchEvent(new Event('e2e-restored-context-set'));
       }, historyForRestore);
       await page.waitForTimeout(400);
-      const textInput = page.locator('[data-testid="text-input"]');
-      await textInput.focus();
-      await page.waitForTimeout(300);
     }
 
+    // Issue #489: Reset BEFORE the action that triggers reconnect (focus). Reconnect happens on focus;
+    // if we reset after focus we zero out the getAgentOptions call we want to count.
     await page.evaluate(() => { window.__getAgentOptionsCallCount = 0; });
+
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.focus();
+    await page.waitForTimeout(300);
 
     await sendMessageAndWaitForResponse(page, 'What famous people lived there?', AGENT_RESPONSE_TIMEOUT);
 

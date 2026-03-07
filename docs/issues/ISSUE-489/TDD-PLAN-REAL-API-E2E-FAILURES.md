@@ -12,6 +12,57 @@
 
 ---
 
+## Latest real-API run (2026-03-07)
+
+**Command:** From test-app: `USE_REAL_APIS=1 npm run test:e2e`
+
+**Result:** **212 passed**, **12 failed**, 25 skipped (8.2m)
+
+**Failed tests (exact list from Playwright):**
+
+| # | Spec | Test |
+|---|------|------|
+| 1 | context-retention-agent-usage.spec.js | should retain context when disconnecting and reconnecting – agent uses context |
+| 2 | context-retention-agent-usage.spec.js | Issue #490: when app provides restoredAgentContext, Settings on reconnect include it |
+| 3 | context-retention-with-function-calling.spec.js | should retain context when disconnecting and reconnecting with function calling enabled |
+| 4 | deepgram-ux-protocol.spec.js | should handle microphone protocol states |
+| 5 | openai-proxy-e2e.spec.js | 3. Multi-turn – sequential messages, second agent response appears |
+| 6 | openai-proxy-e2e.spec.js | 3b. Multi-turn after disconnect – session history preserved (disconnect WS between 3 & 4) |
+| 7 | openai-proxy-e2e.spec.js | 6. Simple function calling – assert response in `[data-testid="agent-response"]` |
+| 8 | openai-proxy-e2e.spec.js | 6b. Issue #462 / #470 – function-call flow (partner scenario) |
+| 9 | openai-proxy-e2e.spec.js | 9a. Isolation – Settings on reconnect include context (prerequisite for session retention) |
+| 10 | openai-proxy-e2e.spec.js | 9b. getAgentOptions must be called when building Settings on reconnect (Issue #489 root cause) |
+| 11 | openai-proxy-e2e.spec.js | 9. Repro – after disconnect and reconnect (same page), session retained; response must not be stale or greeting |
+| 12 | openai-proxy-tts-diagnostic.spec.js | diagnose TTS path: binary received and playback status after agent response |
+
+**Note:** This run did **not** include callback-test (onPlaybackStateChange) or issue-373 long-running in the failure set (those passed). Deepgram UX protocol (microphone states) is an additional failure in this run.
+
+### Playwright report details (error-context snapshots)
+
+**9a (Settings on reconnect):** Page at failure: agentState=thinking, Agent Response still "Hello! How can I assist you today?", Conversation History has 4 items (assistant, user×3: France, Sorry, What famous people…). Diagnostic: getAgentOptions shows fromComponent/fromRef/fromLastKnown/fromWindowApp=3, contextMsgCount=3, source=component; but **last Settings has context: false** (Settings count=2). So component has context; the second Settings message sent on reconnect does not include it in the captured WebSocket payload.
+
+**9b (getAgentOptions on reconnect):** getAgentOptions **callCount after reconnect=0** (expected ≥1). So the code path that sends the second Settings on reconnect does not invoke the app’s getAgentOptions callback.
+
+**9 (Repro – session retained):** Context was sent (3 items) but upstream returned greeting. Agent response to "What famous people lived there?" is "Hello! How can I assist you today?" — possible upstream/session bug or proxy not forwarding context correctly.
+
+**6 & 6b (function-call time):** agent-response remains "Hello! How can I assist you today?" after "What time is it?"; Conversation History shows only greeting + user "What time is it?". No time/UTC reply from API/proxy.
+
+**3 (Multi-turn):** Only one assistant message in Conversation History (greeting); second user message "What is the capital of France?" present; no second agent reply.
+
+**3b (Multi-turn after disconnect):** Same pattern: Conversation History has greeting + "What is the capital of France?"; only one assistant bubble; expected 2 user + 3 assistant.
+
+**Context retention (agent uses context):** After reconnect, Agent Response shows "Hello! How can I assist you today?" and Conversation History has only greeting + "Hello again" (or similar). Agent did not use restored context.
+
+**Context retention (#490 restoredAgentContext):** Page shows "E2E restored assistant reply." in Agent Response and Conversation History; test likely failed on a different assertion (e.g. Settings payload or timing).
+
+**Context retention with function calling:** Conversation History shows greeting + "What is the time?" + greeting again (duplicate assistant); after reconnect, agent response still greeting.
+
+**TTS diagnostic:** Session closed; Agent Response greeting; Conversation History single user "What is 2 plus 2?". No binary/playback path exercised in captured state.
+
+**Error-context paths:** `test-app/test-results/<folder>/error-context.md` — e.g. `openai-proxy-e2e-OpenAI-Pr-50f9d-site-for-session-retention--chromium`, `openai-proxy-e2e-OpenAI-Pr-193ef-nnect-Issue-489-root-cause--chromium`, etc.
+
+---
+
 ## Status at a glance
 
 **Overall**
