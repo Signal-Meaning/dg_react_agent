@@ -66,9 +66,11 @@ declare global {
     /** Idle timeout (ms) used by the component; exposed for E2E (e.g. deepgram-greeting-idle-timeout.spec.js). */
     __idleTimeoutMs?: number;
     /** Issue #489: Last getAgentOptions call debug (E2E test 9a). */
-    __lastGetAgentOptionsDebug?: { fromComponent: number; fromRef: number; fromStorage: number; conversationForDisplay: number; contextMsgCount: number; source: string };
+    __lastGetAgentOptionsDebug?: { fromComponent: number; fromRef: number; fromLastKnown: number; fromWindowApp: number; fromStorage: number; conversationForDisplay: number; contextMsgCount: number; source: string };
     /** Issue #490: E2E-only. When set, app passes this as restoredAgentContext to the component. */
     __e2eRestoredAgentContext?: AgentOptions['context'];
+    /** Issue #489/9a: App-persisted last known conversation (survives remount so reconnect Settings get context). */
+    __appLastKnownConversation?: Array<{ role: string; content: string; timestamp?: number }>;
   }
 }
 
@@ -110,6 +112,8 @@ function App() {
      !projectId || projectId === 'your-real-project-id');
 
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
+  /** Issue #489/9a: Last non-empty conversation seen (from callbacks/ref). Used when component ref/state are empty on reconnect (e.g. OpenAI path). */
+  const lastKnownConversationRef = useRef<Array<{ role: ConversationRole; content: string; timestamp?: number }>>([]);
   
   // State for UI
   const [isReady, setIsReady] = useState(false);
@@ -159,8 +163,11 @@ function App() {
   useEffect(() => {
     if (connectionStates.agent !== 'connected') return;
     const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
-    if (fromRef.length === 0) return;
-    setConversationForDisplay((prev) => (prev.length >= fromRef.length ? prev : fromRef));
+    if (fromRef.length > 0) {
+      lastKnownConversationRef.current = fromRef;
+      if (typeof window !== 'undefined') (window as TestWindow).__appLastKnownConversation = fromRef;
+      setConversationForDisplay((prev) => (prev.length >= fromRef.length ? prev : fromRef));
+    }
   }, [connectionStates.agent]);
 
   // Expose conversation history to window for E2E testing (Issue #362)
@@ -512,6 +519,9 @@ function App() {
   ) => {
     const fromComponent = getConversationHistory?.() ?? [];
     const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
+    const fromLastKnown = lastKnownConversationRef.current ?? [];
+    const fromWindowApp: Array<{ role: string; content: string }> =
+      (typeof window !== 'undefined' ? (window as TestWindow).__appLastKnownConversation : undefined) ?? [];
     let fromStorage: Array<{ role: string; content: string }> = [];
     if (fromComponent.length === 0 && fromRef.length === 0 && typeof localStorage !== 'undefined') {
       try {
@@ -529,9 +539,16 @@ function App() {
         /* ignore */
       }
     }
+    // Issue #489/9a: When component ref/state are empty on reconnect (e.g. OpenAI path), use last known conversation (ref or window so it survives remount).
+    const historyForContext =
+      fromComponent.length > 0 ? fromComponent
+      : fromRef.length > 0 ? fromRef
+      : fromLastKnown.length > 0 ? fromLastKnown
+      : fromWindowApp.length > 0 ? fromWindowApp
+      : fromStorage;
     let context = getContextForSettings(
       conversationForDisplay,
-      () => (fromComponent.length > 0 ? fromComponent : fromRef.length > 0 ? fromRef : fromStorage)
+      () => historyForContext
     ) as AgentOptions['context'];
     // Issue #489/9a: E2E fallback – when ref/component/storage are empty on reconnect, use
     // window.__e2eRestoredAgentContext so Settings on reconnect include context (test sets this before reconnect).
@@ -542,11 +559,13 @@ function App() {
     }
     const contextMsgCount = context?.messages?.length ?? 0;
     const source = contextMsgCount > 0
-      ? (context === e2eRestored ? 'e2eRestored' : conversationForDisplay.length > 0 ? 'display' : fromComponent.length > 0 ? 'component' : fromRef.length > 0 ? 'ref' : fromStorage.length > 0 ? 'storage' : 'display')
+      ? (context === e2eRestored ? 'e2eRestored' : conversationForDisplay.length > 0 ? 'display' : fromComponent.length > 0 ? 'component' : fromRef.length > 0 ? 'ref' : fromLastKnown.length > 0 ? 'lastKnown' : fromWindowApp.length > 0 ? 'windowApp' : fromStorage.length > 0 ? 'storage' : 'display')
       : 'none';
     const debug = {
       fromComponent: fromComponent.length,
       fromRef: fromRef.length,
+      fromLastKnown: fromLastKnown.length,
+      fromWindowApp: fromWindowApp.length,
       fromStorage: fromStorage.length,
       conversationForDisplay: conversationForDisplay.length,
       contextMsgCount,
@@ -657,6 +676,10 @@ function App() {
 
   const handleAgentUtterance = useCallback((utterance: LLMResponse, conversationHistory?: Array<{ role: ConversationRole; content: string; timestamp?: number }>) => {
     const history = conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? [];
+    if (history.length > 0) {
+      lastKnownConversationRef.current = history;
+      if (typeof window !== 'undefined') (window as TestWindow).__appLastKnownConversation = history;
+    }
     const greeting = import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?';
     const isGreeting = utterance.text.trim() === greeting.trim();
     const prevEntry = history.length >= 2 ? history[history.length - 2] : undefined;
@@ -670,8 +693,13 @@ function App() {
   }, []);
 
   const handleUserMessage = useCallback((message: UserMessageResponse, conversationHistory?: Array<{ role: ConversationRole; content: string; timestamp?: number }>) => {
+    const history = conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? [];
+    if (history.length > 0) {
+      lastKnownConversationRef.current = history;
+      if (typeof window !== 'undefined') (window as TestWindow).__appLastKnownConversation = history;
+    }
     setUserMessage(message.text);
-    setConversationForDisplay(conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? []);
+    setConversationForDisplay(history);
     // Component logs user message echo; no redundant addLog here
   }, []);
   

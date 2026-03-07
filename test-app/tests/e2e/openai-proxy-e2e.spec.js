@@ -28,9 +28,9 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  skipIfNoOpenAIProxy,
+  skipIfNoProxyForBackend,
   skipUnlessRealAPIs,
-  setupTestPageWithOpenAIProxy,
+  setupTestPageForBackend,
   waitForSettingsApplied,
   establishConnectionViaText,
   sendMessageAndWaitForResponse,
@@ -62,11 +62,11 @@ const FUNCTION_CALL_TIME_RESPONSE_PATTERN = /\d{1,2}:\d{2}|UTC/;
 
 test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   test.beforeEach(() => {
-    skipIfNoOpenAIProxy('Requires VITE_OPENAI_PROXY_ENDPOINT for OpenAI proxy E2E');
+    skipIfNoProxyForBackend('Requires proxy for E2E_BACKEND and API key when USE_REAL_APIS=1');
   });
 
   test('1. Connection – connect through OpenAI proxy and receive settings', async ({ page }) => {
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     const state = await getAgentState(page);
     expect(state).toBeDefined();
@@ -77,7 +77,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   test('1b. Greeting – proxy injects greeting; component shows greeting-sent (Issue #381)', async ({ page }) => {
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     await expect(page.locator('[data-testid="has-sent-settings"]')).toHaveText('true');
@@ -86,7 +86,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   test('2. Single message – inject user message, receive agent response in Message Bubble', async ({ page }) => {
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, 'What is 2 plus 2?');
@@ -98,7 +98,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   test('2b. Protocol: user message appears in conversation history (proxy sends user echo)', async ({ page }) => {
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     const userContent = 'What is the capital of France?';
@@ -113,7 +113,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
 
   test('3. Multi-turn – sequential messages, second agent response appears', async ({ page }) => {
     skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     const r1 = await sendMessageAndWaitForResponse(page, "What is the capital of France?", AGENT_RESPONSE_TIMEOUT);
@@ -148,7 +148,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
 
   test('3b. Multi-turn after disconnect – session history preserved (disconnect WS between 3 & 4)', async ({ page }) => {
     skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     const r1 = await sendMessageAndWaitForResponse(page, "What is the capital of France?", AGENT_RESPONSE_TIMEOUT);
@@ -183,7 +183,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   test('4. Reconnection – disconnect then send, app reconnects and user receives response', async ({ page }) => {
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     await sendMessageAndWaitForResponse(page, "First message.", AGENT_RESPONSE_TIMEOUT);
@@ -198,7 +198,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     // Proxy translates client binary audio to OpenAI input_audio_buffer.append + commit + response.create.
     // In the test-app the agent response is rendered in the element with data-testid="agent-response".
     await context.grantPermissions(['microphone']);
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, 'What is 2 plus 2?');
@@ -235,7 +235,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
    */
   test('5b. VAD (Issue #414) – send audio via OpenAI proxy; no error (VAD events optional when Server VAD disabled)', async ({ page, context }) => {
     await context.grantPermissions(['microphone']);
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     const hasSample = await page.evaluate(async () => {
@@ -320,7 +320,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
 
   test('7. Reconnection with context – disconnect, reconnect; proxy sends context via conversation.item.create', async ({ page }) => {
     test.setTimeout(60000); // First message + disconnect + second message can exceed 30s
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     const firstResponse = await sendMessageAndWaitForResponse(page, "My favorite color is blue.", AGENT_RESPONSE_TIMEOUT);
@@ -364,7 +364,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
    */
   test('8b. Lengthy response – after IDLE_TIMEOUT+15s agent still connected, content in DOM', async ({ page }) => {
     test.setTimeout(90000);
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
 
@@ -410,7 +410,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     test.setTimeout(90000);
     await installWebSocketCapture(page);
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
 
@@ -436,19 +436,8 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     });
     console.log('[9a] Component getConversationHistory() length before disconnect:', historyBeforeDisconnect);
 
-    await disconnectComponent(page);
-    await page.waitForTimeout(1000);
-
-    // Diagnostic: component history length after disconnect, before reconnect
-    const historyAfterDisconnect = await page.evaluate(() => {
-      const h = window.deepgramRef?.current?.getConversationHistory?.() ?? [];
-      return Array.isArray(h) ? h.length : 0;
-    });
-    console.log('[9a] Component getConversationHistory() length after disconnect (before reconnect):', historyAfterDisconnect);
-
-    // Issue #489/9a: When in-memory refs are empty on reconnect (timing/remount), component uses
-    // restoredAgentContext. Set it from ref, or fallback to localStorage (dg_voice_conversation)
-    // so reconnect Settings include context.
+    // Issue #489/9a: Capture history and set window context BEFORE disconnect so when the component
+    // reconnects (e.g. during wait or on next send), getAgentOptions/getContextForSend see it.
     let historyForRestore = await page.evaluate(() => {
       const h = window.deepgramRef?.current?.getConversationHistory?.() ?? [];
       if (!Array.isArray(h) || h.length === 0) return null;
@@ -472,12 +461,39 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     }
     if (historyForRestore && historyForRestore.length > 0) {
       await page.evaluate((hist) => {
-        window.__e2eRestoredAgentContext = {
-          messages: hist.map((m) => ({ type: 'History', role: m.role, content: m.content })),
-        };
+        const e2eContext = { messages: hist.map((m) => ({ type: 'History', role: m.role, content: m.content })) };
+        const appConversation = hist.map((m) => ({ role: m.role, content: m.content }));
+        for (const w of [window, window.top]) {
+          if (w && !w.document) continue;
+          w.__e2eRestoredAgentContext = e2eContext;
+          w.__appLastKnownConversation = appConversation;
+        }
       }, historyForRestore);
-      // Trigger app re-render so component gets restoredAgentContext prop and ref updates before reconnect
+    }
+
+    await disconnectComponent(page);
+    await page.waitForTimeout(1000);
+
+    // Diagnostic: component history length after disconnect, before reconnect
+    const historyAfterDisconnect = await page.evaluate(() => {
+      const h = window.deepgramRef?.current?.getConversationHistory?.() ?? [];
+      return Array.isArray(h) ? h.length : 0;
+    });
+    console.log('[9a] Component getConversationHistory() length after disconnect (before reconnect):', historyAfterDisconnect);
+
+    if (historyForRestore && historyForRestore.length > 0) {
+      // Ensure window context still set after disconnect (no-op if already set)
+      await page.evaluate((hist) => {
+        const e2eContext = { messages: hist.map((m) => ({ type: 'History', role: m.role, content: m.content })) };
+        const appConversation = hist.map((m) => ({ role: m.role, content: m.content }));
+        for (const w of [window, window.top]) {
+          if (w && !w.document) continue;
+          w.__e2eRestoredAgentContext = e2eContext;
+          w.__appLastKnownConversation = appConversation;
+        }
+      }, historyForRestore);
       await page.evaluate(() => window.dispatchEvent(new Event('e2e-restored-context-set')));
+      await page.waitForTimeout(100);
       const textInput = page.locator('[data-testid="text-input"]');
       await textInput.focus();
       await page.waitForTimeout(200);
@@ -531,7 +547,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     test.setTimeout(90000);
     await installWebSocketCapture(page);
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
 
@@ -601,7 +617,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
    */
   test.skip('10. Repro – after reload (session change), response must not be stale or greeting', async ({ page }) => {
     test.setTimeout(90000);
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
 

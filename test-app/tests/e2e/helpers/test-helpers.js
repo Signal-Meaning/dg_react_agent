@@ -138,6 +138,37 @@ export function skipIfOpenAIProxy(reason = 'Deepgram-only test; skip when using 
 }
 
 /**
+ * Skip when the backend selected by E2E_BACKEND has no proxy configured or (when USE_REAL_APIS)
+ * no API key. Use with setupTestPageForBackend() so the same test runs against either proxy.
+ * E2E_BACKEND=deepgram → Deepgram proxy; unset or openai → OpenAI proxy.
+ * @param {string} reason - Optional reason for skipping
+ */
+export function skipIfNoProxyForBackend(reason = 'Requires proxy for selected E2E_BACKEND and, when USE_REAL_APIS=1, the corresponding API key') {
+  const backend = process.env.E2E_BACKEND === 'deepgram' ? 'deepgram' : 'openai';
+  if (backend === 'openai') {
+    if (!hasOpenAIProxyEndpoint()) {
+      test.skip(true, reason || 'OpenAI proxy not configured (set USE_PROXY_MODE=true or VITE_OPENAI_PROXY_ENDPOINT)');
+      return;
+    }
+    if (process.env.USE_REAL_APIS === 'true' || process.env.USE_REAL_APIS === '1') {
+      if (!hasOpenAIKey()) {
+        test.skip(true, 'USE_REAL_APIS=1 requires OPENAI_API_KEY or VITE_OPENAI_API_KEY for OpenAI proxy');
+      }
+    }
+    return;
+  }
+  if (!hasDeepgramProxyEndpoint()) {
+    test.skip(true, reason || 'Deepgram proxy not configured (set E2E_BACKEND=deepgram and USE_PROXY_MODE=true or VITE_DEEPGRAM_PROXY_ENDPOINT)');
+    return;
+  }
+  if (process.env.USE_REAL_APIS === 'true' || process.env.USE_REAL_APIS === '1') {
+    if (!hasRealAPIKey()) {
+      test.skip(true, 'USE_REAL_APIS=1 requires VITE_DEEPGRAM_API_KEY for Deepgram proxy');
+    }
+  }
+}
+
+/**
  * Skip test when not running with real APIs (USE_REAL_APIS not set).
  * Use for E2E tests that require real upstream (e.g. OpenAI) and fail with mocks/default backend.
  * @param {string} reason - Optional reason for skipping
@@ -1888,12 +1919,12 @@ async function writeTranscriptToFile(transcript, options = {}) {
 }
 
 export {
-  // hasRealAPIKey, hasOpenAIKey, hasRealBackend, skipIfNoRealBackend, skipIfNoRealAPI, hasOpenAIProxyEndpoint, hasDeepgramProxyEndpoint, skipIfNoOpenAIProxy, skipIfOpenAIProxy, isRealBackendReachable, skipIfNoRealBackendAsync are already exported inline above
+  // hasRealAPIKey, hasOpenAIKey, hasRealBackend, skipIfNoRealBackend, skipIfNoRealAPI, hasOpenAIProxyEndpoint, hasDeepgramProxyEndpoint, skipIfNoOpenAIProxy, skipIfOpenAIProxy, skipIfNoProxyForBackend, isRealBackendReachable, skipIfNoRealBackendAsync are already exported inline above
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   setupTestPageWithDeepgramProxy, // Navigate to test app with Deepgram proxy (VITE_DEEPGRAM_PROXY_ENDPOINT)
   setupTestPageWithOpenAIProxy, // Navigate to test app with OpenAI proxy (VITE_OPENAI_PROXY_ENDPOINT) – Issue #381
-  setupTestPageForBackend, // Navigate to test app with E2E_BACKEND proxy (openai or deepgram) – Issue #406
+  setupTestPageForBackend, // Navigate to test app with E2E_BACKEND proxy (openai or deepgram) – use for backend-agnostic E2E
   waitForConnection, // Wait for connection to be established
   waitForSettingsApplied, // Wait for agent settings to be applied (SettingsApplied received from server)
   setupConnectionStateTracking, // Setup connection state tracking via DOM elements (data-testid attributes)

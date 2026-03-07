@@ -33,23 +33,10 @@ const artifactsOnFailure = process.env.PW_ARTIFACTS_ON_FAILURE === '1' || proces
 
 /**
  * @see https://playwright.dev/docs/test-configuration
+ * All E2E specs run against either proxy; backend is selected via E2E_BACKEND (openai | deepgram).
  */
-const E2E_BACKEND = process.env.E2E_BACKEND || '';
-const isDeepgramOnly = E2E_BACKEND === 'deepgram';
-
 export default defineConfig({
   testDir: './e2e',
-  /* When E2E_BACKEND=deepgram, run only Deepgram-backed specs (exclude OpenAI proxy-only specs) */
-  ...(isDeepgramOnly
-    ? {
-        testIgnore: [
-          '**/openai-proxy-e2e.spec.js',
-          '**/openai-proxy-tts-diagnostic.spec.js',
-          '**/greeting-playback-validation.spec.js',
-          '**/openai-inject-connection-stability.spec.js',
-        ],
-      }
-    : {}),
   /* Run tests in files in parallel */
   fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */

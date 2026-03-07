@@ -28,12 +28,11 @@ import {
   installWebSocketCapture,
   getCapturedWebSocketData,
   skipIfNoRealAPI,
+  skipIfNoProxyForBackend,
   skipUnlessRealAPIs,
   waitForConnection,
-  hasOpenAIProxyEndpoint,
-  setupTestPageWithOpenAIProxy
+  setupTestPageForBackend
 } from './helpers/test-helpers.js';
-import { setupTestPage } from './helpers/test-helpers.mjs';
 
 test.describe('Context Retention - Agent Usage (Issue #362)', () => {
   
@@ -46,13 +45,9 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     // Install WebSocket capture to verify context is sent
     await installWebSocketCapture(page);
     
-    // Step 1: Setup and establish connection
-    // When running against OpenAI proxy, use proxy URL so app connects to proxy and receives user echo (ConversationText) for conversationHistory
-    if (hasOpenAIProxyEndpoint()) {
-      await setupTestPageWithOpenAIProxy(page);
-    } else {
-      await setupTestPage(page);
-    }
+    // Step 1: Setup and establish connection (backend from E2E_BACKEND: openai or deepgram)
+    skipIfNoProxyForBackend();
+    await setupTestPageForBackend(page);
     
     // Wait for connection mode to be set (proxy mode)
     await page.waitForFunction(() => {
@@ -342,12 +337,9 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
     
     console.log('🧪 Testing context format in Settings message');
     
+    skipIfNoProxyForBackend();
     await installWebSocketCapture(page);
-    if (hasOpenAIProxyEndpoint()) {
-      await setupTestPageWithOpenAIProxy(page);
-    } else {
-      await setupTestPage(page);
-    }
+    await setupTestPageForBackend(page);
     
     // Send first message to establish conversation
     // Wait for text input and focus to trigger auto-connect
@@ -409,13 +401,10 @@ test.describe('Context Retention - Agent Usage (Issue #362)', () => {
    */
   test('Issue #490: when app provides restoredAgentContext, Settings on reconnect include it', async ({ page }) => {
     skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
-    skipIfNoRealAPI('Requires real Deepgram API key');
+    skipIfNoRealAPI('Requires real API key for selected backend');
+    skipIfNoProxyForBackend();
     await installWebSocketCapture(page);
-    if (hasOpenAIProxyEndpoint()) {
-      await setupTestPageWithOpenAIProxy(page);
-    } else {
-      await setupTestPage(page);
-    }
+    await setupTestPageForBackend(page);
 
     const restoredContext = {
       messages: [

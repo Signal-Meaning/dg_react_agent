@@ -15,11 +15,11 @@
 | Phase | Description | Red | Green | Refactor | Notes |
 |-------|-------------|-----|-------|----------|--------|
 | 1 | Playback / TTS (tests 1, 12) | [x] | [~] | [ ] | **Flaky.** Full run with real APIs: both failed. Isolated re-run: both passed. Often pass without real APIs (proxy/mock path). Treat as flaky; do not block on Phase 1. |
-| 2 | Context retention (tests 2, 3, 4) | [x] | [~] | [ ] | **Green in progress:** sync localStorage write on ConversationText; preload before sendAgentSettings on reconnection; **9a E2E fallback:** if ref empty after disconnect, set __e2eRestoredAgentContext from localStorage `dg_voice_conversation` so reconnect Settings get context. |
+| 2 | Context retention (tests 2, 3, 4) | [x] | [~] | [ ] | **Green (Jest):** Sync localStorage; preload on close + on connect; hadAgentConnectionClosedRef; always preload before sendAgentSettings; per-instance lastPersistedHistoryForReconnectRef. **9a E2E:** Still fails with OpenAI; see §12 Next steps. |
 | 3 | Issue-373 long-running (test 5) | [ ] | [ ] | [ ] | |
 | 4 | Multi-turn / history (tests 6, 7) | [ ] | [ ] | [ ] | |
 | 5 | Function-call reply (tests 8, 9) | [ ] | [ ] | [ ] | |
-| 6 | Context on reconnect (tests 10, 11) | [ ] | [ ] | [ ] | Same fix as Phase 2. |
+| 6 | Context on reconnect (tests 10, 11) | [ ] | [~] | [ ] | Same as Phase 2; 9a fails with OpenAI only. See §12 Next steps. |
 
 **Acceptance criteria**
 
@@ -43,7 +43,7 @@
 | 7 | openai-proxy-e2e.spec.js | 3b. Multi-turn after disconnect – session history preserved | 2 user + 3 assistant after disconnect; count/content differs. |
 | 8 | openai-proxy-e2e.spec.js | 6. Simple function calling – assert response in agent-response | Expected `/\d{1,2}:\d{2}|UTC/`. **Received:** `"Hello! How can I assist you today?"` (greeting). Spec line ~286; error-context: `test-results/openai-proxy-e2e-...-acd4e-.../error-context.md`. |
 | 9 | openai-proxy-e2e.spec.js | 6b. Issue #462 / #470 – function-call flow (partner scenario) | Same as 8; greeting received. Spec line ~316; error-context: `...-dd25c-.../error-context.md`. |
-| 10 | openai-proxy-e2e.spec.js | 9a. Isolation – Settings on reconnect include context | Settings must include agent.context. **Diagnostic:** `__lastGetAgentOptionsDebug` = `fromComponent:0, fromRef:0, fromStorage:0, conversationForDisplay:0, contextMsgCount:0, source:"none"`; WebSocket sent types: `Settings, Settings, InjectUserMessage×4, ping×2`; last Settings has context false. Spec line ~490; error-context: `...-50f9d-.../error-context.md`. |
+| 10 | openai-proxy-e2e.spec.js | 9a. Isolation – Settings on reconnect include context | Settings must include agent.context. **Isolated to OpenAI proxy:** 9a **passes** vs Deepgram (real APIs); **fails** vs OpenAI (real APIs). OpenAI path: `fromComponent:0, fromRef:0, source:"none"`; Deepgram path: `fromComponent:4, fromRef:4, source:"display"`. See “Defect isolation (9a)” in Phase 2. |
 | 11 | openai-proxy-e2e.spec.js | 9. Repro – session retained; response must not be stale or greeting | Context on reconnect; response not greeting. |
 | 12 | openai-proxy-tts-diagnostic.spec.js | diagnose TTS path: binary received and playback status | Binary ≥ 1, no JSON as binary, handleAgentAudio called, playback started, PCM speech-like. |
 
@@ -90,12 +90,32 @@ For each fix:
 
 **Red:** [x] 9a still fails: `__lastGetAgentOptionsDebug` source "none", fromComponent/fromRef/fromStorage 0 at last getAgentOptions call (app’s getAgentOptions; component’s getContextForSend still sees empty history).
 
-**Green (applied, 9a still failing):**
+**Green (applied):**
 - Sync `localStorage.setItem(CONVERSATION_STORAGE_KEY, …)` when appending ConversationText (so storage has history before any close).
 - On agent connection **closed**, preload `lastPersistedHistoryForReconnectRef` from localStorage (keys: lastUsed, dg_voice_conversation, dg_conversation).
 - On agent **connected** when **reconnection**, preload from localStorage into `lastPersistedHistoryForReconnectRef` **before** `sendAgentSettings()` (avoids race where new WS opens before old WS ‘closed’).
+- **Component (root-cause fixes):** (1) **Reconnection detection:** `hadAgentConnectionClosedRef` — set `true` on `'closed'`; on next `'connected'` use `isReconnection = event.isReconnection ?? hadAgentConnectionClosedRef.current` so a new WebSocketManager (which reports `isReconnection: false`) is still treated as reconnection. (2) **Always preload:** Before every `sendAgentSettings()` when WebSocket is OPEN, preload from localStorage into `lastPersistedHistoryForReconnectRef` (not only when `isReconnectionRef.current`). (3) **Per-instance ref:** `lastPersistedHistoryForReconnectRef` is now a component `useRef` (not module-level), so each instance and each test has correct isolation; remount gets a fresh ref that is then filled by the preload. (4) **App:** `getAgentOptions` type fix for `fromWindowApp` (ternary so type is array, not `false | array`).
+- **Jest:** All 12 tests in `useSettingsContext.test.tsx` and `reconnect-settings-context-isolation.test.tsx` **pass**. 9a E2E still fails with OpenAI (see below).
 
-**Next:** If 9a still fails, component may be remounting (module-level ref reset) or storage key mismatch; ensure test-app and component use same key (`dg_voice_conversation`) and consider passing `restoredAgentContext` from app from `getConversationHistory()` before reconnect send.
+**Defect isolation (9a):** The same 9a test was run against **Deepgram** and **OpenAI** with real APIs (E2E backend-agnostic; see test-app E2E-BACKEND-MATRIX.md).
+
+| Backend | Result | Diagnostic (getAgentOptions / Settings context) |
+|--------|--------|--------------------------------------------------|
+| **Deepgram** (`E2E_BACKEND=deepgram USE_PROXY_MODE=true USE_REAL_APIS=1`) | **Pass** | `fromComponent: 4`, `fromRef: 4`, `contextMsgCount: 4`, `source: "display"`; last Settings has context. |
+| **OpenAI** (`USE_PROXY_MODE=true USE_REAL_APIS=1`, default backend) | **Fail** | `fromComponent: 0`, `fromRef: 0`, `source: "none"`; last Settings has no context. |
+
+**Conclusion:** The defect is **isolated to the OpenAI proxy path**. With Deepgram, the component’s refs and the app’s conversation/context remain available on reconnect and Settings include context. With OpenAI, by the time `getContextForSend` / `getAgentOptions` run on reconnect, refs and app context are empty. Likely causes when using the OpenAI proxy: (1) **Component remount** or different lifecycle so the same instance’s refs are not used on reconnect. (2) **Connection/WebSocket handling** (e.g. OpenAI proxy or test-app) triggering a remount or a new component instance when the socket reconnects. (3) **Timing/ordering** specific to the OpenAI path (e.g. connection-open handler runs before refs or app state are restored). Fix should target the OpenAI proxy flow (test-app + component behavior when `proxyEndpoint` includes `/openai`), not the general context-retention logic (which works for Deepgram and in Jest).
+
+**Next:** See **§12 Next steps** — trace second Settings (diagnostic logging), confirm one vs two component instances on OpenAI path; if still blocked, proceed to Phases 3–5 and revisit 9a later.
+
+**Attempted fixes (Phase 2/6, 2025-03):** (1) **App:** `lastKnownConversationRef` plus `window.__appLastKnownConversation`; `getAgentOptions` uses `fromLastKnown` and `fromWindowApp`; type fix for `fromWindowApp`. (2) **Component hook:** `useSettingsContext` reads `window.__e2eRestoredAgentContext` and `window.__appLastKnownConversation` (and `window.top`). (3) **E2E test:** Set context on `window` and `window.top`, and **before** disconnect. (4) **Component:** `hadAgentConnectionClosedRef`, always preload from localStorage before sendAgentSettings, and per-instance `lastPersistedHistoryForReconnectRef`. Despite (1)–(4), 9a still fails with OpenAI: last `getAgentOptions` reports all zeros and last Settings has no context. **Open:** The code path that runs on reconnect (OpenAI) may execute in a different context (e.g. closure over a different instance), or the second Settings may be built/sent from a path that does not see the preloaded ref or window.
+
+**Tests that validate the integration path (Jest):** In `tests/reconnect-settings-context-isolation.test.tsx` we added integration tests that would expose defects in the component’s use of context:
+- *Settings with agent.context from localStorage when refs are empty on first connection* — ensures `getHistoryForSettings` → `getItem` is used and context is sent when refs are empty.
+- *Settings with agent.context from window fallback when getAgentOptions returns empty context* — ensures the component uses `effectiveContext` from `getContextForSend()` (including window fallback) rather than only `getAgentOptions().context`.
+- *Settings with agent.context from window.__e2eRestoredAgentContext when refs and storage are empty* — ensures the E2E fallback is used in the full component flow.
+
+These tests **pass** in Jest, so the defect is not reproduced in the unit/integration environment. The 9a E2E failure is **reproduced only with the OpenAI proxy**; with the Deepgram proxy the same test passes.
 
 **Investigation:**
 
@@ -174,11 +194,13 @@ For each fix:
 
 **Tests:** openai-proxy-e2e 9a (Isolation – Settings on reconnect include context), 9 (Repro – session retained; response not stale or greeting).
 
-**Red:** Run with real APIs; confirm getAgentOptions source `"none"`, last has context false (historyBeforeDisconnect=3, historyAfterDisconnect=3, Settings count=2), and response to "What famous people lived there?" is greeting.
+**Defect isolated to OpenAI proxy:** 9a **passes** when run with `E2E_BACKEND=deepgram` (Deepgram proxy + real APIs) and **fails** with the default OpenAI proxy. So the failure is specific to the OpenAI proxy path (remount, lifecycle, or ref/context loss when reconnecting through the OpenAI proxy). See “Defect isolation (9a)” in Phase 2.
+
+**Red:** Run with real APIs **and OpenAI backend** (default); confirm getAgentOptions source `"none"`, last Settings has no context (historyBeforeDisconnect=3, historyAfterDisconnect=3), and response to "What famous people lived there?" is greeting.
 
 **Investigation:**
 
-- Same root as Phase 2: app/component must send context in Settings on reconnect. 9a asserts Settings include agent.context; 9 asserts the agent reply is not the greeting. If context is missing, upstream treats it as new session and returns greeting.
+- Same root as Phase 2 for the **OpenAI path only**: app/component must send context in Settings on reconnect when using the OpenAI proxy. 9a asserts Settings include agent.context; 9 asserts the agent reply is not the greeting. With Deepgram, context is present and 9a passes; fix must address why refs/app context are lost on reconnect when backend is OpenAI.
 
 **Green (candidate fixes):**
 
@@ -218,3 +240,24 @@ Phases 2 and 6 can be done together (context on reconnect). Phases 4 and 5 are p
 - Resolution doc: [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md).
 - Idle timeout (resolved): [TDD-PLAN-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md](./TDD-PLAN-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md).
 - Proxy protocol: `scripts/openai-proxy/`, test-app backend; OPENAI-PROTOCOL-E2E.md, PROTOCOL-AND-MESSAGE-ORDERING.md.
+
+---
+
+## 12. Next steps (proposed)
+
+**Priority 1 – 9a (OpenAI) and Phases 2/6**
+
+1. **Trace the second Settings on reconnect (OpenAI):** Add short-lived diagnostic logging in the component: inside the connection-handler branch that calls `sendAgentSettings()`, log (a) `lastPersistedHistoryForReconnectRef.current.length` immediately after the preload, and (b) the result of `getContextForSend().effectiveContext?.messages?.length` before building the Settings payload. Run 9a with OpenAI once and inspect logs to confirm whether the instance that sends the second Settings has preloaded ref and non-empty effectiveContext. If both are non-zero but the captured WebSocket payload still has no context, the bug is in `buildSettingsMessage` or the send path; if they are zero, the handler is running in a different instance or the preload did not run.
+2. **Confirm one vs two component instances:** In the test-app, add a ref or module counter that increments on mount and log it from the connection handler when it runs. If the “second connection” handler logs a different instance id than the one that handled the first connection, the app is remounting the component when using the OpenAI path (e.g. due to a key or parent state); then fix the remount or ensure the new instance gets context from localStorage/window before its first sendAgentSettings.
+3. **If 9a remains blocked:** Proceed to Phase 3 (Issue-373), Phase 4 (multi-turn), and Phase 5 (function-call reply). Revisit 9a after proxy/API or test-app changes, or after adding the diagnostics above.
+
+**Priority 2 – Broader E2E and Phases 3–5**
+
+4. **Phase 3 (test 5):** Run issue-373 spec with real APIs; confirm failure mode; implement or verify IdleTimeoutService does not fire during long function call.
+5. **Phase 4 (tests 6, 7):** Run multi-turn specs with real APIs; confirm assistant message count/order; fix proxy mapping or component display if needed.
+6. **Phase 5 (tests 8, 9):** Run function-call specs with real APIs; ensure model reply (time) is delivered as ConversationText from the correct event; fix proxy or backend if needed.
+
+**Priority 3 – Documentation and closure**
+
+7. When any of the 12 failures is resolved, update [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md) (move to “Resolved”, update counts).
+8. After full run is green, run Refactor pass: tighten timeouts, remove temporary diagnostics, and document any env-specific or flaky behavior in the plan or resolution doc.

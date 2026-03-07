@@ -17,8 +17,8 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  skipIfNoOpenAIProxy,
-  setupTestPageWithOpenAIProxy,
+  skipIfNoProxyForBackend,
+  setupTestPageForBackend,
   establishConnectionViaText,
   waitForSettingsApplied,
   sendTextMessage,
@@ -35,7 +35,7 @@ const GREETING_AFTER_CONNECT_ONLY_MS = 20000;
 
 test.describe('Greeting playback validation (real APIs)', () => {
   test.beforeEach(() => {
-    skipIfNoOpenAIProxy('Requires VITE_OPENAI_PROXY_ENDPOINT for real API E2E');
+    skipIfNoProxyForBackend('Requires VITE_OPENAI_PROXY_ENDPOINT for real API E2E');
   });
 
   /**
@@ -48,7 +48,7 @@ test.describe('Greeting playback validation (real APIs)', () => {
     // 0. Capture WebSocket sends so we can assert no binary is sent (connect-only = no mic; binary would be wrong)
     await installWebSocketCapture(page);
     // Load app once, clear localStorage, reload so app runs with clean state (like manual "restart browser")
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await page.evaluate(() => localStorage.clear());
     await page.reload();
     await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
@@ -117,7 +117,7 @@ test.describe('Greeting playback validation (real APIs)', () => {
    */
   test('connect then send non-greeting message: agent response TTS played', async ({ page }) => {
     test.setTimeout(90000); // connect + send + wait for playback + finish
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
 

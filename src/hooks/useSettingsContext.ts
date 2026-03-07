@@ -120,17 +120,32 @@ export function useSettingsContext(params: UseSettingsContextParams): UseSetting
         : agentOptionsRef.current?.context?.messages?.length
           ? agentOptionsRef.current.context
           : undefined;
-    // Issue #489/9a: E2E test may set window.__e2eRestoredAgentContext before reconnect; use when ref is empty
-    const win = typeof window !== 'undefined' ? window as Window & { __e2eRestoredAgentContext?: AgentContext } : null;
-    const fromWindowE2E = win?.__e2eRestoredAgentContext?.messages?.length ? win.__e2eRestoredAgentContext : undefined;
+    // Issue #489/9a: E2E test may set window.__e2eRestoredAgentContext or __appLastKnownConversation before reconnect; use when ref is empty.
+    // Read from window and window.top so context is found when test sets on main frame but component runs in iframe.
+    type WinWithE2E = Window & { __e2eRestoredAgentContext?: AgentContext; __appLastKnownConversation?: Array<{ role: string; content: string }> };
+    const win: WinWithE2E | null = typeof window !== 'undefined' ? (window as WinWithE2E) : null;
+    const topWin = win?.top && win.top !== win ? (win.top as WinWithE2E) : win;
+    const fromWindowE2E = (win?.__e2eRestoredAgentContext ?? topWin?.__e2eRestoredAgentContext)?.messages?.length
+      ? (win?.__e2eRestoredAgentContext ?? topWin?.__e2eRestoredAgentContext)
+      : undefined;
+    const fromWindowAppRaw = win?.__appLastKnownConversation ?? topWin?.__appLastKnownConversation;
+    const fromWindowApp: AgentContext | undefined =
+      Array.isArray(fromWindowAppRaw) && fromWindowAppRaw.length > 0
+        ? { messages: fromWindowAppRaw.map((m) => ({ type: 'History' as const, role: m.role as 'user' | 'assistant', content: m.content })) }
+        : undefined;
     const fromRestored =
       restoredAgentContextRef.current?.messages?.length
         ? restoredAgentContextRef.current
-        : fromWindowE2E;
+        : fromWindowE2E ?? fromWindowApp;
 
-    if (fromWindowE2E && fromRestored === fromWindowE2E) {
+    if (fromRestored === fromWindowE2E && fromWindowE2E) {
       getLogger().debug('[9a getContextForSend] Using window.__e2eRestoredAgentContext fallback', {
         messageCount: fromWindowE2E.messages?.length,
+      });
+    }
+    if (fromRestored === fromWindowApp && fromWindowApp) {
+      getLogger().debug('[getContextForSend] Using window.__appLastKnownConversation fallback', {
+        messageCount: fromWindowApp.messages?.length,
       });
     }
 

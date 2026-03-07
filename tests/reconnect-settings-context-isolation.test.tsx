@@ -63,9 +63,22 @@ describe('Reconnect Settings context isolation (test 9)', () => {
   let mockWebSocketManager: ReturnType<typeof createMockWebSocketManager>;
   let mockAudioManager: ReturnType<typeof createMockAudioManager>;
 
+  const STORAGE_KEY = 'dg_voice_conversation';
+
+  /** Valid conversation for localStorage (component expects role + content). */
+  const storedConversation = [
+    { role: 'user' as const, content: 'Stored user message.' },
+    { role: 'assistant' as const, content: 'Stored assistant reply.' },
+  ];
+
   beforeEach(() => {
     jest.clearAllMocks();
     resetTestState();
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('dg_conversation');
+    }
+    (window as unknown as { __e2eRestoredAgentContext?: unknown }).__e2eRestoredAgentContext = undefined;
     mockWebSocketManager = createMockWebSocketManager();
     mockAudioManager = createMockAudioManager();
     WebSocketManager.mockImplementation(() => mockWebSocketManager);
@@ -123,5 +136,137 @@ describe('Reconnect Settings context isolation (test 9)', () => {
     const ctx = secondSettings.agent?.context as { messages?: unknown[] } | undefined;
     expect(ctx?.messages).toBeDefined();
     expect(Array.isArray(ctx?.messages) && ctx.messages.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Exposes defect: when refs are empty (e.g. first connection or after remount), the component
+   * must still send Settings with agent.context from localStorage so session can be retained.
+   * If getHistoryForSettings → getItem is not used or storageKeys are wrong, this fails.
+   */
+  it('sends Settings with agent.context from localStorage when refs are empty on first connection', async () => {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(storedConversation));
+
+    const settingsSent: Array<{ type: string; agent?: { context?: unknown } }> = [];
+    mockWebSocketManager.sendJSON.mockImplementation((msg: unknown) => {
+      const m = msg as { type: string; agent?: { context?: unknown } };
+      if (m?.type === 'Settings') {
+        settingsSent.push({ type: m.type, agent: m.agent ? { context: m.agent.context } : undefined });
+      }
+    });
+
+    const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+    render(
+      <DeepgramVoiceInteraction
+        ref={ref}
+        apiKey={MOCK_API_KEY}
+        agentOptions={optionsWithoutContext}
+      />
+    );
+    await waitFor(() => expect(ref.current).toBeTruthy());
+
+    const eventListener = await setupComponentAndConnect(ref, mockWebSocketManager);
+    expect(settingsSent.length).toBeGreaterThanOrEqual(1);
+    const firstSettings = settingsSent[0];
+    expect(firstSettings.agent?.context).toBeDefined();
+    const ctx = firstSettings.agent?.context as { messages?: Array<{ role: string; content: string }> } | undefined;
+    expect(ctx?.messages).toBeDefined();
+    expect(Array.isArray(ctx?.messages) && ctx.messages.length).toBe(2);
+    expect(ctx?.messages?.[0].role).toBe('user');
+    expect(ctx?.messages?.[0].content).toBe('Stored user message.');
+  });
+
+  /**
+   * Exposes defect: when getAgentOptions returns options with no/empty context, the component
+   * must still send context from getContextForSend (e.g. window fallback). If the component
+   * used only getAgentOptions().context, it would send empty; it must use effectiveContext.
+   */
+  it('sends Settings with agent.context from window fallback when getAgentOptions returns empty context', async () => {
+    // Clear storage so context comes only from window (previous test may have left data; connection-handler preload would otherwise use it).
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('dg_conversation');
+    }
+    const e2eContext = {
+      messages: [
+        { type: 'History' as const, role: 'user' as const, content: 'E2E restored user.' },
+        { type: 'History' as const, role: 'assistant' as const, content: 'E2E restored assistant.' },
+      ],
+    };
+    (window as unknown as { __e2eRestoredAgentContext: typeof e2eContext }).__e2eRestoredAgentContext = e2eContext;
+
+    const settingsSent: Array<{ type: string; agent?: { context?: unknown } }> = [];
+    mockWebSocketManager.sendJSON.mockImplementation((msg: unknown) => {
+      const m = msg as { type: string; agent?: { context?: unknown } };
+      if (m?.type === 'Settings') {
+        settingsSent.push({ type: m.type, agent: m.agent ? { context: m.agent.context } : undefined });
+      }
+    });
+
+    const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+    const optionsWithEmptyContext = { ...baseOptions, context: { messages: [] } };
+    render(
+      <DeepgramVoiceInteraction
+        ref={ref}
+        apiKey={MOCK_API_KEY}
+        agentOptions={optionsWithEmptyContext}
+        getAgentOptions={() => optionsWithEmptyContext}
+      />
+    );
+    await waitFor(() => expect(ref.current).toBeTruthy());
+
+    await setupComponentAndConnect(ref, mockWebSocketManager);
+    expect(settingsSent.length).toBeGreaterThanOrEqual(1);
+    const firstSettings = settingsSent[0];
+    expect(firstSettings.agent?.context).toBeDefined();
+    const ctx = firstSettings.agent?.context as { messages?: Array<{ role: string; content: string }> } | undefined;
+    expect(Array.isArray(ctx?.messages) && ctx.messages.length).toBe(2);
+    expect(ctx?.messages?.[0].content).toBe('E2E restored user.');
+  });
+
+  /**
+   * Exposes defect: when refs and getAgentOptions are empty, the component must still send
+   * Settings with agent.context from window.__e2eRestoredAgentContext (E2E fallback).
+   * If the hook fallback is not used in the component path or result is dropped, this fails.
+   */
+  it('sends Settings with agent.context from window.__e2eRestoredAgentContext when refs and storage are empty', async () => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('dg_conversation');
+    }
+    const e2eContext = {
+      messages: [
+        { type: 'History' as const, role: 'user' as const, content: 'E2E restored user.' },
+        { type: 'History' as const, role: 'assistant' as const, content: 'E2E restored assistant.' },
+      ],
+    };
+    (window as unknown as { __e2eRestoredAgentContext: typeof e2eContext }).__e2eRestoredAgentContext = e2eContext;
+
+    const settingsSent: Array<{ type: string; agent?: { context?: unknown } }> = [];
+    mockWebSocketManager.sendJSON.mockImplementation((msg: unknown) => {
+      const m = msg as { type: string; agent?: { context?: unknown } };
+      if (m?.type === 'Settings') {
+        settingsSent.push({ type: m.type, agent: m.agent ? { context: m.agent.context } : undefined });
+      }
+    });
+
+    const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+    render(
+      <DeepgramVoiceInteraction
+        ref={ref}
+        apiKey={MOCK_API_KEY}
+        agentOptions={optionsWithoutContext}
+      />
+    );
+    await waitFor(() => expect(ref.current).toBeTruthy());
+
+    const eventListener = await setupComponentAndConnect(ref, mockWebSocketManager);
+    expect(settingsSent.length).toBeGreaterThanOrEqual(1);
+    const firstSettings = settingsSent[0];
+    expect(firstSettings.agent?.context).toBeDefined();
+    const ctx = firstSettings.agent?.context as { messages?: Array<{ role: string; content: string }> } | undefined;
+    expect(ctx?.messages).toBeDefined();
+    expect(Array.isArray(ctx?.messages) && ctx.messages.length).toBe(2);
+    expect(ctx?.messages?.[0].content).toBe('E2E restored user.');
   });
 });

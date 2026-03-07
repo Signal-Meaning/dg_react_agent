@@ -50,9 +50,7 @@ const DEFAULT_ENDPOINTS = {
   agentUrl: 'wss://agent.deepgram.com/v1/agent/converse',
 };
 
-// Issue #489/9a: Last persisted history (module-level) so sendAgentSettings can include context after remount
-// when in-memory refs are empty. Updated in the persist effect and ConversationText handler.
-const lastPersistedHistoryForReconnectRef: { current: ConversationMessage[] } = { current: [] };
+// Issue #489: storage key last used by this page (module-level for backward compat; component also sets it).
 const lastUsedStorageKeyRef: { current: string } = { current: 'dg_conversation' };
 
 /**
@@ -171,6 +169,8 @@ function DeepgramVoiceInteraction(
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   // Ref so callbacks receive up-to-date history (handleAgentMessage closure can be stale) — Issue #414
   const conversationHistoryRef = useRef<ConversationMessage[]>([]);
+  // Issue #489: Per-instance so reconnect/remount and tests get correct context; preloaded from storage on close/open.
+  const lastPersistedHistoryForReconnectRef = useRef<ConversationMessage[]>([]);
   // Phase 3 refactor: single "latest history" ref — conversationHistoryRef is updated by effect (state) and ConversationText handler; hook uses it for getHistoryForSettings (no separate latestConversationHistoryRef).
 
   // Internal state
@@ -188,6 +188,9 @@ function DeepgramVoiceInteraction(
   
   // Set on 'connected' so sendAgentSettings (possibly async) and Welcome handler know first connection vs reconnection (Issue #480).
   const isReconnectionRef = useRef<boolean>(false);
+  // Issue #489: Track that agent connection closed in this component instance. Next 'connected' is a reconnection
+  // even if the new WebSocketManager reports isReconnection false (new manager instance has hasEverConnected false).
+  const hadAgentConnectionClosedRef = useRef<boolean>(false);
 
   // Track mount state to handle React StrictMode double-invocation
   // StrictMode will call cleanup then immediately re-run the effect
@@ -849,8 +852,12 @@ function DeepgramVoiceInteraction(
             log('Agent state:', event.state);
             if (event.state === 'connected') {
               logger.info('🔗 [Protocol] Agent WebSocket connected');
-              const isReconnection = event.isReconnection ?? false;
+              // Issue #489: Treat as reconnection if manager says so OR we saw a close in this component instance.
+              // New WebSocketManager on reconnect has hasEverConnected=false so event.isReconnection is false;
+              // without this, we skip localStorage preload and Settings go out with empty context (OpenAI path).
+              const isReconnection = event.isReconnection ?? hadAgentConnectionClosedRef.current;
               isReconnectionRef.current = isReconnection;
+              if (isReconnection) hadAgentConnectionClosedRef.current = false;
               // Handle reconnection logic
               if (isReconnection) {
                 log('Agent WebSocket reconnected - resetting greeting state');
@@ -873,6 +880,7 @@ function DeepgramVoiceInteraction(
           
           // Reset settings flag when connection closes
           if (event.state === 'closed') {
+            hadAgentConnectionClosedRef.current = true; // Issue #489: next 'connected' is reconnection (e.g. new manager)
             if (config.debug) {
               logConsole('debug','🔧 [Connection] Agent connection closed - checking for errors or reasons');
               logConsole('debug','🔧 [Connection] Connection close event details:', event);
@@ -981,9 +989,10 @@ function DeepgramVoiceInteraction(
                 }
                 
                 if (wsState === 1) { // OPEN
-                  // Issue #489 Phase 2: On reconnection, preload lastPersistedHistory from sync storage
-                  // before sendAgentSettings so getHistoryForSettings sees context (close may not have fired yet).
-                  if (isReconnectionRef.current && typeof localStorage !== 'undefined') {
+                  // Issue #489: Always preload lastPersistedHistory from sync storage before sendAgentSettings when
+                  // in-memory refs might be empty (reconnection or remount). Ensures Settings get context on OpenAI path
+                  // where a new WebSocketManager reports isReconnection false and/or component may have remounted.
+                  if (typeof localStorage !== 'undefined') {
                     const keys = [lastUsedStorageKeyRef.current, 'dg_voice_conversation', 'dg_conversation'];
                     for (const key of keys) {
                       if (!key) continue;
