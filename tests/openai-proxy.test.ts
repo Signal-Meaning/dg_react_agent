@@ -219,7 +219,7 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.code).toBe('unknown');
     });
 
-    /** Issue #489 TDD: codes over message text — prefer API structured code; legacy message fallback when code absent */
+    /** Issue #489: codes over message text — use only API structured code; when code absent, returns unknown */
     describe('Error mapping (codes over message text, Issue #489)', () => {
       it('uses event.error.code when present: idle_timeout → component code idle_timeout', () => {
         const event = {
@@ -249,25 +249,25 @@ describe('OpenAI proxy translator (Issue #381)', () => {
         expect(out.code).toBe('rate_limit_exceeded');
       });
 
-      it('legacy fallback: when error.code absent and message matches idle timeout string, returns idle_timeout', () => {
+      it('when error.code absent, returns unknown (no message-text inference; API should send structured code)', () => {
         const event = {
           type: 'error' as const,
           error: { message: 'The server had an error while processing your request' },
         };
         const out = mapErrorToComponentError(event);
-        expect(out.code).toBe('idle_timeout');
+        expect(out.code).toBe('unknown');
       });
 
-      it('legacy fallback: when error.code absent and message matches session max duration, returns session_max_duration', () => {
+      it('when error.code absent and message is session max duration text, returns unknown (no message-text inference)', () => {
         const event = {
           type: 'error' as const,
           error: { message: 'Your session hit the maximum duration of 60 minutes.' },
         };
         const out = mapErrorToComponentError(event);
-        expect(out.code).toBe('session_max_duration');
+        expect(out.code).toBe('unknown');
       });
 
-      it('when error.code absent and message does not match legacy strings, returns unknown', () => {
+      it('when error.code absent and message does not match any string, returns unknown', () => {
         const event = {
           type: 'error' as const,
           error: { message: 'Some other error' },

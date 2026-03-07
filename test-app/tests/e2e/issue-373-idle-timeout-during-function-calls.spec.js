@@ -736,11 +736,16 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
     await page.waitForTimeout(12000); // Wait 12 seconds to see if timeout fires
 
     const idleTimeoutFiredFlag = await page.evaluate(() => (window).__idleTimeoutFired__ === true);
+    const agentAudioDoneReceived = await page.evaluate(() => (window).__agentAudioDoneReceived__ === true);
 
     console.log('\n📊 Test Results:');
+    console.log(`  AgentAudioDone received (component): ${agentAudioDoneReceived}`);
     console.log(`  Timeout fired (console): ${timeoutFired}`);
     console.log(`  Timeout fired (__idleTimeoutFired__): ${idleTimeoutFiredFlag}`);
     console.log(`  Connection closes detected: ${connectionCloses.length}`);
+
+    // Confirm component received AgentAudioDone from proxy (Phase 1 verification).
+    expect(agentAudioDoneReceived, 'Component must receive AgentAudioDone from proxy after function-call turn so idle timeout can start.').toBe(true);
 
     // After function completes and we wait 12 seconds, idle timeout should have fired and connection should close.
     // Requires: proxy sends AgentThinking (or any message) after FunctionCallResponse so "waiting" clears; then proxy

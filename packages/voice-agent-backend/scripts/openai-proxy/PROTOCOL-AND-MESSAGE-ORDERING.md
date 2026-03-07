@@ -128,7 +128,7 @@ The API reference shows the **effective session** configuration in the example p
 
 **OpenAI: no server timeout when Server VAD is disabled.** We use `turn_detection: null` so the proxy (client) controls commit and response.create; the server does not run Server VAD. In that configuration the **OpenAI server has no server idle timeout** — `idle_timeout_ms` is only supported under `turn_detection: { type: 'server_vad', ... }`. We could enable Server VAD to get a configurable server timeout (5s–30s per API), but we would have to **disable our client VAD** (or align commit strategy) to avoid the "buffer too small" / double-commit issues. To convey "no server timeout" we use **`NO_SERVER_TIMEOUT_MS`** (`-1`) in docs and when we do not send `idle_timeout_ms` to the API. See `src/constants/voice-agent.ts`, `translator.ts` `mapSettingsToSessionUpdate`.
 
-**Proxy/client reaction:** When the proxy receives an upstream `error`, it maps to component **Error** using the API's **structured code** (e.g. `event.error?.code`) for all error types — expected closures (server timeout → **`idle_timeout`** (same as `SERVER_TIMEOUT_ERROR_CODE`), session max duration → **`session_max_duration`**) and any other codes the API emits. Do not use message text for mapping when code is present. **Implementation:** `translator.ts` exposes `getComponentErrorCode(event)` which prefers `event.error?.code`; only when the API omits code does the proxy use a single legacy message fallback (`legacyInferCodeFromMessage`). Log at INFO for expected closure; send the client an Error-shaped message with that code. Same principle for any codes the proxy emits to the client: use protocol-defined codes, not free-form text. The component treats `idle_timeout` and `session_max_duration` as expected closure (log only; do not call onError or surface as error). See `translator.ts` (`getComponentErrorCode`, `isIdleTimeoutClosure`, `mapErrorToComponentError`), `server.ts` (error handling), and component Error handler.
+**Proxy/client reaction:** When the proxy receives an upstream `error`, it maps to component **Error** using the API's **structured code** (e.g. `event.error?.code`) for all error types — expected closures (server timeout → **`idle_timeout`** (same as `SERVER_TIMEOUT_ERROR_CODE`), session max duration → **`session_max_duration`**) and any other codes the API emits. Do not use message text for mapping when code is present. **Implementation:** `translator.ts` exposes `getComponentErrorCode(event)` which uses only `event.error?.code`; when the API omits code, returns `'unknown'` (no message-text inference). Log at INFO for expected closure; send the client an Error-shaped message with that code. Same principle for any codes the proxy emits to the client: use protocol-defined codes, not free-form text. The component treats `idle_timeout` and `session_max_duration` as expected closure (log only; do not call onError or surface as error). See `translator.ts` (`getComponentErrorCode`, `isIdleTimeoutClosure`, `mapErrorToComponentError`), `server.ts` (error handling), and component Error handler.
 
 ---
 
@@ -151,10 +151,10 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 | **session.created** | No message to client. Log only. Do not inject context or greeting. |
 | **session.updated** | Send context items to upstream (if any); send **SettingsApplied** (text); send greeting as **ConversationText** (text) if configured; no greeting to upstream. |
 | **conversation.item.created** / **.added** / **.done** | Decrement pending-item counter; when 0, send `response.create` to upstream. Forward event to client as **text**. |
-| **response.output_text.done** | Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream. **Issue #482:** Send **AgentStartedSpeaking** (if not yet sent for this response), then **ConversationText** (assistant), then **AgentAudioDone**; flush any buffered idle_timeout Error after. Send as **text**. |
-| **response.done** | Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream (Issue #470 fallback). No client message. |
-| **response.output_audio_transcript.done** | Map to **ConversationText** (assistant); send as **text**. |
-| **response.function_call_arguments.done** | Map to **FunctionCallRequest** and **ConversationText** (assistant); send both as **text**. |
+| **response.output_text.done** | **Control only.** Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream. **Issue #482:** Send **AgentStartedSpeaking** (if not yet sent), then **AgentAudioDone**; flush any buffered idle_timeout Error. **Issue #489 Phase 2:** Do **not** send ConversationText from this event; assistant text comes only from **conversation.item.added**. See §7a below. |
+| **response.done** | Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream (Issue #470 fallback). Send **AgentAudioDone** so component can transition to idle. No ConversationText. |
+| **response.output_audio_transcript.done** | **Control only.** Log only. **Issue #489 Phase 2:** Do **not** send ConversationText; assistant text only from **conversation.item.added**. |
+| **response.function_call_arguments.done** | Map to **FunctionCallRequest** only; send as **text**. **Issue #489 Phase 2:** Do **not** send ConversationText; assistant text only from **conversation.item.added**. |
 | **response.output_audio.delta** | **Issue #482:** If first output for this response, send **AgentStartedSpeaking** (text). Decode base64 to PCM; send **binary** (raw PCM) to client. Do not send as JSON. |
 | **response.output_audio.done** | **Issue #482:** Send **AgentAudioDone** (text). No other client message (playback is driven by chunks). Optional: boundary debug logging. |
 | **error** | Map to **Error** (component shape). **Issue #482:** If idle_timeout and response is in progress, **buffer** the Error and send after the next `response.output_text.done` (so client receives ConversationText before Error). Otherwise send as **text** immediately. **Expected closures** (not treated as errors): (1) [Session max duration (60 min)](#38-session-maximum-duration-60-minutes-and-expected-closure) → log INFO, code `session_max_duration`. (2) [Idle timeout](#39-idle-timeout-expected-closure-not-an-error) → log INFO, code `idle_timeout`. Client treats both as normal closure (no error surfaced). |
@@ -169,9 +169,9 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 |------------------------|------------|------|
 | SettingsApplied | Text | After session.updated |
 | ConversationText (user) | Text | After InjectUserMessage (echo) |
-| ConversationText (assistant) | Text | From output_text.done, output_audio_transcript.done, function_call_arguments.done, or greeting |
-| AgentStartedSpeaking | Text | Issue #482: before first response output (first output_audio.delta or before ConversationText from output_text.done) so component sees "agent active" and does not fire client idle timeout |
-| AgentAudioDone | Text | Issue #482: on response.output_audio.done or after ConversationText from response.output_text.done so component sees response complete |
+| ConversationText (assistant) | Text | From **conversation.item.added** (assistant) or greeting only (Issue #489 Phase 2). Not from output_text.done, output_audio_transcript.done, or function_call_arguments.done. |
+| AgentStartedSpeaking | Text | Issue #482: before first response output (first output_audio.delta or before control from response.output_text.done) so component sees "agent active" and does not fire client idle timeout |
+| AgentAudioDone | Text | Issue #482: on response.output_audio.done, response.output_text.done, or response.done so component sees response complete and can transition to idle |
 | FunctionCallRequest | Text | From response.function_call_arguments.done |
 | Error | Text | From upstream error; Issue #482: idle_timeout may be buffered until after ConversationText when response in progress (expected closures; client treats as normal closure) |
 | (binary PCM) | Binary | From response.output_audio.delta only |
@@ -182,6 +182,15 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 ## 7. Protocol requirements and test coverage
 
 Protocol requirements we’ve learned (from docs and failures) and how they’re tested are documented in **docs/issues/ISSUE-470/PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE.md**. A **single protocol specification** that lists every server→proxy→client event and maps each requirement to a test lives in **tests/integration/PROTOCOL-SPECIFICATION.md** (co-located with the integration tests). That doc also recommends re-auditing OpenAI docs/samples when changing ordering and qualifying proxy changes with real-API tests.
+
+---
+
+## 7a. response.output_text.done (OpenAI API)
+
+**OpenAI Realtime API:** The event `response.output_text.done` is defined in the [Realtime server events](https://platform.openai.com/docs/api-reference/realtime-server-events) reference. Paraphrase: *Returned when the text value of an "output_text" content part is done streaming. Also emitted when a Response is interrupted, incomplete, or cancelled.*
+
+- **When the API sends it:** Only when the session uses text output (e.g. `output_modalities` includes `"output_text"`). For audio-only or when the model does not emit a text content part for that turn, the API may send `response.done` and/or `response.output_audio.done` / `response.output_audio_transcript.done` instead; we do not rely on `response.output_text.done` for every turn.
+- **Our mapping (component state):** **Control only.** We use it to: (1) clear `responseInProgress` so we can send the next `session.update` or `response.create`; (2) send **AgentStartedSpeaking** if not yet sent for this response; (3) send **AgentAudioDone** so the component can transition to idle and the idle timeout can start. We do **not** map it to **ConversationText** (assistant). Assistant content for display comes only from **conversation.item.added** (assistant role).
 
 ---
 

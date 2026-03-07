@@ -219,11 +219,24 @@ export function useIdleTimeoutManager(
     }
   }, []);
 
+  /**
+   * Issue #489: Push agent idle + not playing into the idle timeout service so it sees the same
+   * state we just dispatched, before we call handleMeaningfulActivity. Use when the component has
+   * just transitioned to idle (e.g. on AgentAudioDone) so the service can start the timeout in the
+   * same tick instead of waiting for React to commit and events to propagate.
+   */
+  const pushIdleStateToIdleTimeoutService = useCallback(() => {
+    if (serviceRef.current) {
+      serviceRef.current.updateStateDirectly({ agentState: 'idle', isPlaying: false });
+    }
+  }, []);
+
   return {
     handleMeaningfulActivity,
     handleUtteranceEnd,
     handleFunctionCallStarted,
     handleFunctionCallCompleted,
     notifyAgentMessageReceived,
+    pushIdleStateToIdleTimeoutService,
   };
 }

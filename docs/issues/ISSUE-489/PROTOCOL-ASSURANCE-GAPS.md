@@ -19,14 +19,14 @@ The following real-API integration tests were added in `tests/integration/openai
 
 ---
 
-## 1. Missing essential: proxy receives completion after FunctionCallResponse (real API)
+## 1. Proxy receives completion after FunctionCallResponse (real API) — covered and passing
 
 **Assurance:** After the client sends `FunctionCallResponse`, the **proxy** receives from upstream at least one of: `response.output_text.done`, `response.output_audio.done`, or `response.done`. The proxy only sends "agent done" to the client when it receives one of these; if the real API never sends them, the component never transitions to idle and the idle timeout never runs.
 
 **Current coverage:**
 - **Mock:** Issue #487 protocol contract — client receives AgentThinking or ConversationText or AgentAudioDone within 2s of FunctionCallResponse (mock sends output_text.done on function_call_output).
 - **Real API:** Issue #470 real-API function-call test — asserts no `conversation_already_has_active_response` and client receives assistant ConversationText.
-- **Real API (added):** `Issue #489 real-API: after FunctionCallResponse client receives AgentAudioDone (proxy received completion)` — asserts client receives AgentAudioDone within 60s after sending FunctionCallResponse (effect of proxy receiving response.done or response.output_text.done from upstream).
+- **Real API (added, passing):** `Issue #489 real-API: after FunctionCallResponse client receives AgentAudioDone (proxy received completion)` — asserts client receives AgentAudioDone within 60s after sending FunctionCallResponse. **This test passes with USE_REAL_APIS=1**, proving that the client **does** receive completion (AgentAudioDone) from the proxy after a function call when using the real OpenAI API. The remaining E2E failure (issue-373 "re-enable idle timeout after function calls complete") is therefore not due to the proxy failing to send completion; see [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md).
 
 ---
 
@@ -47,18 +47,18 @@ These are protocol guarantees the proxy depends on. For each, we either have no 
 
 ---
 
-## 3. Summary: highest priority gaps
+## 3. Summary: gaps addressed and remaining
 
-1. **Proxy receives completion after FunctionCallResponse (real API)** — Essential. Add integration test with real API that asserts the proxy receives `response.done` or `response.output_text.done` (or that the client receives an agent-done signal) after the client sends FunctionCallResponse. This directly addresses the failing E2E and distinguishes API vs proxy.
-2. **Proxy receives session.updated (real API)** — High. All flows depend on it; no explicit assertion. Could be a single real-API test: client receives SettingsApplied within N s of connect.
-3. **Client receives AgentAudioDone after a turn (real API)** — High. Component needs "agent done" to start idle timeout; we have no real-API test that the client receives AgentAudioDone (or that proxy received completion) for a normal or function-call turn.
-4. **AgentStartedSpeaking before ConversationText (real API)** — Medium. Issue #482 ordering; mock-only today.
+1. **Proxy receives completion after FunctionCallResponse (real API)** — **Addressed.** Real-API integration test "after FunctionCallResponse client receives AgentAudioDone" **passes**; client does receive AgentAudioDone from the proxy. E2E failure (issue-373) is component/E2E env, not proxy. See [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md).
+2. **Proxy receives session.updated (real API)** — **Addressed.** Issue #489 real-API test: client receives SettingsApplied within 10s of connect.
+3. **Client receives AgentAudioDone after a turn (real API)** — **Addressed.** Covered by InjectUserMessage test (normal turn) and after FunctionCallResponse test (function-call turn).
+4. **AgentStartedSpeaking before ConversationText (real API)** — **Addressed.** Issue #489 real-API test for this ordering.
 5. **InjectUserMessage: proxy received item.added (real API)** — Lower; outcome (no error, client gets response) is already asserted; explicit "proxy received item.added" would help if we ever see ordering bugs.
 
 ---
 
 ## 4. Recommendations
 
-- **Add first:** Real-API integration test that after FunctionCallResponse, the proxy receives (or we observe the effect of) `response.done` or `response.output_text.done` from upstream. For example: run function-call flow with real API and assert client receives AgentAudioDone (or ConversationText that implies completion) within a timeout; or capture proxy logs and assert presence of completion event type. This is the essential missing protocol test.
-- **Then:** Consider real-API tests for (2) session.updated → SettingsApplied, (3) client receives AgentAudioDone after a turn, (4) AgentStartedSpeaking before ConversationText for a turn.
-- **Logging:** Proxy already logs every upstream JSON message type at INFO. When adding tests, run with LOG_LEVEL=info to correlate "proxy received X" with test assertions; optional: have the test parse proxy output or use a test double that records received upstream event types.
+- **Done:** Real-API integration test "after FunctionCallResponse client receives AgentAudioDone" was added and **passes**; it proves the client receives completion from the proxy with real API.
+- **Next (E2E):** Debug why the component in the full E2E run does not transition to idle or fire idle timeout after function call (see [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md)); optionally skip the issue-373 E2E test when using real API until fixed.
+- **Logging:** Proxy already logs every upstream JSON message type at INFO. Run with LOG_LEVEL=info to correlate "proxy received X" with test assertions when debugging E2E.

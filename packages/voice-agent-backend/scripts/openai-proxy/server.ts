@@ -25,13 +25,11 @@ import {
   mapSettingsToSessionUpdate,
   mapInjectUserMessageToConversationItemCreate,
   mapSessionUpdatedToSettingsApplied,
-  mapOutputTextDoneToConversationText,
-  mapOutputAudioTranscriptDoneToConversationText,
   mapFunctionCallArgumentsDoneToFunctionCallRequest,
-  mapFunctionCallArgumentsDoneToConversationText,
   mapFunctionCallResponseToConversationItemCreate,
   mapContextMessageToConversationItemCreate,
   mapGreetingToConversationText,
+  mapConversationItemAddedToConversationText,
   mapErrorToComponentError,
   type ComponentError,
   binaryToInputAudioBufferAppend,
@@ -494,36 +492,29 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             upstream.send(JSON.stringify({ type: 'response.create' }));
             onResponseStarted();
           }
-          const m = msg as { type: string; text?: string };
-          const isFunctionCallTranscript = m.text?.startsWith('Function call:');
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: `Received response.output_text.done from upstream${isFunctionCallTranscript ? ' (transcript-like)' : ''} — sending ConversationText + AgentAudioDone. E2E: if neither this nor response.done appears after a function call, the real API is not sending completion.`,
+            body: `response.output_text.done → control only (AgentAudioDone); assistant text from conversation.item.added`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
           sendAgentStartedSpeakingIfNeeded();
-          const conversationText = mapOutputTextDoneToConversationText(msg as Parameters<typeof mapOutputTextDoneToConversationText>[0]);
-          clientWs.send(JSON.stringify(conversationText));
+          // Issue #489 Phase 2: Do not map control events to ConversationText. Assistant content only from conversation.item.added.
           sendAgentAudioDoneIfNeeded();
           flushPendingIdleTimeoutError();
         } else if (msg.type === 'response.output_audio_transcript.done') {
-          const m = msg as { type: string; transcript?: string };
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: `upstream→client: ${msg.type}${m.transcript?.startsWith('Function call:') ? ' (transcript-like)' : ''}`,
+            body: `upstream→client: ${msg.type} (control only; assistant text from conversation.item.added)`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
-          const conversationText = mapOutputAudioTranscriptDoneToConversationText(
-            msg as Parameters<typeof mapOutputAudioTranscriptDoneToConversationText>[0]
-          );
-          clientWs.send(JSON.stringify(conversationText));
+          // Issue #489 Phase 2: Do not map control events to ConversationText. Assistant content only from conversation.item.added.
         } else if (msg.type === 'response.function_call_arguments.done') {
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: `upstream→client: ${msg.type} → sending FunctionCallRequest + ConversationText`,
+            body: `upstream→client: ${msg.type} → sending FunctionCallRequest only (assistant text from conversation.item.added)`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
           sendAgentStartedSpeakingIfNeeded();
@@ -531,10 +522,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             msg as Parameters<typeof mapFunctionCallArgumentsDoneToFunctionCallRequest>[0]
           );
           clientWs.send(JSON.stringify(functionCallRequest));
-          const conversationText = mapFunctionCallArgumentsDoneToConversationText(
-            msg as Parameters<typeof mapFunctionCallArgumentsDoneToConversationText>[0]
-          );
-          clientWs.send(JSON.stringify(conversationText));
+          // Issue #489 Phase 2: Do not map control events to ConversationText. Assistant content only from conversation.item.added.
         } else if (msg.type === 'error') {
           const componentError = mapErrorToComponentError(msg as Parameters<typeof mapErrorToComponentError>[0]);
           const isExpectedClosure =
@@ -691,6 +679,13 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
                 upstream.send(JSON.stringify({ type: 'response.create' }));
                 onResponseStarted();
               }
+            }
+          }
+          // Issue #489: conversation.item.added (assistant message) is the protocol-defined source for assistant text.
+          if (msg.type === 'conversation.item.added' && clientWs.readyState === WebSocket.OPEN) {
+            const conversationText = mapConversationItemAddedToConversationText(msg as Parameters<typeof mapConversationItemAddedToConversationText>[0]);
+            if (conversationText) {
+              clientWs.send(JSON.stringify(conversationText));
             }
           }
           // Issue #414: send as text so component routes as message, not binary (audio)

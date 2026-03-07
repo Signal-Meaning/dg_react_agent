@@ -2,6 +2,15 @@
 
 This document describes the intended run order for tests and when to use mocks vs real upstream.
 
+## Working directories
+
+- **Jest (unit and integration):** Run from the **repository root**. Examples: `npm test`, `npm run test:mock`, `npm test -- tests/openai-proxy.test.ts`, `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`.
+- **E2E (Playwright):** Run from **test-app** only. The Playwright config (`test-app/tests/playwright.config.mjs`), `testDir`, and env are defined for test-app. Running E2E from the repo root is not recommended for targeted runs and can be error-prone. **Standard:** `cd test-app` then `npm run test:e2e` (full suite) or `npm run test:e2e -- openai-proxy-e2e.spec.js` (specific spec(s)). See `test-app/tests/e2e/README.md` for full E2E command reference.
+
+## Use npm scripts
+
+**Stick to npm commands** for running tests and tooling; they are better controlled (env, paths, flags) and match CI and docs. Use e.g. `npm test` (from repo root), `npm run test:e2e` or `npm run test:e2e -- <spec>.spec.js` (from test-app), `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` (from repo root) rather than raw `npx jest` or `npx playwright test`. See `.cursorrules` (Use npm scripts, E2E working directory) and the relevant `package.json` for available scripts.
+
 ## Third-party backends and scope (Epic #455)
 
 - **Third-party backends are out of scope.** Voice-commerce and any other third-party backend are not supported or tested by this repo. Our integration and E2E tests use this repo’s proxy and mock (or real OpenAI) only.
@@ -15,7 +24,7 @@ This document describes the intended run order for tests and when to use mocks v
 
 2. **Integration / E2E with mocks** — Run the same or full suite with mock upstream (no API keys required).
 
-3. **E2E tests** — Run test-app E2E with real backend/APIs when configured; then extended E2E as needed.
+3. **E2E tests** — From **test-app**, run E2E with real backend/APIs when configured (`npm run test:e2e` for full suite, or `npm run test:e2e -- <spec>.spec.js` for specific specs); then extended E2E as needed.
 
 Summary: **real APIs first (when available) → mocks**. **CI: mocks only.**
 

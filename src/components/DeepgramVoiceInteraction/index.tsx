@@ -466,7 +466,7 @@ function DeepgramVoiceInteraction(
   
   // Initialize idle timeout manager
   const effectiveIdleTimeoutMs = agentOptions?.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
-  const { handleMeaningfulActivity, handleUtteranceEnd, handleFunctionCallStarted, handleFunctionCallCompleted, notifyAgentMessageReceived } = useIdleTimeoutManager(
+  const { handleMeaningfulActivity, handleUtteranceEnd, handleFunctionCallStarted, handleFunctionCallCompleted, notifyAgentMessageReceived, pushIdleStateToIdleTimeoutService } = useIdleTimeoutManager(
     state,
     agentManagerRef,
     props.debug,
@@ -2257,8 +2257,10 @@ function DeepgramVoiceInteraction(
       logConsole('debug', `🎯 [AGENT] ${eventType} - agent done for turn (semantic); transitioning to idle`);
       sleepLog(`${eventType} received - agent done for turn`);
 
-      // Transition to idle when in speaking or listening so idle timeout can start.
-      // IdleTimeoutService requires isPlaying: false to start the timeout; set it so timeout can run (E2E greeting tests).
+      // Transition to idle when in speaking, listening, or thinking so idle timeout can start.
+      // IdleTimeoutService requires isPlaying: false and agentState idle/listening to start the timeout.
+      // Issue #489: In function-call flow we may receive AgentAudioDone while still in 'thinking' (no audio
+      // for that turn); if we don't transition to idle here, the service never starts the idle timeout.
       const agentState = stateRef.current.agentState;
       if (agentState === 'speaking') {
         logConsole('debug','🎯 [AGENT] Agent done - transitioning to idle (response complete)');
@@ -2269,10 +2271,23 @@ function DeepgramVoiceInteraction(
         logConsole('debug','🎯 [AGENT] Agent done while listening - transitioning to idle (greeting/response done before playback)');
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
         dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+      } else if (agentState === 'thinking') {
+        logConsole('debug','🎯 [AGENT] Agent done while thinking - transitioning to idle (e.g. text-only turn after function call)');
+        dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
+        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
       }
 
-      // Issue #489: Ensure IdleTimeoutService sees meaningful activity so it can start the timeout.
+      // Issue #489: Push the state we just dispatched into the service so it sees idle in this tick
+      // (React state updates are async). Then notify activity so the service can start the timeout.
+      if (agentState === 'speaking' || agentState === 'listening' || agentState === 'thinking') {
+        pushIdleStateToIdleTimeoutService();
+      }
       handleMeaningfulActivity(eventType);
+
+      // TODO(issue-489): Remove before concluding Issue #489 — E2E flag to confirm proxy → component AgentAudioDone delivery.
+      if (typeof window !== 'undefined') {
+        (window as unknown as { __agentAudioDoneReceived__?: boolean }).__agentAudioDoneReceived__ = true;
+      }
 
       // Track agent silent for greeting state
       if (state.greetingInProgress) {

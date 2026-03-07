@@ -265,7 +265,8 @@ let voiceAgentAttachment = null;
           cwd: voiceAgentBackendPkgDir,
           command: 'npx',
           args: ['tsx', 'scripts/openai-proxy/run.ts'],
-          env: { OPENAI_API_KEY },
+          // Inherit parent env so proxy sees same vars as backend (LOG_LEVEL, HTTPS, OPENAI_PROXY_PORT, etc.). No special-casing.
+          env: { ...process.env, OPENAI_API_KEY },
           port: OPENAI_INTERNAL_PORT,
         },
       } : undefined,

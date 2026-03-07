@@ -1,5 +1,7 @@
 # E2E / Playwright run notes (Issue #489)
 
+**Current E2E failure status and next steps:** See [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md). Integration tests (real API) prove the client receives AgentAudioDone after FunctionCallResponse; the remaining failure is issue-373 "re-enable idle timeout after function calls complete" (component/E2E env).
+
 ## Why not reinstall browsers from the agent?
 
 The project and Cursor sandbox are set up so that:
@@ -18,10 +20,10 @@ When rerunning the two E2E tests (interruptAgent + TTS diagnostic) with real API
 
 ## How to run the two tests with real APIs (from your terminal)
 
-From **repo root**, with browsers already installed (e.g. `npm run playwright:install-browsers` once):
+**Use npm scripts** (see `.cursorrules` and `docs/development/TEST-STRATEGY.md`). From **test-app**, with browsers already installed (e.g. `npm run playwright:install-browsers` once):
 
 ```bash
-npm run test:e2e -- test-app/tests/e2e/declarative-props-api.spec.js test-app/tests/e2e/openai-proxy-tts-diagnostic.spec.js --grep "should interrupt TTS when interruptAgent prop is true|diagnose TTS path"
+cd test-app && npm run test:e2e -- tests/e2e/declarative-props-api.spec.js tests/e2e/openai-proxy-tts-diagnostic.spec.js --grep "should interrupt TTS when interruptAgent prop is true|diagnose TTS path"
 ```
 
-Ensure `test-app/.env` (and proxy/backend if needed) is configured for real APIs. The interruptAgent test is skipped in CI; it runs when not in CI and when real API is available (`skipIfNoRealAPI()`).
+Or use the dedicated script: `npm run test:e2e:openai` for the OpenAI proxy E2E set. Ensure `test-app/.env` (and proxy/backend if needed) is configured for real APIs. The interruptAgent test is skipped in CI; it runs when not in CI and when real API is available (`skipIfNoRealAPI()`).

@@ -132,6 +132,17 @@ export interface ComponentConversationText {
   content: string;
 }
 
+/** OpenAI server event: conversation.item.added (item may be assistant message with content) */
+export interface OpenAIConversationItemAdded {
+  type: 'conversation.item.added';
+  item?: {
+    id?: string;
+    type?: string;
+    role?: 'user' | 'assistant' | 'system';
+    content?: Array<{ type?: string; text?: string }>;
+  };
+}
+
 /** OpenAI server event: response.output_text.done */
 export interface OpenAIOutputTextDone {
   type: 'response.output_text.done';
@@ -280,6 +291,32 @@ export function mapFunctionCallArgumentsDoneToConversationText(
 }
 
 /**
+ * Map OpenAI conversation.item.added (assistant message with content) → component ConversationText (assistant).
+ * This is the protocol-defined source for assistant text. Returns null when the item is not an assistant
+ * message or has no extractable text content. Issue #489.
+ */
+export function mapConversationItemAddedToConversationText(
+  event: OpenAIConversationItemAdded
+): ComponentConversationText | null {
+  const item = event.item;
+  if (!item || item.role !== 'assistant') return null;
+  const content = item.content;
+  if (!Array.isArray(content) || content.length === 0) return null;
+  const parts: string[] = [];
+  for (const part of content) {
+    if (part && typeof part.text === 'string' && part.text.trim()) {
+      parts.push(part.text.trim());
+    }
+  }
+  if (parts.length === 0) return null;
+  return {
+    type: 'ConversationText',
+    role: 'assistant',
+    content: parts.join('\n'),
+  };
+}
+
+/**
  * Map component FunctionCallResponse → OpenAI conversation.item.create (function_call_output).
  * Required so the backend receives the function result and can continue the response.
  */
@@ -308,31 +345,16 @@ function mapApiErrorCodeToComponentCode(apiCode: string): string {
 }
 
 /**
- * Legacy fallback: infer component code from message when API does not send error.code.
- * Avoid using for control flow when API provides structured code. See PROTOCOL-AND-MESSAGE-ORDERING §3.9.
- */
-function legacyInferCodeFromMessage(event: OpenAIErrorEvent): string | undefined {
-  const msg = event.error?.message ?? '';
-  if (typeof msg !== 'string') return undefined;
-  if (msg.includes('maximum duration') && msg.includes('60 minutes')) {
-    return COMPONENT_CODE_SESSION_MAX_DURATION;
-  }
-  if (msg.includes('The server had an error while processing your request')) {
-    return COMPONENT_CODE_IDLE_TIMEOUT;
-  }
-  return undefined;
-}
-
-/**
- * Get component error code from upstream error event. Prefers API structured code (event.error?.code);
- * uses legacy message fallback only when code is absent. Issue #489, codes over message text.
+ * Get component error code from upstream error event. Uses only API structured code (event.error?.code).
+ * When the API omits code, returns 'unknown'. Do not infer from message text (antipattern removed).
+ * Call sites that depend on a specific code when the API sends no code are likely defect sources.
  */
 export function getComponentErrorCode(event: OpenAIErrorEvent): string {
   const apiCode = event.error?.code;
   if (apiCode !== undefined && apiCode !== '') {
     return mapApiErrorCodeToComponentCode(apiCode);
   }
-  return legacyInferCodeFromMessage(event) ?? 'unknown';
+  return 'unknown';
 }
 
 /**
@@ -345,7 +367,7 @@ export function isSessionMaxDurationError(event: OpenAIErrorEvent): boolean {
 
 /**
  * Detect expected idle-timeout closure. Implemented via getComponentErrorCode (DRY).
- * Legacy: upstream may send generic message when code absent; we prefer API code when present.
+ * True only when the API sends event.error.code === 'idle_timeout'.
  */
 export function isIdleTimeoutClosure(event: OpenAIErrorEvent): boolean {
   return getComponentErrorCode(event) === COMPONENT_CODE_IDLE_TIMEOUT;
@@ -353,7 +375,7 @@ export function isIdleTimeoutClosure(event: OpenAIErrorEvent): boolean {
 
 /**
  * Map OpenAI error event → component Error.
- * Uses getComponentErrorCode (code-first, then legacy message fallback). Issue #489, DRY.
+ * Uses getComponentErrorCode (structured code only; returns 'unknown' when API omits code). Issue #489.
  */
 export function mapErrorToComponentError(event: OpenAIErrorEvent): ComponentError {
   const msg = event.error?.message ?? 'Unknown error';

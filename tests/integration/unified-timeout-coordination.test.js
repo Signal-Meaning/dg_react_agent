@@ -522,6 +522,30 @@ describe('Unified Timeout Coordination Integration', () => {
     });
 
     /**
+     * Issue #373/#489: When real API sends only AgentAudioDone (no second ConversationText) after
+     * function result, the component calls handleMeaningfulActivity('AgentAudioDone'). IdleTimeoutService
+     * must clear waitingForNextAgentMessageAfterFunctionResult on MEANINGFUL_USER_ACTIVITY(AgentAudioDone)
+     * so the idle timeout can start. This test would have caught the behavior gap.
+     */
+    test('should clear waiting-for-next-message when MEANINGFUL_USER_ACTIVITY is AgentAudioDone or AgentDone', () => {
+      const timeoutMs = 5000;
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'fc-1' });
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'fc-1' });
+      // No AGENT_MESSAGE_RECEIVED; real API may send only AgentAudioDone. Component emits MEANINGFUL_USER_ACTIVITY('AgentAudioDone').
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'AgentAudioDone' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+
+      jest.advanceTimersByTime(timeoutMs);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    /**
      * Max-wait fallback: if backend never sends a "working" signal or message after function result,
      * we clear the "waiting" flag after maxWaitForAgentReplyMs (capped at timeoutMs) so idle timeout
      * can start and the connection can close (avoids hanging forever).

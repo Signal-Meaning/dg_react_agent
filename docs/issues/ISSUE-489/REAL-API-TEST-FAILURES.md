@@ -1,8 +1,10 @@
 # Real-API Test Failures: Investigation and Alignment
 
-This doc records the **two recurring real-API integration test failures**, their likely root causes, and how we align with the **OpenAI Realtime API** and our own protocol docs. **Do not fix these by increasing timeouts;** see [TEST-STRATEGY.md](../../development/TEST-STRATEGY.md) and focus on correct observation and spec alignment.
+This doc records **real-API integration test failures** (and their resolution), **E2E real-API failure**, and how we align with the **OpenAI Realtime API** and our own protocol docs. **Do not fix these by increasing timeouts;** see [TEST-STRATEGY.md](../../development/TEST-STRATEGY.md) and focus on correct observation and spec alignment.
 
 **Reference:** [PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE.md](../ISSUE-470/PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE.md), [PROTOCOL-AND-MESSAGE-ORDERING.md](../../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md), [PROTOCOL-SPECIFICATION.md](../../../tests/integration/PROTOCOL-SPECIFICATION.md) (requirement ↔ test table), [TDD-CODES-OVER-MESSAGE-TEXT-CHECKLIST.md](./TDD-CODES-OVER-MESSAGE-TEXT-CHECKLIST.md) (TDD progress for error-code implementation), OpenAI Realtime API [server events](https://platform.openai.com/docs/api-reference/realtime-server-events), [client events](https://platform.openai.com/docs/api-reference/realtime-client-events).
+
+**Integration tests (real API):** The openai-proxy integration suite includes real-API tests that **pass** with `USE_REAL_APIS=1`, including **"after FunctionCallResponse client receives AgentAudioDone"** — so we have proven that the **client does receive completion (AgentAudioDone) from the proxy** after a function call with the real API. See [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md) and [PROTOCOL-ASSURANCE-GAPS.md](./PROTOCOL-ASSURANCE-GAPS.md).
 
 ---
 
@@ -95,3 +97,15 @@ We do **not** fix real-API test failures by increasing deadlines (e.g. 10s → 3
 **Agent activity and idle timer**
 
 - **(a) Proxy sends the events the component needs:** PROTOCOL-AND-MESSAGE-ORDERING.md §5–6 and COMPONENT-PROXY-CONTRACT list the component-facing events (AgentThinking, AgentStartedSpeaking, AgentDone/AgentAudioDone, etc.) and when the proxy sends them. AGENT-DONE-SEMANTICS-AND-NAMING.md defines agent done and receipt vs playback. **(b) Order:** The same docs specify order (e.g. AgentStartedSpeaking before first response output; AgentDone/AgentAudioDone when response completes; Issue #482 buffering of idle_timeout Error after ConversationText). We clarify by keeping the **protocol specification** in the integration test folder (see below) with every server → proxy → client event and required ordering, and a test (or test section) per requirement so that agent activity and idle timer are explicitly covered.
+
+---
+
+## 7. E2E real-API failure: Idle timeout after function calls (issue-373)
+
+**Test:** `issue-373-idle-timeout-during-function-calls.spec.js` — `should re-enable idle timeout after function calls complete`
+
+**Observed:** With real APIs, the test waits 12s after the function call completes; neither idle timeout nor connection close is observed (`timeoutFired` and `__idleTimeoutFired__` false, no connection closes).
+
+**Important:** The **integration** test `Issue #489 real-API: after FunctionCallResponse client receives AgentAudioDone (proxy received completion)` **passes** with real API. So the client **does** receive AgentAudioDone from the proxy after a function call at the wire level. The E2E failure therefore points to **component or E2E environment** (e.g. component not transitioning to idle in the full app, or timing in browser), not "proxy never sends completion."
+
+**Detail and next steps:** See [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md) (current E2E failure and recommended next steps).

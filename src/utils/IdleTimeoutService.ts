@@ -57,7 +57,12 @@ export class IdleTimeoutService {
    *     idle timer to start after at most one idle-timeout period so the connection can close.
    */
   private waitingForNextAgentMessageAfterFunctionResult = false;
-  /** Fallback timer: clear "waiting" after at most timeoutMs so we don't wait forever. */
+  /**
+   * Fallback timer (not a second idle timer): after FUNCTION_CALL_COMPLETED we set waitingForNextAgentMessageAfterFunctionResult.
+   * If the backend never sends AgentAudioDone/AgentThinking/next message, we would block the idle timeout forever.
+   * This single timer fires after maxWaitForAgentReplyMs (capped at timeoutMs) and clears the waiting flag so the idle timeout can start.
+   * When we clear the flag via the normal path (e.g. MEANINGFUL_USER_ACTIVITY(AgentAudioDone)), we cancel this fallback with stopMaxWaitForAgentReplyTimer().
+   */
   private maxWaitForAgentReplyTimeoutId: number | null = null;
   private logger: Logger;
   /** Pause timeout until first user activity (speaking, typing/sending text, etc.). After any such event, timeout is allowed to run when conditions are idle. */
@@ -219,6 +224,15 @@ export class IdleTimeoutService {
         // User activity (e.g. sending text, conversation activity) — unpause timeout for this session
         this.hasSeenUserActivityThisSession = true;
         this.log(`MEANINGFUL_USER_ACTIVITY: activity=${event.activity}, agentState=${this.currentState.agentState}, isPlaying=${this.currentState.isPlaying}, isUserSpeaking=${this.currentState.isUserSpeaking}, isDisabled=${this.isDisabled}`);
+        // Issue #373/#489: AgentAudioDone/AgentDone means the turn is complete; clear "waiting after function result"
+        // so idle timeout can start. Real API may send only AgentAudioDone (no second ConversationText).
+        if (event.activity === 'AgentAudioDone' || event.activity === 'AgentDone') {
+          this.stopMaxWaitForAgentReplyTimer();
+          if (this.waitingForNextAgentMessageAfterFunctionResult) {
+            this.waitingForNextAgentMessageAfterFunctionResult = false;
+            this.log('MEANINGFUL_USER_ACTIVITY(' + event.activity + ') - agent turn done, no longer waiting for next agent message');
+          }
+        }
         // CRITICAL FIX: If agent is idle and not playing, enable resets and RESET timeout
         // This handles the case where MEANINGFUL_USER_ACTIVITY arrives after agent becomes idle
         // but before PLAYBACK_STATE_CHANGED with isPlaying=false

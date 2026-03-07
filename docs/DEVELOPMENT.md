@@ -58,12 +58,12 @@ npm install ../dg_react_agent/deepgram-voice-interaction-react-0.1.1.tgz
 - `npm run clean` - Clean build artifacts and temporary files
 
 ### **Testing**
-- `npm test` - Run unit tests with Jest
-- `npm run test:e2e` - Run E2E tests with Playwright
-- `npm run test:e2e:ui` - Run E2E tests with UI
-- `npm run test:e2e:debug` - Run E2E tests in debug mode
-- `npm run test:e2e:headed` - Run E2E tests in headed mode
-- `npm run test:e2e:report` - Show E2E test report
+- **Jest (from repo root):** `npm test` - Run unit/integration tests. Use `npm test -- tests/openai-proxy.test.ts` for a single suite.
+- **E2E (from test-app only):** Run E2E from the **test-app** directory. `npm run test:e2e` runs the **full** E2E suite; to run only specific specs use `npm run test:e2e -- <spec>.spec.js` (e.g. `npm run test:e2e -- openai-proxy-e2e.spec.js`). See `test-app/tests/e2e/README.md` and `docs/development/TEST-STRATEGY.md` for working directory and commands.
+- `npm run test:e2e:ui` - Run E2E with UI (from test-app)
+- `npm run test:e2e:debug` - Run E2E in debug mode (from test-app)
+- `npm run test:e2e:headed` - Run E2E headed (from test-app)
+- `npm run test:e2e:report` - Show last E2E report (from test-app)
 
 ### **Code Quality**
 - `npm run lint` - Run ESLint on source code
@@ -98,11 +98,12 @@ npm run dev
 # Run unit tests
 npm test
 
-# Run E2E tests
-npm run test:e2e
+# Run E2E tests (from test-app; use full suite or pass spec names)
+cd test-app && npm run test:e2e
+# Or only specific specs: npm run test:e2e -- openai-proxy-e2e.spec.js
 
-# Run all tests
-npm run test && npm run test:e2e
+# Run all tests (Jest from root, then E2E from test-app)
+npm test && cd test-app && npm run test:e2e
 ```
 
 ### **3. Creating Local Package**
