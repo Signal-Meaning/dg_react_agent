@@ -28,13 +28,13 @@
 
 ## Acceptance criteria (epic complete)
 
-- [ ] **Component docs updated:** Documentation that describes the component’s contract with the proxy (e.g. COMPONENT-PROXY-CONTRACT.md, test-app or component README, PROTOCOL-SPECIFICATION.md) is updated to reflect the improvements from this epic. In particular:
+- [x] **Component docs updated:** Documentation that describes the component’s contract with the proxy (e.g. COMPONENT-PROXY-CONTRACT.md, test-app or component README, PROTOCOL-SPECIFICATION.md) is updated to reflect the improvements from this epic. In particular:
   - **UtteranceEnd:** Document that the proxy sends `UtteranceEnd` with `channel` and `last_word_end` from upstream when present (Issue #494); default shape when API omits them.
   - **ConversationText source:** Document that assistant text comes only from `conversation.item.*` (upstream requirement); not from `response.output_text.done` or other control events (Issue #498, #500).
   - **Transcript:** Document that user transcript comes from `conversation.item.input_audio_transcription.completed` and `.delta` (accumulated per item_id, Issue #497); when transcription is enabled and audio is committed, same with `turn_detection: null` (Issue #495).
-  - **Raw events:** Document that the proxy does not forward raw upstream events (e.g. `conversation.item.*` as passthrough); only mapped component messages (Issue #500).
-- [ ] All sub-issues (#494–#500) resolved or documented as decided.
-- [ ] Integration tests and protocol spec reference the above behavior.
+  - **Raw events:** Document that the proxy does not forward raw upstream events (e.g. `conversation.item.*` as passthrough); only mapped component messages (Issue #500). **Done:** see [COMPONENT-PROXY-CONTRACT.md](../../BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md) section "Proxy → component: message sources (Epic #493)".
+- [x] All sub-issues (#494–#500) resolved or documented as decided.
+- [x] Integration tests and protocol spec reference the above behavior (PROTOCOL-SPECIFICATION.md §1, §3; openai-proxy-integration.test.ts).
 
 ---
 
@@ -42,4 +42,4 @@
 
 - Epic (#493) and sub-issues (#494–#500) created via `gh issue create`.
 - **Done:** #494 (speech_stopped), #495 (transcription when VAD disabled: documented), #496 (transcription expose actuals), #497 (delta accumulator), #498 (output_text.done rationale), #499 (function_call part → ConversationText for parity), #500 (raw conversation.item forward removed).
-- **Next:** Epic acceptance: update component docs per acceptance criteria; all sub-issues complete.
+- **Next:** Epic acceptance criteria satisfied. Optional: run full integration + E2E to confirm no regressions.

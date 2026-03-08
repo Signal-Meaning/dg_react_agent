@@ -60,6 +60,7 @@ The component starts its **idle timeout** (after which it may close the connecti
 | **Codes over message text** | Use structured codes from API and protocol-defined codes from proxy; avoid using message text for control flow or mapping. See "Codes over message text" above. |
 | **Idle timeout** | Component starts idle timer only when agent is done for the turn. Send **AgentDone** (semantic) when the proxy can trap the signal; **AgentAudioDone** (receipt only, legacy) for compatibility. For **text-only** or v2v see [Agent-done semantics](../issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md). |
 | **Function calls** | Host should execute functions on the app backend (proxies not involved). Frontend forwards `FunctionCallRequest` → backend executes → frontend sends `FunctionCallResponse`. |
+| **Message sources (translation proxy)** | UtteranceEnd, ConversationText (assistant), and Transcript come from mapped upstream events only; proxy does not forward raw upstream events. See "Proxy → component: message sources (Epic #493)" above. |
 
 Tests that enforce this contract (for either proxy):
 
@@ -67,3 +68,17 @@ Tests that enforce this contract (for either proxy):
 - **E2E**: `test-app/tests/e2e/readiness-contract-e2e.spec.js` (runs with `E2E_BACKEND=openai` or `E2E_BACKEND=deepgram`)
 
 See [Issue #406](../issues/ISSUE-406/README.md) for context on readiness and conversation-after-refresh with the OpenAI provider.
+
+## Proxy → component: message sources (Epic #493)
+
+When using a **translation proxy** (e.g. OpenAI Realtime), the component receives the same protocol messages; the proxy maps upstream events to that protocol. The following describes where each relevant message type comes from so component and app developers know what to expect. See [OPENAI-PROXY-EVENT-MAP-GAPS](../issues/OPENAI-PROXY-EVENT-MAP-GAPS/EPIC.md) (Epic #493) and [PROTOCOL-SPECIFICATION](../../tests/integration/PROTOCOL-SPECIFICATION.md).
+
+| Message / behavior | Source (translation proxy) |
+|--------------------|----------------------------|
+| **UtteranceEnd** | Mapped from upstream VAD/speech_stopped. The proxy sends `channel` and `last_word_end` from upstream when present (Issue #494); uses defaults when the API omits them. |
+| **ConversationText (assistant)** | **Only** from **conversation.item** (created/added/done) or greeting. Assistant text is **not** sent from control events such as `response.output_text.done` (upstream requirement; Issue #498, #500). Content includes text parts and **function_call** parts formatted as `"Function call: name(args)"` for parity with Deepgram (Issue #499). |
+| **Transcript** (user) | From **conversation.item.input_audio_transcription.completed** (final) and **.delta** (interim). The proxy accumulates deltas per item_id and sends interim Transcript with accumulated text (Issue #497). When the upstream sends them, `start`, `duration`, `channel`, `channel_index`, and `alternatives` are passed through (Issue #496). These events are emitted when transcription is enabled and audio is committed, including when server VAD is disabled (`turn_detection: null`) (Issue #495). |
+| **Raw upstream events** | The proxy **does not** forward raw upstream JSON (e.g. raw `conversation.item.added`) to the client. Only mapped component messages (ConversationText, Transcript, UtteranceEnd, etc.) and control messages (SettingsApplied, AgentAudioDone, Error) are sent (Issue #500). |
+| **Unmapped upstream events** | If the upstream sends an event type the proxy does not map, the proxy sends **Error** to the client with `code: 'unmapped_upstream_event'` (treated as a warning; goal is to map all events). It does not forward the raw event as text. |
+
+Tests that cover these behaviors: see [PROTOCOL-SPECIFICATION](../../tests/integration/PROTOCOL-SPECIFICATION.md) §1 and §3 and the integration test file `openai-proxy-integration.test.ts`.
