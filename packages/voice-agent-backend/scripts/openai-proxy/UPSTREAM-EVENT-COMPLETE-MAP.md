@@ -18,8 +18,8 @@ Every `msg.type` that has its own branch in the proxy. **Mapped** = we send one 
 | **error** | `type`, `error?: { message?, code? }`. Proxy uses `error.code` (e.g. `idle_timeout`, `session_max_duration`) and `error.message`. | Map to **Error** (description, code). Buffer if idle_timeout and response in progress; else send immediately. | Yes |
 | **input_audio_buffer.speech_started** | `type`. No payload fields read. | Send **UserStartedSpeaking** (text). | Yes |
 | **input_audio_buffer.speech_stopped** | `type`, `channel?`, `last_word_end?` (Issue #494). Proxy maps via `mapSpeechStoppedToUtteranceEnd`; use actuals when present, else defaults `channel: [0,1]`, `last_word_end: 0`. | Send **UtteranceEnd** (text). | Yes |
-| **conversation.item.input_audio_transcription.completed** | `type`, `item_id?`, `content_index?`, `transcript?`. Proxy uses `transcript` for **Transcript**. Emitted when transcription is enabled and audio is committed (Issue #495: same with turn_detection null). | Map to **Transcript** (transcript, is_final: true). | Yes |
-| **conversation.item.input_audio_transcription.delta** | `type`, `item_id?`, `content_index?`, `delta?`. Proxy accumulates per `item_id` (Issue #497). Emitted when transcription enabled and audio committed (Issue #495: same with turn_detection null). | Map to **Transcript** (interim, accumulated); clear accumulator on .completed for that item_id. | Yes |
+| **conversation.item.input_audio_transcription.completed** | `type`, `item_id?`, `content_index?`, `transcript?`, and optionally `start?`, `duration?`, `channel?`, `channel_index?`, `alternatives?` (Issue #496). Proxy passes through actuals when present; defaults when absent. Emitted when transcription is enabled and audio is committed (Issue #495: same with turn_detection null). | Map to **Transcript** (transcript, is_final: true; start, duration, channel, channel_index, alternatives from upstream when present). | Yes |
+| **conversation.item.input_audio_transcription.delta** | `type`, `item_id?`, `content_index?`, `delta?`, and optionally `start?`, `duration?`, `channel?`, `channel_index?` (Issue #496). Proxy accumulates per `item_id` (Issue #497). Emitted when transcription enabled and audio committed (Issue #495: same with turn_detection null). | Map to **Transcript** (interim, accumulated); pass through start/duration/channel when present; clear accumulator on .completed for that item_id. | Yes |
 | **response.output_audio.delta** | `type`, `delta` (base64 PCM). Proxy decodes to buffer and sends **binary** to client. | If first output, send **AgentStartedSpeaking**. Decode base64 → PCM; send **binary**. | Yes |
 | **response.output_audio.done** | `type` (no payload read). | Send **AgentAudioDone**. Do not clear responseInProgress. | Yes |
 | **response.done** | `type`, `response?` (API may include response object). Proxy does not read payload. | Send **AgentAudioDone** if needed. Clear responseInProgress; maybe send deferred response.create. | Yes |
@@ -51,9 +51,9 @@ Proxy maps to **Error** with `description` ← `error.message`, `code` ← `erro
 
 **conversation.item.input_audio_transcription.completed**
 ```json
-{ "type": "conversation.item.input_audio_transcription.completed", "item_id": "item_1", "transcript": "Hello, how can I help?" }
+{ "type": "conversation.item.input_audio_transcription.completed", "item_id": "item_1", "transcript": "Hello, how can I help?", "start": 1.5, "duration": 2.25, "channel": 1, "channel_index": [1] }
 ```
-Proxy maps `transcript` to **Transcript** (is_final: true).
+Proxy maps to **Transcript** (is_final: true); when upstream sends `start`, `duration`, `channel`, `channel_index`, or `alternatives`, they are passed through (Issue #496). Defaults used when absent.
 
 **conversation.item.added** (assistant message)
 ```json

@@ -138,6 +138,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   let mockSendTranscriptThenFunctionCallAfterSession = false;
   /** Issue #497: when true, mock sends multiple input_audio_transcription.delta events (same item_id) after session.updated to test accumulator. */
   let mockSendTranscriptionDeltasForAccumulator = false;
+  /** Issue #496: when true, mock sends input_audio_transcription.completed with start, duration, channel so client receives Transcript with actuals. */
+  let mockSendTranscriptionCompletedWithActuals = false;
   /** When true, mock sends response.output_audio.delta (base64 PCM) then .done before response.output_text.done (so client receives binary PCM from proxy). */
   let mockSendOutputAudioBeforeText = false;
   /** Issue #414 3.2: when > 0, mock delays sending response completion (output_audio.delta, .done, output_text.done) by this many ms after receiving response.create. */
@@ -399,6 +401,21 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                 }));
               }
               if (debugMock) process.stdout.write('[mock] sent 3 input_audio_transcription.delta for Issue #497\n');
+            } else if (mockSendTranscriptionCompletedWithActuals) {
+              mockSendTranscriptionCompletedWithActuals = false;
+              setImmediate(() => {
+                socket.send(JSON.stringify({
+                  type: 'conversation.item.input_audio_transcription.completed',
+                  item_id: 'item_496',
+                  content_index: 0,
+                  transcript: 'Hello world',
+                  start: 1.5,
+                  duration: 2.25,
+                  channel: 1,
+                  channel_index: [1],
+                }));
+              });
+              if (debugMock) process.stdout.write('[mock] sent input_audio_transcription.completed with actuals for Issue #496\n');
             } else if (mockSendFunctionCallAfterSession) {
               mockSendFunctionCallAfterSession = false;
               socket.send(JSON.stringify({
@@ -2270,6 +2287,61 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     });
     client.on('error', (err) => finish(err));
   }, 5000);
+
+  /**
+   * Issue #496: When upstream sends input_audio_transcription.completed with start, duration, channel (or channel_index),
+   * proxy must pass those through to Transcript; use defaults only when API omits them.
+   */
+  itMockOnly('Issue #496: input_audio_transcription.completed with start/duration/channel → Transcript has actuals', (done) => {
+    mockSendTranscriptionCompletedWithActuals = true;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    const t = setTimeout(() => {
+      finish(new Error('Issue #496: timeout, did not receive Transcript with actuals'));
+    }, 5000);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as {
+          type?: string;
+          transcript?: string;
+          is_final?: boolean;
+          start?: number;
+          duration?: number;
+          channel?: number;
+          channel_index?: number[];
+        };
+        if (msg.type === 'Transcript' && msg.is_final === true) {
+          clearTimeout(t);
+          expect(msg.transcript).toBe('Hello world');
+          expect(msg.start).toBe(1.5);
+          expect(msg.duration).toBe(2.25);
+          expect(msg.channel).toBe(1);
+          expect(msg.channel_index).toEqual([1]);
+          finish();
+        }
+      } catch (e) {
+        finish(e as Error);
+      }
+    });
+    client.on('close', () => {
+      if (!finished) {
+        clearTimeout(t);
+        finish(new Error('Issue #496: connection closed before receiving Transcript'));
+      }
+    });
+    client.on('error', (err) => finish(err));
+  }, 6000);
 
   /**
    * Upstream requirement: use conversation.item for finalized message and conversation history; response.output_text.done is control only.

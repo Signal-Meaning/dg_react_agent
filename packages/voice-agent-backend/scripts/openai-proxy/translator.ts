@@ -436,20 +436,31 @@ export function mapErrorToComponentError(event: OpenAIErrorEvent): ComponentErro
   return { type: 'Error', description: String(msg), code };
 }
 
-/** OpenAI server event: conversation.item.input_audio_transcription.completed (user speech transcript) */
+/** OpenAI server event: conversation.item.input_audio_transcription.completed (user speech transcript).
+ * Issue #496: optional start, duration, channel, channel_index — pass through when present; defaults when absent. */
 export interface OpenAIInputAudioTranscriptionCompleted {
   type: 'conversation.item.input_audio_transcription.completed';
   item_id?: string;
   content_index?: number;
   transcript?: string;
+  start?: number;
+  duration?: number;
+  channel?: number;
+  channel_index?: number[];
+  alternatives?: Array<{ transcript?: string; confidence?: number; words?: unknown[] }>;
 }
 
-/** OpenAI server event: conversation.item.input_audio_transcription.delta (interim user transcript) */
+/** OpenAI server event: conversation.item.input_audio_transcription.delta (interim user transcript).
+ * Issue #496: optional start, duration, channel, channel_index — pass through when present. */
 export interface OpenAIInputAudioTranscriptionDelta {
   type: 'conversation.item.input_audio_transcription.delta';
   item_id?: string;
   content_index?: number;
   delta?: string;
+  start?: number;
+  duration?: number;
+  channel?: number;
+  channel_index?: number[];
 }
 
 /** Component message: Transcript (incoming from proxy; same shape as Deepgram Results/Transcript for onTranscriptUpdate) */
@@ -468,27 +479,42 @@ export interface ComponentTranscript {
 /**
  * Map OpenAI conversation.item.input_audio_transcription.completed → component Transcript.
  * Component maps this to TranscriptResponse and calls onTranscriptUpdate (Issue #414).
+ * Issue #496: use upstream start, duration, channel, channel_index, alternatives when present; defaults when absent.
  */
 export function mapInputAudioTranscriptionCompletedToTranscript(
   event: OpenAIInputAudioTranscriptionCompleted
 ): ComponentTranscript {
   const transcript = event.transcript ?? '';
+  const channelIndex = Array.isArray(event.channel_index) && event.channel_index.length > 0
+    ? event.channel_index
+    : (typeof event.channel === 'number' ? [event.channel] : [0]);
+  const channel = typeof event.channel === 'number' ? event.channel : (channelIndex[0] ?? 0);
+  const start = typeof event.start === 'number' ? event.start : 0;
+  const duration = typeof event.duration === 'number' ? event.duration : 0;
+  const alternatives = Array.isArray(event.alternatives) && event.alternatives.length > 0
+    ? event.alternatives.map((a) => ({
+        transcript: a.transcript ?? transcript,
+        confidence: typeof a.confidence === 'number' ? a.confidence : 1,
+        words: Array.isArray(a.words) ? a.words : [],
+      }))
+    : [{ transcript, confidence: 1, words: [] }];
   return {
     type: 'Transcript',
     transcript,
     is_final: true,
     speech_final: true,
-    channel: 0,
-    channel_index: [0],
-    start: 0,
-    duration: 0,
-    alternatives: [{ transcript, confidence: 1, words: [] }],
+    channel,
+    channel_index: channelIndex,
+    start,
+    duration,
+    alternatives,
   };
 }
 
 /**
  * Map OpenAI conversation.item.input_audio_transcription.delta → component Transcript (interim).
  * Component maps this to TranscriptResponse and calls onTranscriptUpdate (Issue #414).
+ * Issue #496: use upstream start, duration, channel, channel_index when present; defaults when absent.
  */
 export function mapInputAudioTranscriptionDeltaToTranscript(
   event: OpenAIInputAudioTranscriptionDelta,
@@ -496,15 +522,21 @@ export function mapInputAudioTranscriptionDeltaToTranscript(
 ): ComponentTranscript {
   const delta = event.delta ?? '';
   const transcript = (accumulated ?? '') + delta;
+  const channelIndex = Array.isArray(event.channel_index) && event.channel_index.length > 0
+    ? event.channel_index
+    : (typeof event.channel === 'number' ? [event.channel] : [0]);
+  const channel = typeof event.channel === 'number' ? event.channel : (channelIndex[0] ?? 0);
+  const start = typeof event.start === 'number' ? event.start : 0;
+  const duration = typeof event.duration === 'number' ? event.duration : 0;
   return {
     type: 'Transcript',
     transcript,
     is_final: false,
     speech_final: false,
-    channel: 0,
-    channel_index: [0],
-    start: 0,
-    duration: 0,
+    channel,
+    channel_index: channelIndex,
+    start,
+    duration,
     alternatives: [{ transcript, confidence: 1, words: [] }],
   };
 }

@@ -18,7 +18,7 @@
 |---|-----|--------------|-----------|--------|
 | 1 | **speech_stopped** — map `channel`, `last_word_end` (and word timings) from upstream to **UtteranceEnd**; stop using fixed defaults when API sends actuals | [Issue #494](https://github.com/Signal-Meaning/dg_react_agent/issues/494) | [TDD-speech-stopped-fields.md](./TDD-speech-stopped-fields.md) | **Done** |
 | 2a | **Transcription events when VAD disabled** — Confirm whether `input_audio_transcription.completed` / `.delta` are expected when server VAD is disabled; if not, document and optionally gate | [Issue #495](https://github.com/Signal-Meaning/dg_react_agent/issues/495) | [TDD-transcription-events-vad.md](./TDD-transcription-events-vad.md) | **Done** |
-| 2b | **Transcription completed/delta — expose actuals** — Use API fields (alternatives, words, start, duration, channel) when present; use defaults only when absent | [Issue #496](https://github.com/Signal-Meaning/dg_react_agent/issues/496) | [TDD-transcription-expose-actuals.md](./TDD-transcription-expose-actuals.md) | Open |
+| 2b | **Transcription completed/delta — expose actuals** — Use API fields (alternatives, words, start, duration, channel) when present; use defaults only when absent | [Issue #496](https://github.com/Signal-Meaning/dg_react_agent/issues/496) | [TDD-transcription-expose-actuals.md](./TDD-transcription-expose-actuals.md) | **Done** |
 | 3 | **Delta accumulator** — Accumulate `conversation.item.input_audio_transcription.delta` per `item_id` and send accumulated interim **Transcript**; DRY with existing translator mapper | [Issue #497](https://github.com/Signal-Meaning/dg_react_agent/issues/497) | (implementation + tests) | **Done** |
 | 4 | **response.output_text.done and ConversationText** — Document why we do not use this event for ConversationText; capture best practice and rationale | [Issue #498](https://github.com/Signal-Meaning/dg_react_agent/issues/498) | [DOC-output-text-done-rationale.md](./DOC-output-text-done-rationale.md) | **Done** |
 | 5 | **function_call part in assistant items** — Decide if we need to surface function_call content (e.g. for parity with Deepgram); document or implement | [Issue #499](https://github.com/Signal-Meaning/dg_react_agent/issues/499) | [TDD-function-call-part-assistant.md](./TDD-function-call-part-assistant.md) | Open |
@@ -41,5 +41,5 @@
 ## Status
 
 - Epic (#493) and sub-issues (#494–#500) created via `gh issue create`.
-- **Done:** #494 (speech_stopped), #495 (transcription when VAD disabled: documented — events expected when transcription enabled + commit), #497 (delta accumulator), #498 (output_text.done rationale), #500 (raw conversation.item forward removed).
-- **Next:** #496 (transcription expose actuals) or #499 (function_call part).
+- **Done:** #494 (speech_stopped), #495 (transcription when VAD disabled: documented), #496 (transcription expose actuals: start, duration, channel, channel_index, alternatives), #497 (delta accumulator), #498 (output_text.done rationale), #500 (raw conversation.item forward removed).
+- **Next:** #499 (function_call part in assistant items).

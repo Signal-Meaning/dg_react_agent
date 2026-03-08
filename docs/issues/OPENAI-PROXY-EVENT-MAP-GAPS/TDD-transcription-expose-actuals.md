@@ -19,10 +19,10 @@
 
 ## TDD steps
 
-1. **Red:** Add unit tests (and/or integration tests) that feed events with partial and full payloads; assert output **Transcript** contains actuals where provided and defaults only where omitted.
-2. **Green:** Extend `mapInputAudioTranscriptionCompletedToTranscript` (and delta mapper if needed) to accept and pass through the additional fields; update types/interfaces.
-3. **Refactor:** Keep mapper pure; document API shape in UPSTREAM-EVENT-COMPLETE-MAP.md.
-4. Verify component/onTranscriptUpdate still receives a valid shape.
+1. **Red:** Add unit tests (and/or integration tests) that feed events with partial and full payloads; assert output **Transcript** contains actuals where provided and defaults only where omitted. **Done:** integration test `Issue #496: input_audio_transcription.completed with start/duration/channel → Transcript has actuals`.
+2. **Green:** Extend `mapInputAudioTranscriptionCompletedToTranscript` (and delta mapper if needed) to accept and pass through the additional fields; update types/interfaces. **Done:** translator.ts — optional `start`, `duration`, `channel`, `channel_index`, `alternatives` on completed; optional `start`, `duration`, `channel`, `channel_index` on delta; mappers use actuals when present, defaults when absent.
+3. **Refactor:** Keep mapper pure; document API shape in UPSTREAM-EVENT-COMPLETE-MAP.md. **Done.**
+4. Verify component/onTranscriptUpdate still receives a valid shape. Component expects TranscriptResponse (channel, channel_index, start, duration, alternatives); mapper output matches.
 
 ## References
 
