@@ -31,13 +31,14 @@ import {
   skipIfNoProxyForBackend,
   skipUnlessRealAPIs,
   setupTestPageForBackend,
+  setupFunctionCallingTest,
   waitForSettingsApplied,
+  waitForFunctionCall,
   establishConnectionViaText,
   sendMessageAndWaitForResponse,
   sendTextMessage,
   waitForAgentResponse,
   waitForAgentResponseEnhanced,
-  waitForAgentState,
   disconnectComponent,
   getAgentState,
   assertNoRecoverableAgentErrors,
@@ -62,7 +63,7 @@ const AGENT_STATE_IDLE = 'idle';
  * time-like substring (HH:MM or H:MM) or the literal "UTC" so we don't depend on exact phrasing.
  */
 const FUNCTION_CALL_TIME_RESPONSE_PATTERN = /\d{1,2}:\d{2}|UTC/;
-/** Tests 6 and 6b require the app backend running (e.g. `cd test-app && npm run backend`) so POST /function-call is available; otherwise they timeout waiting for the time response. */
+/** Tests 6 and 6b use setupFunctionCallingTest(page, { useBackend: true }) then setupTestPageForBackend with enable-function-calling; they wait for function-call-tracker before asserting time. Same backend path as other proxy E2E; useBackend ensures prerequisites (tracking arrays, testFunctions) without overriding handleFunctionCall. See test-app/tests/e2e/README.md § "Function-call tests". */
 
 test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   test.beforeEach(() => {
@@ -284,14 +285,14 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     if (process.env.SKIP_FUNCTION_CALL_E2E === '1') {
       test.skip(true, 'SKIP_FUNCTION_CALL_E2E=1; requires backend running for POST /function-call');
     }
-    const { pathWithQuery, getOpenAIProxyParams, BASE_URL } = await import('./helpers/test-helpers.mjs');
-    const params = { ...getOpenAIProxyParams(), 'test-mode': 'true', 'enable-function-calling': 'true' };
-    const pathPart = pathWithQuery(params);
-    await page.goto(pathPart.startsWith('http') ? pathPart : BASE_URL + pathPart);
-    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    await setupFunctionCallingTest(page, { useBackend: true });
+    await setupTestPageForBackend(page, { extraParams: { 'test-mode': 'true', 'enable-function-calling': 'true' } });
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, "What time is it?");
+    // Wait for component to receive FunctionCallRequest (same backend as other tests; isolates protocol/setup vs backend).
+    const functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
+    expect(functionCallInfo.count, 'FunctionCallRequest should be received (function-call-tracker); if 0, check proxy/API and enable-function-calling').toBeGreaterThanOrEqual(1);
     // Issue #478: Wait for the function result (time) to appear. Do not pass on greeting — agent-response
     // shows the latest assistant message; we must wait for the one that contains the time (backend /function-call).
     const agentResponseEl = page.locator('[data-testid="agent-response"]');
@@ -317,14 +318,14 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     if (process.env.SKIP_FUNCTION_CALL_E2E === '1') {
       test.skip(true, 'SKIP_FUNCTION_CALL_E2E=1; requires backend running for POST /function-call');
     }
-    const { pathWithQuery, getOpenAIProxyParams, BASE_URL } = await import('./helpers/test-helpers.mjs');
-    const params = { ...getOpenAIProxyParams(), 'test-mode': 'true', 'enable-function-calling': 'true' };
-    const pathPart = pathWithQuery(params);
-    await page.goto(pathPart.startsWith('http') ? pathPart : BASE_URL + pathPart);
-    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    await setupFunctionCallingTest(page, { useBackend: true });
+    await setupTestPageForBackend(page, { extraParams: { 'test-mode': 'true', 'enable-function-calling': 'true' } });
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, 'What time is it?');
+    // Wait for component to receive FunctionCallRequest (same backend as other tests; isolates protocol/setup vs backend).
+    const functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
+    expect(functionCallInfo.count, 'FunctionCallRequest should be received (function-call-tracker); if 0, check proxy/API and enable-function-calling').toBeGreaterThanOrEqual(1);
     // Wait for function result (time) to appear in agent-response (same as test 6).
     const agentResponseEl = page.locator('[data-testid="agent-response"]');
     await expect(agentResponseEl).toHaveText(FUNCTION_CALL_TIME_RESPONSE_PATTERN, { timeout: FUNCTION_CALL_RESULT_TIMEOUT });

@@ -8,6 +8,11 @@
  *
  * Run: npm test -- function-call-endpoint-integration
  * (from test-app; or from repo root if Jest picks up test-app/tests/**)
+ *
+ * Same backend implementation (backend-server.js + function-call-handlers.js) is used when running
+ * `npm run backend` for E2E; that server listens on PROXY_PORT (default 8080) and serves both
+ * the proxy and POST /function-call. E2E tests 6 and 6b require that backend running. See
+ * docs/issues/ISSUE-489/TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md § E2E environment requirements.
  * @jest-environment node
  */
 

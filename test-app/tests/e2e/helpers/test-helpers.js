@@ -402,12 +402,15 @@ async function setupTestPageWithOpenAIProxy(page, timeout = 10000) {
  * Navigate to the test app with the backend selected by E2E_BACKEND (openai or deepgram).
  * Use for E2E tests that run/pass for either proxy (Issue #406 readiness contract).
  * @param {import('@playwright/test').Page} page
- * @param {number} timeout - Timeout in ms (default: 10000)
+ * @param {number | { timeout?: number; extraParams?: Record<string, string> }} timeoutOrOptions - Timeout in ms (default: 10000), or options object with timeout and/or extraParams (merged into query string)
  */
-async function setupTestPageForBackend(page, timeout = 10000) {
+async function setupTestPageForBackend(page, timeoutOrOptions = 10000) {
+  const timeout = typeof timeoutOrOptions === 'number' ? timeoutOrOptions : (timeoutOrOptions.timeout ?? 10000);
+  const extraParams = typeof timeoutOrOptions === 'object' && timeoutOrOptions.extraParams ? timeoutOrOptions.extraParams : {};
   const { getBackendProxyParams, BASE_URL } = await import('./test-helpers.mjs');
   const { pathWithQuery } = await import('./app-paths.mjs');
-  const pathPart = pathWithQuery(getBackendProxyParams());
+  const params = { ...getBackendProxyParams(), ...extraParams };
+  const pathPart = pathWithQuery(params);
   const url = pathPart.startsWith('http') ? pathPart : BASE_URL + pathPart;
   await page.goto(url);
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
@@ -1765,10 +1768,12 @@ async function tryPromptsForFunctionCall(page, prompts, options = {}) {
 
 /**
  * Set up function calling test infrastructure
+ * Call before page.goto() so addInitScript runs before the page loads.
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {Object} options - Options
  * @param {Array} options.functions - Function definitions (default: get_current_time)
- * @param {Function} options.handler - Function handler (default: time handler)
+ * @param {Function} options.handler - Function handler (default: time handler). Omit when useBackend: true.
+ * @param {boolean} options.useBackend - When true, only set tracking arrays and optional testFunctions; do NOT set handleFunctionCall so the app uses forwardFunctionCallToBackend (Issue #407). Use for E2E tests that assert the backend path (e.g. openai-proxy-e2e 6, 6b).
  * @returns {Promise<void>}
  */
 async function setupFunctionCallingTest(page, options = {}) {
@@ -1808,8 +1813,21 @@ async function setupFunctionCallingTest(page, options = {}) {
     }
     return { success: false, error: 'Unknown function' };
   };
+
+  if (options.useBackend) {
+    // Backend path: only set tracking arrays and optional testFunctions; app will use forwardFunctionCallToBackend
+    await page.addInitScript((functions) => {
+      window.functionCallRequests = [];
+      window.functionCallResponses = [];
+      if (functions && functions.length > 0) {
+        window.testFunctions = functions;
+      }
+      // Do NOT set window.handleFunctionCall so App.tsx uses getFunctionCallBackendBaseUrl + forwardFunctionCallToBackend
+    }, options.functions || defaultFunctions);
+    return;
+  }
   
-  // Use addInitScript to set up everything before page loads
+  // In-browser handler path
   await page.addInitScript((functions, handler) => {
     window.testFunctions = functions;
     window.testFunctionHandler = handler;
