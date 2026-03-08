@@ -160,6 +160,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let hasSentAgentAudioDoneForCurrentResponse = false;
     /** Issue #482: Buffer idle_timeout Error and send after ConversationText so client can show assistant bubble before close. */
     let pendingIdleTimeoutError: ComponentError | null = null;
+    /** Issue #497: accumulate input_audio_transcription.delta per item_id; clear on .completed for that item_id. */
+    const transcriptionDeltaAccumulator = new Map<string, string>();
     /** Issue #414: TTS chunk boundary diagnostic (set OPENAI_PROXY_TTS_BOUNDARY_DEBUG=1 to log same format as test-app E2E). */
     let ttsChunkLengths: number[] = [];
     let lastTtsChunk: Buffer | null = null;
@@ -594,6 +596,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         } else if (msg.type === 'conversation.item.input_audio_transcription.completed') {
           // Issue #414: map OpenAI user transcript to component Transcript → onTranscriptUpdate
           const completedMsg = msg as Parameters<typeof mapInputAudioTranscriptionCompletedToTranscript>[0];
+          const itemId = completedMsg.item_id;
+          if (itemId) transcriptionDeltaAccumulator.delete(itemId);
           const transcriptText = (completedMsg.transcript ?? '').slice(0, 60);
           emitLog({
             severityNumber: SeverityNumber.INFO,
@@ -604,16 +608,18 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           const transcript = mapInputAudioTranscriptionCompletedToTranscript(completedMsg);
           clientWs.send(JSON.stringify(transcript));
         } else if (msg.type === 'conversation.item.input_audio_transcription.delta') {
-          // Issue #414: send interim transcript (delta); we do not accumulate across deltas here (each delta is sent as its own Transcript)
+          // Issue #497: accumulate deltas per item_id; send Transcript with accumulated text (DRY: translator already accepts accumulated).
+          const deltaMsg = msg as Parameters<typeof mapInputAudioTranscriptionDeltaToTranscript>[0];
+          const itemId = deltaMsg.item_id ?? '';
+          const accumulated = transcriptionDeltaAccumulator.get(itemId) ?? '';
+          const transcript = mapInputAudioTranscriptionDeltaToTranscript(deltaMsg, accumulated);
+          transcriptionDeltaAccumulator.set(itemId, transcript.transcript);
           emitLog({
             severityNumber: SeverityNumber.DEBUG,
             severityText: 'DEBUG',
-            body: 'upstream→client: input_audio_transcription.delta → Transcript (interim)',
+            body: `upstream→client: input_audio_transcription.delta → Transcript (interim, accumulated length=${transcript.transcript.length})`,
             attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'upstream→client' },
           });
-          const transcript = mapInputAudioTranscriptionDeltaToTranscript(
-            msg as Parameters<typeof mapInputAudioTranscriptionDeltaToTranscript>[0]
-          );
           clientWs.send(JSON.stringify(transcript));
         } else if (msg.type === 'response.output_audio.delta') {
           // Component expects raw PCM (binary frame) for playback; upstream sends JSON with base64 delta.

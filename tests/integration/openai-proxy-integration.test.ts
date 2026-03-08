@@ -136,6 +136,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   let mockSendOutputTextOnlyAfterSession = false;
   /** When true, mock sends output_audio_transcript.done then response.function_call_arguments.done after session.updated */
   let mockSendTranscriptThenFunctionCallAfterSession = false;
+  /** Issue #497: when true, mock sends multiple input_audio_transcription.delta events (same item_id) after session.updated to test accumulator. */
+  let mockSendTranscriptionDeltasForAccumulator = false;
   /** When true, mock sends response.output_audio.delta (base64 PCM) then .done before response.output_text.done (so client receives binary PCM from proxy). */
   let mockSendOutputAudioBeforeText = false;
   /** Issue #414 3.2: when > 0, mock delays sending response completion (output_audio.delta, .done, output_text.done) by this many ms after receiving response.create. */
@@ -384,6 +386,19 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                 text: 'Function call: get_current_datetime({ })',
               }));
               if (debugMock) process.stdout.write('[mock] sent output_text.done only (outputTextOnly)\n');
+            } else if (mockSendTranscriptionDeltasForAccumulator) {
+              mockSendTranscriptionDeltasForAccumulator = false;
+              const itemId = 'item_accum_497';
+              const deltas = ['Hel', 'lo ', 'world'];
+              for (const delta of deltas) {
+                socket.send(JSON.stringify({
+                  type: 'conversation.item.input_audio_transcription.delta',
+                  item_id: itemId,
+                  content_index: 0,
+                  delta,
+                }));
+              }
+              if (debugMock) process.stdout.write('[mock] sent 3 input_audio_transcription.delta for Issue #497\n');
             } else if (mockSendFunctionCallAfterSession) {
               mockSendFunctionCallAfterSession = false;
               socket.send(JSON.stringify({
@@ -2139,6 +2154,70 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         return;
       }
       // Success is asserted in the 4s timeout: SettingsApplied and no FCR
+    });
+    client.on('error', (err) => finish(err));
+  }, 5000);
+
+  /**
+   * Issue #497: Proxy must accumulate input_audio_transcription.delta per item_id and send Transcript with accumulated text.
+   * Mock sends three deltas ("Hel", "lo ", "world") for the same item_id; client must receive three Transcripts with
+   * transcript "Hel", "Hello ", "Hello world" (is_final: false).
+   */
+  itMockOnly('Issue #497: input_audio_transcription.delta accumulated per item_id → Transcript with accumulated text', (done) => {
+    mockSendTranscriptionDeltasForAccumulator = true;
+    const transcripts: Array<{ transcript: string; is_final: boolean }> = [];
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    const t = setTimeout(() => {
+      try {
+        expect(transcripts.length).toBe(3);
+        expect(transcripts[0].transcript).toBe('Hel');
+        expect(transcripts[1].transcript).toBe('Hello ');
+        expect(transcripts[2].transcript).toBe('Hello world');
+        transcripts.forEach((x) => expect(x.is_final).toBe(false));
+        finish();
+      } catch (e) {
+        finish(e as Error);
+      }
+    }, 4000);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; transcript?: string; is_final?: boolean };
+        if (msg.type === 'Transcript') {
+          transcripts.push({ transcript: msg.transcript ?? '', is_final: msg.is_final ?? false });
+          if (transcripts.length >= 3) {
+            clearTimeout(t);
+            try {
+              expect(transcripts[0].transcript).toBe('Hel');
+              expect(transcripts[1].transcript).toBe('Hello ');
+              expect(transcripts[2].transcript).toBe('Hello world');
+              transcripts.forEach((x) => expect(x.is_final).toBe(false));
+              finish();
+            } catch (e) {
+              finish(e as Error);
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('close', () => {
+      if (!finished) {
+        clearTimeout(t);
+        finish(new Error(`Issue #497: connection closed with ${transcripts.length} Transcript(s); expected 3 accumulated`));
+      }
     });
     client.on('error', (err) => finish(err));
   }, 5000);

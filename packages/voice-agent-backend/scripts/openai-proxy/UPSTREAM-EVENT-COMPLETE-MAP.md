@@ -19,7 +19,7 @@ Every `msg.type` that has its own branch in the proxy. **Mapped** = we send one 
 | **input_audio_buffer.speech_started** | `type`. No payload fields read. | Send **UserStartedSpeaking** (text). | Yes |
 | **input_audio_buffer.speech_stopped** | `type` (API may send `channel`, word timings). Proxy sends fixed `UtteranceEnd` with `channel: [0,1]`, `last_word_end: 0`. | Send **UtteranceEnd** (text). | Yes |
 | **conversation.item.input_audio_transcription.completed** | `type`, `item_id?`, `content_index?`, `transcript?`. Proxy uses `transcript` for **Transcript**. | Map to **Transcript** (transcript, is_final: true). | Yes |
-| **conversation.item.input_audio_transcription.delta** | `type`, `item_id?`, `content_index?`, `delta?`. Proxy uses `delta` for interim **Transcript**. | Map to **Transcript** (interim, is_final: false). | Yes |
+| **conversation.item.input_audio_transcription.delta** | `type`, `item_id?`, `content_index?`, `delta?`. Proxy accumulates per `item_id` (Issue #497); uses existing mapper with accumulated string. | Map to **Transcript** (interim, is_final: false) with **accumulated** text; clear accumulator on .completed for that item_id. | Yes |
 | **response.output_audio.delta** | `type`, `delta` (base64 PCM). Proxy decodes to buffer and sends **binary** to client. | If first output, send **AgentStartedSpeaking**. Decode base64 → PCM; send **binary**. | Yes |
 | **response.output_audio.done** | `type` (no payload read). | Send **AgentAudioDone**. Do not clear responseInProgress. | Yes |
 | **response.done** | `type`, `response?` (API may include response object). Proxy does not read payload. | Send **AgentAudioDone** if needed. Clear responseInProgress; maybe send deferred response.create. | Yes |
