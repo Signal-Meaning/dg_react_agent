@@ -352,11 +352,12 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   });
 
   /**
-   * Diagnostic: pinpoint where the function-call chain breaks (step 1 backend, step 2 sendResponse, step 3 proxy).
+   * Diagnostic: pinpoint where the function-call chain breaks (step 1 browser→backend, step 2 app sent sendResponse).
    * Runs the same flow as test 6 but after waitForFunctionCall reads window.__functionCallDiagnostics and
-   * (when Playwright started the backend) test-results/e2e-function-call-output.json. Fails at the first step that does not hold.
+   * network capture for /function-call. Asserts only steps 1–2 (backend 200 + CORS, app sent result). Does not assert
+   * on proxy behavior (that is covered by integration tests and by tests 6/6b outcome when they pass).
    */
-  test('6d. Diagnostic – pinpoint function-call failure (step 1–3)', async ({ page }) => {
+  test('6d. Diagnostic – pinpoint function-call failure (step 1–2)', async ({ page }) => {
     skipUnlessRealAPIs('Requires USE_REAL_APIS=1 (Issue #489).');
     if (process.env.SKIP_FUNCTION_CALL_E2E === '1') {
       test.skip(true, 'SKIP_FUNCTION_CALL_E2E=1');
@@ -404,6 +405,7 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     // Allow time for backend and proxy to run
     await page.waitForTimeout(4000);
     const diagnostics = await page.evaluate(() => (typeof window !== 'undefined' ? window.__functionCallDiagnostics : null));
+    // Optional: when backend runs with LOG_LEVEL=debug, proxy writes to test-results/e2e-function-call-output.json for manual inspection (not asserted)
     const proxyDebugPath = path.resolve(process.cwd(), 'test-results', 'e2e-function-call-output.json');
     let proxyPayload = null;
     try {
@@ -413,13 +415,12 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     } catch {
       // ignore
     }
-    // Always log so headed or CI runs show what was captured when step 1/2/3 fails
     console.log('[6d] Step 1–2 (app diagnostics):', JSON.stringify(diagnostics, null, 2));
     console.log('[6d] Network capture – requests to function-call:', JSON.stringify(functionCallRequests, null, 2));
     console.log('[6d] Network capture – responses from function-call:', JSON.stringify(functionCallResponses.map((r) => ({ url: r.url, status: r.status, statusText: r.statusText, acao: r.headers['access-control-allow-origin'] })), null, 2));
-    console.log('[6d] Step 3 (proxy file):', proxyPayload ? JSON.stringify(proxyPayload, null, 2) : 'file missing or unreadable');
+    if (proxyPayload) console.log('[6d] Proxy debug file (LOG_LEVEL=debug):', JSON.stringify(proxyPayload, null, 2));
 
-    // Automated assertion: browser must have attempted POST to /function-call
+    // Step 1: browser→backend (POST /function-call, 200, CORS)
     const postRequests = functionCallRequests.filter((r) => r.method === 'POST');
     expect(postRequests.length, 'At least one POST request to /function-call (browser attempted backend call)').toBeGreaterThanOrEqual(1);
     // Automated assertion: we must have received a response for the POST (status 200 with CORS so app can read it)
@@ -435,12 +436,6 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     expect(diagnostics.responseSent, 'Step 2: app should have called sendResponse').toBeTruthy();
     expect(diagnostics.responseSent.hasError, 'Step 2: sendResponse should not have been called with error').toBe(false);
     expect(diagnostics.responseSent.hasResult, 'Step 2: sendResponse should have been called with result').toBe(true);
-    // Step 3: proxy writes to E2E_FUNCTION_CALL_DEBUG_LOG only when that env is set (Playwright sets it when it starts the backend). Skip when using existing servers so 6d can pass with user-started backend when steps 1–2 pass.
-    const useExistingServer = process.env.E2E_USE_EXISTING_SERVER === '1' || process.env.E2E_USE_EXISTING_SERVER === 'true';
-    if (!useExistingServer) {
-      expect(proxyPayload, 'Step 3: proxy should have written function_call_output (E2E_FUNCTION_CALL_DEBUG_LOG)').toBeTruthy();
-      expect(proxyPayload?.outputLength ?? 0, 'Step 3: proxy function_call_output should have non-empty output').toBeGreaterThan(0);
-    }
   });
 
   test('7. Reconnection with context – disconnect, reconnect; proxy sends context via conversation.item.create', async ({ page }) => {

@@ -278,17 +278,23 @@ let voiceAgentAttachment = null;
         },
         setSecurityHeaders,
       } : undefined,
-      openai: hasOpenAI ? {
-        path: '/openai',
-        spawn: {
-          cwd: voiceAgentBackendPkgDir,
-          command: 'npx',
-          args: ['tsx', 'scripts/openai-proxy/run.ts'],
-          // Inherit parent env so proxy sees same vars as backend (LOG_LEVEL, HTTPS, OPENAI_PROXY_PORT, etc.). No special-casing.
-          env: { ...process.env, OPENAI_API_KEY },
-          port: OPENAI_INTERNAL_PORT,
-        },
-      } : undefined,
+      openai: hasOpenAI ? (() => {
+        const spawnEnv = { ...process.env, OPENAI_API_KEY };
+        // When LOG_LEVEL=debug, proxy writes function_call_output to a file for inspection. Path default: test-app/test-results (backend cwd when run from test-app).
+        if (process.env.LOG_LEVEL === 'debug' && !process.env.E2E_FUNCTION_CALL_DEBUG_LOG) {
+          spawnEnv.E2E_FUNCTION_CALL_DEBUG_LOG = path.resolve(process.cwd(), 'test-results', 'e2e-function-call-output.json');
+        }
+        return {
+          path: '/openai',
+          spawn: {
+            cwd: voiceAgentBackendPkgDir,
+            command: 'npx',
+            args: ['tsx', 'scripts/openai-proxy/run.ts'],
+            env: spawnEnv,
+            port: OPENAI_INTERNAL_PORT,
+          },
+        };
+      })() : undefined,
       logger: rootLog,
       https: useHttps,
     });
