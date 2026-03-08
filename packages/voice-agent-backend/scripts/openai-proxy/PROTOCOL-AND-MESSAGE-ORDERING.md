@@ -159,7 +159,7 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 | **response.output_audio.done** | **Issue #482:** Send **AgentAudioDone** (text). No other client message (playback is driven by chunks). Optional: boundary debug logging. |
 | **error** | Map to **Error** (component shape). **Issue #482:** If idle_timeout and response is in progress, **buffer** the Error and send after the next `response.output_text.done` (so client receives ConversationText before Error). Otherwise send as **text** immediately. **Expected closures** (not treated as errors): (1) [Session max duration (60 min)](#38-session-maximum-duration-60-minutes-and-expected-closure) → log INFO, code `session_max_duration`. (2) [Idle timeout](#39-idle-timeout-expected-closure-not-an-error) → log INFO, code `idle_timeout`. Client treats both as normal closure (no error surfaced). |
 | **input_audio_buffer.speech_started** / **speech_stopped** (and transcript if available) | Map to component transcript/VAD contract (**UserStartedSpeaking**, **UtteranceEnd**, etc.). Full mapping spec: [docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md](../../docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md) §2.1. Implemented in `server.ts`. |
-| **Any other upstream event** | Forward to client as **text** (same JSON). |
+| **Any other upstream event** | Send **Error** to client (code ). Do not forward as text. See [UPSTREAM-EVENT-COMPLETE-MAP.md](./UPSTREAM-EVENT-COMPLETE-MAP.md). |
 
 ---
 
@@ -175,7 +175,7 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 | FunctionCallRequest | Text | From response.function_call_arguments.done |
 | Error | Text | From upstream error; Issue #482: idle_timeout may be buffered until after ConversationText when response in progress (expected closures; client treats as normal closure) |
 | (binary PCM) | Binary | From response.output_audio.delta only |
-| (other) | Text | Forwarded upstream events (e.g. conversation.item.added) |
+| Error (unmapped_upstream_event) | Text | Unmapped upstream event types (no passthrough) |
 
 ---
 

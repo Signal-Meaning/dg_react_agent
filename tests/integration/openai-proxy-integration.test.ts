@@ -82,6 +82,16 @@ const AudioFileLoader = require('../utils/audio-file-loader');
 /** Use for tests that require the mock upstream (exact payloads, mockReceived, etc.); skipped when USE_REAL_APIS=1. */
 const itMockOnly = useRealAPIs ? it.skip : it;
 
+/**
+ * Schedules a fallback timeout for tests. When it fires, runs onFired in setImmediate so the
+ * timer callback returns immediately (avoids open handle in --detectOpenHandles).
+ * Returns a clear function; call it from the success path (e.g. finish()) to cancel the timeout.
+ */
+function scheduleFallbackTimeout(delayMs: number, onFired: () => void): () => void {
+  const id = setTimeout(() => setImmediate(onFired), delayMs);
+  return () => clearTimeout(id);
+}
+
 describe('OpenAI proxy integration (Issue #381)', () => {
   // Prevent real-API runs from hanging indefinitely; longest test is 70s (function-call flow).
   if (useRealAPIs) jest.setTimeout(80000);
@@ -3154,28 +3164,32 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
-   * Protocol §5: Any other upstream event forwarded to client as text.
+   * Unmapped upstream events: proxy sends Error (unmapped_upstream_event), does not forward as text.
+   * Mock sends response.created after session.updated; client must receive Error with code unmapped_upstream_event.
    */
-  itMockOnly('Protocol: other upstream event (e.g. response.created) forwarded to client as text', (done) => {
+  itMockOnly('Protocol: unmapped upstream event (e.g. response.created) yields Error (unmapped_upstream_event)', (done) => {
     mockSendResponseCreatedAfterSessionUpdated = true;
     let finished = false;
-    const clientMessages: Array<{ type?: string }> = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const clearFallback = scheduleFallbackTimeout(5000, () => {
+      if (finished) return;
+      finished = true;
+      client.close();
+      done(new Error('Expected to receive Error (unmapped_upstream_event) from proxy within 5s'));
+    });
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
       try {
-        const msg = JSON.parse(data.toString()) as { type?: string; response_id?: string };
-        if (msg && typeof msg === 'object' && typeof msg.type === 'string') {
-          clientMessages.push({ type: msg.type });
-          if (msg.type === 'response.created') {
-            expect(msg.response_id).toBe('r1');
-            finished = true;
-            client.close();
-            done();
-          }
+        const msg = JSON.parse(data.toString()) as { type?: string; code?: string; description?: string };
+        if (msg?.type === 'Error' && msg.code === 'unmapped_upstream_event') {
+          expect(msg.description).toContain('response.created');
+          finished = true;
+          clearFallback();
+          client.close();
+          done();
         }
       } catch {
         // ignore
@@ -3184,17 +3198,6 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('error', (err) => {
       if (!finished) done(err);
     });
-    setTimeout(() => {
-      if (finished) return;
-      finished = true;
-      client.close();
-      const hasResponseCreated = clientMessages.some((m) => m.type === 'response.created');
-      if (!hasResponseCreated) {
-        done(new Error('Expected to receive response.created from proxy (other upstream events must be forwarded as text)'));
-      } else {
-        done();
-      }
-    }, 5000);
   }, 8000);
 
   /**
@@ -3240,9 +3243,26 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; role?: string }> = [];
     let finished = false;
+    const clearFallback = scheduleFallbackTimeout(5000, () => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      const startedIdx = received.findIndex((m) => m.type === 'AgentStartedSpeaking');
+      const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+      try {
+        expect(received.some((m) => m.type === 'AgentStartedSpeaking')).toBe(true);
+        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
+        expect(startedIdx).toBeLessThan(ctIdx);
+      } catch (e) {
+        done(e as Error);
+        return;
+      }
+      done();
+    });
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
+      clearFallback();
       try { client.close(); } catch { /* ignore */ }
       if (err) done(err);
       else done();
@@ -3270,22 +3290,6 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         // ignore
       }
     });
-    setTimeout(() => {
-      if (finished) return;
-      finished = true;
-      try { client.close(); } catch { /* ignore */ }
-      const startedIdx = received.findIndex((m) => m.type === 'AgentStartedSpeaking');
-      const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
-      try {
-        expect(received.some((m) => m.type === 'AgentStartedSpeaking')).toBe(true);
-        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
-        expect(startedIdx).toBeLessThan(ctIdx);
-      } catch (e) {
-        done(e as Error);
-        return;
-      }
-      done();
-    }, 5000);
     client.on('error', (err) => finish(err));
   }, 8000);
 
@@ -3297,9 +3301,23 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; role?: string }> = [];
     let finished = false;
+    const clearFallback = scheduleFallbackTimeout(5000, () => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      try {
+        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
+        expect(received.some((m) => m.type === 'AgentAudioDone')).toBe(true);
+      } catch (e) {
+        done(e as Error);
+        return;
+      }
+      done();
+    });
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
+      clearFallback();
       try { client.close(); } catch { /* ignore */ }
       if (err) done(err);
       else done();
@@ -3326,34 +3344,21 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         finish(e as Error);
       }
     });
-    setTimeout(() => {
-      if (finished) return;
-      finished = true;
-      try { client.close(); } catch { /* ignore */ }
-      try {
-        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
-        expect(received.some((m) => m.type === 'AgentAudioDone')).toBe(true);
-      } catch (e) {
-        done(e as Error);
-        return;
-      }
-      done();
-    }, 5000);
     client.on('error', (err) => finish(err));
   }, 8000);
 
   /**
    * Issue #482 (voice-commerce #956): When upstream sends error (idle_timeout), the client must receive
    * ConversationText (assistant) before Error so the UI can show the assistant bubble before the connection
-   * closes. Runs with real API first (USE_REAL_APIS=1), then with mock. Real API: send message, wait for
-   * response and idle_timeout; assert order. Mock: sends error then output_text.done; same assertion.
+   * closes. Runs only when USE_REAL_APIS=1 and the real API is known to send server idle_timeout in this scenario.
+   * Mock: the same assertion is covered by itMockOnly('Issue #482: client receives ConversationText (assistant) before Error (idle_timeout) when upstream sends error before output_text.done').
    *
-   * Server timeout: When the server closes due to its inactivity limit it sends error code
-   * SERVER_TIMEOUT_ERROR_CODE ('idle_timeout'). We wait DEFAULT_SERVER_TIMEOUT_MS + 5s for that.
-   * Skip when real API has no server timeout (NO_SERVER_TIMEOUT_MS), e.g. OpenAI with turn_detection: null.
+   * Skip when: (1) mock mode (upstream does not send idle_timeout), or (2) real API has no server timeout
+   * (NO_SERVER_TIMEOUT_MS, e.g. OpenAI with turn_detection: null). Otherwise the test would wait 65s and fail
+   * with errIdx === -1 because the client never receives Error (idle_timeout).
    */
   const realAPIServerTimeoutMs = NO_SERVER_TIMEOUT_MS; // OpenAI with turn_detection: null has no server timeout
-  (useRealAPIs && realAPIServerTimeoutMs === NO_SERVER_TIMEOUT_MS ? it.skip : it)('Issue #482 real-API: client receives ConversationText (assistant) before Error (idle_timeout) (USE_REAL_APIS=1)', (done) => {
+  (useRealAPIs && realAPIServerTimeoutMs !== NO_SERVER_TIMEOUT_MS ? it : it.skip)('Issue #482 real-API: client receives ConversationText (assistant) before Error (idle_timeout) (USE_REAL_APIS=1)', (done) => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; role?: string; code?: string }> = [];
     let finished = false;
@@ -3411,17 +3416,20 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         timeoutId = null;
       }
       try { client.close(); } catch { /* ignore */ }
-      const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
-      const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === SERVER_TIMEOUT_ERROR_CODE);
-      try {
-        expect(errIdx).toBeGreaterThanOrEqual(0);
-        expect(ctIdx).toBeGreaterThanOrEqual(0);
-        expect(ctIdx).toBeLessThan(errIdx);
-      } catch (e) {
-        done(e as Error);
-        return;
-      }
-      done();
+      // Defer assert + done to next tick so this callback returns and the timer handle is released (avoids open handle in --detectOpenHandles).
+      setImmediate(() => {
+        const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+        const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === SERVER_TIMEOUT_ERROR_CODE);
+        try {
+          expect(errIdx).toBeGreaterThanOrEqual(0);
+          expect(ctIdx).toBeGreaterThanOrEqual(0);
+          expect(ctIdx).toBeLessThan(errIdx);
+        } catch (e) {
+          done(e as Error);
+          return;
+        }
+        done();
+      });
     }, serverTimeoutDeadlineMs);
     client.on('error', (err) => finish(err));
   }, DEFAULT_SERVER_TIMEOUT_MS + 10000);
@@ -3498,9 +3506,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; role?: string; code?: string }> = [];
     let finished = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       try { client.close(); } catch { /* ignore */ }
       if (err) done(err);
       else done();
@@ -3528,21 +3541,27 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         // ignore
       }
     });
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       if (finished) return;
       finished = true;
-      const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
-      const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === 'idle_timeout');
-      try {
-        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
-        expect(received.some((m) => m.type === 'Error' && m.code === 'idle_timeout')).toBe(true);
-        expect(ctIdx).toBeLessThan(errIdx);
-      } catch (e) {
-        done(e as Error);
-        return;
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
       }
-      client.close();
-      done();
+      try { client.close(); } catch { /* ignore */ }
+      setImmediate(() => {
+        const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+        const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === 'idle_timeout');
+        try {
+          expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
+          expect(received.some((m) => m.type === 'Error' && m.code === 'idle_timeout')).toBe(true);
+          expect(ctIdx).toBeLessThan(errIdx);
+        } catch (e) {
+          done(e as Error);
+          return;
+        }
+        done();
+      });
     }, 5000);
     client.on('error', (err) => finish(err));
   }, 8000);

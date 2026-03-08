@@ -30,7 +30,7 @@ Every upstream (OpenAI Realtime API) event the proxy receives and what it sends 
 | **error** | Map to **Error** (component shape). If idle_timeout and response in progress, **buffer** Error and send after next `response.output_text.done`. Otherwise send immediately. Expected closures: session_max_duration → code `session_max_duration`; idle timeout → code `idle_timeout`. | `when upstream sends error after session.updated, client receives Error`; `Issue #482 real-API: client receives ConversationText (assistant) before Error (idle_timeout)`; `Issue #482: client receives ConversationText (assistant) before Error (idle_timeout) when upstream sends error before output_text.done` |
 | **input_audio_buffer.speech_started** | Map to **UserStartedSpeaking**. | `when upstream sends input_audio_buffer.speech_started, client receives UserStartedSpeaking` |
 | **input_audio_buffer.speech_stopped** | Map to **UtteranceEnd** (with channel, last_word_end). | `when upstream sends input_audio_buffer.speech_stopped, client receives UtteranceEnd with channel and last_word_end` |
-| **Any other upstream event** | Forward to client as **text** (same JSON). | `Protocol: other upstream event (e.g. response.created) forwarded to client as text` |
+| **Any other upstream event** | Send **Error** to client (code `unmapped_upstream_event`). Do not forward as text. See [UPSTREAM-EVENT-COMPLETE-MAP.md](../../packages/voice-agent-backend/scripts/openai-proxy/UPSTREAM-EVENT-COMPLETE-MAP.md). | `Protocol: unmapped upstream event (e.g. response.created) yields Error (unmapped_upstream_event)` |
 
 ---
 
@@ -54,7 +54,7 @@ Every upstream (OpenAI Realtime API) event the proxy receives and what it sends 
 | FunctionCallRequest | Text | From response.function_call_arguments.done | See §1 function_call_arguments.done row |
 | Error | Text | From upstream error; idle_timeout may be buffered until after ConversationText when response in progress | See §1 error row |
 | (binary PCM) | Binary | From response.output_audio.delta only | `Issue #414: only response.output_audio.delta is sent as binary; all other upstream messages as text`; `sends binary PCM to client when upstream sends response.output_audio.delta` |
-| (other) | Text | Forwarded upstream events | `Protocol: other upstream event... forwarded to client as text` |
+| Error (unmapped_upstream_event) | Text | When upstream sends an event type the proxy does not map | `Protocol: unmapped upstream event yields Error (unmapped_upstream_event)` |
 
 ---
 

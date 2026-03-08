@@ -742,12 +742,37 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // Issue #414: send as text so component routes as message, not binary (audio)
           clientWs.send(text);
         } else {
-          // Issue #414: send as text so component routes as message, not binary (audio)
-          clientWs.send(text);
+          // Unmapped upstream event: do not forward as text; send Error so client sees a clear contract.
+          const eventType = msg.type ?? '(unknown)';
+          emitLog({
+            severityNumber: SeverityNumber.WARN,
+            severityText: 'WARN',
+            body: `Unmapped upstream event: ${eventType} — sending Error to client (no forward as text)`,
+            attributes: {
+              ...connectionAttrs,
+              [ATTR_DIRECTION]: 'upstream→client',
+              [ATTR_MESSAGE_TYPE]: String(eventType),
+            },
+          });
+          const unmappedError: ComponentError = {
+            type: 'Error',
+            code: 'unmapped_upstream_event',
+            description: `Proxy received unmapped upstream event: ${eventType}. All events must be mapped; no passthrough.`,
+          };
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(JSON.stringify(unmappedError));
+          }
         }
       } catch {
-        // Issue #414: forward as text so JSON is not routed to audio pipeline
-        clientWs.send(raw.toString('utf8'));
+        // Malformed or non-JSON upstream message: send Error instead of forwarding raw bytes.
+        const fallbackError: ComponentError = {
+          type: 'Error',
+          code: 'unmapped_upstream_event',
+          description: 'Proxy received upstream message that could not be parsed as JSON.',
+        };
+        if (clientWs.readyState === WebSocket.OPEN) {
+          clientWs.send(JSON.stringify(fallbackError));
+        }
       }
     });
 
