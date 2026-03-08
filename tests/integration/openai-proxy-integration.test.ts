@@ -113,6 +113,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
 
   let mockUpstreamServer: http.Server | null = null;
   let mockWss: InstanceType<typeof WebSocketServer> | null = null;
+  /** Proxy WebSocket server; closed in afterAll to avoid open handles (Jest not exiting). */
+  let proxyWss: InstanceType<typeof WebSocketServer> | null = null;
   let mockPort: number;
   let proxyServer: http.Server;
   let proxyPort: number;
@@ -210,13 +212,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     if (useRealAPIs) {
       const apiKey = process.env.OPENAI_API_KEY!.trim();
       const upstreamUrl = process.env.OPENAI_REALTIME_URL ?? 'wss://api.openai.com/v1/realtime?model=gpt-realtime';
-      createOpenAIProxyServer({
+      const proxy = createOpenAIProxyServer({
         server: proxyServer,
         path: PROXY_PATH,
         upstreamUrl,
         upstreamHeaders: { Authorization: `Bearer ${apiKey}` },
         logLevel: process.env.LOG_LEVEL ?? undefined,
       });
+      proxyWss = proxy.wss;
       mockPort = 0;
       if (useRealAPIs) process.stdout.write(`[openai-proxy-integration] beforeAll: proxy ready on port ${proxyPort}. Use --verbose to see each test name as it runs.\n`);
       return;
@@ -543,17 +546,27 @@ describe('OpenAI proxy integration (Issue #381)', () => {
 
     // Proxy created with default options (no greetingTextOnly); matches production when that TODO is removed.
     // Issue #462: pass LOG_LEVEL so capture runs can emit proxy debug logs.
-    createOpenAIProxyServer({
+    const proxy = createOpenAIProxyServer({
       server: proxyServer,
       path: PROXY_PATH,
       upstreamUrl: `ws://localhost:${mockPort}`,
       logLevel: process.env.LOG_LEVEL ?? undefined,
     });
+    proxyWss = proxy.wss;
   });
 
   afterAll(async () => {
     if (mockWss) mockWss.close();
     if (mockUpstreamServer) await new Promise<void>((resolve) => mockUpstreamServer!.close(() => resolve()));
+    // Close proxy WebSocket server first so client (and thus upstream) connections close; avoids Jest open handles (e.g. real-API runs).
+    if (proxyWss) {
+      await new Promise<void>((resolve) => {
+        proxyWss!.close(() => resolve());
+      });
+      proxyWss = null;
+      // Allow upstream sockets (e.g. to real OpenAI) to finish closing before Jest checks for open handles.
+      await new Promise((r) => setTimeout(r, useRealAPIs ? 800 : 100));
+    }
     if (proxyServer) {
       // Force-close any remaining client connections so server.close() can complete (avoids TCPSERVERWRAP open handle). Node 18.2+. Protocol-agnostic (HTTP/HTTPS).
       if ('closeAllConnections' in proxyServer && typeof (proxyServer as { closeAllConnections?: () => void }).closeAllConnections === 'function') {
