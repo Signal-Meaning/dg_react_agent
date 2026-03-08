@@ -136,11 +136,21 @@ const requestHandler = (req, res) => {
   if (req.method === 'OPTIONS') {
     const origin = req.headers.origin;
     const originValidation = validateOrigin(origin);
-    
-    if (originValidation.valid && origin) {
+    const pathname = getPathname(req.url);
+
+    // Always allow preflight for /function-call so browser (e.g. app at localhost:5173) can POST (Issue #489)
+    const isFunctionCall = pathname === '/function-call';
+    if (isFunctionCall || (originValidation.valid && origin)) {
       setSecurityHeaders(res);
+      if (origin && originValidation.valid) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      } else if (isFunctionCall) {
+        res.setHeader('Access-Control-Allow-Origin', origin || '*');
+        if (origin) res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Trace-Id, X-Request-Id');
       res.writeHead(200);
       res.end();
     } else {
@@ -161,10 +171,11 @@ const requestHandler = (req, res) => {
     rootLog.debug('Function call request', { traceId });
     // Ensure CORS so browser (e.g. app at localhost:5173) can read the response (Issue #489 diagnostic: step 1 failed with hasError true, status undefined when CORS was missing or origin not reflected)
     const origin = req.headers.origin;
-    if (origin && validateOrigin(origin).valid) {
+    const useOrigin = origin && origin !== 'null' && validateOrigin(origin).valid;
+    if (useOrigin) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
-    } else if (!origin) {
+    } else {
       res.setHeader('Access-Control-Allow-Origin', '*');
     }
     functionCallHandler(req, res);

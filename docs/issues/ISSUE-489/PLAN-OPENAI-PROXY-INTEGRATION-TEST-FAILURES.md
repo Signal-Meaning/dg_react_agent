@@ -207,10 +207,10 @@ So the flow reaches: connect → greeting → user sends "What time is it?" → 
 
 1. **Backend not running or not reachable**
    POST `/function-call` must hit the same host as the WebSocket (e.g. `http://localhost:8080/function-call`). If the backend is not running, or the app is not configured to use it, the client never gets a function result.
-   **Check:** Ensure `cd test-app && npm run backend` is running when running E2E; confirm in Network tab that POST to `/function-call` is sent and returns 200.
+   **Check (automated):** Use test 6d and `__functionCallDiagnostics`; extend with E2E network capture (Playwright request/response for `/function-call`) to assert POST status and CORS. Ensure backend is running when running E2E (or let Playwright start it).
 
 2. **Browser → backend (CORS / connection)**
-   Diagnostic test 6d and `errorMessage: "Failed to fetch"` show the browser’s fetch to POST `/function-call` can fail before any response (first failing link: browser → backend). Backend now sets CORS explicitly for POST /function-call. If E2E still fails, run with `--headed` and check Network tab for the `function-call` request (OPTIONS and POST). Backend integration tests (`cd test-app && npm test -- backend-integration`) assert CORS and /function-call contract on the same server process.
+   Diagnostic test 6d and `errorMessage: "Failed to fetch"` show the browser’s fetch to POST `/function-call` can fail before any response (first failing link: browser → backend). Backend now sets CORS explicitly for POST /function-call. Resolution must be entirely automated: use backend integration tests (`cd test-app && npm test -- backend-integration`) and extend test 6d or add E2E network capture to assert OPTIONS/POST to `/function-call` (status, CORS headers); no manual inspection.
 
 3. **API never sends FunctionCallRequest**
    The model might not call `get_current_time` (e.g. tools not in session, or model behavior).  

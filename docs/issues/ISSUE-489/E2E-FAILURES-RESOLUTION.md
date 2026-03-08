@@ -2,6 +2,8 @@
 
 **Context:** E2E is run from `test-app/` with proxy mode (default). This doc focuses on **current E2E failure status** and how integration tests prove protocol behavior so we can target the remaining gap.
 
+**Principle: entirely automated testable solution.** Resolution and verification use only automated tests (E2E, integration, diagnostic). No manual inspection (e.g. headed runs or Network tab) is required to qualify a fix. See [TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md](./TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md) for the same principle and automated next steps.
+
 **Run the failing specs (from test-app):**  
 `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js issue-373-idle-timeout-during-function-calls.spec.js`  
 With an existing dev server and backend, add `E2E_USE_EXISTING_SERVER=1` if you started them yourself. Proxy mode and proxy endpoint use test-app defaults; no need to pass `USE_PROXY_MODE` or `VITE_OPENAI_PROXY_ENDPOINT` unless overriding.
