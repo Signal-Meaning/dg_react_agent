@@ -21,7 +21,7 @@
 | 2b | **Transcription completed/delta — expose actuals** — Use API fields (alternatives, words, start, duration, channel) when present; use defaults only when absent | [Issue #496](https://github.com/Signal-Meaning/dg_react_agent/issues/496) | [TDD-transcription-expose-actuals.md](./TDD-transcription-expose-actuals.md) | **Done** |
 | 3 | **Delta accumulator** — Accumulate `conversation.item.input_audio_transcription.delta` per `item_id` and send accumulated interim **Transcript**; DRY with existing translator mapper | [Issue #497](https://github.com/Signal-Meaning/dg_react_agent/issues/497) | (implementation + tests) | **Done** |
 | 4 | **response.output_text.done and ConversationText** — Document why we do not use this event for ConversationText; capture best practice and rationale | [Issue #498](https://github.com/Signal-Meaning/dg_react_agent/issues/498) | [DOC-output-text-done-rationale.md](./DOC-output-text-done-rationale.md) | **Done** |
-| 5 | **function_call part in assistant items** — Decide if we need to surface function_call content (e.g. for parity with Deepgram); document or implement | [Issue #499](https://github.com/Signal-Meaning/dg_react_agent/issues/499) | [TDD-function-call-part-assistant.md](./TDD-function-call-part-assistant.md) | Open |
+| 5 | **function_call part in assistant items** — Surface function_call content as ConversationText for Deepgram parity (e.g. "Function call: name(args)") | [Issue #499](https://github.com/Signal-Meaning/dg_react_agent/issues/499) | [TDD-function-call-part-assistant.md](./TDD-function-call-part-assistant.md) | **Done** |
 | 6 | **conversation.item raw forward** — Remove forwarding of raw upstream JSON for `.created`/`.added`/`.done`; send only mapped **ConversationText** (and control). No motivation for passthrough; treat as bug fix. | [Issue #500](https://github.com/Signal-Meaning/dg_react_agent/issues/500) | (implementation) | **Done** |
 
 ---
@@ -41,5 +41,5 @@
 ## Status
 
 - Epic (#493) and sub-issues (#494–#500) created via `gh issue create`.
-- **Done:** #494 (speech_stopped), #495 (transcription when VAD disabled: documented), #496 (transcription expose actuals: start, duration, channel, channel_index, alternatives), #497 (delta accumulator), #498 (output_text.done rationale), #500 (raw conversation.item forward removed).
-- **Next:** #499 (function_call part in assistant items).
+- **Done:** #494 (speech_stopped), #495 (transcription when VAD disabled: documented), #496 (transcription expose actuals), #497 (delta accumulator), #498 (output_text.done rationale), #499 (function_call part → ConversationText for parity), #500 (raw conversation.item forward removed).
+- **Next:** Epic acceptance: update component docs per acceptance criteria; all sub-issues complete.

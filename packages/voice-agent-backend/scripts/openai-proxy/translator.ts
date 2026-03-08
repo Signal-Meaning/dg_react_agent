@@ -306,13 +306,25 @@ export function mapFunctionCallArgumentsDoneToConversationText(
 }
 
 /**
+ * Format a function_call content part as ConversationText (Issue #499 Deepgram parity).
+ * Matches mapFunctionCallArgumentsDoneToConversationText so history shows "Function call: name(args)".
+ */
+function formatFunctionCallPartForConversationText(part: Record<string, unknown>): string {
+  const name = typeof part.name === 'string' ? part.name : 'function';
+  const args = typeof part.arguments === 'string' ? part.arguments.trim() : '';
+  return args ? `Function call: ${name}(${args})` : `Function call: ${name}()`;
+}
+
+/**
  * Extract a single text string from a content part (OpenAI Realtime API can use different shapes).
  * Primary: part.text. Also: part.transcript (output_audio), part.output_text (object with .text), part.input_text (object with .text), part.content (string).
+ * Issue #499: part.type === 'function_call' → "Function call: name(args)" for Deepgram parity in conversation history.
  * Real API sends assistant content in conversation.item.done with content parts like { type: "output_audio", transcript: "..." } (Issue #489).
  */
 function extractTextFromContentPart(part: unknown): string | null {
   if (!part || typeof part !== 'object') return null;
   const p = part as Record<string, unknown>;
+  if (p.type === 'function_call') return formatFunctionCallPartForConversationText(p);
   if (typeof p.text === 'string' && p.text.trim()) return p.text.trim();
   if (typeof p.transcript === 'string' && p.transcript.trim()) return p.transcript.trim();
   if (p.output_text && typeof p.output_text === 'object' && typeof (p.output_text as { text?: string }).text === 'string') {

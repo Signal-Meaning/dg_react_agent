@@ -140,6 +140,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   let mockSendTranscriptionDeltasForAccumulator = false;
   /** Issue #496: when true, mock sends input_audio_transcription.completed with start, duration, channel so client receives Transcript with actuals. */
   let mockSendTranscriptionCompletedWithActuals = false;
+  /** Issue #499: when true, mock sends conversation.item.added with assistant item whose content is only a function_call part (parity: client receives ConversationText). */
+  let mockSendConversationItemAddedFunctionCallOnly = false;
   /** When true, mock sends response.output_audio.delta (base64 PCM) then .done before response.output_text.done (so client receives binary PCM from proxy). */
   let mockSendOutputAudioBeforeText = false;
   /** Issue #414 3.2: when > 0, mock delays sending response completion (output_audio.delta, .done, output_text.done) by this many ms after receiving response.create. */
@@ -416,6 +418,20 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                 }));
               });
               if (debugMock) process.stdout.write('[mock] sent input_audio_transcription.completed with actuals for Issue #496\n');
+            } else if (mockSendConversationItemAddedFunctionCallOnly) {
+              mockSendConversationItemAddedFunctionCallOnly = false;
+              setImmediate(() => {
+                socket.send(JSON.stringify({
+                  type: 'conversation.item.added',
+                  item: {
+                    id: 'item_fc_499',
+                    type: 'message',
+                    role: 'assistant',
+                    content: [{ type: 'function_call', name: 'get_current_time', arguments: '{}', call_id: 'call_499' }],
+                  },
+                }));
+              });
+              if (debugMock) process.stdout.write('[mock] sent conversation.item.added (function_call only) for Issue #499\n');
             } else if (mockSendFunctionCallAfterSession) {
               mockSendFunctionCallAfterSession = false;
               socket.send(JSON.stringify({
@@ -2338,6 +2354,51 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       if (!finished) {
         clearTimeout(t);
         finish(new Error('Issue #496: connection closed before receiving Transcript'));
+      }
+    });
+    client.on('error', (err) => finish(err));
+  }, 6000);
+
+  /**
+   * Issue #499 (Deepgram parity): When upstream sends conversation.item.added with assistant item whose content is only
+   * a function_call part, client must receive ConversationText (assistant) with content like "Function call: name(args)".
+   */
+  itMockOnly('Issue #499: conversation.item.added with only function_call part → ConversationText (assistant) for parity', (done) => {
+    mockSendConversationItemAddedFunctionCallOnly = true;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    const t = setTimeout(() => {
+      finish(new Error('Issue #499: timeout, did not receive ConversationText (assistant) for function_call-only item'));
+    }, 5000);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string };
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          const content = msg.content ?? '';
+          if (content.includes('Function call') && content.includes('get_current_time')) {
+            clearTimeout(t);
+            finish();
+          }
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('close', () => {
+      if (!finished) {
+        clearTimeout(t);
+        finish(new Error('Issue #499: connection closed before receiving ConversationText'));
       }
     });
     client.on('error', (err) => finish(err));
