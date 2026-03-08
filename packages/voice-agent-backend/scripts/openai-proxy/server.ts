@@ -33,6 +33,7 @@ import {
   mapConversationItemAddedToConversationText,
   mapErrorToComponentError,
   type ComponentError,
+  type OpenAIConversationItemEvent,
   binaryToInputAudioBufferAppend,
   mapInputAudioTranscriptionCompletedToTranscript,
   mapInputAudioTranscriptionDeltaToTranscript,
@@ -141,6 +142,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let pendingItemAddedBeforeResponseCreate = 0;
     /** Issue #414: track item IDs already counted toward the pending counter to avoid double-decrement. */
     const pendingItemAckedIds = new Set<string>();
+    /** Issue #489: track item IDs we already sent ConversationText for (dedupe across .created/.added/.done). */
+    const sentConversationTextItemIds = new Set<string>();
     /** Issue #406: have we sent SettingsApplied to the client? Used to send clear Error when upstream closes before session ready. */
     let hasSentSettingsApplied = false;
     /** Issue #406: defer context (conversation.item.create) until after session.updated to avoid upstream close. */
@@ -680,28 +683,39 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               }
             }
           }
-          // conversation.item.added (assistant message) is the protocol-defined source for assistant text.
-          if (msg.type === 'conversation.item.added' && clientWs.readyState === WebSocket.OPEN) {
-            const conversationText = mapConversationItemAddedToConversationText(msg as Parameters<typeof mapConversationItemAddedToConversationText>[0]);
+          // conversation.item.created / .added / .done (assistant message) is the protocol-defined source for assistant text.
+          // Real API may send assistant content in .created or .done instead of .added (Issue #489 / TDD-PLAN-ALL-MESSAGES-IN-HISTORY).
+          if (clientWs.readyState === WebSocket.OPEN) {
+            const itemRole = (msg as { item?: { role?: string } }).item?.role;
+            const itemId = (msg as { item?: { id?: string } }).item?.id;
+            const conversationText = mapConversationItemAddedToConversationText(msg as OpenAIConversationItemEvent);
+            let didSend = false;
             if (conversationText) {
-              clientWs.send(JSON.stringify(conversationText));
-            } else {
-              // Log actual API shape when mapper returns null so we can align mapper with real API (Issue #489 / TDD-PLAN-ALL-MESSAGES-IN-HISTORY).
+              if (itemId && sentConversationTextItemIds.has(itemId)) {
+                // Already sent ConversationText for this item (e.g. from another of .created/.added/.done).
+              } else {
+                if (itemId) sentConversationTextItemIds.add(itemId);
+                clientWs.send(JSON.stringify(conversationText));
+                didSend = true;
+              }
+            }
+            // Diagnostic: log every assistant item event so we can see what the real API sends and whether we mapped/sent.
+            if (itemRole === 'assistant') {
               const MAX_LOG_PAYLOAD = 2000;
               const eventShape = JSON.stringify(msg);
               const truncated = eventShape.length > MAX_LOG_PAYLOAD ? eventShape.slice(0, MAX_LOG_PAYLOAD) + '…' : eventShape;
               emitLog({
                 severityNumber: SeverityNumber.INFO,
                 severityText: 'INFO',
-                body: `conversation.item.added did not map to ConversationText; actual API shape (use to align mapper): ${truncated}`,
+                body: `conversation.item.* assistant event_type=${msg.type} item_id=${itemId ?? 'n/a'} mapped=${Boolean(conversationText)} sent=${didSend}. ${!conversationText ? `Raw payload (align mapper): ${truncated}` : ''}`,
                 attributes: {
                   ...connectionAttrs,
                   [ATTR_DIRECTION]: 'upstream→client',
-                  [ATTR_MESSAGE_TYPE]: 'conversation.item.added',
-                  itemRole: (msg as { item?: { role?: string } }).item?.role ?? '(missing)',
-                  itemContentType: Array.isArray((msg as { item?: { content?: unknown } }).item?.content)
-                    ? 'array'
-                    : typeof (msg as { item?: { content?: unknown } }).item?.content,
+                  [ATTR_MESSAGE_TYPE]: String(msg.type),
+                  itemRole: itemRole ?? '(missing)',
+                  itemId: itemId ?? '(missing)',
+                  mapped: String(Boolean(conversationText)),
+                  sent: String(didSend),
                 },
               });
             }

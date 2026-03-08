@@ -143,6 +143,12 @@ export interface OpenAIConversationItemAdded {
   };
 }
 
+/** Same item shape for .created / .added / .done (real API may send assistant content in any of these). */
+export type OpenAIConversationItemEvent =
+  | OpenAIConversationItemAdded
+  | { type: 'conversation.item.created'; item?: OpenAIConversationItemAdded['item'] }
+  | { type: 'conversation.item.done'; item?: OpenAIConversationItemAdded['item'] };
+
 /** OpenAI server event: response.output_audio_transcript.done (transcript of model's speech) */
 export interface OpenAIOutputAudioTranscriptDone {
   type: 'response.output_audio_transcript.done';
@@ -275,12 +281,14 @@ export function mapFunctionCallArgumentsDoneToConversationText(
 
 /**
  * Extract a single text string from a content part (OpenAI Realtime API can use different shapes).
- * Primary: part.text. Also: part.output_text (object with .text), part.input_text (object with .text), part.content (string).
+ * Primary: part.text. Also: part.transcript (output_audio), part.output_text (object with .text), part.input_text (object with .text), part.content (string).
+ * Real API sends assistant content in conversation.item.done with content parts like { type: "output_audio", transcript: "..." } (Issue #489).
  */
 function extractTextFromContentPart(part: unknown): string | null {
   if (!part || typeof part !== 'object') return null;
   const p = part as Record<string, unknown>;
   if (typeof p.text === 'string' && p.text.trim()) return p.text.trim();
+  if (typeof p.transcript === 'string' && p.transcript.trim()) return p.transcript.trim();
   if (p.output_text && typeof p.output_text === 'object' && typeof (p.output_text as { text?: string }).text === 'string') {
     const t = (p.output_text as { text: string }).text.trim();
     if (t) return t;
@@ -294,13 +302,14 @@ function extractTextFromContentPart(part: unknown): string | null {
 }
 
 /**
- * Map OpenAI conversation.item.added (assistant message with content) → component ConversationText (assistant).
+ * Map OpenAI conversation.item.created / .added / .done (assistant message with content) → component ConversationText (assistant).
  * This is the primary pipeline for assistant text. Returns null when the item is not an assistant
  * message or has no extractable text content. Issue #489.
  * Handles multiple API shapes: content as array of { text }, { type, text }, { output_text: { text } }, or single object.
+ * Real API may send assistant content in .created or .done instead of .added.
  */
 export function mapConversationItemAddedToConversationText(
-  event: OpenAIConversationItemAdded
+  event: OpenAIConversationItemEvent
 ): ComponentConversationText | null {
   const item = event.item;
   if (!item) return null;

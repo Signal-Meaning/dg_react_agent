@@ -380,6 +380,43 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(mapConversationItemAddedToConversationText({ type: 'conversation.item.added', item: { role: 'assistant', content: [] } })).toBeNull();
       expect(mapConversationItemAddedToConversationText({ type: 'conversation.item.added', item: { role: 'assistant' } })).toBeNull();
     });
+
+    it('maps conversation.item.created (assistant) to ConversationText (real API may send content in .created)', () => {
+      const event = {
+        type: 'conversation.item.created' as const,
+        item: { id: 'item_2', type: 'message', role: 'assistant' as const, content: [{ type: 'output_text', text: 'Reply from .created.' }] },
+      };
+      const out = mapConversationItemAddedToConversationText(event);
+      expect(out).toEqual({ type: 'ConversationText', role: 'assistant', content: 'Reply from .created.' });
+    });
+
+    it('maps conversation.item.done (assistant) to ConversationText (real API may send content in .done)', () => {
+      const event = {
+        type: 'conversation.item.done' as const,
+        item: { id: 'item_3', type: 'message', role: 'assistant' as const, content: [{ type: 'output_text', text: 'Reply from .done.' }] },
+      };
+      const out = mapConversationItemAddedToConversationText(event);
+      expect(out).toEqual({ type: 'ConversationText', role: 'assistant', content: 'Reply from .done.' });
+    });
+
+    it('maps conversation.item.done (assistant) with output_audio transcript to ConversationText (real API shape, Issue #489)', () => {
+      const event = {
+        type: 'conversation.item.done' as const,
+        item: {
+          id: 'item_DGvkyAAsUpgzAMehIVRim',
+          type: 'message',
+          status: 'completed',
+          role: 'assistant' as const,
+          content: [{ type: 'output_audio', transcript: "The capital of France is Paris. It's a major European city and a global center for art, fashion, and culture." }],
+        },
+      };
+      const out = mapConversationItemAddedToConversationText(event);
+      expect(out).toEqual({
+        type: 'ConversationText',
+        role: 'assistant',
+        content: "The capital of France is Paris. It's a major European city and a global center for art, fashion, and culture.",
+      });
+    });
   });
 
   describe('7. Input audio (binary → input_audio_buffer.append)', () => {

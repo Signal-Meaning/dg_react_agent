@@ -20,7 +20,7 @@
 | Phase     | What | Status |
 |-----------|------|--------|
 | **RED**   | Add or extend tests that fail when assistant (or user) messages are missing from the DOM. E2E: after N exchanges, assert DOM has expected counts and order. Unit/integration: assert that every `ConversationText` (user/assistant) is appended to history and passed to the app. | Done |
-| **GREEN** | Implement so that every assistant and user message is recorded and displayed: fix component to append on every `ConversationText` (and any other relevant events); and/or fix proxy/API to send `ConversationText` for every assistant turn; and/or add fallbacks (e.g. from `response.done` / transcript) if upstream does not send `ConversationText`. | In progress |
+| **GREEN** | Implement so that every assistant and user message is recorded and displayed: fix component to append on every `ConversationText` (and any other relevant events); and/or fix proxy/API to send `ConversationText` for every assistant turn; and/or add fallbacks (e.g. from `response.done` / transcript) if upstream does not send `ConversationText`. | Done |
 | **REFACTOR** | Remove temporary diagnostics; align test 9 (Repro) expectations with the new behavior; update docs. | Pending |
 
 **Tests that define the behavior:**
@@ -30,9 +30,11 @@
 
 ---
 
-## Current failure (observed)
+## Resolution (Test 9 Repro passes with real APIs)
 
-When Test 9 (Repro) runs with real APIs:
+**Fix:** The real API sends assistant content in `conversation.item.done` with `content[].type: "output_audio"` and `content[].transcript`. The proxy mapper was updated to extract `part.transcript` in `extractTextFromContentPart` (translator.ts), so those events now map to ConversationText. Verified with USE_REAL_APIS=1; no mocks.
+
+**Previously (failure):** When Test 9 (Repro) ran with real APIs:
 
 - **DOM conversation (4 messages):**  
   1. assistant: Hello! How can I assist you today?  
@@ -50,21 +52,21 @@ When Test 9 (Repro) runs with real APIs:
 
 | # | Step | Red / Green / Refactor | Status | Notes |
 |---|------|------------------------|--------|--------|
-| **1** | **RED:** Add E2E assertion that conversation history has expected assistant + user counts after a multi-turn flow (e.g. after 2 user messages, DOM has ≥ 2 assistant messages and ≥ 2 user messages, in order). Run Test 9 (or a dedicated spec); confirm it fails when only 1 assistant message (greeting) is present. | RED | Pending | Can extend Test 9 (Repro) or add a new test “9c. All turns in history.” |
-| **2** | **RED:** Add unit or integration test: when the component receives a sequence of `ConversationText` events (user, assistant, user, assistant), its internal history and the history passed to the app callback contain all four messages in order. | RED | Pending | Ensures component appends every `ConversationText` and passes full history to the app. |
-| **3** | **GREEN (upstream):** Confirm whether the proxy/API sends `ConversationText` for every assistant turn. If not, fix the proxy (or document API limitation) so that every assistant reply is sent as `ConversationText` (or equivalent) to the client. | GREEN | Pending | Without this, the component cannot add assistant messages it never receives. |
-| **4** | **GREEN (component):** Ensure the component appends to `conversationHistory` (and notifies the app) for **every** `ConversationText` (user and assistant). Add fallback: if the backend sends assistant content via another event (e.g. `response.done`, transcript, or audio metadata), append that content to history so it appears in the UI. | GREEN | Pending | Single path: one place that updates history from wire events. |
-| **5** | **GREEN (app):** Ensure the test-app always displays the full history from the component (e.g. `conversationForDisplay` / `getConversationHistory()`); no filtering that would drop assistant messages. | GREEN | Pending | Test-app should reflect component state; verify no overwrite or truncation. |
-| **6** | Re-run E2E (Test 9 and any new test). Confirm DOM shows all assistant and user messages in order; Test 9 (Repro) passes or is updated to match. | GREEN | Pending | |
+| **1** | **RED:** Add E2E assertion that conversation history has expected assistant + user counts after a multi-turn flow (e.g. after 2 user messages, DOM has ≥ 2 assistant messages and ≥ 2 user messages, in order). Run Test 9 (or a dedicated spec); confirm it fails when only 1 assistant message (greeting) is present. | RED | Done | Extended Test 9 (Repro) “9c. All turns in history.” |
+| **2** | **RED:** Add unit or integration test: when the component receives a sequence of `ConversationText` events (user, assistant, user, assistant), its internal history and the history passed to the app callback contain all four messages in order. | RED | Done | See tests/conversation-storage-issue406.test.tsx. |
+| **3** | **GREEN (upstream):** Confirm whether the proxy/API sends `ConversationText` for every assistant turn. If not, fix the proxy (or document API limitation) so that every assistant reply is sent as `ConversationText` (or equivalent) to the client. | GREEN | Done | Fixed: proxy now maps `conversation.item.done` with `content[].transcript` (output_audio) to ConversationText. |
+| **4** | **GREEN (component):** Ensure the component appends to `conversationHistory` (and notifies the app) for **every** `ConversationText` (user and assistant). Add fallback: if the backend sends assistant content via another event (e.g. `response.done`, transcript, or audio metadata), append that content to history so it appears in the UI. | GREEN | Done | Component already appends every ConversationText; no change needed. |
+| **5** | **GREEN (app):** Ensure the test-app always displays the full history from the component (e.g. `conversationForDisplay` / `getConversationHistory()`); no filtering that would drop assistant messages. | GREEN | Done | Test-app displays full history; Test 9 (Repro) passes. |
+| **6** | Re-run E2E (Test 9 and any new test). Confirm DOM shows all assistant and user messages in order; Test 9 (Repro) passes or is updated to match. | GREEN | Done | Test 9 (Repro) passes with USE_REAL_APIS=1. |
 | **7** | **REFACTOR:** Remove or reduce temporary diagnostics added for this requirement; update [DIAGNOSIS-9-TESTS.md](./DIAGNOSIS-9-TESTS.md) and [TDD-PLAN-REAL-API-E2E-FAILURES.md](./TDD-PLAN-REAL-API-E2E-FAILURES.md) as needed. | REFACTOR | Pending | |
 
 ---
 
 ## Success criteria (all must be met)
 
-- [ ] After a multi-turn flow (e.g. two user messages with two assistant replies), the conversation history in the DOM contains **all** user and assistant messages in the correct order (e.g. ≥ 2 assistant, ≥ 2 user for that flow, plus greeting and final user message as in Test 9).
-- [ ] Unit or integration test confirms that every `ConversationText` (user/assistant) results in one new entry in the component’s history and in the history passed to the app callback.
-- [ ] Test 9 (Repro) passes with real APIs, or its expectations are explicitly updated and documented if the fix is proxy/API-only and test environment differs.
+- [x] After a multi-turn flow (e.g. two user messages with two assistant replies), the conversation history in the DOM contains **all** user and assistant messages in the correct order (e.g. ≥ 2 assistant, ≥ 2 user for that flow, plus greeting and final user message as in Test 9).
+- [x] Unit or integration test confirms that every `ConversationText` (user/assistant) results in one new entry in the component’s history and in the history passed to the app callback.
+- [x] Test 9 (Repro) passes with real APIs, or its expectations are explicitly updated and documented if the fix is proxy/API-only and test environment differs.
 - [ ] No regression: existing E2E (e.g. 9a, 9b) and unit tests still pass.
 
 ---
@@ -77,10 +79,11 @@ When Test 9 (Repro) runs with real APIs:
 2. **Component not appending:** Component receives `ConversationText` but does not append for some events (e.g. only appends user, or skips “duplicate” greeting). **Fix:** Append for every `ConversationText` with role user or assistant; use a single code path that updates `conversationHistory` and calls the app callback with the full list.
 3. **App not showing:** App receives full history in the callback but overwrites or filters it (e.g. on connection state change). **Fix:** Ensure `setConversationForDisplay` is only updated from the component’s history (and optional restore); never replace with a shorter list when we already have a longer one (see existing “only replace if longer” logic in test-app).
 
-### Fallbacks if upstream never sends ConversationText for assistant
+### Capturing the real API shape (when Test 9 Repro still fails)
 
-- **Implemented:** The proxy sends ConversationText (assistant) from `response.output_text.done` when the event has a `text` field, only when no ConversationText (assistant) was yet sent for the current response. See `mapOutputTextDoneToConversationText` in translator.ts and the response.output_text.done handler in server.ts. If the real API uses a different field or does not include text in output_text.done, the proxy can be extended (e.g. use response.output_audio_transcript.done).
-- If the API sends assistant content only in another event (e.g. `response.done`, transcript, or audio metadata), the component can append that content to `conversationHistory` when that event is received, so the UI still shows “all” messages even when `ConversationText` is not used for assistant turns. This keeps the requirement “all messages appear” satisfied from the user’s perspective while proxy/API is updated.
+- The proxy logs **every** `conversation.item.created` / `.added` / `.done` event whose `item.role === 'assistant'` at INFO level. Each log line includes `event_type`, `item_id`, `mapped`, `sent`, and when `mapped=false` the **raw payload** so the mapper can be aligned with the real API.
+- **How to capture:** Terminal 1: `cd test-app && npm run backend:log` (tees to `backend.log` and stdout). Terminal 2: run the test. Then inspect `backend.log` or Terminal 1 for `conversation.item.* assistant event_type=... mapped=... sent=...`. If `mapped=false`, the line includes `Raw payload (align mapper): {...}` — use that JSON to update the mapper in `translator.ts`. If there are **no** assistant item lines, the real API may not send assistant content in item events. Search: `grep -E 'conversation\.item|assistant event_type' backend.log`.
+- (Removed obsolete fallback note; primary pipeline is conversation.item.* mapping. See "Capturing the real API shape" above.) “all” messages even when `ConversationText` is not used for assistant turns. This keeps the requirement “all messages appear” satisfied from the user’s perspective while proxy/API is updated.
 
 ---
 
