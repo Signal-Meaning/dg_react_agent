@@ -868,6 +868,55 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   });
 
   /**
+   * Issue #494: When upstream sends input_audio_buffer.speech_stopped with channel and last_word_end,
+   * proxy must pass those values through to UtteranceEnd (not fixed defaults).
+   */
+  itMockOnly('Issue #494: when upstream sends speech_stopped with channel and last_word_end, client receives UtteranceEnd with those values', (done) => {
+    let mockSocket: import('ws') | null = null;
+    const originalConnection = mockWss!.listeners('connection')[0] as (socket: import('ws')) => void;
+    mockWss!.removeAllListeners('connection');
+    mockWss!.on('connection', (socket: import('ws')) => {
+      mockSocket = socket;
+      originalConnection(socket);
+    });
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const timeoutId = setTimeout(() => done(new Error('Issue #494: timeout, did not receive UtteranceEnd')), 5000);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string; channel?: number[]; last_word_end?: number };
+        if (msg.type === 'Error') {
+          clearTimeout(timeoutId);
+          client.close();
+          done(new Error(`Upstream error: ${msg.description ?? 'unknown'}`));
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          setImmediate(() => mockSocket?.send(JSON.stringify({
+            type: 'input_audio_buffer.speech_stopped',
+            channel: [0],
+            last_word_end: 1.5,
+          })));
+          return;
+        }
+        if (msg.type === 'UtteranceEnd') {
+          clearTimeout(timeoutId);
+          expect(msg.channel).toEqual([0]);
+          expect(msg.last_word_end).toBe(1.5);
+          client.close();
+          done();
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => { clearTimeout(timeoutId); done(err); });
+  });
+
+  /**
    * Issue #459: Proxy must NOT send session.update to upstream while the API has an active response.
    * Otherwise OpenAI returns conversation_already_has_active_response. Scenario: client sends
    * InjectUserMessage first (no Settings), proxy sends item.create → mock sends item.added →

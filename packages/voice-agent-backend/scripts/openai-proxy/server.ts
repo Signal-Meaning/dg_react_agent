@@ -36,6 +36,7 @@ import {
   binaryToInputAudioBufferAppend,
   mapInputAudioTranscriptionCompletedToTranscript,
   mapInputAudioTranscriptionDeltaToTranscript,
+  mapSpeechStoppedToUtteranceEnd,
 } from './translator';
 import {
   initProxyLogger,
@@ -585,14 +586,15 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           });
           clientWs.send(JSON.stringify({ type: 'UserStartedSpeaking' }));
         } else if (msg.type === 'input_audio_buffer.speech_stopped') {
-          // Issue #414 COMPONENT-PROXY-INTERFACE-TDD: map to UtteranceEnd with channel and last_word_end (component contract)
+          // Issue #494: map upstream channel and last_word_end to UtteranceEnd; defaults when absent
+          const utteranceEnd = mapSpeechStoppedToUtteranceEnd(msg as Parameters<typeof mapSpeechStoppedToUtteranceEnd>[0]);
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: 'upstream→client: input_audio_buffer.speech_stopped → UtteranceEnd',
+            body: `upstream→client: input_audio_buffer.speech_stopped → UtteranceEnd (channel=${JSON.stringify(utteranceEnd.channel)} last_word_end=${utteranceEnd.last_word_end})`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.speech_stopped' },
           });
-          clientWs.send(JSON.stringify({ type: 'UtteranceEnd', channel: [0, 1], last_word_end: 0 }));
+          clientWs.send(JSON.stringify(utteranceEnd));
         } else if (msg.type === 'conversation.item.input_audio_transcription.completed') {
           // Issue #414: map OpenAI user transcript to component Transcript → onTranscriptUpdate
           const completedMsg = msg as Parameters<typeof mapInputAudioTranscriptionCompletedToTranscript>[0];

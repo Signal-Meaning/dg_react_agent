@@ -509,6 +509,30 @@ export function mapInputAudioTranscriptionDeltaToTranscript(
   };
 }
 
+/** OpenAI server event: input_audio_buffer.speech_stopped (Issue #494: API may send channel, last_word_end) */
+export interface OpenAISpeechStopped {
+  type: 'input_audio_buffer.speech_stopped';
+  channel?: number[];
+  last_word_end?: number;
+}
+
+/** Component message: UtteranceEnd (VAD; same shape as Deepgram UtteranceEndResponse) */
+export interface ComponentUtteranceEnd {
+  type: 'UtteranceEnd';
+  channel: number[];
+  last_word_end: number;
+}
+
+/**
+ * Map OpenAI input_audio_buffer.speech_stopped → component UtteranceEnd (Issue #494).
+ * Use upstream channel and last_word_end when present; otherwise defaults [0, 1] and 0.
+ */
+export function mapSpeechStoppedToUtteranceEnd(event: OpenAISpeechStopped): ComponentUtteranceEnd {
+  const channel = Array.isArray(event.channel) && event.channel.length > 0 ? event.channel : [0, 1];
+  const last_word_end = typeof event.last_word_end === 'number' ? event.last_word_end : 0;
+  return { type: 'UtteranceEnd', channel, last_word_end };
+}
+
 /** OpenAI client event: input_audio_buffer.append (base64 audio) */
 export interface OpenAIInputAudioBufferAppend {
   type: 'input_audio_buffer.append';
