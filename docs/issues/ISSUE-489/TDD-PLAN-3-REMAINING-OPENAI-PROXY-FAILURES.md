@@ -1,6 +1,6 @@
 # TDD Plan: Remaining OpenAI Proxy E2E Failures (2)
 
-**Scope:** Resolve the failing tests when running `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js` from test-app. **Current:** 14 passed, **2 failed**, 2 skipped in some runs (after unmapped-event test-app change). Known failures: 6 and 6b. **3b is not resolved** — do not treat as fixed; verify with `--grep "3b"`.
+**Scope:** Resolve the failing tests when running `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js` from test-app. **Current (post-fix):** **17 passed**, 0 failed, 2 skipped. **6 and 6b** are resolved (fix: test-app handler must return the Promise from `forwardFunctionCallToBackend`; see "Backend log evidence" below). **3b** is resolved (verified in same run). Nothing left to fix in this spec; optional re-runs after future changes. The **issue-373** idle-timeout flow is a different spec file (see E2E-FAILURES-RESOLUTION.md).
 
 **Principle: entirely automated testable solution.** All verification and resolution must be automatable. No manual inspection (e.g. running with `--headed` and checking the Network tab) is required to qualify a fix. Use E2E assertions, integration tests, and diagnostic tests (e.g. test 6d, `__functionCallDiagnostics`, backend integration tests); extend with automated network capture/assertions in Playwright if needed (e.g. `page.route` or request/response interception) so the pipeline stays fully automated.
 
@@ -8,16 +8,11 @@
 
 ---
 
-## The 2 remaining failures
+## Status: 6 and 6b resolved; 3b verify
 
-| # | Test | Error | Phase |
-|---|------|------|-------|
-| 1 | **6.** Simple function calling – assert response in agent-response | Expected `/\d{1,2}:\d{2}\|UTC/`; **received:** model fallback text ("I'm having some trouble retrieving the current time...") | Function-call reply |
-| 2 | **6b.** Issue #462 / #470 – function-call flow (partner scenario) | Same; received "I'm sorry, but I couldn't retrieve the current time..." | Function-call reply |
+**6 and 6b (function-call reply) — RESOLVED.** Previously failed with model fallback text. **Root cause:** Test-app's `handleFunctionCallRequest` called `forwardFunctionCallToBackend(...)` but did **not return** the Promise. The component treated a void return as "handler finished without sending" and immediately sent the default error "Handler completed without sending a response"; when the backend fetch later completed, the app sent the real result — so the API received **two** function_call_outputs (error first, then time) and the model replied to the first. **Fix:** `return forwardFunctionCallToBackend(request, sendResponse, baseUrl);` in test-app/src/App.tsx; type `onFunctionCallRequest` to allow `Promise<void>` (src/types/index.ts). **Latest run:** `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js` → **17 passed**, 2 skipped (1.8m).
 
-**Plain statement:** Tests 6 and 6b fail because the **model returns fallback text** ("I'm having trouble fetching the current time...") — i.e. an **error in the function flow** (backend, proxy, or API did not deliver the result, or the model did not use it). This is **not** a greeting issue: we are not seeing the greeting as the final response or duplicate greetings; we are seeing the model's fallback when the function result is missing or unused.
-
-(3b had failed on assistant count 5 vs 3; status is not resolved — verify with a dedicated run.)
+**3b** — In the same run, 3b passed (multi-turn after disconnect; session history preserved). Verify with `--grep "3b"` if needed.
 
 ### Why 3b can pass while 6 and 6b fail
 
@@ -33,9 +28,9 @@
 
 ---
 
-## Failure 1: 3b – assistant count 5 vs 3 (status: not resolved)
+## Failure 1: 3b – assistant count 5 vs 3 (status: resolved)
 
-**Status:** Not resolved. The proxy fix (context in instructions only, no reinjection; see [DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md](./DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md)) was intended to make 3b pass with exactly 3 assistant messages. Verify with: `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "3b"` (from test-app). Kept here for reference and message-breakdown.
+**Status:** **Resolved.** The proxy fix (context in instructions only, no reinjection; see [DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md](./DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md)) makes 3b pass with exactly 3 assistant messages. Verified in full openai-proxy-e2e run (17 passed). Kept below for reference and message-breakdown.
 
 **RED (historical):** Test expected `[data-role="assistant"]` count === 3 (greeting + r1 + r2). With transcript mapping we had 5. Likely causes: (a) same logical message sent multiple times (e.g. conversation.item.created + .added + .done with different item ids), (b) session history on reconnect adds duplicate items, (c) test expectation too strict.
 
@@ -58,11 +53,11 @@ Expected (3 assistant): **1** = greeting, **3** = r1, and **r2** (reply to “Wh
 
 ---
 
-## Failure 2 & 3: 6 and 6b – function-call reply (time/UTC)
+## Failure 2 & 3: 6 and 6b – function-call reply (time/UTC) — RESOLVED
 
-**Root cause (plain):** 6 and 6b fail because of **fallback text** — the model says it can't fetch the time. That indicates an **error in the function flow** (result not delivered or not used), **not** greeting issues (no greeting as final response, no duplicate-greeting bug here).
+**Root cause (plain):** 6 and 6b failed because the **model received the default error** "Handler completed without sending a response" before the real backend result; the component sent that error when the handler returned void (did not return the Promise). **Fix:** Return the Promise from the handler so the component waits for the backend; single function_call_output (time) is sent; model replies with time. See "Backend log evidence" in § "When 6d passes but 6b still fails" and TDD plan resolution note.
 
-**RED:** After "What time is it?" and function call, the **model** replies with fallback text ("I'm having some trouble retrieving the current time...", "I couldn't retrieve the current time...") instead of a reply that includes the time or "UTC". Test expects `/\d{1,2}:\d{2}|UTC/` in `[data-testid="agent-response"]`.
+**RED (historical):** After "What time is it?" and function call, the **model** replied with fallback text. Test expects `/\d{1,2}:\d{2}|UTC/` in `[data-testid="agent-response"]`.
 
 **What “backend/model behavior” meant:** The earlier note that this is “backend/model behavior” described the *symptom* (model output is fallback text, not time). It did **not** mean the cause is outside our stack. The failure can be in **delivery of the instructions or data** the model needs to satisfy the function-call (tool schema, function result, or prompt).
 
@@ -160,13 +155,16 @@ Steps 1–2 are verified (browser→backend, app sent sendResponse). The failure
    Run the same flow with `LOG_LEVEL=debug` (e.g. `LOG_LEVEL=debug npm run backend` from test-app). After 6b, check `test-app/test-results/e2e-function-call-output.json`. If the file exists with non-empty `outputLength`, the proxy did send; focus on step 4 (API/model or timing). If the file is missing or `outputLength` is 0, the proxy is not sending the result correctly (payload or ordering).
 
 2. **Confirm full chain with real API (integration)**  
-   From repo root: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` and run the real-API function-call test (e.g. "Issue #489 real-API: function-call flow completes…"). If it passes, proxy↔API works from Node; the difference is E2E-specific (timing, or how the browser sends messages to the proxy).
+   From repo root: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts --testNamePattern "Issue #470 real-API: function-call flow"`. If it passes, proxy↔API works from Node; the difference is E2E-specific (timing, or how the browser sends messages to the proxy).  
+   **Evidence (run):** This test **passed** (~4.3s). So proxy and real API correctly complete the function-call flow when the client is the Node integration test; the failure in 6b is specific to the E2E/browser path. Next: do step 1 (run 6b with `LOG_LEVEL=debug` backend and check `e2e-function-call-output.json`) to see whether the proxy receives and sends in E2E.
 
 3. **If proxy sends but model still returns fallback**  
    Consider timing: the model may emit the fallback before the function result is applied. Check proxy/API docs for ordering (e.g. `response.done` vs `response.output_text.done` after `function_call_output`). Integration test "Issue #470: after function_call_output, response.done…" and proxy deferral of `response.create` address this; if E2E still fails, compare event order in E2E vs integration.
 
 4. **Document**  
    Update this plan and E2E-FAILURES-RESOLUTION.md with what you find (step 3 vs step 4, and any fix).
+
+**Backend log evidence (run):** The proxy log showed the upstream received **two** `function_call_output` items per call: first with `"output":"{\"error\":\"Handler completed without sending a response\"}"`, then with the real time (e.g. `"{\"time\":\"22:12:24\",\"timezone\":\"UTC\"}"`). The model used the **first** (error) and replied with the fallback. **Root cause:** The test-app's `handleFunctionCallRequest` called `forwardFunctionCallToBackend(...)` but did **not return** the Promise, so the component (which treats a void return as "handler finished without sending") immediately sent the default error; when the backend fetch completed, the app sent the real result — too late. **Fix:** Return the Promise from the handler: `return forwardFunctionCallToBackend(request, sendResponse, baseUrl);` so the component waits for the async backend round-trip before deciding to send the default error (test-app/src/App.tsx).
 
 ---
 
@@ -210,9 +208,11 @@ Given: integration test (3) passes (proxy↔API path works); E2E 6/6b alignment 
 
 ## Success criteria
 
-- [ ] 3b passes (assistant count and r1-in-history) — not resolved; verify with `--grep "3b"`.
-- [ ] 6 and 6b pass (agent-response shows time/UTC after function call).
-- [ ] `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js` → 0 failures (excluding existing skips).
+**Convention:** Completed items = `[x]`. Items that no longer apply = ~~`[ ]`~~ (struck through). Open items that matter have a **plan to verify** (see below).
+
+- [x] 3b passes (assistant count and r1-in-history) — **verified** in latest full run (17 passed). *After future code changes,* re-run from test-app: `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "3b"`; if it fails, uncheck and track.
+- [x] 6 and 6b pass (agent-response shows time/UTC after function call) — **resolved** (return Promise from handler).
+- [x] `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js` → 0 failures for openai-proxy-e2e (17 passed, 2 skipped in latest run).
 
 ---
 
@@ -224,7 +224,7 @@ From test-app:
 USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js
 ```
 
-**Run only the 2 failing tests (6 and 6b):**
+**Run only tests 6 and 6b (e.g. to verify function-call):**
 
 ```bash
 cd test-app
@@ -254,8 +254,11 @@ npm test -- backend-integration
 
 ## What to resolve next
 
+**For openai-proxy-e2e.spec.js:** Nothing. All 17 tests passed (2 skipped). 3b, 6, and 6b are verified in that run.
+
 | Priority | Item | Why |
 |----------|------|-----|
-| **1** | **Browser → backend for 6/6b** | Diagnostic 6d shows `errorMessage: "Failed to fetch"` — browser’s fetch to POST /function-call fails before any response. Backend integration tests (CORS + /function-call) pass when run from Node; the gap is browser → same backend (CORS or connection from app origin). **Automated resolution:** Extend 6d or add E2E test that uses Playwright to capture and assert on requests/responses to `/function-call` (OPTIONS + POST status and CORS headers); fix until that test and 6/6b pass. No manual inspection. |
-| **2** | **Proxy response.done + function_call_output (G.6)** | Once the browser receives 200 from /function-call, the proxy must send `function_call_output` and the API must start the next turn. PLAN § G.6: when we receive `response.done` and `pendingResponseCreateAfterFunctionCallOutput` is true, send `response.create`. Implement and validate with real API; re-run 6/6b. |
-| **3** | **Verify 3b** | Run `--grep "3b"` with real APIs; if it fails (assistant count or r1-in-history), track separately from 6/6b. |
+| — | *Optional after future changes* | Re-run `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js` or `--grep "3b"` from test-app to confirm 3b (and 6/6b) still pass. |
+| — | **issue-373 spec** | **Resolved.** `USE_REAL_APIS=1 npm run test:e2e -- issue-373-idle-timeout-during-function-calls.spec.js` from test-app → 5 passed (42.5s). See [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md). |
+
+**Done:** Browser → backend and proxy function_call_output path for 6/6b — fixed by returning the Promise from the test-app handler; 6d and 6/6b pass. 3b passes. issue-373 (idle timeout during function calls) verified: 5 passed. **Issue #489 ready for PR.**

@@ -947,11 +947,12 @@ function App() {
       return;
     }
 
-    // Issue #407: By default, forward to app backend (no in-browser execution)
+    // Issue #407: By default, forward to app backend (no in-browser execution).
+    // Return the Promise so the component waits for the backend round-trip before deciding to send
+    // the default "Handler completed without sending a response" error (Issue #489).
     const baseUrl = getFunctionCallBackendBaseUrl(proxyEndpoint);
     if (baseUrl) {
-      forwardFunctionCallToBackend(request, sendResponse, baseUrl);
-      return;
+      return forwardFunctionCallToBackend(request, sendResponse, baseUrl);
     }
 
     // No handler and no backend URL: log only (e.g. direct Deepgram without proxy)

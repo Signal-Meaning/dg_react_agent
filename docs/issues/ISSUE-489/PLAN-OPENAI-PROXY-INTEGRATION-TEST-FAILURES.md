@@ -16,7 +16,7 @@
 | **D. Fake timers (four itMockOnly timeouts)** | Done | `beforeEach` now calls `jest.useRealTimers()` for every test in this suite so mock round-trips complete. See “Root causes for current integration-test failures” below. |
 | **Integration suite green** | In progress | Four itMockOnly tests were failing because they expected ConversationText from control events; proxy (Issue #489 Phase 2) does not send ConversationText for response.function_call_arguments.done / output_audio_transcript.done / output_text.done. Tests updated to match current proxy contract; each test now has a 4s fallback timeout that closes the client to avoid open handles. Re-run to confirm. |
 | **No regressions elsewhere** | Pending | Full `npm test` to confirm no regressions outside OpenAI proxy; not yet verified. |
-| **E2E Tests 6 / 6b (function-call)** | Pending | Still fail with real APIs (time never appears in agent-response). Root cause: API sends `response.done` before we send `function_call_output`; see § G.6. Proposed fix: send `response.create` when we receive `response.done` and `pendingResponseCreateAfterFunctionCallOutput` is true. |
+| **E2E Tests 6 / 6b (function-call)** | Done | **Resolved.** Root cause was test-app handler not returning the Promise from `forwardFunctionCallToBackend`, so the component sent the default error before the backend responded. Fix: `return forwardFunctionCallToBackend(...)` in test-app App.tsx; type allows `Promise<void>`. Latest run: 17 passed, 2 skipped. |
 | **Backend integration tests** | Done | `test-app/tests/backend-integration.test.js` added (Issue #489): runs real backend-server.js on port 18408; asserts server + proxy reachability, POST /function-call contract, and CORS (OPTIONS + POST with Origin). Run: `cd test-app && npm test -- backend-integration`. Fills gap between function-call-endpoint-integration (port 18407, no CORS) and E2E (browser → backend). |
 
 **Quick reference:** § A–C = integration-test fixes (implemented). § E = success criteria checklist. § G = E2E 6/6b findings and next steps.
@@ -156,17 +156,19 @@ socket.send(JSON.stringify({
 
 ## E. Success criteria
 
+**Convention:** Completed = `[x]`. No longer applicable = ~~`[ ]`~~ (struck through). Open items have a **plan to check** in the text.
+
 **Implemented (code changes done):**
 
 - [x] **Context tests updated:** Context in instructions only; 0 context item creates; no greeting to client when context present (§ A).
 - [x] **Mock sends assistant item:** `conversation.item.done` (assistant) with response text; order: `response.output_text.done` then assistant item (AgentStartedSpeaking before ConversationText); for idle_timeout branch, ConversationText before Error (§ B).
 - [x] **afterAll timeout:** Increased to 60s in `openai-proxy-integration.test.ts` (§ C).
 
-**Not yet verified / still open:**
+**Not yet verified / still open (with plan to check):**
 
-- [ ] **Integration suite green:** Run `npm test -- tests/integration/openai-proxy-integration.test.ts` and confirm 0 failures (or document any remaining real-API/env-specific failures).
-- [ ] **No regressions:** Full `npm test` confirms no regressions in other unit/integration tests (openai-proxy and non-openai).
-- [ ] **E2E Tests 6 / 6b:** Function-call flow passes with real APIs when backend is running; see **§ G** (currently fails; § G.6 explains cause and proposed fix).
+- [ ] **Integration suite green:** Run `npm test -- tests/integration/openai-proxy-integration.test.ts` and confirm 0 failures (or document any remaining real-API/env-specific failures). **Plan:** Run from repo root; when pass, check this box.
+- [ ] **No regressions:** Full `npm test` confirms no regressions in other unit/integration tests (openai-proxy and non-openai). **Plan:** Run full `npm test`; when no new failures, check this box.
+- [x] **E2E Tests 6 / 6b:** Function-call flow passes with real APIs when backend is running — **resolved** (return Promise from handler in test-app; see § G).
 
 ---
 

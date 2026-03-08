@@ -1,6 +1,6 @@
 # Issue #489: E2E Failures — Resolution and Remaining Items
 
-**Context:** E2E is run from `test-app/` with proxy mode (default). This doc focuses on **current E2E failure status** and how integration tests prove protocol behavior so we can target the remaining gap.
+**Context:** E2E is run from `test-app/` with proxy mode (default). **All tracked E2E failures for #489 are resolved** (openai-proxy-e2e 17 passed, 2 skipped; issue-373 spec 5 passed). This doc is kept for reference and for re-verification after future changes.
 
 **Principle: entirely automated testable solution.** Resolution and verification use only automated tests (E2E, integration, diagnostic). No manual inspection (e.g. headed runs or Network tab) is required to qualify a fix. See [TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md](./TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md) for the same principle and automated next steps.
 
@@ -26,9 +26,9 @@ With an existing dev server and backend, add `E2E_USE_EXISTING_SERVER=1` if you 
 
 | Result   | Notes |
 |----------|--------|
-| **Passing** | Most OpenAI proxy E2E and **issue-373** “re-enable idle timeout” (resolved). Connection, single message, multi-turn, greeting, reconnection, basic audio, VAD, long-running function call, thinking phase, concurrent function calls. |
-| **Latest result** | **211 passed**, **12 failed**, 25 skipped (full suite, 7.8m). **OpenAI proxy spec only:** `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js` → **14 passed**, **2 failed**, 2 skipped (2.5m) after unmapped-event test-app change and proxy instruction. See "OpenAI proxy E2E only – latest run" below. |
-| **Failing (openai-proxy-e2e only)** | **2 in latest run:** 6, 6b. Both expect time/UTC in `[data-testid="agent-response"]`; test 6 receives model fallback text; test 6b sometimes greeting only. Isolate with integration tests: [TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md](./TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md) § "Identify and isolate the failure with integration tests". Full suite: callback-test, context-retention (2,3,4), issue-373, openai-proxy-tts-diagnostic still in failure set. |
+| **Passing** | Most OpenAI proxy E2E and **issue-373** “re-enable idle timeout” (resolved). Connection, single message, multi-turn, greeting, reconnection, basic audio, VAD, long-running function call, thinking phase, concurrent function calls. **6 and 6b (function-call) resolved.** |
+| **Latest result** | **OpenAI proxy spec:** `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js` → **17 passed**, 2 skipped (~1.8m). **issue-373 spec:** `USE_REAL_APIS=1 npm run test:e2e -- issue-373-idle-timeout-during-function-calls.spec.js` → **5 passed** (42.5s). 6 and 6b resolved (return Promise from handler). All tracked #489 E2E flows verified. |
+| **Failing (openai-proxy-e2e only)** | **None** in latest run. 6 and 6b fixed by returning the Promise from the test-app handler. See [TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md](./TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md). Other specs may still fail in full suite. |
 | **Skipped** | Various mock-only or conditional skips (e.g. interruptAgent in CI). |
 
 **Playwright E2E (proxy mode, without real APIs / default run):**
@@ -94,14 +94,14 @@ cd test-app
 USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js
 ```
 
-**Run only the 2 failing tests (6 and 6b):**
+**Run only tests 6 and 6b (e.g. to verify function-call):**
 
 ```bash
 cd test-app
 USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6. Simple function calling|6b. Issue #462"
 ```
 
-**Result (latest run):** **14 passed**, **2 failed**, 2 skipped (2.5m), after test-app change (unmapped_upstream_event not counted as agent error) and proxy instruction (“use tool results in your reply”). The only failures are **6** and **6b** (function-call reply: expect time/UTC; both get model fallback text). The table “Latest run – failed tests (9)” below is from the run *before* that test-app change; the *current* failure set is just 6 and 6b.
+**Result (latest run):** **17 passed**, **0 failed**, 2 skipped (~1.8m). **6 and 6b resolved** (return Promise from handler; see TDD-PLAN-3).
 
 #### Root cause 1: Unmapped upstream events (tests 2, 2b, 3, 3b, 4, 5, 7)
 
@@ -116,7 +116,7 @@ The **real OpenAI API** sends events that the proxy currently treats as unmapped
 
 **Implication:** The proxy must **handle** these event types (log only, no client Error) so they do not increment agent error count. The proxy codebase has handlers for these in `server.ts` (Epic #493); if the run still shows unmapped errors, either the real API sends a different payload shape/type string, or the deployed/local proxy is not the version that includes those handlers. See [TDD-PLAN-REAL-API-E2E-FAILURES.md](./TDD-PLAN-REAL-API-E2E-FAILURES.md) § “Unmapped response.* events (real API).”
 
-#### Root cause 2: Function-call reply – fallback text (tests 6, 6b)
+#### Root cause 2: Function-call reply – fallback text (tests 6, 6b) — RESOLVED
 
 After "What time is it?" and function call, the agent response is **fallback text** (or greeting) instead of time/UTC. Test expects `/\d{1,2}:\d{2}|UTC/` in `[data-testid="agent-response"]`.
 
@@ -500,7 +500,7 @@ Per the component–proxy contract, **upstream events must map to appropriate co
 
 ## Plan to resolve remaining failures
 
-Test 10 is **skipped** (see §5); the plan below covers the **three remaining failing tests** (openai-proxy-e2e 3b, 6, 6b — §2–§4). Execute in order where steps depend on prior steps.
+**Current status:** openai-proxy-e2e 3b, 6, and 6b are **resolved** (17 passed, 2 skipped). **issue-373** (idle timeout during function calls) is **resolved** — `issue-373-idle-timeout-during-function-calls.spec.js` run with real APIs: 5 passed (42.5s). Test 10 is **skipped** (see §5). All tracked E2E failures for Issue #489 are resolved; ready for PR to close #489.
 
 ### Phase 1: Confirm root causes with proxy logging
 
@@ -529,28 +529,28 @@ Dev manages backend and dev server; restart as needed. To complete Phase 1:
    - **Connection boundaries:**  
      `grep -n "connection_id:" docs/issues/ISSUE-489/phase1-proxy.log | head -80`
 
+**Checklist convention:** Completed = `[x]`. No longer applicable = ~~`[ ]`~~ (struck through). Open items that matter have a **plan to verify** in the text.
+
 **Phase 1 findings (from a run with the above tests):**
 - **§1:** Log shows `response.done` and "Received response.done from upstream — sending AgentAudioDone" for the function-call flow (e.g. connection c2). So the API *does* send completion and the proxy *does* send AgentAudioDone. To confirm the **component** receives it, the test now asserts `window.__agentAudioDoneReceived__` (set by the component when it handles AgentDone/AgentAudioDone). If that passes but idle timeout still does not fire, the issue is component/timing (e.g. idle timeout not starting or not firing within the test window).
 - **§2:** Log showed the proxy sending ConversationText from `response.function_call_arguments.done` and `response.output_audio_transcript.done`, producing extra assistant bubbles (5 instead of 3). **Phase 2 §2 fix applied:** proxy no longer sends ConversationText from those control events; assistant text only from `conversation.item.added`.
 - **response.output_text.done:** Documented in `packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md` §7a: OpenAI definition (text content part done streaming; also on interrupt/incomplete/cancel). Our mapping: **control only** (clear responseInProgress, send AgentStartedSpeaking/AgentAudioDone); no ConversationText. Assistant content only from `conversation.item.added`.
 
-- [ ] **§1 Issue-373 (idle timeout after function calls)**  
-  - [ ] Run issue-373 E2E with proxy started as `LOG_LEVEL=info` (e.g. `cd test-app && LOG_LEVEL=info npm run backend` in one terminal; run the spec in another).  
-  - [ ] After the in-browser function call completes, check proxy logs for **`response.done`** or **`response.output_text.done`** from upstream (e.g. `grep -E 'response\.done|response\.output_text\.done|AgentAudioDone' docs/issues/ISSUE-489/phase1-proxy.log`).  
-  - [ ] If **neither** appears: root cause is that the real API does not send a completion event for this turn. Proceed to Phase 2 (proxy fix for §1).  
-  - [ ] If **either** appears: component or timing issue; investigate why AgentAudioDone is not clearing the waiting flag or why the timeout does not start in this E2E path.
+- [x] **§1 Issue-373 (idle timeout after function calls)** — **Resolved.** Verified with `USE_REAL_APIS=1 npm run test:e2e -- issue-373-idle-timeout-during-function-calls.spec.js` from test-app: **5 passed** (42.5s), including "re-enable idle timeout after function calls complete".  
+  - [x] Run issue-373 E2E — passed (5 tests).  
+  - ~~[ ] After the in-browser function call completes, check proxy logs…~~ — N/A (spec passed with real APIs).  
+  - ~~[ ] If **neither** appears…~~ — N/A (spec passed).  
+  - ~~[ ] If **either** appears…~~ — N/A (spec passed).
 
-- [ ] **§2 3b (multi-turn after disconnect — 5 vs 3 assistant)**  
-  - [ ] Run openai-proxy-e2e test 3b with `LOG_LEVEL=info` on the proxy.  
-  - [ ] Count how many times the proxy **sends** ConversationText (assistant) to the client before and after disconnect (e.g. grep logs for `upstream→client` and `message_type` or for `response.output_text.done`, `conversation.item.added`, `output_audio_transcript.done`, `function_call_arguments.done` that each can trigger a ConversationText send).  
-  - [ ] If the proxy sends **five** (or more) ConversationText (assistant) messages: root cause is extra content from control events. Proceed to Phase 2 (proxy fix for §2).  
-  - [ ] If the proxy sends only three but the UI shows five: investigate component or test-app conversation history merge/display.
+- [x] **§2 3b (multi-turn after disconnect — 5 vs 3 assistant)** — **Done.** Phase 2 fix applied; 3b passes in full openai-proxy-e2e run (17 passed). **Plan to re-verify:** Run `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "3b"` from test-app; if it fails, uncheck and investigate.
+  - [x] Run openai-proxy-e2e test 3b — passed in full run.
+  - [x] Phase 2 fix (no ConversationText from control events) applied; proxy sends only three assistant messages.
+  - ~~[ ] If the proxy sends **five**…~~ — N/A (fix applied).
+  - ~~[ ] If the proxy sends only three but the UI shows five…~~ — N/A (3b passes).
 
 ### Phase 2: Proxy fixes (control events → no ConversationText)
 
-- [ ] **§1 Fix (if Phase 1 confirmed API sends no completion):**  
-  - [ ] In the proxy, add a path to send **AgentAudioDone** when we receive **`conversation.item.added`** (assistant role with content) and no response is currently in progress (or when we have not yet sent AgentAudioDone for this turn). This allows the component to transition to idle and start the idle timeout when the API sends only item.added and no response.done/output_text.done.  
-  - [ ] Document the new trigger in `PROTOCOL-AND-MESSAGE-ORDERING.md` and ensure it does not double-send AgentAudioDone when response.done/output_text.done also arrives.
+- ~~[ ] **§1 Fix (if Phase 1 confirmed API sends no completion)**~~ — **N/A.** Phase 1 confirmed the API *does* send completion (`response.done`); proxy sends AgentAudioDone; issue-373 spec passed (5 passed). No proxy change needed.
 
 - [x] **§2 Fix (Phase 1 confirmed proxy sent extra ConversationText):** **Done.**  
   - **Stopped mapping control events to ConversationText.** Proxy no longer sends ConversationText (assistant) from `response.output_text.done`, `response.output_audio_transcript.done`, or `response.function_call_arguments.done`. Those events are used for **control only** (e.g. AgentAudioDone, response.create). Assistant content **only** from **`conversation.item.added`** (assistant). Implemented in `server.ts`; protocol doc updated in `PROTOCOL-AND-MESSAGE-ORDERING.md` (§4 table and §6 summary).  
@@ -558,19 +558,19 @@ Dev manages backend and dev server; restart as needed. To complete Phase 1:
 
 ### Phase 3: Tests 6 and 6b (function-call reply shows time)
 
-- [ ] **§3 / §4 (tests 6 and 6b)**  
-  - [ ] After Phase 2, assistant content comes only from `conversation.item.added`. The real API must send **conversation.item.added** (assistant) with the model’s natural-language reply (e.g. the time) after the function call.  
-  - [ ] Verify with proxy logs that the API sends `conversation.item.added` (assistant) with the reply text for the get_current_time flow when the backend returns the time.  
-  - [ ] If the API **does** send that event: the proxy already maps it via `mapConversationItemAddedToConversationText`; confirm the client receives that ConversationText and that `agent-response` updates. If the client still only sees the transcript, fix any ordering or filtering in the proxy.  
-  - [ ] If the API **does not** send that event (only transcript or control events): the gap is upstream; document and either relax the test for that provider or track an API/docs ask.  
-  - [ ] For **6b**: if the API sometimes returns a fallback message (e.g. "I'm sorry, I'm currently unable to retrieve the exact time"), consider whether the test should accept that as a valid response or only pass when the backend returns a time (current pattern expects time/UTC).
+- [x] **§3 / §4 (tests 6 and 6b)** — **Resolved.** Root cause: test-app handler did not return the Promise from `forwardFunctionCallToBackend`; component sent default error then backend reply arrived too late. Fix: `return forwardFunctionCallToBackend(...)` in App.tsx. 6 and 6b pass.  
+  - ~~[ ] After Phase 2, assistant content comes only from `conversation.item.added`…~~ — N/A (resolved by app fix).
+  - ~~[ ] Verify with proxy logs…~~ — N/A (resolved by app fix).  
+  - ~~[ ] If the API **does** send that event…~~ — N/A (resolved by app fix).  
+  - ~~[ ] If the API **does not** send that event…~~ — N/A (resolved by app fix).  
+  - ~~[ ] For **6b**: if the API sometimes returns a fallback message…~~ — N/A (backend reply now used; test expects time/UTC).
 
 ### Phase 4: Re-run and lock in
 
-- [ ] Re-run the four specs with real APIs:  
-  `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js issue-373-idle-timeout-during-function-calls.spec.js`  
-- [ ] Confirm: issue-373 "re-enable idle timeout" passes, 3b passes (3 assistant), test 6 passes (agent-response contains time/UTC), test 6b passes or is updated per Phase 3.  
-- [ ] Update this doc: set status to **Resolved** for each and move any remaining notes to "Resolved / previously documented failures".
+- [x] Re-run the four specs with real APIs: openai-proxy-e2e run completed (17 passed, 2 skipped).
+- [x] Confirm: 3b passes (3 assistant), test 6 passes (agent-response contains time/UTC), test 6b passes — confirmed in full run.
+- [x] **issue-373 "re-enable idle timeout"** — **Resolved.** Verified: `USE_REAL_APIS=1 npm run test:e2e -- issue-373-idle-timeout-during-function-calls.spec.js` from test-app → 5 passed (including re-enable idle timeout after function calls complete).
+- [x] Update this doc: set status to **Resolved** for 3b, 6, 6b, and issue-373; Phase 3 and §3/§4 updated above. All tracked E2E failures for #489 resolved.
 
 ---
 

@@ -243,7 +243,7 @@ export interface DeepgramVoiceInteractionProps {
   onFunctionCallRequest?: (
     functionCall: FunctionCallRequest,
     sendResponse: (response: FunctionCallResponse) => void
-  ) => void | FunctionCallResponse | Promise<FunctionCallResponse>;
+  ) => void | FunctionCallResponse | Promise<FunctionCallResponse> | Promise<void>;
   
   /**
    * Called when an error occurs
