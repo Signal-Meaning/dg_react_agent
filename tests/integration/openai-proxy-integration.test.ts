@@ -2144,14 +2144,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 5000);
 
   /**
-   * When upstream sends ONLY response.output_text.done (no response.function_call_arguments.done),
-   * proxy sends AgentStartedSpeaking, AgentDone, AgentAudioDone but not ConversationText (Issue #489 Phase 2).
-   * Client does NOT receive FunctionCallRequest. This test asserts client gets SettingsApplied and completion events, no FCR.
+   * Upstream requirement: use conversation.item for finalized message and conversation history; response.output_text.done is control only.
+   * When upstream sends ONLY response.output_text.done (no conversation.item.added/.done for assistant), client must NOT receive ConversationText (assistant).
+   * Also: no FunctionCallRequest. Asserts SettingsApplied, AgentAudioDone/AgentDone, and no FCR and no ConversationText (assistant).
    */
-  itMockOnly('sends no FunctionCallRequest when upstream sends only output_text.done (no FCR)', (done) => {
+  itMockOnly('Upstream requirement: when upstream sends only output_text.done (no item), client does not receive ConversationText (assistant)', (done) => {
     mockSendOutputTextOnlyAfterSession = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
-    const received: Array<{ type: string; content?: string }> = [];
+    const received: Array<{ type: string; content?: string; role?: string }> = [];
     let finished = false;
     let lastError: Error | undefined;
     const finish = (err?: Error) => {
@@ -2163,9 +2163,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const debug = process.env.DEBUG_OPENAI_PROXY_INTEGRATION === '1';
     const t = setTimeout(() => {
       const hasFCR = received.some((m) => m.type === 'FunctionCallRequest');
+      const hasConvTextAssistant = received.some((m) => m.type === 'ConversationText' && m.role === 'assistant');
       const hasDone = received.some((m) => m.type === 'AgentAudioDone' || m.type === 'AgentDone');
+      if (hasConvTextAssistant) {
+        finish(new Error('Upstream requirement: must not send ConversationText (assistant) from response.output_text.done when no conversation.item event; received: ' + JSON.stringify(received.filter((m) => m.type === 'ConversationText'))));
+        return;
+      }
       if (received.some((m) => m.type === 'SettingsApplied') && !hasFCR && hasDone) finish();
-      else finish(new Error(`timeout: FCR=${hasFCR} done=${hasDone}, received: ${received.map((m) => m.type).join(', ')}`));
+      else finish(new Error(`timeout: FCR=${hasFCR} convTextAssistant=${hasConvTextAssistant} done=${hasDone}, received: ${received.map((m) => m.type + (m.role ? `(${m.role})` : '')).join(', ')}`));
     }, 4000);
     client.on('close', () => {
       if (finished) {
@@ -2178,14 +2183,19 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       if (debug) process.stdout.write('[client] open, sent Settings (outputTextOnly test)\n');
     });
     client.on('message', (data: Buffer) => {
-      const msg = JSON.parse(data.toString()) as { type?: string; content?: string };
+      const msg = JSON.parse(data.toString()) as { type?: string; content?: string; role?: string };
       if (msg.type) {
-        received.push({ type: msg.type, content: msg.content });
-        if (debug) process.stdout.write(`[client] received: ${msg.type}${msg.content ? ` content=${String(msg.content).slice(0, 50)}...` : ''}\n`);
+        received.push({ type: msg.type, content: msg.content, role: msg.role });
+        if (debug) process.stdout.write(`[client] received: ${msg.type}${msg.role ? ` role=${msg.role}` : ''}${msg.content ? ` content=${String(msg.content).slice(0, 50)}...` : ''}\n`);
       }
       if (received.some((m) => m.type === 'FunctionCallRequest')) {
         clearTimeout(t);
         finish(new Error('expected no FunctionCallRequest'));
+        return;
+      }
+      if (received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')) {
+        clearTimeout(t);
+        finish(new Error('Upstream requirement: must not send ConversationText (assistant) from response.output_text.done only'));
         return;
       }
       if (received.some((m) => m.type === 'SettingsApplied') && received.some((m) => m.type === 'AgentAudioDone' || m.type === 'AgentDone')) {

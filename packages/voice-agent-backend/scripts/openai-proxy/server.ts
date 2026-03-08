@@ -508,7 +508,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // Issue #414: session is now configured for audio; send any append chunks queued before session.updated.
           flushPendingAudio();
         } else if (msg.type === 'response.output_text.done') {
-          // response.output_text.done is a control signal only. Assistant content comes from conversation.item.added only (primary pipeline).
+          // Upstream requirement: use conversation.item for finalized message and conversation history; response.output_text.done is control only. We do not map this event to ConversationText.
           onResponseEnded();
           // Issue #462 / #470: After function_call_output we deferred response.create; send it now so the API can start the next turn.
           if (pendingResponseCreateAfterFunctionCallOutput) {
@@ -519,7 +519,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: 'response.output_text.done → control (AgentAudioDone only; assistant text from conversation.item.added)',
+            body: 'response.output_text.done → control only (upstream requirement: assistant text from conversation.item.*)',
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
           sendAgentStartedSpeakingIfNeeded();
@@ -529,15 +529,15 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: `upstream→client: ${msg.type} (control only; assistant text from conversation.item.added)`,
+            body: `upstream→client: ${msg.type} (control only; upstream requirement: assistant text from conversation.item.*)`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
-          // Issue #489 Phase 2: Do not map control events to ConversationText. Assistant content only from conversation.item.added.
+          // Upstream requirement: ConversationText only from conversation.item.*; do not map control events.
         } else if (msg.type === 'response.function_call_arguments.done') {
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: `upstream→client: ${msg.type} → sending FunctionCallRequest only (assistant text from conversation.item.added)`,
+            body: `upstream→client: ${msg.type} → FunctionCallRequest only (assistant text from conversation.item.*)`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
           sendAgentStartedSpeakingIfNeeded();
@@ -545,7 +545,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             msg as Parameters<typeof mapFunctionCallArgumentsDoneToFunctionCallRequest>[0]
           );
           clientWs.send(JSON.stringify(functionCallRequest));
-          // Issue #489 Phase 2: Do not map control events to ConversationText. Assistant content only from conversation.item.added.
+          // Upstream requirement: ConversationText only from conversation.item.*
         } else if (msg.type === 'error') {
           const componentError = mapErrorToComponentError(msg as Parameters<typeof mapErrorToComponentError>[0]);
           const isExpectedClosure =
@@ -702,7 +702,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               }
             }
           }
-          // conversation.item.created / .added / .done (assistant message) is the protocol-defined source for assistant text.
+          // Upstream requirement: use conversation.item for finalized message and conversation history. Map assistant content to ConversationText here only.
           // Real API may send assistant content in .created or .done instead of .added (Issue #489 / TDD-PLAN-ALL-MESSAGES-IN-HISTORY).
           if (clientWs.readyState === WebSocket.OPEN) {
             const itemRole = (msg as { item?: { role?: string } }).item?.role;

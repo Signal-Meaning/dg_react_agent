@@ -150,8 +150,8 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 |----------------|----------------|
 | **session.created** | No message to client. Log only. Do not inject context or greeting. |
 | **session.updated** | Send context items to upstream (if any); send **SettingsApplied** (text); send greeting as **ConversationText** (text) if configured; no greeting to upstream. |
-| **conversation.item.created** / **.added** / **.done** | Decrement pending-item counter; when 0, send `response.create` to upstream. Forward event to client as **text**. |
-| **response.output_text.done** | **Control only.** Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream. **Issue #482:** Send **AgentStartedSpeaking** (if not yet sent), then **AgentAudioDone**; flush any buffered idle_timeout Error. **Issue #489 Phase 2:** Do **not** send ConversationText from this event; assistant text comes only from **conversation.item.added**. See §7a below. |
+| **conversation.item.created** / **.added** / **.done** | Decrement pending-item counter; when 0, send `response.create` to upstream. **Upstream requirement:** use conversation.item for finalized message and conversation history. Map assistant content to **ConversationText** (from item only); do not forward raw event. |
+| **response.output_text.done** | **Control only.** Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream. **Issue #482:** Send **AgentStartedSpeaking** (if not yet sent), then **AgentAudioDone**; flush any buffered idle_timeout Error. **Upstream requirement:** do **not** send ConversationText from this event; assistant text only from **conversation.item.*** (finalized message and history). See §7a below. |
 | **response.done** | Clear response-in-progress; if deferred after FunctionCallResponse, send `response.create` to upstream (Issue #470 fallback). Send **AgentAudioDone** so component can transition to idle. No ConversationText. |
 | **response.output_audio_transcript.done** | **Control only.** Log only. **Issue #489 Phase 2:** Do **not** send ConversationText; assistant text only from **conversation.item.added**. |
 | **response.function_call_arguments.done** | Map to **FunctionCallRequest** only; send as **text**. **Issue #489 Phase 2:** Do **not** send ConversationText; assistant text only from **conversation.item.added**. |
@@ -169,7 +169,7 @@ Item confirmation is tracked by upstream event types `conversation.item.created`
 |------------------------|------------|------|
 | SettingsApplied | Text | After session.updated |
 | ConversationText (user) | Text | After InjectUserMessage (echo) |
-| ConversationText (assistant) | Text | From **conversation.item.added** (assistant) or greeting only (Issue #489 Phase 2). Not from output_text.done, output_audio_transcript.done, or function_call_arguments.done. |
+| ConversationText (assistant) | Text | **Upstream requirement:** from **conversation.item.created** / **.added** / **.done** (assistant content) or greeting only. Not from response.output_text.done or other control events. |
 | AgentStartedSpeaking | Text | Issue #482: before first response output (first output_audio.delta or before control from response.output_text.done) so component sees "agent active" and does not fire client idle timeout |
 | AgentAudioDone | Text | Issue #482: on response.output_audio.done, response.output_text.done, or response.done so component sees response complete and can transition to idle |
 | FunctionCallRequest | Text | From response.function_call_arguments.done |
@@ -187,10 +187,12 @@ Protocol requirements we’ve learned (from docs and failures) and how they’re
 
 ## 7a. response.output_text.done (OpenAI API)
 
+**Upstream requirement:** Use **conversation.item** for the **finalized assistant message** and **conversation history**; use **response.output** (e.g. `response.output_text.done`) for real-time streaming/control only. We map and implement this: assistant ConversationText is derived only from conversation.item.* (and greeting); we do not use response.output_text.done as a content source. See [DOC-output-text-done-rationale](../../../../docs/issues/OPENAI-PROXY-EVENT-MAP-GAPS/DOC-output-text-done-rationale.md) (Issue #498).
+
 **OpenAI Realtime API:** The event `response.output_text.done` is defined in the [Realtime server events](https://platform.openai.com/docs/api-reference/realtime-server-events) reference. Paraphrase: *Returned when the text value of an "output_text" content part is done streaming. Also emitted when a Response is interrupted, incomplete, or cancelled.*
 
 - **When the API sends it:** Only when the session uses text output (e.g. `output_modalities` includes `"output_text"`). For audio-only or when the model does not emit a text content part for that turn, the API may send `response.done` and/or `response.output_audio.done` / `response.output_audio_transcript.done` instead; we do not rely on `response.output_text.done` for every turn.
-- **Our mapping (component state):** **Control only.** We use it to: (1) clear `responseInProgress` so we can send the next `session.update` or `response.create`; (2) send **AgentStartedSpeaking** if not yet sent for this response; (3) send **AgentAudioDone** so the component can transition to idle and the idle timeout can start. We do **not** map it to **ConversationText** (assistant). Assistant content for display comes only from **conversation.item.added** (assistant role).
+- **Our mapping (component state):** **Control only.** We use it to: (1) clear `responseInProgress` so we can send the next `session.update` or `response.create`; (2) send **AgentStartedSpeaking** if not yet sent for this response; (3) send **AgentAudioDone** so the component can transition to idle and the idle timeout can start. We do **not** map it to **ConversationText** (assistant). Assistant content for display comes only from **conversation.item.*** (upstream requirement).
 
 ---
 
