@@ -316,6 +316,67 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       const out = mapFunctionCallResponseToConversationItemCreate(msg);
       expect(out.item.output).toBe('');
     });
+
+    /** Issue #489: Component API uses { id, result?, error? }. When client sends result (no content), output is stringified result. */
+    it('derives output from result when content is absent (component API shape)', () => {
+      const msg = {
+        type: 'FunctionCallResponse' as const,
+        id: 'call_xyz',
+        result: { time: '14:32:15', timezone: 'UTC' },
+      };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.type).toBe('conversation.item.create');
+      expect(out.item.call_id).toBe('call_xyz');
+      expect(out.item.output).toBe(JSON.stringify({ time: '14:32:15', timezone: 'UTC' }));
+    });
+
+    it('derives output from result when result is a string (no content)', () => {
+      const msg = {
+        type: 'FunctionCallResponse' as const,
+        id: 'call_s',
+        result: 'The time is 14:32 UTC',
+      };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.item.output).toBe('The time is 14:32 UTC');
+    });
+
+    it('derives output from error when content and result are absent', () => {
+      const msg = {
+        type: 'FunctionCallResponse' as const,
+        id: 'call_err',
+        error: 'Function failed',
+      };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.item.output).toBe(JSON.stringify({ error: 'Function failed' }));
+    });
+
+    it('returns empty output when only id is present (no content, result, or error)', () => {
+      const msg = { type: 'FunctionCallResponse' as const, id: 'call_minimal' };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.item.output).toBe('');
+    });
+
+    it('prefers content over result when both are present', () => {
+      const msg = {
+        type: 'FunctionCallResponse' as const,
+        id: 'call_both',
+        content: '{"time":"12:00"}',
+        result: { time: '99:99', timezone: 'UTC' },
+      };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.item.output).toBe('{"time":"12:00"}');
+    });
+
+    it('accepts message without name (name is optional)', () => {
+      const msg = {
+        type: 'FunctionCallResponse' as const,
+        id: 'call_no_name',
+        result: { ok: true },
+      };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.item.call_id).toBe('call_no_name');
+      expect(out.item.output).toBe(JSON.stringify({ ok: true }));
+    });
   });
 
   describe('6. Context (context message → conversation.item.create)', () => {

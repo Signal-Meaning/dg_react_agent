@@ -1,6 +1,20 @@
 # Diagnosis: Test 3b – Duplicate Assistant Messages (5 instead of 3)
 
-**Observed:** After reconnect, the DOM shows 5 assistant messages instead of 3. Expected: greeting + r1 (Paris) + r2 (“What did I just say?”). Actual order:
+## Status: fixed
+
+**Outcome:** The duplicate-assistant-message issue for Test 3b is **fixed** in the proxy. Context is sent only in session instructions; we do not send the greeting again when context is present; we do not inject context as `conversation.item.create`. No dedup logic — any upstream behavior that duplicated context would surface as a failure.
+
+**Verify:** Run Test 3b with real APIs from `test-app`:  
+`USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "3b"`  
+Expect: exactly 3 assistant messages (greeting + r1 + r2) in the conversation history after reconnect.
+
+**Sections below:** Cause 1 & 2 = original diagnosis. “Fix applied” = what was implemented. “Intended design” = context-as-instructions-only, no reinjection, no dedup.
+
+---
+
+## Original observation (before fix)
+
+**Observed:** After reconnect, the DOM showed 5 assistant messages instead of 3. Expected: greeting + r1 (Paris) + r2 (“What did I just say?”). Actual order:
 
 1. assistant: Hello! How can I assist you today?
 2. user: What is the capital of France?
@@ -85,3 +99,13 @@ We should **not** inject prior-session context as normal user/assistant conversa
    If the last Settings included `agent.context.messages`, the proxy sets `hadContextInLastSettings`. On `session.updated` it does not send the greeting to the client (they already have it in history).
 
 Result: no duplicate greeting from our side, and no API echo of context items, so the client should see exactly 3 assistant messages (greeting + r1 + r2) in test 3b.
+
+---
+
+## Intended design: context as instructions only (no reinjection)
+
+**We do not send context as `conversation.item.create`.** Context is provided to the OpenAI Realtime API on reconnect **only** via `session.update` instructions (e.g. a “Previous conversation: …” block in the system prompt). That is the correct use of the API for this data: instructions are context for the model, not conversation items. There should **never** be an “echo” of that instruction text as `conversation.item.added` / `conversation.item.done` from the upstream; if that were to happen, we would be using the wrong API or wrong usage for such data.
+
+**Approach:** Ensure context is provided to the OpenAI Realtime API when a reconnection is necessary. Do **not** reinject all messages as items. As context exceeds a certain length, we will necessarily **summarize** it — e.g. key turns, summarizations of other content, list of function calls, results that matter, etc. So the design is: context in instructions (and eventually summarized), not reinjection of full message history as conversation items.
+
+**No dedup logic.** We do not suppress or deduplicate any ConversationText. If the upstream ever sends `conversation.item.*` events whose content matches the context we put in instructions, that would be incorrect API behavior (instructions are not meant to be reflected as conversation items). Such behavior should **produce failures** (e.g. duplicate messages in the client, test assertions failing), not be hidden by dedup. We forward all mappable conversation items to the client.

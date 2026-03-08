@@ -62,6 +62,7 @@ const AGENT_STATE_IDLE = 'idle';
  * time-like substring (HH:MM or H:MM) or the literal "UTC" so we don't depend on exact phrasing.
  */
 const FUNCTION_CALL_TIME_RESPONSE_PATTERN = /\d{1,2}:\d{2}|UTC/;
+/** Tests 6 and 6b require the app backend running (e.g. `cd test-app && npm run backend`) so POST /function-call is available; otherwise they timeout waiting for the time response. */
 
 test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   test.beforeEach(() => {
@@ -280,6 +281,9 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
 
   test('6. Simple function calling – trigger function call; assert response in [data-testid="agent-response"]', async ({ page }, testInfo) => {
     skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
+    if (process.env.SKIP_FUNCTION_CALL_E2E === '1') {
+      test.skip(true, 'SKIP_FUNCTION_CALL_E2E=1; requires backend running for POST /function-call');
+    }
     const { pathWithQuery, getOpenAIProxyParams, BASE_URL } = await import('./helpers/test-helpers.mjs');
     const params = { ...getOpenAIProxyParams(), 'test-mode': 'true', 'enable-function-calling': 'true' };
     const pathPart = pathWithQuery(params);
@@ -288,20 +292,17 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, "What time is it?");
-    await waitForAgentResponseEnhanced(page, { timeout: AGENT_RESPONSE_TIMEOUT });
-    // Wait for agent to be idle so we assert on the final displayed response (not mid-turn).
-    await waitForAgentState(page, AGENT_STATE_IDLE, FUNCTION_CALL_RESULT_TIMEOUT).catch(() => {});
+    // Issue #478: Wait for the function result (time) to appear. Do not pass on greeting — agent-response
+    // shows the latest assistant message; we must wait for the one that contains the time (backend /function-call).
     const agentResponseEl = page.locator('[data-testid="agent-response"]');
+    await expect(agentResponseEl).toHaveText(FUNCTION_CALL_TIME_RESPONSE_PATTERN, { timeout: FUNCTION_CALL_RESULT_TIMEOUT });
     const response = await agentResponseEl.textContent();
-    // Log for inspection when assertion fails or for debugging.
     testInfo.annotations.push({ type: 'agent-response', description: response ?? '(empty)' });
     if (process.env.CI !== '1') {
       console.log('[E2E test 6] agent-response for inspection:', JSON.stringify(response));
     }
     expect(response).toBeTruthy();
     expect(response).not.toBe('(Waiting for agent response...)');
-    // Issue #478: expect the reply that presents the function result (time), not the greeting or transcript-only.
-    await expect(agentResponseEl).toHaveText(FUNCTION_CALL_TIME_RESPONSE_PATTERN, { timeout: FUNCTION_CALL_RESULT_TIMEOUT });
     // Function-calling flow can surface transient upstream errors (e.g. tool call handling); allow up to 2 (Issue #420).
     await assertAgentErrorsAllowUpstreamTimeouts(page, { maxTotal: 2, maxRecoverable: 2 });
   });
@@ -313,6 +314,9 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
    */
   test('6b. Issue #462 / #470: function-call flow completes without conversation_already_has_active_response (partner scenario)', async ({ page }, testInfo) => {
     skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
+    if (process.env.SKIP_FUNCTION_CALL_E2E === '1') {
+      test.skip(true, 'SKIP_FUNCTION_CALL_E2E=1; requires backend running for POST /function-call');
+    }
     const { pathWithQuery, getOpenAIProxyParams, BASE_URL } = await import('./helpers/test-helpers.mjs');
     const params = { ...getOpenAIProxyParams(), 'test-mode': 'true', 'enable-function-calling': 'true' };
     const pathPart = pathWithQuery(params);
@@ -321,9 +325,9 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, 'What time is it?');
-    await waitForAgentResponseEnhanced(page, { timeout: AGENT_RESPONSE_TIMEOUT });
-    await waitForAgentState(page, AGENT_STATE_IDLE, FUNCTION_CALL_RESULT_TIMEOUT).catch(() => {});
+    // Wait for function result (time) to appear in agent-response (same as test 6).
     const agentResponseEl = page.locator('[data-testid="agent-response"]');
+    await expect(agentResponseEl).toHaveText(FUNCTION_CALL_TIME_RESPONSE_PATTERN, { timeout: FUNCTION_CALL_RESULT_TIMEOUT });
     const response = await agentResponseEl.textContent();
     testInfo.annotations.push({ type: 'agent-response', description: response ?? '(empty)' });
     if (process.env.CI !== '1') {
@@ -331,7 +335,6 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     }
     expect(response).toBeTruthy();
     expect(response).not.toBe('(Waiting for agent response...)');
-    await expect(agentResponseEl).toHaveText(FUNCTION_CALL_TIME_RESPONSE_PATTERN, { timeout: FUNCTION_CALL_RESULT_TIMEOUT });
     // Partner scenario: no conversation_already_has_active_response; strict 0 errors.
     await assertNoRecoverableAgentErrors(page);
   });

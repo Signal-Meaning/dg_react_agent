@@ -300,6 +300,13 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           const settings = msg as Parameters<typeof mapSettingsToSessionUpdate>[0];
           const sessionUpdate = mapSettingsToSessionUpdate(settings);
           upstream.send(JSON.stringify(sessionUpdate));
+          const toolsCount = (sessionUpdate.session as { tools?: unknown[] })?.tools?.length ?? 0;
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: `session.update sent to upstream (tools=${toolsCount})`,
+            attributes: { ...connectionAttrs, toolsCount: String(toolsCount) },
+          });
           // Issue #489: Do not inject prior-session context as conversation items. Context is passed in session.update
           // instructions (buildInstructionsWithContext in translator) so the model has history without creating items
           // that the API would echo back and duplicate in the UI. See DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md.
@@ -314,16 +321,23 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             msg as Parameters<typeof mapFunctionCallResponseToConversationItemCreate>[0]
           );
           upstream.send(JSON.stringify(itemCreate));
-          // Issue #462 / #470: Do not send response.create here. The API still has the previous response
-          // (the function-call request) active until it processes our function_call_output and sends
-          // response.output_text.done. Sending response.create now triggers conversation_already_has_active_response.
-          // Defer response.create until we receive that output_text.done (see output_text.done handler).
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: 'FunctionCallResponse from client → function_call_output sent to upstream',
+            attributes: { ...connectionAttrs },
+          });
+          // Issue #489 / G.6: Real API sends response.done in the same batch as (or before) our FunctionCallResponse.
+          // So we never see response.output_text.done or response.done *after* function_call_output; the response
+          // is already closed. Send response.create immediately so the next turn starts and the model can reply
+          // with the function result (e.g. "The time is 2:30 PM"). We still set the flag so that if we *do*
+          // receive response.done or output_text.done later (different API ordering), we don't double-send.
           pendingResponseCreateAfterFunctionCallOutput = true;
+          upstream.send(JSON.stringify({ type: 'response.create' }));
+          onResponseStarted();
+          pendingResponseCreateAfterFunctionCallOutput = false;
           // Issue #487 / voice-commerce: Signal "agent is working" so the component can clear "waiting for next
-          // agent message" and allow idle timeout to run once the turn completes. Without this, the client only
-          // clears when we forward response.output_text.done or response.done; if the API is slow or order
-          // differs, the connection never idles. Sending AgentThinking here lets the component transition to
-          // thinking and IdleTimeoutService to clear waitingForNextAgentMessageAfterFunctionResult.
+          // agent message" and allow idle timeout to run once the turn completes.
           if (clientWs.readyState === WebSocket.OPEN) {
             clientWs.send(JSON.stringify({ type: 'AgentThinking', content: '' }));
           }
@@ -479,6 +493,13 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               severityNumber: SeverityNumber.INFO,
               severityText: 'INFO',
               body: 'greeting sent to client only (not upstream; OpenAI Realtime rejects client-created assistant items)',
+              attributes: { ...connectionAttrs },
+            });
+          } else if (storedGreeting && hadContextInLastSettings) {
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: 'greeting not sent (context present; client already has history)',
               attributes: { ...connectionAttrs },
             });
           }

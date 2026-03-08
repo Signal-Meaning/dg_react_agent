@@ -100,12 +100,20 @@ export interface ComponentFunctionCallRequest {
   functions: Array<{ id: string; name: string; arguments: string; client_side: boolean }>;
 }
 
-/** Component message: FunctionCallResponse (outgoing from client to proxy) */
+/** Component message: FunctionCallResponse (outgoing from client to proxy).
+ * Component public API uses { id, result?, error? }. The component may stringify result and send as content
+ * when using the callback; some paths (e.g. app backend) send result only. We accept both for robustness.
+ */
 export interface ComponentFunctionCallResponse {
   type: 'FunctionCallResponse';
   id: string;
-  name: string;
-  content: string;
+  name?: string;
+  /** String payload for OpenAI function_call_output (preferred when component has already stringified). */
+  content?: string;
+  /** Function result (object/string); used when content is absent. Serialized to JSON for output. */
+  result?: unknown;
+  /** Error message when function failed; sent as output so model can respond. */
+  error?: string;
 }
 
 /** OpenAI client event: conversation.item.create (function_call_output) */
@@ -350,6 +358,18 @@ export function mapConversationItemAddedToConversationText(
 }
 
 /**
+ * Derive OpenAI function_call_output string from component FunctionCallResponse.
+ * Component API uses result/error; component may send content (string) after stringifying result.
+ */
+function functionCallOutputFromResponse(msg: ComponentFunctionCallResponse): string {
+  if (typeof msg.content === 'string' && msg.content.length > 0) return msg.content;
+  if (msg.error != null) return JSON.stringify({ error: msg.error });
+  if (msg.result !== undefined && msg.result !== null)
+    return typeof msg.result === 'string' ? msg.result : JSON.stringify(msg.result);
+  return '';
+}
+
+/**
  * Map component FunctionCallResponse → OpenAI conversation.item.create (function_call_output).
  * Required so the backend receives the function result and can continue the response.
  */
@@ -358,7 +378,7 @@ export function mapFunctionCallResponseToConversationItemCreate(
 ): OpenAIConversationItemCreateFunctionCallOutput {
   return {
     type: 'conversation.item.create',
-    item: { type: 'function_call_output', call_id: msg.id, output: msg.content ?? '' },
+    item: { type: 'function_call_output', call_id: msg.id, output: functionCallOutputFromResponse(msg) },
   };
 }
 
