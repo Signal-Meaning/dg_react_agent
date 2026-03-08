@@ -136,11 +136,21 @@ const requestHandler = (req, res) => {
   if (req.method === 'OPTIONS') {
     const origin = req.headers.origin;
     const originValidation = validateOrigin(origin);
-    
-    if (originValidation.valid && origin) {
+    const pathname = getPathname(req.url);
+
+    // Always allow preflight for /function-call so browser (e.g. app at localhost:5173) can POST (Issue #489)
+    const isFunctionCall = pathname === '/function-call';
+    if (isFunctionCall || (originValidation.valid && origin)) {
       setSecurityHeaders(res);
+      if (origin && originValidation.valid) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      } else if (isFunctionCall) {
+        res.setHeader('Access-Control-Allow-Origin', origin || '*');
+        if (origin) res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Trace-Id, X-Request-Id');
       res.writeHead(200);
       res.end();
     } else {
@@ -159,6 +169,15 @@ const requestHandler = (req, res) => {
   if (req.method === 'POST' && pathname === '/function-call') {
     const traceId = req.headers['x-trace-id'] || req.headers['x-request-id'] || generateTraceId();
     rootLog.debug('Function call request', { traceId });
+    // Ensure CORS so browser (e.g. app at localhost:5173) can read the response (Issue #489 diagnostic: step 1 failed with hasError true, status undefined when CORS was missing or origin not reflected)
+    const origin = req.headers.origin;
+    const useOrigin = origin && origin !== 'null' && validateOrigin(origin).valid;
+    if (useOrigin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
     functionCallHandler(req, res);
     return;
   }
@@ -259,16 +278,23 @@ let voiceAgentAttachment = null;
         },
         setSecurityHeaders,
       } : undefined,
-      openai: hasOpenAI ? {
-        path: '/openai',
-        spawn: {
-          cwd: voiceAgentBackendPkgDir,
-          command: 'npx',
-          args: ['tsx', 'scripts/openai-proxy/run.ts'],
-          env: { OPENAI_API_KEY },
-          port: OPENAI_INTERNAL_PORT,
-        },
-      } : undefined,
+      openai: hasOpenAI ? (() => {
+        const spawnEnv = { ...process.env, OPENAI_API_KEY };
+        // When LOG_LEVEL=debug, proxy writes function_call_output to a file for inspection. Path default: test-app/test-results (backend cwd when run from test-app).
+        if (process.env.LOG_LEVEL === 'debug' && !process.env.E2E_FUNCTION_CALL_DEBUG_LOG) {
+          spawnEnv.E2E_FUNCTION_CALL_DEBUG_LOG = path.resolve(process.cwd(), 'test-results', 'e2e-function-call-output.json');
+        }
+        return {
+          path: '/openai',
+          spawn: {
+            cwd: voiceAgentBackendPkgDir,
+            command: 'npx',
+            args: ['tsx', 'scripts/openai-proxy/run.ts'],
+            env: spawnEnv,
+            port: OPENAI_INTERNAL_PORT,
+          },
+        };
+      })() : undefined,
       logger: rootLog,
       https: useHttps,
     });

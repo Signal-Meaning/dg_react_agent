@@ -15,13 +15,20 @@
  * 4. Idle timeout re-enables after function calls complete
  * 
  * Requirements:
- * - Real Deepgram API key (VITE_DEEPGRAM_API_KEY)
- * - Real OpenAI API key (VITE_OPENAI_API_KEY) for think provider
- * - Proxy backend server running (default: ws://localhost:8080/deepgram-proxy)
- * - USE_PROXY_MODE=true (default, uses proxy mode with real APIs)
- * 
- * To run:
- * USE_PROXY_MODE=true npm run test:e2e -- issue-373-idle-timeout-during-function-calls
+ * - Proxy mode with real APIs (Deepgram or OpenAI). Use E2E_BACKEND=deepgram or E2E_BACKEND=openai (default: openai).
+ * - Real API key for chosen backend (VITE_DEEPGRAM_API_KEY or VITE_OPENAI_API_KEY)
+ * - Proxy backend server running (e.g. ws://localhost:8080/deepgram-proxy or .../openai)
+ * - USE_PROXY_MODE=true (default)
+ *
+ * To run (OpenAI proxy, default): USE_PROXY_MODE=true npm run test:e2e -- issue-373-idle-timeout-during-function-calls
+ * To run (Deepgram proxy):       E2E_BACKEND=deepgram USE_PROXY_MODE=true npm run test:e2e -- issue-373-idle-timeout-during-function-calls
+ *
+ * If "re-enable idle timeout after function calls complete" fails on OpenAI: the component needs response.done
+ * (or response.output_text.done) from the real API so it can transition to idle and start the idle timer.
+ * To verify whether the real API sends response.done: run the backend with LOG_LEVEL=info (e.g. in another
+ * terminal: cd test-app && LOG_LEVEL=info npm run backend), then run this spec. In the proxy output, look for
+ * "Received response.done from upstream" or "Received response.output_text.done from upstream" after the
+ * function call completes. If neither appears, the real API is not sending completion for that turn.
  */
 
 import { test, expect } from '@playwright/test';
@@ -31,10 +38,9 @@ import {
   waitForSettingsApplied,
   setupFunctionCallingTest,
 } from './helpers/test-helpers.js';
-import { pathWithQuery, getDeepgramProxyParams } from './helpers/test-helpers.mjs';
+import { pathWithQuery, getBackendProxyParams, installWebSocketCapture, getCapturedWebSocketData } from './helpers/test-helpers.mjs';
 
-// Proxy mode configuration - use proxy backend with real APIs
-const PROXY_ENDPOINT = getDeepgramProxyParams().proxyEndpoint;
+// Proxy mode: runnable with either Deepgram or OpenAI backend (E2E_BACKEND=deepgram | openai).
 const IS_PROXY_MODE = process.env.USE_PROXY_MODE !== 'false'; // Default to true
 
 test.describe('Issue #373: Idle Timeout During Function Calls', () => {
@@ -144,8 +150,7 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
     
     // Setup test page with proxy mode and real APIs
     const testUrl = pathWithQuery({
-      connectionMode: 'proxy',
-      proxyEndpoint: PROXY_ENDPOINT,
+      ...getBackendProxyParams(),
       'enable-function-calling': 'true',
       'test-mode': 'true',
       debug: 'true'
@@ -368,8 +373,7 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
     
     // Setup test page with proxy mode and real APIs
     const testUrl = pathWithQuery({
-      connectionMode: 'proxy',
-      proxyEndpoint: PROXY_ENDPOINT,
+      ...getBackendProxyParams(),
       'enable-function-calling': 'true',
       'test-mode': 'true',
       debug: 'true'
@@ -532,8 +536,7 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
     
     // Setup test page with proxy mode and real APIs
     const testUrl = pathWithQuery({
-      connectionMode: 'proxy',
-      proxyEndpoint: PROXY_ENDPOINT,
+      ...getBackendProxyParams(),
       'enable-function-calling': 'true',
       'test-mode': 'true',
       debug: 'true'
@@ -667,8 +670,7 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
     
     // Setup test page with proxy mode and real APIs
     const testUrl = pathWithQuery({
-      connectionMode: 'proxy',
-      proxyEndpoint: PROXY_ENDPOINT,
+      ...getBackendProxyParams(),
       'enable-function-calling': 'true',
       'test-mode': 'true',
       debug: 'true'
@@ -732,25 +734,103 @@ test.describe('Issue #373: Idle Timeout During Function Calls', () => {
     // Now wait for idle timeout (should fire after 10 seconds of inactivity)
     console.log('Waiting for idle timeout to fire (should fire after 10s of inactivity)...');
     await page.waitForTimeout(12000); // Wait 12 seconds to see if timeout fires
-    
+
+    const idleTimeoutFiredFlag = await page.evaluate(() => (window).__idleTimeoutFired__ === true);
+    const agentAudioDoneReceived = await page.evaluate(() => (window).__agentAudioDoneReceived__ === true);
+    const idleTimeoutStarted = await page.evaluate(() => (window).__idleTimeoutStarted__ === true);
+    const idleTimeoutStopped = await page.evaluate(() => (window).__idleTimeoutStopped__ === true);
+    const idleTimeoutMs = await page.evaluate(() => (typeof window !== 'undefined' && window.__idleTimeoutMs) ? window.__idleTimeoutMs : null);
+
     console.log('\n📊 Test Results:');
-    console.log(`  Timeout fired: ${timeoutFired}`);
+    console.log(`  AgentAudioDone received (component): ${agentAudioDoneReceived}`);
+    console.log(`  Idle timeout started (__idleTimeoutStarted__): ${idleTimeoutStarted}`);
+    console.log(`  Idle timeout stopped before fire (__idleTimeoutStopped__): ${idleTimeoutStopped}`);
+    console.log(`  Idle timeout ms (app): ${idleTimeoutMs ?? 'not set'}`);
+    console.log(`  Timeout fired (console): ${timeoutFired}`);
+    console.log(`  Timeout fired (__idleTimeoutFired__): ${idleTimeoutFiredFlag}`);
     console.log(`  Connection closes detected: ${connectionCloses.length}`);
-    
-    // After function completes and we wait 12 seconds, timeout should have fired
-    // (This verifies that timeout re-enables after function calls complete)
-    if (timeoutFired || connectionCloses.length > 0) {
-      console.log('✅ Idle timeout re-enabled and fired after function call completed');
-    } else {
-      console.log('⚠️  Idle timeout did not fire - may need longer wait or agent may still be active');
-    }
-    
-    // The key assertion: function call should have completed without timing out
+    // Diagnostic: if __idleTimeoutStarted__ is false, timeout was never started (e.g. canStartTimeout blocked).
+    // To verify proxy sent completion, from repo root: grep -n -E 'AgentAudioDone|response\.done|output_text\.done' docs/issues/ISSUE-489/phase1-proxy.log
+
+    // Confirm component received AgentAudioDone from proxy (Phase 1 verification).
+    expect(agentAudioDoneReceived, 'Component must receive AgentAudioDone from proxy after function-call turn so idle timeout can start.').toBe(true);
+
+    // After function completes and we wait 12 seconds, idle timeout should have fired and connection should close.
+    // Requires: proxy sends AgentThinking (or any message) after FunctionCallResponse so "waiting" clears; then proxy
+    // sends AgentAudioDone when response is complete so component transitions to idle and the idle timer can start.
+    expect(
+      timeoutFired || idleTimeoutFiredFlag || connectionCloses.length > 0,
+      'Idle timeout should fire and connection should close after function call completes and user is idle for idle_timeout (e.g. 10s). If this fails on OpenAI path, backend may not be sending a message or agent-state signal after the function result, or may not be sending AgentAudioDone when the response completes so the component can transition to idle.'
+    ).toBe(true);
+
+    // Function call should have completed without timing out
     const functionCompleted = await page.evaluate(() => {
       return window.__FUNCTION_CALL_RESPONSE_SENT__ === true;
     });
-    
-    // Function should have completed (even if timeout fires later)
     expect(functionCompleted !== false).toBe(true); // May be undefined if using declarative pattern
+  });
+
+  /**
+   * E2E protocol contract: After the client sends FunctionCallResponse, the client must receive at least one
+   * of AgentThinking, ConversationText (assistant), or AgentAudioDone so the component can clear "waiting
+   * for next agent message" and re-enable idle timeout. Guarantees necessary protocol elements for the
+   * proxy in use (OpenAI or Deepgram per E2E_BACKEND). See docs/issues/ISSUE-489/WHY-INTEGRATION-TESTS-MISS-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md.
+   */
+  test('should receive protocol signal after function call (AgentThinking or equivalent)', async ({ page }) => {
+    test.setTimeout(45000);
+
+    await installWebSocketCapture(page);
+    await page.addInitScript(() => {
+      window.testFunctions = [
+        {
+          name: 'test_quick_function',
+          description: 'Quick test function. Use when the user says "test" or "trigger".',
+          parameters: { type: 'object', properties: {} }
+        }
+      ];
+      window.handleFunctionCall = async (request, sendResponse) => {
+        if (request.name !== 'test_quick_function') return undefined;
+        await new Promise(r => setTimeout(r, 800));
+        sendResponse({ id: request.id, result: { ok: true } });
+        window.__FUNCTION_CALL_RESPONSE_SENT__ = true;
+        return { id: request.id, result: { ok: true } };
+      };
+    });
+
+    const testUrl = pathWithQuery({
+      ...getBackendProxyParams(),
+      'enable-function-calling': 'true',
+      'test-mode': 'true',
+      debug: 'true'
+    });
+    await page.goto(testUrl);
+    await page.waitForSelector('[data-testid="voice-agent"]', { timeout: 10000 });
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.waitFor({ state: 'visible', timeout: 10000 });
+    await textInput.focus();
+    await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
+    await waitForConnection(page, 30000);
+    await waitForSettingsApplied(page, 10000);
+
+    await page.evaluate(() => {
+      const ref = window.deepgramRef || window.voiceAgentRef;
+      if (ref?.current) ref.current.injectUserMessage('test');
+    });
+    await page.waitForFunction(() => window.__FUNCTION_CALL_RESPONSE_SENT__ === true, { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(3000);
+
+    const { sent = [], received = [] } = await getCapturedWebSocketData(page);
+    const lastFCR = [...sent].filter(m => m.type === 'FunctionCallResponse').pop();
+    expect(lastFCR, 'Client should have sent FunctionCallResponse').toBeDefined();
+    const afterTs = lastFCR ? new Date(lastFCR.timestamp).getTime() : 0;
+    const acceptableAfter = received.filter(r => new Date(r.timestamp).getTime() >= afterTs).some(r =>
+      r.type === 'AgentThinking' ||
+      r.type === 'AgentAudioDone' ||
+      (r.type === 'ConversationText' && r.data?.role === 'assistant')
+    );
+    expect(
+      acceptableAfter,
+      'After FunctionCallResponse, client must receive AgentThinking, ConversationText (assistant), or AgentAudioDone (protocol contract for idle timeout). Backend: ' + (process.env.E2E_BACKEND || 'openai')
+    ).toBe(true);
   });
 });

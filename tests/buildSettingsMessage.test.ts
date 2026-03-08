@@ -52,6 +52,22 @@ describe('buildSettingsMessage', () => {
     expect(msg.agent.idleTimeoutMs).toBe(15000);
   });
 
+  it('uses default idle timeout (10s) when isOpenAIProxy true and options.idleTimeoutMs omitted', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.idleTimeoutMs).toBe(10000);
+  });
+
+  it('idleTimeoutMs can be set to a value other than default (e.g. 15s)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, idleTimeoutMs: 15000 },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.idleTimeoutMs).toBe(15000);
+  });
+
   it('omits idleTimeoutMs when isOpenAIProxy is false', () => {
     const msg = buildSettingsMessage(
       { ...minimalOptions, idleTimeoutMs: 5000 },

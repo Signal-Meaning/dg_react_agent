@@ -111,6 +111,22 @@ export function useIdleTimeoutManager(
       isPlaying: prevStateRef.current.isPlaying,
     };
 
+    // Issue #489: Sync full state to the service BEFORE emitting transition events.
+    // Otherwise the first event (e.g. AGENT_STATE_CHANGED) runs updateTimeoutBehavior() while
+    // the service still has stale isPlaying/agentState from the previous render, so we
+    // incorrectly call disableResets() and stop a timeout we just started.
+    const stateChanged =
+      currentState.agentState !== prevState.agentState ||
+      currentState.isPlaying !== prevState.isPlaying ||
+      currentState.isUserSpeaking !== prevState.isUserSpeaking;
+    if (stateChanged) {
+      serviceRef.current.updateStateDirectly({
+        agentState: currentState.agentState,
+        isPlaying: currentState.isPlaying,
+        isUserSpeaking: currentState.isUserSpeaking,
+      });
+    }
+
     logger.debug('State change detected', {
       prev: prevState,
       current: currentState,
@@ -145,26 +161,6 @@ export function useIdleTimeoutManager(
     }
 
     prevStateRef.current = state;
-    
-    // CRITICAL FIX: If state changed but events weren't emitted (React batching issue),
-    // directly update IdleTimeoutService state as fallback
-    // This ensures state is always in sync even if useEffect doesn't fire for all changes
-    if (serviceRef.current) {
-      const stateChanged = 
-        currentState.agentState !== prevState.agentState ||
-        currentState.isPlaying !== prevState.isPlaying ||
-        currentState.isUserSpeaking !== prevState.isUserSpeaking;
-      
-      if (stateChanged) {
-        // Directly sync state to IdleTimeoutService as fallback
-        // This handles cases where React batches updates and events aren't emitted
-        serviceRef.current.updateStateDirectly({
-          agentState: currentState.agentState,
-          isPlaying: currentState.isPlaying,
-          isUserSpeaking: currentState.isUserSpeaking
-        });
-      }
-    }
   }, [state.isUserSpeaking, state.agentState, state.isPlaying, debug]);
 
   // Handle meaningful user activity from WebSocket managers
@@ -208,10 +204,30 @@ export function useIdleTimeoutManager(
     }
   }, []);
 
-  /** Issue #487: Notify idle timeout that next agent message was received (clears "waiting after function result"). */
-  const handleNextAgentMessageReceived = useCallback(() => {
+  /**
+   * Issue #487: Notify idle timeout that an agent message was received.
+   * Passed to WebSocketManager as onAgentMessageReceived; the manager calls it when it emits a message (single path).
+   * Clears "waiting for agent after function result." See docs/issues/ISSUE-489/IDLE-TIMEOUT-AFTER-FUNCTION-RESULT-DESIGN.md.
+   */
+  const notifyAgentMessageReceived = useCallback(() => {
     if (serviceRef.current) {
       serviceRef.current.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
+    }
+  }, []);
+
+  /**
+   * Issue #489: Push full idle state into the idle timeout service so it sees the same
+   * state we just dispatched, before we call handleMeaningfulActivity. Use when the component has
+   * just transitioned to idle (e.g. on AgentAudioDone) so the service can start the timeout in the
+   * same tick. Includes isUserSpeaking: false so canStartTimeout() is not blocked by stale user-speaking state.
+   */
+  const pushIdleStateToIdleTimeoutService = useCallback(() => {
+    if (serviceRef.current) {
+      serviceRef.current.updateStateDirectly({
+        agentState: 'idle',
+        isPlaying: false,
+        isUserSpeaking: false,
+      });
     }
   }, []);
 
@@ -220,6 +236,7 @@ export function useIdleTimeoutManager(
     handleUtteranceEnd,
     handleFunctionCallStarted,
     handleFunctionCallCompleted,
-    handleNextAgentMessageReceived,
+    notifyAgentMessageReceived,
+    pushIdleStateToIdleTimeoutService,
   };
 }

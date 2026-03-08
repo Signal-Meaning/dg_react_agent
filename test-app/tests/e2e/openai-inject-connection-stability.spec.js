@@ -14,8 +14,8 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  skipIfNoOpenAIProxy,
-  setupTestPageWithOpenAIProxy,
+  skipIfNoProxyForBackend,
+  setupTestPageForBackend,
   establishConnectionViaText,
   waitForSettingsApplied,
   sendTextMessage,
@@ -25,11 +25,11 @@ import {
 
 test.describe('OpenAI injectUserMessage (issue #380)', () => {
   test.beforeEach(() => {
-    skipIfNoOpenAIProxy('Requires VITE_OPENAI_PROXY_ENDPOINT to run against real OpenAI proxy');
+    skipIfNoProxyForBackend('Requires VITE_OPENAI_PROXY_ENDPOINT to run against real OpenAI proxy');
   });
 
   test('should receive agent response after first text message (real OpenAI proxy)', async ({ page }) => {
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, 'What is 2 plus 2?');

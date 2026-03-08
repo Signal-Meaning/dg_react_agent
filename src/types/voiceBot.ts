@@ -29,6 +29,7 @@ export type VoiceBotMessage = UserMessage | AssistantMessage | LatencyMessage;
  */
 export enum BehindScenesEventType {
   SETTINGS_APPLIED = 'SettingsApplied',
+  AGENT_DONE = 'AgentDone',
   AGENT_AUDIO_DONE = 'AgentAudioDone',
   USER_STARTED_SPEAKING = 'UserStartedSpeaking',
   AGENT_STARTED_SPEAKING = 'AgentStartedSpeaking',
@@ -42,6 +43,7 @@ export enum BehindScenesEventType {
  */
 export type BehindScenesEvent = 
   | { type: BehindScenesEventType.SETTINGS_APPLIED }
+  | { type: BehindScenesEventType.AGENT_DONE }
   | { type: BehindScenesEventType.AGENT_AUDIO_DONE }
   | { type: BehindScenesEventType.USER_STARTED_SPEAKING }
   | { type: BehindScenesEventType.AGENT_STARTED_SPEAKING }

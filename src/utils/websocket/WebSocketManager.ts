@@ -1,11 +1,15 @@
-import { DEFAULT_IDLE_TIMEOUT_MS } from '../../constants/voice-agent';
+import {
+  DEFAULT_CONNECTION_TIMEOUT_MS,
+  DEFAULT_IDLE_TIMEOUT_MS,
+  DEFAULT_KEEPALIVE_INTERVAL_MS,
+} from '../../constants/voice-agent';
 import { ConnectionState, DeepgramError, ServiceType } from '../../types';
 import { AgentResponseType } from '../../types/agent';
 import { functionCallLogger } from '../function-call-logger';
 import { getLogger, type Logger } from '../logger';
 
-/** Message types that indicate agent activity for idle timeout (Issue #482). */
-const AGENT_ACTIVITY_MESSAGE_TYPES = ['AgentThinking', 'AgentStartedSpeaking', 'AgentAudioDone'] as const;
+/** Message types that indicate agent activity for idle timeout (Issue #482). AgentDone = semantic agent done; AgentAudioDone = receipt complete (legacy). */
+const AGENT_ACTIVITY_MESSAGE_TYPES = ['AgentThinking', 'AgentStartedSpeaking', 'AgentDone', 'AgentAudioDone'] as const;
 
 /**
  * Event types emitted by the WebSocketManager
@@ -71,6 +75,13 @@ export interface WebSocketManagerOptions {
    * Callback for meaningful user activity (for idle timeout management)
    */
   onMeaningfulActivity?: (activity: string) => void;
+
+  /**
+   * Issue #487: Called whenever the manager emits an agent message (type 'message') to the component.
+   * Single path: only the manager invokes this when it emits, so no code path can deliver agent
+   * messages without triggering idle-timeout notification. Used for agent service only.
+   */
+  onAgentMessageReceived?: () => void;
 }
 
 /**
@@ -78,8 +89,8 @@ export interface WebSocketManagerOptions {
  * idleTimeout uses shared DEFAULT_IDLE_TIMEOUT_MS so it matches Settings (e.g. OpenAI proxy session).
  */
 const DEFAULT_OPTIONS: Partial<WebSocketManagerOptions> = {
-  keepaliveInterval: 5000, // 5 seconds - keep connection alive to prevent server timeout
-  connectionTimeout: 10000, // 10 seconds - reasonable timeout for connection establishment
+  keepaliveInterval: DEFAULT_KEEPALIVE_INTERVAL_MS,
+  connectionTimeout: DEFAULT_CONNECTION_TIMEOUT_MS,
   idleTimeout: DEFAULT_IDLE_TIMEOUT_MS,
   debug: false,
 };
@@ -246,6 +257,9 @@ export class WebSocketManager {
             
             // Route as 'message' event (same as text JSON messages)
             this.log(`📨 [WEBSOCKET.onmessage] About to emit message event with type: ${messageType} (from binary ${source})`);
+            if (this.options.service === 'agent') {
+              this.options.onAgentMessageReceived?.();
+            }
             this.emit({ type: 'message', data });
             this.log(`📨 [WEBSOCKET.onmessage] Emit completed for message type: ${messageType} (from binary ${source})`);
             return;
@@ -396,6 +410,9 @@ export class WebSocketManager {
               }
               
               this.log(`📨 [WEBSOCKET.onmessage] About to emit message event with type:`, data.type);
+              if (this.options.service === 'agent') {
+                this.options.onAgentMessageReceived?.();
+              }
               this.emit({ type: 'message', data });
               this.log(`📨 [WEBSOCKET.onmessage] Emit completed for message type:`, data.type);
             } catch (error) {
@@ -632,28 +649,30 @@ export class WebSocketManager {
     if (this.options.service === 'agent') {
       return true;
     }
-    
+
     // For transcription service, only reset on meaningful messages
     if (this.options.service === 'transcription') {
+      const d = data as { type?: string; alternatives?: Array<{ transcript?: string }> };
       // Don't reset on empty Results (silence)
-      if (data.type === 'Results') {
-        const hasAlternatives = data.alternatives && data.alternatives.length > 0;
-        const hasTranscript = hasAlternatives && data.alternatives[0].transcript && data.alternatives[0].transcript.trim().length > 0;
-        
+      if (d.type === 'Results') {
+        const hasAlternatives = d.alternatives && d.alternatives.length > 0;
+        const firstAlt = hasAlternatives ? d.alternatives?.[0] : undefined;
+        const hasTranscript = !!(firstAlt?.transcript && firstAlt.transcript.trim().length > 0);
+
         // Only reset if there's actual transcript content
-        if (hasTranscript) {
-          this.log(`Resetting idle timeout - meaningful transcript: "${data.alternatives[0].transcript}"`);
+        if (hasTranscript && firstAlt?.transcript) {
+          this.log(`Resetting idle timeout - meaningful transcript: "${firstAlt.transcript}"`);
           return true;
         } else {
           this.log(`NOT resetting idle timeout - empty transcript`);
           return false;
         }
       }
-      
+
       // Reset on other meaningful transcription messages (UtteranceEnd, UserStoppedSpeaking, etc.)
       return true;
     }
-    
+
     return true; // Default to reset for unknown services
   }
 
@@ -666,49 +685,51 @@ export class WebSocketManager {
    * - Agent activity is already tracked via AgentThinking/AgentStartedSpeaking messages and state changes
    */
   private isMeaningfulUserActivity(data: unknown): boolean {
+    const d = data as { type?: string; alternatives?: Array<{ transcript?: string }> };
     // Only reset idle timeout on ACTUAL activity indicators, not transcript messages
-    
+
     // For agent service, reset on activity indicators
     if (this.options.service === 'agent') {
       // Typing (sending text) is user activity
-      if (data.type === 'InjectUserMessage') {
-        this.options.onMeaningfulActivity?.(data.type);
+      if (d.type === 'InjectUserMessage') {
+        if (d.type) this.options.onMeaningfulActivity?.(d.type);
         return true;
       }
-      
+
       // Agent activity that should keep connection alive
       // Note: These are handled by agent state changes, but we keep them here
       // as a fallback in case state hasn't updated yet
-      if (AGENT_ACTIVITY_MESSAGE_TYPES.includes(data.type as (typeof AGENT_ACTIVITY_MESSAGE_TYPES)[number])) {
-        this.options.onMeaningfulActivity?.(data.type);
+      if (d.type && AGENT_ACTIVITY_MESSAGE_TYPES.includes(d.type as (typeof AGENT_ACTIVITY_MESSAGE_TYPES)[number])) {
+        this.options.onMeaningfulActivity?.(d.type);
         return true;
       }
-      
+
       // ConversationText messages (both user and assistant) are redundant:
       // - User text: Should be handled via onUserMessage callback/state updates
       // - Assistant text: Agent activity already tracked via state changes and activity messages
       // So we don't reset timeout on ConversationText messages
-      
+
       return false;
     }
-    
+
     // For transcription service, only reset on actual speech activity
     if (this.options.service === 'transcription') {
       // Only reset on actual speech content, not empty results or protocol messages
-      if (data.type === 'Results') {
-        const hasAlternatives = data.alternatives && data.alternatives.length > 0;
-        const hasTranscript = hasAlternatives && data.alternatives[0].transcript && data.alternatives[0].transcript.trim().length > 0;
-        if (hasTranscript) {
-          this.options.onMeaningfulActivity?.(`Results with transcript: "${data.alternatives[0].transcript}"`);
+      if (d.type === 'Results') {
+        const hasAlternatives = d.alternatives && d.alternatives.length > 0;
+        const firstAlt = hasAlternatives ? d.alternatives?.[0] : undefined;
+        const hasTranscript = !!(firstAlt?.transcript && firstAlt.transcript.trim().length > 0);
+        if (hasTranscript && firstAlt?.transcript) {
+          this.options.onMeaningfulActivity?.(`Results with transcript: "${firstAlt.transcript}"`);
         }
         return hasTranscript; // Only reset if there's actual transcript content
       }
-      
+
       // Don't reset on other transcription messages (UtteranceEnd, etc.)
       // These are protocol messages, not user activity
       return false;
     }
-    
+
     return false; // Default to not reset for unknown services
   }
 
@@ -720,7 +741,10 @@ export class WebSocketManager {
    * coordinated timeout behavior across all services.
    */
   public resetIdleTimeout(triggerMessage?: unknown): void {
-    const triggerInfo = triggerMessage ? ` (triggered by: ${triggerMessage.type || 'unknown'})` : '';
+    const triggerType = triggerMessage && typeof triggerMessage === 'object' && 'type' in triggerMessage
+      ? (triggerMessage as { type?: string }).type
+      : 'unknown';
+    const triggerInfo = triggerMessage ? ` (triggered by: ${triggerType || 'unknown'})` : '';
     this.log(`🎯 [IDLE_TIMEOUT] Using centralized IdleTimeoutService for ${this.options.service}${triggerInfo}`);
     // Individual WebSocket timeout resets are disabled - IdleTimeoutService handles all timeout logic
   }
@@ -804,7 +828,7 @@ export class WebSocketManager {
       
       // Always expose Settings payload to window for automated testing (even without debug mode)
       // This is needed for E2E tests that check window variables
-      if (data && data.type === 'Settings' && typeof window !== 'undefined') {
+      if (data && typeof data === 'object' && 'type' in data && (data as { type: string }).type === 'Settings' && typeof window !== 'undefined') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).__DEEPGRAM_WS_SETTINGS_PAYLOAD__ = jsonString;
         try {

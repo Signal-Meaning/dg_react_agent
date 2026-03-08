@@ -57,7 +57,7 @@
  *   - AgentThinking: Agent is processing
  *   - AgentStartedSpeaking: Agent audio begins
  *   - ConversationText: Transcript messages (user & assistant)
- *   - AgentAudioDone: TTS audio generation complete (not playback complete)
+ *   - AgentAudioDone: agent turn output received complete (receipt), not playback complete
  *   - Error: Error handling
  *   - Warning: Warning messages
  * 
@@ -401,6 +401,28 @@ describe('Voice Agent API - Event Validation', () => {
     });
   });
 
+  describe('AgentDone Event', () => {
+    it('should handle AgentDone message (semantic agent done for the turn)', async () => {
+      const ref = React.createRef<any>();
+
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+          debug={true}
+        />
+      );
+
+      await waitFor(() => {
+        expect(ref.current).toBeTruthy();
+      });
+
+      const agentDoneMessage = { type: 'AgentDone' };
+      expect(agentDoneMessage.type).toBe(AgentResponseType.AGENT_DONE);
+    });
+  });
+
   describe('AgentAudioDone Event', () => {
     it('should handle AgentAudioDone message', async () => {
       const ref = React.createRef<any>();
@@ -423,7 +445,7 @@ describe('Voice Agent API - Event Validation', () => {
         type: 'AgentAudioDone',
       };
 
-      // This test documents that AgentAudioDone is a valid Voice Agent API event (marks the end of TTS generation)
+      // This test documents that AgentAudioDone is a valid Voice Agent API event (turn output received complete, not playback)
       expect(agentAudioDoneMessage.type).toBe(AgentResponseType.AGENT_AUDIO_DONE);
     });
   });
@@ -502,6 +524,7 @@ describe('Voice Agent API - Event Validation', () => {
         'AgentThinking',
         'AgentStartedSpeaking',
         'ConversationText',
+        'AgentDone',
         'AgentAudioDone',
         'Error',
         'Warning',
@@ -515,6 +538,7 @@ describe('Voice Agent API - Event Validation', () => {
       expect(voiceAgentEvents).toContain('AgentThinking');
       expect(voiceAgentEvents).toContain('AgentStartedSpeaking');
       expect(voiceAgentEvents).toContain('ConversationText');
+      expect(voiceAgentEvents).toContain('AgentDone');
       expect(voiceAgentEvents).toContain('AgentAudioDone');
       expect(voiceAgentEvents).toContain('Error');
       expect(voiceAgentEvents).toContain('Warning');
@@ -527,6 +551,7 @@ describe('Voice Agent API - Event Validation', () => {
       expect(AgentResponseType.AGENT_THINKING).toBe('AgentThinking');
       expect(AgentResponseType.AGENT_STARTED_SPEAKING).toBe('AgentStartedSpeaking');
       expect(AgentResponseType.CONVERSATION_TEXT).toBe('ConversationText');
+      expect(AgentResponseType.AGENT_DONE).toBe('AgentDone');
       expect(AgentResponseType.AGENT_AUDIO_DONE).toBe('AgentAudioDone');
       expect(AgentResponseType.ERROR).toBe('Error');
       expect(AgentResponseType.WARNING).toBe('Warning');

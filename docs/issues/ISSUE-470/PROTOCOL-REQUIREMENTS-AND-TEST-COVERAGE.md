@@ -2,7 +2,7 @@
 
 **Purpose:** Capture protocol requirements we’ve learned (from docs, community, and failures), map them to tests, and identify gaps so we don’t repeat the #462/#470 class of bugs (ordering requirements not covered until a partner hit them on the real API).
 
-**See also:** [PROTOCOL-AND-MESSAGE-ORDERING.md](../../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md), [ISSUE-388 OPENAI-REALTIME-API-REVIEW.md](../ISSUE-388/OPENAI-REALTIME-API-REVIEW.md), [BACKEND-PROXY-DEFECTS-REAL-API.md](../../../tests/docs/BACKEND-PROXY-DEFECTS-REAL-API.md).
+**See also:** [PROTOCOL-AND-MESSAGE-ORDERING.md](../../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md), [PROTOCOL-SPECIFICATION.md](../../../tests/integration/PROTOCOL-SPECIFICATION.md) (event list and requirement ↔ test table, in integration test folder), [ISSUE-388 OPENAI-REALTIME-API-REVIEW.md](../ISSUE-388/OPENAI-REALTIME-API-REVIEW.md), [BACKEND-PROXY-DEFECTS-REAL-API.md](../../../tests/docs/BACKEND-PROXY-DEFECTS-REAL-API.md).
 
 ---
 
@@ -18,6 +18,7 @@
 | 6 | **No input_audio_buffer.append before session.updated** | Session must be configured for audio | #414: we queue audio and flush after session.updated. |
 | 7 | **Commit only when buffer has enough audio (e.g. ≥100ms)** | API “buffer too small” error | openai-audio-constants; we assert before commit. |
 | 8 | **Only one response active at a time** | API “conversation already has an active response” | Community + #459/#462/#470; we track responseInProgress and pendingResponseCreateAfterFunctionCallOutput. |
+| 9 | **Error handling: use structured codes; avoid message text** | API and proxy both emit codes | **API codes:** Map upstream `error` (and any events with a code) using the API's structured payload (e.g. `event.error?.code`), not message text. **Proxy codes:** When the proxy sends messages to the client (e.g. `Error` with `code`), use protocol-defined codes, not free-form text. The proxy should **avoid using text strings from messages** (from API or client) for control flow or mapping if at all possible; prefer structured fields (codes, types, event names). When idle_timeout occurs while response in progress, buffer Error and send after next `response.output_text.done`. See PROTOCOL-AND-MESSAGE-ORDERING §3.8, §3.9; COMPONENT-PROXY-CONTRACT "Codes over message text." |
 
 Other documented behaviors we rely on: session max duration 60 min, idle timeout closure, Server VAD vs client commit (we disable Server VAD and commit from proxy), wire contract (only output_audio.delta as binary to client).
 
@@ -35,6 +36,7 @@ Other documented behaviors we rely on: session max duration 60 min, idle timeout
 | 6 – No append before session.updated | ✅ Issue #414 tests | Mock-only (real API does not let us control event order) | — |
 | 7 – Min audio before commit | ✅ Buffer too small test | — | — |
 | 8 – Only one response active | ✅ “at most one response.create per turn” test | — | Test 6b (strict 0 errors) |
+| 9 – Error handling: use upstream error codes; buffer idle_timeout when response in progress | ✅ `when upstream sends error after session.updated, client receives Error`; ✅ Issue #482 tests (ConversationText before Error) | — | Issue #482 real-API (client receives Error with code idle_timeout; order when response in progress) |
 
 **Gap:** Requirement 4 was **not** covered by any test that would fail on the real API before we added test 6b and the proxy fix. The mock did not simulate “API still has response active until it processes function_call_output and sends output_text.done.”
 

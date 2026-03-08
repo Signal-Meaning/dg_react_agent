@@ -10,9 +10,11 @@
 import http from 'http';
 import type { Server as HttpsServer } from 'https';
 import path from 'path';
+import fs from 'fs';
 // Use require so we get CJS WebSocket; Server is on WebSocket.Server in ws/index.js
 // Under Jest/ts-jest the default export may not have .Server, so load Server from lib
 /** Minimal type for ws WebSocket .on(); TS may infer DOM WebSocket which lacks .on(). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- ws .on() callback args vary by event (message, close, etc.)
 type WsLike = { on(event: string, cb: (...args: any[]) => void): void };
 type WsServerConstructor = new (options: object) => { on(event: string, cb: (...args: unknown[]) => void): void; close(): void };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -25,20 +27,17 @@ import {
   mapSettingsToSessionUpdate,
   mapInjectUserMessageToConversationItemCreate,
   mapSessionUpdatedToSettingsApplied,
-  mapOutputTextDoneToConversationText,
-  mapOutputAudioTranscriptDoneToConversationText,
   mapFunctionCallArgumentsDoneToFunctionCallRequest,
-  mapFunctionCallArgumentsDoneToConversationText,
   mapFunctionCallResponseToConversationItemCreate,
-  mapContextMessageToConversationItemCreate,
   mapGreetingToConversationText,
+  mapConversationItemAddedToConversationText,
   mapErrorToComponentError,
   type ComponentError,
-  isIdleTimeoutClosure,
-  isSessionMaxDurationError,
+  type OpenAIConversationItemEvent,
   binaryToInputAudioBufferAppend,
   mapInputAudioTranscriptionCompletedToTranscript,
   mapInputAudioTranscriptionDeltaToTranscript,
+  mapSpeechStoppedToUtteranceEnd,
 } from './translator';
 import {
   initProxyLogger,
@@ -144,22 +143,27 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let pendingItemAddedBeforeResponseCreate = 0;
     /** Issue #414: track item IDs already counted toward the pending counter to avoid double-decrement. */
     const pendingItemAckedIds = new Set<string>();
+    /** Issue #489: track item IDs we already sent ConversationText for (dedupe across .created/.added/.done). */
+    const sentConversationTextItemIds = new Set<string>();
     /** Issue #406: have we sent SettingsApplied to the client? Used to send clear Error when upstream closes before session ready. */
     let hasSentSettingsApplied = false;
-    /** Issue #406: defer context (conversation.item.create) until after session.updated to avoid upstream close. */
-    const pendingContextItems: string[] = [];
+    /** Issue #489: Prior-session context is no longer sent as conversation items; it is passed in session.update instructions only. */
     /** Issue #414: defer input_audio_buffer.append until after session.updated so session is configured for audio. */
     const pendingAudioQueue: Buffer[] = [];
     /** TODO: Not expected to keep. Only forward the first Settings per connection; duplicate Settings (e.g. on reconnect/reload) must not send a second session.update or upstream can error. */
     let hasForwardedSessionUpdate = false;
+    /** Issue #489: Last Settings had context (reconnect). On session.updated do not send greeting to client; they already have it. */
+    let hadContextInLastSettings = false;
     /** Issue #462 / #470: After sending function_call_output, defer response.create until we receive response.output_text.done so the API can close the previous response first (avoids conversation_already_has_active_response). */
     let pendingResponseCreateAfterFunctionCallOutput = false;
     /** Issue #482: Have we sent AgentStartedSpeaking for the current response? So component sees "agent active" before ConversationText (avoids client idle timeout). Reset when response ends. */
     let hasSentAgentStartedSpeakingForCurrentResponse = false;
-    /** Issue #482 / #489: Have we sent AgentAudioDone for the current response? Sent on output_text.done and output_audio.done; also send on response.done if not yet sent so component can transition to idle. */
+    /** Issue #482 / #489: Have we sent AgentAudioDone for the current response? AgentAudioDone = receipt complete only (legacy); we also send AgentDone for semantic "agent done" so the wire has the correct signal. See docs/issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md. */
     let hasSentAgentAudioDoneForCurrentResponse = false;
     /** Issue #482: Buffer idle_timeout Error and send after ConversationText so client can show assistant bubble before close. */
     let pendingIdleTimeoutError: ComponentError | null = null;
+    /** Issue #497: accumulate input_audio_transcription.delta per item_id; clear on .completed for that item_id. */
+    const transcriptionDeltaAccumulator = new Map<string, string>();
     /** Issue #414: TTS chunk boundary diagnostic (set OPENAI_PROXY_TTS_BOUNDARY_DEBUG=1 to log same format as test-app E2E). */
     let ttsChunkLengths: number[] = [];
     let lastTtsChunk: Buffer | null = null;
@@ -176,8 +180,17 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       hasSentAgentStartedSpeakingForCurrentResponse = false;
       hasSentAgentAudioDoneForCurrentResponse = false;
     };
+    /**
+     * Send agent-done signals to client once per response so the component can transition to idle and start idle timeout.
+     * We send both:
+     * - AgentDone: semantic "agent done for the turn" (preferred; aligned with docs).
+     * - AgentAudioDone: legacy receipt-complete only (NOT playback complete); kept for API compatibility. In comments always refer to it as "receipt complete."
+     * Called from: response.output_text.done, response.output_audio.done, response.done (fallback for function-call turn).
+     * If the client never receives these after a function result, the upstream API is not sending one of those three events (or is very slow).
+     */
     const sendAgentAudioDoneIfNeeded = (): void => {
       if (!hasSentAgentAudioDoneForCurrentResponse && clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(JSON.stringify({ type: 'AgentDone' }));
         clientWs.send(JSON.stringify({ type: 'AgentAudioDone' }));
         hasSentAgentAudioDoneForCurrentResponse = true;
       }
@@ -291,13 +304,19 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           const settings = msg as Parameters<typeof mapSettingsToSessionUpdate>[0];
           const sessionUpdate = mapSettingsToSessionUpdate(settings);
           upstream.send(JSON.stringify(sessionUpdate));
-          const contextMessages = settings.agent?.context?.messages;
-          if (contextMessages?.length) {
-            for (const m of contextMessages) {
-              const role = (m.role === 'user' || m.role === 'assistant') ? m.role : 'user';
-              const itemCreate = mapContextMessageToConversationItemCreate(role, m.content ?? '');
-              pendingContextItems.push(JSON.stringify(itemCreate));
-            }
+          const toolsCount = (sessionUpdate.session as { tools?: unknown[] })?.tools?.length ?? 0;
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: `session.update sent to upstream (tools=${toolsCount})`,
+            attributes: { ...connectionAttrs, toolsCount: String(toolsCount) },
+          });
+          // Issue #489: Do not inject prior-session context as conversation items. Context is passed in session.update
+          // instructions (buildInstructionsWithContext in translator) so the model has history without creating items
+          // that the API would echo back and duplicate in the UI. See DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md.
+          const hadContextInSettings = !!(settings.agent?.context?.messages?.length);
+          if (hadContextInSettings) {
+            hadContextInLastSettings = true;
           }
           const g = settings.agent?.greeting;
           storedGreeting = typeof g === 'string' && g.trim().length > 0 ? g : undefined;
@@ -306,11 +325,42 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             msg as Parameters<typeof mapFunctionCallResponseToConversationItemCreate>[0]
           );
           upstream.send(JSON.stringify(itemCreate));
-          // Issue #462 / #470: Do not send response.create here. The API still has the previous response
-          // (the function-call request) active until it processes our function_call_output and sends
-          // response.output_text.done. Sending response.create now triggers conversation_already_has_active_response.
-          // Defer response.create until we receive that output_text.done (see output_text.done handler).
+          const debugLogPath = process.env.E2E_FUNCTION_CALL_DEBUG_LOG;
+          if (debugLogPath && itemCreate.item?.type === 'function_call_output') {
+            try {
+              const dir = path.dirname(debugLogPath);
+              fs.mkdirSync(dir, { recursive: true });
+              const payload = {
+                call_id: itemCreate.item.call_id,
+                outputLength: itemCreate.item.output?.length ?? 0,
+                outputPreview: itemCreate.item.output?.slice(0, 120) ?? '',
+                sentAt: new Date().toISOString(),
+              };
+              fs.writeFileSync(debugLogPath, JSON.stringify(payload, null, 2), 'utf8');
+            } catch {
+              // ignore write errors
+            }
+          }
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: 'FunctionCallResponse from client → function_call_output sent to upstream',
+            attributes: { ...connectionAttrs },
+          });
+          // Issue #489 / G.6: Real API sends response.done in the same batch as (or before) our FunctionCallResponse.
+          // So we never see response.output_text.done or response.done *after* function_call_output; the response
+          // is already closed. Send response.create immediately so the next turn starts and the model can reply
+          // with the function result (e.g. "The time is 2:30 PM"). We still set the flag so that if we *do*
+          // receive response.done or output_text.done later (different API ordering), we don't double-send.
           pendingResponseCreateAfterFunctionCallOutput = true;
+          upstream.send(JSON.stringify({ type: 'response.create' }));
+          onResponseStarted();
+          pendingResponseCreateAfterFunctionCallOutput = false;
+          // Issue #487 / voice-commerce: Signal "agent is working" so the component can clear "waiting for next
+          // agent message" and allow idle timeout to run once the turn completes.
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(JSON.stringify({ type: 'AgentThinking', content: '' }));
+          }
         } else if (msg.type === 'InjectUserMessage') {
           const injectMsg = msg as Parameters<typeof mapInjectUserMessageToConversationItemCreate>[0];
           const itemCreate = mapInjectUserMessageToConversationItemCreate(injectMsg);
@@ -446,18 +496,16 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           });
         } else if (msg.type === 'session.updated') {
           hasSentSettingsApplied = true;
-          for (const itemJson of pendingContextItems) {
-            upstream.send(itemJson);
-          }
-          pendingContextItems.length = 0;
           const settingsApplied = mapSessionUpdatedToSettingsApplied(msg as Parameters<typeof mapSessionUpdatedToSettingsApplied>[0]);
           clientWs.send(JSON.stringify(settingsApplied));
-          if (storedGreeting) {
+          // Issue #489: When client sent context (reconnect), do not send greeting again; they already have it in history.
+          const sendGreeting = storedGreeting && !hadContextInLastSettings;
+          if (sendGreeting) {
             // Issue #414 fix: greeting is text-only to client. Do NOT send conversation.item.create
             // (assistant) to upstream — OpenAI Realtime API errors on client-created assistant messages.
             // The greeting text is shown immediately in the UI; the model sees the greeting text in
             // its instructions (if configured) so it knows it already greeted the user.
-            clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting)));
+            clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting!)));
             // Issue #489: Send AgentAudioDone after greeting so the component can transition to idle
             // and the idle timeout can start (E2E "timeout after greeting" tests).
             sendAgentAudioDoneIfNeeded();
@@ -467,11 +515,20 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               body: 'greeting sent to client only (not upstream; OpenAI Realtime rejects client-created assistant items)',
               attributes: { ...connectionAttrs },
             });
-            storedGreeting = undefined;
+          } else if (storedGreeting && hadContextInLastSettings) {
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: 'greeting not sent (context present; client already has history)',
+              attributes: { ...connectionAttrs },
+            });
           }
+          if (storedGreeting) storedGreeting = undefined;
+          hadContextInLastSettings = false;
           // Issue #414: session is now configured for audio; send any append chunks queued before session.updated.
           flushPendingAudio();
         } else if (msg.type === 'response.output_text.done') {
+          // Upstream requirement: use conversation.item for finalized message and conversation history; response.output_text.done is control only. We do not map this event to ConversationText.
           onResponseEnded();
           // Issue #462 / #470: After function_call_output we deferred response.create; send it now so the API can start the next turn.
           if (pendingResponseCreateAfterFunctionCallOutput) {
@@ -479,35 +536,36 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             upstream.send(JSON.stringify({ type: 'response.create' }));
             onResponseStarted();
           }
-          const m = msg as { type: string; text?: string };
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: `upstream→client: ${msg.type}${m.text?.startsWith('Function call:') ? ' (transcript-like)' : ''}`,
+            body: 'response.output_text.done → control only (upstream requirement: assistant text from conversation.item.*)',
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
           sendAgentStartedSpeakingIfNeeded();
-          const conversationText = mapOutputTextDoneToConversationText(msg as Parameters<typeof mapOutputTextDoneToConversationText>[0]);
-          clientWs.send(JSON.stringify(conversationText));
           sendAgentAudioDoneIfNeeded();
           flushPendingIdleTimeoutError();
         } else if (msg.type === 'response.output_audio_transcript.done') {
-          const m = msg as { type: string; transcript?: string };
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: `upstream→client: ${msg.type}${m.transcript?.startsWith('Function call:') ? ' (transcript-like)' : ''}`,
+            body: `upstream→client: ${msg.type} (control only; upstream requirement: assistant text from conversation.item.*)`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
-          const conversationText = mapOutputAudioTranscriptDoneToConversationText(
-            msg as Parameters<typeof mapOutputAudioTranscriptDoneToConversationText>[0]
-          );
-          clientWs.send(JSON.stringify(conversationText));
+          // Upstream requirement: ConversationText only from conversation.item.*; do not map control events.
+        } else if (msg.type === 'response.output_audio_transcript.delta') {
+          // Real API streams transcript deltas; we use conversation.item.* for finalized text (Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.output_audio_transcript.delta' },
+          });
         } else if (msg.type === 'response.function_call_arguments.done') {
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: `upstream→client: ${msg.type} → sending FunctionCallRequest + ConversationText`,
+            body: `upstream→client: ${msg.type} → FunctionCallRequest only (assistant text from conversation.item.*)`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
           sendAgentStartedSpeakingIfNeeded();
@@ -515,21 +573,15 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             msg as Parameters<typeof mapFunctionCallArgumentsDoneToFunctionCallRequest>[0]
           );
           clientWs.send(JSON.stringify(functionCallRequest));
-          const conversationText = mapFunctionCallArgumentsDoneToConversationText(
-            msg as Parameters<typeof mapFunctionCallArgumentsDoneToConversationText>[0]
-          );
-          clientWs.send(JSON.stringify(conversationText));
+          // Upstream requirement: ConversationText only from conversation.item.*
         } else if (msg.type === 'error') {
-          const isSessionMaxDuration = isSessionMaxDurationError(msg as Parameters<typeof isSessionMaxDurationError>[0]);
-          const isIdleTimeout = isIdleTimeoutClosure(msg as Parameters<typeof isIdleTimeoutClosure>[0]);
-          const isExpectedClosure = isSessionMaxDuration || isIdleTimeout;
+          const componentError = mapErrorToComponentError(msg as Parameters<typeof mapErrorToComponentError>[0]);
+          const isExpectedClosure =
+            componentError.code === 'idle_timeout' || componentError.code === 'session_max_duration';
           {
-            const logBody = isSessionMaxDuration
-              ? `expected session limit: ${msg.error?.message ?? 'session max duration'}`
-              : isIdleTimeout
-                ? `expected idle timeout closure: ${msg.error?.message ?? 'idle timeout'}`
-                : (msg.error?.message ?? String(msg));
-            const closureCode = isSessionMaxDuration ? 'session_max_duration' : isIdleTimeout ? 'idle_timeout' : (msg.error?.code ?? '');
+            const logBody = isExpectedClosure
+              ? `expected closure (${componentError.code}): ${msg.error?.message ?? componentError.code}`
+              : (msg.error?.message ?? String(msg));
             emitLog({
               severityNumber: isExpectedClosure ? SeverityNumber.INFO : SeverityNumber.ERROR,
               severityText: isExpectedClosure ? 'INFO' : 'ERROR',
@@ -538,14 +590,13 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
                 ...connectionAttrs,
                 [ATTR_DIRECTION]: 'upstream→client',
                 [ATTR_MESSAGE_TYPE]: 'error',
-                [ATTR_ERROR_CODE]: closureCode,
+                [ATTR_ERROR_CODE]: componentError.code,
                 [ATTR_ERROR_MESSAGE]: msg.error?.message ?? '',
               },
             });
           }
-          const componentError = mapErrorToComponentError(msg as Parameters<typeof mapErrorToComponentError>[0]);
           // Issue #482: Buffer idle_timeout only when a response is in progress (we may still get output_text.done); otherwise send immediately.
-          if (isIdleTimeout && responseInProgress && clientWs.readyState === WebSocket.OPEN) {
+          if (componentError.code === 'idle_timeout' && responseInProgress && clientWs.readyState === WebSocket.OPEN) {
             pendingIdleTimeoutError = componentError;
           } else {
             clientWs.send(JSON.stringify(componentError));
@@ -560,17 +611,32 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           });
           clientWs.send(JSON.stringify({ type: 'UserStartedSpeaking' }));
         } else if (msg.type === 'input_audio_buffer.speech_stopped') {
-          // Issue #414 COMPONENT-PROXY-INTERFACE-TDD: map to UtteranceEnd with channel and last_word_end (component contract)
+          // Issue #494: map upstream channel and last_word_end to UtteranceEnd; defaults when absent
+          const utteranceEnd = mapSpeechStoppedToUtteranceEnd(msg as Parameters<typeof mapSpeechStoppedToUtteranceEnd>[0]);
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: 'upstream→client: input_audio_buffer.speech_stopped → UtteranceEnd',
+            body: `upstream→client: input_audio_buffer.speech_stopped → UtteranceEnd (channel=${JSON.stringify(utteranceEnd.channel)} last_word_end=${utteranceEnd.last_word_end})`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.speech_stopped' },
           });
-          clientWs.send(JSON.stringify({ type: 'UtteranceEnd', channel: [0, 1], last_word_end: 0 }));
+          clientWs.send(JSON.stringify(utteranceEnd));
+        } else if (
+          msg.type === 'input_audio_buffer.committed' ||
+          msg.type === 'input_audio_buffer.cleared' ||
+          msg.type === 'input_audio_buffer.timeout_triggered'
+        ) {
+          // Buffer control/ack events: no component message. Deepgram Voice Agent API has no equivalent (component AgentResponseType has none of these); upstream-only signals — handle explicitly for parity, log only (Issue #414 firm-audio; Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: String(msg.type) },
+          });
         } else if (msg.type === 'conversation.item.input_audio_transcription.completed') {
           // Issue #414: map OpenAI user transcript to component Transcript → onTranscriptUpdate
           const completedMsg = msg as Parameters<typeof mapInputAudioTranscriptionCompletedToTranscript>[0];
+          const itemId = completedMsg.item_id;
+          if (itemId) transcriptionDeltaAccumulator.delete(itemId);
           const transcriptText = (completedMsg.transcript ?? '').slice(0, 60);
           emitLog({
             severityNumber: SeverityNumber.INFO,
@@ -581,16 +647,18 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           const transcript = mapInputAudioTranscriptionCompletedToTranscript(completedMsg);
           clientWs.send(JSON.stringify(transcript));
         } else if (msg.type === 'conversation.item.input_audio_transcription.delta') {
-          // Issue #414: send interim transcript (delta); we do not accumulate across deltas here (each delta is sent as its own Transcript)
+          // Issue #497: accumulate deltas per item_id; send Transcript with accumulated text (DRY: translator already accepts accumulated).
+          const deltaMsg = msg as Parameters<typeof mapInputAudioTranscriptionDeltaToTranscript>[0];
+          const itemId = deltaMsg.item_id ?? '';
+          const accumulated = transcriptionDeltaAccumulator.get(itemId) ?? '';
+          const transcript = mapInputAudioTranscriptionDeltaToTranscript(deltaMsg, accumulated);
+          transcriptionDeltaAccumulator.set(itemId, transcript.transcript);
           emitLog({
             severityNumber: SeverityNumber.DEBUG,
             severityText: 'DEBUG',
-            body: 'upstream→client: input_audio_transcription.delta → Transcript (interim)',
+            body: `upstream→client: input_audio_transcription.delta → Transcript (interim, accumulated length=${transcript.transcript.length})`,
             attributes: { [ATTR_CONNECTION_ID]: connId, [ATTR_DIRECTION]: 'upstream→client' },
           });
-          const transcript = mapInputAudioTranscriptionDeltaToTranscript(
-            msg as Parameters<typeof mapInputAudioTranscriptionDeltaToTranscript>[0]
-          );
           clientWs.send(JSON.stringify(transcript));
         } else if (msg.type === 'response.output_audio.delta') {
           // Component expects raw PCM (binary frame) for playback; upstream sends JSON with base64 delta.
@@ -602,8 +670,6 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               if (ttsBoundaryDebug && lastTtsChunk !== null) {
                 const bufA = lastTtsChunk;
                 const bufB = pcm;
-                const lastBytesA = bufA.length >= 2 ? [bufA[bufA.length - 2], bufA[bufA.length - 1]] : (bufA.length === 1 ? [bufA[0]] : []);
-                const firstBytesB = bufB.length >= 2 ? [bufB[0], bufB[1]] : (bufB.length === 1 ? [bufB[0]] : []);
                 const lastSampleLE = bufA.length >= 2 ? bufA.readInt16LE(bufA.length - 2) : undefined;
                 const firstSampleLE = bufB.length >= 2 ? bufB.readInt16LE(0) : undefined;
                 let carriedPlusFirst: number | undefined;
@@ -641,6 +707,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // still has an active response → conversation_already_has_active_response. Clear only on output_text.done.
         } else if (msg.type === 'response.done') {
           // Issue #482 / #489: Ensure client gets AgentAudioDone so component can transition to idle (e.g. when API sends response.done without output_text.done/output_audio.done).
+          emitLog({
+            severityNumber: SeverityNumber.INFO,
+            severityText: 'INFO',
+            body: 'Received response.done from upstream — sending AgentAudioDone to client (idle timeout can start). E2E: if this never appears after a function call, the real API is not sending response.done.',
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.done' },
+          });
           sendAgentAudioDoneIfNeeded();
           // Issue #470: API may send response.done to mark response complete (e.g. after function-call turn).
           // If we deferred response.create after function_call_output, send it now so the next turn can start.
@@ -650,7 +722,62 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             upstream.send(JSON.stringify({ type: 'response.create' }));
             onResponseStarted();
           }
+        } else if (msg.type === 'response.created') {
+          // Real API sends response.created when a response is created (e.g. after our response.create). Control event only; no component message (Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.created' },
+          });
+        } else if (msg.type === 'response.output_item.added' || msg.type === 'response.output_item.done') {
+          // Real API: output item added/done; content comes via conversation.item.* (Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: String(msg.type) },
+          });
+        } else if (msg.type === 'response.content_part.added' || msg.type === 'response.content_part.done') {
+          // Real API streaming control; finalized content from conversation.item.* (Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: String(msg.type) },
+          });
+        } else if (msg.type === 'rate_limits.updated') {
+          // Real API sends rate limit info; no component equivalent (Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'rate_limits.updated' },
+          });
+        } else if (msg.type === 'response.output_text.added') {
+          // Real API streaming control; finalized text from conversation.item.* (Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.output_text.added' },
+          });
         } else if (msg.type === 'conversation.item.created' || msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
+          // Debug: log raw upstream event (truncated) so we can inspect payload when not forwarded to client (Issue #500).
+          {
+            const MAX_RAW_DEBUG = 2000;
+            const rawTruncated = text.length > MAX_RAW_DEBUG ? text.slice(0, MAX_RAW_DEBUG) + '…' : text;
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: `conversation.item.* raw (debug): type=${msg.type} item_id=${(msg as { item?: { id?: string } }).item?.id ?? 'n/a'} payload=${rawTruncated}`,
+              attributes: {
+                ...connectionAttrs,
+                [ATTR_DIRECTION]: 'upstream→client',
+                [ATTR_MESSAGE_TYPE]: String(msg.type),
+              },
+            });
+          }
           // Issue #388 / #414: decrement the counter once per unique item; send response.create when all pending items are confirmed.
           // Issue #470: do not send response.create from this path when we deferred after function_call_output — the API still has
           // that response active; we must wait for response.output_text.done or response.done. (API may send item.added for the
@@ -675,15 +802,76 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               }
             }
           }
-          // Issue #414: send as text so component routes as message, not binary (audio)
-          clientWs.send(text);
+          // Upstream requirement: use conversation.item for finalized message and conversation history. Map assistant content to ConversationText here only.
+          // Real API may send assistant content in .created or .done instead of .added (Issue #489 / TDD-PLAN-ALL-MESSAGES-IN-HISTORY).
+          if (clientWs.readyState === WebSocket.OPEN) {
+            const itemRole = (msg as { item?: { role?: string } }).item?.role;
+            const itemId = (msg as { item?: { id?: string } }).item?.id;
+            const conversationText = mapConversationItemAddedToConversationText(msg as OpenAIConversationItemEvent);
+            let didSend = false;
+            if (conversationText) {
+              if (itemId && sentConversationTextItemIds.has(itemId)) {
+                // Already sent ConversationText for this item (e.g. from another of .created/.added/.done).
+              } else {
+                if (itemId) sentConversationTextItemIds.add(itemId);
+                clientWs.send(JSON.stringify(conversationText));
+                didSend = true;
+              }
+            }
+            // Diagnostic: log every assistant item event so we can see what the real API sends and whether we mapped/sent.
+            if (itemRole === 'assistant') {
+              const MAX_LOG_PAYLOAD = 2000;
+              const eventShape = JSON.stringify(msg);
+              const truncated = eventShape.length > MAX_LOG_PAYLOAD ? eventShape.slice(0, MAX_LOG_PAYLOAD) + '…' : eventShape;
+              emitLog({
+                severityNumber: SeverityNumber.INFO,
+                severityText: 'INFO',
+                body: `conversation.item.* assistant event_type=${msg.type} item_id=${itemId ?? 'n/a'} mapped=${Boolean(conversationText)} sent=${didSend}. ${!conversationText ? `Raw payload (align mapper): ${truncated}` : ''}`,
+                attributes: {
+                  ...connectionAttrs,
+                  [ATTR_DIRECTION]: 'upstream→client',
+                  [ATTR_MESSAGE_TYPE]: String(msg.type),
+                  itemRole: itemRole ?? '(missing)',
+                  itemId: itemId ?? '(missing)',
+                  mapped: String(Boolean(conversationText)),
+                  sent: String(didSend),
+                },
+              });
+            }
+          }
+          // Issue #500: Do not forward raw conversation.item.* to client; only mapped ConversationText (and counter/response.create) are sent.
         } else {
-          // Issue #414: send as text so component routes as message, not binary (audio)
-          clientWs.send(text);
+          // Unmapped upstream event: do not forward as text; send Error so client sees a clear contract.
+          const eventType = msg.type ?? '(unknown)';
+          emitLog({
+            severityNumber: SeverityNumber.WARN,
+            severityText: 'WARN',
+            body: `Unmapped upstream event: ${eventType} — sending Error to client (no forward as text)`,
+            attributes: {
+              ...connectionAttrs,
+              [ATTR_DIRECTION]: 'upstream→client',
+              [ATTR_MESSAGE_TYPE]: String(eventType),
+            },
+          });
+          const unmappedError: ComponentError = {
+            type: 'Error',
+            code: 'unmapped_upstream_event',
+            description: `Proxy received unmapped upstream event: ${eventType}. All events must be mapped; no passthrough.`,
+          };
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(JSON.stringify(unmappedError));
+          }
         }
       } catch {
-        // Issue #414: forward as text so JSON is not routed to audio pipeline
-        clientWs.send(raw.toString('utf8'));
+        // Malformed or non-JSON upstream message: send Error instead of forwarding raw bytes.
+        const fallbackError: ComponentError = {
+          type: 'Error',
+          code: 'unmapped_upstream_event',
+          description: 'Proxy received upstream message that could not be parsed as JSON.',
+        };
+        if (clientWs.readyState === WebSocket.OPEN) {
+          clientWs.send(JSON.stringify(fallbackError));
+        }
       }
     });
 

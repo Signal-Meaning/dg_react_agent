@@ -9,11 +9,15 @@ module.exports = {
     '!<rootDir>/tests/e2e/**/*' // Exclude E2E tests
   ],
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1'
+    '^@/(.*)$': '<rootDir>/src/$1',
+    // Resolve package to repo source so unit tests never use built dist (same as Vite alias)
+    '^@signal-meaning/voice-agent-react$': '<rootDir>/../src/index.ts',
+    '^@signal-meaning/voice-agent-react/(.*)$': '<rootDir>/../src/$1'
   },
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', {
-      useESM: true
+      useESM: true,
+      tsconfig: 'tsconfig.app.json'
     }],
     '^.+\\.(js|jsx)$': 'babel-jest'
   },

@@ -31,7 +31,7 @@ import {
 import { useIdleTimeoutManager } from '../../hooks/useIdleTimeoutManager';
 import { useCallbackRef, useBooleanDeclarativeProp } from '../../hooks/declarative-props';
 import { AgentStateService } from '../../services/AgentStateService';
-import { DEFAULT_IDLE_TIMEOUT_MS } from '../../constants/voice-agent';
+import { DEFAULT_IDLE_TIMEOUT_MS, SERVER_TIMEOUT_ERROR_CODE, SESSION_MAX_DURATION_ERROR_CODE } from '../../constants/voice-agent';
 import { compareAgentOptionsIgnoringContext, hasDependencyChanged } from '../../utils/option-comparison';
 import { functionCallLogger } from '../../utils/function-call-logger';
 import {
@@ -50,9 +50,7 @@ const DEFAULT_ENDPOINTS = {
   agentUrl: 'wss://agent.deepgram.com/v1/agent/converse',
 };
 
-// Issue #489/9a: Last persisted history (module-level) so sendAgentSettings can include context after remount
-// when in-memory refs are empty. Updated in the persist effect and ConversationText handler.
-const lastPersistedHistoryForReconnectRef: { current: ConversationMessage[] } = { current: [] };
+// Issue #489: storage key last used by this page (module-level for backward compat; component also sets it).
 const lastUsedStorageKeyRef: { current: string } = { current: 'dg_conversation' };
 
 /**
@@ -171,6 +169,8 @@ function DeepgramVoiceInteraction(
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   // Ref so callbacks receive up-to-date history (handleAgentMessage closure can be stale) — Issue #414
   const conversationHistoryRef = useRef<ConversationMessage[]>([]);
+  // Issue #489: Per-instance so reconnect/remount and tests get correct context; preloaded from storage on close/open.
+  const lastPersistedHistoryForReconnectRef = useRef<ConversationMessage[]>([]);
   // Phase 3 refactor: single "latest history" ref — conversationHistoryRef is updated by effect (state) and ConversationText handler; hook uses it for getHistoryForSettings (no separate latestConversationHistoryRef).
 
   // Internal state
@@ -188,6 +188,9 @@ function DeepgramVoiceInteraction(
   
   // Set on 'connected' so sendAgentSettings (possibly async) and Welcome handler know first connection vs reconnection (Issue #480).
   const isReconnectionRef = useRef<boolean>(false);
+  // Issue #489: Track that agent connection closed in this component instance. Next 'connected' is a reconnection
+  // even if the new WebSocketManager reports isReconnection false (new manager instance has hasEverConnected false).
+  const hadAgentConnectionClosedRef = useRef<boolean>(false);
 
   // Track mount state to handle React StrictMode double-invocation
   // StrictMode will call cleanup then immediately re-run the effect
@@ -245,13 +248,26 @@ function DeepgramVoiceInteraction(
     const msg = args.length && args[0] !== undefined ? String(args[0]) : '';
     logger.debug('[SLEEP_CYCLE][CORE] ' + msg, args.length > 1 ? { extra: args.slice(1) } : undefined);
   };
+  /**
+   * Issue #412: pass-through to OTel-style Logger (message, attributes?).
+   * Accepts (level, message, attributes?) or (level, ...args) with args normalized to (message, { extra: rest }).
+   * Use logger.child() for scoped attributes. See src/utils/logger.ts and docs/issues/ISSUE-412/LOGGING-STANDARD.md.
+   */
   const logConsole = (level: 'debug' | 'info' | 'warn' | 'error', ...args: unknown[]) => {
-    const msg = args.length && args[0] !== undefined ? String(args[0]) : '';
-    const attrs = args.length > 1 ? { extra: args.slice(1) } : undefined;
-    if (level === 'debug') logger.debug(msg, attrs);
-    else if (level === 'info') logger.info(msg, attrs);
-    else if (level === 'warn') logger.warn(msg, attrs);
-    else logger.error(msg, attrs);
+    const message = args.length && args[0] !== undefined ? String(args[0]) : '';
+    const attributes: Record<string, unknown> | undefined =
+      args.length > 1
+        ? args.length === 2 &&
+          typeof args[1] === 'object' &&
+          args[1] !== null &&
+          !Array.isArray(args[1])
+          ? (args[1] as Record<string, unknown>)
+          : { extra: args.slice(1) }
+        : undefined;
+    if (level === 'debug') logger.debug(message, attributes);
+    else if (level === 'info') logger.info(message, attributes);
+    else if (level === 'warn') logger.warn(message, attributes);
+    else logger.error(message, attributes);
   };
 
   // Detect actual remounts (not just re-renders)
@@ -322,6 +338,8 @@ function DeepgramVoiceInteraction(
   const speechFinalReceivedRef = useRef(false);
   
   const hasSentSettingsRef = useRef(false);
+  /** Manager instance that last sent Settings; used to allow send on reconnect (new manager) and avoid race with flags. */
+  const lastManagerThatSentSettingsRef = useRef<WebSocketManager | null>(null);
   // Issue #433: Queue user messages when channel is not ready; drain when SettingsApplied/session.created is received
   const pendingInjectUserMessagesRef = useRef<string[]>([]);
   
@@ -466,7 +484,7 @@ function DeepgramVoiceInteraction(
   
   // Initialize idle timeout manager
   const effectiveIdleTimeoutMs = agentOptions?.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
-  const { handleMeaningfulActivity, handleUtteranceEnd, handleFunctionCallStarted, handleFunctionCallCompleted, handleNextAgentMessageReceived } = useIdleTimeoutManager(
+  const { handleMeaningfulActivity, handleUtteranceEnd, handleFunctionCallStarted, handleFunctionCallCompleted, notifyAgentMessageReceived, pushIdleStateToIdleTimeoutService } = useIdleTimeoutManager(
     state,
     agentManagerRef,
     props.debug,
@@ -835,6 +853,7 @@ function DeepgramVoiceInteraction(
         debug: config.debug,
         idleTimeout: config.agentOptions?.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,
         onMeaningfulActivity: handleMeaningfulActivity,
+        onAgentMessageReceived: notifyAgentMessageReceived,
       });
 
       // Set up event listeners for agent WebSocket
@@ -844,12 +863,123 @@ function DeepgramVoiceInteraction(
           if (config.debug) {
             logConsole('debug','🔧 [DEBUG] Agent state event:', event.state, 'Previous:', lastConnectionStates.current.agent);
           }
-          if (lastConnectionStates.current.agent !== event.state) {
+          // Issue #489 / 9a: Also process 'connected' when we initiated close (hadAgentConnectionClosedRef) so
+          // the next connection is treated as reconnection even if 'closed' has not fired yet (state still 'connected').
+          const stateChanged = lastConnectionStates.current.agent !== event.state;
+          const reconnectionWithoutClosed = event.state === 'connected' && hadAgentConnectionClosedRef.current;
+          // Issue #489: Define checkAndSend when connected so reconnection block can schedule it (guarantee second send).
+          let checkAndSend: (() => void) | undefined;
+          if (event.state === 'connected') {
+            checkAndSend = () => {
+              const wsState = agentManagerRef.current?.getReadyState() ?? undefined;
+              const wsStateName = wsState === 0 ? 'CONNECTING' :
+                                  wsState === 1 ? 'OPEN' :
+                                  wsState === 2 ? 'CLOSING' :
+                                  wsState === 3 ? 'CLOSED' : 'UNKNOWN';
+              if (config.debug) {
+                logConsole('debug','🔧 [Connection State] Checking WebSocket state:', wsState, `(${wsStateName})`);
+              }
+              if (wsState === 1) { // OPEN
+                if (typeof localStorage !== 'undefined') {
+                  const keys = [lastUsedStorageKeyRef.current, 'dg_voice_conversation', 'dg_conversation'];
+                  for (const key of keys) {
+                    if (!key) continue;
+                    try {
+                      const raw = localStorage.getItem(key);
+                      if (raw) {
+                        const parsed = JSON.parse(raw) as unknown;
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                          const valid = parsed.filter(
+                            (m): m is ConversationMessage =>
+                              m &&
+                              typeof m === 'object' &&
+                              (m as ConversationMessage).role !== undefined &&
+                              ((m as ConversationMessage).role === 'user' || (m as ConversationMessage).role === 'assistant') &&
+                              typeof (m as ConversationMessage).content === 'string'
+                          );
+                          if (valid.length > 0) {
+                            lastPersistedHistoryForReconnectRef.current = valid.slice(-MAX_CONVERSATION_STORED);
+                            break;
+                          }
+                        }
+                      }
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                }
+                if (config.debug) {
+                  logConsole('debug','🔧 [Connection State] WebSocket is OPEN, sending Settings');
+                }
+                sendAgentSettings();
+              } else if (wsState === 0) { // CONNECTING
+                if (config.debug) {
+                  logConsole('debug','🔧 [Connection State] WebSocket still CONNECTING, will retry');
+                }
+                setTimeout(checkAndSend!, 50);
+              } else {
+                if (config.debug) {
+                  logConsole('error','🔧 [Connection State] WebSocket is', wsStateName, '- cannot send Settings');
+                }
+              }
+            };
+          }
+          if (stateChanged || reconnectionWithoutClosed) {
             log('Agent state:', event.state);
             if (event.state === 'connected') {
-              logger.info('🔗 [Protocol] Agent WebSocket connected');
-              const isReconnection = event.isReconnection ?? false;
+              // Issue #489: Treat as reconnection if manager says so OR we saw a close in this component instance.
+              // New WebSocketManager on reconnect has hasEverConnected=false so event.isReconnection is false;
+              // without this, we skip localStorage preload and Settings go out with empty context (OpenAI path).
+              const isReconnection = event.isReconnection ?? hadAgentConnectionClosedRef.current;
               isReconnectionRef.current = isReconnection;
+              if (isReconnection) hadAgentConnectionClosedRef.current = false;
+              logger.info('🔗 [Protocol] Agent WebSocket connected');
+              // Issue #489: On reconnection, reset "already sent" flags so the new connection sends Settings
+              // (with context from sync-load). Otherwise sendAgentSettings() would skip and the second
+              // connection would have no context.
+              if (isReconnection) {
+                hasSentSettingsRef.current = false;
+                windowWithGlobals.globalSettingsSent = false;
+                // Issue #489 / 9a: Preload from storage immediately on reconnect so when checkAndSend(50) runs,
+                // lastPersistedHistoryForReconnectRef is already populated and sendAgentSettings gets context.
+                if (typeof localStorage !== 'undefined') {
+                  const keys = [lastUsedStorageKeyRef.current, 'dg_voice_conversation', 'dg_conversation'];
+                  for (const key of keys) {
+                    if (!key) continue;
+                    try {
+                      const raw = localStorage.getItem(key);
+                      if (raw) {
+                        const parsed = JSON.parse(raw) as unknown;
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                          const valid = parsed.filter(
+                            (m): m is ConversationMessage =>
+                              m &&
+                              typeof m === 'object' &&
+                              (m as ConversationMessage).role !== undefined &&
+                              ((m as ConversationMessage).role === 'user' || (m as ConversationMessage).role === 'assistant') &&
+                              typeof (m as ConversationMessage).content === 'string'
+                          );
+                          if (valid.length > 0) {
+                            lastPersistedHistoryForReconnectRef.current = valid.slice(-MAX_CONVERSATION_STORED);
+                            break;
+                          }
+                        }
+                      }
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                }
+                const preloadLen = lastPersistedHistoryForReconnectRef.current?.length ?? 0;
+                // Issue #489: When we have preloaded context and the new manager's WebSocket is already OPEN,
+                // send Settings synchronously so the second Settings definitely uses this ref (avoids timeout/closure issues in E2E).
+                const wsReady = agentManagerRef.current?.getReadyState() === 1;
+                if (preloadLen > 0 && wsReady) {
+                  sendAgentSettings();
+                } else if (checkAndSend) {
+                  setTimeout(checkAndSend, 50);
+                }
+              }
               // Handle reconnection logic
               if (isReconnection) {
                 log('Agent WebSocket reconnected - resetting greeting state');
@@ -872,6 +1002,7 @@ function DeepgramVoiceInteraction(
           
           // Reset settings flag when connection closes
           if (event.state === 'closed') {
+            hadAgentConnectionClosedRef.current = true; // Issue #489: next 'connected' is reconnection (e.g. new manager)
             if (config.debug) {
               logConsole('debug','🔧 [Connection] Agent connection closed - checking for errors or reasons');
               logConsole('debug','🔧 [Connection] Connection close event details:', event);
@@ -880,8 +1011,36 @@ function DeepgramVoiceInteraction(
             dispatch({ type: 'SETTINGS_SENT', sent: false });
             hasSentSettingsRef.current = false; // Reset ref when connection closes
             windowWithGlobals.globalSettingsSent = false; // Reset global flag when connection closes
+            lastManagerThatSentSettingsRef.current = null; // So next connection (new manager) is allowed to send
             pendingInjectUserMessagesRef.current = []; // Issue #433: clear queue on close
             settingsSentTimeRef.current = null; // Reset settings time
+            // Issue #489 Phase 2: Preload lastPersistedHistoryForReconnectRef from sync storage on close so
+            // the next reconnect's sendAgentSettings sees context (getHistoryForSettings falls back to storage
+            // when latestHistory and lastPersistedHistory are empty; async persist may not have flushed yet).
+            if (typeof localStorage !== 'undefined') {
+              const key = lastUsedStorageKeyRef.current || CONVERSATION_STORAGE_KEY;
+              try {
+                const raw = localStorage.getItem(key);
+                if (raw) {
+                  const parsed = JSON.parse(raw) as unknown;
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    const valid = parsed.filter(
+                      (m): m is ConversationMessage =>
+                        m &&
+                        typeof m === 'object' &&
+                        (m as ConversationMessage).role !== undefined &&
+                        ((m as ConversationMessage).role === 'user' || (m as ConversationMessage).role === 'assistant') &&
+                        typeof (m as ConversationMessage).content === 'string'
+                    );
+                    if (valid.length > 0) {
+                      lastPersistedHistoryForReconnectRef.current = valid.slice(-MAX_CONVERSATION_STORED);
+                    }
+                  }
+                }
+              } catch {
+                /* ignore */
+              }
+            }
             if (config.debug) {
               logConsole('debug','🔧 [Connection] hasSentSettingsRef and globalSettingsSent reset to false due to connection close');
             }
@@ -939,40 +1098,8 @@ function DeepgramVoiceInteraction(
               if (config.debug) {
                 logConsole('debug','🔧 [Connection State] ✅ Will send Settings after WebSocket is fully open');
               }
-              // Wait for WebSocket to be fully OPEN before sending Settings (Issue #329)
-              // React StrictMode can cause timing issues where state is 'connected' but WebSocket isn't fully OPEN yet
-              const checkAndSend = () => {
-                const wsState = agentManagerRef.current?.getReadyState() ?? undefined;
-                const wsStateName = wsState === 0 ? 'CONNECTING' : 
-                                    wsState === 1 ? 'OPEN' : 
-                                    wsState === 2 ? 'CLOSING' : 
-                                    wsState === 3 ? 'CLOSED' : 'UNKNOWN';
-                
-                if (config.debug) {
-                  logConsole('debug','🔧 [Connection State] Checking WebSocket state:', wsState, `(${wsStateName})`);
-                }
-                
-                if (wsState === 1) { // OPEN
-                  if (config.debug) {
-                    logConsole('debug','🔧 [Connection State] WebSocket is OPEN, sending Settings');
-                  }
-                  sendAgentSettings();
-                } else if (wsState === 0) { // CONNECTING
-                  // Still connecting, wait a bit more
-                  if (config.debug) {
-                    logConsole('debug','🔧 [Connection State] WebSocket still CONNECTING, will retry');
-                  }
-                  setTimeout(checkAndSend, 50);
-                } else {
-                  // CLOSING or CLOSED - connection is gone, can't send Settings
-                  if (config.debug) {
-                    logConsole('error','🔧 [Connection State] WebSocket is', wsStateName, '- cannot send Settings');
-                  }
-                }
-              };
-              
-              // Start checking after a small delay to allow WebSocket to transition to OPEN
-              setTimeout(checkAndSend, 50);
+              // Wait for WebSocket to be fully OPEN before sending Settings (Issue #329). checkAndSend defined above when event.state === 'connected'.
+              if (checkAndSend) setTimeout(checkAndSend, 50);
             } else if (state.hasSentSettings) {
               log('Connection established but settings already sent, skipping');
               if (config.debug) {
@@ -1110,7 +1237,6 @@ function DeepgramVoiceInteraction(
     const previousMountId = mountIdRef.current;
     mountIdRef.current = currentMountId;
     isMountedRef.current = true;
-    
     // Check if we're in a CI environment or package import context
     const isCIEnvironment = typeof process !== 'undefined' && (process.env.CI === 'true' || process.env.NODE_ENV === 'test');
     const isPackageImport = typeof window === 'undefined' || !window.document;
@@ -1288,6 +1414,7 @@ function DeepgramVoiceInteraction(
           }
           agentManagerRef.current.close();
           agentManagerRef.current = null;
+          lastManagerThatSentSettingsRef.current = null;
         }
         
         if (audioManagerRef.current) {
@@ -1844,8 +1971,98 @@ function DeepgramVoiceInteraction(
 
   // Send agent settings after connection is established - only if agent is configured
   const sendAgentSettings = () => {
+    // Guarantee context loads from storage when in-memory refs are empty or on reconnect, so the hook alone
+    // is enough for Settings context on any backend (OpenAI proxy same as Deepgram). See ISSUE-489 / TDD-PLAN-9A.
+    const hasInMemory =
+      (conversationHistoryRef.current?.length ?? 0) > 0 ||
+      (lastPersistedHistoryForReconnectRef.current?.length ?? 0) > 0;
+    const shouldLoadFromStorage =
+      !hasInMemory || isReconnectionRef.current;
+    if (shouldLoadFromStorage && typeof getItemForSettings === 'function') {
+      const keys = [
+        lastUsedStorageKeyRef.current,
+        'dg_voice_conversation',
+        'dg_conversation',
+      ].filter(Boolean) as string[];
+      for (const key of keys) {
+        try {
+          const raw = getItemForSettings(key);
+          if (raw) {
+            const parsed = JSON.parse(raw) as unknown;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const valid = parsed.filter(
+                (m): m is ConversationMessage =>
+                  m &&
+                  typeof m === 'object' &&
+                  (m as ConversationMessage).role !== undefined &&
+                  ((m as ConversationMessage).role === 'user' ||
+                    (m as ConversationMessage).role === 'assistant') &&
+                  typeof (m as ConversationMessage).content === 'string'
+              );
+              if (valid.length > 0) {
+                lastPersistedHistoryForReconnectRef.current = valid.slice(
+                  -MAX_CONVERSATION_STORED
+                );
+                break;
+              }
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    // Issue #489: On reconnect, ensure ref is populated from localStorage in this tick right before getContextForSend,
+    // so the hook or our fallback below sees context (E2E can have timing where the earlier sync load used different key or ref wasn't visible).
+    if (isReconnectionRef.current && typeof localStorage !== 'undefined') {
+      const keys = [lastUsedStorageKeyRef.current, 'dg_voice_conversation', 'dg_conversation'];
+      for (const key of keys) {
+        if (!key) continue;
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw) as unknown;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const valid = parsed.filter(
+                (m): m is ConversationMessage =>
+                  m &&
+                  typeof m === 'object' &&
+                  (m as ConversationMessage).role !== undefined &&
+                  ((m as ConversationMessage).role === 'user' || (m as ConversationMessage).role === 'assistant') &&
+                  typeof (m as ConversationMessage).content === 'string'
+              );
+              if (valid.length > 0) {
+                lastPersistedHistoryForReconnectRef.current = valid.slice(-MAX_CONVERSATION_STORED);
+                break;
+              }
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
     // Phase 4 refactor: resolve context and base options via hook (Issue #489 / REFACTORING-PLAN-release-v0.9.8). Phase 3: no ref sync — conversationHistoryRef is the single latest-history ref (updated by effect + ConversationText handler).
-    const { effectiveContext, baseAgentOptions } = getContextForSend();
+    let { effectiveContext, baseAgentOptions } = getContextForSend();
+    // Issue #489: If hook returned empty context but we have history in lastPersistedHistoryForReconnectRef
+    // (e.g. reconnect preload or sync load above), use it so Settings always get context when we have data.
+    // Apply whenever effectiveContext is empty and ref has messages (not only isReconnection) so any code path
+    // that sends Settings with empty context still attaches context when the ref was populated.
+    if (
+      (!effectiveContext?.messages?.length) &&
+      (lastPersistedHistoryForReconnectRef.current?.length ?? 0) > 0
+    ) {
+      const fromRef = lastPersistedHistoryForReconnectRef.current;
+      effectiveContext = {
+        messages: fromRef.map((m) => ({
+          type: 'History' as const,
+          role: m.role,
+          content: m.content,
+        })),
+      };
+    }
     const currentAgentOptions = baseAgentOptions
       ? { ...baseAgentOptions, context: effectiveContext }
       : undefined;
@@ -1867,15 +2084,25 @@ function DeepgramVoiceInteraction(
       return;
     }
 
-    // Check if settings have already been sent (welcome-first behavior)
-    // Use both ref and global flag to avoid stale closure issues and cross-component duplicates
-    if (hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent) {
+    // Check if settings have already been sent (welcome-first behavior).
+    // Use manager identity so a new connection (new WebSocketManager) always sends; avoids race where
+    // flags are still true from the previous connection when the new one opens.
+    const currentManager = agentManagerRef.current;
+    const alreadySentForThisManager =
+      currentManager != null && currentManager === lastManagerThatSentSettingsRef.current;
+    const flagsSaySent = hasSentSettingsRef.current || windowWithGlobals.globalSettingsSent;
+    if (flagsSaySent && alreadySentForThisManager) {
       if (debug) {
         logConsole('debug','🔧 [sendAgentSettings] Settings already sent (via ref or global), skipping');
         logConsole('debug','🔧 [sendAgentSettings] hasSentSettingsRef.current:', hasSentSettingsRef.current);
         logConsole('debug','🔧 [sendAgentSettings] globalSettingsSent:', windowWithGlobals.globalSettingsSent);
       }
       return;
+    }
+    if (flagsSaySent && !alreadySentForThisManager) {
+      // New manager (reconnection): allow send; reset flags so we don't double-send from same manager
+      hasSentSettingsRef.current = false;
+      windowWithGlobals.globalSettingsSent = false;
     }
 
     // Issue #480: On reconnection, warn if we have no context so the new connection has no prior conversation history
@@ -1980,12 +2207,14 @@ function DeepgramVoiceInteraction(
     // concurrent call to sendAgentSettings will then see flags true and skip.
     hasSentSettingsRef.current = true;
     windowWithGlobals.globalSettingsSent = true;
+    lastManagerThatSentSettingsRef.current = agentManagerRef.current;
 
     const sendResult = agentManagerRef.current.sendJSON(settingsMessage);
     if (!sendResult) {
-      // Send failed - reset flags so a retry or later path can send
+      // Send failed - reset flags and manager ref so a retry or later path can send
       hasSentSettingsRef.current = false;
       windowWithGlobals.globalSettingsSent = false;
+      lastManagerThatSentSettingsRef.current = null;
       if (debug) {
         const stateAtFail = agentManagerRef.current?.getReadyState() ?? null;
         const wsStateName = stateAtFail === 0 ? 'CONNECTING' :
@@ -2070,8 +2299,7 @@ function DeepgramVoiceInteraction(
 
   // Handle agent messages - only relevant if agent is configured
   const handleAgentMessage = (data: unknown) => {
-    // Issue #487: Any agent message clears "waiting for next message after function result" so idle timeout may start when truly idle
-    handleNextAgentMessageReceived();
+    // Issue #487: Idle-timeout "waiting after function result" is cleared by WebSocketManager.onAgentMessageReceived (single path) and by AGENT_STATE_CHANGED to thinking/speaking (agent became active). See docs/issues/ISSUE-489/IDLE-TIMEOUT-AFTER-FUNCTION-RESULT-DESIGN.md.
     // Debug: Log all agent messages with type
     const messageType = typeof data === 'object' && data !== null && 'type' in data ? (data as { type?: string }).type || 'unknown' : 'unknown';
     log(`🔍 [DEBUG] Received agent message (type: ${messageType}):`, data);
@@ -2249,32 +2477,44 @@ function DeepgramVoiceInteraction(
       return;
     }
     
-    if (data.type === 'AgentAudioDone') {
-      logConsole('debug','🔊 [AGENT EVENT] AgentAudioDone received');
-      logConsole('debug','🎯 [AGENT] AgentAudioDone received - audio generation complete, playback may continue');
-      sleepLog('AgentAudioDone received - audio generation complete, but playback may continue');
+    // Agent done for the turn: accept either AgentDone (semantic) or AgentAudioDone (legacy receipt-complete).
+    // AgentDone = proxy signals "agent is done" (prefer when supported). AgentAudioDone = receipt complete only, not playback.
+    if (data.type === 'AgentDone' || data.type === 'AgentAudioDone') {
+      const eventType = data.type as 'AgentDone' | 'AgentAudioDone';
+      logConsole('debug', `🔊 [AGENT EVENT] ${eventType} received`);
+      logConsole('debug', `🎯 [AGENT] ${eventType} - agent done for turn (semantic); transitioning to idle`);
+      sleepLog(`${eventType} received - agent done for turn`);
 
-      // Issue #482 / #489: Transition to idle when in speaking so idle timeout can start. In proxy mode
-      // playback may never report isPlaying: false; AgentAudioDone is the contract for "response complete."
-      // Also transition when 'listening' so greeting/response that sends AgentAudioDone before playback
-      // starts (e.g. proxy injects it after first ConversationText, or audio disabled in E2E) still starts idle timeout.
-      // IdleTimeoutService requires isPlaying: false to start the timeout; set it so timeout can run (E2E greeting tests).
+      // Transition to idle when in speaking, listening, or thinking so idle timeout can start.
+      // IdleTimeoutService requires isPlaying: false and agentState idle/listening to start the timeout.
+      // Issue #489: In function-call flow we may receive AgentAudioDone while still in 'thinking' (no audio
+      // for that turn); if we don't transition to idle here, the service never starts the idle timeout.
       const agentState = stateRef.current.agentState;
       if (agentState === 'speaking') {
-        logConsole('debug','🎯 [AGENT] AgentAudioDone - transitioning to idle (response complete)');
+        logConsole('debug','🎯 [AGENT] Agent done - transitioning to idle (response complete)');
         agentStateServiceRef.current?.handleAudioPlaybackChange(false);
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
         dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
       } else if (agentState === 'listening') {
-        logConsole('debug','🎯 [AGENT] AgentAudioDone while listening - transitioning to idle (greeting/response done before playback)');
+        logConsole('debug','🎯 [AGENT] Agent done while listening - transitioning to idle (greeting/response done before playback)');
+        dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
+        dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+      } else if (agentState === 'thinking') {
+        logConsole('debug','🎯 [AGENT] Agent done while thinking - transitioning to idle (e.g. text-only turn after function call)');
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
         dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
       }
 
-      // Issue #489: Ensure IdleTimeoutService sees meaningful activity so it can start the timeout.
-      // When agent was speaking/listening, WebSocketManager has idleTimeoutDisabled and skips
-      // onMeaningfulActivity for AgentAudioDone; calling here guarantees hasSeenUserActivityThisSession.
-      handleMeaningfulActivity('AgentAudioDone');
+      // Issue #489: Always push idle into the service so it can start the timeout (React state updates
+      // are async). If we only push when agentState is speaking/listening/thinking, then when
+      // agentState is already 'idle' the service may keep stale state (e.g. 'thinking') and never start.
+      pushIdleStateToIdleTimeoutService();
+      handleMeaningfulActivity(eventType);
+
+      // TODO(issue-489): Remove before concluding Issue #489 — E2E flag to confirm proxy → component AgentAudioDone delivery.
+      if (typeof window !== 'undefined') {
+        (window as unknown as { __agentAudioDoneReceived__?: boolean }).__agentAudioDoneReceived__ = true;
+      }
 
       // Track agent silent for greeting state
       if (state.greetingInProgress) {
@@ -2283,7 +2523,6 @@ function DeepgramVoiceInteraction(
       }
 
       // Reset user speaking state when agent finishes speaking
-      // This is important for text-based interactions where no UtteranceEnd is received
       dispatch({ type: 'USER_SPEAKING_STATE_CHANGE', isSpeaking: false });
       if (stateRef.current.isUserSpeaking) {
         onUserStoppedSpeaking?.();
@@ -2317,10 +2556,26 @@ function DeepgramVoiceInteraction(
         conversationHistoryRef.current = updatedHistory;
         setConversationHistory((prev) => [...prev, newEntry]);
         // Issue #489/9a: Keep module-level ref in sync so reconnect has context even after remount
-        lastPersistedHistoryForReconnectRef.current = updatedHistory.slice(-MAX_CONVERSATION_STORED);
+        const toStore = updatedHistory.slice(-MAX_CONVERSATION_STORED);
+        lastPersistedHistoryForReconnectRef.current = toStore;
+        // Issue #489 Phase 2: Sync write to localStorage so preload on connection close sees latest
+        // (async conversationStorage.setItem may not have flushed before close).
+        if (typeof localStorage !== 'undefined') {
+          try {
+            localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(toStore));
+            lastUsedStorageKeyRef.current = CONVERSATION_STORAGE_KEY;
+          } catch {
+            /* ignore quota / private mode */
+          }
+        }
       }
 
       if (data.role === 'assistant') {
+        // Issue #487: If we're idle/listening and receive assistant text (e.g. backend sent only ConversationText after function result), transition to thinking so IdleTimeoutService clears "waiting after function result" via AGENT_STATE_CHANGED (agent became active).
+        const agentState = stateRef.current.agentState;
+        if (agentState === 'idle' || agentState === 'listening') {
+          transitionToThinkingState('ConversationText (assistant) received');
+        }
         // Idle timeout: greeting is agent activity (disables/resets timeout while active). When greeting has no
         // audio, "agent activity ended" once the text is delivered. Schedule a short deferral; if AgentStartedSpeaking
         // does not fire, no audio will play for this message → transition to idle and allow idle timeout to start.
@@ -2329,10 +2584,12 @@ function DeepgramVoiceInteraction(
         }
         textOnlyAgentDoneTimeoutIdRef.current = setTimeout(() => {
           textOnlyAgentDoneTimeoutIdRef.current = null;
-          if (stateRef.current.agentState === 'speaking' || stateRef.current.agentState === 'thinking') {
-            return; // Audio/response in progress; AgentAudioDone or playback will end it
+          // Only skip when actually playing audio (speaking). Idle is enabled when agent is done: when muted, "done" is when text is displayed (do not insist on audio).
+          // When in "thinking" with no audio, treat as agent done for the turn so idle timeout can run (Issue #489).
+          if (stateRef.current.agentState === 'speaking') {
+            return; // Audio in progress; end of audio or playback will signal agent done
           }
-          logConsole('debug','🎯 [AGENT] ConversationText (assistant) - no audio followed; agent activity ended (text-only)');
+          logConsole('debug','🎯 [AGENT] ConversationText (assistant) - no audio followed; agent done for turn (text-only / muted)');
           dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
           dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
           setTimeout(() => handleMeaningfulActivity('ConversationText'), 50);
@@ -2635,15 +2892,14 @@ function DeepgramVoiceInteraction(
         return;
       }
 
-      // Expected closure events (not errors): idle timeout and session max duration.
-      // Proxy sends code idle_timeout or session_max_duration; treat as normal connection closure.
-      // Fallback: same message without code (e.g. older proxy) is also treated as expected idle-timeout closure.
+      // Expected closure: server timeout (API code idle_timeout) or session max duration.
+      // SERVER_TIMEOUT_ERROR_CODE = server closed due to its inactivity limit; distinct from client idle timeout.
       const isExpectedClosure =
-        errorCode === 'idle_timeout' ||
-        errorCode === 'session_max_duration' ||
+        errorCode === SERVER_TIMEOUT_ERROR_CODE ||
+        errorCode === SESSION_MAX_DURATION_ERROR_CODE ||
         errorMessage.includes('The server had an error while processing your request');
       if (isExpectedClosure) {
-        log('[Agent] Expected closure:', errorCode || 'idle_timeout', errorMessage);
+        log('[Agent] Expected closure:', errorCode || SERVER_TIMEOUT_ERROR_CODE, errorMessage);
         return;
       }
       
@@ -3102,8 +3358,12 @@ function DeepgramVoiceInteraction(
       }
       
       if (agentManagerRef.current) {
+        // Issue #489 / 9a: Mark that we initiated close so the next 'connected' (e.g. from a new
+        // WebSocket) is treated as reconnection even if this socket's 'closed' has not fired yet.
+        hadAgentConnectionClosedRef.current = true;
         agentManagerRef.current.close();
         agentManagerRef.current = null; // Clear ref so manager can be recreated
+        lastManagerThatSentSettingsRef.current = null;
       }
       
       // Signal ready after stopping - component can accept new connections

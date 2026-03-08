@@ -15,6 +15,13 @@
  * Run order: integration tests first against real APIs (when keys available), then mocks.
  * CI runs mocks only.
  *
+ * With USE_REAL_APIS=1 this file logs each test name as it runs (beforeEach). For more
+ * Jest output use: npm test -- --verbose tests/integration/openai-proxy-integration.test.ts
+ *
+ * Client message parsing (see PROTOCOL-SPECIFICATION.md §5): Do not parse binary as JSON;
+ * only parse when the frame looks like a complete JSON object. When parse throws, surface
+ * the error (fail the test)—never skip frames on error so we can correct the cause.
+ *
  * @jest-environment node
  */
 
@@ -30,6 +37,7 @@ const WebSocket = require('ws');
 // Load WebSocketServer from ws package (Jest resolve may not expose ws/lib/*)
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const WebSocketServer = require(path.join(path.dirname(require.resolve('ws')), 'lib', 'websocket-server.js'));
+import { DEFAULT_SERVER_TIMEOUT_MS, NO_SERVER_TIMEOUT_MS, SERVER_TIMEOUT_ERROR_CODE } from '../../src/constants/voice-agent';
 import {
   createOpenAIProxyServer,
 } from '../../packages/voice-agent-backend/scripts/openai-proxy/server';
@@ -78,9 +86,35 @@ const AudioFileLoader = require('../utils/audio-file-loader');
 /** Use for tests that require the mock upstream (exact payloads, mockReceived, etc.); skipped when USE_REAL_APIS=1. */
 const itMockOnly = useRealAPIs ? it.skip : it;
 
+/**
+ * Schedules a fallback timeout for tests. When it fires, runs onFired in setImmediate so the
+ * timer callback returns immediately (avoids open handle in --detectOpenHandles).
+ * Returns a clear function; call it from the success path (e.g. finish()) to cancel the timeout.
+ */
+function scheduleFallbackTimeout(delayMs: number, onFired: () => void): () => void {
+  const id = setTimeout(() => setImmediate(onFired), delayMs);
+  return () => clearTimeout(id);
+}
+
+/**
+ * True when the buffer looks like a complete JSON object (starts with '{', ends with '}').
+ * Use to avoid calling JSON.parse on binary frames (e.g. PCM). When we do parse and it
+ * throws, tests must surface the error (PROTOCOL-SPECIFICATION.md §5).
+ */
+function looksLikeJsonObject(data: Buffer): boolean {
+  return data.length >= 2 && data[0] === 0x7b && data[data.length - 1] === 0x7d;
+}
+
 describe('OpenAI proxy integration (Issue #381)', () => {
+  // Prevent real-API runs from hanging indefinitely; longest test is 70s (function-call flow).
+  if (useRealAPIs) jest.setTimeout(80000);
+  // Mock runs: WebSocket round-trips can exceed default 5s under load; use 15s unless test overrides.
+  else jest.setTimeout(15000);
+
   let mockUpstreamServer: http.Server | null = null;
   let mockWss: InstanceType<typeof WebSocketServer> | null = null;
+  /** Proxy WebSocket server; closed in afterAll to avoid open handles (Jest not exiting). */
+  let proxyWss: InstanceType<typeof WebSocketServer> | null = null;
   let mockPort: number;
   let proxyServer: http.Server;
   let proxyPort: number;
@@ -117,6 +151,12 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   let mockSendOutputTextOnlyAfterSession = false;
   /** When true, mock sends output_audio_transcript.done then response.function_call_arguments.done after session.updated */
   let mockSendTranscriptThenFunctionCallAfterSession = false;
+  /** Issue #497: when true, mock sends multiple input_audio_transcription.delta events (same item_id) after session.updated to test accumulator. */
+  let mockSendTranscriptionDeltasForAccumulator = false;
+  /** Issue #496: when true, mock sends input_audio_transcription.completed with start, duration, channel so client receives Transcript with actuals. */
+  let mockSendTranscriptionCompletedWithActuals = false;
+  /** Issue #499: when true, mock sends conversation.item.added with assistant item whose content is only a function_call part (parity: client receives ConversationText). */
+  let mockSendConversationItemAddedFunctionCallOnly = false;
   /** When true, mock sends response.output_audio.delta (base64 PCM) then .done before response.output_text.done (so client receives binary PCM from proxy). */
   let mockSendOutputAudioBeforeText = false;
   /** Issue #414 3.2: when > 0, mock delays sending response completion (output_audio.delta, .done, output_text.done) by this many ms after receiving response.create. */
@@ -140,8 +180,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * is received before session.updated was sent (catches proxy sending context before session.updated).
    */
   let mockEnforceSessionBeforeContext = false;
-  /** Protocol test gap: when true, mock sends response.created (untranslated event) after session.updated so client must receive it as text. */
-  let mockSendResponseCreatedAfterSessionUpdated = false;
+  /** Protocol test: when true, mock sends an unmapped upstream event after session.updated so client receives Error (unmapped_upstream_event). Uses conversation.created (response.created is now handled in proxy). */
+  let mockSendUnmappedEventAfterSessionUpdated = false;
   /**
    * Issue #470: when true, on function_call_output mock sends response.done only (no response.output_text.done).
    * Asserts proxy sends response.create once when it receives response.done (fallback path).
@@ -161,6 +201,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   const receivedSessionUpdatePayloads: Array<{ type: string; session?: { turn_detection?: unknown; [key: string]: unknown } }> = [];
 
   beforeAll(async () => {
+    if (useRealAPIs) process.stdout.write('[openai-proxy-integration] beforeAll: starting proxy...\n');
     proxyServer = http.createServer((_req, res) => {
       res.writeHead(404);
       res.end();
@@ -171,14 +212,16 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     if (useRealAPIs) {
       const apiKey = process.env.OPENAI_API_KEY!.trim();
       const upstreamUrl = process.env.OPENAI_REALTIME_URL ?? 'wss://api.openai.com/v1/realtime?model=gpt-realtime';
-      createOpenAIProxyServer({
+      const proxy = createOpenAIProxyServer({
         server: proxyServer,
         path: PROXY_PATH,
         upstreamUrl,
         upstreamHeaders: { Authorization: `Bearer ${apiKey}` },
         logLevel: process.env.LOG_LEVEL ?? undefined,
       });
+      proxyWss = proxy.wss;
       mockPort = 0;
+      if (useRealAPIs) process.stdout.write(`[openai-proxy-integration] beforeAll: proxy ready on port ${proxyPort}. Use --verbose to see each test name as it runs.\n`);
       return;
     }
 
@@ -297,23 +340,31 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           }
           if (msg.type === 'session.update') {
             receivedSessionUpdatePayloads.push(msg as typeof receivedSessionUpdatePayloads[number]);
+            // Debug: log when mock receives session.update and which follow-up path is taken (for itMockOnly function-call tests).
+            const debugMock = process.env.DEBUG_OPENAI_PROXY_INTEGRATION === '1';
+            if (debugMock) {
+              process.stdout.write(
+                `[mock] session.update received; flags: FCR=${mockSendFunctionCallAfterSession} transcriptOnly=${mockSendTranscriptOnlyAfterSession} outputTextOnly=${mockSendOutputTextOnlyAfterSession} transcriptThenFCR=${mockSendTranscriptThenFunctionCallAfterSession}\n`,
+              );
+            }
             const sendSessionUpdated = () => {
               socket.send(JSON.stringify({ type: 'session.updated', session: { type: 'realtime' } }));
               sessionUpdatedSent = true;
+              if (debugMock) process.stdout.write('[mock] sent session.updated\n');
             };
             if (mockEnforceSessionBeforeContext) {
               setTimeout(() => {
                 sendSessionUpdated();
-                if (mockSendResponseCreatedAfterSessionUpdated) {
-                  mockSendResponseCreatedAfterSessionUpdated = false;
-                  socket.send(JSON.stringify({ type: 'response.created', response_id: 'r1' }));
+                if (mockSendUnmappedEventAfterSessionUpdated) {
+                  mockSendUnmappedEventAfterSessionUpdated = false;
+                  socket.send(JSON.stringify({ type: 'conversation.created', conversation: { id: 'conv_1', items: [] } }));
                 }
               }, 50);
             } else {
               sendSessionUpdated();
-              if (mockSendResponseCreatedAfterSessionUpdated) {
-                mockSendResponseCreatedAfterSessionUpdated = false;
-                socket.send(JSON.stringify({ type: 'response.created', response_id: 'r1' }));
+              if (mockSendUnmappedEventAfterSessionUpdated) {
+                mockSendUnmappedEventAfterSessionUpdated = false;
+                socket.send(JSON.stringify({ type: 'conversation.created', conversation: { id: 'conv_1', items: [] } }));
               }
             }
             if (mockSendTranscriptThenFunctionCallAfterSession) {
@@ -332,6 +383,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                 name: 'get_current_time',
                 arguments: '{}',
               }));
+              if (debugMock) process.stdout.write('[mock] sent transcript.done + function_call_arguments.done (transcriptThenFCR)\n');
             } else if (mockSendTranscriptOnlyAfterSession) {
               mockSendTranscriptOnlyAfterSession = false;
               socket.send(JSON.stringify({
@@ -342,6 +394,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                 content_index: 0,
                 transcript: 'Function call: get_current_datetime({ })',
               }));
+              if (debugMock) process.stdout.write('[mock] sent output_audio_transcript.done only (transcriptOnly)\n');
             } else if (mockSendOutputTextOnlyAfterSession) {
               mockSendOutputTextOnlyAfterSession = false;
               socket.send(JSON.stringify({
@@ -352,6 +405,49 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                 content_index: 0,
                 text: 'Function call: get_current_datetime({ })',
               }));
+              if (debugMock) process.stdout.write('[mock] sent output_text.done only (outputTextOnly)\n');
+            } else if (mockSendTranscriptionDeltasForAccumulator) {
+              mockSendTranscriptionDeltasForAccumulator = false;
+              const itemId = 'item_accum_497';
+              const deltas = ['Hel', 'lo ', 'world'];
+              for (const delta of deltas) {
+                socket.send(JSON.stringify({
+                  type: 'conversation.item.input_audio_transcription.delta',
+                  item_id: itemId,
+                  content_index: 0,
+                  delta,
+                }));
+              }
+              if (debugMock) process.stdout.write('[mock] sent 3 input_audio_transcription.delta for Issue #497\n');
+            } else if (mockSendTranscriptionCompletedWithActuals) {
+              mockSendTranscriptionCompletedWithActuals = false;
+              setImmediate(() => {
+                socket.send(JSON.stringify({
+                  type: 'conversation.item.input_audio_transcription.completed',
+                  item_id: 'item_496',
+                  content_index: 0,
+                  transcript: 'Hello world',
+                  start: 1.5,
+                  duration: 2.25,
+                  channel: 1,
+                  channel_index: [1],
+                }));
+              });
+              if (debugMock) process.stdout.write('[mock] sent input_audio_transcription.completed with actuals for Issue #496\n');
+            } else if (mockSendConversationItemAddedFunctionCallOnly) {
+              mockSendConversationItemAddedFunctionCallOnly = false;
+              setImmediate(() => {
+                socket.send(JSON.stringify({
+                  type: 'conversation.item.added',
+                  item: {
+                    id: 'item_fc_499',
+                    type: 'message',
+                    role: 'assistant',
+                    content: [{ type: 'function_call', name: 'get_current_time', arguments: '{}', call_id: 'call_499' }],
+                  },
+                }));
+              });
+              if (debugMock) process.stdout.write('[mock] sent conversation.item.added (function_call only) for Issue #499\n');
             } else if (mockSendFunctionCallAfterSession) {
               mockSendFunctionCallAfterSession = false;
               socket.send(JSON.stringify({
@@ -360,6 +456,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                 name: 'get_current_time',
                 arguments: '{}',
               }));
+              if (debugMock) process.stdout.write('[mock] sent response.function_call_arguments.done only (FCR)\n');
             }
           }
           if (msg.type === 'response.create') {
@@ -381,6 +478,19 @@ describe('OpenAI proxy integration (Issue #381)', () => {
               }));
               return; // No normal response — matches real API behavior
             }
+            const MOCK_RESPONSE_TEXT = 'Hello from mock';
+            const sendAssistantItemDone = () => {
+              socket.send(JSON.stringify({
+                type: 'conversation.item.done',
+                item: {
+                  id: 'item_mock_response_1',
+                  type: 'message',
+                  status: 'completed',
+                  role: 'assistant',
+                  content: [{ type: 'output_text', text: MOCK_RESPONSE_TEXT }],
+                },
+              }));
+            };
             const sendResponseDone = () => {
               if (mockSendOutputAudioBeforeText || mockSendAudioDeltaOnGreetingResponseCreate) {
                 if (mockSendOutputAudioBeforeText) mockSendOutputAudioBeforeText = false;
@@ -389,19 +499,18 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                 socket.send(JSON.stringify({ type: 'response.output_audio.delta', delta: pcmChunk.toString('base64') }));
                 socket.send(JSON.stringify({ type: 'response.output_audio.done' }));
               }
-              socket.send(JSON.stringify({ type: 'response.output_text.done', text: 'Hello from mock' }));
+              socket.send(JSON.stringify({ type: 'response.output_text.done', text: MOCK_RESPONSE_TEXT }));
+              sendAssistantItemDone();
             };
             // Issue #482: upstream sends idle_timeout before output_text.done (voice-commerce #956 scenario).
             if (mockSendIdleTimeoutBeforeOutputTextDone) {
               mockSendIdleTimeoutBeforeOutputTextDone = false;
+              socket.send(JSON.stringify({ type: 'response.output_text.done', text: MOCK_RESPONSE_TEXT }));
+              sendAssistantItemDone();
               socket.send(JSON.stringify({
                 type: 'error',
-                error: {
-                  message: 'The server had an error while processing your request. Sorry about that! Please contact us through our help center at help.openai.com if the error persists.',
-                  code: 'server_error',
-                },
+                error: { code: 'idle_timeout', message: 'Session closed due to idle timeout' },
               }));
-              socket.send(JSON.stringify({ type: 'response.output_text.done', text: 'Hello from mock' }));
               return;
             }
             // Issue #462: send only output_audio.done first; send output_text.done after delay so test can send Settings in between.
@@ -413,7 +522,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
               socket.send(JSON.stringify({ type: 'response.output_audio.delta', delta: pcmChunk.toString('base64') }));
               socket.send(JSON.stringify({ type: 'response.output_audio.done' }));
               setTimeout(() => {
-                socket.send(JSON.stringify({ type: 'response.output_text.done', text: 'Hello from mock' }));
+                socket.send(JSON.stringify({ type: 'response.output_text.done', text: MOCK_RESPONSE_TEXT }));
+                sendAssistantItemDone();
               }, delayMs);
               return;
             }
@@ -436,22 +546,47 @@ describe('OpenAI proxy integration (Issue #381)', () => {
 
     // Proxy created with default options (no greetingTextOnly); matches production when that TODO is removed.
     // Issue #462: pass LOG_LEVEL so capture runs can emit proxy debug logs.
-    createOpenAIProxyServer({
+    const proxy = createOpenAIProxyServer({
       server: proxyServer,
       path: PROXY_PATH,
       upstreamUrl: `ws://localhost:${mockPort}`,
       logLevel: process.env.LOG_LEVEL ?? undefined,
     });
+    proxyWss = proxy.wss;
   });
 
   afterAll(async () => {
     if (mockWss) mockWss.close();
     if (mockUpstreamServer) await new Promise<void>((resolve) => mockUpstreamServer!.close(() => resolve()));
-    if (proxyServer) await new Promise<void>((resolve) => proxyServer.close(() => resolve()));
-  }, 10000);
+    // Close proxy WebSocket server first so client (and thus upstream) connections close; avoids Jest open handles (e.g. real-API runs).
+    if (proxyWss) {
+      await new Promise<void>((resolve) => {
+        proxyWss!.close(() => resolve());
+      });
+      proxyWss = null;
+      // Allow upstream sockets (e.g. to real OpenAI) to finish closing before Jest checks for open handles.
+      await new Promise((r) => setTimeout(r, useRealAPIs ? 800 : 100));
+    }
+    if (proxyServer) {
+      // Force-close any remaining client connections so server.close() can complete (avoids TCPSERVERWRAP open handle). Node 18.2+. Protocol-agnostic (HTTP/HTTPS).
+      if ('closeAllConnections' in proxyServer && typeof (proxyServer as { closeAllConnections?: () => void }).closeAllConnections === 'function') {
+        (proxyServer as { closeAllConnections: () => void }).closeAllConnections();
+      }
+      await new Promise<void>((resolve) => proxyServer.close(() => resolve()));
+    }
+  }, 60000);
 
   beforeEach(() => {
-    if (useRealAPIs) jest.useRealTimers();
+    // Global setup (tests/setup.js) enables fake timers before every test. This suite runs the real proxy
+    // and real WebSocket servers in-process; the proxy uses setTimeout and the ws/net stack relies on real
+    // timers. With fake timers those never fire and mock round-trips hang. We must use real timers for every
+    // test in this suite (both mock and real-API runs)—a constraint of the code under test.
+    jest.useRealTimers();
+    if (useRealAPIs) {
+      // Stream test name so real-API runs show progress (Jest default reporter does not print names until test completes).
+      const name = (typeof expect.getState === 'function' && expect.getState().currentTestName) || 'unknown';
+      process.stdout.write(`[openai-proxy-integration] Running: ${name}\n`);
+    }
     // Issue #470: reset so tests that expect output_text.done (e.g. "Hello from mock") are not affected by the response.done-only test.
     mockSendResponseDoneOnlyAfterFunctionCallOutput = false;
   });
@@ -483,6 +618,40 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('error', (err) => done(err));
   });
 
+  /**
+   * Issue #489 PROTOCOL-ASSURANCE-GAPS: With real API, client receives SettingsApplied within N s of connect.
+   * Asserts proxy received session.updated from upstream (effect: client gets SettingsApplied). USE_REAL_APIS=1.
+   */
+  (useRealAPIs ? it : it.skip)('Issue #489 real-API: client receives SettingsApplied within 10s of connect (session.updated)', (done) => {
+    const DEADLINE_MS = 10000;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string };
+        if (msg.type === 'SettingsApplied') {
+          finish();
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (!finished) finish(new Error('Issue #489: did not receive SettingsApplied within 10s'));
+    }, DEADLINE_MS);
+  }, 15000);
 
   it('translates Settings to session.update and session.updated to SettingsApplied', (done) => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
@@ -571,6 +740,103 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   });
 
   /**
+   * Issue #489 TDD: When upstream sends error with structured error.code, proxy forwards that code to client (codes over message text).
+   */
+  itMockOnly('when upstream sends error with error.code idle_timeout, client receives Error with code idle_timeout', (done) => {
+    let mockSocket: import('ws') | null = null;
+    const originalConnection = mockWss!.listeners('connection')[0] as (socket: import('ws')) => void;
+    mockWss!.removeAllListeners('connection');
+    mockWss!.on('connection', (socket: import('ws')) => {
+      mockSocket = socket;
+      originalConnection(socket);
+    });
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let finished = false;
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; code?: string };
+        if (msg.type === 'Error') {
+          if (finished) return;
+          finished = true;
+          expect(msg.code).toBe('idle_timeout');
+          try { client.close(); } catch { /* ignore */ }
+          done();
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          setTimeout(() => {
+            mockSocket?.send(JSON.stringify({
+              type: 'error',
+              error: { code: 'idle_timeout', message: 'Session closed due to idle timeout' },
+            }));
+          }, 50);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => done(err));
+    setTimeout(() => {
+      if (!finished) {
+        finished = true;
+        try { client.close(); } catch { /* ignore */ }
+        done(new Error('Expected to receive Error with code idle_timeout'));
+      }
+    }, 5000);
+  });
+
+  itMockOnly('when upstream sends error with error.code session_max_duration, client receives Error with code session_max_duration', (done) => {
+    let mockSocket: import('ws') | null = null;
+    const originalConnection = mockWss!.listeners('connection')[0] as (socket: import('ws')) => void;
+    mockWss!.removeAllListeners('connection');
+    mockWss!.on('connection', (socket: import('ws')) => {
+      mockSocket = socket;
+      originalConnection(socket);
+    });
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let finished = false;
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; code?: string };
+        if (msg.type === 'Error') {
+          if (finished) return;
+          finished = true;
+          expect(msg.code).toBe('session_max_duration');
+          try { client.close(); } catch { /* ignore */ }
+          done();
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          setTimeout(() => {
+            mockSocket?.send(JSON.stringify({
+              type: 'error',
+              error: { code: 'session_max_duration', message: 'Your session hit the maximum duration of 60 minutes.' },
+            }));
+          }, 50);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => done(err));
+    setTimeout(() => {
+      if (!finished) {
+        finished = true;
+        try { client.close(); } catch { /* ignore */ }
+        done(new Error('Expected to receive Error with code session_max_duration'));
+      }
+    }, 5000);
+  });
+
+  /**
    * Issue #414 COMPONENT-PROXY-INTERFACE-TDD: When upstream sends input_audio_buffer.speech_started,
    * proxy must send to client a message with type UserStartedSpeaking (component contract). See docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md §2.1.
    */
@@ -650,6 +916,55 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           expect(msg.type).toBe('UtteranceEnd');
           expect(Array.isArray(msg.channel)).toBe(true);
           expect(typeof msg.last_word_end).toBe('number');
+          client.close();
+          done();
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => { clearTimeout(timeoutId); done(err); });
+  });
+
+  /**
+   * Issue #494: When upstream sends input_audio_buffer.speech_stopped with channel and last_word_end,
+   * proxy must pass those values through to UtteranceEnd (not fixed defaults).
+   */
+  itMockOnly('Issue #494: when upstream sends speech_stopped with channel and last_word_end, client receives UtteranceEnd with those values', (done) => {
+    let mockSocket: import('ws') | null = null;
+    const originalConnection = mockWss!.listeners('connection')[0] as (socket: import('ws')) => void;
+    mockWss!.removeAllListeners('connection');
+    mockWss!.on('connection', (socket: import('ws')) => {
+      mockSocket = socket;
+      originalConnection(socket);
+    });
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const timeoutId = setTimeout(() => done(new Error('Issue #494: timeout, did not receive UtteranceEnd')), 5000);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string; channel?: number[]; last_word_end?: number };
+        if (msg.type === 'Error') {
+          clearTimeout(timeoutId);
+          client.close();
+          done(new Error(`Upstream error: ${msg.description ?? 'unknown'}`));
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          setImmediate(() => mockSocket?.send(JSON.stringify({
+            type: 'input_audio_buffer.speech_stopped',
+            channel: [0],
+            last_word_end: 1.5,
+          })));
+          return;
+        }
+        if (msg.type === 'UtteranceEnd') {
+          clearTimeout(timeoutId);
+          expect(msg.channel).toEqual([0]);
+          expect(msg.last_word_end).toBe(1.5);
           client.close();
           done();
         }
@@ -875,9 +1190,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const errorsReceived: string[] = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       try { client.close(); } catch { /* ignore */ }
       if (err) done(err);
       else done();
@@ -912,10 +1232,70 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', (err) => finish(err));
-    setTimeout(() => {
+    timeoutId = setTimeout(() => setImmediate(() => {
       if (!finished) finish(new Error('Issue #470 real-API Req 3: timeout waiting for assistant response'));
-    }, 25000);
+    }), 25000);
   }, 30000);
+
+  /**
+   * Issue #489 PROTOCOL-ASSURANCE-GAPS: With real API, after InjectUserMessage client receives ConversationText
+   * (assistant) and AgentAudioDone. Asserts proxy received completion (response.done / output_text.done).
+   * USE_REAL_APIS=1.
+   */
+  (useRealAPIs ? it : it.skip)('Issue #489 real-API: InjectUserMessage receives ConversationText (assistant) and AgentAudioDone', (done) => {
+    let finished = false;
+    let gotConversationText = false;
+    let gotAgentAudioDone = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string; description?: string };
+        if (msg.type === 'Error' && msg.description) {
+          finish(new Error(`Upstream error: ${msg.description}`));
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What is 2 plus 2?' }));
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          gotConversationText = true;
+          if (typeof msg.content === 'string') expect(msg.content.length).toBeGreaterThan(0);
+        }
+        if (msg.type === 'AgentAudioDone') {
+          gotAgentAudioDone = true;
+        }
+        if (gotConversationText && gotAgentAudioDone) {
+          finish();
+        }
+      } catch (e) {
+        finish(e as Error);
+      }
+    });
+    client.on('error', (err) => finish(err));
+    timeoutId = setTimeout(() => setImmediate(() => {
+      if (!finished) {
+        finish(new Error(
+          `Issue #489: timeout; gotConversationText=${gotConversationText} gotAgentAudioDone=${gotAgentAudioDone}`,
+        ));
+      }
+    }), 30000);
+  }, 35000);
 
   /**
    * Reconnect/reload: when client sends Settings twice (e.g. test-app focus or reload), proxy must forward
@@ -1440,6 +1820,108 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
+   * Issue #489: Component API sends FunctionCallResponse with { id, result } (no content). Proxy must derive
+   * function_call_output from result so upstream receives stringified result; otherwise model gets empty output.
+   */
+  itMockOnly('maps FunctionCallResponse with result (no content) to conversation.item.create with stringified output', (done) => {
+    receivedConversationItems.length = 0;
+    mockSendFunctionCallAfterSession = true;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const resultPayload = { time: '14:32:15', timezone: 'UTC' };
+    let sentFunctionCallResponse = false;
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }>; role?: string; content?: string };
+      if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+        expect(msg.functions[0].name).toBe('get_current_time');
+        expect(msg.functions[0].id).toBe('call_mock_1');
+        client.send(JSON.stringify({
+          type: 'FunctionCallResponse',
+          id: 'call_mock_1',
+          result: resultPayload,
+        }));
+        sentFunctionCallResponse = true;
+      }
+      if (msg.type === 'ConversationText' && msg.role === 'assistant' && sentFunctionCallResponse && msg.content === 'Hello from mock') {
+        const functionCallOutput = receivedConversationItems.find((m) => m.item?.type === 'function_call_output');
+        expect(functionCallOutput).toBeDefined();
+        expect(functionCallOutput?.item?.call_id).toBe('call_mock_1');
+        expect(functionCallOutput?.item?.output).toBe(JSON.stringify(resultPayload));
+        client.close();
+        done();
+      }
+    });
+    client.on('error', done);
+  }, 8000);
+
+  /**
+   * Issue #487 protocol contract: Within N ms of the client sending FunctionCallResponse, the client must receive
+   * at least one of AgentThinking, ConversationText (assistant), or AgentAudioDone. This allows the component to
+   * clear "waiting for next agent message" and re-enable the idle timer. Catches proxy regressions (e.g. removing
+   * the AgentThinking send after function result). See docs/issues/ISSUE-489/WHY-INTEGRATION-TESTS-MISS-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md.
+   */
+  itMockOnly('Issue #487: within 2s of FunctionCallResponse client receives AgentThinking or ConversationText (assistant) or AgentAudioDone', (done) => {
+    mockSendFunctionCallAfterSession = true;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let sentFunctionCallResponseAt: number | null = null;
+    let finished = false;
+    const CONTRACT_DEADLINE_MS = 2000;
+
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
+        if (msg.type === 'FunctionCallRequest') {
+          client.send(JSON.stringify({
+            type: 'FunctionCallResponse',
+            id: 'call_mock_1',
+            name: 'get_current_time',
+            content: '{"time":"12:00"}',
+          }));
+          sentFunctionCallResponseAt = Date.now();
+          return;
+        }
+        if (sentFunctionCallResponseAt === null) return;
+        const elapsed = Date.now() - sentFunctionCallResponseAt;
+        if (elapsed > CONTRACT_DEADLINE_MS) return;
+        const isAcceptable =
+          msg.type === 'AgentThinking' ||
+          msg.type === 'AgentAudioDone' ||
+          (msg.type === 'ConversationText' && msg.role === 'assistant');
+        if (isAcceptable) {
+          finish();
+        }
+      } catch {
+        // ignore non-JSON
+      }
+    });
+
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (finished) return;
+      if (sentFunctionCallResponseAt !== null) {
+        finish(new Error('Issue #487: client did not receive AgentThinking, ConversationText (assistant), or AgentAudioDone within 2s of FunctionCallResponse'));
+      } else {
+        finish(new Error('Issue #487: never received FunctionCallRequest'));
+      }
+    }, CONTRACT_DEADLINE_MS + 3000);
+  }, 10000);
+
+  /**
    * Issue #470 / #462: Real-API integration test for function-call path. Uses real HTTP to a backend (no in-test
    * hardcoded FunctionCallResponse). Partner scenario: Settings → InjectUserMessage → FunctionCallRequest →
    * POST to backend → FunctionCallResponse → response. Asserts no conversation_already_has_active_response.
@@ -1581,110 +2063,490 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 70000); // Jest timeout: real-API function-call flow can be slow
 
   /**
-   * When upstream sends response.function_call_arguments.done, proxy sends FunctionCallRequest first then ConversationText
-   * (same order as server.ts). Client must receive both so E2E capture can see FunctionCallRequest.
-   * Real OpenAI may send response.output_audio_transcript.done with "Function call: ..." before or without
-   * response.function_call_arguments.done; this test asserts the proxy sends both when it gets function_call_arguments.done.
+   * Issue #489 PROTOCOL-ASSURANCE-GAPS (essential): After client sends FunctionCallResponse, client receives
+   * AgentAudioDone within timeout. Effect of proxy receiving response.done or response.output_text.done from
+   * upstream. If real API never sends completion, this test fails. USE_REAL_APIS=1.
    */
-  itMockOnly('sends FunctionCallRequest then ConversationText when upstream sends response.function_call_arguments.done (client receives both)', (done) => {
+  (useRealAPIs ? it : it.skip)('Issue #489 real-API: after FunctionCallResponse client receives AgentAudioDone (proxy received completion)', (done) => {
+    const errorsReceived: string[] = [];
+    let sentFunctionCallResponse = false;
+    let receivedAgentAudioDone = false;
+    let finished = false;
+    const timeoutMs = 60000;
+    let functionCallBackend: { server: http.Server; port: number } | null = null;
+    let client: InstanceType<typeof WebSocket> | null = null;
+
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      if (functionCallBackend) {
+        try { functionCallBackend.server.close(); } catch { /* ignore */ }
+        functionCallBackend = null;
+      }
+      try { if (client) client.close(); } catch { /* ignore */ }
+      client = null;
+      if (err) done(err);
+      else done();
+    };
+
+    createMinimalFunctionCallBackend()
+      .then((backend) => {
+        functionCallBackend = backend;
+        client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+
+        client.on('open', () => {
+          client.send(JSON.stringify({
+            type: 'Settings',
+            agent: {
+              think: {
+                prompt: 'You are a helpful assistant. Use tools when needed.',
+                functions: [
+                  {
+                    name: 'get_current_time',
+                    description: 'Get the current time in a specific timezone.',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        timezone: { type: 'string', description: 'Timezone (e.g. UTC, America/New_York)' },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          }));
+        });
+
+        client.on('message', (data: Buffer) => {
+          if (data.length === 0 || data[0] !== 0x7b) return;
+          try {
+            const msg = JSON.parse(data.toString()) as {
+              type?: string;
+              description?: string;
+              functions?: Array<{ id: string; name: string; arguments?: string }>;
+            };
+            if (msg.type === 'Error' && msg.description) {
+              errorsReceived.push(msg.description);
+              if (msg.description.includes('conversation_already_has_active_response')) {
+                finish(new Error(`Issue #489: conversation_already_has_active_response: ${msg.description}`));
+                return;
+              }
+            }
+            if (msg.type === 'SettingsApplied') {
+              client!.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What time is it?' }));
+            }
+            if (msg.type === 'FunctionCallRequest' && msg.functions?.length && !sentFunctionCallResponse) {
+              const fn = msg.functions[0];
+              const backendUrl = `http://127.0.0.1:${functionCallBackend!.port}/function-call`;
+              fetch(backendUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: fn.id, name: fn.name, arguments: fn.arguments ?? '{}' }),
+              })
+                .then((res) => res.json() as Promise<{ content?: string; error?: string }>)
+                .then((body) => {
+                  if (body.error) {
+                    finish(new Error(`Function-call backend returned error: ${body.error}`));
+                    return;
+                  }
+                  const content = typeof body.content === 'string' ? body.content : JSON.stringify({ time: '12:00', timezone: 'UTC' });
+                  client!.send(JSON.stringify({
+                    type: 'FunctionCallResponse',
+                    id: fn.id,
+                    name: fn.name,
+                    content,
+                  }));
+                  sentFunctionCallResponse = true;
+                })
+                .catch((err) => finish(err instanceof Error ? err : new Error(String(err))));
+            }
+            if (msg.type === 'AgentAudioDone') {
+              if (sentFunctionCallResponse) {
+                receivedAgentAudioDone = true;
+                finish();
+              }
+            }
+          } catch {
+            // ignore non-JSON
+          }
+        });
+
+        client.on('error', (err) => finish(err));
+        setTimeout(() => {
+          if (finished) return;
+          const errMsg = errorsReceived.length
+            ? `Timeout; errors: ${errorsReceived.join('; ')}`
+            : 'Timeout: client did not receive AgentAudioDone after FunctionCallResponse (proxy may not have received response.done/output_text.done from upstream)';
+          finish(new Error(`Issue #489: ${errMsg}`));
+        }, timeoutMs);
+      })
+      .catch((err) => finish(err instanceof Error ? err : new Error(String(err))));
+  }, 70000);
+
+  /**
+   * When upstream sends response.function_call_arguments.done, proxy sends FunctionCallRequest (and AgentStartedSpeaking).
+   * Issue #489 Phase 2: proxy does not map this control event to ConversationText; assistant content from conversation.item.added only.
+   * This test asserts the client receives FunctionCallRequest after SettingsApplied.
+   */
+  itMockOnly('sends FunctionCallRequest when upstream sends response.function_call_arguments.done (client receives FCR)', (done) => {
     mockSendFunctionCallAfterSession = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const receivedOrder: string[] = [];
+    let finished = false;
+    let lastError: Error | undefined;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      lastError = err;
+      try { client.close(); } catch { /* ignore */ }
+    };
+    const debug = process.env.DEBUG_OPENAI_PROXY_INTEGRATION === '1';
+    const t = setTimeout(() => finish(new Error('timeout: expected FunctionCallRequest')), 4000);
+    client.on('close', () => {
+      if (finished) {
+        if (lastError) done(lastError);
+        else done();
+      }
+    });
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      if (debug) process.stdout.write('[client] open, sent Settings\n');
     });
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }>; role?: string; content?: string };
-      if (msg.type) receivedOrder.push(msg.type);
-      const hasFCR = receivedOrder.includes('FunctionCallRequest');
-      const hasCT = receivedOrder.some((_, i) => receivedOrder[i] === 'ConversationText');
-      if (hasFCR && hasCT) {
-        expect(receivedOrder.indexOf('FunctionCallRequest')).toBeLessThan(receivedOrder.indexOf('ConversationText'));
-        client.close();
-        done();
+      if (msg.type) {
+        receivedOrder.push(msg.type);
+        if (debug) process.stdout.write(`[client] received: ${msg.type}\n`);
+      }
+      if (receivedOrder.includes('FunctionCallRequest')) {
+        expect(receivedOrder).toContain('SettingsApplied');
+        clearTimeout(t);
+        finish();
       }
     });
-    client.on('error', done);
+    client.on('error', (err) => finish(err));
   }, 5000);
 
   /**
-   * API gap: When upstream sends ONLY response.output_audio_transcript.done with "Function call: ..."
-   * (no response.function_call_arguments.done), proxy sends only ConversationText.
-   * Client does NOT receive FunctionCallRequest — so onFunctionCallRequest is never invoked.
-   * This documents E2E behavior when real API sends function-call info only in transcript.
+   * When upstream sends ONLY response.output_audio_transcript.done (no response.function_call_arguments.done),
+   * proxy does not send ConversationText (Issue #489 Phase 2: control events not mapped to ConversationText).
+   * Client does NOT receive FunctionCallRequest. This test asserts client gets SettingsApplied and never gets FCR.
    */
-  itMockOnly('sends only ConversationText when upstream sends only output_audio_transcript.done with "Function call: ..." (no FunctionCallRequest)', (done) => {
+  itMockOnly('sends no FunctionCallRequest when upstream sends only output_audio_transcript.done (no FCR)', (done) => {
     mockSendTranscriptOnlyAfterSession = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; content?: string }> = [];
+    let finished = false;
+    let lastError: Error | undefined;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      lastError = err;
+      try { client.close(); } catch { /* ignore */ }
+    };
+    const debug = process.env.DEBUG_OPENAI_PROXY_INTEGRATION === '1';
+    const t = setTimeout(() => {
+      const hasFCR = received.some((m) => m.type === 'FunctionCallRequest');
+      if (received.some((m) => m.type === 'SettingsApplied') && !hasFCR) finish();
+      else finish(new Error(`timeout: got FCR=${hasFCR}, received: ${received.map((m) => m.type).join(', ')}`));
+    }, 4000);
+    client.on('close', () => {
+      if (finished) {
+        if (lastError) done(lastError);
+        else done();
+      }
+    });
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      if (debug) process.stdout.write('[client] open, sent Settings (transcriptOnly test)\n');
     });
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string; content?: string };
-      if (msg.type) received.push({ type: msg.type, content: msg.content });
-      if (msg.type === 'ConversationText' && msg.content?.includes('Function call: get_current_datetime')) {
-        const hasFCR = received.some((m) => m.type === 'FunctionCallRequest');
-        expect(hasFCR).toBe(false);
-        expect(msg.content).toBe('Function call: get_current_datetime({ })');
-        client.close();
-        done();
+      if (msg.type) {
+        received.push({ type: msg.type, content: msg.content });
+        if (debug) process.stdout.write(`[client] received: ${msg.type}${msg.content ? ` content=${String(msg.content).slice(0, 50)}...` : ''}\n`);
       }
+      if (received.some((m) => m.type === 'FunctionCallRequest')) {
+        clearTimeout(t);
+        finish(new Error('expected no FunctionCallRequest'));
+        return;
+      }
+      // Success is asserted in the 4s timeout: SettingsApplied and no FCR
     });
-    client.on('error', done);
+    client.on('error', (err) => finish(err));
   }, 5000);
 
   /**
-   * API gap: When upstream sends ONLY response.output_text.done with "Function call: ..."
-   * (no response.function_call_arguments.done), proxy sends only ConversationText.
-   * Client does NOT receive FunctionCallRequest.
+   * Issue #497: Proxy must accumulate input_audio_transcription.delta per item_id and send Transcript with accumulated text.
+   * Mock sends three deltas ("Hel", "lo ", "world") for the same item_id; client must receive three Transcripts with
+   * transcript "Hel", "Hello ", "Hello world" (is_final: false).
    */
-  itMockOnly('sends only ConversationText when upstream sends only output_text.done with "Function call: ..." (no FunctionCallRequest)', (done) => {
-    mockSendOutputTextOnlyAfterSession = true;
+  itMockOnly('Issue #497: input_audio_transcription.delta accumulated per item_id → Transcript with accumulated text', (done) => {
+    mockSendTranscriptionDeltasForAccumulator = true;
+    const transcripts: Array<{ transcript: string; is_final: boolean }> = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
-    const received: Array<{ type: string; content?: string }> = [];
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    const t = setTimeout(() => {
+      try {
+        expect(transcripts.length).toBe(3);
+        expect(transcripts[0].transcript).toBe('Hel');
+        expect(transcripts[1].transcript).toBe('Hello ');
+        expect(transcripts[2].transcript).toBe('Hello world');
+        transcripts.forEach((x) => expect(x.is_final).toBe(false));
+        finish();
+      } catch (e) {
+        finish(e as Error);
+      }
+    }, 4000);
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
-      const msg = JSON.parse(data.toString()) as { type?: string; content?: string };
-      if (msg.type) received.push({ type: msg.type, content: msg.content });
-      if (msg.type === 'ConversationText' && msg.content?.includes('Function call: get_current_datetime')) {
-        const hasFCR = received.some((m) => m.type === 'FunctionCallRequest');
-        expect(hasFCR).toBe(false);
-        expect(msg.content).toBe('Function call: get_current_datetime({ })');
-        client.close();
-        done();
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; transcript?: string; is_final?: boolean };
+        if (msg.type === 'Transcript') {
+          transcripts.push({ transcript: msg.transcript ?? '', is_final: msg.is_final ?? false });
+          if (transcripts.length >= 3) {
+            clearTimeout(t);
+            try {
+              expect(transcripts[0].transcript).toBe('Hel');
+              expect(transcripts[1].transcript).toBe('Hello ');
+              expect(transcripts[2].transcript).toBe('Hello world');
+              transcripts.forEach((x) => expect(x.is_final).toBe(false));
+              finish();
+            } catch (e) {
+              finish(e as Error);
+            }
+          }
+        }
+      } catch {
+        // ignore
       }
     });
-    client.on('error', done);
+    client.on('close', () => {
+      if (!finished) {
+        clearTimeout(t);
+        finish(new Error(`Issue #497: connection closed with ${transcripts.length} Transcript(s); expected 3 accumulated`));
+      }
+    });
+    client.on('error', (err) => finish(err));
+  }, 5000);
+
+  /**
+   * Issue #496: When upstream sends input_audio_transcription.completed with start, duration, channel (or channel_index),
+   * proxy must pass those through to Transcript; use defaults only when API omits them.
+   */
+  itMockOnly('Issue #496: input_audio_transcription.completed with start/duration/channel → Transcript has actuals', (done) => {
+    mockSendTranscriptionCompletedWithActuals = true;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    const t = setTimeout(() => {
+      finish(new Error('Issue #496: timeout, did not receive Transcript with actuals'));
+    }, 5000);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as {
+          type?: string;
+          transcript?: string;
+          is_final?: boolean;
+          start?: number;
+          duration?: number;
+          channel?: number;
+          channel_index?: number[];
+        };
+        if (msg.type === 'Transcript' && msg.is_final === true) {
+          clearTimeout(t);
+          expect(msg.transcript).toBe('Hello world');
+          expect(msg.start).toBe(1.5);
+          expect(msg.duration).toBe(2.25);
+          expect(msg.channel).toBe(1);
+          expect(msg.channel_index).toEqual([1]);
+          finish();
+        }
+      } catch (e) {
+        finish(e as Error);
+      }
+    });
+    client.on('close', () => {
+      if (!finished) {
+        clearTimeout(t);
+        finish(new Error('Issue #496: connection closed before receiving Transcript'));
+      }
+    });
+    client.on('error', (err) => finish(err));
+  }, 6000);
+
+  /**
+   * Issue #499 (Deepgram parity): When upstream sends conversation.item.added with assistant item whose content is only
+   * a function_call part, client must receive ConversationText (assistant) with content like "Function call: name(args)".
+   */
+  itMockOnly('Issue #499: conversation.item.added with only function_call part → ConversationText (assistant) for parity', (done) => {
+    mockSendConversationItemAddedFunctionCallOnly = true;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    const t = setTimeout(() => {
+      finish(new Error('Issue #499: timeout, did not receive ConversationText (assistant) for function_call-only item'));
+    }, 5000);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string };
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          const content = msg.content ?? '';
+          if (content.includes('Function call') && content.includes('get_current_time')) {
+            clearTimeout(t);
+            finish();
+          }
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('close', () => {
+      if (!finished) {
+        clearTimeout(t);
+        finish(new Error('Issue #499: connection closed before receiving ConversationText'));
+      }
+    });
+    client.on('error', (err) => finish(err));
+  }, 6000);
+
+  /**
+   * Upstream requirement: use conversation.item for finalized message and conversation history; response.output_text.done is control only.
+   * When upstream sends ONLY response.output_text.done (no conversation.item.added/.done for assistant), client must NOT receive ConversationText (assistant).
+   * Also: no FunctionCallRequest. Asserts SettingsApplied, AgentAudioDone/AgentDone, and no FCR and no ConversationText (assistant).
+   */
+  itMockOnly('Upstream requirement: when upstream sends only output_text.done (no item), client does not receive ConversationText (assistant)', (done) => {
+    mockSendOutputTextOnlyAfterSession = true;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const received: Array<{ type: string; content?: string; role?: string }> = [];
+    let finished = false;
+    let lastError: Error | undefined;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      lastError = err;
+      try { client.close(); } catch { /* ignore */ }
+    };
+    const debug = process.env.DEBUG_OPENAI_PROXY_INTEGRATION === '1';
+    const t = setTimeout(() => {
+      const hasFCR = received.some((m) => m.type === 'FunctionCallRequest');
+      const hasConvTextAssistant = received.some((m) => m.type === 'ConversationText' && m.role === 'assistant');
+      const hasDone = received.some((m) => m.type === 'AgentAudioDone' || m.type === 'AgentDone');
+      if (hasConvTextAssistant) {
+        finish(new Error('Upstream requirement: must not send ConversationText (assistant) from response.output_text.done when no conversation.item event; received: ' + JSON.stringify(received.filter((m) => m.type === 'ConversationText'))));
+        return;
+      }
+      if (received.some((m) => m.type === 'SettingsApplied') && !hasFCR && hasDone) finish();
+      else finish(new Error(`timeout: FCR=${hasFCR} convTextAssistant=${hasConvTextAssistant} done=${hasDone}, received: ${received.map((m) => m.type + (m.role ? `(${m.role})` : '')).join(', ')}`));
+    }, 4000);
+    client.on('close', () => {
+      if (finished) {
+        if (lastError) done(lastError);
+        else done();
+      }
+    });
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      if (debug) process.stdout.write('[client] open, sent Settings (outputTextOnly test)\n');
+    });
+    client.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString()) as { type?: string; content?: string; role?: string };
+      if (msg.type) {
+        received.push({ type: msg.type, content: msg.content, role: msg.role });
+        if (debug) process.stdout.write(`[client] received: ${msg.type}${msg.role ? ` role=${msg.role}` : ''}${msg.content ? ` content=${String(msg.content).slice(0, 50)}...` : ''}\n`);
+      }
+      if (received.some((m) => m.type === 'FunctionCallRequest')) {
+        clearTimeout(t);
+        finish(new Error('expected no FunctionCallRequest'));
+        return;
+      }
+      if (received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')) {
+        clearTimeout(t);
+        finish(new Error('Upstream requirement: must not send ConversationText (assistant) from response.output_text.done only'));
+        return;
+      }
+      if (received.some((m) => m.type === 'SettingsApplied') && received.some((m) => m.type === 'AgentAudioDone' || m.type === 'AgentDone')) {
+        clearTimeout(t);
+        finish();
+      }
+    });
+    client.on('error', (err) => finish(err));
   }, 5000);
 
   /**
    * When upstream sends output_audio_transcript.done then response.function_call_arguments.done,
-   * proxy sends ConversationText (from transcript), then FunctionCallRequest, then ConversationText (from .done).
-   * Client receives CT, FCR, CT — so component gets both transcript display and function call handler.
+   * proxy sends AgentStartedSpeaking then FunctionCallRequest (Issue #489 Phase 2: no ConversationText from these control events).
+   * This test asserts client receives SettingsApplied, then AgentStartedSpeaking, then FunctionCallRequest in order.
    */
-  itMockOnly('sends ConversationText then FunctionCallRequest then ConversationText when upstream sends transcript.done then function_call_arguments.done', (done) => {
+  itMockOnly('sends AgentStartedSpeaking then FunctionCallRequest when upstream sends transcript.done then function_call_arguments.done', (done) => {
     mockSendTranscriptThenFunctionCallAfterSession = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const receivedOrder: Array<{ type: string; content?: string }> = [];
+    let finished = false;
+    let lastError: Error | undefined;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      lastError = err;
+      try { client.close(); } catch { /* ignore */ }
+    };
+    const debug = process.env.DEBUG_OPENAI_PROXY_INTEGRATION === '1';
+    const t = setTimeout(() => finish(new Error('timeout: expected SettingsApplied, AgentStartedSpeaking, FunctionCallRequest')), 4000);
+    client.on('close', () => {
+      if (finished) {
+        if (lastError) done(lastError);
+        else done();
+      }
+    });
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      if (debug) process.stdout.write('[client] open, sent Settings (transcriptThenFCR test)\n');
     });
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string; content?: string };
-      if (msg.type) receivedOrder.push({ type: msg.type, content: msg.content });
-      const fcrIndex = receivedOrder.findIndex((m) => m.type === 'FunctionCallRequest');
-      const ctIndices = receivedOrder.map((m, i) => (m.type === 'ConversationText' ? i : -1)).filter((i) => i >= 0);
-      if (fcrIndex >= 0 && ctIndices.length >= 2) {
-        expect(ctIndices[0]).toBeLessThan(fcrIndex);
-        expect(fcrIndex).toBeLessThan(ctIndices[1]);
-        client.close();
-        done();
+      if (msg.type) {
+        receivedOrder.push({ type: msg.type, content: msg.content });
+        if (debug) process.stdout.write(`[client] received: ${msg.type}${msg.content ? ` content=${String(msg.content).slice(0, 50)}...` : ''}\n`);
+      }
+      const settingsIdx = receivedOrder.findIndex((m) => m.type === 'SettingsApplied');
+      const assIdx = receivedOrder.findIndex((m) => m.type === 'AgentStartedSpeaking');
+      const fcrIdx = receivedOrder.findIndex((m) => m.type === 'FunctionCallRequest');
+      if (settingsIdx >= 0 && assIdx >= 0 && fcrIdx >= 0 && settingsIdx < assIdx && assIdx < fcrIdx) {
+        clearTimeout(t);
+        finish();
       }
     });
-    client.on('error', done);
+    client.on('error', (err) => finish(err));
   }, 5000);
 
   it('echoes user message as ConversationText (role user) when client sends InjectUserMessage', (done) => {
@@ -1767,12 +2629,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 5000);
 
   /**
-   * Issue #406: Proxy must send conversation.item.create (context) only after receiving session.updated.
-   * Mock enforces this by delaying session.updated; if proxy sends context before waiting, protocol error is recorded.
+   * Issue #489: Prior-session context is sent in session.update instructions only (not as conversation.item.create).
+   * Proxy must send session.update with instructions containing "Previous conversation:" and the context messages.
+   * No conversation.item.create for context (avoids API echo and duplicate messages in UI).
    */
-  itMockOnly('sends Settings.agent.context.messages as conversation.item.create to upstream', (done) => {
+  itMockOnly('sends Settings.agent.context in session.update instructions (no conversation.item.create for context)', (done) => {
     mockReceived.length = 0;
     receivedConversationItems.length = 0;
+    receivedSessionUpdatePayloads.length = 0;
     protocolErrors.length = 0;
     mockEnforceSessionBeforeContext = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
@@ -1796,12 +2660,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         expect(protocolErrors).toHaveLength(0);
         mockEnforceSessionBeforeContext = false;
         expect(mockReceived.map((m) => m.type)).toContain('session.update');
+        expect(receivedSessionUpdatePayloads.length).toBeGreaterThanOrEqual(1);
+        const sessionUpdate = receivedSessionUpdatePayloads[0];
+        const instructions = typeof sessionUpdate?.session?.instructions === 'string' ? sessionUpdate.session.instructions : '';
+        expect(instructions).toContain('Previous conversation:');
+        expect(instructions).toContain('user: Hello');
+        expect(instructions).toContain('assistant: Hi there!');
         const itemCreates = receivedConversationItems.filter((m) => m.type === 'conversation.item.create');
-        expect(itemCreates.length).toBe(2);
-        const userItem = itemCreates.find((m) => m.item?.type === 'message' && m.item?.role === 'user');
-        const assistantItem = itemCreates.find((m) => m.item?.type === 'message' && m.item?.role === 'assistant');
-        expect(userItem).toBeDefined();
-        expect(assistantItem).toBeDefined();
+        expect(itemCreates.length).toBe(0);
         client.close();
         done();
       }
@@ -1821,6 +2687,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    */
   (useRealAPIs ? it : it.skip)('Issue #480 real-API: Settings with context.messages + follow-up yields contextualized response (USE_REAL_APIS=1)', (done) => {
     let finished = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const errorsReceived: string[] = [];
     let assistantContent: string | null = null;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
@@ -1828,6 +2695,10 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       try { client.close(); } catch { /* ignore */ }
       if (err) done(err);
       else done();
@@ -1874,7 +2745,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', (err) => finish(err));
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       if (!finished) {
         finish(new Error(
           `Issue #480 real-API: timeout. Context may be ignored by model. ` +
@@ -1950,7 +2821,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockReceived.length = 0;
     protocolErrors.length = 0;
     const greeting = 'Hello! How can I help you today?';
-    const clientMessages: Array<{ type: string; role?: string; content?: string }> = [];
+    const clientMessages: Array<{ type?: string; role?: string; content?: string }> = [];
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
@@ -2157,12 +3028,13 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   });
 
   /**
-   * Issue #414: With context messages + greeting, only context items are sent to upstream.
-   * Greeting is text-only to client. No conversation.item.create for greeting, no response.create.
+   * Issue #489: With context + greeting, context is in session.update instructions only (no conversation.item.create).
+   * When context is present we do not send greeting to client again (they already have it). No response.create.
    */
-  itMockOnly('Issue #414 TDD: context + greeting sends only context items to upstream (greeting is text-only)', (done) => {
+  itMockOnly('Issue #414 TDD: context + greeting — context in instructions only, no greeting sent when context present (no item creates)', (done) => {
     mockReceived.length = 0;
     receivedConversationItems.length = 0;
+    receivedSessionUpdatePayloads.length = 0;
     protocolErrors.length = 0;
     mockSendItemDoneAfterAdded = true;
     mockEnforceSessionBeforeContext = true;
@@ -2205,11 +3077,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       cleanup();
       try {
         expect(receivedSettingsApplied).toBe(true);
-        expect(receivedGreetingText).toBe(true);
-        // Only the context item should have been sent to upstream (1 context, 0 greeting)
+        expect(receivedGreetingText).toBe(false);
         const itemCreateCount = mockReceived.filter((m) => m.type === 'conversation.item.create').length;
-        expect(itemCreateCount).toBe(1); // 1 context only — greeting is NOT sent to upstream
-        // No response.create
+        expect(itemCreateCount).toBe(0);
+        expect(receivedSessionUpdatePayloads.length).toBeGreaterThanOrEqual(1);
+        const instructions = typeof receivedSessionUpdatePayloads[0]?.session?.instructions === 'string'
+          ? receivedSessionUpdatePayloads[0].session.instructions : '';
+        expect(instructions).toContain('Previous conversation:');
+        expect(instructions).toContain('user: Previous question');
         const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
         expect(responseCreateCount).toBe(0);
         expect(protocolErrors).toHaveLength(0);
@@ -2596,28 +3471,32 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
-   * Protocol §5: Any other upstream event forwarded to client as text.
+   * Unmapped upstream events: proxy sends Error (unmapped_upstream_event), does not forward as text.
+   * Mock sends conversation.created (unmapped) after session.updated; client must receive Error with code unmapped_upstream_event.
    */
-  itMockOnly('Protocol: other upstream event (e.g. response.created) forwarded to client as text', (done) => {
-    mockSendResponseCreatedAfterSessionUpdated = true;
+  itMockOnly('Protocol: unmapped upstream event (e.g. conversation.created) yields Error (unmapped_upstream_event)', (done) => {
+    mockSendUnmappedEventAfterSessionUpdated = true;
     let finished = false;
-    const clientMessages: Array<{ type?: string }> = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const clearFallback = scheduleFallbackTimeout(5000, () => {
+      if (finished) return;
+      finished = true;
+      client.close();
+      done(new Error('Expected to receive Error (unmapped_upstream_event) from proxy within 5s'));
+    });
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
       try {
-        const msg = JSON.parse(data.toString()) as { type?: string; response_id?: string };
-        if (msg && typeof msg === 'object' && typeof msg.type === 'string') {
-          clientMessages.push({ type: msg.type });
-          if (msg.type === 'response.created') {
-            expect(msg.response_id).toBe('r1');
-            finished = true;
-            client.close();
-            done();
-          }
+        const msg = JSON.parse(data.toString()) as { type?: string; code?: string; description?: string };
+        if (msg?.type === 'Error' && msg.code === 'unmapped_upstream_event') {
+          expect(msg.description).toContain('conversation.created');
+          finished = true;
+          clearFallback();
+          client.close();
+          done();
         }
       } catch {
         // ignore
@@ -2626,23 +3505,12 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('error', (err) => {
       if (!finished) done(err);
     });
-    setTimeout(() => {
-      if (finished) return;
-      finished = true;
-      client.close();
-      const hasResponseCreated = clientMessages.some((m) => m.type === 'response.created');
-      if (!hasResponseCreated) {
-        done(new Error('Expected to receive response.created from proxy (other upstream events must be forwarded as text)'));
-      } else {
-        done();
-      }
-    }, 5000);
   }, 8000);
 
   /**
-   * Protocol §1.2 (optional): conversation.item.added / .done received as text (not binary).
+   * Issue #500: Proxy must not forward raw conversation.item.created/.added/.done to client; only mapped ConversationText (and control) are sent.
    */
-  itMockOnly('Protocol: conversation.item.added or .done received by client as text frame', (done) => {
+  itMockOnly('Issue #500: client does not receive raw conversation.item.added/created/done (only mapped ConversationText)', (done) => {
     mockSendOutputAudioBeforeText = true;
     const receivedTextTypes: string[] = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
@@ -2658,10 +3526,10 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hi' }));
           }
           if (msg.type === 'ConversationText' && msg.role === 'assistant') {
-            const hasItemEvent = receivedTextTypes.some(
+            const hasRawItemEvent = receivedTextTypes.some(
               (t) => t === 'conversation.item.added' || t === 'conversation.item.done' || t === 'conversation.item.created'
             );
-            expect(hasItemEvent).toBe(true);
+            expect(hasRawItemEvent).toBe(false);
             client.close();
             done();
           }
@@ -2682,9 +3550,26 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; role?: string }> = [];
     let finished = false;
+    const clearFallback = scheduleFallbackTimeout(5000, () => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      const startedIdx = received.findIndex((m) => m.type === 'AgentStartedSpeaking');
+      const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+      try {
+        expect(received.some((m) => m.type === 'AgentStartedSpeaking')).toBe(true);
+        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
+        expect(startedIdx).toBeLessThan(ctIdx);
+      } catch (e) {
+        done(e as Error);
+        return;
+      }
+      done();
+    });
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
+      clearFallback();
       try { client.close(); } catch { /* ignore */ }
       if (err) done(err);
       else done();
@@ -2712,22 +3597,6 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         // ignore
       }
     });
-    setTimeout(() => {
-      if (finished) return;
-      finished = true;
-      const startedIdx = received.findIndex((m) => m.type === 'AgentStartedSpeaking');
-      const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
-      try {
-        expect(received.some((m) => m.type === 'AgentStartedSpeaking')).toBe(true);
-        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
-        expect(startedIdx).toBeLessThan(ctIdx);
-      } catch (e) {
-        done(e as Error);
-        return;
-      }
-      client.close();
-      done();
-    }, 5000);
     client.on('error', (err) => finish(err));
   }, 8000);
 
@@ -2739,9 +3608,23 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; role?: string }> = [];
     let finished = false;
+    const clearFallback = scheduleFallbackTimeout(5000, () => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      try {
+        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
+        expect(received.some((m) => m.type === 'AgentAudioDone')).toBe(true);
+      } catch (e) {
+        done(e as Error);
+        return;
+      }
+      done();
+    });
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
+      clearFallback();
       try { client.close(); } catch { /* ignore */ }
       if (err) done(err);
       else done();
@@ -2768,41 +3651,42 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         finish(e as Error);
       }
     });
-    setTimeout(() => {
-      if (finished) return;
-      finished = true;
-      try {
-        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
-        expect(received.some((m) => m.type === 'AgentAudioDone')).toBe(true);
-      } catch (e) {
-        done(e as Error);
-        return;
-      }
-      client.close();
-      done();
-    }, 5000);
     client.on('error', (err) => finish(err));
   }, 8000);
 
   /**
    * Issue #482 (voice-commerce #956): When upstream sends error (idle_timeout), the client must receive
    * ConversationText (assistant) before Error so the UI can show the assistant bubble before the connection
-   * closes. Runs with real API first (USE_REAL_APIS=1), then with mock. Real API: send message, wait for
-   * response and idle_timeout; assert order. Mock: sends error then output_text.done; same assertion.
+   * closes. Runs only when USE_REAL_APIS=1 and the real API is known to send server idle_timeout in this scenario.
+   * Mock: the same assertion is covered by itMockOnly('Issue #482: client receives ConversationText (assistant) before Error (idle_timeout) when upstream sends error before output_text.done').
+   *
+   * Skip when: (1) mock mode (upstream does not send idle_timeout), or (2) real API has no server timeout
+   * (NO_SERVER_TIMEOUT_MS, e.g. OpenAI with turn_detection: null). Otherwise the test would wait 65s and fail
+   * with errIdx === -1 because the client never receives Error (idle_timeout).
    */
-  (useRealAPIs ? it : it.skip)('Issue #482 real-API: client receives ConversationText (assistant) before Error (idle_timeout) (USE_REAL_APIS=1)', (done) => {
+  const realAPIServerTimeoutMs = NO_SERVER_TIMEOUT_MS; // OpenAI with turn_detection: null has no server timeout
+  (useRealAPIs && realAPIServerTimeoutMs !== NO_SERVER_TIMEOUT_MS ? it : it.skip)('Issue #482 real-API: client receives ConversationText (assistant) before Error (idle_timeout) (USE_REAL_APIS=1)', (done) => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; role?: string; code?: string }> = [];
     let finished = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       try { client.close(); } catch { /* ignore */ }
       if (err) done(err);
       else done();
     };
+    // Include idleTimeoutMs so proxy can send it when API supports it; server may still use its default when turn_detection is null.
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Say hi briefly.' } } }));
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: { think: { prompt: 'Say hi briefly.' }, idleTimeoutMs: 15000 },
+      }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -2813,7 +3697,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           if (msg.type === 'SettingsApplied') {
             client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Hi' }));
           }
-          const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === 'idle_timeout');
+          const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === SERVER_TIMEOUT_ERROR_CODE);
           if (errIdx >= 0) {
             const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
             try {
@@ -2830,23 +3714,95 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         // ignore
       }
     });
-    setTimeout(() => {
+    const serverTimeoutDeadlineMs = DEFAULT_SERVER_TIMEOUT_MS + 5000;
+    timeoutId = setTimeout(() => {
       if (finished) return;
       finished = true;
-      const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
-      const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === 'idle_timeout');
-      try {
-        expect(errIdx).toBeGreaterThanOrEqual(0);
-        expect(ctIdx).toBeGreaterThanOrEqual(0);
-        expect(ctIdx).toBeLessThan(errIdx);
-      } catch (e) {
-        done(e as Error);
-        return;
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
       }
-      client.close();
-      done();
-    }, 25000);
+      try { client.close(); } catch { /* ignore */ }
+      // Defer assert + done to next tick so this callback returns and the timer handle is released (avoids open handle in --detectOpenHandles).
+      setImmediate(() => {
+        const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+        const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === SERVER_TIMEOUT_ERROR_CODE);
+        try {
+          expect(errIdx).toBeGreaterThanOrEqual(0);
+          expect(ctIdx).toBeGreaterThanOrEqual(0);
+          expect(ctIdx).toBeLessThan(errIdx);
+        } catch (e) {
+          done(e as Error);
+          return;
+        }
+        done();
+      });
+    }, serverTimeoutDeadlineMs);
     client.on('error', (err) => finish(err));
+  }, DEFAULT_SERVER_TIMEOUT_MS + 10000);
+
+  /**
+   * Issue #489 PROTOCOL-ASSURANCE-GAPS: With real API, for a turn (InjectUserMessage → response), client receives
+   * AgentStartedSpeaking before ConversationText (assistant). Asserts message order for a single turn.
+   * USE_REAL_APIS=1.
+   */
+  (useRealAPIs ? it : it.skip)('Issue #489 real-API: client receives AgentStartedSpeaking before ConversationText (assistant) for a turn', (done) => {
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const receivedOrder: Array<{ type: string; role?: string }> = [];
+    let finished = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Reply in one short sentence.' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (!looksLikeJsonObject(data)) return; // Do not parse binary (PCM); PROTOCOL-SPECIFICATION §5
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
+        if (msg.type) {
+          receivedOrder.push({ type: msg.type, role: msg.role });
+          if (msg.type === 'SettingsApplied') {
+            client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hello.' }));
+          }
+          if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+            const idxAgentStartedSpeaking = receivedOrder.findIndex((m) => m.type === 'AgentStartedSpeaking');
+            const idxConversationText = receivedOrder.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+            if (idxAgentStartedSpeaking >= 0 && idxConversationText >= 0 && idxAgentStartedSpeaking < idxConversationText) {
+              finish();
+            } else if (idxConversationText >= 0) {
+              finish(new Error(
+                `Issue #489: AgentStartedSpeaking not before ConversationText (assistant). ` +
+                `Order: ${receivedOrder.map((m) => m.type + (m.role ? `(${m.role})` : '')).join(', ')}`,
+              ));
+            }
+          }
+        }
+      } catch (e) {
+        // Parse errors must surface so we can correct them; never skip (PROTOCOL-SPECIFICATION §5)
+        finish(e as Error);
+      }
+    });
+    client.on('error', (err) => finish(err));
+    timeoutId = setTimeout(() => {
+      if (!finished) {
+        const hasCT = receivedOrder.some((m) => m.type === 'ConversationText' && m.role === 'assistant');
+        const hasASS = receivedOrder.some((m) => m.type === 'AgentStartedSpeaking');
+        finish(new Error(
+          `Issue #489: timeout; got ConversationText(assistant)=${hasCT} AgentStartedSpeaking=${hasASS}; ` +
+          `order: ${receivedOrder.map((m) => m.type + (m.role ? `(${m.role})` : '')).join(', ')}`,
+        ));
+      }
+    }, 25000);
   }, 30000);
 
   /**
@@ -2858,9 +3814,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; role?: string; code?: string }> = [];
     let finished = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       try { client.close(); } catch { /* ignore */ }
       if (err) done(err);
       else done();
@@ -2888,21 +3849,27 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         // ignore
       }
     });
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       if (finished) return;
       finished = true;
-      const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
-      const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === 'idle_timeout');
-      try {
-        expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
-        expect(received.some((m) => m.type === 'Error' && m.code === 'idle_timeout')).toBe(true);
-        expect(ctIdx).toBeLessThan(errIdx);
-      } catch (e) {
-        done(e as Error);
-        return;
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
       }
-      client.close();
-      done();
+      try { client.close(); } catch { /* ignore */ }
+      setImmediate(() => {
+        const ctIdx = received.findIndex((m) => m.type === 'ConversationText' && m.role === 'assistant');
+        const errIdx = received.findIndex((m) => m.type === 'Error' && m.code === 'idle_timeout');
+        try {
+          expect(received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')).toBe(true);
+          expect(received.some((m) => m.type === 'Error' && m.code === 'idle_timeout')).toBe(true);
+          expect(ctIdx).toBeLessThan(errIdx);
+        } catch (e) {
+          done(e as Error);
+          return;
+        }
+        done();
+      });
     }, 5000);
     client.on('error', (err) => finish(err));
   }, 8000);

@@ -28,17 +28,27 @@ If the proxy never sends `SettingsApplied` (e.g. because the upstream closes bef
 
 The component delivers **`FunctionCallRequest`** to the host via `onFunctionCallRequest`. The **proxy** only forwards messages; it does **not** execute function logic. For production, the host should execute function calls on the **app backend** (e.g. HTTP `POST /function-call`), not in the browser: frontend forwards the request to the backend, backend runs common handlers (neither Deepgram- nor OpenAI-specific), frontend sends `FunctionCallResponse` with the result. See [Backend function-call contract](./BACKEND-FUNCTION-CALL-CONTRACT.md).
 
-## Idle timeout and agent completion (AgentAudioDone / text-only path)
+## Codes over message text
 
-The component starts its **idle timeout** (after which it may close the connection) only when the agent is considered **idle** — i.e. not speaking and not playing audio. That transition can happen in two ways:
+**Any proxy** should prefer **structured codes and fields** over **message text** for control flow and mapping:
 
-1. **Audio path:** The proxy sends **`AgentAudioDone`** after the agent has finished sending audio for a turn (e.g. after a response or greeting that included binary audio). The component then transitions to idle and starts the idle timer.
-2. **Text-only path:** When the proxy sends **`ConversationText` (role: assistant)** and **no** binary audio follows (e.g. greeting as text only), the component uses an internal path: after a short defer, if the agent is still in “listening” (no `AgentStartedSpeaking` received), it treats agent activity as ended, transitions to idle, and starts the idle timer. So the proxy **does not** need to send `AgentAudioDone` for text-only greeting or text-only turns.
+- **Codes from the API:** When the upstream (e.g. OpenAI Realtime API) sends events or errors, the proxy must map them using the API's **structured payload** (e.g. `error.code`, event types, defined fields), not by parsing or matching text strings in messages. Use the codes the API emits for all error and event mapping (e.g. `idle_timeout`, `session_max_duration`, and any others).
+- **Codes from the proxy:** When the proxy sends messages to the component (e.g. `Error` with `code`), it must use **protocol-defined codes** (e.g. `idle_timeout`, `session_max_duration`), not free-form or human-readable text for the code field.
+- **Avoid message text if at all possible:** The proxy should avoid using text strings from messages (from the API or from the client) for control flow, branching, or mapping. Prefer event types, codes, and other structured fields so behavior is stable if wording or locale changes.
+
+See [PROTOCOL-AND-MESSAGE-ORDERING.md](../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) §3.9 and [PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE.md](../issues/ISSUE-470/PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE.md) requirement 9.
+
+## Idle timeout and agent completion (AgentDone / AgentAudioDone / text-only path)
+
+The component starts its **idle timeout** (after which it may close the connection) only when the agent is **done** for the turn — i.e. not speaking and not playing audio. That transition can happen in two ways:
+
+1. **Audio path:** The proxy sends **`AgentDone`** (semantic "agent done"; preferred) and/or **`AgentAudioDone`** (legacy: **receipt complete only**, not playback complete). The component accepts both and transitions to idle. See [Agent-done semantics and naming](../issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md). For v2v agents, the proxy should trap the signal (e.g. observe first/last binary audio) and send **AgentDone** so doneness is not left to inference.
+2. **Text-only path:** When the proxy sends **`ConversationText` (role: assistant)** and **no** binary audio follows (e.g. greeting as text only), the component uses an internal path: after a short defer, if the agent is still in “listening” (no `AgentStartedSpeaking` received), it treats agent activity as ended, transitions to idle, and starts the idle timer. This is unreliable for v2v; prefer sending **AgentDone** when the proxy can.
 
 **Proxy guidance:**
 
-- **When your upstream sends both audio and then ConversationText (assistant):** Send `AgentAudioDone` after that ConversationText so the component can transition to idle and the idle timeout can start. Do **not** send `AgentAudioDone` before any audio has been forwarded for that turn, or the component may start the timer and then receive audio and cancel it.
-- **When your upstream sends only ConversationText (assistant)** (e.g. greeting as text, no TTS): You may omit `AgentAudioDone`; the component’s text-only path will transition to idle. Our Deepgram proxy follows this: it sends `AgentAudioDone` after the first assistant `ConversationText` only if it has already forwarded at least one binary message in that connection. See `packages/voice-agent-backend/src/attach-upgrade.js` and [E2E-FAILURES-RESOLUTION.md](../issues/ISSUE-489/E2E-FAILURES-RESOLUTION.md) for the rationale and tests.
+- **When your upstream sends both audio and then ConversationText (assistant):** Send **AgentDone** when you know the agent is done for the turn (e.g. when upstream signals completion and you have forwarded everything). Also send **AgentAudioDone** for backward compatibility; in comments always describe it as "receipt complete," never "playback complete." Do **not** send either before any audio has been forwarded for that turn, or the component may start the timer and then receive audio and cancel it.
+- **When your upstream sends only ConversationText (assistant)** (e.g. greeting as text, no TTS): You may omit `AgentAudioDone`; the component’s text-only path will transition to idle. Our Deepgram proxy follows this: it sends `AgentAudioDone` after the first assistant `ConversationText` only if it has already forwarded at least one binary message in that connection. For v2v, send **AgentDone** when you can trap the signal (see [Agent-done semantics](../issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md)). See also `packages/voice-agent-backend/src/attach-upgrade.js` and [E2E-FAILURES-RESOLUTION.md](../issues/ISSUE-489/E2E-FAILURES-RESOLUTION.md) for the rationale and tests.
 
 ## Summary
 
@@ -47,8 +57,10 @@ The component starts its **idle timeout** (after which it may close the connecti
 | **Protocol** | Component speaks one protocol (Deepgram Voice Agent message types). Proxies either forward it (Deepgram) or translate to/from another API (e.g. OpenAI Realtime). |
 | **Readiness** | Session is ready for the first user message only after the component has received **SettingsApplied** (or equivalent). Proxies must send it and keep the connection open until the host can send. |
 | **First message** | The component will not send `InjectUserMessage` until Settings are confirmed. Proxies must not close the connection before sending `SettingsApplied`. |
-| **Idle timeout** | Component starts idle timer only when agent is idle. Send **AgentAudioDone** after response/greeting **audio**; for **text-only** greeting or turns, the component transitions to idle via its text-only path — proxy may omit AgentAudioDone. |
+| **Codes over message text** | Use structured codes from API and protocol-defined codes from proxy; avoid using message text for control flow or mapping. See "Codes over message text" above. |
+| **Idle timeout** | Component starts idle timer only when agent is done for the turn. Send **AgentDone** (semantic) when the proxy can trap the signal; **AgentAudioDone** (receipt only, legacy) for compatibility. For **text-only** or v2v see [Agent-done semantics](../issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md). |
 | **Function calls** | Host should execute functions on the app backend (proxies not involved). Frontend forwards `FunctionCallRequest` → backend executes → frontend sends `FunctionCallResponse`. |
+| **Message sources (translation proxy)** | UtteranceEnd, ConversationText (assistant), and Transcript come from mapped upstream events only; proxy does not forward raw upstream events. See "Proxy → component: message sources (Epic #493)" above. |
 
 Tests that enforce this contract (for either proxy):
 
@@ -56,3 +68,17 @@ Tests that enforce this contract (for either proxy):
 - **E2E**: `test-app/tests/e2e/readiness-contract-e2e.spec.js` (runs with `E2E_BACKEND=openai` or `E2E_BACKEND=deepgram`)
 
 See [Issue #406](../issues/ISSUE-406/README.md) for context on readiness and conversation-after-refresh with the OpenAI provider.
+
+## Proxy → component: message sources (Epic #493)
+
+When using a **translation proxy** (e.g. OpenAI Realtime), the component receives the same protocol messages; the proxy maps upstream events to that protocol. The following describes where each relevant message type comes from so component and app developers know what to expect. See [OPENAI-PROXY-EVENT-MAP-GAPS](../issues/OPENAI-PROXY-EVENT-MAP-GAPS/EPIC.md) (Epic #493) and [PROTOCOL-SPECIFICATION](../../tests/integration/PROTOCOL-SPECIFICATION.md).
+
+| Message / behavior | Source (translation proxy) |
+|--------------------|----------------------------|
+| **UtteranceEnd** | Mapped from upstream VAD/speech_stopped. The proxy sends `channel` and `last_word_end` from upstream when present (Issue #494); uses defaults when the API omits them. |
+| **ConversationText (assistant)** | **Only** from **conversation.item** (created/added/done) or greeting. Assistant text is **not** sent from control events such as `response.output_text.done` (upstream requirement; Issue #498, #500). Content includes text parts and **function_call** parts formatted as `"Function call: name(args)"` for parity with Deepgram (Issue #499). |
+| **Transcript** (user) | From **conversation.item.input_audio_transcription.completed** (final) and **.delta** (interim). The proxy accumulates deltas per item_id and sends interim Transcript with accumulated text (Issue #497). When the upstream sends them, `start`, `duration`, `channel`, `channel_index`, and `alternatives` are passed through (Issue #496). These events are emitted when transcription is enabled and audio is committed, including when server VAD is disabled (`turn_detection: null`) (Issue #495). |
+| **Raw upstream events** | The proxy **does not** forward raw upstream JSON (e.g. raw `conversation.item.added`) to the client. Only mapped component messages (ConversationText, Transcript, UtteranceEnd, etc.) and control messages (SettingsApplied, AgentAudioDone, Error) are sent (Issue #500). |
+| **Unmapped upstream events** | If the upstream sends an event type the proxy does not map, the proxy sends **Error** to the client with `code: 'unmapped_upstream_event'` (treated as a warning; goal is to map all events). It does not forward the raw event as text. |
+
+Tests that cover these behaviors: see [PROTOCOL-SPECIFICATION](../../tests/integration/PROTOCOL-SPECIFICATION.md) §1 and §3 and the integration test file `openai-proxy-integration.test.ts`.

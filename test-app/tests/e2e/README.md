@@ -1,5 +1,27 @@
 # E2E Tests for Deepgram Voice Agent
 
+## Working directory: run E2E from test-app only
+
+**All E2E commands in this document must be run from the `test-app` directory.** The Playwright config (`tests/playwright.config.mjs`), `testDir`, and env loading are defined relative to test-app. Running Playwright from the repository root (e.g. the root `npm run test:e2e`) uses a different cwd and can run the full suite with ambiguous paths; it is error-prone for targeted runs. **Standard practice: `cd test-app` first, then run any `npm run test:e2e` variant.**
+
+## Running only specific specs (not the full suite)
+
+- **Full suite:** From test-app, `npm run test:e2e` with no further arguments runs **all** E2E specs (e.g. 210+ tests). Use this for CI or full regression.
+- **Specific specs:** From test-app, pass spec file names after `--` so only those specs run. Example — only the OpenAI proxy E2E spec and the issue-373 idle-timeout spec:
+  ```bash
+  cd test-app
+  npm run test:e2e -- openai-proxy-e2e.spec.js issue-373-idle-timeout-during-function-calls.spec.js
+  ```
+- **With real APIs and existing server:** Start the backend and dev server first (see below), then from test-app:
+  ```bash
+  E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js issue-373-idle-timeout-during-function-calls.spec.js
+  ```
+- **Single spec:** `npm run test:e2e -- openai-proxy-e2e.spec.js`
+- **Only the 2 failing tests (6 and 6b):** `npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6. Simple function calling|6b. Issue #462"`
+- **One test by name:** `npm run test:e2e -- openai-proxy-e2e.spec.js --grep "Simple function calling"`
+
+Do **not** run `npm run test:e2e` without spec names when you only want to verify a subset (e.g. previously failing tests); that runs the entire suite.
+
 ## ⚠️ IMPORTANT: Real API Key Required
 
 These E2E tests use **REAL Deepgram WebSocket connections**, not mocks. This provides authentic integration testing but requires a valid Deepgram API key.
@@ -38,12 +60,16 @@ VITE_DEEPGRAM_VOICE=aura-asteria-en
 ```
 
 ### 3. Run Tests
+
+All commands below are from the **test-app** directory.
+
 ```bash
+cd test-app
+
 # Run all E2E tests (foreground, blocks terminal)
 npm run test:e2e
 
 # Run all E2E tests and capture output to a file (recommended for long runs)
-# Output is printed and saved to e2e-run.log in the project root
 npm run test:e2e:log
 
 # Run all E2E tests in background (monitorable, for long test runs)
@@ -52,16 +78,17 @@ npm run test:e2e:background
 # Monitor test progress (in another terminal)
 npm run test:e2e:monitor
 
-# Run specific test file
-npx playwright test tests/e2e/text-only-conversation.spec.js
+# Run only specific spec(s) (recommended for debugging or verifying a subset)
+npm run test:e2e -- text-only-conversation.spec.js
+npm run test:e2e -- openai-proxy-e2e.spec.js issue-373-idle-timeout-during-function-calls.spec.js
 
 # Run with UI
 npm run test:e2e:ui
 
-# Run specific test categories
-npx playwright test --grep "Timeout"        # All timeout-related tests
-npx playwright test --grep "Idle Timeout"   # Idle timeout specific tests
-npx playwright test --grep "Microphone"     # All microphone tests
+# Run specific test categories (full suite filtered by grep)
+npm run test:e2e -- --grep "Timeout"
+npm run test:e2e -- --grep "Idle Timeout"
+npm run test:e2e -- --grep "Microphone"
 ```
 
 ### Proxy-mode E2E: idle timeout and reconnection specs
@@ -121,13 +148,13 @@ If you already run the test-app dev server (e.g. `npm run dev` in test-app), Pla
    ```
    These tests assert **no upstream agent errors** (recoverable or not); a test fails if the app receives any agent error during the run.
 
-   To run all E2E (not just OpenAI proxy specs) with existing server:
+   To run all E2E (not just OpenAI proxy specs) with existing server, from **test-app**:
    ```bash
    USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e
    ```
-   Or from **project root** (OpenAI proxy specs only):
+   To run only the OpenAI proxy E2E spec from **test-app**:
    ```bash
-   USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npx playwright test test-app/tests/e2e/openai-proxy-e2e.spec.js --config=test-app/tests/playwright.config.mjs
+   USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js
    ```
    When `E2E_USE_EXISTING_SERVER=1` is set, a startup check verifies the app is reachable and exits with a clear error if not.
 
@@ -140,6 +167,7 @@ If the app uses **HTTPS** (e.g. `HTTPS=true` in test-app/.env), set the base URL
 
 ### Port, scheme, and backend (E2E environment)
 
+- **Function-call tests (openai-proxy-e2e 6, 6b):** Tests **"6. Simple function calling"** and **"6b. Issue #462 / #470"** use the same backend as other proxy E2E tests (same host:port for proxy and `POST /function-call`). They use `setupTestPageForBackend` with `enable-function-calling` and wait for the function-call-tracker (request received) before asserting on the time in agent-response. If the tracker never increments, the component did not receive a FunctionCallRequest (protocol/setup). If the tracker increments but the model replies with fallback text, the issue is backend/proxy/API delivery. See (from repo root) `docs/issues/ISSUE-489/TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md` § E2E test alignment. To capture backend logs: `npm run backend:log` (test-app) writes a timestamped log file. With `LOG_LEVEL=debug`, the proxy writes `function_call_output` to `test-results/e2e-function-call-output.json` for manual inspection (test 6d does not assert on it).
 - **Proxy port:** Playwright and helpers default to **port 8080**. If you start the proxy on a different port (e.g. `PROXY_PORT=8081`), set `VITE_OPENAI_PROXY_ENDPOINT` and/or `VITE_DEEPGRAM_PROXY_ENDPOINT` in the same env as Playwright so the app uses that port. Otherwise connection will never become "connected".
 - **Scheme:** If the app is **HTTPS** (`HTTPS=true`), the proxy must serve **wss**. If the app is HTTP, the proxy must serve **ws**. Mismatch causes connection failures (connection never becomes "connected").
 - **Backend matrix:** The full suite includes both **Deepgram-only** and **OpenAI-proxy-only** specs. See [E2E-BACKEND-MATRIX.md](./E2E-BACKEND-MATRIX.md) and run backend-specific specs when diagnosing failures. With **USE_PROXY_MODE=true** (OpenAI proxy default), the full run is **210 passed, 24 skipped** (0 failures): three Deepgram-only specs skip via `skipIfOpenAIProxy`—`deepgram-interim-transcript-validation.spec.js`, `deepgram-extended-silence-idle-timeout.spec.js` (renamed from `extended-silence-idle-timeout.spec.js`), and the test **"Deepgram: should test minimal function definition for SettingsApplied issue"** in `function-calling-e2e.spec.js`.
@@ -252,12 +280,12 @@ Use these in order; each gives a LOC (this README) and the exact command(s).
 
 ### Limiting test count (verify failure condition only)
 
-To avoid running the full suite when you only need to confirm the proxy/connection failure:
+From **test-app**, to avoid running the full suite when you only need to confirm the proxy/connection failure:
 
 - **Minimal (1 test):**  
-  `USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js -g "1. Connection"`
-- **One spec (9 tests):**  
-  `USE_REAL_APIS=true E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js`
+  `USE_REAL_APIS=1 E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js --grep "1. Connection"`
+- **One spec:**  
+  `USE_REAL_APIS=1 E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js`
 
 If the single "1. Connection" test fails, the same failure condition is present; run the full suite only when you need full coverage. See also `docs/issues/ISSUE-383/E2E-SUMMARY-REPORT.md` ("Limiting tests to verify the failure condition").
 

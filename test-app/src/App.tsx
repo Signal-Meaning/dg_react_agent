@@ -1,28 +1,28 @@
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
-import DeepgramVoiceInteraction from '../../src/components/DeepgramVoiceInteraction';
-import { 
-  DeepgramVoiceInteractionHandle,
-  TranscriptResponse,
-  LLMResponse,
-  UserMessageResponse,
-  AgentState,
-  AgentOptions,
-  ConnectionState,
-  ServiceType,
-  DeepgramError,
-  ConversationRole,
-  AudioConstraints,
-  FunctionCallRequest,
-  FunctionCallResponse,
-  ConversationStorage
-} from '../../src/types';
+import {
+  DeepgramVoiceInteraction,
+  type DeepgramVoiceInteractionHandle,
+  type TranscriptResponse,
+  type LLMResponse,
+  type UserMessageResponse,
+  type AgentState,
+  type AgentOptions,
+  type ConnectionState,
+  type ServiceType,
+  type DeepgramError,
+  type ConversationRole,
+  type AudioConstraints,
+  type FunctionCallRequest,
+  type FunctionCallResponse,
+  type ConversationStorage,
+  type AgentFunction,
+  getLogger,
+} from '@signal-meaning/voice-agent-react';
 import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
 import { ClosureIssueTestPage } from './closure-issue-test-page';
 import { getFunctionDefinitions } from './utils/functionDefinitions';
 import { getContextForSettings } from './utils/context-for-settings';
 import { getFunctionCallBackendBaseUrl, forwardFunctionCallToBackend } from './utils/functionCallBackend';
-import type { AgentFunction } from '../../src/types/agent';
-import { getLogger } from '../../src/utils/logger';
 import { generateSessionId } from './session-management';
 
 // Type declaration for E2E test support
@@ -66,9 +66,11 @@ declare global {
     /** Idle timeout (ms) used by the component; exposed for E2E (e.g. deepgram-greeting-idle-timeout.spec.js). */
     __idleTimeoutMs?: number;
     /** Issue #489: Last getAgentOptions call debug (E2E test 9a). */
-    __lastGetAgentOptionsDebug?: { fromComponent: number; fromRef: number; fromStorage: number; conversationForDisplay: number; contextMsgCount: number; source: string };
+    __lastGetAgentOptionsDebug?: { fromComponent: number; fromRef: number; fromLastKnown: number; fromWindowApp: number; fromStorage: number; conversationForDisplay: number; contextMsgCount: number; source: string };
     /** Issue #490: E2E-only. When set, app passes this as restoredAgentContext to the component. */
     __e2eRestoredAgentContext?: AgentOptions['context'];
+    /** Issue #489/9a: App-persisted last known conversation (survives remount so reconnect Settings get context). */
+    __appLastKnownConversation?: Array<{ role: string; content: string; timestamp?: number }>;
   }
 }
 
@@ -85,6 +87,79 @@ type TranscriptHistoryEntry = {
 
 /** Issue #406: Storage key for conversation (component persists via conversationStorage). */
 const CONVERSATION_STORAGE_KEY = 'dg_voice_conversation';
+
+/** Issue #489/9a: Read and validate conversation from localStorage. Returns valid messages or null. */
+function getValidConversationFromStorage(key: string): Array<{ role: 'user' | 'assistant'; content: string }> | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Array<{ role?: string; content?: string }>;
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    const valid = parsed.filter(
+      (m): m is { role: 'user' | 'assistant'; content: string } =>
+        (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
+    );
+    return valid.length > 0 ? valid : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Issue #489: Resolve agent context from ordered sources. Returns context, source label, and counts for debugging. */
+function resolveAgentContextFromSources(params: {
+  fromComponent: Array<{ role: string; content: string }>;
+  fromRef: Array<{ role: string; content: string }>;
+  fromLastKnown: Array<{ role: string; content: string }>;
+  fromWindowApp: Array<{ role: string; content: string }>;
+  fromStorage: Array<{ role: string; content: string }>;
+  conversationForDisplay: Array<{ role: ConversationRole; content: string; timestamp?: number }>;
+  e2eRestored: AgentOptions['context'] | undefined;
+}): { context: AgentOptions['context']; source: string; counts: Record<string, number> } {
+  const { fromComponent, fromRef, fromLastKnown, fromWindowApp, fromStorage, conversationForDisplay, e2eRestored } = params;
+  const candidates: Array<{ history: Array<{ role: string; content: string }>; source: string }> = [
+    { history: fromComponent, source: 'component' },
+    { history: fromRef, source: 'ref' },
+    { history: fromLastKnown, source: 'lastKnown' },
+    { history: fromWindowApp, source: 'windowApp' },
+    { history: fromStorage, source: 'storage' },
+  ];
+  const chosen = candidates.find((c) => c.history.length > 0);
+  const historyForContext = chosen?.history ?? [];
+  const historySource = chosen?.source ?? 'none';
+
+  let context = getContextForSettings(
+    conversationForDisplay,
+    () => historyForContext
+  ) as AgentOptions['context'];
+
+  if ((context?.messages?.length ?? 0) === 0 && e2eRestored?.messages?.length) {
+    context = e2eRestored;
+  }
+
+  const contextMsgCount = context?.messages?.length ?? 0;
+  const source = contextMsgCount === 0
+    ? 'none'
+    : context === e2eRestored
+      ? 'e2eRestored'
+      : conversationForDisplay.length > 0
+        ? 'display'
+        : historySource;
+
+  return {
+    context,
+    source,
+    counts: {
+      fromComponent: fromComponent.length,
+      fromRef: fromRef.length,
+      fromLastKnown: fromLastKnown.length,
+      fromWindowApp: fromWindowApp.length,
+      fromStorage: fromStorage.length,
+      conversationForDisplay: conversationForDisplay.length,
+      contextMsgCount,
+    },
+  };
+}
 
 /** Issue #406: localStorage-backed ConversationStorage for the component (test-app uses component storage + getConversationHistory). */
 const localStorageConversationStorage: ConversationStorage = {
@@ -110,6 +185,8 @@ function App() {
      !projectId || projectId === 'your-real-project-id');
 
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
+  /** Issue #489/9a: Last non-empty conversation seen (from callbacks/ref). Used when component ref/state are empty on reconnect (e.g. OpenAI path). */
+  const lastKnownConversationRef = useRef<Array<{ role: ConversationRole; content: string; timestamp?: number }>>([]);
   
   // State for UI
   const [isReady, setIsReady] = useState(false);
@@ -138,6 +215,21 @@ function App() {
   // Issue #406: Conversation for display and context — synced from component ref (component owns persistence via conversationStorage)
   const [conversationForDisplay, setConversationForDisplay] = useState<Array<{ role: ConversationRole; content: string; timestamp?: number }>>([]);
 
+  // Issue #489/9a: E2E test sets window.__e2eRestoredAgentContext and localStorage then dispatches this event so we re-render and getAgentOptions has context on reconnect.
+  const [, setE2eRestoredContextTick] = useState(0);
+  useEffect(() => {
+    const handler = () => {
+      setE2eRestoredContextTick((t) => t + 1);
+      const valid = getValidConversationFromStorage(CONVERSATION_STORAGE_KEY);
+      if (valid && valid.length > 0) {
+        lastKnownConversationRef.current = valid;
+        setConversationForDisplay((prev) => (prev.length >= valid.length ? prev : valid));
+      }
+    };
+    window.addEventListener('e2e-restored-context-set', handler);
+    return () => window.removeEventListener('e2e-restored-context-set', handler);
+  }, []);
+
   // Sync conversation from component after it restores from storage (ref may not have data until restore completes)
   useEffect(() => {
     const t = setTimeout(() => {
@@ -151,8 +243,11 @@ function App() {
   useEffect(() => {
     if (connectionStates.agent !== 'connected') return;
     const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
-    if (fromRef.length === 0) return;
-    setConversationForDisplay((prev) => (prev.length >= fromRef.length ? prev : fromRef));
+    if (fromRef.length > 0) {
+      lastKnownConversationRef.current = fromRef;
+      if (typeof window !== 'undefined') (window as TestWindow).__appLastKnownConversation = fromRef;
+      setConversationForDisplay((prev) => (prev.length >= fromRef.length ? prev : fromRef));
+    }
   }, [connectionStates.agent]);
 
   // Expose conversation history to window for E2E testing (Issue #362)
@@ -399,29 +494,19 @@ function App() {
           return;
         }
 
-        // Use the instructions-loader utility which handles:
-        // 1. Environment variable override (VITE_DEEPGRAM_INSTRUCTIONS)
-        // 2. File loading (instructions.txt)
-        // 3. Graceful fallback to default instructions
+        // Loader: env override (VITE_DEFAULT_INSTRUCTIONS) → file → default
         const instructions = await loadInstructionsFromFile();
-        
+
         setLoadedInstructions(instructions);
         addLog(`Loaded instructions via loader: ${instructions.substring(0, 50)}...`);
       } catch (error) {
         sessionLogger.error('Failed to load instructions', { error: error instanceof Error ? error.message : String(error) });
         addLog(`Failed to load instructions: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        
-        // Fallback to environment variable directly if loader fails
-        const envInstructions = import.meta.env.VITE_DEEPGRAM_INSTRUCTIONS;
-        if (envInstructions && envInstructions.trim()) {
-          setLoadedInstructions(envInstructions.trim());
-          addLog(`Using fallback env instructions: ${envInstructions.substring(0, 50)}...`);
-        } else {
-          // Final fallback to default
-          const defaultInstructions = 'You are a helpful voice assistant. Keep your responses concise and informative.';
-          setLoadedInstructions(defaultInstructions);
-          addLog(`Using default instructions: ${defaultInstructions.substring(0, 50)}...`);
-        }
+
+        const { getDefaultInstructions } = await import('../../src/utils/instructions-loader');
+        const defaultInstructions = getDefaultInstructions();
+        setLoadedInstructions(defaultInstructions);
+        addLog(`Using default instructions: ${defaultInstructions.substring(0, 50)}...`);
       } finally {
         setInstructionsLoading(false);
         hasLoadedInstructions.current = true;
@@ -429,7 +514,7 @@ function App() {
     };
 
     loadInstructions();
-  }, [addLog]); // Include addLog in dependencies
+  }, [addLog, sessionLogger]);
 
   const memoizedTranscriptionOptions = useMemo(() => {
     const interimResults = import.meta.env.VITE_TRANSCRIPTION_INTERIM_RESULTS !== 'false';
@@ -507,50 +592,50 @@ function App() {
   }, [memoizedAgentOptions]);
 
   // Issue #489: Supply options at send time so Settings on reconnect include up-to-date context.
-  // Component may pass its current history getter; fallback to ref, then sync read from storage
-  // (component restores from storage async, so on reconnect ref can still be empty).
+  // 1) Gather history from five sources (component getter, ref, lastKnown, window, storage).
+  // 2) Resolve context via resolveAgentContextFromSources (precedence + getContextForSettings + E2E fallback).
+  // 3) Write E2E debug globals and return options with context.
   const getAgentOptions = useCallback((
     getConversationHistory?: () => Array<{ role: ConversationRole; content: string; timestamp?: number }>
   ) => {
     const fromComponent = getConversationHistory?.() ?? [];
     const fromRef = deepgramRef.current?.getConversationHistory() ?? [];
-    let fromStorage: Array<{ role: string; content: string }> = [];
-    if (fromComponent.length === 0 && fromRef.length === 0 && typeof localStorage !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(CONVERSATION_STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as Array<{ role?: string; content?: string }>;
-          if (Array.isArray(parsed)) {
-            fromStorage = parsed.filter(
-              (m): m is { role: string; content: string } =>
-                (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
-            );
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    const context = getContextForSettings(
+    const fromLastKnown = lastKnownConversationRef.current ?? [];
+    const win = typeof window !== 'undefined' ? (window as TestWindow) : undefined;
+    const topWin = win?.top && win.top !== win ? (win.top as TestWindow) : win;
+    const fromWindowApp = (win?.__appLastKnownConversation ?? topWin?.__appLastKnownConversation) ?? [];
+    const fromStorage = (fromComponent.length === 0 && fromRef.length === 0)
+      ? (getValidConversationFromStorage(CONVERSATION_STORAGE_KEY) ?? [])
+      : [];
+    const e2eRestored = win?.__e2eRestoredAgentContext ?? topWin?.__e2eRestoredAgentContext;
+
+    const { context, source, counts } = resolveAgentContextFromSources({
+      fromComponent,
+      fromRef,
+      fromLastKnown,
+      fromWindowApp,
+      fromStorage,
       conversationForDisplay,
-      () => (fromComponent.length > 0 ? fromComponent : fromRef.length > 0 ? fromRef : fromStorage)
-    ) as AgentOptions['context'];
-    const contextMsgCount = context?.messages?.length ?? 0;
-    const source = contextMsgCount > 0
-      ? (conversationForDisplay.length > 0 ? 'display' : fromComponent.length > 0 ? 'component' : fromRef.length > 0 ? 'ref' : fromStorage.length > 0 ? 'storage' : 'display')
-      : 'none';
+      e2eRestored,
+    });
+
     const debug = {
-      fromComponent: fromComponent.length,
-      fromRef: fromRef.length,
-      fromStorage: fromStorage.length,
-      conversationForDisplay: conversationForDisplay.length,
-      contextMsgCount,
+      fromComponent: counts.fromComponent,
+      fromRef: counts.fromRef,
+      fromLastKnown: counts.fromLastKnown,
+      fromWindowApp: counts.fromWindowApp,
+      fromStorage: counts.fromStorage,
+      conversationForDisplay: counts.conversationForDisplay,
+      contextMsgCount: counts.contextMsgCount,
       source,
     };
     if (import.meta.env.DEV || (typeof window !== 'undefined' && window.location.search.includes('contextDebug=1'))) {
       console.log('[getAgentOptions]', debug);
     }
     if (typeof window !== 'undefined') {
+      const w = window as TestWindow & { __getAgentOptionsCallCount?: number; __getAgentOptionsLastWindowIsTop?: boolean };
+      w.__getAgentOptionsCallCount = (w.__getAgentOptionsCallCount ?? 0) + 1;
+      w.__getAgentOptionsLastWindowIsTop = w === w.top;
       (window as TestWindow).__lastGetAgentOptionsDebug = debug;
     }
     return { ...memoizedAgentOptions, context };
@@ -652,6 +737,10 @@ function App() {
 
   const handleAgentUtterance = useCallback((utterance: LLMResponse, conversationHistory?: Array<{ role: ConversationRole; content: string; timestamp?: number }>) => {
     const history = conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? [];
+    if (history.length > 0) {
+      lastKnownConversationRef.current = history;
+      if (typeof window !== 'undefined') (window as TestWindow).__appLastKnownConversation = history;
+    }
     const greeting = import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?';
     const isGreeting = utterance.text.trim() === greeting.trim();
     const prevEntry = history.length >= 2 ? history[history.length - 2] : undefined;
@@ -665,8 +754,13 @@ function App() {
   }, []);
 
   const handleUserMessage = useCallback((message: UserMessageResponse, conversationHistory?: Array<{ role: ConversationRole; content: string; timestamp?: number }>) => {
+    const history = conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? [];
+    if (history.length > 0) {
+      lastKnownConversationRef.current = history;
+      if (typeof window !== 'undefined') (window as TestWindow).__appLastKnownConversation = history;
+    }
     setUserMessage(message.text);
-    setConversationForDisplay(conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? []);
+    setConversationForDisplay(history);
     // Component logs user message echo; no redundant addLog here
   }, []);
   
@@ -736,11 +830,20 @@ function App() {
   
   const handleError = useCallback((error: DeepgramError) => {
     // Count all agent errors (recoverable and non-recoverable) so E2E can fail on any upstream error.
-    if (error.service === 'agent') {
+    // Exception: unmapped_upstream_event — proxy sends these when the real API emits control-only events
+    // (e.g. response.output_audio_transcript.delta, response.created) that we handle as "log only".
+    // Tests match implementation: we don't treat these as regressions in E2E (see E2E-FAILURES-RESOLUTION.md).
+    if (error.service === 'agent' && error.code !== 'unmapped_upstream_event') {
       setAgentErrorCount((c) => c + 1);
       if (error.recoverable) {
         setRecoverableAgentErrorCount((c) => c + 1);
       }
+    }
+    if (error.service === 'agent' && error.code === 'unmapped_upstream_event') {
+      if (isDebugMode) {
+        addLog(`Warning (agent): ${error.message} (expected in real-API runs; not counted as error).`);
+      }
+      return;
     }
     // Recoverable: e.g. OpenAI sends "server had an error" after a successful response. Still a regression; tests assert count stays 0.
     if (error.recoverable) {
@@ -835,23 +938,21 @@ function App() {
     }
 
     if (handler) {
-      // E2E/demo: use in-browser handler (Issue #305)
+      // E2E/demo: use in-browser handler (Issue #305). Return any value or Promise so the component
+      // waits for async handlers (e.g. Promise<void>) before sending the default "no response" error.
       const result = handler(request, sendResponse);
-      if (result !== undefined && result !== null) {
-        return result;
-      }
+      if (result !== undefined && result !== null) return result;
       testWindow.__testFunctionCallResponseSent = true;
       return;
     }
 
-    // Issue #407: By default, forward to app backend (no in-browser execution)
+    // Issue #407: Forward to app backend. Return the Promise so the component waits for the
+    // backend round-trip; otherwise it treats void return as "no response" and sends the default error (Issue #489).
     const baseUrl = getFunctionCallBackendBaseUrl(proxyEndpoint);
     if (baseUrl) {
-      forwardFunctionCallToBackend(request, sendResponse, baseUrl);
-      return;
+      return forwardFunctionCallToBackend(request, sendResponse, baseUrl);
     }
 
-    // No handler and no backend URL: log only (e.g. direct Deepgram without proxy)
     sessionLogger.warn('No function-call handler or backend URL; request not handled', { name: request.name });
   }, [proxyEndpoint]);
 

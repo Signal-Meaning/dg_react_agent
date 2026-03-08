@@ -114,10 +114,20 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 - **Tools**: Playwright, real Deepgram API (when available)
 - **Example**: Testing full function calling flow from connection to execution
 
+### E2E working directory and running specific specs
+
+- **E2E working directory:** Run all E2E commands from **test-app** (e.g. `cd test-app` then `npm run test:e2e`). The Playwright config, testDir, and env are defined for test-app. Running E2E from the repository root (e.g. root `npm run test:e2e`) is error-prone for targeted runs and can run the full suite with wrong paths; do not rely on root for running only specific specs.
+- **Running only specific E2E specs:** From test-app, pass spec file names after `--`: `npm run test:e2e -- openai-proxy-e2e.spec.js` or `npm run test:e2e -- openai-proxy-e2e.spec.js issue-373-idle-timeout-during-function-calls.spec.js`. Running `npm run test:e2e` with no arguments runs the **full** E2E suite (all specs). To verify only previously failing or changed tests, always pass the desired spec file(s). See `test-app/tests/e2e/README.md` for full E2E command reference.
+
+### Use npm scripts (do not use ad-hoc npx/shell)
+
+- **Stick to npm commands** — Use the project’s npm scripts for tests, builds, and tooling. They are better controlled (env, paths, flags) and match what CI and docs expect. Prefer e.g. `npm test`, `npm run test:e2e`, `npm run test:e2e:openai`, `npm run backend` over raw `npx jest`, `npx playwright test`, or ad-hoc shell commands. See `test-app/package.json` and repo root `package.json` for available scripts.
+- **Do not start servers in the background** from automation/agents; if servers are needed (e.g. for E2E with real APIs), the user will start them (e.g. `cd test-app && npm run backend`, `npm run dev`).
+
 ### Test run order and strategy
 
-- **Real APIs first, then mocks** — When API keys are available, run integration and E2E tests against the real upstream first (e.g. `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`); then run the same or complementary tests with mocks. Location: `tests/integration/` (e.g. `openai-proxy-integration.test.ts`).
-- **Then E2E** — Run E2E tests (`test-app/tests/e2e/`) with real backend/APIs when configured, then extended E2E as needed.
+- **Real APIs first, then mocks** — When API keys are available, run integration and E2E tests against the real upstream first (e.g. from repo root: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`; from test-app: `USE_REAL_APIS=1 npm run test:e2e:openai`); then run the same or complementary tests with mocks. Location: `tests/integration/` (e.g. `openai-proxy-integration.test.ts`).
+- **Then E2E** — Run E2E tests (`test-app/tests/e2e/`) via **npm scripts** from test-app (e.g. `npm run test:e2e`, `npm run test:e2e:openai`) with real backend/APIs when configured, then extended E2E as needed.
 - **CI always runs mocks** — In CI, run only mock-based integration and E2E (no real API keys); keep CI fast and deterministic. See `docs/development/TEST-STRATEGY.md`.
 
 ### Test Utilities
@@ -138,6 +148,11 @@ Any improvements must be justified and maintain compatibility with the Voice Age
 ### Current Test Status
 
 - Focus on maintaining and improving test coverage
+
+## Proxy / upstream: errors and protocol
+
+- **When upstream produces an error, surface the error.** Do not add fallbacks (e.g. turning errors into synthetic content or success). If you want a fallback, the user will ask for one explicitly.
+- **Do not invent responses to make tests pass.** Fix the real cause (upstream, protocol, or test expectations); do not fabricate or “make up” messages so that a test turns green.
 
 ## Backend / Proxy Defects — Must Engage Real APIs
 

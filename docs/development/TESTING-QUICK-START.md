@@ -2,6 +2,11 @@
 
 This guide helps new developers quickly understand how to test voice interaction features in the `dg_react_agent` library.
 
+## Where to run tests
+
+- **Unit and integration (Jest):** Run from the **repository root** (e.g. `npm test`, `npm test -- tests/openai-proxy.test.ts`).
+- **E2E (Playwright):** Run from **test-app** only. Use `cd test-app` then `npm run test:e2e` (full suite) or `npm run test:e2e -- <spec>.spec.js` for specific specs. See [test-app/tests/e2e/README.md](../../test-app/tests/e2e/README.md) for E2E working directory, running only specific specs, and real-API commands.
+
 ## Test development order (strategy)
 
 The strategy is about the **order in which to build and get tests passing** while a feature is in development, not the order to run tests during a traditional/CI pass. Use this order: **(1) unit tests first**, **(2) integration with real APIs**, **(3) integration with mocks**, **(4) adjust for CI**. See `docs/development/TEST-STRATEGY.md` and `.cursorrules` (Testing Guidelines).

@@ -25,5 +25,13 @@ module.exports = {
     '@typescript-eslint/explicit-function-return-type': 'off',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-explicit-any': 'warn',
+    // Logging must go through the shared logger (pico/OTel). No direct console in application source.
+    'no-console': 'warn',
   },
+  overrides: [
+    {
+      files: ['src/utils/logger.ts'],
+      rules: { 'no-console': 'off' },
+    },
+  ],
 };

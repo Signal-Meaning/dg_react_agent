@@ -9,7 +9,6 @@ import {
   mapSettingsToSessionUpdate,
   mapInjectUserMessageToConversationItemCreate,
   mapSessionUpdatedToSettingsApplied,
-  mapOutputTextDoneToConversationText,
   mapOutputAudioTranscriptDoneToConversationText,
   mapFunctionCallArgumentsDoneToFunctionCallRequest,
   mapFunctionCallArgumentsDoneToConversationText,
@@ -17,6 +16,7 @@ import {
   mapContextMessageToConversationItemCreate,
   mapGreetingToConversationItemCreate,
   mapGreetingToConversationText,
+  mapConversationItemAddedToConversationText,
   mapErrorToComponentError,
   binaryToInputAudioBufferAppend,
 } from '../packages/voice-agent-backend/scripts/openai-proxy/translator';
@@ -41,6 +41,28 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.session.instructions).toBe('');
       expect(out.session.model).toBe('gpt-realtime');
       expect(out.session).not.toHaveProperty('voice');
+    });
+
+    it('includes prior-session context in instructions (Issue #489; do not inject context as conversation items)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'You are helpful.', provider: { model: 'gpt-4o-realtime' } },
+          context: {
+            messages: [
+              { role: 'assistant' as const, content: 'Hello! How can I assist you today?' },
+              { role: 'user' as const, content: 'What is the capital of France?' },
+              { role: 'assistant' as const, content: 'The capital of France is Paris.' },
+            ],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.instructions).toContain('You are helpful.');
+      expect(out.session.instructions).toContain('Previous conversation:');
+      expect(out.session.instructions).toContain('assistant: Hello! How can I assist you today?');
+      expect(out.session.instructions).toContain('user: What is the capital of France?');
+      expect(out.session.instructions).toContain('assistant: The capital of France is Paris.');
     });
 
     it('maps Settings.agent.think.functions to session.update tools', () => {
@@ -84,6 +106,20 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.session.tools![1].name).toBe('get_weather');
       expect(out.session.tools![1].parameters).toEqual({ type: 'object', properties: { city: { type: 'string' } } });
     });
+
+    it('appends instruction to use tool results when functions are present (E2E 6/6b)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'You are helpful.',
+            functions: [{ name: 'get_current_time', description: 'Get the time', parameters: {} }],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.instructions).toContain('When you receive results from tool calls, use them in your reply to the user.');
+    });
   });
 
   describe('2. Client event handling (InjectUserMessage)', () => {
@@ -107,22 +143,6 @@ describe('OpenAI proxy translator (Issue #381)', () => {
     it('maps session.updated to SettingsApplied', () => {
       const out = mapSessionUpdatedToSettingsApplied({ type: 'session.updated', session: {} });
       expect(out).toEqual({ type: 'SettingsApplied' });
-    });
-
-    it('maps response.output_text.done to ConversationText (assistant)', () => {
-      const event = { type: 'response.output_text.done' as const, text: 'Hello there!' };
-      const out = mapOutputTextDoneToConversationText(event);
-      expect(out).toEqual({
-        type: 'ConversationText',
-        role: 'assistant',
-        content: 'Hello there!',
-      });
-    });
-
-    it('maps response.output_text.done with missing text to empty content', () => {
-      const event = { type: 'response.output_text.done' as const };
-      const out = mapOutputTextDoneToConversationText(event);
-      expect(out.content).toBe('');
     });
 
     it('maps response.output_audio_transcript.done to ConversationText (assistant)', () => {
@@ -218,6 +238,76 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.description).toBe('Unknown error');
       expect(out.code).toBe('unknown');
     });
+
+    /** Issue #489: codes over message text — use only API structured code; when code absent, returns unknown */
+    describe('Error mapping (codes over message text, Issue #489)', () => {
+      it('uses event.error.code when present: idle_timeout → component code idle_timeout', () => {
+        const event = {
+          type: 'error' as const,
+          error: { code: 'idle_timeout', message: 'Any message' },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('idle_timeout');
+        expect(out.type).toBe('Error');
+      });
+
+      it('uses event.error.code when present: session_max_duration → component code session_max_duration', () => {
+        const event = {
+          type: 'error' as const,
+          error: { code: 'session_max_duration', message: 'Any message' },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('session_max_duration');
+      });
+
+      it('passes through other API codes (e.g. rate_limit_exceeded)', () => {
+        const event = {
+          type: 'error' as const,
+          error: { code: 'rate_limit_exceeded', message: 'Rate limit exceeded' },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('rate_limit_exceeded');
+      });
+
+      it('when error.code absent, returns unknown (no message-text inference; API should send structured code)', () => {
+        const event = {
+          type: 'error' as const,
+          error: { message: 'The server had an error while processing your request' },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('unknown');
+      });
+
+      it('when error.code absent and message is session max duration text, returns unknown (no message-text inference)', () => {
+        const event = {
+          type: 'error' as const,
+          error: { message: 'Your session hit the maximum duration of 60 minutes.' },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('unknown');
+      });
+
+      it('when error.code absent and message does not match any string, returns unknown', () => {
+        const event = {
+          type: 'error' as const,
+          error: { message: 'Some other error' },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('unknown');
+      });
+
+      it('prefers event.error.code over message: when code is rate_limit_exceeded and message matches idle string, returns rate_limit_exceeded', () => {
+        const event = {
+          type: 'error' as const,
+          error: {
+            code: 'rate_limit_exceeded',
+            message: 'The server had an error while processing your request',
+          },
+        };
+        const out = mapErrorToComponentError(event);
+        expect(out.code).toBe('rate_limit_exceeded');
+      });
+    });
   });
 
   describe('5. Function call response (FunctionCallResponse → conversation.item.create)', () => {
@@ -239,6 +329,67 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       const msg = { type: 'FunctionCallResponse' as const, id: 'call_1', name: 'fn', content: '' };
       const out = mapFunctionCallResponseToConversationItemCreate(msg);
       expect(out.item.output).toBe('');
+    });
+
+    /** Issue #489: Component API uses { id, result?, error? }. When client sends result (no content), output is stringified result. */
+    it('derives output from result when content is absent (component API shape)', () => {
+      const msg = {
+        type: 'FunctionCallResponse' as const,
+        id: 'call_xyz',
+        result: { time: '14:32:15', timezone: 'UTC' },
+      };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.type).toBe('conversation.item.create');
+      expect(out.item.call_id).toBe('call_xyz');
+      expect(out.item.output).toBe(JSON.stringify({ time: '14:32:15', timezone: 'UTC' }));
+    });
+
+    it('derives output from result when result is a string (no content)', () => {
+      const msg = {
+        type: 'FunctionCallResponse' as const,
+        id: 'call_s',
+        result: 'The time is 14:32 UTC',
+      };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.item.output).toBe('The time is 14:32 UTC');
+    });
+
+    it('derives output from error when content and result are absent', () => {
+      const msg = {
+        type: 'FunctionCallResponse' as const,
+        id: 'call_err',
+        error: 'Function failed',
+      };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.item.output).toBe(JSON.stringify({ error: 'Function failed' }));
+    });
+
+    it('returns empty output when only id is present (no content, result, or error)', () => {
+      const msg = { type: 'FunctionCallResponse' as const, id: 'call_minimal' };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.item.output).toBe('');
+    });
+
+    it('prefers content over result when both are present', () => {
+      const msg = {
+        type: 'FunctionCallResponse' as const,
+        id: 'call_both',
+        content: '{"time":"12:00"}',
+        result: { time: '99:99', timezone: 'UTC' },
+      };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.item.output).toBe('{"time":"12:00"}');
+    });
+
+    it('accepts message without name (name is optional)', () => {
+      const msg = {
+        type: 'FunctionCallResponse' as const,
+        id: 'call_no_name',
+        result: { ok: true },
+      };
+      const out = mapFunctionCallResponseToConversationItemCreate(msg);
+      expect(out.item.call_id).toBe('call_no_name');
+      expect(out.item.output).toBe(JSON.stringify({ ok: true }));
     });
   });
 
@@ -284,6 +435,83 @@ describe('OpenAI proxy translator (Issue #381)', () => {
         type: 'ConversationText',
         role: 'assistant',
         content: 'Hi there!',
+      });
+    });
+
+    it('maps conversation.item.added (assistant, content array with part.text) to ConversationText', () => {
+      const event = {
+        type: 'conversation.item.added' as const,
+        item: { id: 'item_1', type: 'message', role: 'assistant' as const, content: [{ type: 'output_text', text: 'The capital is Paris.' }] },
+      };
+      const out = mapConversationItemAddedToConversationText(event);
+      expect(out).toEqual({ type: 'ConversationText', role: 'assistant', content: 'The capital is Paris.' });
+    });
+
+    it('maps conversation.item.added (assistant, content as single object with .text) to ConversationText', () => {
+      const event = {
+        type: 'conversation.item.added' as const,
+        item: { id: 'item_1', role: 'assistant' as const, content: { type: 'output_text', text: 'Hello.' } },
+      };
+      const out = mapConversationItemAddedToConversationText(event);
+      expect(out).toEqual({ type: 'ConversationText', role: 'assistant', content: 'Hello.' });
+    });
+
+    it('maps conversation.item.added (assistant, part with output_text object) to ConversationText', () => {
+      const event = {
+        type: 'conversation.item.added' as const,
+        item: { id: 'item_1', role: 'assistant' as const, content: [{ output_text: { text: 'From output_text.' } }] },
+      };
+      const out = mapConversationItemAddedToConversationText(event);
+      expect(out).toEqual({ type: 'ConversationText', role: 'assistant', content: 'From output_text.' });
+    });
+
+    it('mapConversationItemAddedToConversationText returns null for non-assistant role', () => {
+      const event = {
+        type: 'conversation.item.added' as const,
+        item: { id: 'item_1', role: 'user' as const, content: [{ text: 'User said this.' }] },
+      };
+      expect(mapConversationItemAddedToConversationText(event)).toBeNull();
+    });
+
+    it('mapConversationItemAddedToConversationText returns null for empty or missing content', () => {
+      expect(mapConversationItemAddedToConversationText({ type: 'conversation.item.added', item: { role: 'assistant', content: [] } })).toBeNull();
+      expect(mapConversationItemAddedToConversationText({ type: 'conversation.item.added', item: { role: 'assistant' } })).toBeNull();
+    });
+
+    it('maps conversation.item.created (assistant) to ConversationText (real API may send content in .created)', () => {
+      const event = {
+        type: 'conversation.item.created' as const,
+        item: { id: 'item_2', type: 'message', role: 'assistant' as const, content: [{ type: 'output_text', text: 'Reply from .created.' }] },
+      };
+      const out = mapConversationItemAddedToConversationText(event);
+      expect(out).toEqual({ type: 'ConversationText', role: 'assistant', content: 'Reply from .created.' });
+    });
+
+    it('maps conversation.item.done (assistant) to ConversationText (real API may send content in .done)', () => {
+      const event = {
+        type: 'conversation.item.done' as const,
+        item: { id: 'item_3', type: 'message', role: 'assistant' as const, content: [{ type: 'output_text', text: 'Reply from .done.' }] },
+      };
+      const out = mapConversationItemAddedToConversationText(event);
+      expect(out).toEqual({ type: 'ConversationText', role: 'assistant', content: 'Reply from .done.' });
+    });
+
+    it('maps conversation.item.done (assistant) with output_audio transcript to ConversationText (real API shape, Issue #489)', () => {
+      const event = {
+        type: 'conversation.item.done' as const,
+        item: {
+          id: 'item_DGvkyAAsUpgzAMehIVRim',
+          type: 'message',
+          status: 'completed',
+          role: 'assistant' as const,
+          content: [{ type: 'output_audio', transcript: "The capital of France is Paris. It's a major European city and a global center for art, fashion, and culture." }],
+        },
+      };
+      const out = mapConversationItemAddedToConversationText(event);
+      expect(out).toEqual({
+        type: 'ConversationText',
+        role: 'assistant',
+        content: "The capital of France is Paris. It's a major European city and a global center for art, fashion, and culture.",
       });
     });
   });

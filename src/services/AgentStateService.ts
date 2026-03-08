@@ -77,18 +77,18 @@ export class AgentStateService {
   }
 
   /**
-   * Handle AgentAudioDone message
+   * Handle AgentAudioDone message (agent turn output received complete; not playback complete).
+   * @see docs/issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md
    */
   public handleAgentAudioDone(greetingInProgress: boolean): void {
-    this.log('AgentAudioDone received - audio generation complete, but playback may continue');
+    this.log('AgentAudioDone received - turn output received complete (receipt); playback may still be in progress');
     
     // Handle greeting state if applicable
     if (greetingInProgress) {
       this.log('Greeting progress ended - audio generation complete');
     }
     
-    // Note: We don't transition to idle here because audio playback may still be ongoing
-    // The actual transition to idle happens when audio playback finishes
+    // Transition to idle is handled by the component when it receives AgentAudioDone (turn output received complete).
   }
 
   /**

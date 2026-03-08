@@ -2,6 +2,15 @@
 
 This document describes the intended run order for tests and when to use mocks vs real upstream.
 
+## Working directories
+
+- **Jest (unit and integration):** Run from the **repository root**. Examples: `npm test`, `npm run test:mock`, `npm test -- tests/openai-proxy.test.ts`, `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`.
+- **E2E (Playwright):** Run from **test-app** only. The Playwright config (`test-app/tests/playwright.config.mjs`), `testDir`, and env are defined for test-app. Running E2E from the repo root is not recommended for targeted runs and can be error-prone. **Standard:** `cd test-app` then `npm run test:e2e` (full suite) or `npm run test:e2e -- openai-proxy-e2e.spec.js` (specific spec(s)). See `test-app/tests/e2e/README.md` for full E2E command reference.
+
+## Use npm scripts
+
+**Stick to npm commands** for running tests and tooling; they are better controlled (env, paths, flags) and match CI and docs. Use e.g. `npm test` (from repo root), `npm run test:e2e` or `npm run test:e2e -- <spec>.spec.js` (from test-app), `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` (from repo root) rather than raw `npx jest` or `npx playwright test`. See `.cursorrules` (Use npm scripts, E2E working directory) and the relevant `package.json` for available scripts.
+
 ## Third-party backends and scope (Epic #455)
 
 - **Third-party backends are out of scope.** Voice-commerce and any other third-party backend are not supported or tested by this repo. Our integration and E2E tests use this repo’s proxy and mock (or real OpenAI) only.
@@ -15,7 +24,7 @@ This document describes the intended run order for tests and when to use mocks v
 
 2. **Integration / E2E with mocks** — Run the same or full suite with mock upstream (no API keys required).
 
-3. **E2E tests** — Run test-app E2E with real backend/APIs when configured; then extended E2E as needed.
+3. **E2E tests** — From **test-app**, run E2E with real backend/APIs when configured (`npm run test:e2e` for full suite, or `npm run test:e2e -- <spec>.spec.js` for specific specs); then extended E2E as needed.
 
 Summary: **real APIs first (when available) → mocks**. **CI: mocks only.**
 
@@ -25,6 +34,10 @@ Summary: **real APIs first (when available) → mocks**. **CI: mocks only.**
 - **Local / when keys available:** Run **real APIs first**, then mocks.
 
 - **When real APIs are requested:** Set **`USE_REAL_APIS=1`** and **`OPENAI_API_KEY`** (in `.env`, `test-app/.env`, or env), then run e.g. `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`. Mock-only tests are skipped; the rest run against the live OpenAI Realtime API. Optional: `OPENAI_REALTIME_URL` to override the upstream URL.
+
+- **Filtering by name does not enable real APIs.** Using **`--testNamePattern=real-API`** (or similar) only selects which tests run; it does **not** set `USE_REAL_APIS=1`. To run tests against the real API you must set the env var. Without it, real-API tests are skipped (they use `(useRealAPIs ? it : it.skip)`). So a run with `--testNamePattern=real-API` but without `USE_REAL_APIS=1` will skip those tests, not run them against the live API.
+
+- **Do not fix real-API test failures by increasing timeouts.** If a real-API test fails due to timeout (e.g. "did not receive SettingsApplied within 10s" or "Timeout waiting for assistant response"), the root cause is likely incorrect observation of events, proxy/API misalignment with the OpenAI Realtime API spec, or test assumptions that don't match the API contract. Focus on aligning tests and proxy with the spec and on correctly observing events; do not relax or increase test timeouts as a fix. See `docs/issues/ISSUE-489/REAL-API-TEST-FAILURES.md` when investigating failures.
 
 ## Transcript / VAD and backends
 
@@ -38,6 +51,7 @@ Summary: **real APIs first (when available) → mocks**. **CI: mocks only.**
 
 ## Document references
 
+- **Real-API test failures (do not fix by increasing timeouts):** `docs/issues/ISSUE-489/REAL-API-TEST-FAILURES.md` — investigation, alignment with OpenAI Realtime API, and open questions on spec clarity and test coverage.
 - **Integration tests (mock upstream):** `docs/issues/ISSUE-381/INTEGRATION-TEST-PLAN.md`, `tests/integration/openai-proxy-integration.test.ts`
 - **E2E tests:** `test-app/tests/e2e/`, `docs/development/TESTING-QUICK-START.md`
 - **Transcript/VAD contract (Issue #414):** `docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md`

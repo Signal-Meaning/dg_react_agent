@@ -12,7 +12,8 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  setupTestPageWithDeepgramProxy,
+  skipIfNoProxyForBackend,
+  setupTestPageForBackend,
   waitForSettingsApplied,
   establishConnectionViaText,
   sendMessageAndWaitForResponse,
@@ -27,7 +28,8 @@ test.describe('Text Session Flow', () => {
   test('should auto-connect and re-establish connection when WebSocket is closed', async ({ page }) => {
     console.log('🧪 Testing auto-connect when WebSocket is closed');
     
-    await setupTestPageWithDeepgramProxy(page);
+    skipIfNoProxyForBackend();
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page);
     console.log('✅ Initial connection established');
     
@@ -56,7 +58,8 @@ test.describe('Text Session Flow', () => {
   test('should handle rapid message exchange within idle timeout', async ({ page }) => {
     console.log('🧪 Testing rapid message exchange within 10-second idle timeout');
     
-    await setupTestPageWithDeepgramProxy(page);
+    skipIfNoProxyForBackend();
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page);
     console.log('✅ Initial connection established');
     
@@ -88,8 +91,9 @@ test.describe('Text Session Flow', () => {
   test('should establish connection, send settings, and respond to initial text', async ({ page }) => {
     console.log('🧪 Testing initial connection flow with settings and first message');
     
+    skipIfNoProxyForBackend();
     await installWebSocketCapture(page);
-    await setupTestPageWithDeepgramProxy(page);
+    await setupTestPageForBackend(page);
     
     // Trigger connection via text input using fixture
     await establishConnectionViaText(page);
@@ -135,7 +139,8 @@ test.describe('Text Session Flow', () => {
   test('should maintain connection through sequential messages', async ({ page }) => {
     console.log('🧪 Testing sequential message exchange with state tracking');
     
-    await setupTestPageWithDeepgramProxy(page);
+    skipIfNoProxyForBackend();
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page);
     console.log('✅ Initial connection established');
     

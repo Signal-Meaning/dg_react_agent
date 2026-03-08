@@ -18,8 +18,8 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  skipIfNoOpenAIProxy,
-  setupTestPageWithOpenAIProxy,
+  skipIfNoProxyForBackend,
+  setupTestPageForBackend,
   establishConnectionViaText,
   waitForSettingsApplied,
   sendTextMessage,
@@ -43,13 +43,13 @@ const TTS_DELIVERY_WAIT_MS = 4000;
 
 test.describe('OpenAI proxy TTS diagnostic (Issue #414)', () => {
   test.beforeEach(() => {
-    skipIfNoOpenAIProxy('Requires VITE_OPENAI_PROXY_ENDPOINT for OpenAI proxy E2E');
+    skipIfNoProxyForBackend('Requires VITE_OPENAI_PROXY_ENDPOINT for OpenAI proxy E2E');
   });
 
   test('diagnose TTS path: binary received and playback status after agent response', async ({ page }) => {
     // Capture WebSocket before any navigation so the agent WebSocket is wrapped
     await installWebSocketCapture(page);
-    await setupTestPageWithOpenAIProxy(page);
+    await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
 

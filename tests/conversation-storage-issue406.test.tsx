@@ -28,6 +28,7 @@ import {
   setupComponentAndConnect,
   waitForEventListener,
   simulateConnection,
+  waitForSettingsSent,
 } from './utils/component-test-helpers';
 import { act } from '@testing-library/react';
 
@@ -210,6 +211,62 @@ describe('Conversation storage (Issue #406)', () => {
         },
         { timeout: 2000 }
       );
+    });
+  });
+
+  /**
+   * TDD all-messages-in-history (Issue #489, TDD-PLAN-ALL-MESSAGES-IN-HISTORY).
+   * Every ConversationText (user or assistant) must be appended to history and passed to the app callback.
+   */
+  describe('all messages in history (Issue #489)', () => {
+    it('when component receives sequence ConversationText (user, assistant, user, assistant), getConversationHistory and callbacks have all four in order', async () => {
+      const onAgentUtterance = jest.fn<(_u: unknown, history?: ConversationMessage[]) => void>();
+      const onUserMessage = jest.fn<(_m: unknown, history?: ConversationMessage[]) => void>();
+      const ref = React.createRef<DeepgramVoiceInteractionHandle>();
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+          conversationStorage={mockStorage}
+          onAgentUtterance={onAgentUtterance as any}
+          onUserMessage={onUserMessage as any}
+        />
+      );
+      await waitFor(() => expect(mockStorage.getItem).toHaveBeenCalled());
+      await act(async () => {
+        await ref.current!.start({ agent: true, transcription: false });
+      });
+      const eventListener = await waitForEventListener(mockWebSocketManager);
+      await simulateConnection(eventListener, mockWebSocketManager);
+      await waitForSettingsSent(mockWebSocketManager);
+
+      const events: Array<{ role: 'user' | 'assistant'; content: string }> = [
+        { role: 'user', content: 'U1' },
+        { role: 'assistant', content: 'A1' },
+        { role: 'user', content: 'U2' },
+        { role: 'assistant', content: 'A2' },
+      ];
+      for (const ev of events) {
+        await act(async () => {
+          eventListener({ type: 'message', data: { type: 'ConversationText', role: ev.role, content: ev.content } });
+        });
+      }
+
+      await waitFor(
+        () => {
+          const history = ref.current!.getConversationHistory();
+          expect(history).toHaveLength(4);
+        },
+        { timeout: 2000 }
+      );
+
+      const history = ref.current!.getConversationHistory();
+      expect(history).toHaveLength(4);
+      expect(history[0]).toMatchObject({ role: 'user', content: 'U1' });
+      expect(history[1]).toMatchObject({ role: 'assistant', content: 'A1' });
+      expect(history[2]).toMatchObject({ role: 'user', content: 'U2' });
+      expect(history[3]).toMatchObject({ role: 'assistant', content: 'A2' });
     });
   });
 });

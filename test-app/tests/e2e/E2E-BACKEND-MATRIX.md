@@ -1,15 +1,16 @@
 # E2E Backend Matrix (Deepgram vs OpenAI Proxy)
 
-This document flags which E2E specs assume **Deepgram** (direct or Deepgram proxy) vs **OpenAI Realtime proxy** vs backend-agnostic. Use it when running a "full E2E pass" to know which tests apply to which backend.
+**Every E2E spec is runnable against either proxy.** Backend is selected by `E2E_BACKEND` (default `openai`; set to `deepgram` for Deepgram proxy). Tests use `setupTestPageForBackend()` and `skipIfNoProxyForBackend()` so no per-test changes are needed when switching backend.
 
-**Run only one backend:**
+**Run against a specific backend (from `test-app`):**
 
 | Goal | Command (from `test-app`) |
 |------|----------------------------|
-| **OpenAI proxy specs only** (4 specs + callback suite) | `npm run test:e2e:openai` |
-| **Deepgram-backed specs only** (all except the 4 OpenAI-only specs) | `npm run test:e2e:deepgram` |
+| **All specs vs OpenAI proxy** | `E2E_BACKEND=openai USE_PROXY_MODE=true npm run test:e2e` or `npm run test:e2e:openai` |
+| **All specs vs Deepgram proxy** | `E2E_BACKEND=deepgram USE_PROXY_MODE=true npm run test:e2e` or `npm run test:e2e:deepgram` |
+| **One spec (e.g. 9a) vs Deepgram** | `E2E_BACKEND=deepgram USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js --grep "9a"` |
 
-Both scripts set `USE_PROXY_MODE=true`. For OpenAI, set `VITE_OPENAI_PROXY_ENDPOINT` in `.env` or env (default `ws://localhost:8080/openai`). For Deepgram, set `VITE_DEEPGRAM_PROXY_ENDPOINT` and do not set `VITE_OPENAI_PROXY_ENDPOINT` so the app uses the Deepgram proxy.
+Both proxies default to `ws://localhost:8080/openai` and `ws://localhost:8080/deepgram-proxy` when `USE_PROXY_MODE=true`. Start the backend with `npm run backend` (requires `DEEPGRAM_API_KEY` and/or `OPENAI_API_KEY` in `.env` for the proxy you use).
 
 **Callback suite (`callback-test.spec.js`):** Verifies component callback contracts (onTranscriptUpdate, onUserStartedSpeaking, onUserStoppedSpeaking, onPlaybackStateChange, integration). Issue #414 resolved: the OpenAI proxy maps transcript/VAD to the same component events. This spec runs in both `test:e2e:openai` and `test:e2e:deepgram` and must pass for both.
 

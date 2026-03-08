@@ -138,6 +138,48 @@ export function skipIfOpenAIProxy(reason = 'Deepgram-only test; skip when using 
 }
 
 /**
+ * Skip when the backend selected by E2E_BACKEND has no proxy configured or (when USE_REAL_APIS)
+ * no API key. Use with setupTestPageForBackend() so the same test runs against either proxy.
+ * E2E_BACKEND=deepgram → Deepgram proxy; unset or openai → OpenAI proxy.
+ * @param {string} reason - Optional reason for skipping
+ */
+export function skipIfNoProxyForBackend(reason = 'Requires proxy for selected E2E_BACKEND and, when USE_REAL_APIS=1, the corresponding API key') {
+  const backend = process.env.E2E_BACKEND === 'deepgram' ? 'deepgram' : 'openai';
+  if (backend === 'openai') {
+    if (!hasOpenAIProxyEndpoint()) {
+      test.skip(true, reason || 'OpenAI proxy not configured (set USE_PROXY_MODE=true or VITE_OPENAI_PROXY_ENDPOINT)');
+      return;
+    }
+    if (process.env.USE_REAL_APIS === 'true' || process.env.USE_REAL_APIS === '1') {
+      if (!hasOpenAIKey()) {
+        test.skip(true, 'USE_REAL_APIS=1 requires OPENAI_API_KEY or VITE_OPENAI_API_KEY for OpenAI proxy');
+      }
+    }
+    return;
+  }
+  if (!hasDeepgramProxyEndpoint()) {
+    test.skip(true, reason || 'Deepgram proxy not configured (set E2E_BACKEND=deepgram and USE_PROXY_MODE=true or VITE_DEEPGRAM_PROXY_ENDPOINT)');
+    return;
+  }
+  if (process.env.USE_REAL_APIS === 'true' || process.env.USE_REAL_APIS === '1') {
+    if (!hasRealAPIKey()) {
+      test.skip(true, 'USE_REAL_APIS=1 requires VITE_DEEPGRAM_API_KEY for Deepgram proxy');
+    }
+  }
+}
+
+/**
+ * Skip test when not running with real APIs (USE_REAL_APIS not set).
+ * Use for E2E tests that require real upstream (e.g. OpenAI) and fail with mocks/default backend.
+ * @param {string} reason - Optional reason for skipping
+ */
+export function skipUnlessRealAPIs(reason = 'Requires USE_REAL_APIS=1; skipped when run without real APIs') {
+  if (process.env.USE_REAL_APIS !== 'true' && process.env.USE_REAL_APIS !== '1') {
+    test.skip(true, reason);
+  }
+}
+
+/**
  * Check if Deepgram proxy is configured (app would connect to /deepgram-proxy).
  * Same server (PROXY_PORT) can host both /openai and /deepgram-proxy.
  * @returns {boolean} True if VITE_DEEPGRAM_PROXY_ENDPOINT set or USE_PROXY_MODE + E2E_BACKEND=deepgram
@@ -271,6 +313,47 @@ const SELECTORS = {
 };
 
 /**
+ * Storage key for conversation history (must match test-app CONVERSATION_STORAGE_KEY).
+ * Used by setConversationInLocalStorage and getConversationStorageCheck (Issue #489/9a).
+ */
+const CONVERSATION_STORAGE_KEY = 'dg_voice_conversation';
+
+/**
+ * Set conversation history in localStorage so component getHistoryForSettings (getItem) finds it on reconnect.
+ * @param {import('@playwright/test').Page} page
+ * @param {Array<{ role: string; content: string }>} history - Array of { role, content } messages
+ */
+async function setConversationInLocalStorage(page, history) {
+  await page.evaluate(
+    ({ key, hist }) => {
+      try {
+        localStorage.setItem(key, JSON.stringify(hist));
+      } catch (_) {}
+    },
+    { key: CONVERSATION_STORAGE_KEY, hist: history }
+  );
+}
+
+/**
+ * Check that conversation is present in localStorage (for 9a reconnect context).
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<{ ok: boolean; length?: number; reason?: string }>}
+ */
+async function getConversationStorageCheck(page) {
+  return await page.evaluate((key) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return { ok: false, reason: 'no raw' };
+      const parsed = JSON.parse(raw);
+      const ok = Array.isArray(parsed) && parsed.length > 0;
+      return { ok, length: Array.isArray(parsed) ? parsed.length : 0 };
+    } catch (e) {
+      return { ok: false, reason: String(e && e.message) };
+    }
+  }, CONVERSATION_STORAGE_KEY);
+}
+
+/**
  * Navigate to the test app and wait for it to load.
  * Uses relative path so Playwright's baseURL (http or https from config) is applied.
  * @param {import('@playwright/test').Page} page
@@ -319,15 +402,59 @@ async function setupTestPageWithOpenAIProxy(page, timeout = 10000) {
  * Navigate to the test app with the backend selected by E2E_BACKEND (openai or deepgram).
  * Use for E2E tests that run/pass for either proxy (Issue #406 readiness contract).
  * @param {import('@playwright/test').Page} page
- * @param {number} timeout - Timeout in ms (default: 10000)
+ * @param {number | { timeout?: number; extraParams?: Record<string, string> }} timeoutOrOptions - Timeout in ms (default: 10000), or options object with timeout and/or extraParams (merged into query string)
  */
-async function setupTestPageForBackend(page, timeout = 10000) {
+async function setupTestPageForBackend(page, timeoutOrOptions = 10000) {
+  const timeout = typeof timeoutOrOptions === 'number' ? timeoutOrOptions : (timeoutOrOptions.timeout ?? 10000);
+  const extraParams = typeof timeoutOrOptions === 'object' && timeoutOrOptions.extraParams ? timeoutOrOptions.extraParams : {};
   const { getBackendProxyParams, BASE_URL } = await import('./test-helpers.mjs');
   const { pathWithQuery } = await import('./app-paths.mjs');
-  const pathPart = pathWithQuery(getBackendProxyParams());
+  const params = { ...getBackendProxyParams(), ...extraParams };
+  const pathPart = pathWithQuery(params);
   const url = pathPart.startsWith('http') ? pathPart : BASE_URL + pathPart;
   await page.goto(url);
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
+}
+
+/**
+ * Derive function-call backend base URL from proxy endpoint.
+ * Logic must match getFunctionCallBackendBaseUrl in test-app/src/utils/functionCallBackend.ts
+ * so E2E reachability checks use the same URL as the app.
+ * @returns {Promise<string>} e.g. 'http://localhost:8080'
+ */
+async function getFunctionCallBackendBaseUrlForE2E() {
+  const { getBackendProxyParams } = await import('./test-helpers.mjs');
+  const proxyEndpoint = getBackendProxyParams().proxyEndpoint || '';
+  if (!proxyEndpoint.trim()) return '';
+  const httpScheme = proxyEndpoint.startsWith('wss://') ? 'https://' : 'http://';
+  const withoutScheme = proxyEndpoint.replace(/^wss?:\/\//, '').trim();
+  const hostPort = withoutScheme.split('/')[0] ?? '';
+  return hostPort ? `${httpScheme}${hostPort}` : '';
+}
+
+/**
+ * Check if the backend supports the get_current_time function (for tests 6 and 6b).
+ * POSTs to /function-call with name: 'get_current_time' and returns true only if the backend
+ * responds with 200 and a body (backend must implement get_current_time). When false (e.g.
+ * E2E_USE_EXISTING_SERVER=1 but backend not started or backend does not support get_current_time),
+ * tests 6/6b skip with a clear message instead of failing with fallback-text.
+ * @returns {Promise<boolean>} true if POST /function-call (get_current_time) returns 200
+ */
+async function isGetCurrentTimeBackendReachable() {
+  const baseUrl = await getFunctionCallBackendBaseUrlForE2E();
+  if (!baseUrl) return false;
+  const url = `${baseUrl.replace(/\/$/, '')}/function-call`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'e2e-reach', name: 'get_current_time', arguments: '{}' }),
+      signal: AbortSignal.timeout(5000),
+    });
+    return res.ok && res.status === 200;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -1682,10 +1809,12 @@ async function tryPromptsForFunctionCall(page, prompts, options = {}) {
 
 /**
  * Set up function calling test infrastructure
+ * Call before page.goto() so addInitScript runs before the page loads.
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {Object} options - Options
  * @param {Array} options.functions - Function definitions (default: get_current_time)
- * @param {Function} options.handler - Function handler (default: time handler)
+ * @param {Function} options.handler - Function handler (default: time handler). Omit when useBackend: true.
+ * @param {boolean} options.useBackend - When true, only set tracking arrays and optional testFunctions; do NOT set handleFunctionCall so the app uses forwardFunctionCallToBackend (Issue #407). Use for E2E tests that assert the backend path (e.g. openai-proxy-e2e 6, 6b).
  * @returns {Promise<void>}
  */
 async function setupFunctionCallingTest(page, options = {}) {
@@ -1725,8 +1854,21 @@ async function setupFunctionCallingTest(page, options = {}) {
     }
     return { success: false, error: 'Unknown function' };
   };
+
+  if (options.useBackend) {
+    // Backend path: only set tracking arrays and optional testFunctions; app will use forwardFunctionCallToBackend
+    await page.addInitScript((functions) => {
+      window.functionCallRequests = [];
+      window.functionCallResponses = [];
+      if (functions && functions.length > 0) {
+        window.testFunctions = functions;
+      }
+      // Do NOT set window.handleFunctionCall so App.tsx uses getFunctionCallBackendBaseUrl + forwardFunctionCallToBackend
+    }, options.functions || defaultFunctions);
+    return;
+  }
   
-  // Use addInitScript to set up everything before page loads
+  // In-browser handler path
   await page.addInitScript((functions, handler) => {
     window.testFunctions = functions;
     window.testFunctionHandler = handler;
@@ -1877,12 +2019,12 @@ async function writeTranscriptToFile(transcript, options = {}) {
 }
 
 export {
-  // hasRealAPIKey, hasOpenAIKey, hasRealBackend, skipIfNoRealBackend, skipIfNoRealAPI, hasOpenAIProxyEndpoint, hasDeepgramProxyEndpoint, skipIfNoOpenAIProxy, skipIfOpenAIProxy, isRealBackendReachable, skipIfNoRealBackendAsync are already exported inline above
+  // hasRealAPIKey, hasOpenAIKey, hasRealBackend, skipIfNoRealBackend, skipIfNoRealAPI, hasOpenAIProxyEndpoint, hasDeepgramProxyEndpoint, skipIfNoOpenAIProxy, skipIfOpenAIProxy, skipIfNoProxyForBackend, isRealBackendReachable, skipIfNoRealBackendAsync are already exported inline above
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
   setupTestPage, // Navigate to test app and wait for page load with configurable timeout
   setupTestPageWithDeepgramProxy, // Navigate to test app with Deepgram proxy (VITE_DEEPGRAM_PROXY_ENDPOINT)
   setupTestPageWithOpenAIProxy, // Navigate to test app with OpenAI proxy (VITE_OPENAI_PROXY_ENDPOINT) – Issue #381
-  setupTestPageForBackend, // Navigate to test app with E2E_BACKEND proxy (openai or deepgram) – Issue #406
+  setupTestPageForBackend, // Navigate to test app with E2E_BACKEND proxy (openai or deepgram) – use for backend-agnostic E2E
   waitForConnection, // Wait for connection to be established
   waitForSettingsApplied, // Wait for agent settings to be applied (SettingsApplied received from server)
   setupConnectionStateTracking, // Setup connection state tracking via DOM elements (data-testid attributes)
@@ -1890,6 +2032,9 @@ export {
   waitForAgentGreeting, // Wait for agent to finish speaking its greeting message
   waitForGreetingIfPresent, // Safely wait for greeting if it plays, otherwise continue (doesn't fail if no greeting)
   sendTextMessage, // Send a text message through the UI and wait for input to clear
+  CONVERSATION_STORAGE_KEY, // Storage key for conversation (matches test-app; use with LS helpers)
+  setConversationInLocalStorage, // Set conversation in localStorage for reconnect context (9a)
+  getConversationStorageCheck, // Check conversation in localStorage { ok, length?, reason? }
   installWebSocketCapture, // Install WebSocket message capture in browser context for testing
   getCapturedWebSocketData, // Retrieve captured WebSocket messages and their counts
   getTtsFirstChunkBase64, // Get first TTS binary chunk as base64 for audio-quality check (Issue #414)
@@ -1929,6 +2074,7 @@ export {
   waitForFunctionCall, // Wait for function call to be made (tracked via data-testid="function-call-tracker")
   tryPromptsForFunctionCall, // Try multiple prompts to trigger function call with retry logic
   setupFunctionCallingTest, // Set up function calling test infrastructure
+  isGetCurrentTimeBackendReachable, // True if backend supports get_current_time (for tests 6/6b skip when not)
   establishConnectionAndWaitForFunctionCall, // Establish connection and wait for function call
   MicrophoneHelpers, // Microphone utility helpers for E2E tests (activate/deactivate mic)
   writeTranscriptToFile // Write conversation transcript to file (optional, enabled via env var)

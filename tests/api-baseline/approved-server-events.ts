@@ -46,5 +46,10 @@ export const APPROVED_SERVER_EVENT_ADDITIONS = {
     addedIn: 'post-fork',
     needsOfficialVerification: true,
   },
+  'AgentDone': {
+    rationale: 'Semantic "agent done for the turn" (Issue #489). Aligned with agent-done semantics; proxy sends when it can trap the signal. Prefer over AgentAudioDone for doneness. See docs/issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md.',
+    addedIn: 'post-fork',
+    needsOfficialVerification: true,
+  },
 } as const;
 
