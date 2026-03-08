@@ -18,6 +18,10 @@
  * With USE_REAL_APIS=1 this file logs each test name as it runs (beforeEach). For more
  * Jest output use: npm test -- --verbose tests/integration/openai-proxy-integration.test.ts
  *
+ * Client message parsing (see PROTOCOL-SPECIFICATION.md §5): Do not parse binary as JSON;
+ * only parse when the frame looks like a complete JSON object. When parse throws, surface
+ * the error (fail the test)—never skip frames on error so we can correct the cause.
+ *
  * @jest-environment node
  */
 
@@ -90,6 +94,15 @@ const itMockOnly = useRealAPIs ? it.skip : it;
 function scheduleFallbackTimeout(delayMs: number, onFired: () => void): () => void {
   const id = setTimeout(() => setImmediate(onFired), delayMs);
   return () => clearTimeout(id);
+}
+
+/**
+ * True when the buffer looks like a complete JSON object (starts with '{', ends with '}').
+ * Use to avoid calling JSON.parse on binary frames (e.g. PCM). When we do parse and it
+ * throws, tests must surface the error (PROTOCOL-SPECIFICATION.md §5).
+ */
+function looksLikeJsonObject(data: Buffer): boolean {
+  return data.length >= 2 && data[0] === 0x7b && data[data.length - 1] === 0x7d;
 }
 
 describe('OpenAI proxy integration (Issue #381)', () => {
@@ -3740,7 +3753,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Reply in one short sentence.' } } }));
     });
     client.on('message', (data: Buffer) => {
-      if (data.length === 0 || data[0] !== 0x7b) return;
+      if (!looksLikeJsonObject(data)) return; // Do not parse binary (PCM); PROTOCOL-SPECIFICATION §5
       try {
         const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
         if (msg.type) {
@@ -3761,9 +3774,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             }
           }
         }
-      } catch {
-        // Ignore binary or malformed frames (e.g. PCM starts with 0x7b)
-        return;
+      } catch (e) {
+        // Parse errors must surface so we can correct them; never skip (PROTOCOL-SPECIFICATION §5)
+        finish(e as Error);
       }
     });
     client.on('error', (err) => finish(err));

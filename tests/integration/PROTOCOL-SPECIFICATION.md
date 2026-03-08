@@ -83,10 +83,22 @@ From PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE and PROTOCOL-ASSURANCE-GAPS. Each r
 
 ---
 
-## 5. Test file and run
+## 5. Client message parsing in tests
+
+When tests receive WebSocket messages from the proxy, they must follow these rules:
+
+1. **Do not parse binary as JSON.** The proxy sends JSON text frames and binary (PCM) frames. Only attempt `JSON.parse` when the frame looks like a complete JSON object (e.g. first byte `0x7b` and last byte `0x7d`). Do not call `JSON.parse` on frames that are clearly binary (e.g. PCM audio).
+
+2. **Do not skip frames on parse error.** If a frame is parsed as JSON and `JSON.parse` throws, the test must **fail** (e.g. call `done(err)` or `finish(err)`). Never catch parse errors and ignore or skip the frame — parse errors must surface so we can correct the cause (e.g. protocol change, malformed payload, or test bug).
+
+3. **Summary:** Only parse when the frame is JSON-shaped; when we do parse and get an error, surface it. This keeps tests deterministic and prevents silent skips that hide real issues.
+
+---
+
+## 6. Test file and run
 
 - **File:** `openai-proxy-integration.test.ts` in this directory.
 - **Mock-only tests:** Run with `npm test -- tests/integration/openai-proxy-integration.test.ts` (no env).
 - **Real-API tests:** Run with `USE_REAL_APIS=1` (and `OPENAI_API_KEY` set). **Note:** `--testNamePattern=real-API` alone does **not** enable real-API tests; the env var is required. See [TEST-STRATEGY.md](../../docs/development/TEST-STRATEGY.md).
 
-When adding or changing a protocol requirement, update (1) PROTOCOL-AND-MESSAGE-ORDERING.md, (2) this spec (§1–4), and (3) the test file so that every requirement has a corresponding test (or test section) listed here.
+When adding or changing a protocol requirement, update (1) PROTOCOL-AND-MESSAGE-ORDERING.md, (2) this spec (§1–5), and (3) the test file so that every requirement has a corresponding test (or test section) listed here.
