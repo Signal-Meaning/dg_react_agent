@@ -289,30 +289,33 @@ export function mapFunctionCallArgumentsDoneToFunctionCallRequest(
 }
 
 /**
+ * Single source for "Function call: name(args)" text (DRY; Issue #499, unit tests).
+ * Used by mapFunctionCallArgumentsDoneToConversationText and formatFunctionCallPartForConversationText.
+ */
+export function functionCallToConversationTextContent(name: string, args?: string): string {
+  const trimmed = typeof args === 'string' ? args.trim() : '';
+  return trimmed ? `Function call: ${name}(${trimmed})` : `Function call: ${name}()`;
+}
+
+/**
  * Map OpenAI response.function_call_arguments.done → component ConversationText (assistant).
  * Optional: so the app can show that a function was requested (e.g. "Function call: get_current_time()").
  */
 export function mapFunctionCallArgumentsDoneToConversationText(
   event: OpenAIFunctionCallArgumentsDone
 ): ComponentConversationText {
-  const name = event.name ?? 'function';
-  const args = event.arguments?.trim();
-  const content = args ? `Function call: ${name}(${args})` : `Function call: ${name}()`;
-  return {
-    type: 'ConversationText',
-    role: 'assistant',
-    content,
-  };
+  const content = functionCallToConversationTextContent(event.name ?? 'function', event.arguments);
+  return { type: 'ConversationText', role: 'assistant', content };
 }
 
 /**
  * Format a function_call content part as ConversationText (Issue #499 Deepgram parity).
- * Matches mapFunctionCallArgumentsDoneToConversationText so history shows "Function call: name(args)".
+ * Uses functionCallToConversationTextContent so history matches FCR format.
  */
 function formatFunctionCallPartForConversationText(part: Record<string, unknown>): string {
   const name = typeof part.name === 'string' ? part.name : 'function';
-  const args = typeof part.arguments === 'string' ? part.arguments.trim() : '';
-  return args ? `Function call: ${name}(${args})` : `Function call: ${name}()`;
+  const args = typeof part.arguments === 'string' ? part.arguments : undefined;
+  return functionCallToConversationTextContent(name, args);
 }
 
 /**
@@ -399,13 +402,10 @@ const COMPONENT_CODE_IDLE_TIMEOUT = 'idle_timeout';
 const COMPONENT_CODE_SESSION_MAX_DURATION = 'session_max_duration';
 
 /**
- * Map API error code to component code. Pass-through for known protocol codes and any other API code.
- * Single source of truth for API code → component code (DRY).
+ * Map API error code to component code. Currently pass-through; extend here if the API
+ * sends a code we must normalize to a component protocol code (single source of truth).
  */
 function mapApiErrorCodeToComponentCode(apiCode: string): string {
-  if (apiCode === COMPONENT_CODE_IDLE_TIMEOUT || apiCode === COMPONENT_CODE_SESSION_MAX_DURATION) {
-    return apiCode;
-  }
   return apiCode;
 }
 
@@ -488,6 +488,22 @@ export interface ComponentTranscript {
   alternatives: Array<{ transcript: string; confidence: number; words: unknown[] }>;
 }
 
+/** Issue #496: shared channel/timing extraction for Transcript mappers (DRY). */
+function transcriptChannelAndTiming(event: {
+  channel?: number;
+  channel_index?: number[];
+  start?: number;
+  duration?: number;
+}): { channel: number; channel_index: number[]; start: number; duration: number } {
+  const channelIndex = Array.isArray(event.channel_index) && event.channel_index.length > 0
+    ? event.channel_index
+    : (typeof event.channel === 'number' ? [event.channel] : [0]);
+  const channel = typeof event.channel === 'number' ? event.channel : (channelIndex[0] ?? 0);
+  const start = typeof event.start === 'number' ? event.start : 0;
+  const duration = typeof event.duration === 'number' ? event.duration : 0;
+  return { channel, channel_index: channelIndex, start, duration };
+}
+
 /**
  * Map OpenAI conversation.item.input_audio_transcription.completed → component Transcript.
  * Component maps this to TranscriptResponse and calls onTranscriptUpdate (Issue #414).
@@ -497,12 +513,7 @@ export function mapInputAudioTranscriptionCompletedToTranscript(
   event: OpenAIInputAudioTranscriptionCompleted
 ): ComponentTranscript {
   const transcript = event.transcript ?? '';
-  const channelIndex = Array.isArray(event.channel_index) && event.channel_index.length > 0
-    ? event.channel_index
-    : (typeof event.channel === 'number' ? [event.channel] : [0]);
-  const channel = typeof event.channel === 'number' ? event.channel : (channelIndex[0] ?? 0);
-  const start = typeof event.start === 'number' ? event.start : 0;
-  const duration = typeof event.duration === 'number' ? event.duration : 0;
+  const { channel, channel_index, start, duration } = transcriptChannelAndTiming(event);
   const alternatives = Array.isArray(event.alternatives) && event.alternatives.length > 0
     ? event.alternatives.map((a) => ({
         transcript: a.transcript ?? transcript,
@@ -516,7 +527,7 @@ export function mapInputAudioTranscriptionCompletedToTranscript(
     is_final: true,
     speech_final: true,
     channel,
-    channel_index: channelIndex,
+    channel_index,
     start,
     duration,
     alternatives,
@@ -534,19 +545,14 @@ export function mapInputAudioTranscriptionDeltaToTranscript(
 ): ComponentTranscript {
   const delta = event.delta ?? '';
   const transcript = (accumulated ?? '') + delta;
-  const channelIndex = Array.isArray(event.channel_index) && event.channel_index.length > 0
-    ? event.channel_index
-    : (typeof event.channel === 'number' ? [event.channel] : [0]);
-  const channel = typeof event.channel === 'number' ? event.channel : (channelIndex[0] ?? 0);
-  const start = typeof event.start === 'number' ? event.start : 0;
-  const duration = typeof event.duration === 'number' ? event.duration : 0;
+  const { channel, channel_index, start, duration } = transcriptChannelAndTiming(event);
   return {
     type: 'Transcript',
     transcript,
     is_final: false,
     speech_final: false,
     channel,
-    channel_index: channelIndex,
+    channel_index,
     start,
     duration,
     alternatives: [{ transcript, confidence: 1, words: [] }],

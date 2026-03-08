@@ -8,6 +8,15 @@
 - **Integration tests**: `tests/integration/openai-proxy-integration.test.ts` (Jest, `@jest-environment node`).
 - **Contract:** [PROTOCOL-AND-MESSAGE-ORDERING.md](./PROTOCOL-AND-MESSAGE-ORDERING.md) (wire protocol and ordering); [docs/issues/ISSUE-381/API-DISCONTINUITIES.md](../../docs/issues/ISSUE-381/API-DISCONTINUITIES.md) (API mapping).
 
+## Further reading (docs index)
+
+| Doc | Purpose |
+|-----|---------|
+| [UPSTREAM-EVENT-COMPLETE-MAP.md](./UPSTREAM-EVENT-COMPLETE-MAP.md) | Authoritative list of every upstream event and what the proxy does (map, control-only, or Error). |
+| [Epic #493 / OPENAI-PROXY-EVENT-MAP-GAPS](../../../docs/issues/OPENAI-PROXY-EVENT-MAP-GAPS/EPIC.md) | Epic and sub-issues for event-mapping gaps (UtteranceEnd, Transcript, ConversationText, etc.). |
+| [PROTOCOL-SPECIFICATION.md](../../../tests/integration/PROTOCOL-SPECIFICATION.md) | Event map with test references; client-facing events; requirement ↔ test table. |
+| [COMPONENT-PROXY-CONTRACT](../../../docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md) | Component ↔ proxy contract; includes "Proxy → component: message sources" (Epic #493). |
+
 ## Translator exports
 
 - `mapSettingsToSessionUpdate(settings)` – component Settings → OpenAI `session.update`
