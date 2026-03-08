@@ -23,11 +23,23 @@ export interface CapturedSettingsMessage {
   agent?: {
     think?: {
       functions?: AgentFunction[];
+      prompt?: string;
       [key: string]: any;
     };
+    context?: { messages?: Array<{ type: string; role: string; content: string }> };
     [key: string]: any;
   };
   [key: string]: any;
+}
+
+/**
+ * Options for assertSettingsStructure (Issue #379)
+ */
+export interface AssertSettingsStructureOptions {
+  /** When true, agent.context must exist and have a messages array */
+  requireContext?: boolean;
+  /** When true, agent.think.functions must exist and have length > 0 */
+  requireFunctions?: boolean;
 }
 
 export type CapturedSettings = Array<CapturedSettingsMessage>;
@@ -479,13 +491,44 @@ export function resetTestState(): void {
 }
 
 /**
- * Verify Settings message structure
+ * Assert Settings message has expected structure (Issue #379).
+ * Use for tests that need to validate full shape: type, agent, think, optional context, instructions.
+ */
+export function assertSettingsStructure(
+  settings: CapturedSettingsMessage | undefined,
+  options: AssertSettingsStructureOptions = {}
+): void {
+  if (!settings) {
+    throw new Error('Settings message is undefined');
+  }
+  expect(settings.type).toBe('Settings');
+  expect(settings.agent).toBeDefined();
+  expect(settings.agent?.think).toBeDefined();
+  // Instructions: agent.think.prompt is the canonical field in the wire format
+  if (settings.agent?.think && typeof (settings.agent.think as { prompt?: string }).prompt !== 'undefined') {
+    expect(typeof (settings.agent.think as { prompt?: string }).prompt).toBe('string');
+  }
+  // When agent.context is present it must be { messages: Array }
+  if (settings.agent?.context !== undefined) {
+    expect(settings.agent.context).toBeDefined();
+    expect(Array.isArray((settings.agent.context as { messages?: unknown }).messages)).toBe(true);
+  }
+  if (options.requireContext) {
+    expect(settings.agent?.context).toBeDefined();
+    expect(Array.isArray((settings.agent!.context as { messages: unknown[] })?.messages)).toBe(true);
+  }
+  if (options.requireFunctions) {
+    expect(settings.agent?.think?.functions).toBeDefined();
+    expect(Array.isArray(settings.agent.think.functions)).toBe(true);
+    expect(settings.agent.think.functions!.length).toBeGreaterThan(0);
+  }
+}
+
+/**
+ * Verify Settings message structure (basic checks; for full shape use assertSettingsStructure)
  */
 export function verifySettingsStructure(settings: CapturedSettingsMessage | undefined): void {
-  expect(settings).toBeDefined();
-  expect(settings?.type).toBe('Settings');
-  expect(settings?.agent).toBeDefined();
-  expect(settings?.agent?.think).toBeDefined();
+  assertSettingsStructure(settings);
 }
 
 /**

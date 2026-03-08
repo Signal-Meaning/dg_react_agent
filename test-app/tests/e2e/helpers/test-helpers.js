@@ -819,6 +819,53 @@ async function getCapturedWebSocketData(page) {
 }
 
 /**
+ * Get the last sent Settings message from captured WebSocket data (Issue #379).
+ * Use for diagnostics and structure verification in E2E.
+ * @param {{ sent: Array<{ type: string, data: object }> }} wsData - result of getCapturedWebSocketData(page)
+ * @returns {object | null} Last Settings message payload or null if none sent
+ */
+function getLastSettingsFromCapture(wsData) {
+  if (!wsData?.sent || !Array.isArray(wsData.sent)) return null;
+  for (let i = wsData.sent.length - 1; i >= 0; i--) {
+    const msg = wsData.sent[i];
+    const type = msg?.type ?? msg?.data?.type;
+    if (type === 'Settings') return msg?.data ?? msg;
+  }
+  return null;
+}
+
+/**
+ * Assert Settings message has expected structure in E2E (Issue #379).
+ * Validates type, agent, agent.think, and optional agent.context shape.
+ * @param {object} settings - Settings message payload (e.g. from getLastSettingsFromCapture)
+ * @param {{ requireContext?: boolean, requireFunctions?: boolean }} [options]
+ */
+function assertSettingsStructureE2E(settings, options = {}) {
+  if (!settings) throw new Error('Settings message is undefined (diagnostic: use getLastSettingsFromCapture after installWebSocketCapture)');
+  if (settings.type !== 'Settings') throw new Error(`Expected type "Settings", got "${settings.type}"`);
+  if (!settings.agent) throw new Error('Settings.agent is missing');
+  if (!settings.agent.think) throw new Error('Settings.agent.think is missing');
+  if (typeof settings.agent.think.prompt !== 'undefined' && typeof settings.agent.think.prompt !== 'string') {
+    throw new Error('Settings.agent.think.prompt must be a string');
+  }
+  if (settings.agent.context !== undefined) {
+    if (!settings.agent.context || !Array.isArray(settings.agent.context.messages)) {
+      throw new Error('When present, Settings.agent.context must have a messages array');
+    }
+  }
+  if (options.requireContext) {
+    if (!settings.agent.context || !Array.isArray(settings.agent.context.messages)) {
+      throw new Error('Settings.agent.context (with messages) is required');
+    }
+  }
+  if (options.requireFunctions) {
+    if (!Array.isArray(settings.agent.think.functions) || settings.agent.think.functions.length === 0) {
+      throw new Error('Settings.agent.think.functions is required and must be non-empty');
+    }
+  }
+}
+
+/**
  * Get the first TTS binary chunk as base64 (stored by WebSocket capture for Issue #414 audio-quality check).
  * @param {import('@playwright/test').Page} page
  * @returns {Promise<string|null>}
@@ -2037,6 +2084,8 @@ export {
   getConversationStorageCheck, // Check conversation in localStorage { ok, length?, reason? }
   installWebSocketCapture, // Install WebSocket message capture in browser context for testing
   getCapturedWebSocketData, // Retrieve captured WebSocket messages and their counts
+  getLastSettingsFromCapture, // Get last sent Settings from capture (Issue #379 diagnostics)
+  assertSettingsStructureE2E, // Assert Settings message structure in E2E (Issue #379)
   getTtsFirstChunkBase64, // Get first TTS binary chunk as base64 for audio-quality check (Issue #414)
   getTtsFirstLargeChunkBase64, // First 3 chunks >= 1000 bytes (actual TTS PCM; use for quality assertion)
   getTtsChunksBase64List, // Get per-chunk base64 list for boundary diagnostic (Issue #414)
