@@ -39,6 +39,29 @@ This document is the **Test-Driven Development** plan for fixing the **four fail
 - **IDLE-TIMEOUT-TEST-ANALYSIS.md:** Documents that greeting-idle-timeout, idle-timeout-behavior, idle-timeout-during-agent-speech, and text-idle-timeout-suspended-audio were fixed/consolidated and reported as passing in some runs; current branch may still show failures in direct mode.
 - **Possible causes:** Timing (idle timeout firing too early or too late), AudioContext not initialized in test environment, connection setup or VAD differences in direct mode, or component idle timeout logic not aligned with test expectations.
 
+### Run result: proxy mode (2026-03-08)
+
+A full run of the four specs with **proxy mode** (default `USE_PROXY_MODE=true`) from test-app completed successfully:
+
+| Result | Detail |
+|--------|--------|
+| **Outcome** | **15 passed** (exit code 0) |
+| **Duration** | ~3.9 minutes |
+| **Specs** | `deepgram-greeting-idle-timeout.spec.js`, `idle-timeout-behavior.spec.js`, `idle-timeout-during-agent-speech.spec.js`, `text-idle-timeout-suspended-audio.spec.js` |
+
+**Per-spec highlights:**
+
+- **deepgram-greeting-idle-timeout:** Idle timeout after greeting (Issue #139) passed; connection closed within tolerance of `__idleTimeoutMs`; reconnect-after-timeout and second timeout after agent response passed.
+- **idle-timeout-behavior:** Microphone activation after timeout, active conversation continuity, VAD/USER_STOPPED_SPEAKING restart, startAudioCapture() reset, and IdleTimeoutService behavior tests passed.
+- **idle-timeout-during-agent-speech:** Connection remained active during 20s agent response; "BUG NOT REPRODUCED" (connection did not drop during agent speech).
+- **text-idle-timeout-suspended-audio:** Idle timeout after text interaction and AudioContext resumption on focus passed.
+
+**Next step:** Run the same four specs in **direct mode** to confirm whether the original Issue #346 failures (reported in direct mode) still occur. Use the script that does not override `USE_PROXY_MODE` (so the app connects directly to Deepgram, not via proxy). No frontend or backend restart needed for direct mode; the app uses `VITE_DEEPGRAM_*` and connects to Deepgram’s WebSocket.
+
+**How direct mode is controlled (so test logs show it):** When `USE_PROXY_MODE=false`, the Playwright config sets baseURL with `?connectionMode=direct`, proxy endpoint env vars to empty, starts only the dev server (no backend), and logs "E2E direct mode" and "proxy endpoints: none (direct mode)". Use the `test:e2e:direct` script (see “How to reproduce” below). No frontend or backend restart needed; the app connects directly to Deepgram using `VITE_DEEPGRAM_*` env vars.
+
+**Note (2026-03):** A direct-mode run via `USE_PROXY_MODE=false npx playwright test ...` failed with **Playwright browser executable not found** (`chromium_headless_shell` missing at `.playwright-browsers/...`), not due to network or app. Ensure browsers are installed: `npm run playwright:install-browsers`. Then run the direct-mode command from your machine. If direct mode passes, the issue may be resolved; if not, use Phase 1–2 to isolate and fix.
+
 ---
 
 ## Phase 1: RED – Reproduce and isolate
@@ -99,20 +122,21 @@ This document is the **Test-Driven Development** plan for fixing the **four fail
 
 | Deliverable | Status |
 |-------------|--------|
-| Failures reproduced and categorized | Run from test-app (see below) |
-| Root cause identified (component vs test vs env) | Pending reproduction |
+| Failures reproduced and categorized | Proxy: N/A (15 passed). Direct: run from test-app (see below). |
+| Root cause identified (component vs test vs env) | Pending if direct-mode run fails |
 | Unit tests for idle timeout behavior (if applicable) | RED → GREEN (if needed) |
-| Four E2E specs passing in direct mode | GREEN (after fix) |
-| Docs and refactor | REFACTOR |
+| Four E2E specs passing in proxy mode | ✅ **GREEN** (15 passed, 2026-03-08) |
+| Four E2E specs passing in direct mode | Pending: run with `USE_PROXY_MODE=false` |
+| Docs and refactor | REFACTOR (after direct-mode result) |
 
 ### How to reproduce (from test-app)
 
 ```bash
 cd test-app
-# Direct mode (Deepgram, no proxy) – Issue #346 failures were in direct mode
-USE_PROXY_MODE=false npm run test:e2e -- deepgram-greeting-idle-timeout.spec.js idle-timeout-behavior.spec.js idle-timeout-during-agent-speech.spec.js text-idle-timeout-suspended-audio.spec.js
+# Direct mode – USE_PROXY_MODE=false; config sets baseURL with ?connectionMode=direct, no proxy env, only dev server. Logs show "E2E direct mode" and "proxy endpoints: none (direct mode)".
+npm run test:e2e:direct -- deepgram-greeting-idle-timeout.spec.js idle-timeout-behavior.spec.js idle-timeout-during-agent-speech.spec.js text-idle-timeout-suspended-audio.spec.js
 
-# Proxy mode (to compare)
+# Proxy mode (to compare) – USE_PROXY_MODE=true; config sets proxy endpoints and starts backend.
 npm run test:e2e -- deepgram-greeting-idle-timeout.spec.js idle-timeout-behavior.spec.js idle-timeout-during-agent-speech.spec.js text-idle-timeout-suspended-audio.spec.js
 ```
 

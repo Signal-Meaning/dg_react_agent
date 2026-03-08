@@ -1,7 +1,7 @@
 # PR: Resolve issues #490, #379, #346, #333
 
 **Branch:** `fix/issues-490-379-346-333`  
-**Status:** In progress — #379, #490, #333 addressed; #346 requires E2E reproduction (direct mode)
+**Status:** In progress — #379, #490, #333 done; #346 proxy-mode E2E **15 passed** (2026-03-08); direct-mode run still to confirm
 
 ## Scope
 
@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | **#490** | Refactor: Component-owned agent context for Settings | Component owns and builds `agent.context` when sending Settings; app persists/restores only. Single source of truth, reconnect robustness. |
 | **#379** | Component Team Test Suite Improvement Recommendations | Add Settings message structure verification, WebSocket capture, functions verification, improved diagnostics. |
-| **#346** | Idle Timeout Test Failures (4 E2E tests) | Fix 4 failing E2E tests in direct mode: greeting-idle-timeout, idle-timeout-behavior, idle-timeout-during-agent-speech, text-idle-timeout-suspended-audio. |
+| **#346** | Idle Timeout Test Failures (4 E2E tests) | Fix 4 failing E2E tests in direct mode. **Proxy mode:** 15/15 passed (2026-03-08). Direct mode: run `USE_PROXY_MODE=false` from test-app to confirm. |
 | **#333** | Fix remount test: Settings not sent on new connection after remount | After remount with different `agentOptions`, new connection should send Settings with new options; currently test skipped, bug open. |
 
 ## TDD documents and ordering

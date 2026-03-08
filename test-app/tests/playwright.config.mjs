@@ -19,13 +19,19 @@ dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 const forceHttp = process.env.E2E_USE_HTTP === '1' || process.env.E2E_USE_HTTP === 'true';
 const useHttps = !forceHttp && (process.env.HTTPS === 'true' || process.env.HTTPS === '1');
 // When HTTPS=true, baseURL must be https so webServer readiness and tests hit the right URL
-const baseURL = useHttps
+const baseURLRaw = useHttps
   ? (process.env.VITE_BASE_URL?.startsWith('https') ? process.env.VITE_BASE_URL : 'https://localhost:5173')
   : (process.env.VITE_BASE_URL || 'http://localhost:5173');
 const wsScheme = useHttps ? 'wss' : 'ws';
 const proxyBase = `${wsScheme}://localhost:8080`;
+// When USE_PROXY_MODE=false (direct mode), app must load with connectionMode=direct and no proxy endpoints
+const isDirectMode = process.env.USE_PROXY_MODE === 'false';
+const baseURL = isDirectMode
+  ? baseURLRaw + (baseURLRaw.includes('?') ? '&' : '?') + 'connectionMode=direct'
+  : baseURLRaw;
 console.log('Playwright baseURL:', baseURL);
-console.log('Playwright HTTPS:', useHttps, '| proxy endpoints:', `${proxyBase}/deepgram-proxy`, `${proxyBase}/openai`);
+console.log('Playwright HTTPS:', useHttps, '| proxy endpoints:', isDirectMode ? 'none (direct mode)' : `${proxyBase}/deepgram-proxy`, isDirectMode ? '' : `${proxyBase}/openai`);
+if (isDirectMode) console.log('E2E direct mode: USE_PROXY_MODE=false → connectionMode=direct, app connects to Deepgram directly (no proxy)');
 const ENABLE_AUDIO = process.env.PW_ENABLE_AUDIO === 'true';
 console.log('PW_ENABLE_AUDIO:', ENABLE_AUDIO);
 // By default do not collect failure artifacts (trace/screenshot). Set PW_ARTIFACTS_ON_FAILURE=1 to enable.
@@ -130,14 +136,16 @@ export default defineConfig({
               HTTPS: useHttps ? 'true' : 'false',
               VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
               VITE_DEEPGRAM_PROJECT_ID: process.env.VITE_DEEPGRAM_PROJECT_ID || '',
-              VITE_BASE_URL: process.env.VITE_BASE_URL || baseURL,
-              VITE_DEEPGRAM_PROXY_ENDPOINT: process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || `${proxyBase}/deepgram-proxy`,
-              VITE_OPENAI_PROXY_ENDPOINT: process.env.VITE_OPENAI_PROXY_ENDPOINT || `${proxyBase}/openai`,
+              VITE_BASE_URL: process.env.VITE_BASE_URL || baseURLRaw,
+              // Direct mode: do not set proxy endpoints so app uses connectionMode=direct (from baseURL query). Proxy mode: set defaults.
+              VITE_DEEPGRAM_PROXY_ENDPOINT: isDirectMode ? '' : (process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || `${proxyBase}/deepgram-proxy`),
+              VITE_OPENAI_PROXY_ENDPOINT: isDirectMode ? '' : (process.env.VITE_OPENAI_PROXY_ENDPOINT || `${proxyBase}/openai`),
               // E2E default 1s so greeting-idle-timeout tests finish within test timeout; override with VITE_IDLE_TIMEOUT_MS if needed. Test-app default (when run outside E2E) is 10s via component DEFAULT_IDLE_TIMEOUT_MS.
               VITE_IDLE_TIMEOUT_MS: process.env.VITE_IDLE_TIMEOUT_MS || '1000',
             },
           },
-          {
+          // In direct mode only the dev server is needed; backend (proxy) is not used. Start it in proxy mode so tests that assume proxy still run if script is wrong.
+          ...(isDirectMode ? [] : [{
             command: 'npm run backend',
             cwd: '..',
             port: 8080,
@@ -154,7 +162,7 @@ export default defineConfig({
               PROXY_PATH: '/deepgram-proxy',
               LOG_LEVEL: 'debug',
             },
-          },
+          }]),
         ],
       }),
 

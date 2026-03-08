@@ -27,6 +27,7 @@
     "test:e2e:proxy": "PLAYWRIGHT_BROWSERS_PATH=$(node -p \"require('path').resolve(process.cwd(), '.playwright-browsers')\") playwright test tests/e2e/deepgram-backend-proxy-mode.spec.js --config=tests/playwright.config.mjs",
     "test:e2e:proxy:log": "USE_PROXY_MODE=true PLAYWRIGHT_BROWSERS_PATH=$(node -p \"require('path').resolve(process.cwd(), '.playwright-browsers')\") playwright test --config=tests/playwright.config.mjs 2>&1 | tee e2e-proxy-run.log",
     "test:e2e:greeting-idle": "VITE_IDLE_TIMEOUT_MS=1000 USE_PROXY_MODE=true PLAYWRIGHT_BROWSERS_PATH=$(node -p \"require('path').resolve(process.cwd(), '.playwright-browsers')\") playwright test tests/e2e/deepgram-greeting-idle-timeout.spec.js --config=tests/playwright.config.mjs",
+    "test:e2e:direct": "USE_PROXY_MODE=false PLAYWRIGHT_BROWSERS_PATH=$(node -p \"require('path').resolve(process.cwd(), '.playwright-browsers')\") playwright test --config=tests/playwright.config.mjs",
     "playwright:install-browsers": "PLAYWRIGHT_BROWSERS_PATH=./.playwright-browsers npx playwright install chromium"
   },
   "dependencies": {
