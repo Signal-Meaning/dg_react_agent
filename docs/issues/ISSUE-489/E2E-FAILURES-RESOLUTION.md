@@ -23,8 +23,8 @@ With an existing dev server and backend, add `E2E_USE_EXISTING_SERVER=1` if you 
 | Result   | Notes |
 |----------|--------|
 | **Passing** | Most OpenAI proxy E2E and **issue-373** “re-enable idle timeout” (resolved). Connection, single message, multi-turn, greeting, reconnection, basic audio, VAD, long-running function call, thinking phase, concurrent function calls. |
-| **Latest result** | **211 passed**, **12 failed**, 25 skipped (7.8m). |
-| **Failing** | **12 tests** (pre-9a fix); **9a resolved** 2026-03-07. Remaining: callback-test (onPlaybackStateChange), context-retention (2,3,4 — unblocked by 9a, re-run to confirm), issue-373 (long-running), openai-proxy-e2e (3, 3b, 6, 6b, 9, 9a green), openai-proxy-tts-diagnostic (1). See TDD-PLAN-REAL-API-E2E-FAILURES.md. |
+| **Latest result** | **211 passed**, **12 failed**, 25 skipped (full suite, 7.8m). **OpenAI proxy spec only:** `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js` → **13 passed**, **3 failed**, 2 skipped (8.1m). See "OpenAI proxy E2E only" below. |
+| **Failing (openai-proxy-e2e only)** | **3 remaining:** 3b (assistant count 5 vs expected 3), 6 (function-call time not in agent-response), 6b (same). TDD: [TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md](./TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md). Full suite: callback-test, context-retention (2,3,4), issue-373, openai-proxy-tts-diagnostic still in failure set. |
 | **Skipped** | Various mock-only or conditional skips (e.g. interruptAgent in CI). |
 
 **Playwright E2E (proxy mode, without real APIs / default run):**
@@ -58,7 +58,7 @@ When running the full E2E suite from `test-app` **with** `USE_REAL_APIS=1`, the 
 | 8 | openai-proxy-e2e.spec.js | **6. Simple function calling** – assert response in `[data-testid="agent-response"]` | Expected pattern `/\d{1,2}:\d{2}|UTC/`. **Received:** `"Hello! How can I assist you today?"` (greeting). `toHaveText` timeout 45s; test timeout 60s. Locator resolved ~18× to greeting. Error context: `test-results/openai-proxy-e2e-OpenAI-Pr-acd4e-data-testid-agent-response--chromium/error-context.md`. |
 | 9 | openai-proxy-e2e.spec.js | **6b. Issue #462 / #470** – function-call flow (partner scenario) | Same as test 6: expected time/UTC. **Received:** greeting. Error context: `test-results/openai-proxy-e2e-OpenAI-Pr-dd25c--response-partner-scenario--chromium/error-context.md`. |
 | 10 | openai-proxy-e2e.spec.js | **9a. Isolation** – Settings on reconnect include context | **Resolved 2026-03-07.** Settings on reconnect now include `agent.context` (reconnect preload + sync send; ref fallback in component). Passes OpenAI and Deepgram. See [TDD-PLAN-9A-CONTEXT-ON-RECONNECT.md](./TDD-PLAN-9A-CONTEXT-ON-RECONNECT.md). |
-| 11 | openai-proxy-e2e.spec.js | **9. Repro** – after disconnect and reconnect, session retained; response must not be stale or greeting | Unblocked by 9a fix; re-run to confirm. Previously: session not retained when Settings on reconnect lacked context. |
+| 11 | openai-proxy-e2e.spec.js | **9. Repro** – after disconnect and reconnect, session retained; response must not be stale or greeting | **Resolved.** Proxy maps conversation.item.done content part.transcript (output_audio) to ConversationText; Test 9 (Repro) passes with USE_REAL_APIS=1. See TDD-PLAN-ALL-MESSAGES-IN-HISTORY.md. |
 | 12 | openai-proxy-tts-diagnostic.spec.js | diagnose TTS path: binary received and playback status after agent response | Asserts: binary count ≥ 1, no JSON as binary, handleAgentAudio called, playback started if binary received, AudioContext runnable, PCM speech-like. One of these fails (env/timing or proxy/component). |
 
 ### Breakdown by category
@@ -79,7 +79,25 @@ Tests 6, 7: multi-turn (3) expects second agent response; 3b expects exactly 2 u
 Tests 8, 9: agent-response must show time/UTC after "What time is it?" and function call. With real API, UI often stays on greeting; no second assistant message with time.
 
 **OpenAI proxy – context on reconnect (2)**
-**9a resolved 2026-03-07.** Test 10 (9a) passes. Test 11 (9) unblocked by same fix; re-run to confirm.
+**9a resolved 2026-03-07.** Test 10 (9a) passes. **Test 11 (9. Repro) resolved:** proxy maps conversation.item.done (output_audio.transcript) to ConversationText; passes with real APIs. Re-run full suite to confirm counts.
+
+### OpenAI proxy E2E only (reduced to 3 failures)
+
+When running **only** the openai-proxy-e2e spec with real APIs from test-app:
+
+```bash
+cd test-app && USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js
+```
+
+**Result (2026-03):** **13 passed**, **3 failed**, 2 skipped (8.1m).
+
+| # | Test | Error | Notes |
+|---|------|--------|--------|
+| 1 | **3b.** Multi-turn after disconnect – session history preserved | `toHaveCount(3)` for assistant messages failed: **Expected 3, Received 5** | After transcript mapping fix we get more assistant messages (e.g. duplicates from .created/.added/.done or session history on reconnect). Test expects exactly 3 (greeting + r1 + r2). |
+| 2 | **6.** Simple function calling – assert response in agent-response | `toHaveText(/\d{1,2}:\d{2}\|UTC/)` failed. **Received:** "Hello! How can I assist you today?" (greeting) | Model's reply with time after function call never reaches UI. Phase 5 (function-call reply). |
+| 3 | **6b.** Issue #462 / #470 – function-call flow (partner scenario) | Same as 6. **Received:** greeting or "I'm having some trouble getting the exact time...". | Same root cause: post–function-call assistant message (time/UTC) not delivered to client. |
+
+**TDD plan for the 3 remaining:** [TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md](./TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md).
 
 ### How to reproduce
 

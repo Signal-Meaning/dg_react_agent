@@ -175,7 +175,22 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
 
     const history = page.locator('[data-testid="conversation-history"]');
     await expect(history.locator('[data-role="user"]')).toHaveCount(2);
-    await expect(history.locator('[data-role="assistant"]')).toHaveCount(3);
+
+    // DOM observation (TDD-PLAN-ALL-MESSAGES-IN-HISTORY): capture all messages in order to diagnose assistant count
+    const messageItems = await history.locator('li[data-role]').all();
+    const conversationInOrder = await Promise.all(
+      messageItems.map(async (el, i) => {
+        const role = await el.getAttribute('data-role');
+        const text = (await el.textContent()) || '';
+        const content = text.replace(/^(user|assistant):\s*/i, '').trim().replace(/\s+/g, ' ');
+        return { index: i + 1, role, content: content.slice(0, 200) + (content.length > 200 ? '...' : '') };
+      })
+    );
+    const conversationSummary = conversationInOrder.map(({ index, role, content }) => `  ${index}. ${role}: ${content}`).join('\n');
+    const assistantCount = conversationInOrder.filter((m) => m.role === 'assistant').length;
+    console.log('[Test 3b] Conversation history (DOM order, ' + conversationInOrder.length + ' messages, ' + assistantCount + ' assistant):\n' + conversationSummary);
+
+    await expect(history.locator('[data-role="assistant"]'), 'Expected 3 assistant messages (greeting + r1 + r2). DOM order:\n' + conversationSummary).toHaveCount(3);
     const assistantTexts = await history.locator('[data-role="assistant"]').allTextContents();
     const r1StillInHistory = assistantTexts.some((t) => t.includes('Paris') || (r1 && t.trim().includes(r1.trim().slice(0, 20))));
     expect(r1StillInHistory, 'Conversation history must still contain r1 after reconnect (session history requirement)').toBe(true);

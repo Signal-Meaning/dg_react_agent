@@ -177,13 +177,31 @@ export interface OpenAIErrorEvent {
 }
 
 /**
+ * Build instructions string: base prompt + optional prior conversation context.
+ * Issue #489: Do not inject prior-session context as conversation items (that causes API to echo them and duplicate in UI).
+ * Instead we pass context in the session instructions so the model has history without creating items.
+ */
+function buildInstructionsWithContext(settings: ComponentSettings): string {
+  const base = settings.agent?.think?.prompt ?? '';
+  const messages = settings.agent?.context?.messages;
+  if (!messages?.length) return base;
+  const lines = messages.map((m) => {
+    const role = m.role === 'user' || m.role === 'assistant' ? m.role : 'user';
+    const content = (m.content ?? '').trim();
+    return `${role}: ${content}`;
+  });
+  const contextBlock = `\n\nPrevious conversation:\n${lines.join('\n')}`;
+  return base ? base + contextBlock : contextBlock.trim();
+}
+
+/**
  * Map component Settings → OpenAI session.update payload (client event).
  */
 export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAISessionUpdate {
   const session: OpenAISessionUpdate['session'] = {
     type: 'realtime',
     model: settings.agent?.think?.provider?.model ?? 'gpt-realtime',
-    instructions: settings.agent?.think?.prompt ?? '',
+    instructions: buildInstructionsWithContext(settings),
     // Do not send voice in session.update; current Realtime API returns "Unknown parameter: 'session.voice'".
     // GA API: turn_detection is under session.audio.input (REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2).
     // Use turn_detection: null so the server does NOT auto-commit the audio buffer; only the proxy sends

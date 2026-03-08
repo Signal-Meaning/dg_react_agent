@@ -43,6 +43,28 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.session).not.toHaveProperty('voice');
     });
 
+    it('includes prior-session context in instructions (Issue #489; do not inject context as conversation items)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'You are helpful.', provider: { model: 'gpt-4o-realtime' } },
+          context: {
+            messages: [
+              { role: 'assistant' as const, content: 'Hello! How can I assist you today?' },
+              { role: 'user' as const, content: 'What is the capital of France?' },
+              { role: 'assistant' as const, content: 'The capital of France is Paris.' },
+            ],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.instructions).toContain('You are helpful.');
+      expect(out.session.instructions).toContain('Previous conversation:');
+      expect(out.session.instructions).toContain('assistant: Hello! How can I assist you today?');
+      expect(out.session.instructions).toContain('user: What is the capital of France?');
+      expect(out.session.instructions).toContain('assistant: The capital of France is Paris.');
+    });
+
     it('maps Settings.agent.think.functions to session.update tools', () => {
       const settings = {
         type: 'Settings' as const,

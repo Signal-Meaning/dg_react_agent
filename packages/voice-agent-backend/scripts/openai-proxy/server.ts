@@ -28,7 +28,6 @@ import {
   mapSessionUpdatedToSettingsApplied,
   mapFunctionCallArgumentsDoneToFunctionCallRequest,
   mapFunctionCallResponseToConversationItemCreate,
-  mapContextMessageToConversationItemCreate,
   mapGreetingToConversationText,
   mapConversationItemAddedToConversationText,
   mapErrorToComponentError,
@@ -146,12 +145,13 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     const sentConversationTextItemIds = new Set<string>();
     /** Issue #406: have we sent SettingsApplied to the client? Used to send clear Error when upstream closes before session ready. */
     let hasSentSettingsApplied = false;
-    /** Issue #406: defer context (conversation.item.create) until after session.updated to avoid upstream close. */
-    const pendingContextItems: string[] = [];
+    /** Issue #489: Prior-session context is no longer sent as conversation items; it is passed in session.update instructions only. */
     /** Issue #414: defer input_audio_buffer.append until after session.updated so session is configured for audio. */
     const pendingAudioQueue: Buffer[] = [];
     /** TODO: Not expected to keep. Only forward the first Settings per connection; duplicate Settings (e.g. on reconnect/reload) must not send a second session.update or upstream can error. */
     let hasForwardedSessionUpdate = false;
+    /** Issue #489: Last Settings had context (reconnect). On session.updated do not send greeting to client; they already have it. */
+    let hadContextInLastSettings = false;
     /** Issue #462 / #470: After sending function_call_output, defer response.create until we receive response.output_text.done so the API can close the previous response first (avoids conversation_already_has_active_response). */
     let pendingResponseCreateAfterFunctionCallOutput = false;
     /** Issue #482: Have we sent AgentStartedSpeaking for the current response? So component sees "agent active" before ConversationText (avoids client idle timeout). Reset when response ends. */
@@ -300,13 +300,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           const settings = msg as Parameters<typeof mapSettingsToSessionUpdate>[0];
           const sessionUpdate = mapSettingsToSessionUpdate(settings);
           upstream.send(JSON.stringify(sessionUpdate));
-          const contextMessages = settings.agent?.context?.messages;
-          if (contextMessages?.length) {
-            for (const m of contextMessages) {
-              const role = (m.role === 'user' || m.role === 'assistant') ? m.role : 'user';
-              const itemCreate = mapContextMessageToConversationItemCreate(role, m.content ?? '');
-              pendingContextItems.push(JSON.stringify(itemCreate));
-            }
+          // Issue #489: Do not inject prior-session context as conversation items. Context is passed in session.update
+          // instructions (buildInstructionsWithContext in translator) so the model has history without creating items
+          // that the API would echo back and duplicate in the UI. See DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md.
+          const hadContextInSettings = !!(settings.agent?.context?.messages?.length);
+          if (hadContextInSettings) {
+            hadContextInLastSettings = true;
           }
           const g = settings.agent?.greeting;
           storedGreeting = typeof g === 'string' && g.trim().length > 0 ? g : undefined;
@@ -463,18 +462,16 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           });
         } else if (msg.type === 'session.updated') {
           hasSentSettingsApplied = true;
-          for (const itemJson of pendingContextItems) {
-            upstream.send(itemJson);
-          }
-          pendingContextItems.length = 0;
           const settingsApplied = mapSessionUpdatedToSettingsApplied(msg as Parameters<typeof mapSessionUpdatedToSettingsApplied>[0]);
           clientWs.send(JSON.stringify(settingsApplied));
-          if (storedGreeting) {
+          // Issue #489: When client sent context (reconnect), do not send greeting again; they already have it in history.
+          const sendGreeting = storedGreeting && !hadContextInLastSettings;
+          if (sendGreeting) {
             // Issue #414 fix: greeting is text-only to client. Do NOT send conversation.item.create
             // (assistant) to upstream — OpenAI Realtime API errors on client-created assistant messages.
             // The greeting text is shown immediately in the UI; the model sees the greeting text in
             // its instructions (if configured) so it knows it already greeted the user.
-            clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting)));
+            clientWs.send(JSON.stringify(mapGreetingToConversationText(storedGreeting!)));
             // Issue #489: Send AgentAudioDone after greeting so the component can transition to idle
             // and the idle timeout can start (E2E "timeout after greeting" tests).
             sendAgentAudioDoneIfNeeded();
@@ -484,8 +481,9 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               body: 'greeting sent to client only (not upstream; OpenAI Realtime rejects client-created assistant items)',
               attributes: { ...connectionAttrs },
             });
-            storedGreeting = undefined;
           }
+          if (storedGreeting) storedGreeting = undefined;
+          hadContextInLastSettings = false;
           // Issue #414: session is now configured for audio; send any append chunks queued before session.updated.
           flushPendingAudio();
         } else if (msg.type === 'response.output_text.done') {

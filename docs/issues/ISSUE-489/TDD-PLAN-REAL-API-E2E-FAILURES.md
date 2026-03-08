@@ -83,7 +83,7 @@
 | 8 | openai-proxy-e2e | 6. Simple function calling – time in response | **Red.** agent-response stays greeting; proxy fallback in place; API/backend may not send time reply. |
 | 9 | openai-proxy-e2e | 6b. Function-call flow (partner) | **Red.** Same as #8. |
 | 10 | openai-proxy-e2e | 9a. Settings on reconnect include context | **Green.** Resolved 2026-03-07. Passes OpenAI and Deepgram. Diagnostics removed. |
-| 11 | openai-proxy-e2e | 9. Session retained; response not greeting | **Unblocked by 9a.** Re-run to confirm. |
+| 11 | openai-proxy-e2e | 9. Session retained; response not greeting | **Green.** Resolved: proxy maps conversation.item.done content part.transcript (output_audio) to ConversationText. See TDD-PLAN-ALL-MESSAGES-IN-HISTORY.md. Re-run full suite to confirm. |
 | 12 | openai-proxy-tts-diagnostic | TTS path: binary + playback status | **Red.** Fail in full suite. Playback/TTS only; not yet addressed. |
 
 **By phase (phase = E2E green for its tests; 2 and 6 combined in order)**
@@ -93,7 +93,7 @@
 | 1 | Playback / TTS (tests 1, 12) | [ ] |
 | 2+6 | Context retention + context on reconnect (tests 2, 3, 4, 10, 11) | [~] 9a green; 2,3,4,7,11 unblocked, re-run to confirm |
 | 3 | Issue-373 long function call (test 5) | [~] (re-run: 4 pass, 1 flaky) |
-| 4 | Multi-turn / history (tests 6, 7) | [ ] |
+| 4 | Multi-turn / history (tests 6, 7) | [~] Same proxy transcript mapping may fix 3/3b; re-run to confirm. |
 | 5 | Function-call reply (tests 8, 9) | [ ] |
 
 **Acceptance (all must be checked to close)**
@@ -112,7 +112,7 @@
 | 1 | Playback / TTS (tests 1, 12) | [x] | [ ] | [ ] | **Red.** Playback/TTS only. Red in full suite. See §3. |
 | 2+6 | Context retention + context on reconnect (tests 2, 3, 4, 10, 11) | [x] | [x] | [x] | **9a resolved (2026-03-07):** Reconnect preload + sync send; ref fallback; forced preload in sendAgentSettings; diagnostics removed. 9a E2E passes OpenAI + Deepgram. Tests 2,3,4,7,11 unblocked; re-run full suite to confirm. |
 | 3 | Issue-373 long-running (test 5) | [x] | [~] | [ ] | Re-ran with real APIs: 4 passed, 1 flaky (long-running test failed 2× with connection closes during 12s execution, passed on retry). IdleTimeoutService blocks timeout; flakiness may be proxy/upstream closing (code 1005). |
-| 4 | Multi-turn / history (tests 6, 7) | [x] | [~] | [ ] | **Red.** Proxy fallback in place; 3 & 3b still fail (1 assistant). **3b depends on 9a.** |
+| 4 | Multi-turn / history (tests 6, 7) | [x] | [~] | [ ] | Proxy now maps conversation.item.done (output_audio.transcript) to ConversationText; 3 & 3b may pass. Re-run to confirm. |
 | 5 | Function-call reply (tests 8, 9) | [x] | [ ] | [ ] | **Red.** agent-response stays greeting; proxy fallback in place; API/backend may not send time reply. |
 
 **Acceptance criteria**
@@ -348,4 +348,4 @@ Phase 2+6 is one combined phase (context on reconnect). Phases 4 and 5 are proxy
 
 **Use the dedicated 9a plan:** All work to resolve the context-retention bug in WebSocket handling is in **[TDD-PLAN-9A-CONTEXT-ON-RECONNECT.md](./TDD-PLAN-9A-CONTEXT-ON-RECONNECT.md)**. That document is the single place to track repro, diagnostics, and fixes for 9a. Do not spread 9a steps across this plan. **Status:** 9a Green fix is implemented (sync load from storage in `sendAgentSettings()` when refs empty); **E2E verification pending** (run 9a with OpenAI to confirm).
 
-**After 9a is resolved:** Return to this document. Then: (1) Remove `[ISSUE-489]` diagnostics and refs (see TDD-PLAN-9A §Refactor). (2) Re-run Phase 2+6 and 9a/9 E2E to confirm green. (3) Proceed with Phase 1 (playback/TTS), Phase 3 (flakiness if needed), Phase 4, Phase 5. (4) Update [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md) as failures resolve.
+**After 9a and Test 9 (Repro):** 9a resolved 2026-03-07; Test 9 (Repro) resolved via proxy conversation.item.done → transcript mapping (TDD-PLAN-ALL-MESSAGES-IN-HISTORY). Next: (1) Re-run full suite with USE_REAL_APIS=1 to confirm updated failure count (2,3,4,7,11 may pass; 3/3b may pass with same mapper). (2) Proceed with Phase 1 (playback/TTS), Phase 3 (flakiness if needed), Phase 4 (multi-turn), Phase 5 (function-call reply). (3) Update E2E-FAILURES-RESOLUTION.md as failures resolve.
