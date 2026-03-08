@@ -938,24 +938,21 @@ function App() {
     }
 
     if (handler) {
-      // E2E/demo: use in-browser handler (Issue #305)
+      // E2E/demo: use in-browser handler (Issue #305). Return any value or Promise so the component
+      // waits for async handlers (e.g. Promise<void>) before sending the default "no response" error.
       const result = handler(request, sendResponse);
-      if (result !== undefined && result !== null) {
-        return result;
-      }
+      if (result !== undefined && result !== null) return result;
       testWindow.__testFunctionCallResponseSent = true;
       return;
     }
 
-    // Issue #407: By default, forward to app backend (no in-browser execution).
-    // Return the Promise so the component waits for the backend round-trip before deciding to send
-    // the default "Handler completed without sending a response" error (Issue #489).
+    // Issue #407: Forward to app backend. Return the Promise so the component waits for the
+    // backend round-trip; otherwise it treats void return as "no response" and sends the default error (Issue #489).
     const baseUrl = getFunctionCallBackendBaseUrl(proxyEndpoint);
     if (baseUrl) {
       return forwardFunctionCallToBackend(request, sendResponse, baseUrl);
     }
 
-    // No handler and no backend URL: log only (e.g. direct Deepgram without proxy)
     sessionLogger.warn('No function-call handler or backend URL; request not handled', { name: request.name });
   }, [proxyEndpoint]);
 

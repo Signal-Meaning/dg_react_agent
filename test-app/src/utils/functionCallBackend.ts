@@ -5,6 +5,17 @@
 
 import type { FunctionCallRequest, FunctionCallResponse } from '@signal-meaning/voice-agent-react';
 
+/** Backend path for function-call (single source of truth; tests/build URL logic should match). */
+export const FUNCTION_CALL_PATH = '/function-call';
+
+/**
+ * Build the full URL for POST /function-call from a base URL (no trailing slash in result path).
+ * Shared logic so baseUrl + path stay consistent across callers.
+ */
+export function buildFunctionCallUrl(baseUrl: string): string {
+  return `${baseUrl.replace(/\/$/, '')}${FUNCTION_CALL_PATH}`;
+}
+
 /**
  * Derive HTTP(S) base URL from the WebSocket proxy endpoint for POST /function-call.
  * e.g. ws://localhost:8080/openai -> http://localhost:8080
@@ -26,10 +37,6 @@ function generateTraceId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
-/**
- * Forward a function-call request to the app backend and call sendResponse with the result or error.
- * Sends X-Trace-Id so backend logs can be correlated (Issue #412).
- */
 /** E2E diagnostic: set on window when present so tests can read step 1–2 (backend response, sendResponse). */
 declare global {
   interface Window {
@@ -51,6 +58,31 @@ function setDiagnostics(update: Partial<NonNullable<Window['__functionCallDiagno
   w.__functionCallDiagnostics = { ...(w.__functionCallDiagnostics ?? { url: '' }), ...update };
 }
 
+/** Send error response and update diagnostics (DRY for all error exits). */
+function sendErrorResponse(
+  request: FunctionCallRequest,
+  sendResponse: (response: FunctionCallResponse) => void,
+  error: string,
+  diagnostics: Partial<NonNullable<Window['__functionCallDiagnostics']>>
+): void {
+  setDiagnostics({ ...diagnostics, responseSent: { hasResult: false, hasError: true } });
+  sendResponse({ id: request.id, error });
+}
+
+/** Send success response and update diagnostics. */
+function sendSuccessResponse(
+  request: FunctionCallRequest,
+  sendResponse: (response: FunctionCallResponse) => void,
+  result: unknown
+): void {
+  setDiagnostics({ responseSent: { hasResult: true, hasError: false } });
+  sendResponse({ id: request.id, result });
+}
+
+/**
+ * Forward a function-call request to the app backend and call sendResponse with the result or error.
+ * Sends X-Trace-Id so backend logs can be correlated (Issue #412).
+ */
 export async function forwardFunctionCallToBackend(
   request: FunctionCallRequest,
   sendResponse: (response: FunctionCallResponse) => void,
@@ -58,11 +90,10 @@ export async function forwardFunctionCallToBackend(
   traceId?: string
 ): Promise<void> {
   if (!baseUrl) {
-    setDiagnostics({ url: '', responseSent: { hasResult: false, hasError: true } });
-    sendResponse({ id: request.id, error: 'Function-call backend URL not configured' });
+    sendErrorResponse(request, sendResponse, 'Function-call backend URL not configured', { url: '' });
     return;
   }
-  const url = `${baseUrl.replace(/\/$/, '')}/function-call`;
+  const url = buildFunctionCallUrl(baseUrl);
   setDiagnostics({ url });
   const requestTraceId = traceId ?? generateTraceId();
   try {
@@ -90,38 +121,25 @@ export async function forwardFunctionCallToBackend(
       contentPreview,
     });
     if (body.error != null) {
-      setDiagnostics({ errorMessage: String(body.error), responseSent: { hasResult: false, hasError: true } });
-      sendResponse({ id: request.id, error: String(body.error) });
+      sendErrorResponse(request, sendResponse, String(body.error), { errorMessage: String(body.error) });
       return;
     }
     if (body.content != null) {
       try {
-        const result = JSON.parse(body.content as string);
-        setDiagnostics({ responseSent: { hasResult: true, hasError: false } });
-        sendResponse({ id: request.id, result });
+        sendSuccessResponse(request, sendResponse, JSON.parse(body.content as string));
       } catch {
-        setDiagnostics({ responseSent: { hasResult: true, hasError: false } });
-        sendResponse({ id: request.id, result: body.content });
+        sendSuccessResponse(request, sendResponse, body.content);
       }
       return;
     }
-    setDiagnostics({ responseSent: { hasResult: false, hasError: true } });
-    sendResponse({
-      id: request.id,
-      error: res.ok ? 'Backend returned no content' : `Request failed: ${res.status}`,
-    });
+    sendErrorResponse(request, sendResponse, res.ok ? 'Backend returned no content' : `Request failed: ${res.status}`, {});
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    setDiagnostics({
+    sendErrorResponse(request, sendResponse, err instanceof Error ? err.message : 'Failed to call function-call backend', {
       status: undefined,
       hasContent: false,
       hasError: true,
       errorMessage,
-      responseSent: { hasResult: false, hasError: true },
-    });
-    sendResponse({
-      id: request.id,
-      error: err instanceof Error ? err.message : 'Failed to call function-call backend',
     });
   }
 }

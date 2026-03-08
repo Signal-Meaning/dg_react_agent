@@ -417,8 +417,9 @@ async function setupTestPageForBackend(page, timeoutOrOptions = 10000) {
 }
 
 /**
- * Derive function-call backend base URL from proxy endpoint (same as app's getFunctionCallBackendBaseUrl).
- * Used so E2E can check backend reachability before tests 6/6b.
+ * Derive function-call backend base URL from proxy endpoint.
+ * Logic must match getFunctionCallBackendBaseUrl in test-app/src/utils/functionCallBackend.ts
+ * so E2E reachability checks use the same URL as the app.
  * @returns {Promise<string>} e.g. 'http://localhost:8080'
  */
 async function getFunctionCallBackendBaseUrlForE2E() {

@@ -3,10 +3,24 @@
  * TDD: tests define the forwarding contract; implementation in src/utils/functionCallBackend.ts.
  */
 
-import { forwardFunctionCallToBackend, getFunctionCallBackendBaseUrl } from '../src/utils/functionCallBackend';
+import {
+  forwardFunctionCallToBackend,
+  getFunctionCallBackendBaseUrl,
+  buildFunctionCallUrl,
+  FUNCTION_CALL_PATH,
+} from '../src/utils/functionCallBackend';
 import type { FunctionCallRequest, FunctionCallResponse } from '@signal-meaning/voice-agent-react';
 
 describe('functionCallBackend (Issue #407)', () => {
+  describe('FUNCTION_CALL_PATH and buildFunctionCallUrl', () => {
+    it('FUNCTION_CALL_PATH is /function-call', () => {
+      expect(FUNCTION_CALL_PATH).toBe('/function-call');
+    });
+    it('buildFunctionCallUrl normalizes baseUrl and appends path', () => {
+      expect(buildFunctionCallUrl('http://localhost:8080')).toBe('http://localhost:8080/function-call');
+      expect(buildFunctionCallUrl('http://localhost:8080/')).toBe('http://localhost:8080/function-call');
+    });
+  });
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {

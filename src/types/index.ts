@@ -231,6 +231,8 @@ export interface DeepgramVoiceInteractionProps {
    * The callback can either:
    * 1. Call `sendResponse()` and return void (imperative style, backward compatible)
    * 2. Return a `FunctionCallResponse` or `Promise<FunctionCallResponse>` (declarative style)
+   * 3. Return `Promise<void>` when calling `sendResponse()` asynchronously (e.g. after a fetch).
+   *    The component waits for the Promise to settle before deciding to send the default "no response" error.
    * 
    * If the callback returns a value (or Promise), that value is used instead of calling `sendResponse()`.
    * 
