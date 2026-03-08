@@ -536,6 +536,14 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
           // Upstream requirement: ConversationText only from conversation.item.*; do not map control events.
+        } else if (msg.type === 'response.output_audio_transcript.delta') {
+          // Real API streams transcript deltas; we use conversation.item.* for finalized text (Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.output_audio_transcript.delta' },
+          });
         } else if (msg.type === 'response.function_call_arguments.done') {
           emitLog({
             severityNumber: SeverityNumber.INFO,
@@ -595,6 +603,18 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.speech_stopped' },
           });
           clientWs.send(JSON.stringify(utteranceEnd));
+        } else if (
+          msg.type === 'input_audio_buffer.committed' ||
+          msg.type === 'input_audio_buffer.cleared' ||
+          msg.type === 'input_audio_buffer.timeout_triggered'
+        ) {
+          // Buffer control/ack events: no component message. Deepgram Voice Agent API has no equivalent (component AgentResponseType has none of these); upstream-only signals — handle explicitly for parity, log only (Issue #414 firm-audio; Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: String(msg.type) },
+          });
         } else if (msg.type === 'conversation.item.input_audio_transcription.completed') {
           // Issue #414: map OpenAI user transcript to component Transcript → onTranscriptUpdate
           const completedMsg = msg as Parameters<typeof mapInputAudioTranscriptionCompletedToTranscript>[0];
@@ -685,6 +705,46 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             upstream.send(JSON.stringify({ type: 'response.create' }));
             onResponseStarted();
           }
+        } else if (msg.type === 'response.created') {
+          // Real API sends response.created when a response is created (e.g. after our response.create). Control event only; no component message (Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.created' },
+          });
+        } else if (msg.type === 'response.output_item.added' || msg.type === 'response.output_item.done') {
+          // Real API: output item added/done; content comes via conversation.item.* (Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: String(msg.type) },
+          });
+        } else if (msg.type === 'response.content_part.added' || msg.type === 'response.content_part.done') {
+          // Real API streaming control; finalized content from conversation.item.* (Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: String(msg.type) },
+          });
+        } else if (msg.type === 'rate_limits.updated') {
+          // Real API sends rate limit info; no component equivalent (Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'rate_limits.updated' },
+          });
+        } else if (msg.type === 'response.output_text.added') {
+          // Real API streaming control; finalized text from conversation.item.* (Epic #493).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.output_text.added' },
+          });
         } else if (msg.type === 'conversation.item.created' || msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
           // Debug: log raw upstream event (truncated) so we can inspect payload when not forwarded to client (Issue #500).
           {

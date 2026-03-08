@@ -165,8 +165,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * is received before session.updated was sent (catches proxy sending context before session.updated).
    */
   let mockEnforceSessionBeforeContext = false;
-  /** Protocol test gap: when true, mock sends response.created (untranslated event) after session.updated so client must receive it as text. */
-  let mockSendResponseCreatedAfterSessionUpdated = false;
+  /** Protocol test: when true, mock sends an unmapped upstream event after session.updated so client receives Error (unmapped_upstream_event). Uses conversation.created (response.created is now handled in proxy). */
+  let mockSendUnmappedEventAfterSessionUpdated = false;
   /**
    * Issue #470: when true, on function_call_output mock sends response.done only (no response.output_text.done).
    * Asserts proxy sends response.create once when it receives response.done (fallback path).
@@ -339,16 +339,16 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             if (mockEnforceSessionBeforeContext) {
               setTimeout(() => {
                 sendSessionUpdated();
-                if (mockSendResponseCreatedAfterSessionUpdated) {
-                  mockSendResponseCreatedAfterSessionUpdated = false;
-                  socket.send(JSON.stringify({ type: 'response.created', response_id: 'r1' }));
+                if (mockSendUnmappedEventAfterSessionUpdated) {
+                  mockSendUnmappedEventAfterSessionUpdated = false;
+                  socket.send(JSON.stringify({ type: 'conversation.created', conversation: { id: 'conv_1', items: [] } }));
                 }
               }, 50);
             } else {
               sendSessionUpdated();
-              if (mockSendResponseCreatedAfterSessionUpdated) {
-                mockSendResponseCreatedAfterSessionUpdated = false;
-                socket.send(JSON.stringify({ type: 'response.created', response_id: 'r1' }));
+              if (mockSendUnmappedEventAfterSessionUpdated) {
+                mockSendUnmappedEventAfterSessionUpdated = false;
+                socket.send(JSON.stringify({ type: 'conversation.created', conversation: { id: 'conv_1', items: [] } }));
               }
             }
             if (mockSendTranscriptThenFunctionCallAfterSession) {
@@ -1164,9 +1164,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const errorsReceived: string[] = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       try { client.close(); } catch { /* ignore */ }
       if (err) done(err);
       else done();
@@ -1201,9 +1206,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', (err) => finish(err));
-    setTimeout(() => {
+    timeoutId = setTimeout(() => setImmediate(() => {
       if (!finished) finish(new Error('Issue #470 real-API Req 3: timeout waiting for assistant response'));
-    }, 25000);
+    }), 25000);
   }, 30000);
 
   /**
@@ -1215,10 +1220,15 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     let finished = false;
     let gotConversationText = false;
     let gotAgentAudioDone = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       try { client.close(); } catch { /* ignore */ }
       if (err) done(err);
       else done();
@@ -1229,7 +1239,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
       try {
-        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string };
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string; content?: string; description?: string };
         if (msg.type === 'Error' && msg.description) {
           finish(new Error(`Upstream error: ${msg.description}`));
           return;
@@ -1252,13 +1262,13 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', (err) => finish(err));
-    setTimeout(() => {
+    timeoutId = setTimeout(() => setImmediate(() => {
       if (!finished) {
         finish(new Error(
           `Issue #489: timeout; gotConversationText=${gotConversationText} gotAgentAudioDone=${gotAgentAudioDone}`,
         ));
       }
-    }, 30000);
+    }), 30000);
   }, 35000);
 
   /**
@@ -2785,7 +2795,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockReceived.length = 0;
     protocolErrors.length = 0;
     const greeting = 'Hello! How can I help you today?';
-    const clientMessages: Array<{ type: string; role?: string; content?: string }> = [];
+    const clientMessages: Array<{ type?: string; role?: string; content?: string }> = [];
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
@@ -3436,10 +3446,10 @@ describe('OpenAI proxy integration (Issue #381)', () => {
 
   /**
    * Unmapped upstream events: proxy sends Error (unmapped_upstream_event), does not forward as text.
-   * Mock sends response.created after session.updated; client must receive Error with code unmapped_upstream_event.
+   * Mock sends conversation.created (unmapped) after session.updated; client must receive Error with code unmapped_upstream_event.
    */
-  itMockOnly('Protocol: unmapped upstream event (e.g. response.created) yields Error (unmapped_upstream_event)', (done) => {
-    mockSendResponseCreatedAfterSessionUpdated = true;
+  itMockOnly('Protocol: unmapped upstream event (e.g. conversation.created) yields Error (unmapped_upstream_event)', (done) => {
+    mockSendUnmappedEventAfterSessionUpdated = true;
     let finished = false;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const clearFallback = scheduleFallbackTimeout(5000, () => {
@@ -3456,7 +3466,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       try {
         const msg = JSON.parse(data.toString()) as { type?: string; code?: string; description?: string };
         if (msg?.type === 'Error' && msg.code === 'unmapped_upstream_event') {
-          expect(msg.description).toContain('response.created');
+          expect(msg.description).toContain('conversation.created');
           finished = true;
           clearFallback();
           client.close();
@@ -3751,8 +3761,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             }
           }
         }
-      } catch (e) {
-        finish(e as Error);
+      } catch {
+        // Ignore binary or malformed frames (e.g. PCM starts with 0x7b)
+        return;
       }
     });
     client.on('error', (err) => finish(err));
