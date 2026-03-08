@@ -678,6 +678,21 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             onResponseStarted();
           }
         } else if (msg.type === 'conversation.item.created' || msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
+          // Debug: log raw upstream event (truncated) so we can inspect payload when not forwarded to client (Issue #500).
+          {
+            const MAX_RAW_DEBUG = 2000;
+            const rawTruncated = text.length > MAX_RAW_DEBUG ? text.slice(0, MAX_RAW_DEBUG) + '…' : text;
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: `conversation.item.* raw (debug): type=${msg.type} item_id=${(msg as { item?: { id?: string } }).item?.id ?? 'n/a'} payload=${rawTruncated}`,
+              attributes: {
+                ...connectionAttrs,
+                [ATTR_DIRECTION]: 'upstream→client',
+                [ATTR_MESSAGE_TYPE]: String(msg.type),
+              },
+            });
+          }
           // Issue #388 / #414: decrement the counter once per unique item; send response.create when all pending items are confirmed.
           // Issue #470: do not send response.create from this path when we deferred after function_call_output — the API still has
           // that response active; we must wait for response.output_text.done or response.done. (API may send item.added for the
@@ -739,8 +754,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               });
             }
           }
-          // Issue #414: send as text so component routes as message, not binary (audio)
-          clientWs.send(text);
+          // Issue #500: Do not forward raw conversation.item.* to client; only mapped ConversationText (and counter/response.create) are sent.
         } else {
           // Unmapped upstream event: do not forward as text; send Error so client sees a clear contract.
           const eventType = msg.type ?? '(unknown)';

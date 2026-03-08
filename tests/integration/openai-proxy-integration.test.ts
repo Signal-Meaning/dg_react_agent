@@ -3211,9 +3211,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
-   * Protocol §1.2 (optional): conversation.item.added / .done received as text (not binary).
+   * Issue #500: Proxy must not forward raw conversation.item.created/.added/.done to client; only mapped ConversationText (and control) are sent.
    */
-  itMockOnly('Protocol: conversation.item.added or .done received by client as text frame', (done) => {
+  itMockOnly('Issue #500: client does not receive raw conversation.item.added/created/done (only mapped ConversationText)', (done) => {
     mockSendOutputAudioBeforeText = true;
     const receivedTextTypes: string[] = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
@@ -3229,10 +3229,10 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hi' }));
           }
           if (msg.type === 'ConversationText' && msg.role === 'assistant') {
-            const hasItemEvent = receivedTextTypes.some(
+            const hasRawItemEvent = receivedTextTypes.some(
               (t) => t === 'conversation.item.added' || t === 'conversation.item.done' || t === 'conversation.item.created'
             );
-            expect(hasItemEvent).toBe(true);
+            expect(hasRawItemEvent).toBe(false);
             client.close();
             done();
           }
