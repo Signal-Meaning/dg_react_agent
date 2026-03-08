@@ -13,6 +13,11 @@
  * `npm run backend` for E2E; that server listens on PROXY_PORT (default 8080) and serves both
  * the proxy and POST /function-call. E2E tests 6 and 6b require that backend running. See
  * docs/issues/ISSUE-489/TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md § E2E environment requirements.
+ *
+ * Why this test spawns its own server (port 18407): This is a Jest integration test, not E2E.
+ * It does not use E2E_USE_EXISTING_SERVER (that flag is for Playwright). Spawning keeps the test
+ * self-contained: no need to start `npm run backend` first, no port clash with 8080, and it runs
+ * in CI without pre-started servers. The backend code under test is identical to the one used by E2E.
  * @jest-environment node
  */
 

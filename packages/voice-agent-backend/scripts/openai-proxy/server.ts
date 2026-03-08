@@ -10,6 +10,7 @@
 import http from 'http';
 import type { Server as HttpsServer } from 'https';
 import path from 'path';
+import fs from 'fs';
 // Use require so we get CJS WebSocket; Server is on WebSocket.Server in ws/index.js
 // Under Jest/ts-jest the default export may not have .Server, so load Server from lib
 /** Minimal type for ws WebSocket .on(); TS may infer DOM WebSocket which lacks .on(). */
@@ -324,6 +325,22 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             msg as Parameters<typeof mapFunctionCallResponseToConversationItemCreate>[0]
           );
           upstream.send(JSON.stringify(itemCreate));
+          const debugLogPath = process.env.E2E_FUNCTION_CALL_DEBUG_LOG;
+          if (debugLogPath && itemCreate.item?.type === 'function_call_output') {
+            try {
+              const dir = path.dirname(debugLogPath);
+              fs.mkdirSync(dir, { recursive: true });
+              const payload = {
+                call_id: itemCreate.item.call_id,
+                outputLength: itemCreate.item.output?.length ?? 0,
+                outputPreview: itemCreate.item.output?.slice(0, 120) ?? '',
+                sentAt: new Date().toISOString(),
+              };
+              fs.writeFileSync(debugLogPath, JSON.stringify(payload, null, 2), 'utf8');
+            } catch {
+              // ignore write errors
+            }
+          }
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',

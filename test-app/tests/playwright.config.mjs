@@ -152,6 +152,8 @@ export default defineConfig({
               VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
               PROXY_PORT: '8080',
               PROXY_PATH: '/deepgram-proxy',
+              // E2E diagnostic: proxy writes last function_call_output here so test 6d can assert step 3
+              E2E_FUNCTION_CALL_DEBUG_LOG: path.resolve(__dirname, '..', 'test-results', 'e2e-function-call-output.json'),
             },
           },
         ],

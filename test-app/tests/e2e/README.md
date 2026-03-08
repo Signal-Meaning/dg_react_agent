@@ -17,6 +17,7 @@
   E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true HTTPS=0 VITE_OPENAI_PROXY_ENDPOINT=ws://localhost:8080/openai USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js issue-373-idle-timeout-during-function-calls.spec.js
   ```
 - **Single spec:** `npm run test:e2e -- openai-proxy-e2e.spec.js`
+- **Only the 2 failing tests (6 and 6b):** `npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6. Simple function calling|6b. Issue #462"`
 - **One test by name:** `npm run test:e2e -- openai-proxy-e2e.spec.js --grep "Simple function calling"`
 
 Do **not** run `npm run test:e2e` without spec names when you only want to verify a subset (e.g. previously failing tests); that runs the entire suite.

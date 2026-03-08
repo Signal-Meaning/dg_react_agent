@@ -417,6 +417,46 @@ async function setupTestPageForBackend(page, timeoutOrOptions = 10000) {
 }
 
 /**
+ * Derive function-call backend base URL from proxy endpoint (same as app's getFunctionCallBackendBaseUrl).
+ * Used so E2E can check backend reachability before tests 6/6b.
+ * @returns {Promise<string>} e.g. 'http://localhost:8080'
+ */
+async function getFunctionCallBackendBaseUrlForE2E() {
+  const { getBackendProxyParams } = await import('./test-helpers.mjs');
+  const proxyEndpoint = getBackendProxyParams().proxyEndpoint || '';
+  if (!proxyEndpoint.trim()) return '';
+  const httpScheme = proxyEndpoint.startsWith('wss://') ? 'https://' : 'http://';
+  const withoutScheme = proxyEndpoint.replace(/^wss?:\/\//, '').trim();
+  const hostPort = withoutScheme.split('/')[0] ?? '';
+  return hostPort ? `${httpScheme}${hostPort}` : '';
+}
+
+/**
+ * Check if the backend supports the get_current_time function (for tests 6 and 6b).
+ * POSTs to /function-call with name: 'get_current_time' and returns true only if the backend
+ * responds with 200 and a body (backend must implement get_current_time). When false (e.g.
+ * E2E_USE_EXISTING_SERVER=1 but backend not started or backend does not support get_current_time),
+ * tests 6/6b skip with a clear message instead of failing with fallback-text.
+ * @returns {Promise<boolean>} true if POST /function-call (get_current_time) returns 200
+ */
+async function isGetCurrentTimeBackendReachable() {
+  const baseUrl = await getFunctionCallBackendBaseUrlForE2E();
+  if (!baseUrl) return false;
+  const url = `${baseUrl.replace(/\/$/, '')}/function-call`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'e2e-reach', name: 'get_current_time', arguments: '{}' }),
+      signal: AbortSignal.timeout(5000),
+    });
+    return res.ok && res.status === 200;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Wait for connection to be established (auto-connect)
  * On timeout, throws an error that includes the current connection status to aid debugging.
  * @param {import('@playwright/test').Page} page
@@ -2033,6 +2073,7 @@ export {
   waitForFunctionCall, // Wait for function call to be made (tracked via data-testid="function-call-tracker")
   tryPromptsForFunctionCall, // Try multiple prompts to trigger function call with retry logic
   setupFunctionCallingTest, // Set up function calling test infrastructure
+  isGetCurrentTimeBackendReachable, // True if backend supports get_current_time (for tests 6/6b skip when not)
   establishConnectionAndWaitForFunctionCall, // Establish connection and wait for function call
   MicrophoneHelpers, // Microphone utility helpers for E2E tests (activate/deactivate mic)
   writeTranscriptToFile // Write conversation transcript to file (optional, enabled via env var)

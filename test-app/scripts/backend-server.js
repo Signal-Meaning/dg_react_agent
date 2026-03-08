@@ -159,6 +159,14 @@ const requestHandler = (req, res) => {
   if (req.method === 'POST' && pathname === '/function-call') {
     const traceId = req.headers['x-trace-id'] || req.headers['x-request-id'] || generateTraceId();
     rootLog.debug('Function call request', { traceId });
+    // Ensure CORS so browser (e.g. app at localhost:5173) can read the response (Issue #489 diagnostic: step 1 failed with hasError true, status undefined when CORS was missing or origin not reflected)
+    const origin = req.headers.origin;
+    if (origin && validateOrigin(origin).valid) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    } else if (!origin) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
     functionCallHandler(req, res);
     return;
   }

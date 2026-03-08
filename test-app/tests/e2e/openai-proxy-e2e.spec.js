@@ -34,6 +34,7 @@ import {
   setupFunctionCallingTest,
   waitForSettingsApplied,
   waitForFunctionCall,
+  isGetCurrentTimeBackendReachable,
   establishConnectionViaText,
   sendMessageAndWaitForResponse,
   sendTextMessage,
@@ -51,6 +52,8 @@ import {
   SELECTORS,
 } from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, loadAndSendAudioSampleAt24k, waitForVADEvents, CHUNK_20MS_16K_MONO } from './fixtures/audio-helpers.js';
+import path from 'path';
+import fs from 'fs';
 
 const AGENT_RESPONSE_TIMEOUT = 20000;
 /** Issue #478: function-call round-trip (backend + model reply) can exceed 20s; use longer wait for result content. */
@@ -285,6 +288,10 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     if (process.env.SKIP_FUNCTION_CALL_E2E === '1') {
       test.skip(true, 'SKIP_FUNCTION_CALL_E2E=1; requires backend running for POST /function-call');
     }
+    const backendReachable = await isGetCurrentTimeBackendReachable();
+    if (!backendReachable) {
+      test.skip(true, 'Backend does not support get_current_time; start backend (e.g. npm run backend) or run without E2E_USE_EXISTING_SERVER so Playwright starts it');
+    }
     await setupFunctionCallingTest(page, { useBackend: true });
     await setupTestPageForBackend(page, { extraParams: { 'test-mode': 'true', 'enable-function-calling': 'true' } });
     await establishConnectionViaText(page, 30000);
@@ -318,6 +325,10 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     if (process.env.SKIP_FUNCTION_CALL_E2E === '1') {
       test.skip(true, 'SKIP_FUNCTION_CALL_E2E=1; requires backend running for POST /function-call');
     }
+    const backendReachable = await isGetCurrentTimeBackendReachable();
+    if (!backendReachable) {
+      test.skip(true, 'Backend does not support get_current_time; start backend (e.g. npm run backend) or run without E2E_USE_EXISTING_SERVER so Playwright starts it');
+    }
     await setupFunctionCallingTest(page, { useBackend: true });
     await setupTestPageForBackend(page, { extraParams: { 'test-mode': 'true', 'enable-function-calling': 'true' } });
     await establishConnectionViaText(page, 30000);
@@ -338,6 +349,53 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     expect(response).not.toBe('(Waiting for agent response...)');
     // Partner scenario: no conversation_already_has_active_response; strict 0 errors.
     await assertNoRecoverableAgentErrors(page);
+  });
+
+  /**
+   * Diagnostic: pinpoint where the function-call chain breaks (step 1 backend, step 2 sendResponse, step 3 proxy).
+   * Runs the same flow as test 6 but after waitForFunctionCall reads window.__functionCallDiagnostics and
+   * (when Playwright started the backend) test-results/e2e-function-call-output.json. Fails at the first step that does not hold.
+   */
+  test('6d. Diagnostic – pinpoint function-call failure (step 1–3)', async ({ page }) => {
+    skipUnlessRealAPIs('Requires USE_REAL_APIS=1 (Issue #489).');
+    if (process.env.SKIP_FUNCTION_CALL_E2E === '1') {
+      test.skip(true, 'SKIP_FUNCTION_CALL_E2E=1');
+    }
+    const backendReachable = await isGetCurrentTimeBackendReachable();
+    if (!backendReachable) {
+      test.skip(true, 'Backend does not support get_current_time; start backend or run without E2E_USE_EXISTING_SERVER');
+    }
+    await setupFunctionCallingTest(page, { useBackend: true });
+    await setupTestPageForBackend(page, { extraParams: { 'test-mode': 'true', 'enable-function-calling': 'true' } });
+    await establishConnectionViaText(page, 30000);
+    await waitForSettingsApplied(page, 15000);
+    await sendTextMessage(page, 'What time is it?');
+    const functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
+    expect(functionCallInfo.count, 'FunctionCallRequest should be received').toBeGreaterThanOrEqual(1);
+    // Allow time for backend and proxy to run
+    await page.waitForTimeout(4000);
+    const diagnostics = await page.evaluate(() => (typeof window !== 'undefined' ? window.__functionCallDiagnostics : null));
+    const proxyDebugPath = path.resolve(process.cwd(), 'test-results', 'e2e-function-call-output.json');
+    let proxyPayload = null;
+    try {
+      if (fs.existsSync(proxyDebugPath)) {
+        proxyPayload = JSON.parse(fs.readFileSync(proxyDebugPath, 'utf8'));
+      }
+    } catch {
+      // ignore
+    }
+    // Always log so headed or CI runs show what was captured when step 1/2/3 fails
+    console.log('[6d] Step 1–2 (app diagnostics):', JSON.stringify(diagnostics, null, 2));
+    console.log('[6d] Step 3 (proxy file):', proxyPayload ? JSON.stringify(proxyPayload, null, 2) : 'file missing or unreadable');
+    expect(diagnostics, 'Step 1–2: app should set __functionCallDiagnostics after forwarding to backend').toBeTruthy();
+    expect(diagnostics.url, 'Step 1: backend URL should be set (app called forwardFunctionCallToBackend)').toBeTruthy();
+    expect(diagnostics.status, 'Step 1: backend should have responded (status set)').toBe(200);
+    expect(diagnostics.hasContent, 'Step 1: backend response should have content (time JSON)').toBe(true);
+    expect(diagnostics.responseSent, 'Step 2: app should have called sendResponse').toBeTruthy();
+    expect(diagnostics.responseSent.hasError, 'Step 2: sendResponse should not have been called with error').toBe(false);
+    expect(diagnostics.responseSent.hasResult, 'Step 2: sendResponse should have been called with result').toBe(true);
+    expect(proxyPayload, 'Step 3: proxy should have written function_call_output (E2E_FUNCTION_CALL_DEBUG_LOG); run without E2E_USE_EXISTING_SERVER or set env when starting backend').toBeTruthy();
+    expect(proxyPayload?.outputLength ?? 0, 'Step 3: proxy function_call_output should have non-empty output').toBeGreaterThan(0);
   });
 
   test('7. Reconnection with context – disconnect, reconnect; proxy sends context via conversation.item.create', async ({ page }) => {

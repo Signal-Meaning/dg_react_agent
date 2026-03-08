@@ -1,6 +1,6 @@
 # TDD Plan: Remaining OpenAI Proxy E2E Failures (2)
 
-**Scope:** Resolve the failing tests when running `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js` from test-app. **Current:** 14 passed, **2 failed**, 2 skipped (after unmapped-event test-app change). Only tests 6 and 6b still fail.
+**Scope:** Resolve the failing tests when running `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js` from test-app. **Current:** 14 passed, **2 failed**, 2 skipped in some runs (after unmapped-event test-app change). Known failures: 6 and 6b. **3b is not resolved** — do not treat as fixed; verify with `--grep "3b"`.
 
 **Reference:** [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md) — "OpenAI proxy E2E only – latest run."
 
@@ -13,15 +13,42 @@
 | 1 | **6.** Simple function calling – assert response in agent-response | Expected `/\d{1,2}:\d{2}\|UTC/`; **received:** model fallback text ("I'm having some trouble retrieving the current time...") | Function-call reply |
 | 2 | **6b.** Issue #462 / #470 – function-call flow (partner scenario) | Same; received "I'm sorry, but I couldn't retrieve the current time..." | Function-call reply |
 
-(3b previously failed on assistant count 5 vs 3; with latest run it passes.)
+**Plain statement:** Tests 6 and 6b fail because the **model returns fallback text** ("I'm having trouble fetching the current time...") — i.e. an **error in the function flow** (backend, proxy, or API did not deliver the result, or the model did not use it). This is **not** a greeting issue: we are not seeing the greeting as the final response or duplicate greetings; we are seeing the model's fallback when the function result is missing or unused.
+
+(3b had failed on assistant count 5 vs 3; status is not resolved — verify with a dedicated run.)
+
+### Why 3b can pass while 6 and 6b fail
+
+**3b** exercises only the **plain conversation + reconnect** path:
+
+- Connect → Settings (no tools) → greeting → user "What is the capital of France?" → agent reply (r1, Paris) → **disconnect** → **reconnect** (context in session instructions only) → user "What did I just say?" → agent reply (r2).
+- No tools, no function calls. The proxy fix (context in instructions only; no `conversation.item.create` for context; no duplicate greeting on `session.updated`) ensures exactly 3 assistant messages (greeting, r1, r2). So when that fix is in place and the API behaves, 3b can pass: it only depends on **message flow and history**, not on the function-call chain.
+
+**6 and 6b** exercise the **function-calling** path:
+
+- Connect → Settings **with tools** (`get_current_time`) → user "What time is it?" → API sends **FunctionCallRequest** → component calls backend `POST /function-call` → component sends **FunctionCallResponse** → proxy must send `conversation.item.create` (type `function_call_output`) to the API → **model** must use that result and reply with the time (or UTC).
+- The tests fail because the **model reply** is fallback text ("I'm having trouble fetching the current time..."), not the time. The **function-call-tracker passes** (component received FunctionCallRequest), so the break is **after** the component: either (1) backend not called or returns error, (2) proxy not sending the function result correctly to the API, or (3) API/model not using the result. So 3b and 6/6b hit **different code paths**: 3b = conversation + context on reconnect; 6/6b = tools + backend + function_call_output + model using the result. Passing 3b does not imply the function-call path works.
 
 ---
 
-## (Resolved) Failure 1: 3b – assistant count 5 vs 3
+## Failure 1: 3b – assistant count 5 vs 3 (status: not resolved)
 
-**Status:** Passes in latest run (14 passed, 2 failed). Kept for reference.
+**Status:** Not resolved. The proxy fix (context in instructions only, no reinjection; see [DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md](./DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md)) was intended to make 3b pass with exactly 3 assistant messages. Verify with: `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "3b"` (from test-app). Kept here for reference and message-breakdown.
 
 **RED (historical):** Test expected `[data-role="assistant"]` count === 3 (greeting + r1 + r2). With transcript mapping we had 5. Likely causes: (a) same logical message sent multiple times (e.g. conversation.item.created + .added + .done with different item ids), (b) session history on reconnect adds duplicate items, (c) test expectation too strict.
+
+**All messages that comprised the bad count (purpose for each, same style as 3b / 9a message breakdowns):**
+
+| DOM # | Role | Content (short) | Purpose / source |
+|---|------|-----------------|------------------|
+| 1 | assistant | Hello! How can I assist you today? | **Greeting** — first connection; proxy sent ConversationText from initial session/greeting. |
+| 2 | user | What is the capital of France? | **User turn 1** — user echo (or InjectUserMessage) in history. |
+| 3 | assistant | The capital of France is Paris. […] | **r1** — first agent reply (Paris); from conversation.item.* for the API’s reply to user1. |
+| 4 | assistant | Hello! How can I assist you today? | **Duplicate greeting** — proxy sent `storedGreeting` again on session.updated after reconnect even though context already contained it (see [DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md](./DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md) Cause 1). |
+| 5 | assistant | The capital of France is Paris. […] | **Duplicate r1** — API echo of context; we injected greeting, user1, r1 via conversation.item.create on reconnect, then forwarded the API’s conversation.item.* for those as ConversationText (Cause 2). |
+| 6 | user | What did I just say? | **User turn 2** — sent after reconnect; leads to r2. |
+
+Expected (3 assistant): **1** = greeting, **3** = r1, and **r2** (reply to “What did I just say?”) would be the third. The two extras are **4** (duplicate greeting) and **5** (duplicate r1). So the “bad count” is: three correct assistant messages (1, 3, r2) plus two duplicates (4, 5) = 5 assistant in DOM. See [DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md](./DIAGNOSIS-3B-DUPLICATE-ASSISTANT-MESSAGES.md) for the full diagnosis and fix.
 
 **GREEN (candidates):** (1) Relax test to assert ≥3 assistant and that r1 (Paris) is in history. (2) Or deduplicate in proxy/app by content or sequence so we only show 3. (3) Or document real API sends 5 and update test expected count.
 
@@ -30,6 +57,8 @@
 ---
 
 ## Failure 2 & 3: 6 and 6b – function-call reply (time/UTC)
+
+**Root cause (plain):** 6 and 6b fail because of **fallback text** — the model says it can't fetch the time. That indicates an **error in the function flow** (result not delivered or not used), **not** greeting issues (no greeting as final response, no duplicate-greeting bug here).
 
 **RED:** After "What time is it?" and function call, the **model** replies with fallback text ("I'm having some trouble retrieving the current time...", "I couldn't retrieve the current time...") instead of a reply that includes the time or "UTC". Test expects `/\d{1,2}:\d{2}|UTC/` in `[data-testid="agent-response"]`.
 
@@ -83,6 +112,67 @@ Use the same TDD process: add or run integration tests that **narrow down** wher
 
 **If E2E 6/6b still fail:** (a) If `waitForFunctionCall` fails (count 0), the component is not receiving FunctionCallRequest — check proxy/API and that `enable-function-calling` is in the URL. (b) If the tracker increments but agent-response is still fallback text, the issue is backend return value, proxy `function_call_output`, or model not using the result. Document in [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md).
 
+### Latest run evidence (function-call-tracker passes → defect is downstream)
+
+In the latest run the failure is at the **time-pattern assertion** (`toHaveText(/\d{1,2}:\d{2}|UTC/)`), not at the `waitForFunctionCall` / `functionCallInfo.count >= 1` assertion. So the **function-call-tracker passed**: the component received a FunctionCallRequest and the handler path ran. That narrows the defect to **downstream of the component receiving the request**:
+
+- **Backend:** Does the test-app backend receive `POST /function-call` and return `{ content: JSON.stringify({ time, timezone }) }`? If the backend is not running or returns an error, the component would send a FunctionCallResponse with `error`, and the model would reply with fallback text.
+- **Proxy:** Does the proxy send `conversation.item.create` with `type: 'function_call_output'`, correct `call_id`, and `output` containing the backend result?
+- **Model:** Does the real API return an assistant message that includes the time/UTC after receiving the function result? (Integration test with real API passes with a minimal backend that returns fixed time — so the API can use the result; E2E uses the same proxy/API but a different backend URL/host.)
+
+**Received strings in latest run:** Test 6: *"I'm having trouble fetching the current time at the moment. Could you let me know your time zone or location? That way I can help you find the exact time."* Test 6b: *"I'm having trouble fetching the current time right now. Could you tell me your time zone or location so I can better assist you?"* So the model is replying with fallback text, which is consistent with either (1) no function result reached the API (backend not called or proxy didn’t send it), or (2) API received the result but the model still produced fallback text (less likely given integration test passes).
+
+---
+
+## How to find where the failure is
+
+The chain is: **browser → POST /function-call → component sends FunctionCallResponse → proxy sends function_call_output → API → model reply.** Check each link in order; the first one that fails is the defect.
+
+| Step | What to check | How | If it fails → |
+|------|----------------|-----|----------------|
+| **1. Backend receives and responds** | Does the app in the browser actually call `POST /function-call` and get 200 with a body that has `content` (time JSON)? | **Option A:** Run E2E with devtools open (e.g. `--headed`), Network tab, filter by `function-call`. Inspect the request (URL, body) and response (status, body). **Option B:** In `test-app/src/utils/functionCallBackend.ts`, in `forwardFunctionCallToBackend`, add a one-line log or expose via `window.__lastFunctionCallBackendResponse` (e.g. `res.status`, `body.content?.slice(0,50)`). Run test 6, then in the test read `await page.evaluate(() => window.__lastFunctionCallBackendResponse)` and log or assert. | If no request, or status not 200, or body has `error`: defect is **backend URL (CORS/origin), backend down, or backend returned error**. Fix: URL derivation, backend logs, or handler. |
+| **2. Component sends FunctionCallResponse** | After the backend returns, does the component call `sendResponse` with `result` (or `content`) and no `error`? | The function-call-tracker already confirms the component received the **request**. To confirm the **response** is sent: in the test-app, where it forwards to the backend, temporarily set `window.__lastFunctionCallResponseSent = { id, hasResult: !!result, hasError: !!error }`. In the test, after `waitForFunctionCall`, do `await page.evaluate(() => window.__lastFunctionCallResponseSent)`. If `hasError: true`, the backend returned an error to the app. | If the app never sends a response, or sends with `error`: defect is **app logic or backend returned error**. If the app sends `result` correctly, move to step 3. |
+| **3. Proxy sends function_call_output** | Does the proxy, when it receives FunctionCallResponse from the client, send `conversation.item.create` with `type: 'function_call_output'`, correct `call_id`, and `output` set to the backend result string? | **Proxy logs:** Run the backend (and thus the proxy) with debug or added logs. Where the proxy handles FunctionCallResponse, log when sending function_call_output: e.g. `call_id`, `output?.slice(0, 80)`. Run E2E 6; after the run, inspect backend/proxy stdout. Or add a unit/integration test that mocks the client sending FunctionCallResponse and asserts the proxy sends the corresponding upstream message. | If the proxy never logs sending function_call_output, or `output` is empty/wrong: defect is **proxy** (not mapping FunctionCallResponse, or wrong call_id/output). If the proxy sends it correctly, move to step 4. |
+| **4. API/model uses the result** | Does the real API return an assistant message that includes the time (or UTC) after receiving the function result? | The **integration test** (real API + in-process minimal backend) **passes** and asserts assistant content includes `12:00` or `UTC`. So in that environment the API does return a time-based reply. In E2E the only difference is the backend (test-app backend, same handler code). So either (a) the E2E backend returns something different (step 1–2), or (b) the proxy sends a different payload in E2E (step 3), or (c) timing/ordering. If steps 1–3 are green, add a proxy log of the **upstream** assistant message(s) after function_call_output and confirm they contain time/UTC. | If steps 1–3 pass but the model reply in E2E still has no time: defect is **timing/ordering or API behavior** in the E2E setup. Compare proxy logs (E2E vs integration) for messages after function_call_output. |
+
+**Minimal instrumentation checklist:** (1) In the app: log or expose backend request URL, response status, and whether `sendResponse` was called with `result` or `error`. (2) In the proxy: when sending `function_call_output`, log `call_id` and `output` length or prefix. (3) Run E2E 6 once with that instrumentation; the first step that does not match expectations is the failing link.
+
+### Automated diagnostic (test 6d) and result
+
+**Test 6d** runs the same flow as test 6 but after `waitForFunctionCall` reads `window.__functionCallDiagnostics` (app) and `test-results/e2e-function-call-output.json` (proxy, when Playwright started the backend). It asserts step 1 (backend 200, hasContent), step 2 (responseSent.hasResult), step 3 (proxy wrote function_call_output with non-empty output). Instrumentation: `functionCallBackend.ts` sets `__functionCallDiagnostics`; proxy writes to `E2E_FUNCTION_CALL_DEBUG_LOG` when sending function_call_output; Playwright config sets that env for the backend.
+
+**Diagnostic result (run):** Step 1 failed — `diagnostics.status` undefined, `diagnostics.errorMessage` **"Failed to fetch"**. So the browser did not get a successful 200 JSON response from `POST /function-call` (or `res.json()` threw). That implies the **first failing link is browser → backend**: either the request never reached the backend, the backend returned an error or non-JSON, or the response was not readable by the script (e.g. CORS). **Fix applied:** Backend sets CORS explicitly for POST /function-call; diagnostics include `errorMessage`. **If still failing:** Run E2E with `--headed` and inspect the Network tab for the `function-call` request: confirm URL (e.g. `http://localhost:8080/function-call`), status, and response headers (including `Access-Control-Allow-Origin`). If CORS is missing on the POST response, the backend must send it (backend-server.js already calls `setSecurityHeaders(res)` before delegating to the handler; if the handler’s `writeHead` overwrites headers, add CORS explicitly in the handler or ensure merge behavior).
+
+---
+
+## Next steps
+
+Given: integration test (3) passes (proxy↔API path works); E2E 6/6b alignment is done; function-call-tracker passes (component receives the request). The break is **downstream** — backend, proxy `function_call_output`, or model.
+
+| Priority | Action | Purpose |
+|----------|--------|--------|
+| **1** | **Confirm backend during E2E** | When running E2E 6/6b, ensure `npm run backend` is running on the same host/port the test-app uses (e.g. 8080). Run `test-app/tests/function-call-endpoint-integration.test.js` to verify the same backend implementation returns time; then run E2E with that backend up. |
+| **2** | **Instrument or log the E2E function flow** | Add temporary logging (or inspect network) to confirm: (a) browser POSTs to `/function-call` and gets 200 with `content` containing time; (b) component sends `FunctionCallResponse` with that content; (c) proxy sends `function_call_output` to upstream. That identifies which link fails (backend not called, backend error, proxy not sending result, or API/model). |
+| **3** | **Verify 3b** | Run `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "3b"` from test-app. If 3b fails, treat it as an open failure and track with 6/6b. |
+| **4** | **Fix the failing link** | Once (1)–(2) show where the chain breaks (e.g. backend URL wrong in browser, proxy not sending `function_call_output`, or backend returns error), implement the fix and re-run 6 and 6b. |
+| **5** | **Document** | Update this plan and [E2E-FAILURES-RESOLUTION.md](./E2E-FAILURES-RESOLUTION.md) with findings and any code changes. |
+
+---
+
+## E2E test adjustments (for 6 and 6b to pass)
+
+**Already in place:** Tests 6 and 6b use `setupFunctionCallingTest(page, { useBackend: true })`, `setupTestPageForBackend` with `enable-function-calling`, and `waitForFunctionCall` before asserting time. The test flow is correct; the failure is in the system under test (function flow), not the test design.
+
+**Backend check (added):** When the backend does not support `get_current_time` (e.g. not running, or different implementation), the tests used to fail with fallback-text. Now tests 6 and 6b call `isGetCurrentTimeBackendReachable()` at the start and **skip with a clear message** if the check fails: *"Backend does not support get_current_time; start backend (e.g. npm run backend) or run without E2E_USE_EXISTING_SERVER so Playwright starts it"*. Helper: `test-app/tests/e2e/helpers/test-helpers.js` → `isGetCurrentTimeBackendReachable()` (derives backend URL from proxy endpoint and POSTs `get_current_time`; returns true only if the backend responds with 200).
+
+**No other test changes required:** When Playwright starts the webServer (default), it starts both the dev server and `npm run backend` on port 8080, so the backend is up. When using `E2E_USE_EXISTING_SERVER=1`, the user must start the backend; the new check avoids a confusing failure. To make 6 and 6b **pass** (not just skip cleanly), the underlying function-flow defect must be fixed (see Next steps).
+
+---
+
+## Backend integration tests (Issue #489)
+
+**`test-app/tests/backend-integration.test.js`** exercises the real backend (backend-server.js) as a single process: proxy WebSocket(s) and POST /function-call with CORS. It fills the gap between function-call-endpoint-integration.test.js (same backend code, isolated port, no CORS/proxy assertions) and E2E (browser → backend). Run from test-app: `npm test -- backend-integration`. Covers: (1) server and proxy — GET /, TCP, Deepgram proxy path reachable; (2) POST /function-call contract — get_current_time, timezone, unknown function, missing fields, X-Trace-Id; (3) CORS — OPTIONS with Origin returns 200 and preflight headers, POST with Origin returns Access-Control-Allow-Origin. Port 18408 (no clash with 18407 or 8080).
+
 ---
 
 ## TDD workflow
@@ -95,7 +185,7 @@ Use the same TDD process: add or run integration tests that **narrow down** wher
 
 ## Success criteria
 
-- [x] 3b passes (assistant count and r1-in-history) — passes in latest run.
+- [ ] 3b passes (assistant count and r1-in-history) — not resolved; verify with `--grep "3b"`.
 - [ ] 6 and 6b pass (agent-response shows time/UTC after function call).
 - [ ] `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js` → 0 failures (excluding existing skips).
 
@@ -109,8 +199,38 @@ From test-app:
 USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js
 ```
 
-Single test:
+**Run only the 2 failing tests (6 and 6b):**
+
+```bash
+cd test-app
+USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6. Simple function calling|6b. Issue #462"
+```
+
+Single test (e.g. 6 only):
+
+```bash
+USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6. Simple function calling"
+```
+
+Other single test:
 
 ```bash
 USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "3b"
 ```
+
+**Backend integration (no E2E):**
+
+```bash
+cd test-app
+npm test -- backend-integration
+```
+
+---
+
+## What to resolve next
+
+| Priority | Item | Why |
+|----------|------|-----|
+| **1** | **Browser → backend for 6/6b** | Diagnostic 6d shows `errorMessage: "Failed to fetch"` — browser’s fetch to POST /function-call fails before any response. Backend integration tests (CORS + /function-call) pass when run from Node; the gap is browser → same backend (CORS or connection from app origin). Resolve by confirming CORS and backend URL when E2E runs (e.g. run with `--headed`, inspect Network tab), then re-run 6/6b. |
+| **2** | **Proxy response.done + function_call_output (G.6)** | Once the browser receives 200 from /function-call, the proxy must send `function_call_output` and the API must start the next turn. PLAN § G.6: when we receive `response.done` and `pendingResponseCreateAfterFunctionCallOutput` is true, send `response.create`. Implement and validate with real API; re-run 6/6b. |
+| **3** | **Verify 3b** | Run `--grep "3b"` with real APIs; if it fails (assistant count or r1-in-history), track separately from 6/6b. |

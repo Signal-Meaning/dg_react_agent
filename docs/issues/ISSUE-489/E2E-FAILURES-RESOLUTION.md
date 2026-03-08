@@ -85,13 +85,21 @@ Tests 8, 9: agent-response must show time/UTC after "What time is it?" and funct
 
 ### OpenAI proxy E2E only – latest run (2026-03)
 
-When running **only** the openai-proxy-e2e spec with real APIs (from repo root or test-app):
+When running **only** the openai-proxy-e2e spec with real APIs (from test-app):
 
 ```bash
+cd test-app
 USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js
 ```
 
-**Result (latest run):** **14 passed**, **2 failed**, 2 skipped (2.5m), after test-app change (unmapped_upstream_event not counted as agent error) and proxy instruction (“use tool results in your reply”). The only failures are **6** and **6b** (function-call reply: expect time/UTC; test 6 gets model fallback text, test 6b sometimes greeting only). The table “Latest run – failed tests (9)” below is from the run *before* that test-app change; the *current* failure set is just 6 and 6b.
+**Run only the 2 failing tests (6 and 6b):**
+
+```bash
+cd test-app
+USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6. Simple function calling|6b. Issue #462"
+```
+
+**Result (latest run):** **14 passed**, **2 failed**, 2 skipped (2.5m), after test-app change (unmapped_upstream_event not counted as agent error) and proxy instruction (“use tool results in your reply”). The only failures are **6** and **6b** (function-call reply: expect time/UTC; both get model fallback text). The table “Latest run – failed tests (9)” below is from the run *before* that test-app change; the *current* failure set is just 6 and 6b.
 
 #### Root cause 1: Unmapped upstream events (tests 2, 2b, 3, 3b, 4, 5, 7)
 
@@ -119,7 +127,9 @@ So the instruction change did not fix the delivery gap.
 
 **Isolation result:** The real-API integration test *"Issue #470 real-API: function-call flow completes without conversation_already_has_active_response"* **passes** (`USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`). So the failure is **E2E-environment-specific**, not proxy/API. See [TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md](./TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md) § "Integration test (3) result and E2E environment requirements".
 
-**E2E 6/6b test alignment:** The same backend that serves other openai-proxy-e2e tests (connection, messages, reconnection) also serves `POST /function-call`. Earlier plans over-focused on "backend availability"; the real question is whether tests 6 and 6b **use the same setup and protocol utilities** as other specs. They now (1) use `setupTestPageForBackend(page, { extraParams: { 'test-mode': 'true', 'enable-function-calling': 'true' } })` so setup matches other backend tests, and (2) wait for `waitForFunctionCall(page)` (function-call-tracker ≥ 1) before asserting on the time in agent-response. So if the tracker never increments, the failure is protocol/setup (component did not receive FunctionCallRequest); if the tracker increments but the model still says fallback text, the failure is backend/proxy/API delivery of the result.
+**E2E 6/6b test alignment:** The same backend that serves other openai-proxy-e2e tests (connection, messages, reconnection) also serves `POST /function-call`. They now use `setupFunctionCallingTest(page, { useBackend: true })`, `setupTestPageForBackend` with enable-function-calling, and `waitForFunctionCall(page)` (function-call-tracker ≥ 1) before asserting on the time in agent-response.
+
+**New evidence (latest run):** The failure is at the **time-pattern assertion** (`toHaveText(/\d{1,2}:\d{2}|UTC/)`), not at the `waitForFunctionCall` assertion. So the **function-call-tracker passed** — the component received a FunctionCallRequest. The defect is therefore **downstream**: (1) backend not returning time (or not called / wrong URL), (2) proxy not sending `function_call_output` with the result, or (3) model not using the result in its reply. Received strings: test 6 — *"I'm having trouble fetching the current time at the moment. Could you let me know your time zone or location? That way I can help you find the exact time."*; test 6b — *"I'm having trouble fetching the current time right now. Could you tell me your time zone or location so I can better assist you?"* See [TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md](./TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md) § "Latest run evidence".
 
 **Next (if still failing):** Identify and isolate with integration tests (see [TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md](./TDD-PLAN-3-REMAINING-OPENAI-PROXY-FAILURES.md) § “Identify and isolate the failure with integration tests”). Key check: run `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` and the test “Issue #470 real-API: function-call flow completes without conversation_already_has_active_response” — it asserts the client receives assistant content that includes 12:00 or UTC after sending FunctionCallResponse via real backend. If that integration test fails, the break is in proxy↔API or API response; if it passes, the break is likely E2E environment (backend URL, backend not running, or browser timing).
 
@@ -127,8 +137,8 @@ So the instruction change did not fix the delivery gap.
 
 | # | Test | Error / assertion |
 |---|------|-------------------|
-| 1 | **6.** Simple function calling – assert response in agent-response | `toHaveText(/\d{1,2}:\d{2}|UTC/)` failed. **Received:** *"I'm sorry, but I couldn't retrieve the current time right now. Could you please tell me your time zone or location so I can provide the correct time for you?"* (model fallback text). |
-| 2 | **6b.** Issue #462 / #470 – function-call flow (partner scenario) | Same pattern. **Received:** *"Hello! How can I assist you today?"* (greeting only; 31× locator resolution). |
+| 1 | **6.** Simple function calling – assert response in agent-response | `toHaveText(/\d{1,2}:\d{2}|UTC/)` failed. **Received:** *"I'm having trouble fetching the current time at the moment. Could you let me know your time zone or location? That way I can help you find the exact time."* (model fallback text). Function-call-tracker passed (request received). |
+| 2 | **6b.** Issue #462 / #470 – function-call flow (partner scenario) | Same pattern. **Received:** *"I'm having trouble fetching the current time right now. Could you tell me your time zone or location so I can better assist you?"* (model fallback text). Function-call-tracker passed. |
 
 #### Previous run – failed tests (9) *before test-app unmapped-event change*
 

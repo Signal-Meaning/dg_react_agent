@@ -17,6 +17,7 @@
 | **Integration suite green** | In progress | Four itMockOnly tests were failing because they expected ConversationText from control events; proxy (Issue #489 Phase 2) does not send ConversationText for response.function_call_arguments.done / output_audio_transcript.done / output_text.done. Tests updated to match current proxy contract; each test now has a 4s fallback timeout that closes the client to avoid open handles. Re-run to confirm. |
 | **No regressions elsewhere** | Pending | Full `npm test` to confirm no regressions outside OpenAI proxy; not yet verified. |
 | **E2E Tests 6 / 6b (function-call)** | Pending | Still fail with real APIs (time never appears in agent-response). Root cause: API sends `response.done` before we send `function_call_output`; see § G.6. Proposed fix: send `response.create` when we receive `response.done` and `pendingResponseCreateAfterFunctionCallOutput` is true. |
+| **Backend integration tests** | Done | `test-app/tests/backend-integration.test.js` added (Issue #489): runs real backend-server.js on port 18408; asserts server + proxy reachability, POST /function-call contract, and CORS (OPTIONS + POST with Origin). Run: `cd test-app && npm test -- backend-integration`. Fills gap between function-call-endpoint-integration (port 18407, no CORS) and E2E (browser → backend). |
 
 **Quick reference:** § A–C = integration-test fixes (implemented). § E = success criteria checklist. § G = E2E 6/6b findings and next steps.
 
@@ -204,19 +205,22 @@ So the flow reaches: connect → greeting → user sends "What time is it?" → 
 
 ### G.2 Likely failure points (in order to check)
 
-1. **Backend not running or not reachable**  
-   POST `/function-call` must hit the same host as the WebSocket (e.g. `http://localhost:8080/function-call`). If the backend is not running, or the app is not configured to use it, the client never gets a function result.  
+1. **Backend not running or not reachable**
+   POST `/function-call` must hit the same host as the WebSocket (e.g. `http://localhost:8080/function-call`). If the backend is not running, or the app is not configured to use it, the client never gets a function result.
    **Check:** Ensure `cd test-app && npm run backend` is running when running E2E; confirm in Network tab that POST to `/function-call` is sent and returns 200.
 
-2. **API never sends FunctionCallRequest**  
+2. **Browser → backend (CORS / connection)**
+   Diagnostic test 6d and `errorMessage: "Failed to fetch"` show the browser’s fetch to POST `/function-call` can fail before any response (first failing link: browser → backend). Backend now sets CORS explicitly for POST /function-call. If E2E still fails, run with `--headed` and check Network tab for the `function-call` request (OPTIONS and POST). Backend integration tests (`cd test-app && npm test -- backend-integration`) assert CORS and /function-call contract on the same server process.
+
+3. **API never sends FunctionCallRequest**
    The model might not call `get_current_time` (e.g. tools not in session, or model behavior).  
    **Check:** Backend/proxy logs for `FunctionCallRequest` or `response.function_call_arguments.done` from upstream.
 
-3. **Proxy does not forward FunctionCallResponse or API response**  
+4. **Proxy does not forward FunctionCallResponse or API response**  
    Even if the backend returns a result, the proxy might not send it upstream, or the API’s assistant message (with time) might not be mapped to ConversationText.  
    **Check:** Proxy logs for sending `function_call_output` and for forwarding `conversation.item.*` (assistant) with the time text.
 
-4. **Session closed before round-trip**  
+5. **Session closed before round-trip**  
    Snapshot shows Session `closed`. If the connection closed (e.g. idle timeout) before the model sent the tool call or the backend responded, the client would never get the second assistant message.  
    **Check:** Backend/proxy logs for connection close timing vs. function-call and response events.
 
