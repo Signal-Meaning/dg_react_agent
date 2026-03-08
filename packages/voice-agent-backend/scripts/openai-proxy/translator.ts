@@ -206,10 +206,16 @@ function buildInstructionsWithContext(settings: ComponentSettings): string {
  * Map component Settings → OpenAI session.update payload (client event).
  */
 export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAISessionUpdate {
+  let instructions = buildInstructionsWithContext(settings);
+  // When tools are present, instruct the model to use function results in its reply (E2E tests 6/6b: model should say the time after get_current_time).
+  if (settings.agent?.think?.functions?.length) {
+    const functionInstruction = '\n\nWhen you receive results from tool calls, use them in your reply to the user.';
+    instructions = instructions ? instructions + functionInstruction : functionInstruction.trim();
+  }
   const session: OpenAISessionUpdate['session'] = {
     type: 'realtime',
     model: settings.agent?.think?.provider?.model ?? 'gpt-realtime',
-    instructions: buildInstructionsWithContext(settings),
+    instructions,
     // Do not send voice in session.update; current Realtime API returns "Unknown parameter: 'session.voice'".
     // GA API: turn_detection is under session.audio.input (REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2).
     // Use turn_detection: null so the server does NOT auto-commit the audio buffer; only the proxy sends

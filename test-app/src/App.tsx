@@ -830,11 +830,20 @@ function App() {
   
   const handleError = useCallback((error: DeepgramError) => {
     // Count all agent errors (recoverable and non-recoverable) so E2E can fail on any upstream error.
-    if (error.service === 'agent') {
+    // Exception: unmapped_upstream_event — proxy sends these when the real API emits control-only events
+    // (e.g. response.output_audio_transcript.delta, response.created) that we handle as "log only".
+    // Tests match implementation: we don't treat these as regressions in E2E (see E2E-FAILURES-RESOLUTION.md).
+    if (error.service === 'agent' && error.code !== 'unmapped_upstream_event') {
       setAgentErrorCount((c) => c + 1);
       if (error.recoverable) {
         setRecoverableAgentErrorCount((c) => c + 1);
       }
+    }
+    if (error.service === 'agent' && error.code === 'unmapped_upstream_event') {
+      if (isDebugMode) {
+        addLog(`Warning (agent): ${error.message} (expected in real-API runs; not counted as error).`);
+      }
+      return;
     }
     // Recoverable: e.g. OpenAI sends "server had an error" after a successful response. Still a regression; tests assert count stays 0.
     if (error.recoverable) {

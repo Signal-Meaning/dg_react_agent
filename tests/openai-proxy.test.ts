@@ -106,6 +106,20 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.session.tools![1].name).toBe('get_weather');
       expect(out.session.tools![1].parameters).toEqual({ type: 'object', properties: { city: { type: 'string' } } });
     });
+
+    it('appends instruction to use tool results when functions are present (E2E 6/6b)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'You are helpful.',
+            functions: [{ name: 'get_current_time', description: 'Get the time', parameters: {} }],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.instructions).toContain('When you receive results from tool calls, use them in your reply to the user.');
+    });
   });
 
   describe('2. Client event handling (InjectUserMessage)', () => {

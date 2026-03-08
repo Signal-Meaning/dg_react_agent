@@ -45,3 +45,5 @@ All sub-issues (#494–#500) have been **closed** via `gh issue close` with reso
 - Epic (#493) and sub-issues (#494–#500) created via `gh issue create`.
 - **Done and closed:** All sub-issues #494–#500 and epic #493 closed via `gh issue close` with resolution comments.
 - **Summary:** #494 (speech_stopped), #495 (transcription when VAD disabled: documented), #496 (transcription expose actuals), #497 (delta accumulator), #498 (output_text.done rationale), #499 (function_call part → ConversationText for parity), #500 (raw conversation.item forward removed). Epic acceptance criteria satisfied. Real-API integration tests pass; additional upstream control events (e.g. response.created, response.output_item.added/done) handled explicitly for parity.
+
+**Release shipping:** For a release that includes this epic, use the [release checklist](../../../.github/ISSUE_TEMPLATE/release-checklist.md); run real-API integration tests when the release touches proxy/API behavior. See [TDD-PLAN-REAL-API-E2E-FAILURES.md](../ISSUE-489/TDD-PLAN-REAL-API-E2E-FAILURES.md) §11 "Release shipping (post-#493)".
