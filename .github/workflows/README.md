@@ -24,10 +24,10 @@ Use either approach:
 - To test the **Publish** job (including the prelim step with registry config), run **workflow_dispatch** and leave **“Run only test-jest”** unchecked.  
 - That will run test-jest and then publish; only do this when you intend to publish (e.g. from a release branch with a real version).
 
-### E2E job (test-e2e)
+### E2E job (test-e2e) — currently suppressed
 
-The **E2E Tests (mocks, no real APIs)** job runs a CI-safe subset of Playwright tests in proxy mode: no real Deepgram or OpenAI keys are required; the test-app backend mocks upstream. It runs after **Jest Tests**; **Publish** runs only if both test-jest and test-e2e succeed. Specs run: api-key-validation, lazy-initialization-e2e, page-content, deepgram-ux-protocol, protocol-validation-modes.
+The **E2E Tests (mocks, no real APIs)** job is **disabled** in CI (`if: false`) until the backend is in its own repo. Shared folder layout and conflicting env (backend vs frontend) make CI E2E unreliable at this stage. The job definition remains in the workflow so it can be re-enabled when the backend is separated. **Publish** runs after **Jest Tests** only (no E2E gate).
 
 ### Shared prelim action
 
-The test-jest, test-e2e, and publish jobs use `./.github/actions/prelim` for checkout, Node setup, `npm ci`, and `npm run build` (publish also passes registry credentials for `npm publish`).
+The test-jest, test-e2e (when enabled), and publish jobs use `./.github/actions/prelim` for checkout, Node setup, `npm ci`, and `npm run build` (publish also passes registry credentials for `npm publish`).

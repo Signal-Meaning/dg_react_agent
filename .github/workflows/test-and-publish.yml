@@ -98,6 +98,8 @@ jobs:
   test-e2e:
     name: E2E Tests (mocks, no real APIs)
     runs-on: ubuntu-latest
+    # Suppressed until backend is in its own repo: shared folder + conflicting env (backend vs frontend) make CI E2E unreliable. Re-enable when backend is separated.
+    if: false
     permissions:
       contents: read
     steps:
@@ -142,7 +144,7 @@ jobs:
   publish:
     name: Publish Package
     runs-on: ubuntu-latest
-    needs: [test-jest, test-e2e]
+    needs: [test-jest]
     if: success() && (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.test_only != true) || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v')))
     permissions:
       contents: write   # read + write for creating release tag and GitHub Release
