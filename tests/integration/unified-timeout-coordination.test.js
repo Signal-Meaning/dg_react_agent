@@ -406,6 +406,76 @@ describe('Unified Timeout Coordination Integration', () => {
     });
 
     /**
+     * Issue #508 (voice-commerce #1058): When the next agent message after a function result is
+     * another FUNCTION_CALL_STARTED (chained call), the component must clear
+     * waitingForNextAgentMessageAfterFunctionResult and stop the max-wait timer so the idle
+     * timeout does not fire. Simulates: no AGENT_MESSAGE_RECEIVED for the function-call message
+     * (only FUNCTION_CALL_STARTED when the app processes it); without the fix, max-wait fires
+     * at 500ms and we start the timeout, which fires at 5.5s.
+     */
+    test('Issue #508: should NOT timeout when next agent message is a chained function call (FUNCTION_CALL_STARTED clears waiting)', () => {
+      const timeoutMs = 5000;
+      // 1. Establish session with user activity and idle state
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+
+      // 2. First function call: create_mandate
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'create_mandate' });
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'create_mandate' });
+
+      // 3. Before default max-wait (500ms) fires, next agent message arrives as a function call (chained).
+      //    Simulate that only FUNCTION_CALL_STARTED is sent to idle service (no AGENT_MESSAGE_RECEIVED for function-call messages).
+      jest.advanceTimersByTime(400);
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'create_cart_mandate' });
+
+      // 4. Wait past when timeout would have fired without the fix (max-wait 500ms + timeout 5s = 5.5s)
+      jest.advanceTimersByTime(6000);
+
+      // 5. ASSERT: connection must still be open (timeout must NOT have fired)
+      expect(mockOnTimeout).not.toHaveBeenCalled();
+
+      // 6. Complete the chained flow; then next agent message (text) received
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'create_cart_mandate' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
+
+      // 7. Now timeout may start and fire after idle period
+      jest.advanceTimersByTime(timeoutMs);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * Issue #508: Full mandate flow — after each FUNCTION_CALL_COMPLETED, canStartTimeout must be false
+     * until the next FUNCTION_CALL_STARTED or AGENT_MESSAGE_RECEIVED. Verifies the contract for chained calls.
+     */
+    test('Issue #508: mandate flow (create_mandate → create_cart_mandate → execute_mandate) — no timeout between function result and next function call', () => {
+      const timeoutMs = 5000;
+      const MANDATE_FLOW_NAMES = ['create_mandate', 'create_cart_mandate', 'execute_mandate'];
+
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+
+      // Chained function calls: each COMPLETED leaves us waiting; each next STARTED clears waiting
+      for (let i = 0; i < MANDATE_FLOW_NAMES.length; i++) {
+        const name = MANDATE_FLOW_NAMES[i];
+        idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: name });
+        idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: name });
+        // Wait past max-wait (500ms) — timeout must NOT have fired (we're either waiting or will get next STARTED)
+        jest.advanceTimersByTime(600);
+        expect(mockOnTimeout).not.toHaveBeenCalled();
+        // Next agent message is the next function call (or after last, we send AGENT_MESSAGE_RECEIVED below)
+        if (i + 1 < MANDATE_FLOW_NAMES.length) {
+          idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: MANDATE_FLOW_NAMES[i + 1] });
+        }
+      }
+
+      idleTimeoutService.handleEvent({ type: 'AGENT_MESSAGE_RECEIVED' });
+      jest.advanceTimersByTime(timeoutMs);
+      expect(mockOnTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    /**
      * Issue #487 (voice-commerce #1058): Idle timeout must NOT fire while waiting for next
      * agent message after the app has sent a function result. The agent is still busy
      * (model has not yet sent the next function call or final response).

@@ -284,6 +284,10 @@ export class IdleTimeoutService {
         // Issue #373: Function calls are active operations - disable idle timeout during execution
         this.activeFunctionCalls.add(event.functionCallId);
         this.log(`FUNCTION_CALL_STARTED: ${event.functionCallId} (active calls: ${this.activeFunctionCalls.size})`);
+        // Issue #508: Next agent message can be a function call (chained). Clear waiting and cancel max-wait
+        // so we do not start the idle timeout when max-wait fires; treat "next message received" here.
+        this.waitingForNextAgentMessageAfterFunctionResult = false;
+        this.stopMaxWaitForAgentReplyTimer();
         // Disable idle timeout resets when any function call is active
         // This prevents timeout from firing during function execution
         this.disableResets();
