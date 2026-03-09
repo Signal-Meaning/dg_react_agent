@@ -27,6 +27,8 @@ import {
   waitForAgentResponseEnhanced,
   installWebSocketCapture,
   getCapturedWebSocketData,
+  getLastSettingsFromCapture,
+  assertSettingsStructureE2E,
   skipIfNoRealAPI,
   skipIfNoProxyForBackend,
   skipUnlessRealAPIs,
@@ -35,7 +37,28 @@ import {
 } from './helpers/test-helpers.js';
 
 test.describe('Context Retention - Agent Usage (Issue #362)', () => {
-  
+
+  test('Issue #379: Settings structure verification and diagnostics (getLastSettingsFromCapture)', async ({ page }) => {
+    skipUnlessRealAPIs('Requires USE_REAL_APIS=1 for connection that sends Settings.');
+    skipIfNoRealAPI('Requires real API key');
+    skipIfNoProxyForBackend();
+    await installWebSocketCapture(page);
+    await setupTestPageForBackend(page);
+    await page.waitForFunction(() => {
+      const modeEl = document.querySelector('[data-testid="connection-mode"]');
+      return modeEl && (modeEl.textContent?.includes('proxy') || modeEl.textContent?.includes('direct'));
+    }, { timeout: 5000 });
+    const textInput = page.locator('[data-testid="text-input"]');
+    await textInput.waitFor({ state: 'visible', timeout: 10000 });
+    await textInput.focus();
+    await page.waitForSelector('[data-testid="connection-status"]', { timeout: 10000 });
+    await waitForConnection(page, 30000);
+    const wsData = await getCapturedWebSocketData(page);
+    const lastSettings = getLastSettingsFromCapture(wsData);
+    expect(lastSettings).toBeTruthy();
+    assertSettingsStructureE2E(lastSettings);
+  });
+
   test('should retain context when disconnecting and reconnecting - agent uses context', async ({ page }) => {
     skipUnlessRealAPIs('Requires USE_REAL_APIS=1; skipped when run without real APIs (Issue #489).');
     skipIfNoRealAPI('Requires real Deepgram API key');

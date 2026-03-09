@@ -40,9 +40,10 @@ import {
   waitForAgentGreeting,
   setupAudioSendingPrerequisites,
   establishConnectionViaText,
+  attachIdleTimeoutDiagnostics,
 } from './helpers/test-helpers.js';
-import { setupTestPage, simulateSpeech } from './helpers/audio-mocks.js';
-import { waitForIdleTimeout, waitForIdleConditions, getIdleState } from './fixtures/idle-timeout-helpers';
+import { setupTestPage } from './helpers/audio-mocks.js';
+import { waitForIdleTimeout, waitForIdleConditions } from './fixtures/idle-timeout-helpers';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
 
 test.describe('Idle Timeout Behavior', () => {
@@ -220,7 +221,7 @@ test.describe('Idle Timeout Behavior', () => {
     console.log(`Final button text: ${finalButtonText}`);
   });
 
-  test('should not timeout during active conversation after UtteranceEnd', async ({ page, context }) => {
+  test('should not timeout during active conversation after UtteranceEnd', async ({ page, context }, testInfo) => {
     console.log('🧪 Testing idle timeout behavior during active conversation with REAL AUDIO...');
     
     // Track connection close events
@@ -272,7 +273,11 @@ test.describe('Idle Timeout Behavior', () => {
       const eventsDetected = await waitForVADEvents(page, ['UserStartedSpeaking', 'UtteranceEnd'], 7000);
       console.log(`✅ VAD events detected: ${eventsDetected} (UserStartedSpeaking, UtteranceEnd)`);
       
-      // Verify we got at least one VAD event
+      await attachIdleTimeoutDiagnostics(page, testInfo, {
+        attachmentName: 'idle-timeout-vad-failure-active-conversation.json',
+        eventsDetected,
+        sampleSent: sample,
+      });
       expect(eventsDetected).toBeGreaterThan(0);
     }
     
@@ -303,7 +308,7 @@ test.describe('Idle Timeout Behavior', () => {
     console.log('✅ No premature idle timeouts during REAL conversation');
   });
 
-  test('should handle conversation with realistic timing and padding', async ({ page, context }) => {
+  test('should handle conversation with realistic timing and padding', async ({ page, context }, testInfo) => {
     console.log('🧪 Testing idle timeout with realistic conversation timing (2.3s padding)...');
     
     // Track connection close events
@@ -370,7 +375,11 @@ test.describe('Idle Timeout Behavior', () => {
       const eventsDetected = await waitForVADEvents(page, ['UserStartedSpeaking', 'UtteranceEnd'], 7000);
       console.log(`✅ VAD events detected: ${eventsDetected}`);
       
-      // Verify we got at least one VAD event
+      await attachIdleTimeoutDiagnostics(page, testInfo, {
+        attachmentName: 'idle-timeout-vad-failure-realistic-timing.json',
+        eventsDetected,
+        sampleSent: sample,
+      });
       expect(eventsDetected).toBeGreaterThan(0);
     }
     
@@ -906,7 +915,7 @@ test.describe('Idle Timeout Behavior', () => {
     console.log('\n✅ Test passed: IdleTimeoutService correctly starts timeout countdown!');
   });
 
-  test('should restart timeout after USER_STOPPED_SPEAKING when agent is idle - reproduces Issue #262/#430', async ({ page }) => {
+  test('should restart timeout after USER_STOPPED_SPEAKING when agent is idle - reproduces Issue #262/#430', async ({ page }, testInfo) => {
     console.log('🧪 Testing Issue #262/#430: Timeout should restart after USER_STOPPED_SPEAKING when agent is idle...');
     
     // Track all IdleTimeoutService logs
@@ -978,6 +987,10 @@ test.describe('Idle Timeout Behavior', () => {
     // Wait for UserStartedSpeaking to be detected and timeout to be stopped
     // Use the same fixture that works in other passing tests
     const eventsDetected = await waitForVADEvents(page, ['UserStartedSpeaking'], 10000);
+    await attachIdleTimeoutDiagnostics(page, testInfo, {
+      attachmentName: 'idle-timeout-vad-failure-user-stopped-speaking.json',
+      eventsDetected,
+    });
     expect(eventsDetected).toBeGreaterThan(0);
     console.log('✅ UserStartedSpeaking detected');
     

@@ -144,7 +144,7 @@ describe('Agent Options Remount Behavior - Issue #318', () => {
 
   // Issue #333: Settings not sent on new connection after remount
   // https://github.com/Signal-Meaning/dg_react_agent/issues/333
-  test.skip('should verify component remounts with different agentOptions correctly', async () => {
+  test('should verify component remounts with different agentOptions correctly', async () => {
     // Behavior-based test: Verify that remounting with different agentOptions
     // results in Settings being sent with the new options
     

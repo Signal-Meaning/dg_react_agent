@@ -6,12 +6,15 @@
  * Load test-app/.env so skip checks (e.g. USE_REAL_APIS + OPENAI_API_KEY) see keys when run in workers.
  */
 import { expect, test } from '@playwright/test';
+import { createRequire } from 'module';
 import dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+const { validateSettingsStructure } = require(path.resolve(__dirname, '..', '..', '..', '..', 'tests', 'shared', 'settings-structure-validate.js'));
 dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
 
 /**
@@ -816,6 +819,33 @@ async function getCapturedWebSocketData(page) {
     sent: window.capturedSentMessages || [],
     received: window.capturedReceivedMessages || []
   }));
+}
+
+/**
+ * Get the last sent Settings message from captured WebSocket data (Issue #379).
+ * Use for diagnostics and structure verification in E2E.
+ * @param {{ sent: Array<{ type: string, data: object }> }} wsData - result of getCapturedWebSocketData(page)
+ * @returns {object | null} Last Settings message payload or null if none sent
+ */
+function getLastSettingsFromCapture(wsData) {
+  if (!wsData?.sent || !Array.isArray(wsData.sent)) return null;
+  for (let i = wsData.sent.length - 1; i >= 0; i--) {
+    const msg = wsData.sent[i];
+    const type = msg?.type ?? msg?.data?.type;
+    if (type === 'Settings') return msg?.data ?? msg;
+  }
+  return null;
+}
+
+/**
+ * Assert Settings message has expected structure in E2E (Issue #379).
+ * Validates type, agent, agent.think, and optional agent.context shape.
+ * @param {object} settings - Settings message payload (e.g. from getLastSettingsFromCapture)
+ * @param {{ requireContext?: boolean, requireFunctions?: boolean }} [options]
+ */
+function assertSettingsStructureE2E(settings, options = {}) {
+  if (!settings) throw new Error('Settings message is undefined (diagnostic: use getLastSettingsFromCapture after installWebSocketCapture)');
+  validateSettingsStructure(settings, options);
 }
 
 /**
@@ -2018,6 +2048,76 @@ async function writeTranscriptToFile(transcript, options = {}) {
   }
 }
 
+/** Testid keys for getIdleTimeoutDiagnostics (single source of truth; aligns with SELECTORS). */
+const IDLE_TIMEOUT_DIAG_TEST_IDS = {
+  connectionStatus: 'connection-status',
+  agentResponse: 'agent-response',
+  userStartedSpeaking: 'user-started-speaking',
+  utteranceEnd: 'utterance-end',
+  userStoppedSpeaking: 'user-stopped-speaking',
+};
+
+/**
+ * Capture page state for idle-timeout E2E diagnostics (Issue #346).
+ * Call before a failing assertion or in catch after timeout; attach result to test report
+ * so we can inspect user/assistant text and VAD state without relaxing assertions.
+ * Uses IDLE_TIMEOUT_DIAG_TEST_IDS so testids stay in sync with SELECTORS.
+ *
+ * @param {import('@playwright/test').Page} page - Playwright page
+ * @param {{ userMessageSent?: string }} options - Optional user message that was sent (for report)
+ * @returns {Promise<{ connectionStatus: string, agentResponseLength: number, agentResponsePreview: string, vad: { userStartedSpeaking: string, utteranceEnd: string, userStoppedSpeaking: string }, userMessageSent?: string }>}
+ */
+async function getIdleTimeoutDiagnostics(page, options = {}) {
+  const testIds = IDLE_TIMEOUT_DIAG_TEST_IDS;
+  const snapshot = await page.evaluate((ids) => {
+    const get = (testId) => {
+      const el = document.querySelector(`[data-testid="${testId}"]`);
+      if (!el) return null;
+      const t = el.textContent?.trim();
+      return t ?? null;
+    };
+    const agentText = get(ids.agentResponse);
+    const preview = agentText
+      ? (agentText.length > 200 ? agentText.slice(0, 200) + '…' : agentText)
+      : '(no element or empty)';
+    return {
+      connectionStatus: get(ids.connectionStatus) ?? 'element not found',
+      agentResponseLength: agentText ? agentText.length : 0,
+      agentResponsePreview: preview,
+      vad: {
+        userStartedSpeaking: get(ids.userStartedSpeaking) ?? 'absent',
+        utteranceEnd: get(ids.utteranceEnd) ?? 'absent',
+        userStoppedSpeaking: get(ids.userStoppedSpeaking) ?? 'absent',
+      },
+    };
+  }, testIds);
+  if (options.userMessageSent !== undefined) {
+    snapshot.userMessageSent = options.userMessageSent;
+  }
+  return snapshot;
+}
+
+/**
+ * Capture idle-timeout diagnostics and attach to the test report (Issue #346).
+ * Use before a VAD or agent-response assertion so failures include the snapshot.
+ *
+ * @param {import('@playwright/test').Page} page - Playwright page
+ * @param {import('@playwright/test').TestInfo} testInfo - Test info for attachments
+ * @param {{ attachmentName: string, eventsDetected?: number, sampleSent?: string, userMessageSent?: string }} options - Attachment filename and optional extra fields to merge into the snapshot
+ * @returns {Promise<object>} The snapshot object (with any merged fields)
+ */
+async function attachIdleTimeoutDiagnostics(page, testInfo, options) {
+  const { attachmentName, eventsDetected, sampleSent, userMessageSent } = options;
+  const diag = await getIdleTimeoutDiagnostics(page, { userMessageSent });
+  if (eventsDetected !== undefined) diag.eventsDetected = eventsDetected;
+  if (sampleSent !== undefined) diag.sampleSent = sampleSent;
+  await testInfo.attach(attachmentName, {
+    body: JSON.stringify(diag, null, 2),
+    contentType: 'application/json',
+  });
+  return diag;
+}
+
 export {
   // hasRealAPIKey, hasOpenAIKey, hasRealBackend, skipIfNoRealBackend, skipIfNoRealAPI, hasOpenAIProxyEndpoint, hasDeepgramProxyEndpoint, skipIfNoOpenAIProxy, skipIfOpenAIProxy, skipIfNoProxyForBackend, isRealBackendReachable, skipIfNoRealBackendAsync are already exported inline above
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
@@ -2037,6 +2137,8 @@ export {
   getConversationStorageCheck, // Check conversation in localStorage { ok, length?, reason? }
   installWebSocketCapture, // Install WebSocket message capture in browser context for testing
   getCapturedWebSocketData, // Retrieve captured WebSocket messages and their counts
+  getLastSettingsFromCapture, // Get last sent Settings from capture (Issue #379 diagnostics)
+  assertSettingsStructureE2E, // Assert Settings message structure in E2E (Issue #379)
   getTtsFirstChunkBase64, // Get first TTS binary chunk as base64 for audio-quality check (Issue #414)
   getTtsFirstLargeChunkBase64, // First 3 chunks >= 1000 bytes (actual TTS PCM; use for quality assertion)
   getTtsChunksBase64List, // Get per-chunk base64 list for boundary diagnostic (Issue #414)
@@ -2077,6 +2179,8 @@ export {
   isGetCurrentTimeBackendReachable, // True if backend supports get_current_time (for tests 6/6b skip when not)
   establishConnectionAndWaitForFunctionCall, // Establish connection and wait for function call
   MicrophoneHelpers, // Microphone utility helpers for E2E tests (activate/deactivate mic)
-  writeTranscriptToFile // Write conversation transcript to file (optional, enabled via env var)
+  writeTranscriptToFile, // Write conversation transcript to file (optional, enabled via env var)
+  getIdleTimeoutDiagnostics, // Capture agent response, connection, VAD state for idle-timeout failure inspection (Issue #346)
+  attachIdleTimeoutDiagnostics, // Capture + attach idle-timeout diagnostics to report (Issue #346)
 };
 

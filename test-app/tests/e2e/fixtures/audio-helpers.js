@@ -13,6 +13,8 @@
  * - Real-time streaming for better interim transcript generation
  */
 
+import { SELECTORS } from '../helpers/test-helpers.js';
+
 /** 20 ms of audio at 16 kHz 16-bit mono (OpenAI Realtime Eval recommendation). Use for Realtime API tests. */
 export const CHUNK_20MS_16K_MONO = 640;
 
@@ -286,9 +288,9 @@ export async function loadAndSendAudioSampleAt24k(page, sampleName) {
  */
 export async function waitForVADEvents(page, eventTypes = ['UserStartedSpeaking', 'UtteranceEnd'], timeout = 5000) {
   const vadSelectors = {
-    'UserStartedSpeaking': '[data-testid="user-started-speaking"]',
-    'UtteranceEnd': '[data-testid="utterance-end"]',
-    'UserStoppedSpeaking': '[data-testid="user-stopped-speaking"]',
+    'UserStartedSpeaking': SELECTORS.userStartedSpeaking,
+    'UtteranceEnd': SELECTORS.utteranceEnd,
+    'UserStoppedSpeaking': SELECTORS.userStoppedSpeaking,
   };
 
   const startTime = Date.now();

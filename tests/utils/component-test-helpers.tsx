@@ -11,6 +11,10 @@ import DeepgramVoiceInteraction from '../../src/components/DeepgramVoiceInteract
 import { DeepgramVoiceInteractionHandle, AgentOptions, AgentFunction } from '../../src/types';
 import { MOCK_API_KEY } from '../fixtures/mocks';
 
+const { validateSettingsStructure } = require('../shared/settings-structure-validate') as {
+  validateSettingsStructure: (settings: unknown, options?: { requireContext?: boolean; requireFunctions?: boolean }) => void;
+};
+
 // Re-export MOCK_API_KEY and waitFor for convenience
 export { MOCK_API_KEY };
 export { rtlWaitFor as waitFor };
@@ -23,11 +27,23 @@ export interface CapturedSettingsMessage {
   agent?: {
     think?: {
       functions?: AgentFunction[];
+      prompt?: string;
       [key: string]: any;
     };
+    context?: { messages?: Array<{ type: string; role: string; content: string }> };
     [key: string]: any;
   };
   [key: string]: any;
+}
+
+/**
+ * Options for assertSettingsStructure (Issue #379)
+ */
+export interface AssertSettingsStructureOptions {
+  /** When true, agent.context must exist and have a messages array */
+  requireContext?: boolean;
+  /** When true, agent.think.functions must exist and have length > 0 */
+  requireFunctions?: boolean;
 }
 
 export type CapturedSettings = Array<CapturedSettingsMessage>;
@@ -479,13 +495,24 @@ export function resetTestState(): void {
 }
 
 /**
- * Verify Settings message structure
+ * Assert Settings message has expected structure (Issue #379).
+ * Use for tests that need to validate full shape: type, agent, think, optional context, instructions.
+ */
+export function assertSettingsStructure(
+  settings: CapturedSettingsMessage | undefined,
+  options: AssertSettingsStructureOptions = {}
+): void {
+  if (!settings) {
+    throw new Error('Settings message is undefined');
+  }
+  validateSettingsStructure(settings, options);
+}
+
+/**
+ * Verify Settings message structure (basic checks; for full shape use assertSettingsStructure)
  */
 export function verifySettingsStructure(settings: CapturedSettingsMessage | undefined): void {
-  expect(settings).toBeDefined();
-  expect(settings?.type).toBe('Settings');
-  expect(settings?.agent).toBeDefined();
-  expect(settings?.agent?.think).toBeDefined();
+  assertSettingsStructure(settings);
 }
 
 /**
