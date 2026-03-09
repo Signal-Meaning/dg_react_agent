@@ -4,9 +4,14 @@
 
 **All E2E commands in this document must be run from the `test-app` directory.** The Playwright config (`tests/playwright.config.mjs`), `testDir`, and env loading are defined relative to test-app. Running Playwright from the repository root (e.g. the root `npm run test:e2e`) uses a different cwd and can run the full suite with ambiguous paths; it is error-prone for targeted runs. **Standard practice: `cd test-app` first, then run any `npm run test:e2e` variant.**
 
+## CI subset vs full suite
+
+- **CI (essential subset only):** The Test and Publish workflow runs only the **essential** E2E specs (mock-only, no real API keys). From test-app: `npm run test:e2e:ci`. See [CI-E2E-SUBSET.md](./CI-E2E-SUBSET.md) for the list and how to change it.
+- **Full suite:** From test-app, `npm run test:e2e` with no further arguments runs **all** E2E specs (e.g. 210+ tests). Use for full regression locally; many specs require real API keys or specific backends.
+
 ## Running only specific specs (not the full suite)
 
-- **Full suite:** From test-app, `npm run test:e2e` with no further arguments runs **all** E2E specs (e.g. 210+ tests). Use this for CI or full regression.
+- **Full suite (all specs):** From test-app, `npm run test:e2e` with no further arguments runs **all** E2E specs (e.g. 210+ tests). Use for full regression.
 - **Specific specs:** From test-app, pass spec file names after `--` so only those specs run. Example — only the OpenAI proxy E2E spec and the issue-373 idle-timeout spec:
   ```bash
   cd test-app
