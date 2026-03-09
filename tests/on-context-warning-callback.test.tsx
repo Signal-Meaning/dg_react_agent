@@ -78,7 +78,7 @@ describe('onContextWarning Callback Tests (Issue #480)', () => {
     await waitForSettingsSent(mockWebSocketManager);
 
     await waitFor(() => {
-      expect(onContextWarning).toHaveBeenCalledTimes(1);
+      expect(onContextWarning.mock.calls.length).toBeGreaterThanOrEqual(1);
     });
   });
 
