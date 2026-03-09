@@ -445,6 +445,34 @@ describe('Unified Timeout Coordination Integration', () => {
     });
 
     /**
+     * Issue #508 (failing test for the gap): When the next agent message is a chained function call,
+     * the service MUST cancel the max-wait timer so it does not fire and start the idle timeout.
+     * Without the fix (clearing waiting + stopMaxWaitForAgentReplyTimer in FUNCTION_CALL_STARTED),
+     * this test fails: clearTimeout would not be called for the max-wait timer.
+     */
+    test('Issue #508: FUNCTION_CALL_STARTED must cancel max-wait timer (chained call; would fail without fix)', () => {
+      idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'session' });
+      idleTimeoutService.handleEvent({ type: 'USER_STOPPED_SPEAKING' });
+      idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'fc-1' });
+      idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_COMPLETED', functionCallId: 'fc-1' });
+      // Max-wait timer is now running (500ms default)
+
+      const clearSpy = jest.spyOn(global, 'clearTimeout');
+      try {
+        clearSpy.mockClear();
+        jest.advanceTimersByTime(400);
+        idleTimeoutService.handleEvent({ type: 'FUNCTION_CALL_STARTED', functionCallId: 'fc-2-chained' });
+
+        // With Issue #508 fix: stopMaxWaitForAgentReplyTimer() is called, so clearTimeout is invoked.
+        // Without the fix: the max-wait timer is never cancelled and this assertion fails.
+        expect(clearSpy).toHaveBeenCalled();
+      } finally {
+        clearSpy.mockRestore();
+      }
+    });
+
+    /**
      * Issue #508: Full mandate flow — after each FUNCTION_CALL_COMPLETED, canStartTimeout must be false
      * until the next FUNCTION_CALL_STARTED or AGENT_MESSAGE_RECEIVED. Verifies the contract for chained calls.
      */

@@ -64,6 +64,18 @@ Follow **Red → Green → Refactor** for each change:
 
 **Green:** Same implementation as 1.1; this test locks in the full chained-flow contract.
 
+### 1.3 Failing test for the gap (Issue #508 fix)
+
+**Red:** A test that **fails when the fix is reverted** so the gap is covered by a failing test:
+
+- **File:** `tests/integration/unified-timeout-coordination.test.js`
+- **Test:** `Issue #508: FUNCTION_CALL_STARTED must cancel max-wait timer (chained call; would fail without fix)`
+- **Behavior:** After `FUNCTION_CALL_COMPLETED`, the max-wait timer is running. When we dispatch `FUNCTION_CALL_STARTED` (chained call) before the max-wait fires, the service must call `clearTimeout` (cancel the max-wait timer). The test spies on `global.clearTimeout` and asserts it was called when we handle `FUNCTION_CALL_STARTED`.
+- **Without the fix:** The service does not call `stopMaxWaitForAgentReplyTimer()` in the `FUNCTION_CALL_STARTED` branch, so `clearTimeout` is never invoked for that timer → **test fails**.
+- **With the fix:** The service cancels the max-wait timer → **test passes**.
+
+The "must eventually close when no agent message arrives" gap is covered by the existing unit test `should start and fire timeout after maxWaitForAgentReplyMs when no agent message arrives` in the same file.
+
 ---
 
 ## Phase 2: Integration / E2E (partner-reported defect coverage)
@@ -77,7 +89,7 @@ Follow **Red → Green → Refactor** for each change:
 - **Assert:** `functionCallRequests` contains both calls in order; connection did not close with "Idle timeout reached" before the second call.
 - Run from test-app: `npm run test:e2e -- issue-508-idle-timeout-chained-function-calls.spec.js` (with real API and backend).
 
-### 2.2 Protocol-level repro (Option A from defect report)
+### 2.2 Protocol-level repro (Option A from defect report) — **implemented**
 
 - Connect with `idle_timeout` = 10000 ms and a function the model can call.
 - User/test sends a message that causes the model to call that function.
@@ -85,7 +97,7 @@ Follow **Red → Green → Refactor** for each change:
 - Wait up to `idle_timeout` seconds.
 - **Assert:** Connection is still open; component does **not** close with “Idle timeout reached - closing agent connection.”
 
-This can be implemented as an E2E test in test-app (e.g. in `test-app/tests/e2e/idle-timeout-behavior.spec.js` or a dedicated spec for issue-508) using a mock that never sends the next function call, or as an integration test that drives the component with the same event sequence and asserts the idle timeout callback is not invoked in the waiting window.
+**Implementation:** Component integration test in `tests/integration/issue-487-idle-timeout-after-function-result-component.test.tsx`: **`Issue #508 Option A: connection still open for up to idle_timeout after function result with no second message`**. Injects one FunctionCallRequest, app sends result, advances time by `idle_timeout` (10s) with no further messages, asserts `close()` not called.
 
 ### 2.3 Full mandate flow (voice-commerce)
 
@@ -101,6 +113,7 @@ This can be implemented as an E2E test in test-app (e.g. in `test-app/tests/e2e/
 | 2 | IdleTimeoutService | In FUNCTION_CALL_STARTED handler, set `waitingForNextAgentMessageAfterFunctionResult = false`. |
 | 3 | Refactor | Comment in service; optional full mandate-flow unit test. |
 | 4 | E2E | Added `issue-508-idle-timeout-chained-function-calls.spec.js`: chained function-call flow; assert both calls received in order and connection did not close on idle before second call. |
+| 5 | Integration (Option A) | Added `Issue #508 Option A: connection still open for up to idle_timeout after function result with no second message` in `issue-487-idle-timeout-after-function-result-component.test.tsx`. |
 
 ---
 
