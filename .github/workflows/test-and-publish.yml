@@ -111,6 +111,9 @@ jobs:
         with:
           ref: ${{ inputs.branch || github.ref }}
 
+      - name: Install voice-agent-backend dependencies
+        run: cd packages/voice-agent-backend && npm ci
+
       - name: Install test-app dependencies
         run: |
           cd test-app
