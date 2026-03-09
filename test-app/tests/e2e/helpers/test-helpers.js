@@ -2103,6 +2103,27 @@ async function getIdleTimeoutDiagnostics(page, options = {}) {
   return snapshot;
 }
 
+/**
+ * Capture idle-timeout diagnostics and attach to the test report (Issue #346).
+ * Use before a VAD or agent-response assertion so failures include the snapshot.
+ *
+ * @param {import('@playwright/test').Page} page - Playwright page
+ * @param {import('@playwright/test').TestInfo} testInfo - Test info for attachments
+ * @param {{ attachmentName: string, eventsDetected?: number, sampleSent?: string, userMessageSent?: string }} options - Attachment filename and optional extra fields to merge into the snapshot
+ * @returns {Promise<object>} The snapshot object (with any merged fields)
+ */
+async function attachIdleTimeoutDiagnostics(page, testInfo, options) {
+  const { attachmentName, eventsDetected, sampleSent, userMessageSent } = options;
+  const diag = await getIdleTimeoutDiagnostics(page, { userMessageSent });
+  if (eventsDetected !== undefined) diag.eventsDetected = eventsDetected;
+  if (sampleSent !== undefined) diag.sampleSent = sampleSent;
+  await testInfo.attach(attachmentName, {
+    body: JSON.stringify(diag, null, 2),
+    contentType: 'application/json',
+  });
+  return diag;
+}
+
 export {
   // hasRealAPIKey, hasOpenAIKey, hasRealBackend, skipIfNoRealBackend, skipIfNoRealAPI, hasOpenAIProxyEndpoint, hasDeepgramProxyEndpoint, skipIfNoOpenAIProxy, skipIfOpenAIProxy, skipIfNoProxyForBackend, isRealBackendReachable, skipIfNoRealBackendAsync are already exported inline above
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
@@ -2166,5 +2187,6 @@ export {
   MicrophoneHelpers, // Microphone utility helpers for E2E tests (activate/deactivate mic)
   writeTranscriptToFile, // Write conversation transcript to file (optional, enabled via env var)
   getIdleTimeoutDiagnostics, // Capture agent response, connection, VAD state for idle-timeout failure inspection (Issue #346)
+  attachIdleTimeoutDiagnostics, // Capture + attach idle-timeout diagnostics to report (Issue #346)
 };
 

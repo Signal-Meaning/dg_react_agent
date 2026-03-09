@@ -468,7 +468,7 @@ test('my new test', async ({ page }) => {
 
 When the four direct-mode idle-timeout E2E tests fail, the tests attach JSON to the Playwright report so you can inspect user/assistant text and VAD state before changing timeouts or thresholds. Use **test report attachments** (e.g. in `test-results/` or the HTML report) after a run:
 
-- **Helper:** `getIdleTimeoutDiagnostics(page, { userMessageSent? })` in `helpers/test-helpers.js` returns `connectionStatus`, `agentResponseLength`, `agentResponsePreview`, and `vad: { userStartedSpeaking, utteranceEnd, userStoppedSpeaking }`.
+- **Helpers:** `attachIdleTimeoutDiagnostics(page, testInfo, { attachmentName, eventsDetected?, sampleSent?, userMessageSent? })` captures the same snapshot, attaches it to the report, and returns it (use this in specs). `getIdleTimeoutDiagnostics(page, { userMessageSent? })` returns the snapshot only when you need to attach or log elsewhere.
 - **idle-timeout-during-agent-speech.spec.js:** On timeout waiting for agent response >100 chars, attachment `idle-timeout-during-agent-speech-failure.json` includes the sent user message and current agent response state.
 - **idle-timeout-behavior.spec.js** (three tests): Before asserting VAD events, attachments `idle-timeout-vad-failure-*.json` include `eventsDetected`, `sampleSent`, and the same snapshot. Inspect `vad.*` to see whether the test app rendered VAD elements in direct mode.
 - **Targeted runs (direct mode):** Use `--grep` with `npm run test:e2e:direct` to run a subset of tests (e.g. the 4 failing Issue #346 tests).

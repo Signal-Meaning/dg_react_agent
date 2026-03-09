@@ -27,7 +27,9 @@ Each issue has a dedicated TDD plan in this folder. **Suggested order** for impl
 
 ## References
 
-- #490: `docs/issues/ISSUE-490/REFACTOR-CONTEXT-OWNERSHIP.md`, `docs/issues/ISSUE-489/E2E-FAILURES-RESOLUTION.md`, `src/hooks/useSettingsContext.ts`
-- #379: Voice-commerce recommendations (Settings verification, WebSocket capture, functions in Settings)
-- #346: `docs/issues/ISSUE-345/`, `test-app/tests/e2e/*idle*`, `test-app/tests/e2e/*greeting*`, `test-app/tests/e2e/IDLE-TIMEOUT-TEST-ANALYSIS.md`
-- #333: `tests/agent-options-remount-behavior.test.tsx` (skipped test), `docs/issues/ISSUE-331-JEST-TEST-FIXES.md`
+- **#490** — Context ownership: `docs/issues/ISSUE-490/`, `docs/issues/ISSUE-489/E2E-FAILURES-RESOLUTION.md`, `src/hooks/useSettingsContext.ts`
+- **#379** — Settings verification, WebSocket capture, diagnostics: TDD doc and `test-app/tests/e2e/helpers/test-helpers.js`, `tests/utils/component-test-helpers.tsx`
+- **#346** — Idle timeout E2E: `docs/issues/ISSUE-345/`, `test-app/tests/e2e/*idle*`, `test-app/tests/e2e/IDLE-TIMEOUT-TEST-ANALYSIS.md`; deferred to #503
+- **#333** — Remount Settings: `tests/agent-options-remount-behavior.test.tsx`, `docs/issues/ISSUE-331-JEST-TEST-FIXES.md`
+
+See [RECOMMENDED-IMPROVEMENTS.md](./RECOMMENDED-IMPROVEMENTS.md) for refactors and follow-ups.

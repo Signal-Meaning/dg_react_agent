@@ -23,10 +23,10 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  SELECTORS, waitForConnection, sendTextMessage,
+  SELECTORS, sendTextMessage,
   establishConnectionViaText,
   skipIfNoRealAPI,
-  getIdleTimeoutDiagnostics,
+  attachIdleTimeoutDiagnostics,
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks';
 import { monitorConnectionStatus } from './fixtures/idle-timeout-helpers';
@@ -97,10 +97,9 @@ test.describe('Idle Timeout During Agent Speech', () => {
         return agentResponse?.textContent && agentResponse.textContent.length > 100;
       }, { timeout: 30000 });
     } catch (err) {
-      const diag = await getIdleTimeoutDiagnostics(page, { userMessageSent: longResponsePrompt });
-      await testInfo.attach('idle-timeout-during-agent-speech-failure.json', {
-        body: JSON.stringify(diag, null, 2),
-        contentType: 'application/json',
+      const diag = await attachIdleTimeoutDiagnostics(page, testInfo, {
+        attachmentName: 'idle-timeout-during-agent-speech-failure.json',
+        userMessageSent: longResponsePrompt,
       });
       console.log('Diagnostics attached (agent response length, user message, connection, VAD):', JSON.stringify(diag, null, 2));
       throw err;

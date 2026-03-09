@@ -40,7 +40,7 @@ import {
   waitForAgentGreeting,
   setupAudioSendingPrerequisites,
   establishConnectionViaText,
-  getIdleTimeoutDiagnostics,
+  attachIdleTimeoutDiagnostics,
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks.js';
 import { waitForIdleTimeout, waitForIdleConditions } from './fixtures/idle-timeout-helpers';
@@ -273,11 +273,11 @@ test.describe('Idle Timeout Behavior', () => {
       const eventsDetected = await waitForVADEvents(page, ['UserStartedSpeaking', 'UtteranceEnd'], 7000);
       console.log(`✅ VAD events detected: ${eventsDetected} (UserStartedSpeaking, UtteranceEnd)`);
       
-      // Issue #346: attach diagnostics before assert so we can inspect user/assistant and VAD state on failure
-      const diag = await getIdleTimeoutDiagnostics(page);
-      diag.eventsDetected = eventsDetected;
-      diag.sampleSent = sample;
-      await testInfo.attach('idle-timeout-vad-failure-active-conversation.json', { body: JSON.stringify(diag, null, 2), contentType: 'application/json' });
+      await attachIdleTimeoutDiagnostics(page, testInfo, {
+        attachmentName: 'idle-timeout-vad-failure-active-conversation.json',
+        eventsDetected,
+        sampleSent: sample,
+      });
       expect(eventsDetected).toBeGreaterThan(0);
     }
     
@@ -375,11 +375,11 @@ test.describe('Idle Timeout Behavior', () => {
       const eventsDetected = await waitForVADEvents(page, ['UserStartedSpeaking', 'UtteranceEnd'], 7000);
       console.log(`✅ VAD events detected: ${eventsDetected}`);
       
-      // Issue #346: attach diagnostics before assert so we can inspect user/assistant and VAD state on failure
-      const diag = await getIdleTimeoutDiagnostics(page);
-      diag.eventsDetected = eventsDetected;
-      diag.sampleSent = sample;
-      await testInfo.attach('idle-timeout-vad-failure-realistic-timing.json', { body: JSON.stringify(diag, null, 2), contentType: 'application/json' });
+      await attachIdleTimeoutDiagnostics(page, testInfo, {
+        attachmentName: 'idle-timeout-vad-failure-realistic-timing.json',
+        eventsDetected,
+        sampleSent: sample,
+      });
       expect(eventsDetected).toBeGreaterThan(0);
     }
     
@@ -987,10 +987,10 @@ test.describe('Idle Timeout Behavior', () => {
     // Wait for UserStartedSpeaking to be detected and timeout to be stopped
     // Use the same fixture that works in other passing tests
     const eventsDetected = await waitForVADEvents(page, ['UserStartedSpeaking'], 10000);
-    // Issue #346: attach diagnostics before assert so we can inspect VAD state on failure
-    const diag = await getIdleTimeoutDiagnostics(page);
-    diag.eventsDetected = eventsDetected;
-    await testInfo.attach('idle-timeout-vad-failure-user-stopped-speaking.json', { body: JSON.stringify(diag, null, 2), contentType: 'application/json' });
+    await attachIdleTimeoutDiagnostics(page, testInfo, {
+      attachmentName: 'idle-timeout-vad-failure-user-stopped-speaking.json',
+      eventsDetected,
+    });
     expect(eventsDetected).toBeGreaterThan(0);
     console.log('✅ UserStartedSpeaking detected');
     
