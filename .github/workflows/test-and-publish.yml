@@ -134,8 +134,9 @@ jobs:
           E2E_USE_HTTP: '1'
           # Same path as install step; config fallback uses test-app/.playwright-browsers when run from test-app
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/test-app/.playwright-browsers
-          # Placeholder so backend starts; E2E uses mocks, key is never sent to real API
+          # Placeholder so backend and frontend start; E2E uses mocks, key is never sent to real API
           DEEPGRAM_API_KEY: 'test-key-for-ci'
+          VITE_DEEPGRAM_API_KEY: 'test-key-for-ci'
           VITE_BASE_URL: 'http://localhost:5173'
 
   publish:
