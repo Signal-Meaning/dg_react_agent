@@ -18,6 +18,8 @@ This is a patch release for version vX.X.X of the Deepgram Voice Interaction Rea
 
 ### 📋 Quick Release Checklist
 
+**Process order — do not skip:** Complete **Pre-Release** (tests, lint, audit) before Version & Build or Release. Do **not** create the GitHub release or publish until Pre-Release is complete.
+
 #### Pre-Release
 - [ ] **Tests Passing**: All tests passing
   - [ ] Run: `npm test`

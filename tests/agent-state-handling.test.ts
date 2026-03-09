@@ -306,16 +306,10 @@ describe('Agent State Message Handling', () => {
       expect(currentState.isPlaying).toBe(false);
       expect(currentState.isUserSpeaking).toBe(false);
       
-      // 4. Idle timeout should NOT start because agent state is 'speaking'
       jest.advanceTimersByTime(100);
-      expect(idleTimeoutService.isTimeoutActive()).toBe(false);
-      
-      // 5. Wait for timeout period - should NOT fire because timeout never started
-      jest.advanceTimersByTime(10000);
-      expect(timeoutCallback).not.toHaveBeenCalled();
-      
-      // This demonstrates the bug: idle timeout cannot start when agent state is 'speaking'
-      // even though playback has finished and user has stopped speaking
+      // Issue #489: We do not stop an active timeout when agent goes to speaking (avoid stale state).
+      // A timeout may have been started after USER_STOPPED_SPEAKING when state was still idle.
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true); // current design: timeout not stopped
       
       jest.useRealTimers();
     });
@@ -439,17 +433,16 @@ describe('Agent State Message Handling', () => {
       // The callback should have been called when state changed and timeout started
       expect(onIdleTimeoutActiveChange).toHaveBeenCalledWith(true);
       
-      // Clear and test stopping timeout
+      // Clear and test transition to agent speaking
       onIdleTimeoutActiveChange.mockClear();
       
-      // Trigger state that should stop timeout (agent speaking)
+      // Trigger agent speaking. Issue #489: we do not stop an active timeout on thinking/speaking
+      // to avoid stopping on stale state, so timeout may remain active.
       testService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'speaking' });
 
-      // Verify timeout is stopped
-      expect(testService.isTimeoutActive()).toBe(false);
-
-      // Should have been called with false when timeout stopped
-      expect(onIdleTimeoutActiveChange).toHaveBeenCalledWith(false);
+      // Current design: timeout is not stopped when agent goes to speaking (avoid stale state)
+      expect(testService.isTimeoutActive()).toBe(true);
+      // onIdleTimeoutActiveChange is not called with false because we did not stop the timeout
       
       testService.destroy();
     });
@@ -693,21 +686,20 @@ describe('Agent State Message Handling', () => {
       
       expect(idleTimeoutService.isTimeoutActive()).toBe(true);
       
-      // Stop timeout (agent starts speaking)
+      // Agent starts speaking. Issue #489: we do not stop the timeout (avoid stale state).
       idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'speaking' });
-      expect(idleTimeoutService.isTimeoutActive()).toBe(false);
+      expect(idleTimeoutService.isTimeoutActive()).toBe(true); // current design: not stopped
       
-      // Fast-forward - callback should not fire (timeout was stopped)
+      // Fast-forward - callback will fire (timeout was not stopped)
       jest.advanceTimersByTime(10000);
-      expect(timeoutCallback).not.toHaveBeenCalled();
+      expect(timeoutCallback).toHaveBeenCalledTimes(1);
       
-      // Restart timeout (agent finishes)
+      // Restart: go back to idle and advance again for a second fire
+      timeoutCallback.mockClear();
       idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
       idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
       
       expect(idleTimeoutService.isTimeoutActive()).toBe(true);
-      
-      // Fast-forward 10 seconds - callback should fire for the new timeout
       jest.advanceTimersByTime(10000);
       expect(timeoutCallback).toHaveBeenCalledTimes(1);
       
