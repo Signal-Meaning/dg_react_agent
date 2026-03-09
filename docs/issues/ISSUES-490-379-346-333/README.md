@@ -23,7 +23,6 @@ Each issue has a dedicated TDD plan in this folder. **Suggested order** for impl
 | #346 | [TDD-ISSUE-346-IDLE-TIMEOUT-E2E.md](./TDD-ISSUE-346-IDLE-TIMEOUT-E2E.md) |
 | #333 | [TDD-ISSUE-333-REMOUNT-SETTINGS.md](./TDD-ISSUE-333-REMOUNT-SETTINGS.md) |
 
-**#346 merge note:** When closing or deferring #346, add a comment linking to #503 (e.g. “Direct-mode fix tracked in #503”).
 
 ## References
 

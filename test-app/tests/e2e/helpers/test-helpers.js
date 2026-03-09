@@ -6,12 +6,15 @@
  * Load test-app/.env so skip checks (e.g. USE_REAL_APIS + OPENAI_API_KEY) see keys when run in workers.
  */
 import { expect, test } from '@playwright/test';
+import { createRequire } from 'module';
 import dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+const { validateSettingsStructure } = require(path.resolve(__dirname, '..', '..', '..', '..', 'tests', 'shared', 'settings-structure-validate.js'));
 dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
 
 /**
@@ -842,27 +845,7 @@ function getLastSettingsFromCapture(wsData) {
  */
 function assertSettingsStructureE2E(settings, options = {}) {
   if (!settings) throw new Error('Settings message is undefined (diagnostic: use getLastSettingsFromCapture after installWebSocketCapture)');
-  if (settings.type !== 'Settings') throw new Error(`Expected type "Settings", got "${settings.type}"`);
-  if (!settings.agent) throw new Error('Settings.agent is missing');
-  if (!settings.agent.think) throw new Error('Settings.agent.think is missing');
-  if (typeof settings.agent.think.prompt !== 'undefined' && typeof settings.agent.think.prompt !== 'string') {
-    throw new Error('Settings.agent.think.prompt must be a string');
-  }
-  if (settings.agent.context !== undefined) {
-    if (!settings.agent.context || !Array.isArray(settings.agent.context.messages)) {
-      throw new Error('When present, Settings.agent.context must have a messages array');
-    }
-  }
-  if (options.requireContext) {
-    if (!settings.agent.context || !Array.isArray(settings.agent.context.messages)) {
-      throw new Error('Settings.agent.context (with messages) is required');
-    }
-  }
-  if (options.requireFunctions) {
-    if (!Array.isArray(settings.agent.think.functions) || settings.agent.think.functions.length === 0) {
-      throw new Error('Settings.agent.think.functions is required and must be non-empty');
-    }
-  }
+  validateSettingsStructure(settings, options);
 }
 
 /**
@@ -2065,38 +2048,49 @@ async function writeTranscriptToFile(transcript, options = {}) {
   }
 }
 
+/** Testid keys for getIdleTimeoutDiagnostics (single source of truth; aligns with SELECTORS). */
+const IDLE_TIMEOUT_DIAG_TEST_IDS = {
+  connectionStatus: 'connection-status',
+  agentResponse: 'agent-response',
+  userStartedSpeaking: 'user-started-speaking',
+  utteranceEnd: 'utterance-end',
+  userStoppedSpeaking: 'user-stopped-speaking',
+};
+
 /**
  * Capture page state for idle-timeout E2E diagnostics (Issue #346).
  * Call before a failing assertion or in catch after timeout; attach result to test report
  * so we can inspect user/assistant text and VAD state without relaxing assertions.
+ * Uses IDLE_TIMEOUT_DIAG_TEST_IDS so testids stay in sync with SELECTORS.
  *
  * @param {import('@playwright/test').Page} page - Playwright page
  * @param {{ userMessageSent?: string }} options - Optional user message that was sent (for report)
  * @returns {Promise<{ connectionStatus: string, agentResponseLength: number, agentResponsePreview: string, vad: { userStartedSpeaking: string, utteranceEnd: string, userStoppedSpeaking: string }, userMessageSent?: string }>}
  */
 async function getIdleTimeoutDiagnostics(page, options = {}) {
-  const snapshot = await page.evaluate(() => {
+  const testIds = IDLE_TIMEOUT_DIAG_TEST_IDS;
+  const snapshot = await page.evaluate((ids) => {
     const get = (testId) => {
       const el = document.querySelector(`[data-testid="${testId}"]`);
       if (!el) return null;
       const t = el.textContent?.trim();
       return t ?? null;
     };
-    const agentText = get('agent-response');
+    const agentText = get(ids.agentResponse);
     const preview = agentText
       ? (agentText.length > 200 ? agentText.slice(0, 200) + '…' : agentText)
       : '(no element or empty)';
     return {
-      connectionStatus: get('connection-status') ?? 'element not found',
+      connectionStatus: get(ids.connectionStatus) ?? 'element not found',
       agentResponseLength: agentText ? agentText.length : 0,
       agentResponsePreview: preview,
       vad: {
-        userStartedSpeaking: get('user-started-speaking') ?? 'absent',
-        utteranceEnd: get('utterance-end') ?? 'absent',
-        userStoppedSpeaking: get('user-stopped-speaking') ?? 'absent',
+        userStartedSpeaking: get(ids.userStartedSpeaking) ?? 'absent',
+        utteranceEnd: get(ids.utteranceEnd) ?? 'absent',
+        userStoppedSpeaking: get(ids.userStoppedSpeaking) ?? 'absent',
       },
     };
-  });
+  }, testIds);
   if (options.userMessageSent !== undefined) {
     snapshot.userMessageSent = options.userMessageSent;
   }

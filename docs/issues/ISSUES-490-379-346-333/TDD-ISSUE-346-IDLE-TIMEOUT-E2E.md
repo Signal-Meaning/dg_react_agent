@@ -43,61 +43,7 @@ This document is the **Test-Driven Development** plan for fixing the **four fail
 - **IDLE-TIMEOUT-TEST-ANALYSIS.md:** Documents that greeting-idle-timeout, idle-timeout-behavior, idle-timeout-during-agent-speech, and text-idle-timeout-suspended-audio were fixed/consolidated and reported as passing in some runs; current branch may still show failures in direct mode.
 - **Possible causes:** Timing (idle timeout firing too early or too late), AudioContext not initialized in test environment, connection setup or VAD differences in direct mode, or component idle timeout logic not aligned with test expectations.
 
-### Run result: proxy mode (2026-03-08)
-
-A full run of the four specs with **proxy mode** (default `USE_PROXY_MODE=true`) from test-app completed successfully:
-
-| Result | Detail |
-|--------|--------|
-| **Outcome** | **15 passed** (exit code 0) |
-| **Duration** | ~3.9 minutes |
-| **Specs** | `deepgram-greeting-idle-timeout.spec.js`, `idle-timeout-behavior.spec.js`, `idle-timeout-during-agent-speech.spec.js`, `text-idle-timeout-suspended-audio.spec.js` |
-
-**Per-spec highlights:**
-
-- **deepgram-greeting-idle-timeout:** Idle timeout after greeting (Issue #139) passed; connection closed within tolerance of `__idleTimeoutMs`; reconnect-after-timeout and second timeout after agent response passed.
-- **idle-timeout-behavior:** Microphone activation after timeout, active conversation continuity, VAD/USER_STOPPED_SPEAKING restart, startAudioCapture() reset, and IdleTimeoutService behavior tests passed.
-- **idle-timeout-during-agent-speech:** Connection remained active during 20s agent response; "BUG NOT REPRODUCED" (connection did not drop during agent speech).
-- **text-idle-timeout-suspended-audio:** Idle timeout after text interaction and AudioContext resumption on focus passed.
-
-### Run result: direct mode (2026-03-09)
-
-Direct mode run completed: **11 passed, 4 failed** (6.4m), exit code 1. Logs show: `baseURL: ...?connectionMode=direct`, `proxy endpoints: none (direct mode)`, `E2E direct mode: USE_PROXY_MODE=false → connectionMode=direct`.
-
-**4 failures (direct mode only):**
-
-| # | Spec | Test | Exact error |
-|---|------|------|-------------|
-| 1 | idle-timeout-behavior.spec.js:276 | should not timeout during active conversation after UtteranceEnd | `expect(eventsDetected).toBeGreaterThan(0)` — Expected > 0, Received 0. Test waits for VAD events (`UserStartedSpeaking`, `UtteranceEnd`) via `waitForVADEvents`; in direct mode none were detected. |
-| 2 | idle-timeout-behavior.spec.js:374 | should handle conversation with realistic timing and padding | Same: `expect(eventsDetected).toBeGreaterThan(0)` — Expected > 0, Received 0. `waitForVADEvents` returned 0. |
-| 3 | idle-timeout-behavior.spec.js:981 | should restart timeout after USER_STOPPED_SPEAKING when agent is idle (Issue #262/#430) | Same: `expect(eventsDetected).toBeGreaterThan(0)` — Expected > 0, Received 0. `waitForVADEvents(page, ['UserStartedSpeaking'], 10000)` returned 0. |
-| 4 | idle-timeout-during-agent-speech.spec.js:94 | @flaky should NOT timeout while agent is actively speaking | **TimeoutError:** `page.waitForFunction` 30000ms exceeded. Condition: `[data-testid="agent-response"]` text length > 100. |
-
-**Why the exact errors weren’t in the doc before:** They were present in the terminal run log; the TDD update only referred to “see run log for stack” instead of copying them. They are now extracted and recorded above.
-
-**Next steps (no relaxation without inspection):**
-
-1. ~~**Add diagnostics on failure**~~ **Done (2026-03):** Helper `getIdleTimeoutDiagnostics(page, { userMessageSent? })` in `test-app/tests/e2e/helpers/test-helpers.js` captures `connectionStatus`, `agentResponseLength`, `agentResponsePreview`, and `vad: { userStartedSpeaking, utteranceEnd, userStoppedSpeaking }`. On failure, tests attach JSON to the Playwright report:
-   - **idle-timeout-during-agent-speech.spec.js:** On timeout waiting for agent response >100 chars, attaches `idle-timeout-during-agent-speech-failure.json` (includes `userMessageSent`).
-   - **idle-timeout-behavior.spec.js** (all three failing tests): Before `expect(eventsDetected).toBeGreaterThan(0)`, attaches `idle-timeout-vad-failure-*.json` with `eventsDetected`, `sampleSent` (where applicable), and the same connection/agent/VAD snapshot. Re-run direct-mode E2E and inspect these attachments to decide fix vs. relaxation.
-2. **Failures #1–#3:** Root cause is **no VAD events detected** in direct mode (`eventsDetected === 0`). Use the new attachments to see whether VAD elements are present (e.g. `vad.userStartedSpeaking` / `utteranceEnd`), connection state, and agent response; then fix test or component so VAD is observable in direct mode or adjust how the test asserts.
-
-**How direct mode is controlled (so test logs show it):** When `USE_PROXY_MODE=false`, the Playwright config sets baseURL with `?connectionMode=direct`, proxy endpoint env vars to empty, starts only the dev server (no backend), and logs "E2E direct mode" and "proxy endpoints: none (direct mode)". Use the `test:e2e:direct` script (see “How to reproduce” below). No frontend or backend restart needed; the app connects directly to Deepgram using `VITE_DEEPGRAM_*` env vars.
-
-**Targeted runs:** Use `--grep` with `npm run test:e2e:direct` to run a subset of tests when verifying fixes.
-
-**Isolation — which idle-timeout tests pass vs fail (direct mode):**
-
-| Spec | Pass | Fail | What’s different about the failures |
-|------|------|------|-------------------------------------|
-| deepgram-greeting-idle-timeout | 3/3 | 0 | — |
-| idle-timeout-behavior | 5–6 of 9 (1 flaky) | 3 | The **3 that fail** are the only ones that send **audio** and then assert **VAD DOM** (`waitForVADEvents` → `expect(eventsDetected).toBeGreaterThan(0)`). The passing tests use text input, mic button, or timeout polling and do not depend on the app showing UserStartedSpeaking/UtteranceEnd. One other test (“agent state transitions to idle”) is flaky in direct mode. |
-| idle-timeout-during-agent-speech | 0 | 1 | Waits for agent response text length >100 within 30s; in direct mode that condition is never met (no or late response). |
-| text-idle-timeout-suspended-audio | 2/2 | 0 | — |
-
-**Conclusion:** In direct mode, **VAD-related UI is not updated** when the user speaks via audio (or not in time for the test). So the component or test-app does not expose/render the same VAD state in direct mode as in proxy mode. The single agent-speech failure is a separate issue (agent response never reaches >100 chars in 30s). Fix: ensure component exposes same VAD callbacks/state in direct mode and/or test-app renders them the same way (see Requirement above).
-
-**Note (2026-03):** A direct-mode run via `USE_PROXY_MODE=false npx playwright test ...` failed with **Playwright browser executable not found** (`chromium_headless_shell` missing at `.playwright-browsers/...`), not due to network or app. Ensure browsers are installed: `npm run playwright:install-browsers`. Then run the direct-mode command from your machine. If direct mode passes, the issue may be resolved; if not, use Phase 1–2 to isolate and fix.
+**Run results and isolation:** See [DIRECT-MODE-RESULTS.md](./DIRECT-MODE-RESULTS.md) for proxy/direct run outcomes, the 4 direct-mode failure details, isolation table, and diagnostics notes. **Next steps:** Diagnostics on failure are in place (2026-03). Re-run direct-mode E2E and inspect attached JSON. **How direct mode is controlled:** When `USE_PROXY_MODE=false`, use `test:e2e:direct` (see "How to reproduce" below). **Targeted runs:** Use `--grep` with `npm run test:e2e:direct`. **Merge/close note:** When closing or deferring #346, add a comment linking to #503 (e.g. "Direct-mode fix tracked in #503").
 
 ---
 
@@ -183,6 +129,7 @@ npm run test:e2e -- deepgram-greeting-idle-timeout.spec.js idle-timeout-behavior
 
 ## References
 
+- **Run results (direct/proxy):** [DIRECT-MODE-RESULTS.md](./DIRECT-MODE-RESULTS.md)
 - **Issue #345:** `docs/issues/ISSUE-345/ISSUE-345-VALIDATION-REPORT.md`, `docs/issues/ISSUE-345/ISSUE-345-BACKEND-PROXY-VALIDATION.md`
 - **Idle timeout analysis:** `test-app/tests/e2e/IDLE-TIMEOUT-TEST-ANALYSIS.md`
 - **E2E README:** `test-app/tests/e2e/README.md` – deepgram-greeting-idle-timeout, grep patterns

@@ -11,6 +11,10 @@ import DeepgramVoiceInteraction from '../../src/components/DeepgramVoiceInteract
 import { DeepgramVoiceInteractionHandle, AgentOptions, AgentFunction } from '../../src/types';
 import { MOCK_API_KEY } from '../fixtures/mocks';
 
+const { validateSettingsStructure } = require('../shared/settings-structure-validate') as {
+  validateSettingsStructure: (settings: unknown, options?: { requireContext?: boolean; requireFunctions?: boolean }) => void;
+};
+
 // Re-export MOCK_API_KEY and waitFor for convenience
 export { MOCK_API_KEY };
 export { rtlWaitFor as waitFor };
@@ -501,27 +505,7 @@ export function assertSettingsStructure(
   if (!settings) {
     throw new Error('Settings message is undefined');
   }
-  expect(settings.type).toBe('Settings');
-  expect(settings.agent).toBeDefined();
-  expect(settings.agent?.think).toBeDefined();
-  // Instructions: agent.think.prompt is the canonical field in the wire format
-  if (settings.agent?.think && typeof (settings.agent.think as { prompt?: string }).prompt !== 'undefined') {
-    expect(typeof (settings.agent.think as { prompt?: string }).prompt).toBe('string');
-  }
-  // When agent.context is present it must be { messages: Array }
-  if (settings.agent?.context !== undefined) {
-    expect(settings.agent.context).toBeDefined();
-    expect(Array.isArray((settings.agent.context as { messages?: unknown }).messages)).toBe(true);
-  }
-  if (options.requireContext) {
-    expect(settings.agent?.context).toBeDefined();
-    expect(Array.isArray((settings.agent!.context as { messages: unknown[] })?.messages)).toBe(true);
-  }
-  if (options.requireFunctions) {
-    expect(settings.agent?.think?.functions).toBeDefined();
-    expect(Array.isArray(settings.agent.think.functions)).toBe(true);
-    expect(settings.agent.think.functions!.length).toBeGreaterThan(0);
-  }
+  validateSettingsStructure(settings, options);
 }
 
 /**

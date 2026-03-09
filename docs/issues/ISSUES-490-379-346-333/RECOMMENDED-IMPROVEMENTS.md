@@ -8,9 +8,21 @@ Refactors and follow-ups suggested for this PR or later.
 
 - **E2E idle-timeout diagnostics:** Added `attachIdleTimeoutDiagnostics(page, testInfo, options)` in `test-app/tests/e2e/helpers/test-helpers.js` so specs no longer repeat the same capture+attach block. The four failing tests (idle-timeout-behavior ×3, idle-timeout-during-agent-speech ×1) now call this helper. Keeps attachment shape and naming consistent.
 
+- **getIdleTimeoutDiagnostics testids:** `IDLE_TIMEOUT_DIAG_TEST_IDS` in test-helpers.js is passed into `page.evaluate()` so testids stay in sync with SELECTORS.
+
+- **TDD doc length:** Run results and isolation for #346 are in [DIRECT-MODE-RESULTS.md](./DIRECT-MODE-RESULTS.md); TDD-ISSUE-346 links there and stays focused on phases and requirements.
+
+- **#346 merge note:** Moved into TDD-ISSUE-346; removed from the PR README.
+
+- **Shared Settings validation:** `tests/shared/settings-structure-validate.js` exports `validateSettingsStructure`; unit (`component-test-helpers.tsx`) and E2E (`test-helpers.js`) both use it so shape logic is single source of truth.
+
+- **E2E README:** "Failure diagnostics" section groups Issue #379 and #346 diagnostics as subsections.
+
+- **ORDERING.md:** Added "Status" column to the Recommended order table (Done / Deferred).
+
 ---
 
-## Recommended next
+## Recommended next (all implemented)
 
 1. **getIdleTimeoutDiagnostics testids:** The helper uses hardcoded `data-testid` strings inside `page.evaluate()`. To avoid drift, consider passing a small map (e.g. from `SELECTORS`) as a serialized argument into `evaluate` so the single source of truth stays in test-helpers.
 

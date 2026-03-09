@@ -458,13 +458,17 @@ test('my new test', async ({ page }) => {
 });
 ```
 
-### WebSocket capture and Settings verification (Issue #379)
+### Failure diagnostics
+
+Helpers and attachments for diagnosing E2E failures (Settings, idle timeout, etc.).
+
+#### Issue #379 – WebSocket capture and Settings verification
 
 - **When capture is available:** Call `installWebSocketCapture(page)` before navigating or connecting so that all WebSocket messages (sent and received) are captured. After a flow that sends Settings (e.g. connection established), use `getCapturedWebSocketData(page)` then `getLastSettingsFromCapture(wsData)` to get the last sent Settings payload for diagnostics or structure assertions.
 - **When to use:** Direct mode and proxy mode both support capture when the test app uses the patched `WebSocket` (install capture before the page creates the WebSocket). In proxy mode, capture may see the client→proxy WebSocket; in direct mode, client→Deepgram. Use `assertSettingsStructureE2E(settings)` to validate `type`, `agent`, `agent.think`, optional `agent.context` shape, and optional `requireFunctions` / `requireContext`.
 - **Fallback:** If capture has no Settings (e.g. connection failed or different code path), prefer window variables (e.g. `__e2e*`) where documented; see Issue #329 for proxy-mode fallbacks.
 
-### Idle timeout failure diagnostics (Issue #346)
+#### Issue #346 – Idle timeout failure diagnostics
 
 When the four direct-mode idle-timeout E2E tests fail, the tests attach JSON to the Playwright report so you can inspect user/assistant text and VAD state before changing timeouts or thresholds. Use **test report attachments** (e.g. in `test-results/` or the HTML report) after a run:
 
