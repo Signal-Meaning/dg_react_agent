@@ -122,12 +122,13 @@ jobs:
       - name: Install Playwright browsers (Chromium only)
         run: |
           cd test-app
-          npx playwright install chromium --with-deps
+          PLAYWRIGHT_BROWSERS_PATH="$(pwd)/.playwright-browsers" npx playwright install chromium --with-deps
 
       - name: Run Playwright E2E tests (mocks only, CI-safe subset)
         run: |
           cd test-app
           # Proxy mode: backend mocks upstream; no real Deepgram/OpenAI keys required.
+          # PLAYWRIGHT_BROWSERS_PATH must match install step so tests find Chromium.
           USE_PROXY_MODE=true CI=true E2E_USE_HTTP=1 npx playwright test --config=tests/playwright.config.mjs \
             tests/e2e/api-key-validation.spec.js \
             tests/e2e/lazy-initialization-e2e.spec.js \
@@ -138,6 +139,8 @@ jobs:
           CI: true
           USE_PROXY_MODE: true
           E2E_USE_HTTP: '1'
+          # Same path as install step; config fallback uses test-app/.playwright-browsers when run from test-app
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/test-app/.playwright-browsers
           # Placeholder so backend starts; E2E uses mocks, key is never sent to real API
           DEEPGRAM_API_KEY: 'test-key-for-ci'
           VITE_BASE_URL: 'http://localhost:5173'
