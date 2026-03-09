@@ -2,6 +2,8 @@
 
 This document recommends an order in which to tackle the four issues in this PR so that dependencies and reuse are maximized and rework is minimized.
 
+**Status (this PR):** #379, #490, #333 done. #346 direct-mode fix deferred to [#503](https://github.com/Signal-Meaning/dg_react_agent/issues/503) (backlog).
+
 ---
 
 ## Recommended order
