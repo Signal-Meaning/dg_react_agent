@@ -2065,6 +2065,44 @@ async function writeTranscriptToFile(transcript, options = {}) {
   }
 }
 
+/**
+ * Capture page state for idle-timeout E2E diagnostics (Issue #346).
+ * Call before a failing assertion or in catch after timeout; attach result to test report
+ * so we can inspect user/assistant text and VAD state without relaxing assertions.
+ *
+ * @param {import('@playwright/test').Page} page - Playwright page
+ * @param {{ userMessageSent?: string }} options - Optional user message that was sent (for report)
+ * @returns {Promise<{ connectionStatus: string, agentResponseLength: number, agentResponsePreview: string, vad: { userStartedSpeaking: string, utteranceEnd: string, userStoppedSpeaking: string }, userMessageSent?: string }>}
+ */
+async function getIdleTimeoutDiagnostics(page, options = {}) {
+  const snapshot = await page.evaluate(() => {
+    const get = (testId) => {
+      const el = document.querySelector(`[data-testid="${testId}"]`);
+      if (!el) return null;
+      const t = el.textContent?.trim();
+      return t ?? null;
+    };
+    const agentText = get('agent-response');
+    const preview = agentText
+      ? (agentText.length > 200 ? agentText.slice(0, 200) + '…' : agentText)
+      : '(no element or empty)';
+    return {
+      connectionStatus: get('connection-status') ?? 'element not found',
+      agentResponseLength: agentText ? agentText.length : 0,
+      agentResponsePreview: preview,
+      vad: {
+        userStartedSpeaking: get('user-started-speaking') ?? 'absent',
+        utteranceEnd: get('utterance-end') ?? 'absent',
+        userStoppedSpeaking: get('user-stopped-speaking') ?? 'absent',
+      },
+    };
+  });
+  if (options.userMessageSent !== undefined) {
+    snapshot.userMessageSent = options.userMessageSent;
+  }
+  return snapshot;
+}
+
 export {
   // hasRealAPIKey, hasOpenAIKey, hasRealBackend, skipIfNoRealBackend, skipIfNoRealAPI, hasOpenAIProxyEndpoint, hasDeepgramProxyEndpoint, skipIfNoOpenAIProxy, skipIfOpenAIProxy, skipIfNoProxyForBackend, isRealBackendReachable, skipIfNoRealBackendAsync are already exported inline above
   SELECTORS, // Common test selectors object for consistent element targeting across E2E tests
@@ -2126,6 +2164,7 @@ export {
   isGetCurrentTimeBackendReachable, // True if backend supports get_current_time (for tests 6/6b skip when not)
   establishConnectionAndWaitForFunctionCall, // Establish connection and wait for function call
   MicrophoneHelpers, // Microphone utility helpers for E2E tests (activate/deactivate mic)
-  writeTranscriptToFile // Write conversation transcript to file (optional, enabled via env var)
+  writeTranscriptToFile, // Write conversation transcript to file (optional, enabled via env var)
+  getIdleTimeoutDiagnostics, // Capture agent response, connection, VAD state for idle-timeout failure inspection (Issue #346)
 };
 

@@ -1,5 +1,7 @@
 # TDD Plan: Issue #346 – Idle timeout E2E test failures (4 tests)
 
+**Status:** Direct-mode fix deferred to [**#503**](https://github.com/Signal-Meaning/dg_react_agent/issues/503) (backlog). Proxy mode 15/15 pass; diagnostics and isolation documented here.
+
 **Parent:** [GitHub Issue #346](https://github.com/Signal-Meaning/dg_react_agent/issues/346)  
 **Context:** `docs/issues/ISSUE-345/` – Backend proxy validation; 4 idle-timeout E2E tests failing in **direct mode** (component-level, not proxy-specific).
 
@@ -31,6 +33,8 @@ This document is the **Test-Driven Development** plan for fixing the **four fail
 
 **Note:** These failures are **direct mode** (Deepgram); proxy mode had 100% pass rate in Issue #345 validation. Root cause is component-level idle timeout behavior, not proxy.
 
+**Requirement (VAD parity):** The **component** must expose the same VAD-related callbacks/state in direct mode as in proxy mode, and/or the **test-app** must wire and render them the same way in both modes, so that E2E tests can observe UserStartedSpeaking, UtteranceEnd, and UserStoppedSpeaking via the same UI elements in direct and proxy mode.
+
 ---
 
 ## Current state (baseline)
@@ -56,9 +60,42 @@ A full run of the four specs with **proxy mode** (default `USE_PROXY_MODE=true`)
 - **idle-timeout-during-agent-speech:** Connection remained active during 20s agent response; "BUG NOT REPRODUCED" (connection did not drop during agent speech).
 - **text-idle-timeout-suspended-audio:** Idle timeout after text interaction and AudioContext resumption on focus passed.
 
-**Next step:** Run the same four specs in **direct mode** to confirm whether the original Issue #346 failures (reported in direct mode) still occur. Use the script that does not override `USE_PROXY_MODE` (so the app connects directly to Deepgram, not via proxy). No frontend or backend restart needed for direct mode; the app uses `VITE_DEEPGRAM_*` and connects to Deepgram’s WebSocket.
+### Run result: direct mode (2026-03-09)
+
+Direct mode run completed: **11 passed, 4 failed** (6.4m), exit code 1. Logs show: `baseURL: ...?connectionMode=direct`, `proxy endpoints: none (direct mode)`, `E2E direct mode: USE_PROXY_MODE=false → connectionMode=direct`.
+
+**4 failures (direct mode only):**
+
+| # | Spec | Test | Exact error |
+|---|------|------|-------------|
+| 1 | idle-timeout-behavior.spec.js:276 | should not timeout during active conversation after UtteranceEnd | `expect(eventsDetected).toBeGreaterThan(0)` — Expected > 0, Received 0. Test waits for VAD events (`UserStartedSpeaking`, `UtteranceEnd`) via `waitForVADEvents`; in direct mode none were detected. |
+| 2 | idle-timeout-behavior.spec.js:374 | should handle conversation with realistic timing and padding | Same: `expect(eventsDetected).toBeGreaterThan(0)` — Expected > 0, Received 0. `waitForVADEvents` returned 0. |
+| 3 | idle-timeout-behavior.spec.js:981 | should restart timeout after USER_STOPPED_SPEAKING when agent is idle (Issue #262/#430) | Same: `expect(eventsDetected).toBeGreaterThan(0)` — Expected > 0, Received 0. `waitForVADEvents(page, ['UserStartedSpeaking'], 10000)` returned 0. |
+| 4 | idle-timeout-during-agent-speech.spec.js:94 | @flaky should NOT timeout while agent is actively speaking | **TimeoutError:** `page.waitForFunction` 30000ms exceeded. Condition: `[data-testid="agent-response"]` text length > 100. |
+
+**Why the exact errors weren’t in the doc before:** They were present in the terminal run log; the TDD update only referred to “see run log for stack” instead of copying them. They are now extracted and recorded above.
+
+**Next steps (no relaxation without inspection):**
+
+1. ~~**Add diagnostics on failure**~~ **Done (2026-03):** Helper `getIdleTimeoutDiagnostics(page, { userMessageSent? })` in `test-app/tests/e2e/helpers/test-helpers.js` captures `connectionStatus`, `agentResponseLength`, `agentResponsePreview`, and `vad: { userStartedSpeaking, utteranceEnd, userStoppedSpeaking }`. On failure, tests attach JSON to the Playwright report:
+   - **idle-timeout-during-agent-speech.spec.js:** On timeout waiting for agent response >100 chars, attaches `idle-timeout-during-agent-speech-failure.json` (includes `userMessageSent`).
+   - **idle-timeout-behavior.spec.js** (all three failing tests): Before `expect(eventsDetected).toBeGreaterThan(0)`, attaches `idle-timeout-vad-failure-*.json` with `eventsDetected`, `sampleSent` (where applicable), and the same connection/agent/VAD snapshot. Re-run direct-mode E2E and inspect these attachments to decide fix vs. relaxation.
+2. **Failures #1–#3:** Root cause is **no VAD events detected** in direct mode (`eventsDetected === 0`). Use the new attachments to see whether VAD elements are present (e.g. `vad.userStartedSpeaking` / `utteranceEnd`), connection state, and agent response; then fix test or component so VAD is observable in direct mode or adjust how the test asserts.
 
 **How direct mode is controlled (so test logs show it):** When `USE_PROXY_MODE=false`, the Playwright config sets baseURL with `?connectionMode=direct`, proxy endpoint env vars to empty, starts only the dev server (no backend), and logs "E2E direct mode" and "proxy endpoints: none (direct mode)". Use the `test:e2e:direct` script (see “How to reproduce” below). No frontend or backend restart needed; the app connects directly to Deepgram using `VITE_DEEPGRAM_*` env vars.
+
+**Targeted runs:** Use `--grep` with `npm run test:e2e:direct` to run a subset of tests when verifying fixes.
+
+**Isolation — which idle-timeout tests pass vs fail (direct mode):**
+
+| Spec | Pass | Fail | What’s different about the failures |
+|------|------|------|-------------------------------------|
+| deepgram-greeting-idle-timeout | 3/3 | 0 | — |
+| idle-timeout-behavior | 5–6 of 9 (1 flaky) | 3 | The **3 that fail** are the only ones that send **audio** and then assert **VAD DOM** (`waitForVADEvents` → `expect(eventsDetected).toBeGreaterThan(0)`). The passing tests use text input, mic button, or timeout polling and do not depend on the app showing UserStartedSpeaking/UtteranceEnd. One other test (“agent state transitions to idle”) is flaky in direct mode. |
+| idle-timeout-during-agent-speech | 0 | 1 | Waits for agent response text length >100 within 30s; in direct mode that condition is never met (no or late response). |
+| text-idle-timeout-suspended-audio | 2/2 | 0 | — |
+
+**Conclusion:** In direct mode, **VAD-related UI is not updated** when the user speaks via audio (or not in time for the test). So the component or test-app does not expose/render the same VAD state in direct mode as in proxy mode. The single agent-speech failure is a separate issue (agent response never reaches >100 chars in 30s). Fix: ensure component exposes same VAD callbacks/state in direct mode and/or test-app renders them the same way (see Requirement above).
 
 **Note (2026-03):** A direct-mode run via `USE_PROXY_MODE=false npx playwright test ...` failed with **Playwright browser executable not found** (`chromium_headless_shell` missing at `.playwright-browsers/...`), not due to network or app. Ensure browsers are installed: `npm run playwright:install-browsers`. Then run the direct-mode command from your machine. If direct mode passes, the issue may be resolved; if not, use Phase 1–2 to isolate and fix.
 
@@ -75,12 +112,12 @@ A full run of the four specs with **proxy mode** (default `USE_PROXY_MODE=true`)
 
 ### 1.2 Categorize failures
 
-| Spec | Likely cause (hypothesis) | Data to collect |
-|------|---------------------------|------------------|
-| greeting-idle-timeout | Timer fires before/after greeting; or connection closed before assertion | Greeting DOM visibility, `__idleTimeoutMs`, close event timing |
-| idle-timeout-behavior | Reconnection or “active conversation” path not keeping connection alive as expected | Which scenario fails; connection state at failure |
-| idle-timeout-during-agent-speech | Idle timer not paused during agent speech | Agent speech detection; timer pause/resume logs |
-| text-idle-timeout-suspended-audio | AudioContext suspended in test; component or test expectation wrong | AudioContext state; whether timeout should fire when audio suspended |
+| Spec | Observed cause (from run) | Data to collect before changing tests |
+|------|---------------------------|----------------------------------------|
+| greeting-idle-timeout | (Passes in direct mode in last run.) | — |
+| idle-timeout-behavior (#1–#3) | **VAD events never detected:** `waitForVADEvents` returns 0 (no `UserStartedSpeaking` / `UtteranceEnd` DOM). Direct mode may not render VAD testids or timing differs. | On failure: user message sent, agent response text, presence of `[data-testid="user-started-speaking"]` etc., connection state |
+| idle-timeout-during-agent-speech (#4) | **Agent response** never reached >100 chars within 30s (or element/selector differs). | On failure: current agent response text length and content, so we can decide fix vs. threshold change |
+| text-idle-timeout-suspended-audio | (Passes in direct mode in last run.) | — |
 
 ### 1.3 Add or extend unit tests (if applicable)
 
@@ -90,6 +127,8 @@ A full run of the four specs with **proxy mode** (default `USE_PROXY_MODE=true`)
 ---
 
 ## Phase 2: GREEN – Fix implementation or tests
+
+**Principle:** Do not relax timeouts or thresholds (e.g. 30s, >100 chars) without first adding diagnostics that log or report user/assistant text and relevant state on failure; inspect that output to decide the fix.
 
 ### 2.1 Fix component behavior (if bug)
 
@@ -126,7 +165,7 @@ A full run of the four specs with **proxy mode** (default `USE_PROXY_MODE=true`)
 | Root cause identified (component vs test vs env) | Pending if direct-mode run fails |
 | Unit tests for idle timeout behavior (if applicable) | RED → GREEN (if needed) |
 | Four E2E specs passing in proxy mode | ✅ **GREEN** (15 passed, 2026-03-08) |
-| Four E2E specs passing in direct mode | Pending: run with `USE_PROXY_MODE=false` |
+| Four E2E specs passing in direct mode | ❌ **4 failed**, 11 passed (2026-03-09). See "Run result: direct mode" for the 4 failing tests. |
 | Docs and refactor | REFACTOR (after direct-mode result) |
 
 ### How to reproduce (from test-app)

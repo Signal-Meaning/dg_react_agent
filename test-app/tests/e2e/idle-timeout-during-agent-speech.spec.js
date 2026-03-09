@@ -25,7 +25,8 @@ import { test, expect } from '@playwright/test';
 import {
   SELECTORS, waitForConnection, sendTextMessage,
   establishConnectionViaText,
-  skipIfNoRealAPI
+  skipIfNoRealAPI,
+  getIdleTimeoutDiagnostics,
 } from './helpers/test-helpers.js';
 import { setupTestPage } from './helpers/audio-mocks';
 import { monitorConnectionStatus } from './fixtures/idle-timeout-helpers';
@@ -49,7 +50,7 @@ test.describe('Idle Timeout During Agent Speech', () => {
     }
   });
   
-  test('@flaky should NOT timeout while agent is actively speaking', async ({ page }) => {
+  test('@flaky should NOT timeout while agent is actively speaking', async ({ page }, testInfo) => {
     // Skip test if real APIs are not available
     // This test requires real Deepgram APIs because the idle timeout fix
     // only triggers with real agent messages, not mock responses
@@ -89,12 +90,21 @@ test.describe('Idle Timeout During Agent Speech', () => {
     // Step 3: Wait for agent to start responding
     console.log('Step 3: Waiting for agent to start responding...');
     
-    // Wait for agent response to appear and start growing
-    // Increased timeout for full test runs where API may be slower
-    await page.waitForFunction(() => {
-      const agentResponse = document.querySelector('[data-testid="agent-response"]');
-      return agentResponse?.textContent && agentResponse.textContent.length > 100;
-    }, { timeout: 30000 });
+    // Wait for agent response to appear and start growing (Issue #346: on timeout, attach diagnostics for inspection)
+    try {
+      await page.waitForFunction(() => {
+        const agentResponse = document.querySelector('[data-testid="agent-response"]');
+        return agentResponse?.textContent && agentResponse.textContent.length > 100;
+      }, { timeout: 30000 });
+    } catch (err) {
+      const diag = await getIdleTimeoutDiagnostics(page, { userMessageSent: longResponsePrompt });
+      await testInfo.attach('idle-timeout-during-agent-speech-failure.json', {
+        body: JSON.stringify(diag, null, 2),
+        contentType: 'application/json',
+      });
+      console.log('Diagnostics attached (agent response length, user message, connection, VAD):', JSON.stringify(diag, null, 2));
+      throw err;
+    }
     
     console.log('✅ Agent started responding');
     

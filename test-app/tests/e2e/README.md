@@ -464,6 +464,15 @@ test('my new test', async ({ page }) => {
 - **When to use:** Direct mode and proxy mode both support capture when the test app uses the patched `WebSocket` (install capture before the page creates the WebSocket). In proxy mode, capture may see the client→proxy WebSocket; in direct mode, client→Deepgram. Use `assertSettingsStructureE2E(settings)` to validate `type`, `agent`, `agent.think`, optional `agent.context` shape, and optional `requireFunctions` / `requireContext`.
 - **Fallback:** If capture has no Settings (e.g. connection failed or different code path), prefer window variables (e.g. `__e2e*`) where documented; see Issue #329 for proxy-mode fallbacks.
 
+### Idle timeout failure diagnostics (Issue #346)
+
+When the four direct-mode idle-timeout E2E tests fail, the tests attach JSON to the Playwright report so you can inspect user/assistant text and VAD state before changing timeouts or thresholds. Use **test report attachments** (e.g. in `test-results/` or the HTML report) after a run:
+
+- **Helper:** `getIdleTimeoutDiagnostics(page, { userMessageSent? })` in `helpers/test-helpers.js` returns `connectionStatus`, `agentResponseLength`, `agentResponsePreview`, and `vad: { userStartedSpeaking, utteranceEnd, userStoppedSpeaking }`.
+- **idle-timeout-during-agent-speech.spec.js:** On timeout waiting for agent response >100 chars, attachment `idle-timeout-during-agent-speech-failure.json` includes the sent user message and current agent response state.
+- **idle-timeout-behavior.spec.js** (three tests): Before asserting VAD events, attachments `idle-timeout-vad-failure-*.json` include `eventsDetected`, `sampleSent`, and the same snapshot. Inspect `vad.*` to see whether the test app rendered VAD elements in direct mode.
+- **Targeted runs (direct mode):** Use `--grep` with `npm run test:e2e:direct` to run a subset of tests (e.g. the 4 failing Issue #346 tests).
+
 ### Benefits of Using Helpers
 
 - ✅ **DRY**: No duplicated setup/assertion code

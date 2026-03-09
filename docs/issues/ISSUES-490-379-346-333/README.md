@@ -1,7 +1,7 @@
 # PR: Resolve issues #490, #379, #346, #333
 
 **Branch:** `fix/issues-490-379-346-333`  
-**Status:** In progress — #379, #490, #333 done; #346 proxy-mode E2E **15 passed** (2026-03-08); direct-mode run still to confirm
+**Status:** In progress — #379, #490, #333 done; #346 proxy-mode E2E 15/15 pass; direct-mode failures documented and **deferred to #503** (backlog).
 
 ## Scope
 
@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | **#490** | Refactor: Component-owned agent context for Settings | Component owns and builds `agent.context` when sending Settings; app persists/restores only. Single source of truth, reconnect robustness. |
 | **#379** | Component Team Test Suite Improvement Recommendations | Add Settings message structure verification, WebSocket capture, functions verification, improved diagnostics. |
-| **#346** | Idle Timeout Test Failures (4 E2E tests) | Fix 4 failing E2E tests in direct mode. **Proxy mode:** 15/15 passed (2026-03-08). Direct mode: run `USE_PROXY_MODE=false` from test-app to confirm. |
+| **#346** | Idle Timeout Test Failures (4 E2E tests) | **Proxy mode:** 15/15 pass. Direct-mode failures (4 tests) documented and **deferred to [#503](https://github.com/Signal-Meaning/dg_react_agent/issues/503)** (backlog). See [TDD-ISSUE-346-IDLE-TIMEOUT-E2E.md](./TDD-ISSUE-346-IDLE-TIMEOUT-E2E.md). |
 | **#333** | Fix remount test: Settings not sent on new connection after remount | After remount with different `agentOptions`, new connection should send Settings with new options; currently test skipped, bug open. |
 
 ## TDD documents and ordering
@@ -22,6 +22,8 @@ Each issue has a dedicated TDD plan in this folder. **Suggested order** for impl
 | #379 | [TDD-ISSUE-379-TEST-SUITE-IMPROVEMENTS.md](./TDD-ISSUE-379-TEST-SUITE-IMPROVEMENTS.md) |
 | #346 | [TDD-ISSUE-346-IDLE-TIMEOUT-E2E.md](./TDD-ISSUE-346-IDLE-TIMEOUT-E2E.md) |
 | #333 | [TDD-ISSUE-333-REMOUNT-SETTINGS.md](./TDD-ISSUE-333-REMOUNT-SETTINGS.md) |
+
+**#346 merge note:** When closing or deferring #346, add a comment linking to #503 (e.g. “Direct-mode fix tracked in #503”).
 
 ## References
 
