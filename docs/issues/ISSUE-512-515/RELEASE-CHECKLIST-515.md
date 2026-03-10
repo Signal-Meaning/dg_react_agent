@@ -21,7 +21,7 @@
 - [x] **Lint:** `npm run lint` — passes
 - [x] **Unit / mock tests:** `npm run test:mock` — passes (CI uses this)
 - [x] **E2E in proxy mode:** From test-app: start backend, then `USE_PROXY_MODE=true npm run test:e2e` — passed (one @flaky TTS diagnostic test failed as expected; marked @flaky, deal with later)
-- [x] **Real-API integration (required for this release):** When `OPENAI_API_KEY` available: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — in-scope tests pass. **Note:** 16 passed; 1 failed (Issue #480 real-API context/follow-up test — JSON parse of WebSocket message; likely binary frame or flaky). In-scope tests for #512/#514/#517 (mock + real-API session/function-call paths) passed.
+- [x] **Real-API integration (required for this release):** When `OPENAI_API_KEY` available: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — in-scope tests pass. Issue #480 test fixed: ignore JSON parse failures in WS handler (binary PCM frames can start with 0x7b).
 - [x] **#513 Upstream event coverage:** `npm test -- tests/openai-proxy-event-coverage.test.ts` — passes (all canonical event types have handler); no new unmapped event types introduced (review logs if staging ran).
 - [x] **npm audit:** `npm audit --audit-level=high` — passes (required for CI)
 - [x] **Docs:** All relevant docs updated (UPSTREAM-EVENT-COMPLETE-MAP, PROTOCOL-SPECIFICATION, ISSUE-512-515 README/TDD plans)

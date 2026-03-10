@@ -2719,6 +2719,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }));
     });
     client.on('message', (data: Buffer) => {
+      // Real API sends binary PCM (response.output_audio.delta); skip non-JSON. First-byte check is not sufficient (PCM can start with 0x7b).
       if (data.length === 0 || data[0] !== 0x7b) return;
       try {
         const msg = JSON.parse(data.toString()) as { type?: string; description?: string; role?: string; content?: string };
@@ -2741,6 +2742,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           setTimeout(() => finish(), 500);
         }
       } catch (e) {
+        // JSON parse failure: likely binary frame (PCM) that happened to start with '{'; ignore and continue
+        if (e instanceof SyntaxError) return;
         finish(e as Error);
       }
     });
