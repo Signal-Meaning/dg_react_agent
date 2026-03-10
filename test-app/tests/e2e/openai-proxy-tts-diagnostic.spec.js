@@ -14,6 +14,23 @@
  * (Backend must be running: cd test-app && npm run backend)
  *
  * Optional: this describe is marked optional so it is skipped in default E2E runs; run explicitly when diagnosing TTS.
+ *
+ * ---
+ * Debugging a failure (use backend logs + test console/report):
+ * - Run the spec alone and capture console: npm run test:e2e -- openai-proxy-tts-diagnostic 2>&1 | tee tts-run.log
+ *   Or open the HTML report (npx playwright show-report) and check the failing test's trace for [TTS DIAGNOSTIC] output.
+ * - Map the failing assertion to backend/proxy:
+ *   1. binaryCount < 1 → Proxy not sending PCM. Backend: look for response.output_audio.delta from upstream and proxy→client
+ *      binary sends. Upstream may be sending text-only (e.g. no TTS model) or proxy may not be forwarding binary.
+ *   2. jsonLikeIndices non-empty → Proxy sent JSON as binary. Backend: ensure only response.output_audio.delta payload
+ *      is sent as binary; no text/JSON frames sent with binary opcode.
+ *   3. agentAudioChunksReceived < binaryCount → Component not routing binary to handleAgentAudio. Check WebSocketManager
+ *      binary handling; backend logs confirm proxy did send binary.
+ *   4. binaryCount >= 1 but !playbackStarted → Binary reached client but playback never started. Component playback path
+ *      (handleAgentAudio → sink/queueAudio). Backend: binary was sent; defect is in component or browser AudioContext.
+ *   5. AudioContext state invalid → Browser context suspended or wrong state; may need user gesture or autoplay policy.
+ *   6. analysis.speechLike false → PCM format/endianness wrong (e.g. not 16-bit LE) or upstream sent non-PCM; compare
+ *      chunk boundaries with backend/CLI decode; check proxy base64 decode and buffer pass-through.
  */
 
 import { test, expect } from '@playwright/test';
@@ -46,7 +63,7 @@ test.describe('OpenAI proxy TTS diagnostic (Issue #414)', () => {
     skipIfNoProxyForBackend('Requires VITE_OPENAI_PROXY_ENDPOINT for OpenAI proxy E2E');
   });
 
-  test('diagnose TTS path: binary received and playback status after agent response', async ({ page }) => {
+  test('@flaky diagnose TTS path: binary received and playback status after agent response', async ({ page }) => {
     // Capture WebSocket before any navigation so the agent WebSocket is wrapped
     await installWebSocketCapture(page);
     await setupTestPageForBackend(page);
@@ -94,11 +111,18 @@ test.describe('OpenAI proxy TTS diagnostic (Issue #414)', () => {
       }
     }
 
+    // Diagnostic summary for report (helps when chasing with backend logs)
+    const diagnosticSummary =
+      `[TTS] totalReceived=${totalReceived} binaryCount=${binaryCount} playbackStarted=${playbackStarted} ` +
+      `agentAudioChunksReceived=${agentAudioChunksReceived} audioPlayingEl=${audioPlayingEl} ` +
+      `diagnostics.state=${diagnostics.state} componentCtxState=${componentCtxState}`;
+
     // Assert 1: Client must receive at least one binary message if the proxy sends PCM (proxy fix is deployed)
     expect(
       binaryCount,
       `Expected at least one binary WebSocket message (TTS PCM from proxy). Got ${binaryCount}. ` +
-        'If 0: proxy may not be sending PCM (response.output_audio.delta → binary), or backend not running / wrong endpoint.'
+        'If 0: proxy may not be sending PCM (response.output_audio.delta → binary), or backend not running / wrong endpoint. ' +
+        diagnosticSummary
     ).toBeGreaterThanOrEqual(1);
 
     // Assert 2: Every binary frame must not be JSON (proxy contract: only response.output_audio.delta as binary; Issue #414).
