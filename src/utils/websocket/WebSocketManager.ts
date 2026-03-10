@@ -82,6 +82,14 @@ export interface WebSocketManagerOptions {
    * messages without triggering idle-timeout notification. Used for agent service only.
    */
   onAgentMessageReceived?: () => void;
+
+  /**
+   * When true, every binary frame is treated as PCM (e.g. TTS audio). No attempt to parse binary
+   * as JSON. Use when the upstream (e.g. OpenAI proxy) sends only JSON as text and PCM as binary.
+   * When false or omitted, binary frames are first tried as JSON (Issue #353: Deepgram can send
+   * JSON in binary). Agent service only; set by component when proxyEndpoint indicates OpenAI proxy.
+   */
+  binaryFramesArePCMOnly?: boolean;
 }
 
 /**
@@ -428,28 +436,49 @@ export class WebSocketManager {
               });
             }
           } else if (event.data instanceof ArrayBuffer) {
-            // Issue #353: Check if binary ArrayBuffer contains JSON agent message
-            this.log('Received ArrayBuffer binary data, checking if it contains JSON...');
-            this.handleBinaryData(event.data, 'ArrayBuffer');
+            if (this.options.binaryFramesArePCMOnly) {
+              this.log('Received ArrayBuffer binary (PCM-only mode); emitting as binary.');
+              this.emit({ type: 'binary', data: event.data });
+            } else {
+              // Issue #353: Check if binary ArrayBuffer contains JSON agent message (Deepgram can send JSON in binary)
+              this.log('Received ArrayBuffer binary data, checking if it contains JSON...');
+              this.handleBinaryData(event.data, 'ArrayBuffer');
+            }
           } else if (event.data instanceof Blob) {
-            // Issue #353: Check if binary Blob contains JSON agent message before converting
-            this.log(`Received Blob binary data (size: ${event.data.size}), checking if it contains JSON...`);
-            
-            // Convert Blob to ArrayBuffer first to check for JSON
-            event.data.arrayBuffer().then(arrayBuffer => {
-              this.handleBinaryData(arrayBuffer, 'Blob');
-            }).catch(error => {
-              this.log('Error converting Blob to ArrayBuffer:', error);
-              this.emit({
-                type: 'error',
-                error: {
-                  service: this.options.service,
-                  code: 'blob_conversion_error',
-                  message: 'Failed to convert Blob to ArrayBuffer',
-                  details: error,
-                }
+            if (this.options.binaryFramesArePCMOnly) {
+              this.log(`Received Blob binary (PCM-only mode, size=${event.data.size}); emitting as binary.`);
+              event.data.arrayBuffer().then(arrayBuffer => {
+                this.emit({ type: 'binary', data: arrayBuffer });
+              }).catch(error => {
+                this.log('Error converting Blob to ArrayBuffer:', error);
+                this.emit({
+                  type: 'error',
+                  error: {
+                    service: this.options.service,
+                    code: 'blob_conversion_error',
+                    message: 'Failed to convert Blob to ArrayBuffer',
+                    details: error,
+                  }
+                });
               });
-            });
+            } else {
+              // Issue #353: Check if binary Blob contains JSON agent message before converting
+              this.log(`Received Blob binary data (size: ${event.data.size}), checking if it contains JSON...`);
+              event.data.arrayBuffer().then(arrayBuffer => {
+                this.handleBinaryData(arrayBuffer, 'Blob');
+              }).catch(error => {
+                this.log('Error converting Blob to ArrayBuffer:', error);
+                this.emit({
+                  type: 'error',
+                  error: {
+                    service: this.options.service,
+                    code: 'blob_conversion_error',
+                    message: 'Failed to convert Blob to ArrayBuffer',
+                    details: error,
+                  }
+                });
+              });
+            }
           } else {
             // Log if data is neither string, ArrayBuffer, nor Blob
             this.log('Received message data of unexpected type:', event.data);

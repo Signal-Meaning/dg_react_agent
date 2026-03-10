@@ -844,6 +844,9 @@ function DeepgramVoiceInteraction(
         logConsole('debug','🔧 [AGENT] Auth token present:', !!connectionOptions.authToken);
       }
       
+      // When upstream is our OpenAI proxy, it sends only JSON as text and PCM as binary; skip JSON-in-binary handling (Issue #353 path is for Deepgram).
+      const binaryFramesArePCMOnly = (config.proxyEndpoint ?? '').includes('/openai');
+
       const manager = new WebSocketManager({
         url: finalAgentUrl,
         apiKey: connectionOptions.apiKey,
@@ -854,6 +857,7 @@ function DeepgramVoiceInteraction(
         idleTimeout: config.agentOptions?.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,
         onMeaningfulActivity: handleMeaningfulActivity,
         onAgentMessageReceived: notifyAgentMessageReceived,
+        binaryFramesArePCMOnly,
       });
 
       // Set up event listeners for agent WebSocket

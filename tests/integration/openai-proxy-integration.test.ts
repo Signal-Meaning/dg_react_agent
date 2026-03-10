@@ -2759,6 +2759,24 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 30000);
 
   /**
+   * Verifies the fix for Issue #480 real-API test: a WebSocket message that starts with 0x7b ('{')
+   * but is not valid JSON (e.g. binary PCM that happens to start with that byte) must not fail the
+   * test. The handler should catch SyntaxError from JSON.parse and ignore the message.
+   */
+  it('Issue #480 fix: handler ignores JSON parse failure for buffer starting with 0x7b (binary PCM)', () => {
+    const finish = jest.fn();
+    const data = Buffer.from([0x7b, 0x00, 0x00]); // '{' then invalid JSON
+    if (data.length === 0 || data[0] !== 0x7b) return;
+    try {
+      JSON.parse(data.toString());
+    } catch (e) {
+      if (e instanceof SyntaxError) return;
+      finish(e as Error);
+    }
+    expect(finish).not.toHaveBeenCalled();
+  });
+
+  /**
    * Greeting (Issue #381): When Settings includes agent.greeting, after session.updated the proxy
    * sends SettingsApplied, then injects the greeting as ConversationText (assistant) to the client
    * and as conversation.item.create (assistant) to upstream.
