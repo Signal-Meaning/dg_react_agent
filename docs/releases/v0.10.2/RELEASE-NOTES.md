@@ -22,4 +22,5 @@ v0.10.2 patches the OpenAI proxy and release process for **voice-commerce #908**
 ## See also
 
 - [CHANGELOG.md](./CHANGELOG.md) — Full changelog
+- [PACKAGE-STRUCTURE.md](./PACKAGE-STRUCTURE.md) — Package contents and entry points
 - docs/issues/ISSUE-512-515/RELEASE-CHECKLIST-515.md — Pre-release and publish steps
