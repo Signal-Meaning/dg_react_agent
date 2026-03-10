@@ -778,6 +778,34 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             body: `upstream: ${msg.type} (no client message)`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: String(msg.type) },
           });
+        } else if (msg.type === 'conversation.item.deleted' || msg.type === 'conversation.item.truncated' || msg.type === 'conversation.item.retrieved') {
+          // Canonical list: lifecycle events (item deleted/truncated/retrieved); no component equivalent. Explicit ignore.
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: String(msg.type) },
+          });
+        } else if (msg.type === 'input_audio_buffer.dtmf_event_received') {
+          // Canonical list: DTMF from upstream; no component equivalent. Explicit ignore.
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.dtmf_event_received' },
+          });
+        } else if (
+          msg.type === 'mcp_list_tools.completed' ||
+          msg.type === 'mcp_list_tools.failed' ||
+          msg.type === 'mcp_list_tools.in_progress'
+        ) {
+          // Canonical list: MCP list-tools lifecycle; no component equivalent. Explicit ignore.
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: String(msg.type) },
+          });
         } else if (msg.type === 'conversation.item.created' || msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
           // Debug: log raw upstream event (truncated) so we can inspect payload when not forwarded to client (Issue #500).
           {
@@ -860,10 +888,17 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // Issue #512: Unmapped upstream event — log warning only; do NOT send Error to client (avoids retry/re-Settings loops).
           const eventType = msg.type ?? '(unknown)';
           const payloadLen = typeof text === 'string' ? text.length : 0;
+          const MAX_UNMAPPED_PAYLOAD_LOG = 4096;
+          const fullPayloadTruncated =
+            typeof text === 'string'
+              ? text.length > MAX_UNMAPPED_PAYLOAD_LOG
+                ? text.slice(0, MAX_UNMAPPED_PAYLOAD_LOG) + '…'
+                : text
+              : '(non-string)';
           emitLog({
             severityNumber: SeverityNumber.WARN,
             severityText: 'WARN',
-            body: `Unmapped upstream event: ${eventType} (payload length ${payloadLen}) — log only; no client Error.`,
+            body: `Unmapped upstream event: ${eventType} (payload length ${payloadLen}) — log only; no client Error. Full payload (truncated): ${fullPayloadTruncated}`,
             attributes: {
               ...connectionAttrs,
               [ATTR_DIRECTION]: 'upstream→client',

@@ -76,7 +76,8 @@
 
 ## References
 
-- **Proxy unmapped handling:** `packages/voice-agent-backend/scripts/openai-proxy/server.ts` (unmapped `else` branch; ~844–869).
+- **Upstream event coverage plan:** [UPSTREAM-EVENT-COVERAGE-PLAN.md](./UPSTREAM-EVENT-COVERAGE-PLAN.md) — how we identified missing branches and how to guarantee completeness (unmapped = unknown future only).
+- **Proxy unmapped handling:** `packages/voice-agent-backend/scripts/openai-proxy/server.ts` (unmapped `else` branch; logs full payload truncated to 4096 chars).
 - **Component error handling:** `src/components/DeepgramVoiceInteraction/index.tsx` (“Error received after sending Settings with functions”); test-app `App.tsx` `handleError` (unmapped_upstream_event).
 - **Upstream event map:** `packages/voice-agent-backend/scripts/openai-proxy/UPSTREAM-EVENT-COMPLETE-MAP.md`.
 - **Integration test (unmapped):** `tests/integration/openai-proxy-integration.test.ts` — “Protocol: unmapped upstream event … yields Error (unmapped_upstream_event)”.
