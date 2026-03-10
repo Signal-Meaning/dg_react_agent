@@ -22,6 +22,7 @@
 - [ ] **Unit / mock tests:** `npm run test:mock` — passes (CI uses this)
 - [ ] **E2E in proxy mode:** From test-app: start backend, then `USE_PROXY_MODE=true npm run test:e2e` — all required E2E pass
 - [ ] **Real-API integration (required for this release):** When `OPENAI_API_KEY` available: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — in-scope tests pass (see .cursorrules: proxy/API behavior releases must qualify against real API)
+- [ ] **#513 Upstream event coverage:** `npm test -- tests/openai-proxy-event-coverage.test.ts` — passes (all canonical event types have handler); no new unmapped event types introduced (review logs if staging ran).
 - [ ] **npm audit:** `npm audit --audit-level=high` — passes (required for CI)
 - [ ] **Docs:** All relevant docs updated (UPSTREAM-EVENT-COMPLETE-MAP, PROTOCOL-SPECIFICATION, ISSUE-512-515 README/TDD plans)
 

@@ -50,7 +50,7 @@
 ### Phase 4: Verification
 
 - [x] **4.1** Run integration test(s) that cover unmapped event path; all pass.
-- [ ] **4.2** If possible, run against real API or fixture that emits unmapped events; confirm no Error to client and no retry/re-Settings triggered.
+- [x] **4.2** If possible, run against real API or fixture that emits unmapped events; confirm no Error to client and no retry/re-Settings triggered. Done: mock test passes; USE_REAL_APIS=1 SettingsApplied/session.updated flow runs without Error.
 - [x] **4.3** Update [README.md](./README.md) master progress: check off #512 RED / GREEN / REFACTOR / Verified.
 
 ---

@@ -25,29 +25,29 @@
 
 ### Phase 1: RED — Define the gate
 
-- [ ] **1.1** Decide which mechanism(s) to implement: regression test, checklist, docs, or combination.
-- [ ] **1.2** If regression test:
+- [x] **1.1** Decide which mechanism(s) to implement: regression test, checklist, docs, or combination.
+- [x] **1.2** If regression test:
   - Add test(s) that send one or more **known non-fatal** upstream event types (e.g. from fixture or mock) and assert client does **not** receive `Error` with `code: 'unmapped_upstream_event'`.
   - If #512 is not yet merged, test may currently expect Error → **RED** until #512 is in; then flip expectation so test asserts no Error → **GREEN** when proxy only logs.
   - If #512 is merged: add test for at least one event type that real API can send (e.g. `response.audio_transcript.delta` or `response.output_audio.delta` if we have a fixture); assert no Error.
-- [ ] **1.3** If checklist: add item to release checklist template (e.g. in `.github/ISSUE_TEMPLATE/release-checklist.md` or issue #515 body): “Verify no new unmapped upstream event types introduced (review staging/integration logs for unmapped_upstream_event).”
-- [ ] **1.4** If docs: add or update a section in `UPSTREAM-EVENT-COMPLETE-MAP.md` (or new doc): tables for **supported**, **ignored with warning**, **unknown**.
+- [x] **1.3** If checklist: add item to release checklist template (e.g. in `.github/ISSUE_TEMPLATE/release-checklist.md` or issue #515 body): “Verify no new unmapped upstream event types introduced (review staging/integration logs for unmapped_upstream_event).”
+- [x] **1.4** If docs: add or update a section in `UPSTREAM-EVENT-COMPLETE-MAP.md` (or new doc): tables for **supported**, **ignored with warning**, **unknown**.
 
 ### Phase 2: GREEN — Implement
 
-- [ ] **2.1** Regression test: implement test(s); they pass once #512 behavior is in place (no Error for unmapped).
-- [ ] **2.2** Checklist: add the item; mark as done for this release when verified.
-- [ ] **2.3** Docs: write supported / ignored-with-warning / unknown; ensure “unmapped” path is described as “log warning only” (aligned with #512).
+- [x] **2.1** Regression test: implement test(s); they pass once #512 behavior is in place (no Error for unmapped).
+- [x] **2.2** Checklist: add the item; mark as done for this release when verified.
+- [x] **2.3** Docs: write supported / ignored-with-warning / unknown; ensure “unmapped” path is described as “log warning only” (aligned with #512).
 
 ### Phase 3: REFACTOR
 
-- [ ] **3.1** Keep list of “known non-fatal” event types in one place (fixture, constant, or doc) so future event types can be added and covered by the same test or checklist.
-- [ ] **3.2** Update [README.md](./README.md) master progress: check off #513.
+- [x] **3.1** Keep list of “known non-fatal” event types in one place (fixture, constant, or doc) so future event types can be added and covered by the same test or checklist.
+- [x] **3.2** Update [README.md](./README.md) master progress: check off #513.
 
 ### Phase 4: Verification
 
-- [ ] **4.1** Run new/updated tests in CI; they pass.
-- [ ] **4.2** Release checklist (or doc) is actionable and referenced in release process.
+- [x] **4.1** Run new/updated tests in CI; they pass.
+- [x] **4.2** Release checklist (or doc) is actionable and referenced in release process.
 
 ---
 
@@ -64,5 +64,5 @@
 
 ## Completion criteria (from issue #513)
 
-- [ ] At least one of: regression tests for known non-fatal upstream event types, release checklist item for unmapped events, or documentation of supported/ignored/unknown event types.
-- [ ] New unmapped event types are less likely to ship as fatal errors without being caught by test or process.
+- [x] At least one of: regression tests for known non-fatal upstream event types, release checklist item for unmapped events, or documentation of supported/ignored/unknown event types.
+- [x] New unmapped event types are less likely to ship as fatal errors without being caught by test or process.

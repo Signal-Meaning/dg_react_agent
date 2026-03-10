@@ -39,6 +39,14 @@ Every `msg.type` that has its own branch in the proxy. **Mapped** = we send one 
 
 ---
 
+## Supported / ignored / unknown (Issue #513)
+
+- **Supported (mapped):** Upstream events that result in one or more component protocol messages (e.g. **SettingsApplied**, **Transcript**, **FunctionCallRequest**, **ConversationText**, **AgentStartedSpeaking**, **AgentAudioDone**, **UtteranceEnd**, **Error**). See table rows with “Proxy action” that “Send …” to the client.
+- **Explicitly ignored (control/lifecycle):** Upstream events that have their own branch in server.ts but do **not** send a client message (log only, e.g. DEBUG). These are “control only” or lifecycle events (e.g. `conversation.created`, `response.created`, `rate_limits.updated`). No Error is sent; they do not hit the unmapped path.
+- **Unmapped (unknown):** Events that hit the generic `else` in server.ts. The proxy logs a **WARN** with event type, payload length, and full payload (truncated). It does **not** send Error to the client. **Goal:** only **unknown future** API event types should hit this path. Regression test: `tests/openai-proxy-event-coverage.test.ts` ensures every type in the canonical list has an explicit handler.
+
+---
+
 ## Event payload examples (key fields only)
 
 Representative upstream JSON shapes the proxy reads. Full schemas: [OpenAI Realtime server events](https://platform.openai.com/docs/api-reference/realtime-server-events).

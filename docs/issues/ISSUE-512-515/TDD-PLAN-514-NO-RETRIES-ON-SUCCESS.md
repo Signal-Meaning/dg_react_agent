@@ -30,22 +30,22 @@
 
 ### Phase 1: RED — Tests that would fail if retries occur on success
 
-- [ ] **1.1** E2E or integration test: single user message that triggers **one** function call (e.g. “roses” → `search_products`) → host executes and sends **one** successful `FunctionCallResponse` → assert **exactly one** function call request received (or at most one per user message), and assert no reconnection/re-Settings triggered by an error after the function result.
+- [x] **1.1** E2E or integration test: single user message that triggers **one** function call (e.g. “roses” → `search_products`) → host executes and sends **one** successful `FunctionCallResponse` → assert **exactly one** function call request received (or at most one per user message), and assert no reconnection/re-Settings triggered by an error after the function result.
   - **File:** e.g. `test-app/tests/e2e/openai-proxy-e2e.spec.js` or a dedicated spec; or `tests/integration/openai-proxy-integration.test.ts` with real API or fixture.
   - **Assertions:** function call count for that turn === 1; no “Error received after sending Settings with functions” due to unmapped event; optional: assert assistant message count or response content consistent with single execution.
-- [ ] **1.2** Optional: Integration test with **mock** that sends an unmapped event **after** function result; assert client does **not** retry (no second function call request). Depends on #512 (no Error sent for unmapped).
+- [x] **1.2** Optional: Integration test with **mock** that sends an unmapped event **after** function result; assert client does **not** retry (no second function call request). Depends on #512 (no Error sent for unmapped).
 - [ ] Run tests: with **current** behavior (unmapped → Error), test may **fail** (multiple function calls or retry observed). After #512, test should **pass** (no Error ⇒ no retry). If test passes only after #512, that confirms #512 fixes the driver; #514 is “verify and lock in.”
 
 ### Phase 2: GREEN — Implementation
 
-- [ ] **2.1** **Primary:** Land #512 (unmapped → warning only) so that unmapped events no longer send Error and no longer trigger retry/re-Settings.
-- [ ] **2.2** **If needed:** In component or test-app, ensure retry/re-Settings logic does **not** run when the only “error” was a successful function call (e.g. do not treat successful `FunctionCallResponse` as failure). Current code may already be correct once no Error is sent for unmapped events.
-- [ ] **2.3** Add or adjust test so it passes: single user message → single function call → single result → no duplicate calls.
+- [x] **2.1** **Primary:** Land #512 (unmapped → warning only) so that unmapped events no longer send Error and no longer trigger retry/re-Settings.
+- [x] **2.2** **If needed:** In component or test-app, ensure retry/re-Settings logic does **not** run when the only “error” was a successful function call (e.g. do not treat successful `FunctionCallResponse` as failure). Current code may already be correct once no Error is sent for unmapped events.
+- [x] **2.3** Add or adjust test so it passes: single user message → single function call → single result → no duplicate calls.
 
 ### Phase 3: REFACTOR
 
 - [ ] **3.1** Document retry conditions in code or docs: retry only on real failures; success path does not trigger retry.
-- [ ] **3.2** Update [README.md](./README.md) master progress: check off #514.
+- [x] **3.2** Update [README.md](./README.md) master progress: check off #514.
 
 ### Phase 4: Verification
 

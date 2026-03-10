@@ -3471,6 +3471,39 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
+   * Issue #514: After a successful function call (host sends one FunctionCallResponse), the client must receive exactly one
+   * FunctionCallRequest for that turn. No retry or re-Settings should cause a duplicate function call. With #512 (unmapped
+   * → warning only), unmapped events no longer send Error, so the component does not retry; this test locks in that behavior.
+   */
+  itMockOnly('Issue #514: successful function call yields exactly one FunctionCallRequest (no duplicate/retry)', (done) => {
+    receivedConversationItems.length = 0;
+    mockSendFunctionCallAfterSession = true;
+    const functionCallRequestCount: number[] = [];
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }>; role?: string; content?: string };
+      if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+        functionCallRequestCount.push(1);
+        client.send(JSON.stringify({
+          type: 'FunctionCallResponse',
+          id: 'call_mock_1',
+          name: 'get_current_time',
+          content: '{"time":"12:00"}',
+        }));
+      }
+      if (msg.type === 'ConversationText' && msg.role === 'assistant' && msg.content === 'Hello from mock') {
+        expect(functionCallRequestCount.length).toBe(1);
+        client.close();
+        done();
+      }
+    });
+    client.on('error', done);
+  }, 8000);
+
+  /**
    * Issue #512: Unmapped upstream events must NOT be fatal. Proxy logs warning only; client must NOT receive Error (unmapped_upstream_event).
    * Mock sends conversation.created (unmapped) after session.updated; client must not receive any Error with code unmapped_upstream_event.
    */

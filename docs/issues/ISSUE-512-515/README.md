@@ -27,7 +27,7 @@
 - [x] **RED:** Failing test(s) added: unmapped event does **not** cause client to receive `Error` with `unmapped_upstream_event`; proxy logs warning only.
 - [x] **GREEN:** Proxy logs warning and continues; no `Error` sent to client for unmapped events.
 - [x] **REFACTOR:** Comments/docs updated; integration test expectation updated (no longer expect Error for unmapped).
-- [ ] **Verified:** Real-API or fixture run: no retry/re-Settings triggered by unmapped events.
+- [x] **Verified:** Real-API or fixture run: no retry/re-Settings triggered by unmapped events. Mock test "Issue #512: unmapped upstream event … does NOT yield Error" passes; with USE_REAL_APIS=1, SettingsApplied/session.updated flow runs without Error from unmapped events.
 
 **TDD plan:** [TDD-PLAN-512-UNMAPPED-EVENTS-WARNINGS.md](./TDD-PLAN-512-UNMAPPED-EVENTS-WARNINGS.md)
 
@@ -35,10 +35,10 @@
 
 ### #513 — Release gate / test coverage for upstream event types
 
-- [ ] **RED:** Test or checklist added: known non-fatal event types do not emit **error** to client.
-- [ ] **GREEN:** Regression test passes (or release checklist item and docs in place).
-- [ ] **REFACTOR:** Document supported / ignored-with-warning / unknown event types.
-- [ ] **Verified:** New unmapped event types would be caught by test or process.
+- [x] **RED:** Test or checklist added: known non-fatal event types do not emit **error** to client.
+- [x] **GREEN:** Regression test passes (or release checklist item and docs in place).
+- [x] **REFACTOR:** Document supported / ignored-with-warning / unknown event types.
+- [x] **Verified:** New unmapped event types would be caught by test or process.
 
 **TDD plan:** [TDD-PLAN-513-RELEASE-GATE-UPSTREAM-EVENTS.md](./TDD-PLAN-513-RELEASE-GATE-UPSTREAM-EVENTS.md)
 
@@ -46,8 +46,8 @@
 
 ### #514 — No retries on successful function calls
 
-- [ ] **RED:** Test(s) added: after successful function call (host sends result), no duplicate function call or re-Settings triggered.
-- [ ] **GREEN:** Retry/re-Settings logic does not fire on success path (and #512 fix removes unmapped-event-driven retries).
+- [x] **RED:** Test(s) added: after successful function call (host sends result), no duplicate function call or re-Settings triggered.
+- [x] **GREEN:** Retry/re-Settings logic does not fire on success path (and #512 fix removes unmapped-event-driven retries).
 - [ ] **REFACTOR:** Clarify retry conditions in code/docs.
 - [ ] **Verified:** E2E or integration: single user message → single function call → single result; no duplicate calls.
 
