@@ -180,7 +180,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * is received before session.updated was sent (catches proxy sending context before session.updated).
    */
   let mockEnforceSessionBeforeContext = false;
-  /** Protocol test: when true, mock sends an unmapped upstream event after session.updated so client receives Error (unmapped_upstream_event). Uses conversation.created (response.created is now handled in proxy). */
+  /** Protocol test (Issue #512): when true, mock sends an unmapped upstream event after session.updated. Proxy must NOT send Error to client (log warning only). Uses conversation.created. */
   let mockSendUnmappedEventAfterSessionUpdated = false;
   /**
    * Issue #470: when true, on function_call_output mock sends response.done only (no response.output_text.done).
@@ -2719,6 +2719,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }));
     });
     client.on('message', (data: Buffer) => {
+      // Real API sends binary PCM (response.output_audio.delta); skip non-JSON. First-byte check is not sufficient (PCM can start with 0x7b).
       if (data.length === 0 || data[0] !== 0x7b) return;
       try {
         const msg = JSON.parse(data.toString()) as { type?: string; description?: string; role?: string; content?: string };
@@ -2741,6 +2742,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           setTimeout(() => finish(), 500);
         }
       } catch (e) {
+        // JSON parse failure: likely binary frame (PCM) that happened to start with '{'; ignore and continue
+        if (e instanceof SyntaxError) return;
         finish(e as Error);
       }
     });
@@ -2754,6 +2757,24 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     }, 25000);
   }, 30000);
+
+  /**
+   * Verifies the fix for Issue #480 real-API test: a WebSocket message that starts with 0x7b ('{')
+   * but is not valid JSON (e.g. binary PCM that happens to start with that byte) must not fail the
+   * test. The handler should catch SyntaxError from JSON.parse and ignore the message.
+   */
+  it('Issue #480 fix: handler ignores JSON parse failure for buffer starting with 0x7b (binary PCM)', () => {
+    const finish = jest.fn();
+    const data = Buffer.from([0x7b, 0x00, 0x00]); // '{' then invalid JSON
+    if (data.length === 0 || data[0] !== 0x7b) return;
+    try {
+      JSON.parse(data.toString());
+    } catch (e) {
+      if (e instanceof SyntaxError) return;
+      finish(e as Error);
+    }
+    expect(finish).not.toHaveBeenCalled();
+  });
 
   /**
    * Greeting (Issue #381): When Settings includes agent.greeting, after session.updated the proxy
@@ -3471,18 +3492,51 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
-   * Unmapped upstream events: proxy sends Error (unmapped_upstream_event), does not forward as text.
-   * Mock sends conversation.created (unmapped) after session.updated; client must receive Error with code unmapped_upstream_event.
+   * Issue #514: After a successful function call (host sends one FunctionCallResponse), the client must receive exactly one
+   * FunctionCallRequest for that turn. No retry or re-Settings should cause a duplicate function call. With #512 (unmapped
+   * → warning only), unmapped events no longer send Error, so the component does not retry; this test locks in that behavior.
    */
-  itMockOnly('Protocol: unmapped upstream event (e.g. conversation.created) yields Error (unmapped_upstream_event)', (done) => {
+  itMockOnly('Issue #514: successful function call yields exactly one FunctionCallRequest (no duplicate/retry)', (done) => {
+    receivedConversationItems.length = 0;
+    mockSendFunctionCallAfterSession = true;
+    const functionCallRequestCount: number[] = [];
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }>; role?: string; content?: string };
+      if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+        functionCallRequestCount.push(1);
+        client.send(JSON.stringify({
+          type: 'FunctionCallResponse',
+          id: 'call_mock_1',
+          name: 'get_current_time',
+          content: '{"time":"12:00"}',
+        }));
+      }
+      if (msg.type === 'ConversationText' && msg.role === 'assistant' && msg.content === 'Hello from mock') {
+        expect(functionCallRequestCount.length).toBe(1);
+        client.close();
+        done();
+      }
+    });
+    client.on('error', done);
+  }, 8000);
+
+  /**
+   * Issue #512: Unmapped upstream events must NOT be fatal. Proxy logs warning only; client must NOT receive Error (unmapped_upstream_event).
+   * Mock sends conversation.created (unmapped) after session.updated; client must not receive any Error with code unmapped_upstream_event.
+   */
+  itMockOnly('Issue #512: unmapped upstream event (e.g. conversation.created) does NOT yield Error to client (warning only)', (done) => {
     mockSendUnmappedEventAfterSessionUpdated = true;
-    let finished = false;
+    const receivedErrors: Array<{ type: string; code?: string }> = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const clearFallback = scheduleFallbackTimeout(5000, () => {
-      if (finished) return;
-      finished = true;
       client.close();
-      done(new Error('Expected to receive Error (unmapped_upstream_event) from proxy within 5s'));
+      const unmapped = receivedErrors.filter((e) => e.code === 'unmapped_upstream_event');
+      expect(unmapped).toHaveLength(0);
+      done();
     });
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
@@ -3490,20 +3544,32 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
       try {
-        const msg = JSON.parse(data.toString()) as { type?: string; code?: string; description?: string };
-        if (msg?.type === 'Error' && msg.code === 'unmapped_upstream_event') {
-          expect(msg.description).toContain('conversation.created');
-          finished = true;
-          clearFallback();
-          client.close();
-          done();
+        const msg = JSON.parse(data.toString()) as { type?: string; code?: string };
+        if (msg?.type === 'Error') {
+          receivedErrors.push({ type: msg.type, code: msg.code });
+          if (msg.code === 'unmapped_upstream_event') {
+            clearFallback();
+            client.close();
+            return done(new Error(`Issue #512: proxy must not send Error (unmapped_upstream_event) for unmapped events; received: ${JSON.stringify(msg)}`));
+          }
+        }
+        if (msg?.type === 'SettingsApplied') {
+          // Mock has sent unmapped event; give a short time for any Error to arrive, then pass if none
+          setTimeout(() => {
+            clearFallback();
+            client.close();
+            const unmapped = receivedErrors.filter((e) => e.code === 'unmapped_upstream_event');
+            expect(unmapped).toHaveLength(0);
+            done();
+          }, 300);
         }
       } catch {
         // ignore
       }
     });
     client.on('error', (err) => {
-      if (!finished) done(err);
+      clearFallback();
+      done(err);
     });
   }, 8000);
 

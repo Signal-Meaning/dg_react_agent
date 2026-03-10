@@ -626,4 +626,65 @@ describe('WebSocket Binary JSON Message Handling - Issue #353 (ArrayBuffer Tests
       unsubscribe();
     }, 15000);
   });
+
+  describe('binaryFramesArePCMOnly (OpenAI proxy path)', () => {
+    it('should emit binary frames as binary only (no JSON parse) when binaryFramesArePCMOnly is true', async () => {
+      const options: WebSocketManagerOptions = {
+        url: 'wss://example.com/openai',
+        service: 'agent',
+        binaryFramesArePCMOnly: true,
+      };
+
+      manager = new WebSocketManager(options);
+      const unsubscribe = manager.addEventListener((event) => {
+        receivedEvents.push(event);
+      });
+
+      await waitForConnection(manager);
+
+      // Even binary that contains valid agent JSON (FunctionCallRequest) must be emitted as binary only
+      const functionCallRequest = {
+        type: 'FunctionCallRequest',
+        functions: [{ id: 'call_1', name: 'test', arguments: '{}', client_side: false }],
+      };
+      const jsonString = JSON.stringify(functionCallRequest);
+      const mockWs = (manager as any).ws as MockWebSocket;
+      mockWs.simulateBinaryArrayBufferMessage(jsonString);
+      await waitForEvents();
+
+      const messageEvents = receivedEvents.filter(e => e.type === 'message');
+      const binaryEvents = receivedEvents.filter(e => e.type === 'binary');
+
+      expect(binaryEvents.length).toBeGreaterThan(0);
+      expect(messageEvents.length).toBe(0);
+
+      unsubscribe();
+    }, 10000);
+
+    it('should emit raw PCM binary as binary when binaryFramesArePCMOnly is true', async () => {
+      const options: WebSocketManagerOptions = {
+        url: 'wss://example.com/openai',
+        service: 'agent',
+        binaryFramesArePCMOnly: true,
+      };
+
+      manager = new WebSocketManager(options);
+      const unsubscribe = manager.addEventListener((event) => {
+        receivedEvents.push(event);
+      });
+
+      await waitForConnection(manager);
+
+      const pcmData = new Uint8Array([0x00, 0x01, 0x02, 0x03]);
+      const mockWs = (manager as any).ws as MockWebSocket;
+      mockWs.simulateMessage(pcmData.buffer);
+      await waitForEvents();
+
+      const binaryEvents = receivedEvents.filter(e => e.type === 'binary');
+      expect(binaryEvents.length).toBeGreaterThan(0);
+      expect((binaryEvents[0] as { type: 'binary'; data: ArrayBuffer }).data.byteLength).toBe(4);
+
+      unsubscribe();
+    }, 10000);
+  });
 });
