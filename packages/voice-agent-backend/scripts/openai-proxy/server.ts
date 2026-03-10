@@ -762,6 +762,22 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             body: `upstream: ${msg.type} (no client message)`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.output_text.added' },
           });
+        } else if (msg.type === 'conversation.created') {
+          // Issue #517: Real API sends when a conversation is created; control event only. Explicitly ignore (log only) so we don't hit unmapped.
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'conversation.created' },
+          });
+        } else if (msg.type === 'conversation.item.input_audio_transcription.failed' || msg.type === 'conversation.item.input_audio_transcription.segment') {
+          // Issue #517: Real API transcription lifecycle; no component equivalent. Explicitly ignore (log only).
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (no client message)`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: String(msg.type) },
+          });
         } else if (msg.type === 'conversation.item.created' || msg.type === 'conversation.item.added' || msg.type === 'conversation.item.done') {
           // Debug: log raw upstream event (truncated) so we can inspect payload when not forwarded to client (Issue #500).
           {
@@ -841,26 +857,20 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           // Issue #500: Do not forward raw conversation.item.* to client; only mapped ConversationText (and counter/response.create) are sent.
         } else {
-          // Unmapped upstream event: do not forward as text; send Error so client sees a clear contract.
+          // Issue #512: Unmapped upstream event — log warning only; do NOT send Error to client (avoids retry/re-Settings loops).
           const eventType = msg.type ?? '(unknown)';
+          const payloadLen = typeof text === 'string' ? text.length : 0;
           emitLog({
             severityNumber: SeverityNumber.WARN,
             severityText: 'WARN',
-            body: `Unmapped upstream event: ${eventType} — sending Error to client (no forward as text)`,
+            body: `Unmapped upstream event: ${eventType} (payload length ${payloadLen}) — log only; no client Error.`,
             attributes: {
               ...connectionAttrs,
               [ATTR_DIRECTION]: 'upstream→client',
               [ATTR_MESSAGE_TYPE]: String(eventType),
             },
           });
-          const unmappedError: ComponentError = {
-            type: 'Error',
-            code: 'unmapped_upstream_event',
-            description: `Proxy received unmapped upstream event: ${eventType}. All events must be mapped; no passthrough.`,
-          };
-          if (clientWs.readyState === WebSocket.OPEN) {
-            clientWs.send(JSON.stringify(unmappedError));
-          }
+          // Do not send Error to client; continue processing the stream.
         }
       } catch {
         // Malformed or non-JSON upstream message: send Error instead of forwarding raw bytes.

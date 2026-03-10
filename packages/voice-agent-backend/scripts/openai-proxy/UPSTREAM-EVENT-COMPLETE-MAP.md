@@ -1,6 +1,6 @@
 # OpenAI proxy: complete upstream → proxy → client event map
 
-**Purpose:** Single reference for every upstream (OpenAI Realtime server) event type and what the proxy does. Unmapped events are not forwarded; the proxy sends **Error** (code `unmapped_upstream_event`) to the client — **treat these as warnings**; the goal is to map all events and eliminate unmapped cases. Gaps and planned work: [Epic #493](../../../../docs/issues/OPENAI-PROXY-EVENT-MAP-GAPS/EPIC.md) and [issues #494–#500](https://github.com/Signal-Meaning/dg_react_agent/issues/493).
+**Purpose:** Single reference for every upstream (OpenAI Realtime server) event type and what the proxy does. Unmapped events are **not** forwarded; the proxy **logs a warning only** (event type and payload length) and does **not** send Error to the client (Issue #512). The goal is to map all events and eliminate unmapped cases. Gaps and planned work: [Epic #493](../../../../docs/issues/OPENAI-PROXY-EVENT-MAP-GAPS/EPIC.md) and [issues #494–#500](https://github.com/Signal-Meaning/dg_react_agent/issues/493).
 
 ---
 
@@ -30,6 +30,8 @@ Every `msg.type` that has its own branch in the proxy. **Mapped** = we send one 
 | **response.content_part.added** / **.done** | Streaming control; finalized content from conversation.item.*. | No client message. Log only (Epic #493). | Yes (control only) |
 | **response.output_text.added** | Streaming control; finalized text from conversation.item.*. | No client message. Log only (Epic #493). | Yes (control only) |
 | **rate_limits.updated** | Real API rate-limit info. | No client message. Log only (Epic #493). | Yes (control only) |
+| **conversation.created** | `type`, `conversation?` (Real API sends when a conversation is created). | No client message. Log only (Issue #517; was hitting unmapped). | Yes (control only) |
+| **conversation.item.input_audio_transcription.failed** / **.segment** | Transcription lifecycle (Real API). | No client message. Log only (Issue #517; was hitting unmapped). | Yes (control only) |
 | **conversation.item.created** / **.added** / **.done** | `type`, `item?: { id?, type?, role?, content? }`. Proxy uses `item.id` for pending-item counter and dedupe; `item.role`, `item.content` for **ConversationText** (assistant). Text from output_text, transcript, etc.; **function_call** content parts mapped to "Function call: name(args)" for Deepgram parity (Issue #499). Raw event forward removed (Issue #500). | Decrement counter; if 0 send response.create. If assistant, send **ConversationText** (from content, including function_call parts). Do not forward raw event. | Yes |
 
 ---
@@ -76,13 +78,13 @@ Proxy decodes `delta` to binary and sends raw PCM to client; no JSON to client f
 
 ---
 
-## Unmapped upstream events (warnings; goal: eliminate)
+## Unmapped upstream events (log warning only; goal: eliminate)
 
-Any upstream event whose `msg.type` is **not** in the explicitly handled list hits the `else` in server.ts. The proxy **does not** forward it as text. It sends **Error** to the client with `code: 'unmapped_upstream_event'` and a description that includes the event type — **treat as a warning**: the goal is to map all events and eliminate these over time (see [Epic #493](../../../../docs/issues/OPENAI-PROXY-EVENT-MAP-GAPS/EPIC.md)).
+Any upstream event whose `msg.type` is **not** in the explicitly handled list hits the `else` in server.ts (Issue #512). The proxy **does not** forward it as text and **does not** send Error to the client. It **logs a warning only** (event type and payload length); processing continues. This avoids retry/re-Settings loops when the real API sends event types we do not yet map (e.g. `response.audio_transcript.delta`, `response.output_audio.delta`, **conversation.created**). Goal: map all events and eliminate unmapped cases over time (see [Epic #493](../../../../docs/issues/OPENAI-PROXY-EVENT-MAP-GAPS/EPIC.md)).
 
-Examples of event types that currently trigger this (from OpenAI Realtime server events): **conversation.created**, **conversation.item.input_audio_transcription.failed** / **.segment**, **conversation.item.deleted** / **.truncated**, MCP-related events, and any future API event types. (**response.created**, **response.output_item.added** / **.done**, **response.content_part.added** / **.done**, **response.output_audio_transcript.delta**, **response.output_text.added**, **rate_limits.updated**, and buffer events **input_audio_buffer.committed** / **.cleared** / **.timeout_triggered** are now handled — log only, no client message.)
+Examples of event types that may still hit this path: **conversation.item.deleted** / **.truncated**, MCP-related events, and any future API event types. (**conversation.created** and **conversation.item.input_audio_transcription.failed** / **.segment** are now explicitly ignored — Issue #517.)
 
-Integration test: **"Protocol: unmapped upstream event (e.g. conversation.created) yields Error (unmapped_upstream_event)"** — mock sends `conversation.created`, client must receive Error with code `unmapped_upstream_event`.
+Integration test: **"Issue #512: unmapped upstream event (e.g. conversation.created) does NOT yield Error to client (warning only)"** — mock sends `conversation.created`, client must **not** receive Error with code `unmapped_upstream_event`.
 
 ---
 

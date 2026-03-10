@@ -33,7 +33,7 @@ Every upstream (OpenAI Realtime API) event the proxy receives and what it sends 
 | **input_audio_buffer.committed** / **.cleared** / **.timeout_triggered** | No client message (buffer control/ack). Log only. | (avoids Error in firm-audio flow; `Issue #414: firm audio connection — no Error from upstream within 12s after sending audio (mock)`) |
 | **conversation.item.input_audio_transcription.completed** | Map to **Transcript** (is_final: true). Pass through start, duration, channel, channel_index, alternatives when upstream sends them (Issue #496); clear delta accumulator for that item_id (Issue #497). | `Issue #496: input_audio_transcription.completed with start/duration/channel → Transcript has actuals` |
 | **conversation.item.input_audio_transcription.delta** | Accumulate per item_id (Issue #497); map to **Transcript** (interim, accumulated text). Clear accumulator on .completed for that item_id. | `Issue #497: input_audio_transcription.delta accumulated per item_id → Transcript with accumulated text` |
-| **Any other upstream event** | Send **Error** to client (code `unmapped_upstream_event`). Do not forward as text. See [UPSTREAM-EVENT-COMPLETE-MAP.md](../../packages/voice-agent-backend/scripts/openai-proxy/UPSTREAM-EVENT-COMPLETE-MAP.md). | `Protocol: unmapped upstream event (e.g. conversation.created) yields Error (unmapped_upstream_event)` |
+| **Any other upstream event** | **Log warning only** (event type and payload length). Do **not** send Error to client; do not forward as text. See [UPSTREAM-EVENT-COMPLETE-MAP.md](../../packages/voice-agent-backend/scripts/openai-proxy/UPSTREAM-EVENT-COMPLETE-MAP.md) (Issue #512). | `Issue #512: unmapped upstream event (e.g. conversation.created) does NOT yield Error to client (warning only)` |
 
 ---
 
@@ -58,7 +58,7 @@ Every upstream (OpenAI Realtime API) event the proxy receives and what it sends 
 | Transcript | Text | From conversation.item.input_audio_transcription.completed (final) or .delta (interim, accumulated per item_id, Issue #497); start/duration/channel/alternatives from upstream when present (Issue #496) | `Issue #496: input_audio_transcription.completed with start/duration/channel → Transcript has actuals`, `Issue #497: …` |
 | Error | Text | From upstream error; idle_timeout may be buffered until after ConversationText when response in progress | See §1 error row |
 | (binary PCM) | Binary | From response.output_audio.delta only | `Issue #414: only response.output_audio.delta is sent as binary; all other upstream messages as text`; `sends binary PCM to client when upstream sends response.output_audio.delta` |
-| Error (unmapped_upstream_event) | Text | When upstream sends an event type the proxy does not map | `Protocol: unmapped upstream event yields Error (unmapped_upstream_event)` |
+| (none for unmapped) | — | Unmapped upstream events: proxy **logs warning only**; no Error to client (Issue #512). | `Issue #512: unmapped upstream event does NOT yield Error to client (warning only)` |
 
 ---
 

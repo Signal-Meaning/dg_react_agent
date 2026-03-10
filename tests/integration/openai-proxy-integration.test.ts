@@ -180,7 +180,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * is received before session.updated was sent (catches proxy sending context before session.updated).
    */
   let mockEnforceSessionBeforeContext = false;
-  /** Protocol test: when true, mock sends an unmapped upstream event after session.updated so client receives Error (unmapped_upstream_event). Uses conversation.created (response.created is now handled in proxy). */
+  /** Protocol test (Issue #512): when true, mock sends an unmapped upstream event after session.updated. Proxy must NOT send Error to client (log warning only). Uses conversation.created. */
   let mockSendUnmappedEventAfterSessionUpdated = false;
   /**
    * Issue #470: when true, on function_call_output mock sends response.done only (no response.output_text.done).
@@ -3471,18 +3471,18 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
-   * Unmapped upstream events: proxy sends Error (unmapped_upstream_event), does not forward as text.
-   * Mock sends conversation.created (unmapped) after session.updated; client must receive Error with code unmapped_upstream_event.
+   * Issue #512: Unmapped upstream events must NOT be fatal. Proxy logs warning only; client must NOT receive Error (unmapped_upstream_event).
+   * Mock sends conversation.created (unmapped) after session.updated; client must not receive any Error with code unmapped_upstream_event.
    */
-  itMockOnly('Protocol: unmapped upstream event (e.g. conversation.created) yields Error (unmapped_upstream_event)', (done) => {
+  itMockOnly('Issue #512: unmapped upstream event (e.g. conversation.created) does NOT yield Error to client (warning only)', (done) => {
     mockSendUnmappedEventAfterSessionUpdated = true;
-    let finished = false;
+    const receivedErrors: Array<{ type: string; code?: string }> = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const clearFallback = scheduleFallbackTimeout(5000, () => {
-      if (finished) return;
-      finished = true;
       client.close();
-      done(new Error('Expected to receive Error (unmapped_upstream_event) from proxy within 5s'));
+      const unmapped = receivedErrors.filter((e) => e.code === 'unmapped_upstream_event');
+      expect(unmapped).toHaveLength(0);
+      done();
     });
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
@@ -3490,20 +3490,32 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
       try {
-        const msg = JSON.parse(data.toString()) as { type?: string; code?: string; description?: string };
-        if (msg?.type === 'Error' && msg.code === 'unmapped_upstream_event') {
-          expect(msg.description).toContain('conversation.created');
-          finished = true;
-          clearFallback();
-          client.close();
-          done();
+        const msg = JSON.parse(data.toString()) as { type?: string; code?: string };
+        if (msg?.type === 'Error') {
+          receivedErrors.push({ type: msg.type, code: msg.code });
+          if (msg.code === 'unmapped_upstream_event') {
+            clearFallback();
+            client.close();
+            return done(new Error(`Issue #512: proxy must not send Error (unmapped_upstream_event) for unmapped events; received: ${JSON.stringify(msg)}`));
+          }
+        }
+        if (msg?.type === 'SettingsApplied') {
+          // Mock has sent unmapped event; give a short time for any Error to arrive, then pass if none
+          setTimeout(() => {
+            clearFallback();
+            client.close();
+            const unmapped = receivedErrors.filter((e) => e.code === 'unmapped_upstream_event');
+            expect(unmapped).toHaveLength(0);
+            done();
+          }, 300);
         }
       } catch {
         // ignore
       }
     });
     client.on('error', (err) => {
-      if (!finished) done(err);
+      clearFallback();
+      done(err);
     });
   }, 8000);
 
