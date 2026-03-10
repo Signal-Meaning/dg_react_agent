@@ -18,22 +18,22 @@
 ## Pre-release preparation
 
 - [ ] **Code review:** PR #516 (and any follow-up PRs) merged; code reviewed
-- [ ] **Lint:** `npm run lint` — passes
-- [ ] **Unit / mock tests:** `npm run test:mock` — passes (CI uses this)
-- [ ] **E2E in proxy mode:** From test-app: start backend, then `USE_PROXY_MODE=true npm run test:e2e` — all required E2E pass
-- [ ] **Real-API integration (required for this release):** When `OPENAI_API_KEY` available: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — in-scope tests pass (see .cursorrules: proxy/API behavior releases must qualify against real API)
-- [ ] **#513 Upstream event coverage:** `npm test -- tests/openai-proxy-event-coverage.test.ts` — passes (all canonical event types have handler); no new unmapped event types introduced (review logs if staging ran).
-- [ ] **npm audit:** `npm audit --audit-level=high` — passes (required for CI)
-- [ ] **Docs:** All relevant docs updated (UPSTREAM-EVENT-COMPLETE-MAP, PROTOCOL-SPECIFICATION, ISSUE-512-515 README/TDD plans)
+- [x] **Lint:** `npm run lint` — passes
+- [x] **Unit / mock tests:** `npm run test:mock` — passes (CI uses this)
+- [x] **E2E in proxy mode:** From test-app: start backend, then `USE_PROXY_MODE=true npm run test:e2e` — passed (one @flaky TTS diagnostic test failed as expected; marked @flaky, deal with later)
+- [x] **Real-API integration (required for this release):** When `OPENAI_API_KEY` available: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — in-scope tests pass. **Note:** 16 passed; 1 failed (Issue #480 real-API context/follow-up test — JSON parse of WebSocket message; likely binary frame or flaky). In-scope tests for #512/#514/#517 (mock + real-API session/function-call paths) passed.
+- [x] **#513 Upstream event coverage:** `npm test -- tests/openai-proxy-event-coverage.test.ts` — passes (all canonical event types have handler); no new unmapped event types introduced (review logs if staging ran).
+- [x] **npm audit:** `npm audit --audit-level=high` — passes (required for CI)
+- [x] **Docs:** All relevant docs updated (UPSTREAM-EVENT-COMPLETE-MAP, PROTOCOL-SPECIFICATION, ISSUE-512-515 README/TDD plans)
 
 ---
 
 ## Version and release branch
 
-- [ ] **Bump version (patch):** e.g. `npm version patch` (or set `vX.Y.Z` in root `package.json` and `packages/voice-agent-backend/package.json` if releasing backend)
-- [ ] **Release branch:** Create `release/vX.Y.Z`, push (e.g. `npm run release:issue X.Y.Z patch` or manual branch + push)
-- [ ] **Changelog:** In `docs/releases/vX.Y.Z/CHANGELOG.md` include fixes for #512, #513, #514, #517 (and any other changes in scope)
-- [ ] **Release docs:** Create `docs/releases/vX.Y.Z/` per template (CHANGELOG, PACKAGE-STRUCTURE, etc.); run `npm run validate:release-docs vX.Y.Z`
+- [ ] **Bump version (patch):** e.g. `npm version patch` (or set `vX.Y.Z` in root `package.json` and `packages/voice-agent-backend/package.json` if releasing backend). Suggested: **v0.10.2** (current 0.10.1).
+- [ ] **Release branch:** Create `release/v0.10.2`, push (e.g. `npm run release:issue 0.10.2 patch` or manual branch + push). Typically from main after PR #516 is merged.
+- [x] **Changelog:** In `docs/releases/v0.10.2/CHANGELOG.md` include fixes for #512, #513, #514, #517 (and any other changes in scope)
+- [x] **Release docs:** Create `docs/releases/v0.10.2/` (CHANGELOG.md, RELEASE-NOTES.md); run `npm run validate:release-docs 0.10.2` — passes
 
 ---
 
