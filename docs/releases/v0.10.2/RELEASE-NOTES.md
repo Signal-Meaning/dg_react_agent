@@ -17,7 +17,7 @@ v0.10.2 patches the OpenAI proxy and release process for **voice-commerce #908**
 ## Packages
 
 - **@signal-meaning/voice-agent-react** — 0.10.2
-- **@signal-meaning/voice-agent-backend** — (bump if releasing backend; see RELEASE-CHECKLIST-515)
+- **@signal-meaning/voice-agent-backend** — 0.2.7 (includes OpenAI proxy fixes #512, #513, #514, #517)
 
 ## See also
 

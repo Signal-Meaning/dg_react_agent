@@ -1,5 +1,7 @@
 # Workflows
 
+Only workflows in this directory are run by GitHub Actions. Retired workflows (e.g. `publish-alternative`) are in `../workflows-archived/` and do not appear in the Actions list.
+
 ## Test and Publish Package (`test-and-publish.yml`)
 
 ### How to test workflow changes without publishing

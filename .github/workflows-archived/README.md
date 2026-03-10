@@ -5,3 +5,4 @@ Workflows in this directory are **not** run by GitHub Actions. They were moved h
 Archived:
 - **audit.yml** — Audit Dependencies (manual npm audit)
 - **debug-auth.yml** — Debug Authentication (registry/auth debugging)
+- **publish-alternative.yml** — Publish (Alternative Auth); duplicate of test-and-publish, retired (removed from workflows, copy kept here)
