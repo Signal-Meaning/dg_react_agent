@@ -17,7 +17,7 @@
 
 ## Pre-release preparation
 
-- [ ] **Code review:** PR #516 (and any follow-up PRs) merged; code reviewed
+- [x] **Code review:** PR #516 (and any follow-up PRs) merged; code reviewed
 - [x] **Lint:** `npm run lint` — passes
 - [x] **Unit / mock tests:** `npm run test:mock` — passes (CI uses this)
 - [x] **E2E in proxy mode:** From test-app: start backend, then `USE_PROXY_MODE=true npm run test:e2e` — passed (one @flaky TTS diagnostic test failed as expected; marked @flaky, deal with later)
@@ -30,8 +30,8 @@
 
 ## Version and release branch
 
-- [ ] **Bump version (patch):** e.g. `npm version patch` (or set `vX.Y.Z` in root `package.json` and `packages/voice-agent-backend/package.json` if releasing backend). Suggested: **v0.10.2** (current 0.10.1).
-- [ ] **Release branch:** Create `release/v0.10.2`, push (e.g. `npm run release:issue 0.10.2 patch` or manual branch + push). Typically from main after PR #516 is merged.
+- [x] **Bump version (patch):** e.g. `npm version patch` (or set `vX.Y.Z` in root `package.json` and `packages/voice-agent-backend/package.json` if releasing backend). **v0.10.2** (React), **0.2.7** (backend).
+- [x] **Release branch:** Create `release/v0.10.2`, push (e.g. `npm run release:issue 0.10.2 patch` or manual branch + push). Typically from main after PR #516 is merged.
 - [x] **Changelog:** In `docs/releases/v0.10.2/CHANGELOG.md` include fixes for #512, #513, #514, #517 (and any other changes in scope)
 - [x] **Release docs:** Create `docs/releases/v0.10.2/` (CHANGELOG.md, RELEASE-NOTES.md); run `npm run validate:release-docs 0.10.2` — passes
 
@@ -39,16 +39,16 @@
 
 ## Publish and release
 
-- [ ] **GitHub release:** Create release with tag `vX.Y.Z` to trigger CI (version must already be bumped and committed on release branch)
-- [ ] **CI:** Test job passes (lint, test:mock, build, package validation); publish job runs and publishes to GitHub Package Registry
-- [ ] **Tag:** After publish succeeds, ensure tag `vX.Y.Z` exists and is pushed
-- [ ] **Verify install:** Test install from registry at `@signal-meaning/voice-agent-react@vX.Y.Z` (and backend if released)
+- [x] **GitHub release:** Create release with tag `vX.Y.Z` to trigger CI (version must already be bumped and committed on release branch)
+- [x] **CI:** Test job passes (lint, test:mock, build, package validation); publish job runs and publishes to GitHub Package Registry
+- [x] **Tag:** After publish succeeds, ensure tag `vX.Y.Z` exists and is pushed
+- [x] **Verify install:** Test install from registry at `@signal-meaning/voice-agent-react@vX.Y.Z` (and backend if released)
 
 ---
 
 ## Post-release
 
-- [ ] **Merge to main:** Open PR `release/vX.Y.Z` → `main`, merge via PR (do not push directly to main)
+- [x] **Merge to main:** Open PR `release/vX.Y.Z` → `main`, merge via PR (do not push directly to main)
 - [ ] **Notify:** Update voice-commerce / consumers as needed; update external docs if any
 - [ ] **Close issues:** #512, #513, #514, #515, #517 closed or linked to release
 
