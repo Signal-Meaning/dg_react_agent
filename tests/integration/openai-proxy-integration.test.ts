@@ -193,6 +193,21 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    */
   let mockWithholdCompletionAfterFunctionCallOutput = false;
   /**
+   * Issue #522 DEFECT-ISOLATION-PROPOSAL 2a: when true, on function_call_output mock sends response.done first,
+   * then 50ms later response.output_text.done. Asserts proxy sends exactly one response.create and client gets AgentAudioDone.
+   */
+  let mockSendResponseDoneThenOutputTextDoneAfterFunctionCallOutput = false;
+  /**
+   * Issue #522 DEFECT-ISOLATION-PROPOSAL 2b: when true, on function_call_output mock sends response.output_audio.done
+   * then response.done (no output_text.done). Asserts proxy still sends deferred response.create and client gets AgentAudioDone.
+   */
+  let mockSendOutputAudioDoneThenResponseDoneAfterFunctionCallOutput = false;
+  /**
+   * Issue #522 DEFECT-ISOLATION-PROPOSAL 3: when true, after sending completion for function_call_output, mock sends
+   * conversation.item.added with assistant content (time string). Asserts client receives ConversationText with that content.
+   */
+  let mockSendAssistantItemAddedAfterFunctionCallCompletion = false;
+  /**
    * Issue #482 (voice-commerce #956): when true, on response.create mock sends error (idle_timeout) BEFORE
    * response.output_text.done. Reproduces upstream closing before final assistant message; proxy must still
    * deliver ConversationText (assistant) before Error so the UI can show the bubble.
@@ -280,6 +295,25 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             if (msg.item?.type === 'function_call_output') {
               if (mockWithholdCompletionAfterFunctionCallOutput) {
                 // Issue #522: do not send completion; proxy will send response.create after timeout.
+              } else if (mockSendResponseDoneThenOutputTextDoneAfterFunctionCallOutput) {
+                socket.send(JSON.stringify({ type: 'response.done', response_id: 'resp_1' }));
+                setTimeout(() => {
+                  try {
+                    socket.send(JSON.stringify({
+                      type: 'response.output_text.done',
+                      response_id: 'resp_1',
+                      item_id: 'item_1',
+                      output_index: 0,
+                      content_index: 0,
+                      text: 'Hello from mock',
+                    }));
+                  } catch {
+                    // ignore
+                  }
+                }, 50);
+              } else if (mockSendOutputAudioDoneThenResponseDoneAfterFunctionCallOutput) {
+                socket.send(JSON.stringify({ type: 'response.output_audio.done', response_id: 'resp_1' }));
+                socket.send(JSON.stringify({ type: 'response.done', response_id: 'resp_1' }));
               } else if (mockSendResponseDoneOnlyAfterFunctionCallOutput) {
                 socket.send(JSON.stringify({ type: 'response.done', response_id: 'resp_1' }));
               } else {
@@ -291,6 +325,24 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                   content_index: 0,
                   text: 'Hello from mock',
                 }));
+                if (mockSendAssistantItemAddedAfterFunctionCallCompletion) {
+                  setTimeout(() => {
+                    try {
+                      socket.send(JSON.stringify({
+                        type: 'conversation.item.added',
+                        item: {
+                          id: 'item_time_reply',
+                          type: 'message',
+                          status: 'completed',
+                          role: 'assistant',
+                          content: [{ type: 'output_text', text: 'The current time is 2:56 AM UTC.' }],
+                        },
+                      }));
+                    } catch {
+                      // ignore
+                    }
+                  }, 80);
+                }
               }
             }
             // Issue #388: proxy sends response.create only after conversation.item.added. Mock must send item.added for user messages.
@@ -4126,6 +4178,208 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }, DEFERRED_TIMEOUT_MS + 800);
     }, 5000);
   });
+
+  /**
+   * Issue #522 DEFECT-ISOLATION-PROPOSAL 2a: Mock sends response.done first, then 50ms later response.output_text.done.
+   * Proxy must send exactly one response.create (on first completion) and client must receive AgentAudioDone.
+   */
+  itMockOnly('Issue #522: completion order – response.done first then output_text.done; one response.create, client gets AgentAudioDone', (done) => {
+    mockReceived.length = 0;
+    mockSendFunctionCallAfterSession = true;
+    mockSendResponseDoneThenOutputTextDoneAfterFunctionCallOutput = true;
+    let receivedAgentAudioDone = false;
+    let finished = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      mockSendResponseDoneThenOutputTextDoneAfterFunctionCallOutput = false;
+      try {
+        client.close();
+      } catch {
+        /* ignore */
+      }
+      if (err) {
+        done(err);
+        return;
+      }
+      const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+      expect(responseCreateCount).toBe(1);
+      expect(receivedAgentAudioDone).toBe(true);
+      done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }> };
+        if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+          client.send(JSON.stringify({
+            type: 'FunctionCallResponse',
+            id: msg.functions[0].id,
+            name: msg.functions[0].name,
+            content: '{"time":"12:00"}',
+          }));
+        }
+        if (msg.type === 'AgentAudioDone' || msg.type === 'AgentDone') {
+          receivedAgentAudioDone = true;
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (!finished) finish(new Error('Issue #522 2a: timeout'));
+    }, 5000);
+    const deadline = Date.now() + 4000;
+    const check = () => {
+      if (finished || Date.now() > deadline) return;
+      const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+      if (responseCreateCount >= 1 && receivedAgentAudioDone) {
+        finish();
+        return;
+      }
+      setTimeout(check, 80);
+    };
+    setTimeout(check, 500);
+  }, 8000);
+
+  /**
+   * Issue #522 DEFECT-ISOLATION-PROPOSAL 2b: Mock sends response.output_audio.done then response.done (no output_text.done).
+   * Proxy must still send deferred response.create and client must receive AgentAudioDone.
+   */
+  itMockOnly('Issue #522: completion order – output_audio.done then response.done; deferred response.create, client gets AgentAudioDone', (done) => {
+    mockReceived.length = 0;
+    mockSendFunctionCallAfterSession = true;
+    mockSendOutputAudioDoneThenResponseDoneAfterFunctionCallOutput = true;
+    let receivedAgentAudioDone = false;
+    let finished = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      mockSendOutputAudioDoneThenResponseDoneAfterFunctionCallOutput = false;
+      try {
+        client.close();
+      } catch {
+        /* ignore */
+      }
+      if (err) {
+        done(err);
+        return;
+      }
+      const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+      expect(responseCreateCount).toBe(1);
+      expect(receivedAgentAudioDone).toBe(true);
+      done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }> };
+        if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+          client.send(JSON.stringify({
+            type: 'FunctionCallResponse',
+            id: msg.functions[0].id,
+            name: msg.functions[0].name,
+            content: '{"time":"12:00"}',
+          }));
+        }
+        if (msg.type === 'AgentAudioDone' || msg.type === 'AgentDone') {
+          receivedAgentAudioDone = true;
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (!finished) finish(new Error('Issue #522 2b: timeout'));
+    }, 5000);
+    const deadline2b = Date.now() + 4000;
+    const check = () => {
+      if (finished || Date.now() > deadline2b) return;
+      const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+      if (responseCreateCount >= 1 && receivedAgentAudioDone) {
+        finish();
+        return;
+      }
+      setTimeout(check, 80);
+    };
+    setTimeout(check, 500);
+  }, 8000);
+
+  /**
+   * Issue #522 DEFECT-ISOLATION-PROPOSAL 3: After deferred response.create, mock sends conversation.item.added (assistant).
+   * Client must receive ConversationText with the time-like content.
+   */
+  itMockOnly('Issue #522: after completion mock sends conversation.item.added (assistant); client receives ConversationText', (done) => {
+    mockSendFunctionCallAfterSession = true;
+    mockSendAssistantItemAddedAfterFunctionCallCompletion = true;
+    let receivedConversationTextWithTime = false;
+    let finished = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      mockSendAssistantItemAddedAfterFunctionCallCompletion = false;
+      try {
+        client.close();
+      } catch {
+        /* ignore */
+      }
+      if (err) {
+        done(err);
+        return;
+      }
+      expect(receivedConversationTextWithTime).toBe(true);
+      done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }>; content?: string; role?: string };
+        if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+          client.send(JSON.stringify({
+            type: 'FunctionCallResponse',
+            id: msg.functions[0].id,
+            name: msg.functions[0].name,
+            content: '{"time":"12:00"}',
+          }));
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant' && typeof msg.content === 'string') {
+          if (/\d{1,2}:\d{2}|UTC|time/.test(msg.content)) {
+            receivedConversationTextWithTime = true;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (!finished) finish(new Error('Issue #522 3: timeout waiting for ConversationText with time'));
+    }, 5000);
+    const deadline3 = Date.now() + 4000;
+    const check = () => {
+      if (finished || Date.now() > deadline3) return;
+      if (receivedConversationTextWithTime) {
+        finish();
+        return;
+      }
+      setTimeout(check, 80);
+    };
+    setTimeout(check, 500);
+  }, 8000);
 
   /**
    * Issue #470: When upstream sends response.done (and no response.output_text.done) after function_call_output,

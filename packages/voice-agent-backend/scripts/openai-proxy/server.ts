@@ -172,6 +172,10 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let pendingResponseCreateAfterFunctionCallOutput = false;
     /** Timeout: if upstream never sends response.done/output_text.done after function_call_output, unstick by sending response.create (REQUIRED-UPSTREAM-CONTRACT.md). */
     let deferredResponseCreateTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    /** Issue #522 diagnostic: when CAPTURE_UPSTREAM_AFTER_FCR=1, record upstream event types for 25s after sending function_call_output (DEFECT-ISOLATION-PROPOSAL.md). */
+    let captureUpstreamAfterFcrStart: number | null = null;
+    const captureUpstreamAfterFcrBuffer: Array<{ type: string; at_ms: number }> = [];
+    let captureUpstreamAfterFcrTimeoutId: ReturnType<typeof setTimeout> | null = null;
     /** Issue #482: Have we sent AgentStartedSpeaking for the current response? So component sees "agent active" before ConversationText (avoids client idle timeout). Reset when response ends. */
     let hasSentAgentStartedSpeakingForCurrentResponse = false;
     /** Issue #482 / #489: Have we sent AgentAudioDone for the current response? AgentAudioDone = receipt complete only (legacy); we also send AgentDone for semantic "agent done" so the wire has the correct signal. See docs/issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md. */
@@ -377,6 +381,26 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // we receive response.output_text.done or response.done from upstream; those handlers send it when
           // pendingResponseCreateAfterFunctionCallOutput is true.
           pendingResponseCreateAfterFunctionCallOutput = true;
+          // Issue #522 diagnostic: capture upstream event types for 25s after function_call_output (DEFECT-ISOLATION-PROPOSAL.md step 1).
+          if (process.env.CAPTURE_UPSTREAM_AFTER_FCR === '1') {
+            captureUpstreamAfterFcrStart = Date.now();
+            captureUpstreamAfterFcrBuffer.length = 0;
+            if (captureUpstreamAfterFcrTimeoutId) clearTimeout(captureUpstreamAfterFcrTimeoutId);
+            captureUpstreamAfterFcrTimeoutId = setTimeout(() => {
+              const outDir = path.join(process.cwd(), 'test-results');
+              if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+              fs.writeFileSync(
+                path.join(outDir, 'upstream-after-function-call.json'),
+                JSON.stringify(
+                  { captured_at: new Date().toISOString(), start_ms: captureUpstreamAfterFcrStart, events: [...captureUpstreamAfterFcrBuffer] },
+                  null,
+                  2
+                )
+              );
+              captureUpstreamAfterFcrStart = null;
+              captureUpstreamAfterFcrTimeoutId = null;
+            }, 25000);
+          }
           // Enforce required upstream contract (REQUIRED-UPSTREAM-CONTRACT.md): if API never sends completion,
           // unstick after timeout so the client can get a next turn instead of hanging until idle timeout.
           if (deferredResponseCreateTimeoutId) clearTimeout(deferredResponseCreateTimeoutId);
@@ -514,6 +538,9 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           delta?: string;
           error?: { message?: string; code?: string };
         };
+        if (captureUpstreamAfterFcrStart !== null && msg.type && Date.now() - captureUpstreamAfterFcrStart < 25000) {
+          captureUpstreamAfterFcrBuffer.push({ type: msg.type, at_ms: Date.now() - captureUpstreamAfterFcrStart });
+        }
         emitLog({
           severityNumber: SeverityNumber.INFO,
           severityText: 'INFO',

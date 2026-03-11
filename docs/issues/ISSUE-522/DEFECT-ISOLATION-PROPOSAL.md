@@ -66,7 +66,7 @@ When these pass, we know: connection, Settings, FunctionCallRequest, backend POS
 
 **Result:** If we never see `response.done` or `response.output_text.done` in that window → hypothesis A (API not sending). If we see them → defect is downstream (B/C/D).
 
-**Placement:** e.g. `packages/voice-agent-backend/scripts/openai-proxy/scripts/capture-upstream-after-function-call.ts` (run once with real API) or a Jest test that runs only when `USE_REAL_APIS=1` and `CAPTURE_UPSTREAM_AFTER_FCR=1`, writing to a file.
+**Placement:** Implemented in `server.ts`: when env `CAPTURE_UPSTREAM_AFTER_FCR=1`, the proxy records every upstream message type (and `at_ms` since function_call_output) for 25s and writes `test-results/upstream-after-function-call.json`. Run backend + E2E 6b (or test 6) with that env set to capture.
 
 ---
 
@@ -138,7 +138,7 @@ When these pass, we know: connection, Settings, FunctionCallRequest, backend POS
 
 0. **Confirm scope:** In the same environment where 6b fails, run **test 6** (same flow, allows errors). If 6 passes, the failure is 6b’s strict error assertion; if 6 also fails at the time-pattern line, the defect is the shared post–function_call_output path—focus isolation there and avoid duplicating known paths (see Scope above).
 1. **Run diagnostic (1)** once with real API and inspect whether `response.done` / `response.output_text.done` appear after function_call_output. That tells us A vs B/C/D.
-2. **Add integration tests (2a, 2b, 3)** so we lock behavior for completion order and for “next turn” conversation.item. These don’t depend on the real API.
+2. **Add integration tests (2a, 2b, 3)** so we lock behavior for completion order and for “next turn” conversation.item. These don’t depend on the real API. **Done:** 2a (response.done then output_text.done), 2b (output_audio.done then response.done), 3 (conversation.item.added assistant after completion → ConversationText) in `openai-proxy-integration.test.ts`.
 3. **Add E2E diagnostic (5)** so we know whether the client ever receives the follow-up ConversationText.
 4. If the real API sends a different conversation.item shape, **add test (4)** with a captured payload and fix the mapper if needed.
 5. **Unit test (6)** is optional but useful to prevent regressions in the completion-handling branches.
