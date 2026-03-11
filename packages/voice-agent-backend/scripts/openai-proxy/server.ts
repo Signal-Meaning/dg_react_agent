@@ -88,6 +88,11 @@ export interface OpenAIProxyServerOptions {
    * Use when upstream errors after greeting injection (e.g. OPENAI_PROXY_GREETING_TEXT_ONLY=1). Integration tests leave this false.
    */
   greetingTextOnly?: boolean;
+  /**
+   * Issue #522: Override deferred response.create timeout (ms). When set, used instead of DEFERRED_RESPONSE_CREATE_TIMEOUT_MS.
+   * For integration tests only (short timeout to test the "upstream withholds completion" path). Production uses default 20s.
+   */
+  deferredResponseCreateTimeoutMs?: number;
 }
 
 /**
@@ -109,6 +114,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
   if (options.logLevel) {
     initProxyLogger({ logLevel: options.logLevel });
   }
+
+  const deferredResponseCreateTimeoutMs = options.deferredResponseCreateTimeoutMs ?? DEFERRED_RESPONSE_CREATE_TIMEOUT_MS;
 
   wss.on('connection', (clientWs: WebSocket, req: http.IncomingMessage) => {
     const connId = `c${++connectionCounter}`;
@@ -379,18 +386,18 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             emitLog({
               severityNumber: SeverityNumber.ERROR,
               severityText: 'ERROR',
-              body: `Required upstream contract violated: upstream did not send response.done or response.output_text.done after function_call_output within ${DEFERRED_RESPONSE_CREATE_TIMEOUT_MS}ms. Sending response.create to unstick; see REQUIRED-UPSTREAM-CONTRACT.md.`,
+              body: `Required upstream contract violated: upstream did not send response.done or response.output_text.done after function_call_output within ${deferredResponseCreateTimeoutMs}ms. Sending response.create to unstick; see REQUIRED-UPSTREAM-CONTRACT.md.`,
               attributes: {
                 ...connectionAttrs,
                 [ATTR_DIRECTION]: 'upstream→client',
                 [ATTR_MESSAGE_TYPE]: 'contract_violation',
-                'timeout_ms': String(DEFERRED_RESPONSE_CREATE_TIMEOUT_MS),
+                'timeout_ms': String(deferredResponseCreateTimeoutMs),
               },
             });
             pendingResponseCreateAfterFunctionCallOutput = false;
             upstream.send(JSON.stringify({ type: 'response.create' }));
             onResponseStarted();
-          }, DEFERRED_RESPONSE_CREATE_TIMEOUT_MS);
+          }, deferredResponseCreateTimeoutMs);
           // Issue #487 / voice-commerce: Signal "agent is working" so the component can clear "waiting for next
           // agent message" and allow idle timeout to run once the turn completes.
           if (clientWs.readyState === WebSocket.OPEN) {

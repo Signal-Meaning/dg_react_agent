@@ -188,6 +188,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    */
   let mockSendResponseDoneOnlyAfterFunctionCallOutput = false;
   /**
+   * Issue #522: when true, on function_call_output mock does NOT send response.done or response.output_text.done.
+   * Used to test proxy timeout path (proxy sends response.create after deferredResponseCreateTimeoutMs).
+   */
+  let mockWithholdCompletionAfterFunctionCallOutput = false;
+  /**
    * Issue #482 (voice-commerce #956): when true, on response.create mock sends error (idle_timeout) BEFORE
    * response.output_text.done. Reproduces upstream closing before final assistant message; proxy must still
    * deliver ConversationText (assistant) before Error so the UI can show the bubble.
@@ -271,9 +276,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             receivedConversationItems.push({ type: msg.type, item: msg.item });
             itemCreateCount++;
             lastItemCreateRole = msg.item?.role;
-            // Issue #470: proxy defers response.create until output_text.done (or response.done) after function_call_output.
+            // Issue #470 / #522: proxy defers response.create until output_text.done (or response.done) after function_call_output.
             if (msg.item?.type === 'function_call_output') {
-              if (mockSendResponseDoneOnlyAfterFunctionCallOutput) {
+              if (mockWithholdCompletionAfterFunctionCallOutput) {
+                // Issue #522: do not send completion; proxy will send response.create after timeout.
+              } else if (mockSendResponseDoneOnlyAfterFunctionCallOutput) {
                 socket.send(JSON.stringify({ type: 'response.done', response_id: 'resp_1' }));
               } else {
                 socket.send(JSON.stringify({
@@ -1228,6 +1235,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           setTimeout(() => finish(), 1000);
         }
       } catch (e) {
+        // Issue #480: proxy may send binary (e.g. PCM) that starts with 0x7b; ignore parse failure
+        if (e instanceof SyntaxError) return;
         finish(e as Error);
       }
     });
@@ -3939,6 +3948,184 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     }, 5000);
     client.on('error', (err) => finish(err));
   }, 8000);
+
+  /**
+   * Issue #522: Proxy must not send response.create until upstream has sent response.output_text.done (or response.done)
+   * after function_call_output. Asserts order: response.create appears only after the completion event (mock sends
+   * output_text.done when it receives function_call_output, so proxy's response.create follows).
+   */
+  itMockOnly('Issue #522: proxy does not send response.create until upstream sends completion after function_call_output (order)', (done) => {
+    mockReceived.length = 0;
+    receivedConversationItems.length = 0;
+    mockSendFunctionCallAfterSession = true;
+    mockSendResponseDoneOnlyAfterFunctionCallOutput = false;
+    let finished = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) { done(err); return; }
+      const itemCreateIndices = mockReceived.map((m, i) => (m.type === 'conversation.item.create' ? i : -1)).filter((i) => i >= 0);
+      const responseCreateIdx = mockReceived.findIndex((m) => m.type === 'response.create');
+      expect(responseCreateIdx).toBeGreaterThanOrEqual(0);
+      const lastItemCreateIdx = itemCreateIndices[itemCreateIndices.length - 1];
+      expect(lastItemCreateIdx).toBeLessThan(responseCreateIdx);
+      const lastItem = receivedConversationItems[receivedConversationItems.length - 1];
+      expect(lastItem?.item?.type).toBe('function_call_output');
+      done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }> };
+        if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+          client.send(JSON.stringify({
+            type: 'FunctionCallResponse',
+            id: msg.functions[0].id,
+            name: msg.functions[0].name,
+            content: '{"time":"12:00"}',
+          }));
+          setTimeout(() => finish(), 1500);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => finish(err));
+    setTimeout(() => { if (!finished) finish(new Error('Issue #522 order test timeout')); }, 5000);
+  }, 8000);
+
+  /**
+   * Issue #522: When upstream (mock) sends response.output_text.done after function_call_output, proxy must forward
+   * completion to the client as AgentAudioDone. Trust only after E2E 6b (openai-proxy-e2e.spec.js) has passed with
+   * real API (backend + test-app running, USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b").
+   */
+  itMockOnly('Issue #522: after FunctionCallResponse client receives AgentAudioDone when upstream sends completion (mock)', (done) => {
+    mockSendFunctionCallAfterSession = true;
+    mockSendResponseDoneOnlyAfterFunctionCallOutput = false;
+    let sentFunctionCallResponse = false;
+    let receivedAgentAudioDone = false;
+    let finished = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try { client.close(); } catch { /* ignore */ }
+      if (err) { done(err); return; }
+      expect(sentFunctionCallResponse).toBe(true);
+      expect(receivedAgentAudioDone).toBe(true);
+      done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }> };
+        if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+          client.send(JSON.stringify({
+            type: 'FunctionCallResponse',
+            id: msg.functions[0].id,
+            name: msg.functions[0].name,
+            content: '{"time":"12:00"}',
+          }));
+          sentFunctionCallResponse = true;
+        }
+        if (msg.type === 'AgentAudioDone' && sentFunctionCallResponse) {
+          receivedAgentAudioDone = true;
+          finish();
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => finish(err));
+    setTimeout(() => { if (!finished) finish(new Error('Issue #522: did not receive AgentAudioDone within 3s')); }, 3000);
+  }, 5000);
+
+  /**
+   * Issue #522: When upstream withholds completion (does not send response.done/output_text.done after function_call_output),
+   * proxy must send response.create after deferredResponseCreateTimeoutMs so the conversation can continue (REQUIRED-UPSTREAM-CONTRACT.md).
+   * Uses a second proxy with short timeout (500ms) so the test completes quickly.
+   */
+  describe('Issue #522 deferred response.create timeout path', () => {
+    let proxyServer522: http.Server | null = null;
+    let proxyPort522: number;
+    const DEFERRED_TIMEOUT_MS = 500;
+
+    beforeAll(async () => {
+      if (useRealAPIs) return;
+      const server = http.createServer((_req, res) => {
+        res.writeHead(404);
+        res.end();
+      });
+      await new Promise<void>((resolve) => server.listen(0, () => resolve()));
+      proxyPort522 = (server.address() as { port: number }).port;
+      proxyServer522 = server;
+      createOpenAIProxyServer({
+        server,
+        path: PROXY_PATH,
+        upstreamUrl: `ws://localhost:${mockPort}`,
+        deferredResponseCreateTimeoutMs: DEFERRED_TIMEOUT_MS,
+      });
+    });
+
+    afterAll((done) => {
+      if (!proxyServer522) { done(); return; }
+      proxyServer522.close(() => { proxyServer522 = null; done(); });
+    });
+
+    itMockOnly('Issue #522: when upstream withholds completion, proxy sends response.create after timeout', (done) => {
+      mockReceived.length = 0;
+      receivedConversationItems.length = 0;
+      mockWithholdCompletionAfterFunctionCallOutput = true;
+      mockSendFunctionCallAfterSession = true;
+      const client = new WebSocket(`ws://localhost:${proxyPort522}${PROXY_PATH}`);
+      let finished = false;
+      const finish = (err?: Error) => {
+        if (finished) return;
+        finished = true;
+        mockWithholdCompletionAfterFunctionCallOutput = false;
+        try { client.close(); } catch { /* ignore */ }
+        if (err) { done(err); return; }
+        const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+        expect(responseCreateCount).toBe(1);
+        const functionCallOutputReceived = receivedConversationItems.some((m) => m.item?.type === 'function_call_output');
+        expect(functionCallOutputReceived).toBe(true);
+        done();
+      };
+      client.on('open', () => {
+        client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      });
+      client.on('message', (data: Buffer) => {
+        if (data.length === 0 || data[0] !== 0x7b) return;
+        try {
+          const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }> };
+          if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+            client.send(JSON.stringify({
+              type: 'FunctionCallResponse',
+              id: msg.functions[0].id,
+              name: msg.functions[0].name,
+              content: '{"time":"12:00"}',
+            }));
+          }
+        } catch {
+          // ignore
+        }
+      });
+      client.on('error', (err) => finish(err));
+      // Wait for timeout (500ms) + buffer; then assert mock received response.create
+      setTimeout(() => {
+        if (finished) return;
+        finish();
+      }, DEFERRED_TIMEOUT_MS + 800);
+    }, 5000);
+  });
 
   /**
    * Issue #470: When upstream sends response.done (and no response.output_text.done) after function_call_output,
