@@ -43,6 +43,9 @@
 - [x] **CI:** Test job passes (lint, test:mock, build, package validation); publish job runs and publishes to GitHub Package Registry
 - [x] **Tag:** After publish succeeds, ensure tag `vX.Y.Z` exists and is pushed
 - [x] **Verify install:** Test install from registry at `@signal-meaning/voice-agent-react@vX.Y.Z` (and backend if released)
+- [ ] **Apply `latest` dist-tag:** Only for packages published in this release (do not tag the other package when doing a frontend-only or backend-only release). Run with registry auth:
+  - React: `npm dist-tag add @signal-meaning/voice-agent-react@0.10.2 latest --registry https://npm.pkg.github.com`
+  - Backend: `npm dist-tag add @signal-meaning/voice-agent-backend@0.2.7 latest --registry https://npm.pkg.github.com`
 
 ---
 
@@ -65,3 +68,5 @@
 | Audit | `npm audit --audit-level=high` |
 | Version bump | `npm version patch` |
 | Release docs validation | `npm run validate:release-docs vX.Y.Z` |
+| Apply latest (React) | `npm dist-tag add @signal-meaning/voice-agent-react@0.10.2 latest --registry https://npm.pkg.github.com` |
+| Apply latest (backend) | `npm dist-tag add @signal-meaning/voice-agent-backend@0.2.7 latest --registry https://npm.pkg.github.com` |

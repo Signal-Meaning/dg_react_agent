@@ -121,6 +121,16 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
   - [ ] Test: Install from `@signal-meaning/voice-agent-react@vX.X.X`
   - [ ] If releasing backend: Install from `@signal-meaning/voice-agent-backend@<version>` (see `packages/voice-agent-backend/README.md` for registry config)
   - [ ] Verify: Package(s) work correctly in test environment
+- [ ] **Apply `latest` dist-tag** (only to packages published in this release)
+  - [ ] **Important:** Apply `latest` only to each package that was version-bumped and published in this release. When one package is rolled forward independently (e.g. backend-only or frontend-only release), do **not** run `dist-tag add` for the other package—otherwise you would move that package’s `latest` without a new release.
+  - [ ] If you published the **React** package:  
+    `npm dist-tag add @signal-meaning/voice-agent-react@X.X.X latest --registry https://npm.pkg.github.com`
+  - [ ] If you published the **backend** package:  
+    `npm dist-tag add @signal-meaning/voice-agent-backend@X.Y.Z latest --registry https://npm.pkg.github.com`  
+    (use the version from `packages/voice-agent-backend/package.json`)
+  - [ ] Verify (optional):  
+    `npm view @signal-meaning/voice-agent-react dist-tags --registry https://npm.pkg.github.com`  
+    `npm view @signal-meaning/voice-agent-backend dist-tags --registry https://npm.pkg.github.com`
 
 #### GitHub Release
 - [ ] **Create GitHub Release**: Create release on GitHub
