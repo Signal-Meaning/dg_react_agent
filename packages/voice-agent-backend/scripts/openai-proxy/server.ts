@@ -347,15 +347,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             body: 'FunctionCallResponse from client → function_call_output sent to upstream',
             attributes: { ...connectionAttrs },
           });
-          // Issue #489 / G.6: Real API sends response.done in the same batch as (or before) our FunctionCallResponse.
-          // So we never see response.output_text.done or response.done *after* function_call_output; the response
-          // is already closed. Send response.create immediately so the next turn starts and the model can reply
-          // with the function result (e.g. "The time is 2:30 PM"). We still set the flag so that if we *do*
-          // receive response.done or output_text.done later (different API ordering), we don't double-send.
+          // Issue #522 / #462 / #470: Do NOT send response.create here. The API allows only one active response
+          // at a time. Sending response.create before the server has sent response.done (or response.output_text.done)
+          // causes conversation_already_has_active_response (voice-commerce #1066). Defer response.create until
+          // we receive response.output_text.done or response.done from upstream; those handlers send it when
+          // pendingResponseCreateAfterFunctionCallOutput is true.
           pendingResponseCreateAfterFunctionCallOutput = true;
-          upstream.send(JSON.stringify({ type: 'response.create' }));
-          onResponseStarted();
-          pendingResponseCreateAfterFunctionCallOutput = false;
           // Issue #487 / voice-commerce: Signal "agent is working" so the component can clear "waiting for next
           // agent message" and allow idle timeout to run once the turn completes.
           if (clientWs.readyState === WebSocket.OPEN) {
@@ -578,13 +575,18 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           const componentError = mapErrorToComponentError(msg as Parameters<typeof mapErrorToComponentError>[0]);
           const isExpectedClosure =
             componentError.code === 'idle_timeout' || componentError.code === 'session_max_duration';
+          // Issue #522: Do not treat conversation_already_has_active_response as fatal. Log at INFO and do not
+          // forward to the client so the component does not trigger reconnection/re-Settings and duplicate function calls.
+          const isConversationAlreadyHasActiveResponse = componentError.code === 'conversation_already_has_active_response';
           {
             const logBody = isExpectedClosure
               ? `expected closure (${componentError.code}): ${msg.error?.message ?? componentError.code}`
-              : (msg.error?.message ?? String(msg));
+              : isConversationAlreadyHasActiveResponse
+                ? `non-fatal (${componentError.code}): ${msg.error?.message ?? componentError.code} — not forwarded to client`
+                : (msg.error?.message ?? String(msg));
             emitLog({
-              severityNumber: isExpectedClosure ? SeverityNumber.INFO : SeverityNumber.ERROR,
-              severityText: isExpectedClosure ? 'INFO' : 'ERROR',
+              severityNumber: isExpectedClosure || isConversationAlreadyHasActiveResponse ? SeverityNumber.INFO : SeverityNumber.ERROR,
+              severityText: isExpectedClosure || isConversationAlreadyHasActiveResponse ? 'INFO' : 'ERROR',
               body: logBody,
               attributes: {
                 ...connectionAttrs,
@@ -598,7 +600,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // Issue #482: Buffer idle_timeout only when a response is in progress (we may still get output_text.done); otherwise send immediately.
           if (componentError.code === 'idle_timeout' && responseInProgress && clientWs.readyState === WebSocket.OPEN) {
             pendingIdleTimeoutError = componentError;
-          } else {
+          } else if (!isConversationAlreadyHasActiveResponse) {
             clientWs.send(JSON.stringify(componentError));
           }
         } else if (msg.type === 'input_audio_buffer.speech_started') {

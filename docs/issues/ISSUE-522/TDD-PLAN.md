@@ -73,8 +73,8 @@
 
 ### 2.2 GREEN — Implementation
 
-- [ ] **Proxy:** In the upstream `error` message handler in `server.ts`, if `componentError.code === 'conversation_already_has_active_response'`, either: do not forward the error to the client, or forward it with a type/flag that the component treats as non-fatal (no reconnect/re-Settings). Confirm with product/backlog whether we should suppress, forward as warning, or forward as a specific non-fatal error code.
-- [ ] **Component (if applicable):** If the component treats any backend Error as fatal and re-Settings, add a branch so that when the error code is `conversation_already_has_active_response` it does **not** trigger reconnection or re-Settings. Optionally still surface a non-fatal warning to the app.
+- [x] **Proxy:** In the upstream `error` message handler in `server.ts`, if `componentError.code === 'conversation_already_has_active_response'`, log at INFO and **do not forward** the error to the client (client never sees it, so no reconnect/re-Settings).
+- [ ] **Component (if applicable):** If the component treats any backend Error as fatal and re-Settings, add a branch so that when the error code is `conversation_already_has_active_response` it does **not** trigger reconnection or re-Settings. Optionally still surface a non-fatal warning to the app. (Not required when proxy suppresses the error.)
 
 **Done when:** The API error no longer triggers retries or re-Settings; tests from 2.1 pass (GREEN).
 
