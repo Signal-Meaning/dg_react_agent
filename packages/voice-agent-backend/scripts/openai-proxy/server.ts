@@ -62,6 +62,13 @@ import {
 /** Debounce delay (ms) after last binary chunk before sending commit + response.create. Must be long enough for upstream to process appends (real API returns "buffer too small ... 0.00ms" if commit is sent too soon). */
 const INPUT_AUDIO_COMMIT_DEBOUNCE_MS = 400;
 
+/**
+ * Required upstream contract (REQUIRED-UPSTREAM-CONTRACT.md): After we send function_call_output, the API MUST
+ * send response.done or response.output_text.done so we can send the deferred response.create. If the API does
+ * not within this window, we log a contract violation and send response.create anyway to unstick the flow.
+ */
+const DEFERRED_RESPONSE_CREATE_TIMEOUT_MS = 20000;
+
 /** Connection counter for stable short ids in logs */
 let connectionCounter = 0;
 
@@ -156,6 +163,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let hadContextInLastSettings = false;
     /** Issue #462 / #470: After sending function_call_output, defer response.create until we receive response.output_text.done so the API can close the previous response first (avoids conversation_already_has_active_response). */
     let pendingResponseCreateAfterFunctionCallOutput = false;
+    /** Timeout: if upstream never sends response.done/output_text.done after function_call_output, unstick by sending response.create (REQUIRED-UPSTREAM-CONTRACT.md). */
+    let deferredResponseCreateTimeoutId: ReturnType<typeof setTimeout> | null = null;
     /** Issue #482: Have we sent AgentStartedSpeaking for the current response? So component sees "agent active" before ConversationText (avoids client idle timeout). Reset when response ends. */
     let hasSentAgentStartedSpeakingForCurrentResponse = false;
     /** Issue #482 / #489: Have we sent AgentAudioDone for the current response? AgentAudioDone = receipt complete only (legacy); we also send AgentDone for semantic "agent done" so the wire has the correct signal. See docs/issues/ISSUE-489/AGENT-DONE-SEMANTICS-AND-NAMING.md. */
@@ -251,6 +260,10 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         },
       });
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
+      if (deferredResponseCreateTimeoutId) {
+        clearTimeout(deferredResponseCreateTimeoutId);
+        deferredResponseCreateTimeoutId = null;
+      }
       clientWs.close();
     });
     upstream.on('close', (code, reason) => {
@@ -266,6 +279,10 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         },
       });
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
+      if (deferredResponseCreateTimeoutId) {
+        clearTimeout(deferredResponseCreateTimeoutId);
+        deferredResponseCreateTimeoutId = null;
+      }
     });
 
     const forwardClientMessage = (raw: Buffer) => {
@@ -353,6 +370,27 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // we receive response.output_text.done or response.done from upstream; those handlers send it when
           // pendingResponseCreateAfterFunctionCallOutput is true.
           pendingResponseCreateAfterFunctionCallOutput = true;
+          // Enforce required upstream contract (REQUIRED-UPSTREAM-CONTRACT.md): if API never sends completion,
+          // unstick after timeout so the client can get a next turn instead of hanging until idle timeout.
+          if (deferredResponseCreateTimeoutId) clearTimeout(deferredResponseCreateTimeoutId);
+          deferredResponseCreateTimeoutId = setTimeout(() => {
+            deferredResponseCreateTimeoutId = null;
+            if (!pendingResponseCreateAfterFunctionCallOutput || upstream.readyState !== WebSocket.OPEN) return;
+            emitLog({
+              severityNumber: SeverityNumber.ERROR,
+              severityText: 'ERROR',
+              body: `Required upstream contract violated: upstream did not send response.done or response.output_text.done after function_call_output within ${DEFERRED_RESPONSE_CREATE_TIMEOUT_MS}ms. Sending response.create to unstick; see REQUIRED-UPSTREAM-CONTRACT.md.`,
+              attributes: {
+                ...connectionAttrs,
+                [ATTR_DIRECTION]: 'upstream→client',
+                [ATTR_MESSAGE_TYPE]: 'contract_violation',
+                'timeout_ms': String(DEFERRED_RESPONSE_CREATE_TIMEOUT_MS),
+              },
+            });
+            pendingResponseCreateAfterFunctionCallOutput = false;
+            upstream.send(JSON.stringify({ type: 'response.create' }));
+            onResponseStarted();
+          }, DEFERRED_RESPONSE_CREATE_TIMEOUT_MS);
           // Issue #487 / voice-commerce: Signal "agent is working" so the component can clear "waiting for next
           // agent message" and allow idle timeout to run once the turn completes.
           if (clientWs.readyState === WebSocket.OPEN) {
@@ -529,6 +567,10 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           onResponseEnded();
           // Issue #462 / #470: After function_call_output we deferred response.create; send it now so the API can start the next turn.
           if (pendingResponseCreateAfterFunctionCallOutput) {
+            if (deferredResponseCreateTimeoutId) {
+              clearTimeout(deferredResponseCreateTimeoutId);
+              deferredResponseCreateTimeoutId = null;
+            }
             pendingResponseCreateAfterFunctionCallOutput = false;
             upstream.send(JSON.stringify({ type: 'response.create' }));
             onResponseStarted();
@@ -720,6 +762,10 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // If we deferred response.create after function_call_output, send it now so the next turn can start.
           onResponseEnded();
           if (pendingResponseCreateAfterFunctionCallOutput) {
+            if (deferredResponseCreateTimeoutId) {
+              clearTimeout(deferredResponseCreateTimeoutId);
+              deferredResponseCreateTimeoutId = null;
+            }
             pendingResponseCreateAfterFunctionCallOutput = false;
             upstream.send(JSON.stringify({ type: 'response.create' }));
             onResponseStarted();

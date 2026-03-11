@@ -6,6 +6,8 @@
 
 **Principle:** Tests first (RED), then implementation (GREEN), then refactor. All checkboxes start unchecked; check each when that step is **done**.
 
+**Recovery (new chat):** Fixes 1 & 2 are done (v0.10.3). Post–v0.10.3 voice-commerce reported "no agent response after search" — API not sending `response.done`/`response.output_text.done` after `function_call_output`. We added: (1) **REQUIRED-UPSTREAM-CONTRACT.md** (proxy dir) documenting the API contract; (2) **20s proxy timeout** — if no completion event, log ERROR and send `response.create` anyway to unstick; (3) contract doc ties real-API test to enforcement. See **Follow-up** section and **References** (REQUIRED-UPSTREAM-CONTRACT.md). Pending: optional release-checklist bullet naming the "after FunctionCallResponse client receives AgentAudioDone" test; run real-API + E2E 6b when qualifying.
+
 ---
 
 ## Checkbox legend
@@ -55,8 +57,8 @@
 
 ### 1.3 REFACTOR
 
-- [ ] Simplify or add comments in `server.ts` so the “defer until completion” contract is clear for future readers.
-- [ ] **Done when:** Code is clear and tests remain green.
+- [x] Simplify or add comments in `server.ts` so the “defer until completion” contract is clear for future readers. (Contract and timeout documented in REQUIRED-UPSTREAM-CONTRACT.md and enforced via timeout; see Follow-up below.)
+- [x] **Done when:** Code is clear and tests remain green.
 
 ---
 
@@ -80,8 +82,8 @@
 
 ### 2.3 REFACTOR
 
-- [ ] Align error handling with other “expected” or “recoverable” API errors (e.g. `idle_timeout`) if applicable. Document in protocol or types which error codes are non-fatal.
-- [ ] **Done when:** Behavior is consistent and tests remain green.
+- [x] Align error handling with other “expected” or “recoverable” API errors (e.g. `idle_timeout`) if applicable. Document in protocol or types which error codes are non-fatal. (Documented in PROTOCOL-AND-MESSAGE-ORDERING.md §5 error row; `conversation_already_has_active_response` logged INFO, not forwarded.)
+- [x] **Done when:** Behavior is consistent and tests remain green.
 
 ---
 
@@ -97,11 +99,26 @@
 
 ---
 
+## Follow-up: Enforcing the required upstream contract (post–v0.10.3)
+
+**Context:** After v0.10.3, voice-commerce reported "no agent response after the search" — the proxy correctly deferred `response.create` until `response.done`/`response.output_text.done`, but in their environment the **real API was not sending** those events after `function_call_output`, so the proxy waited indefinitely and the client hit idle timeout. We had the spec but were not **enforcing** it.
+
+**Done:**
+
+- [x] **Document required upstream contract:** Added `packages/voice-agent-backend/scripts/openai-proxy/REQUIRED-UPSTREAM-CONTRACT.md`. States: after we send `function_call_output`, the API **MUST** send `response.done` or `response.output_text.done` within a reasonable time; if not, the next turn never starts. References PROTOCOL-AND-MESSAGE-ORDERING and server.ts.
+- [x] **Proxy timeout (enforcement + recovery):** In `server.ts`, when we set `pendingResponseCreateAfterFunctionCallOutput = true` after FunctionCallResponse, we start a 20s timer (`DEFERRED_RESPONSE_CREATE_TIMEOUT_MS`). If the upstream has not sent `response.done` or `response.output_text.done` when the timer fires: log **ERROR** ("Required upstream contract violated: upstream did not send response.done or response.output_text.done after function_call_output within Nms"), then send the deferred `response.create` anyway so the conversation can continue instead of hanging. Timer is cleared when we receive completion or on upstream close/error.
+- [x] **Tie real-API test to contract:** REQUIRED-UPSTREAM-CONTRACT.md § Enforcement states that the test *"Issue #489 real-API: after FunctionCallResponse client receives AgentAudioDone"* enforces the contract when run with `USE_REAL_APIS=1`; release checklist (`.github/ISSUE_TEMPLATE/release-checklist.md`) already requires real-API integration tests for proxy/API behavior releases. No change to checklist text was made; the contract doc explicitly names this test as the enforcement.
+
+**Handoff for new chat:** If continuing work on #522 or voice-commerce #1066: (1) Run real-API integration test and E2E 6b when keys available; (2) If "no agent response" persists, check proxy/backend logs for *"Required upstream contract violated"* — that confirms the API is not sending completion and the timeout unstick has fired; (3) Optional: add a release-checklist bullet that explicitly says "Run test 'after FunctionCallResponse client receives AgentAudioDone' with real API when qualifying proxy releases" if you want it spelled out in the template.
+
+---
+
 ## References
 
 - **Issue:** [#522](https://github.com/Signal-Meaning/dg_react_agent/issues/522)
 - **Consumer:** voice-commerce Issue #1066
 - **Protocol:** `packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md`
-- **Proxy logic:** `packages/voice-agent-backend/scripts/openai-proxy/server.ts` (FunctionCallResponse branch ~305–363; `response.output_text.done` ~529–546; `response.done` ~708–724)
+- **Required contract:** `packages/voice-agent-backend/scripts/openai-proxy/REQUIRED-UPSTREAM-CONTRACT.md` — API must send response.done/output_text.done after function_call_output; proxy enforces via 20s timeout + unstick.
+- **Proxy logic:** `packages/voice-agent-backend/scripts/openai-proxy/server.ts` (FunctionCallResponse branch; `response.output_text.done` / `response.done` handlers; `DEFERRED_RESPONSE_CREATE_TIMEOUT_MS`, `deferredResponseCreateTimeoutId`)
 - **Related issues:** #459 (session.update race), #462 (audio.done vs text.done), #470 (defer response.create until output_text.done/response.done), #489 (idle timeout; introduced immediate response.create after function_call_output)
 - **OpenAI Realtime API:** [response.create](https://platform.openai.com/docs/api-reference/realtime-client-events/response/create), [response.done](https://platform.openai.com/docs/api-reference/realtime-server-events/response/done) — only one response active at a time for the default conversation.
