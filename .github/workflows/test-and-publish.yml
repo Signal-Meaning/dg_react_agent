@@ -355,6 +355,23 @@ jobs:
             exit $EXIT_CODE
           }
           echo "✅ voice-agent-backend published successfully"
+
+      # Apply npm dist-tag "latest" only to packages we actually published (skip when version existed and we didn't publish).
+      - name: Apply latest dist-tag (voice-agent-react)
+        if: steps.check_version.outputs.version_exists != 'true' || inputs.force == 'true'
+        run: |
+          V="${{ steps.version.outputs.version }}"
+          echo "📌 Applying dist-tag 'latest' to @signal-meaning/voice-agent-react@$V"
+          npm dist-tag add @signal-meaning/voice-agent-react@$V latest --registry https://npm.pkg.github.com
+          echo "✅ latest dist-tag applied"
+
+      - name: Apply latest dist-tag (voice-agent-backend)
+        if: steps.check_backend_version.outputs.version_exists != 'true' || inputs.force == 'true'
+        run: |
+          V="${{ steps.backend_version.outputs.version }}"
+          echo "📌 Applying dist-tag 'latest' to @signal-meaning/voice-agent-backend@$V"
+          npm dist-tag add @signal-meaning/voice-agent-backend@$V latest --registry https://npm.pkg.github.com
+          echo "✅ latest dist-tag applied"
           
       - name: Verify package installation
         run: |
