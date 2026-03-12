@@ -195,6 +195,17 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       hasSentAgentStartedSpeakingForCurrentResponse = false;
       hasSentAgentAudioDoneForCurrentResponse = false;
     };
+
+    /** Issue #522: Send deferred response.create after function_call_output (REQUIRED-UPSTREAM-CONTRACT.md). Clears timeout, resets flag, sends response.create, calls onResponseStarted. Call only when pendingResponseCreateAfterFunctionCallOutput is true. */
+    const sendDeferredResponseCreate = (): void => {
+      if (deferredResponseCreateTimeoutId) {
+        clearTimeout(deferredResponseCreateTimeoutId);
+        deferredResponseCreateTimeoutId = null;
+      }
+      pendingResponseCreateAfterFunctionCallOutput = false;
+      upstream.send(JSON.stringify({ type: 'response.create' }));
+      onResponseStarted();
+    };
     const onResponseEnded = (): void => {
       responseInProgress = false;
       hasSentAgentStartedSpeakingForCurrentResponse = false;
@@ -418,9 +429,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
                 'timeout_ms': String(deferredResponseCreateTimeoutMs),
               },
             });
-            pendingResponseCreateAfterFunctionCallOutput = false;
-            upstream.send(JSON.stringify({ type: 'response.create' }));
-            onResponseStarted();
+            sendDeferredResponseCreate();
           }, deferredResponseCreateTimeoutMs);
           // Issue #487 / voice-commerce: Signal "agent is working" so the component can clear "waiting for next
           // agent message" and allow idle timeout to run once the turn completes.
@@ -601,13 +610,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           onResponseEnded();
           // Issue #462 / #470: After function_call_output we deferred response.create; send it now so the API can start the next turn.
           if (pendingResponseCreateAfterFunctionCallOutput) {
-            if (deferredResponseCreateTimeoutId) {
-              clearTimeout(deferredResponseCreateTimeoutId);
-              deferredResponseCreateTimeoutId = null;
-            }
-            pendingResponseCreateAfterFunctionCallOutput = false;
-            upstream.send(JSON.stringify({ type: 'response.create' }));
-            onResponseStarted();
+            sendDeferredResponseCreate();
           }
           emitLog({
             severityNumber: SeverityNumber.INFO,
@@ -796,13 +799,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // If we deferred response.create after function_call_output, send it now so the next turn can start.
           onResponseEnded();
           if (pendingResponseCreateAfterFunctionCallOutput) {
-            if (deferredResponseCreateTimeoutId) {
-              clearTimeout(deferredResponseCreateTimeoutId);
-              deferredResponseCreateTimeoutId = null;
-            }
-            pendingResponseCreateAfterFunctionCallOutput = false;
-            upstream.send(JSON.stringify({ type: 'response.create' }));
-            onResponseStarted();
+            sendDeferredResponseCreate();
           }
         } else if (msg.type === 'response.created') {
           // Real API sends response.created when a response is created (e.g. after our response.create). Control event only; no component message (Epic #493).
@@ -910,13 +907,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           if (msg.type === 'conversation.item.done' && pendingResponseCreateAfterFunctionCallOutput) {
             const itemType = (msg as { item?: { type?: string } }).item?.type;
             if (itemType === 'function_call_output') {
-              if (deferredResponseCreateTimeoutId) {
-                clearTimeout(deferredResponseCreateTimeoutId);
-                deferredResponseCreateTimeoutId = null;
-              }
-              pendingResponseCreateAfterFunctionCallOutput = false;
-              upstream.send(JSON.stringify({ type: 'response.create' }));
-              onResponseStarted();
+              sendDeferredResponseCreate();
             }
           }
           // Issue #388 / #414: decrement the counter once per unique item; send response.create when all pending items are confirmed.
