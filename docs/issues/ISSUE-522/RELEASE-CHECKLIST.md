@@ -8,7 +8,7 @@
 
 ---
 
-## Release vX.X.X (replace with actual version)
+## Release v0.10.3
 
 ### Overview
 
@@ -20,20 +20,20 @@
 
 ### Pre-Release Preparation
 
-- [ ] **Code review complete:** All PRs merged and reviewed
-- [ ] **Tests passing**
-  - [ ] **Run what CI runs:** `npm run lint` then `npm run test:mock` (must pass)
-  - [ ] **E2E in proxy mode:** From test-app: start backend (`npm run backend`), then `USE_PROXY_MODE=true npm run test:e2e` (or focused: `-- openai-proxy-e2e.spec.js --grep '6\\.|6b'`). All must pass.
-  - [ ] **Real-API qualification (required for proxy/API behavior):** When `OPENAI_API_KEY` available:
-    - [ ] `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — in-scope tests pass
-    - [ ] From test-app (backend + dev server running): `E2E_USE_EXISTING_SERVER=1 USE_REAL_APIS=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js --grep '6\\.'` — test 6 passes
-    - [ ] Same env: `--grep '6b'` — test 6b passes (0 recoverable errors, partner scenario)
-  - [ ] **Upstream event coverage (proxy release):** `npm test -- tests/openai-proxy-event-coverage.test.ts` — passes
-- [ ] **Linting clean:** `npm run lint` — no errors
-- [ ] **npm audit:** `npm audit --audit-level=high` — exit 0 (required for CI)
-- [ ] **Documentation updated:** ISSUE-522 docs (TDD-PLAN, FINDINGS, REMAINING-STEPS, this checklist); REQUIRED-UPSTREAM-CONTRACT.md, PROTOCOL-AND-MESSAGE-ORDERING.md, UPSTREAM-EVENT-COMPLETE-MAP.md
-- [ ] **API changes documented:** None (proxy internal behavior only)
-- [ ] **Breaking changes documented:** None
+- [x] **Code review complete:** All PRs merged and reviewed
+- [x] **Tests passing**
+  - [x] **Run what CI runs:** `npm run lint` then `npm run test:mock` (must pass)
+  - [x] **E2E in proxy mode:** From test-app: start backend (`npm run backend`), then `USE_PROXY_MODE=true npm run test:e2e` (or focused: `-- openai-proxy-e2e.spec.js --grep '6\\.|6b'`). All must pass.
+  - [x] **Real-API qualification (required for proxy/API behavior):** When `OPENAI_API_KEY` available:
+    - [x] `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — in-scope tests pass
+    - [x] From test-app (backend + dev server running): `E2E_USE_EXISTING_SERVER=1 USE_REAL_APIS=1 USE_PROXY_MODE=true npm run test:e2e -- openai-proxy-e2e.spec.js --grep '6\\.'` — test 6 passes
+    - [x] Same env: `--grep '6b'` — test 6b passes (0 recoverable errors, partner scenario)
+  - [x] **Upstream event coverage (proxy release):** `npm test -- tests/openai-proxy-event-coverage.test.ts` — passes
+- [x] **Linting clean:** `npm run lint` — no errors
+- [x] **npm audit:** `npm audit --audit-level=high` — exit 0 (required for CI)
+- [x] **Documentation updated:** ISSUE-522 docs (TDD-PLAN, FINDINGS, REMAINING-STEPS, this checklist); REQUIRED-UPSTREAM-CONTRACT.md, PROTOCOL-AND-MESSAGE-ORDERING.md, UPSTREAM-EVENT-COMPLETE-MAP.md
+- [x] **API changes documented:** None (proxy internal behavior only)
+- [x] **Breaking changes documented:** None
 
 #### Optional (recommended where easy)
 
@@ -45,62 +45,62 @@
 
 ### Version Management
 
-- [ ] **Bump version:** Update `packages/voice-agent-backend/package.json` to target version (e.g. patch)
-- [ ] **Root package (if changed):** If root or component changed, bump root `package.json` per release policy
+- [x] **Bump version:** Update `packages/voice-agent-backend/package.json` to target version (0.2.8)
+- [x] **Root package (if changed):** Root `package.json` at 0.10.3 for this release
 - [ ] **Update dependencies (optional):** `npm update`; review if needed
 
 ---
 
 ### Build and Package (CI performs build)
 
-- [ ] **Do not run build/package locally for release.** CI builds and validates on GitHub release creation.
+- [x] **Do not run build/package locally for release.** CI builds and validates on GitHub release creation.
 - [ ] **Optional local validation:** `npm run clean && npm run build && npm run validate` (do not commit dist/.tgz)
 
 ---
 
 ### Documentation
 
-- [ ] **Create release documentation:** `docs/releases/vX.X.X/`
-  - [ ] `CHANGELOG.md` (Keep a Changelog format) — include Issue #522 fix: deferred response.create; completion on response.done / response.output_text.done / conversation.item.done (function_call_output); 20s timeout unstick; conversation_already_has_active_response not forwarded
-  - [ ] `RELEASE-NOTES.md` — note partner validation: voice-commerce (and others) can run E2E test 6b after upgrading (from test-app: backend + dev server, `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b"`)
-  - [ ] Other files per template: `MIGRATION.md` if breaking, `NEW-FEATURES.md`, `API-CHANGES.md`, `EXAMPLES.md`, `PACKAGE-STRUCTURE.md` (from `docs/releases/PACKAGE-STRUCTURE.template.md`)
-- [ ] **Validate documentation:** `npm run validate:release-docs X.X.X`
-- [ ] **Review documentation:** Completeness, links, typos
+- [x] **Create release documentation:** `docs/releases/v0.10.3/` _(done before release)_
+  - [x] `CHANGELOG.md` (Keep a Changelog format) — include Issue #522 fix: deferred response.create; completion on response.done / response.output_text.done / conversation.item.done (function_call_output); 20s timeout unstick; conversation_already_has_active_response not forwarded
+  - [x] `RELEASE-NOTES.md` — note partner validation: voice-commerce (and others) can run E2E test 6b after upgrading (from test-app: backend + dev server, `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b"`)
+  - [x] Other files per template: patch set — `PACKAGE-STRUCTURE.md` (from template); no MIGRATION/NEW-FEATURES/API-CHANGES/EXAMPLES for patch
+- [x] **Validate documentation:** `npm run validate:release-docs 0.10.3` — passed
+- [x] **Review documentation:** Completeness, links, typos
 
 ---
 
 ### Git Operations
 
-- [ ] **Commit:** Version bump and release docs (e.g. `chore: prepare release vX.X.X (Issue #522)`)
-- [ ] **Release branch:** Create `release/vX.X.X` (or use `npm run release:issue X.X.X patch` if available). Push branch.
+- [x] **Commit:** Version bump and release docs (e.g. `chore: prepare release v0.10.3 (Issue #522)`)
+- [x] **Release branch:** Create `release/v0.10.3` (or use `npm run release:issue 0.10.3 patch` if available). Push branch.
 
 ---
 
 ### Package Publishing
 
-- [ ] **Publish via CI**
-  - [ ] Create GitHub release: tag `vX.X.X`, target `release/vX.X.X`, description from CHANGELOG/RELEASE-NOTES
-  - [ ] Trigger workflow from release branch (Actions → Run workflow → Branch: release/vX.X.X)
-  - [ ] Monitor CI: test job then publish job
-  - [ ] Verify package(s) in GitHub Packages
-- [ ] **Tag:** Created with GitHub release
+- [x] **Publish via CI**
+  - [x] Create GitHub release: tag `v0.10.3`, target `release/v0.10.3`, description from CHANGELOG/RELEASE-NOTES
+  - [x] Trigger workflow from release branch (Actions → Run workflow → Branch: release/v0.10.3)
+  - [x] Monitor CI: test job then publish job
+  - [x] Verify package(s) in GitHub Packages
+- [x] **Tag:** Created with GitHub release
 - [ ] **Verify installation (optional):** Install from registry and smoke test
-- [ ] **Apply `latest` dist-tag** only to package(s) published in this release (see PUBLISHING-AND-RELEASING.md)
+- [x] **Apply `latest` dist-tag** — applied by CI when publish succeeds (see PUBLISHING-AND-RELEASING.md)
 
 ---
 
 ### GitHub Release
 
-- [ ] **Create GitHub release:** Title `Release vX.X.X`; description with changelog / link to `docs/releases/vX.X.X/`; tag `vX.X.X`; target `release/vX.X.X`
-- [ ] **Labels:** Add `release`, `vX.X.X` to the release / branch as per template
+- [x] **Create GitHub release:** Title `Release v0.10.3`; description with changelog / link to `docs/releases/v0.10.3/`; tag `v0.10.3`; target `release/v0.10.3`
+- [ ] **Labels:** Add `release`, `v0.10.3` to the release / branch as per template
 
 ---
 
 ### Post-Release
 
-- [ ] **Merge to main via PR:** `release/vX.X.X` → `main` (do not push directly to main)
-- [ ] **Partner validation:** Document in release notes that partners (e.g. voice-commerce) can validate with E2E 6b. After release, voice-commerce run their E2E in their repo (e.g. Issue #1066). No action required from this repo beyond release notes.
-- [ ] **Close Issue #522:** When release is published and release notes (and 6b instructions) give partners a clear path to validate, close the GitHub issue.
+- [x] **Merge to main via PR:** `release/v0.10.3` → `main` — **[PR #526](https://github.com/Signal-Meaning/dg_react_agent/pull/526)** created; merge when ready.
+- [x] **Partner validation:** Document in release notes that partners (e.g. voice-commerce) can validate with E2E 6b. After release, voice-commerce run their E2E in their repo (e.g. Issue #1066). No action required from this repo beyond release notes.
+- [ ] **Close Issue #522:** After PR #526 is merged to main, close the GitHub issue.
 
 ---
 
@@ -115,12 +115,12 @@
 
 ### Completion Criteria
 
-- [ ] Lint and test:mock pass (and CI)
-- [ ] Real-API integration and E2E 6/6b pass (or documented exception)
-- [ ] Release docs validated
-- [ ] GitHub release created; CI published package(s)
-- [ ] PR merged: `release/vX.X.X` → `main`
-- [ ] Issue #522 closed after release and release notes published
+- [x] Lint and test:mock pass (and CI)
+- [x] Real-API integration and E2E 6/6b pass (or documented exception)
+- [x] Release docs validated
+- [x] GitHub release created; CI published package(s)
+- [ ] PR merged: `release/v0.10.3` → `main` (PR #526)
+- [ ] Issue #522 closed after PR merge and release notes published
 
 ---
 
