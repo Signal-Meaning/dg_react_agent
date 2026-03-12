@@ -117,8 +117,7 @@ npm run release:issue 1.0.0 major
 1. **Validates Environment**: Checks that the working directory is clean (no uncommitted changes)
 2. **Switches to Main**: Switches to the main branch and pulls latest changes
 3. **Creates GitHub Issue**: Creates a GitHub issue using the appropriate template:
-   - **Patch releases**: Uses `quick-release.md` template (streamlined checklist)
-   - **Minor/Major releases**: Uses `release-checklist.md` template (comprehensive checklist)
+   - **All releases**: Follow `.github/ISSUE_TEMPLATE/release-checklist.md` (patch = minimal docs; minor/major = full doc set).
 4. **Creates Working Branch**: Creates a new branch named `issueNNN` (where NNN is the issue number)
 5. **Switches to New Branch**: Leaves you on the new release branch ready to start work
 

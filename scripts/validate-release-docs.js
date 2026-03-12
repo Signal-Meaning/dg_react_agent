@@ -18,7 +18,7 @@ const releaseDir = path.join(__dirname, '..', 'docs', 'releases', `v${version}`)
 // Based on .github/ISSUE_TEMPLATE/release-checklist.md requirements
 const STANDARD_DOCS = {
   required: {
-    // Patch releases (quick-release.md): Only CHANGELOG.md required
+    // Patch releases (per release-checklist.md): CHANGELOG + PACKAGE-STRUCTURE; optional RELEASE-NOTES
     patch: ['CHANGELOG.md'],
     // Minor/Major releases (release-checklist.md): Full documentation required
     minor: [
