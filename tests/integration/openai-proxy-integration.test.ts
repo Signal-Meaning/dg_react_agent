@@ -208,6 +208,13 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    */
   let mockSendAssistantItemAddedAfterFunctionCallCompletion = false;
   /**
+   * Issue #522: when true, on function_call_output mock sends ONLY conversation.item.added + conversation.item.done
+   * (item type function_call_output), no response.done or response.output_text.done. Proxy treats item.done as
+   * completion signal (REQUIRED-UPSTREAM-CONTRACT.md) and sends response.create; mock then responds to response.create
+   * with the next turn. Isolated test for item.done-as-completion path.
+   */
+  let mockSendItemDoneOnlyAfterFunctionCallOutput = false;
+  /**
    * Issue #482 (voice-commerce #956): when true, on response.create mock sends error (idle_timeout) BEFORE
    * response.output_text.done. Reproduces upstream closing before final assistant message; proxy must still
    * deliver ConversationText (assistant) before Error so the UI can show the bubble.
@@ -295,6 +302,16 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             if (msg.item?.type === 'function_call_output') {
               if (mockWithholdCompletionAfterFunctionCallOutput) {
                 // Issue #522: do not send completion; proxy will send response.create after timeout.
+              } else if (mockSendItemDoneOnlyAfterFunctionCallOutput) {
+                // Issue #522: send only item.added + item.done (no response.done). Proxy uses item.done as completion signal.
+                const fcrItem = {
+                  id: 'item_fcr_mock',
+                  type: 'function_call_output' as const,
+                  call_id: msg.item?.call_id ?? 'call_1',
+                  output: msg.item?.output ?? '{}',
+                };
+                socket.send(JSON.stringify({ type: 'conversation.item.added', item: fcrItem }));
+                socket.send(JSON.stringify({ type: 'conversation.item.done', item: fcrItem }));
               } else if (mockSendResponseDoneThenOutputTextDoneAfterFunctionCallOutput) {
                 socket.send(JSON.stringify({ type: 'response.done', response_id: 'resp_1' }));
                 setTimeout(() => {
@@ -4373,6 +4390,82 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const check = () => {
       if (finished || Date.now() > deadline3) return;
       if (receivedConversationTextWithTime) {
+        finish();
+        return;
+      }
+      setTimeout(check, 80);
+    };
+    setTimeout(check, 500);
+  }, 8000);
+
+  /**
+   * Issue #522 (isolated): Upstream sends ONLY conversation.item.added + conversation.item.done for function_call_output
+   * (no response.done or response.output_text.done). Per OpenAI Realtime API spec, item.done = "item finalized"; proxy
+   * treats item.done for function_call_output as completion signal and sends deferred response.create. Mock then
+   * responds to response.create with next turn. Asserts: exactly one response.create, client receives AgentAudioDone
+   * and ConversationText (Hello from mock). See REQUIRED-UPSTREAM-CONTRACT.md.
+   */
+  itMockOnly('Issue #522: conversation.item.done (function_call_output) triggers deferred response.create; client gets next turn', (done) => {
+    mockReceived.length = 0;
+    mockSendFunctionCallAfterSession = true;
+    mockSendItemDoneOnlyAfterFunctionCallOutput = true;
+    let receivedAgentAudioDone = false;
+    let receivedConversationText = false;
+    let finished = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      mockSendItemDoneOnlyAfterFunctionCallOutput = false;
+      try {
+        client.close();
+      } catch {
+        /* ignore */
+      }
+      if (err) {
+        done(err);
+        return;
+      }
+      const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+      expect(responseCreateCount).toBe(1);
+      expect(receivedAgentAudioDone).toBe(true);
+      expect(receivedConversationText).toBe(true);
+      done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }>; content?: string; role?: string };
+        if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+          client.send(JSON.stringify({
+            type: 'FunctionCallResponse',
+            id: msg.functions[0].id,
+            name: msg.functions[0].name,
+            content: '{"time":"12:00"}',
+          }));
+        }
+        if (msg.type === 'AgentAudioDone' || msg.type === 'AgentDone') {
+          receivedAgentAudioDone = true;
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant' && typeof msg.content === 'string') {
+          if (msg.content.includes('Hello from mock')) receivedConversationText = true;
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => finish(err));
+    setTimeout(() => {
+      if (!finished) finish(new Error('Issue #522 item.done: timeout waiting for AgentAudioDone and ConversationText'));
+    }, 5000);
+    const deadline = Date.now() + 4000;
+    const check = () => {
+      if (finished || Date.now() > deadline) return;
+      const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
+      if (responseCreateCount >= 1 && receivedAgentAudioDone && receivedConversationText) {
         finish();
         return;
       }

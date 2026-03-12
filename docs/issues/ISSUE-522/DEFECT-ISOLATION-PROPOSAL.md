@@ -1,12 +1,16 @@
 # Issue #522: Defect isolation proposal — function-call flow never delivers follow-up
 
+**Findings update:** See **FINDINGS.md** for analysis of integration vs E2E runs and **debug log analysis**. **Root cause (from LOG_LEVEL=debug backend run):** After the proxy sends **function_call_output**, the API sent only **conversation.item.added** and **conversation.item.done** for that item; it did **not** send **response.done** or **response.output_text.done**. ~10 s later the upstream closed (1005). So **hypothesis A confirmed**: the API did not fulfil the response.done contract in this scenario. **Mitigation implemented:** Per OpenAI Realtime API spec, **conversation.item.done** is "Returned when a conversation item is finalized." The proxy now treats **conversation.item.done** with **item.type === 'function_call_output'** as a valid completion signal and sends the deferred `response.create` immediately (REQUIRED-UPSTREAM-CONTRACT.md, server.ts). **Isolated test:** Integration test *"Issue #522: conversation.item.done (function_call_output) triggers deferred response.create; client gets next turn"* — mock sends only item.added + item.done (no response.done); asserts one response.create, client receives AgentAudioDone and ConversationText.
+
+---
+
 ## Observed failure (from terminal 6)
 
 1. **E2E 6b** (backend + test-app + real API): After "What time is it?" → FunctionCallRequest → backend POST → FunctionCallResponse, the test waits for `[data-testid="agent-response"]` to match `/\d{1,2}:\d{2}|UTC/`. It **never does**: the element stays **"Hello! How can I assist you today?"** (the greeting) for the full 45s timeout. So the **agent’s follow-up (time) never appears** in the UI.
 
-2. **Integration real-API** (Jest proxy → real API): After FunctionCallResponse, the client never receives **AgentAudioDone** within 60s (same flow times out).
+2. **Integration real-API** (Jest proxy → real API): In the **same** environment, integration tests **pass** (including "Issue #470 real-API: function-call flow completes" and "Issue #489 real-API: after FunctionCallResponse client receives AgentAudioDone"). So the in-process proxy **does** receive completion and send AgentAudioDone when talking to the real API.
 
-**Conclusion:** After we send `function_call_output` to the real API, the client never gets (a) the completion signal (AgentAudioDone) and (b) the next assistant turn (ConversationText with the time). So the defect is somewhere in: **real API → proxy → client** for the post–function-call path.
+**Conclusion:** The defect appears **only in the E2E topology** (browser → backend forwarder → subprocess proxy → real API). Backend and app path are OK (6d: POST /function-call 200, response sent). So the failure is in: **subprocess proxy**, **forwarder**, **API session/timing**, or **test-app/component** not updating UI when it receives the follow-up. See FINDINGS.md.
 
 ---
 
@@ -136,10 +140,12 @@ When these pass, we know: connection, Settings, FunctionCallRequest, backend POS
 
 ## Recommended order of work
 
+**Step 0 outcome (from terminal):** Both test 6 and 6b failed at the same line (time pattern); defect is the shared post–function_call_output path. Run diagnostic (1) in **E2E** setup (backend with LOG_LEVEL=debug + CAPTURE_UPSTREAM_AFTER_FCR=1) and add E2E diagnostic (5) to see if browser receives follow-up. See FINDINGS.md.
+
 0. **Confirm scope:** In the same environment where 6b fails, run **test 6** (same flow, allows errors). If 6 passes, the failure is 6b’s strict error assertion; if 6 also fails at the time-pattern line, the defect is the shared post–function_call_output path—focus isolation there and avoid duplicating known paths (see Scope above).
-1. **Run diagnostic (1)** once with real API and inspect whether `response.done` / `response.output_text.done` appear after function_call_output. That tells us A vs B/C/D.
+1. **Run diagnostic (1)** in the **E2E** setup: start backend with `LOG_LEVEL=debug` and `CAPTURE_UPSTREAM_AFTER_FCR=1`, run E2E 6 or 6b once, then inspect backend/subprocess logs and `test-results/upstream-after-function-call.json`. That shows whether the **subprocess** proxy received `response.done` / `response.output_text.done` after function_call_output (hypotheses A/B vs C/D).
 2. **Add integration tests (2a, 2b, 3)** so we lock behavior for completion order and for “next turn” conversation.item. These don’t depend on the real API. **Done:** 2a (response.done then output_text.done), 2b (output_audio.done then response.done), 3 (conversation.item.added assistant after completion → ConversationText) in `openai-proxy-integration.test.ts`.
-3. **Add E2E diagnostic (5)** so we know whether the client ever receives the follow-up ConversationText.
+3. **Add E2E diagnostic (5)** so we know whether the **browser** ever receives the follow-up ConversationText or AgentAudioDone. That distinguishes proxy/forwarder/API (F1/F2) from component/UI (F3). See FINDINGS.md.
 4. If the real API sends a different conversation.item shape, **add test (4)** with a captured payload and fix the mapper if needed.
 5. **Unit test (6)** is optional but useful to prevent regressions in the completion-handling branches.
 
@@ -153,6 +159,7 @@ When these pass, we know: connection, Settings, FunctionCallRequest, backend POS
 | 2a. response.done then output_text.done | Integration (mock) | Order: both completion events |
 | 2b. output_audio.done then response.done | Integration (mock) | Order: audio.done before response.done |
 | 3. conversation.item.added after deferred response.create | Integration (mock) | Next turn’s assistant item → ConversationText |
+| 3b. conversation.item.done (function_call_output) only | Integration (mock) | Isolated: upstream sends only item.added + item.done (no response.done); proxy sends deferred response.create; client gets next turn. REQUIRED-UPSTREAM-CONTRACT.md. |
 | 4. Real API conversation.item shape | Integration (mock) | Mapper handles real payload (after capture) |
 | 5. E2E: client received follow-up? | E2E diagnostic | Proxy vs component |
 | 6. Unit: completion state machine | Unit | Correct handling of response.done / output_text.done |

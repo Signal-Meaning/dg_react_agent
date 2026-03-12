@@ -23,7 +23,7 @@
     "test:e2e:openai": "USE_PROXY_MODE=true PLAYWRIGHT_BROWSERS_PATH=$(node -p \"require('path').resolve(process.cwd(), '.playwright-browsers')\") playwright test tests/e2e/openai-proxy-e2e.spec.js tests/e2e/openai-proxy-tts-diagnostic.spec.js tests/e2e/greeting-playback-validation.spec.js tests/e2e/openai-inject-connection-stability.spec.js tests/e2e/callback-test.spec.js --config=tests/playwright.config.mjs",
     "test:e2e:deepgram": "E2E_BACKEND=deepgram USE_PROXY_MODE=true PLAYWRIGHT_BROWSERS_PATH=$(node -p \"require('path').resolve(process.cwd(), '.playwright-browsers')\") playwright test --config=tests/playwright.config.mjs",
     "backend": "node scripts/backend-server.js",
-    "backend:log": "LOG_LEVEL=info node scripts/backend-server.js 2>&1 | tee backend-$(date +%Y%m%d-%H%M%S).log",
+    "backend:log": "node scripts/backend-server.js 2>&1 | tee backend-$(date +%Y%m%d-%H%M%S).log",
     "openai-proxy:cli": "npm run openai-proxy:cli --prefix .. --",
     "test:e2e:proxy": "PLAYWRIGHT_BROWSERS_PATH=$(node -p \"require('path').resolve(process.cwd(), '.playwright-browsers')\") playwright test tests/e2e/deepgram-backend-proxy-mode.spec.js --config=tests/playwright.config.mjs",
     "test:e2e:proxy:log": "USE_PROXY_MODE=true PLAYWRIGHT_BROWSERS_PATH=$(node -p \"require('path').resolve(process.cwd(), '.playwright-browsers')\") playwright test --config=tests/playwright.config.mjs 2>&1 | tee e2e-proxy-run.log",

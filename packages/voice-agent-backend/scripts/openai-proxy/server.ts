@@ -410,7 +410,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             emitLog({
               severityNumber: SeverityNumber.ERROR,
               severityText: 'ERROR',
-              body: `Required upstream contract violated: upstream did not send response.done or response.output_text.done after function_call_output within ${deferredResponseCreateTimeoutMs}ms. Sending response.create to unstick; see REQUIRED-UPSTREAM-CONTRACT.md.`,
+              body: `Required upstream contract violated: upstream did not send response.done, response.output_text.done, or conversation.item.done (function_call_output) after function_call_output within ${deferredResponseCreateTimeoutMs}ms. Sending response.create to unstick; see REQUIRED-UPSTREAM-CONTRACT.md.`,
               attributes: {
                 ...connectionAttrs,
                 [ATTR_DIRECTION]: 'upstream→client',
@@ -904,9 +904,24 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               },
             });
           }
+          // Issue #522: Per OpenAI Realtime API spec, conversation.item.done is "Returned when a conversation item is finalized."
+          // When we send function_call_output, the API may only send item.added + item.done (no response.done). Treat
+          // conversation.item.done for item.type === 'function_call_output' as completion signal (REQUIRED-UPSTREAM-CONTRACT.md).
+          if (msg.type === 'conversation.item.done' && pendingResponseCreateAfterFunctionCallOutput) {
+            const itemType = (msg as { item?: { type?: string } }).item?.type;
+            if (itemType === 'function_call_output') {
+              if (deferredResponseCreateTimeoutId) {
+                clearTimeout(deferredResponseCreateTimeoutId);
+                deferredResponseCreateTimeoutId = null;
+              }
+              pendingResponseCreateAfterFunctionCallOutput = false;
+              upstream.send(JSON.stringify({ type: 'response.create' }));
+              onResponseStarted();
+            }
+          }
           // Issue #388 / #414: decrement the counter once per unique item; send response.create when all pending items are confirmed.
           // Issue #470: do not send response.create from this path when we deferred after function_call_output — the API still has
-          // that response active; we must wait for response.output_text.done or response.done. (API may send item.added for the
+          // that response active; we must wait for response.output_text.done or response.done (or item.done for function_call_output, handled above). (API may send item.added for the
           // user message late, after function_call_arguments.done; sending response.create here would trigger conversation_already_has_active_response.)
           if (pendingItemAddedBeforeResponseCreate > 0 && !pendingResponseCreateAfterFunctionCallOutput) {
             const itemId = (msg as { item?: { id?: string } }).item?.id;
