@@ -157,9 +157,9 @@ npm run validate:release-docs 0.6.1
 
 ## Required Documents by Release Type
 
-### Patch Releases (Quick Release)
+### Patch Releases
 
-**Template**: `.github/ISSUE_TEMPLATE/quick-release.md`
+**Template**: `.github/ISSUE_TEMPLATE/release-checklist.md` (same checklist; use patch doc set: CHANGELOG, PACKAGE-STRUCTURE, optional RELEASE-NOTES).
 
 **Required**:
 - ✅ `CHANGELOG.md` - All changes in Keep a Changelog format
@@ -249,7 +249,7 @@ $ npm run validate:release-docs 0.6.0
 ## Best Practices
 
 1. **Run Validation Before Packaging**: Always run `npm run validate:release-docs` before creating the package
-2. **Follow Templates**: Use the appropriate issue template (quick-release for patches, release-checklist for minor/major)
+2. **Follow Templates**: Use the release checklist (`.github/ISSUE_TEMPLATE/release-checklist.md`) for all releases
 3. **Complete All Required Docs**: Ensure all required documents are present and complete
 4. **Review Standard Docs**: Include standard documents like `RELEASE-NOTES.md` for consistency
 5. **Update Templates**: Ensure `PACKAGE-STRUCTURE.md` is updated from template (replace `vX.X.X` with actual version)
@@ -295,6 +295,5 @@ $ npm run validate:release-docs 0.6.0
 
 - [Release Documentation Standards](README.md)
 - [Release Checklist Template](.github/ISSUE_TEMPLATE/release-checklist.md)
-- [Quick Release Template](.github/ISSUE_TEMPLATE/quick-release.md)
 - [Package Structure Template](PACKAGE-STRUCTURE.template.md)
 

@@ -77,13 +77,12 @@ if [ "$ROOT_VER" != "$VERSION" ]; then
     exit 1
 fi
 
-# Create the issue using GitHub CLI and capture the issue number
-# For patch releases, use the quick-release template
+# Create the issue using GitHub CLI and capture the issue number (one template for all release types)
 if [ "$TYPE" = "patch" ]; then
     ISSUE_URL=$(gh issue create \
-        --title "Quick Release v$VERSION: Patch Release" \
-        --body-file .github/ISSUE_TEMPLATE/quick-release.md \
-        --label "release")
+        --title "Release v$VERSION: Patch Release" \
+        --body-file .github/ISSUE_TEMPLATE/release-checklist.md \
+        --label "release,patch")
 else
     ISSUE_URL=$(gh issue create \
         --title "Release v$VERSION: Complete Release Process and Documentation" \

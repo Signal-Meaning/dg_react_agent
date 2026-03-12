@@ -4,62 +4,38 @@ This directory contains GitHub issue templates for the Deepgram Voice Interactio
 
 ## Available Templates
 
-### 1. Release Checklist (`release-checklist.md`)
-**Use for**: Major and minor releases that require comprehensive documentation and testing.
+### Release Checklist (`release-checklist.md`)
+**Use for**: Every release (patch, minor, or major). Single source of truth.
 
 **Features**:
 - Complete release process checklist
-- Pre-release preparation steps
-- Version management
+- Pre-release preparation, version management, dual-package versions (React + backend)
 - CI build and package validation (no local build required)
-- Comprehensive documentation requirements
-- Git operations and tagging
-- Package publishing to GitHub Registry
-- GitHub release creation
+- Documentation: **patch** = CHANGELOG + PACKAGE-STRUCTURE (+ optional RELEASE-NOTES); **minor/major** = full set (MIGRATION, NEW-FEATURES, API-CHANGES, EXAMPLES, etc.)
+- Git operations, package publishing to GitHub Registry, GitHub release creation
 
 **CLI Usage**:
 ```bash
 # Using the script (recommended)
-npm run release:issue 0.5.0 minor
+npm run release:issue 0.5.0 minor   # or patch / major
 
 # Or directly with GitHub CLI
 gh issue create --template release-checklist.md --title "Release v0.5.0: Complete Release Process and Documentation" --label "release,documentation,priority:high"
 ```
 
-### 2. Quick Release (`quick-release.md`)
-**Use for**: Patch releases with bug fixes and minor improvements.
-
-**Features**:
-- Streamlined checklist for patch releases
-- Essential testing and validation steps
-- Simplified documentation requirements
-- Quick release process
-
-**CLI Usage**:
-```bash
-gh issue create --template quick-release.md --title "Quick Release v0.4.2: Patch Release" --label "release,patch,priority:medium"
-```
-
 ## Release Types
 
 ### Major Release (X.0.0)
-- Breaking changes
-- New major features
-- Use: `release-checklist.md` template
-- Requires: Migration guide, comprehensive documentation
+- Breaking changes; new major features
+- Use: `release-checklist.md`; follow **minor/major** doc steps (MIGRATION, NEW-FEATURES, API-CHANGES, EXAMPLES)
 
 ### Minor Release (0.X.0)
-- New features
-- Backward compatible changes
-- Use: `release-checklist.md` template
-- Requires: Feature documentation, API changes documentation
+- New features; backward compatible
+- Use: `release-checklist.md`; follow **minor/major** doc steps
 
 ### Patch Release (0.0.X)
-- Bug fixes
-- Minor improvements
-- No breaking changes
-- Use: `quick-release.md` template
-- Requires: CHANGELOG update only
+- Bug fixes; no breaking changes
+- Use: `release-checklist.md`; follow checklist with **patch** doc steps (CHANGELOG, PACKAGE-STRUCTURE, optional RELEASE-NOTES)
 
 ## Using the Release Script
 

@@ -11,14 +11,24 @@ CLI Usage:
 gh issue create --template release-checklist.md --title "Release vX.X.X: Complete Release Process and Documentation" --label "release,documentation,priority:high" --body "Replace vX.X.X with actual version number"
 -->
 
-**Use this template for every new release.** Create a new issue from this template (or copy its checklist); do **not** copy from old release folders (e.g. `docs/releases/v0.4.0/RELEASE-CHECKLIST.md`). Those files are archival only and may be outdated; this template is the source of truth.
+**Use this template for every new release (patch, minor, or major).** Create a new issue from this template (or copy its checklist); do **not** copy from old release folders (e.g. `docs/releases/v0.4.0/RELEASE-CHECKLIST.md`). Those files are archival only and may be outdated; this template is the single source of truth.
+
+- **Patch (0.0.X):** Bug fixes, no breaking changes. Same checklist; use **minimal docs** (CHANGELOG, PACKAGE-STRUCTURE, optional RELEASE-NOTES).
+- **Minor/Major (0.X.0 / X.0.0):** New features or breaking changes. Use the **full documentation** set (see Documentation section below).
 
 ## 🚀 Release vX.X.X - Complete Release Process
 
 ### Overview
-This issue tracks the complete release process for version vX.X.X of the Deepgram Voice Interaction React component. This is a [minor/major/patch] version release that should include [new features/improvements/bug fixes].
+This issue tracks the complete release process for version vX.X.X of the Deepgram Voice Interaction React component. This is a [patch/minor/major] version release that should include [bug fixes/new features or improvements/breaking changes].
 
-The repository publishes two packages to GitHub Package Registry. CI (`.github/workflows/test-and-publish.yml`) publishes both when the workflow runs: **@signal-meaning/voice-agent-react** (root) and **@signal-meaning/voice-agent-backend** (`packages/voice-agent-backend`). Each package has its own version in its `package.json`; you may release the component only, the backend only, or both in one release.
+The repository publishes **two packages** to GitHub Package Registry. CI (`.github/workflows/test-and-publish.yml`) publishes both when the workflow runs. **You must determine and document the version for each package** that is part of this release (see Package versions below).
+
+| Package | Location | Version for this release |
+|---------|----------|--------------------------|
+| **@signal-meaning/voice-agent-react** (React component) | Root `package.json` | vX.X.X _(fill in)_ |
+| **@signal-meaning/voice-agent-backend** | `packages/voice-agent-backend/package.json` | X.Y.Z _(fill in)_ |
+
+You may release the component only, the backend only, or both in one release. Whichever packages you bump and publish, record their versions in the table above and use those versions in the checklist (bump, dist-tag, release notes).
 
 ### 📋 Release Checklist
 
@@ -49,9 +59,11 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 - [ ] **Breaking Changes Documented**: Any breaking changes identified and documented
 
 #### Version Management
-- [ ] **Bump Version**: Update package.json to vX.X.X
-  - [ ] Run: `npm version [patch/minor/major]` (or manually update)
-- [ ] **Bump voice-agent-backend version** (if releasing that package): Update `packages/voice-agent-backend/package.json` version (e.g. 0.1.0 → 0.2.0)
+- [ ] **Determine and record both package versions** (see Overview table). Fill in the version for each package you are releasing so the rest of the checklist and release notes are unambiguous.
+- [ ] **Bump React component version** (if releasing the component): Update root `package.json` to the chosen version (e.g. vX.X.X)
+  - [ ] Run: `npm version [patch/minor/major]` (or manually update root `package.json`)
+- [ ] **Bump Backend version** (if releasing the backend): Update `packages/voice-agent-backend/package.json` to the chosen version (e.g. 0.2.8)
+  - [ ] Edit `packages/voice-agent-backend/package.json` — set `"version": "X.Y.Z"` (independent from React version)
 - [ ] **Update Dependencies**: Ensure all dependencies are up to date
   - [ ] Run: `npm update`
   - [ ] Review and update any outdated dependencies
@@ -65,26 +77,16 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
 - [ ] **Create Release Documentation**: Follow the established structure
   - [ ] Create: `docs/releases/vX.X.X/` directory
   - [ ] Create: `CHANGELOG.md` with all changes (Keep a Changelog format)
-  - [ ] Create: `MIGRATION.md` if there are breaking changes
-  - [ ] Create: `NEW-FEATURES.md` for new features
-  - [ ] Create: `API-CHANGES.md` for API changes
-  - [ ] Create: `EXAMPLES.md` with usage examples
-  - [ ] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`)
-    - Replace `vX.X.X` and `X.X.X` placeholders with actual version
+  - [ ] Create: `PACKAGE-STRUCTURE.md` from template (`docs/releases/PACKAGE-STRUCTURE.template.md`) — replace `vX.X.X` and `X.X.X` placeholders with actual version
+  - [ ] **Patch only:** Optional: `RELEASE-NOTES.md`
+  - [ ] **Minor/Major only:** Create: `MIGRATION.md` if breaking changes; `NEW-FEATURES.md`; `API-CHANGES.md`; `EXAMPLES.md`
 - [ ] **Validate Documentation**: Run validation to ensure all required documents are present
   - [ ] Run: `npm run validate:release-docs vX.X.X`
 - [ ] **Review Documentation**: Review documentation for completeness and accuracy
-  - [ ] Check all examples work correctly
-  - [ ] Verify migration guides are accurate
-  - [ ] Ensure all links are working
-  - [ ] Review for typos and clarity
-- [ ] **Test Documentation Examples**: Test all examples and migration guides
-  - [ ] Test all code examples in NEW-FEATURES.md
-  - [ ] Test all code examples in EXAMPLES.md
-  - [ ] Test migration steps in MIGRATION.md
-  - [ ] Verify API examples in API-CHANGES.md
+  - [ ] Ensure all links are working; review for typos and clarity
+  - [ ] **Minor/Major only:** Check examples work; verify migration guides; test code examples in NEW-FEATURES.md, EXAMPLES.md, MIGRATION.md, API-CHANGES.md
 - [ ] **Update Main Documentation**: Update README and other docs as needed
-- [ ] **Update Migration Guide**: Update migration documentation if needed
+- [ ] **Minor/Major only:** Update migration documentation if needed
 
 #### Git Operations
 - [ ] **Commit Changes**: Commit all release-related changes
@@ -122,12 +124,11 @@ The repository publishes two packages to GitHub Package Registry. CI (`.github/w
   - [ ] If releasing backend: Install from `@signal-meaning/voice-agent-backend@<version>` (see `packages/voice-agent-backend/README.md` for registry config)
   - [ ] Verify: Package(s) work correctly in test environment
 - [ ] **Apply `latest` dist-tag** (only to packages published in this release)
-  - [ ] **Important:** Apply `latest` only to each package that was version-bumped and published in this release. When one package is rolled forward independently (e.g. backend-only or frontend-only release), do **not** run `dist-tag add` for the other package—otherwise you would move that package’s `latest` without a new release.
-  - [ ] If you published the **React** package:  
-    `npm dist-tag add @signal-meaning/voice-agent-react@X.X.X latest --registry https://npm.pkg.github.com`
-  - [ ] If you published the **backend** package:  
-    `npm dist-tag add @signal-meaning/voice-agent-backend@X.Y.Z latest --registry https://npm.pkg.github.com`  
-    (use the version from `packages/voice-agent-backend/package.json`)
+  - [ ] **Important:** Apply `latest` only to each package that was version-bumped and published in this release. Use the **exact version** you recorded in the Overview table (and committed in that package’s `package.json`). When one package is rolled forward independently (e.g. backend-only or frontend-only release), do **not** run `dist-tag add` for the other package—otherwise you would move that package’s `latest` without a new release.
+  - [ ] If you published the **React component**:  
+    `npm dist-tag add @signal-meaning/voice-agent-react@<version-from-root-package.json> latest --registry https://npm.pkg.github.com`
+  - [ ] If you published the **backend**:  
+    `npm dist-tag add @signal-meaning/voice-agent-backend@<version-from-packages/voice-agent-backend/package.json> latest --registry https://npm.pkg.github.com`
   - [ ] Verify (optional):  
     `npm view @signal-meaning/voice-agent-react dist-tags --registry https://npm.pkg.github.com`  
     `npm view @signal-meaning/voice-agent-backend dist-tags --registry https://npm.pkg.github.com`
