@@ -1,6 +1,8 @@
 # Issue #522: Defect isolation proposal — function-call flow never delivers follow-up
 
-**Findings update:** See **FINDINGS.md** for analysis of integration vs E2E runs and **debug log analysis**. **Root cause (from LOG_LEVEL=debug backend run):** After the proxy sends **function_call_output**, the API sent only **conversation.item.added** and **conversation.item.done** for that item; it did **not** send **response.done** or **response.output_text.done**. ~10 s later the upstream closed (1005). So **hypothesis A confirmed**: the API did not fulfil the response.done contract in this scenario. **Mitigation implemented:** Per OpenAI Realtime API spec, **conversation.item.done** is "Returned when a conversation item is finalized." The proxy now treats **conversation.item.done** with **item.type === 'function_call_output'** as a valid completion signal and sends the deferred `response.create` immediately (REQUIRED-UPSTREAM-CONTRACT.md, server.ts). **Isolated test:** Integration test *"Issue #522: conversation.item.done (function_call_output) triggers deferred response.create; client gets next turn"* — mock sends only item.added + item.done (no response.done); asserts one response.create, client receives AgentAudioDone and ConversationText.
+**Resolution status:** **Resolved.** Root cause: API sent only **conversation.item.added** and **conversation.item.done** (no **response.done**) after function_call_output. Mitigation: proxy treats **conversation.item.done** (item type `function_call_output`) as completion signal and sends deferred `response.create` (REQUIRED-UPSTREAM-CONTRACT.md, server.ts refactor `sendDeferredResponseCreate()`). E2E 6 and 6b **pass** with real API. **Remaining work:** Release, partner validation, close issue — see **REMAINING-STEPS.md**.
+
+**Findings (historical):** See **FINDINGS.md** for integration vs E2E analysis and debug log. Isolated integration test: *"Issue #522: conversation.item.done (function_call_output) triggers deferred response.create; client gets next turn"*.
 
 ---
 
@@ -164,4 +166,4 @@ When these pass, we know: connection, Settings, FunctionCallRequest, backend POS
 | 5. E2E: client received follow-up? | E2E diagnostic | Proxy vs component |
 | 6. Unit: completion state machine | Unit | Correct handling of response.done / output_text.done |
 
-Once (1) and (5) are run, we can narrow the defect to: upstream not sending completion (A), wrong order/shape (B), mapper dropping next turn (C), or not sending deferred response.create (D).
+**Outcome:** Hypothesis A applied — API sent only item.added + item.done. We added item.done as a completion signal; E2E 6/6b now pass. Remaining steps: **REMAINING-STEPS.md**.

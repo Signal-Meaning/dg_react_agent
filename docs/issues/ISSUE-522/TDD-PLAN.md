@@ -6,7 +6,7 @@
 
 **Principle:** Tests first (RED), then implementation (GREEN), then refactor. All checkboxes start unchecked; check each when that step is **done**.
 
-**Recovery (new chat):** Fixes 1 & 2 are done (v0.10.3). Post–v0.10.3 voice-commerce reported "no agent response after search" — API not sending `response.done`/`response.output_text.done` after `function_call_output`. We added: (1) **REQUIRED-UPSTREAM-CONTRACT.md** (proxy dir) documenting the API contract; (2) **20s proxy timeout** — if no completion event, log ERROR and send `response.create` anyway to unstick; (3) contract doc ties real-API test to enforcement. See **Follow-up** section and **References** (REQUIRED-UPSTREAM-CONTRACT.md). Pending: run real-API + E2E 6b when qualifying.
+**Recovery (new chat):** Fixes 1 & 2 are done (v0.10.3). Post–v0.10.3 voice-commerce reported "no agent response after search" — API not sending `response.done`/`response.output_text.done` after `function_call_output`. We added: (1) **REQUIRED-UPSTREAM-CONTRACT.md**; (2) **20s proxy timeout** (unstick); (3) **conversation.item.done** (function_call_output) as completion signal (per spec); (4) refactor `sendDeferredResponseCreate()`. E2E 6 and 6b **pass** with real API after backend restart. **Remaining steps:** See **REMAINING-STEPS.md** (release, partner validation, close issue).
 
 ---
 
@@ -123,7 +123,8 @@
 - **Consumer:** voice-commerce Issue #1066
 - **Protocol:** `packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md`
 - **Required contract:** `packages/voice-agent-backend/scripts/openai-proxy/REQUIRED-UPSTREAM-CONTRACT.md` — Proxy sends deferred response.create on response.done, response.output_text.done, or **conversation.item.done** (function_call_output) per spec; 20s timeout unstick if none received.
-- **Proxy logic:** `packages/voice-agent-backend/scripts/openai-proxy/server.ts` (FunctionCallResponse branch; `response.output_text.done` / `response.done` handlers; `DEFERRED_RESPONSE_CREATE_TIMEOUT_MS`, `deferredResponseCreateTimeoutId`)
+- **Proxy logic:** `packages/voice-agent-backend/scripts/openai-proxy/server.ts` (FunctionCallResponse branch; `sendDeferredResponseCreate()`; `response.output_text.done` / `response.done` / `conversation.item.done` for function_call_output; `DEFERRED_RESPONSE_CREATE_TIMEOUT_MS`)
 - **Related issues:** #459 (session.update race), #462 (audio.done vs text.done), #470 (defer response.create until output_text.done/response.done), #489 (idle timeout; introduced immediate response.create after function_call_output)
-- **Findings and isolation:** `docs/issues/ISSUE-522/FINDINGS.md` (integration vs E2E runs; subprocess/forwarder vs in-process). `docs/issues/ISSUE-522/DEFECT-ISOLATION-PROPOSAL.md` (hypotheses, tests, recommended order).
-- **OpenAI Realtime API:** [response.create](https://platform.openai.com/docs/api-reference/realtime-client-events/response/create), [response.done](https://platform.openai.com/docs/api-reference/realtime-server-events/response/done) — only one response active at a time for the default conversation.
+- **Findings and isolation:** `docs/issues/ISSUE-522/FINDINGS.md` (integration vs E2E runs; root cause; E2E 6/6b validation). `docs/issues/ISSUE-522/DEFECT-ISOLATION-PROPOSAL.md` (hypotheses, tests, recommended order).
+- **Remaining steps:** `docs/issues/ISSUE-522/REMAINING-STEPS.md` — summary. **Release checklist:** `docs/issues/ISSUE-522/RELEASE-CHECKLIST.md` (aligned with `.github/ISSUE_TEMPLATE/release-checklist.md`); use for version bump, pre-release tests, release docs, publish, post-release, close issue.
+- **OpenAI Realtime API:** [response.create](https://platform.openai.com/docs/api-reference/realtime-client-events/response/create), [response.done](https://platform.openai.com/docs/api-reference/realtime-server-events/response/done), [conversation.item.done](https://platform.openai.com/docs/api-reference/realtime-server-events/conversation-item-done) — only one response active at a time; item.done = item finalized.

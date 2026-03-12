@@ -1,16 +1,18 @@
 # Issue #522: Findings from integration vs E2E runs
 
-**Source:** Terminal output from same environment (backend + test-app running; real API). See DEFECT-ISOLATION-PROPOSAL.md for hypotheses and next steps.
+**Status:** Mitigation implemented (proxy treats `conversation.item.done` for `function_call_output` as completion signal). E2E tests **6 and 6b now pass** with real API after backend restart. See **REMAINING-STEPS.md** for release and close-out.
+
+**Source:** Terminal output from same environment (backend + test-app running; real API). See DEFECT-ISOLATION-PROPOSAL.md for hypotheses and test plan.
 
 ---
 
 ## Summary
 
 - **Integration tests (real API)** — **all pass**, including function-call flow and AgentAudioDone.
-- **E2E tests 6 and 6b** — **fail** at the same assertion: `agent-response` never shows the time; it stays on the greeting.
+- **E2E tests 6 and 6b** — **Previously failed** (agent-response stuck on greeting). **Now pass** after the item.done mitigation: proxy sends deferred `response.create` on `conversation.item.done` (function_call_output); agent-response shows time (e.g. "The current time is 14:57 UTC."); 6b asserts 0 recoverable errors.
 - **E2E test 6d** — **passes**: backend POST /function-call returns 200, app sends the result.
 
-So: the **proxy logic works** when the proxy runs in-process (integration). It **fails in E2E** where the proxy runs as a **subprocess** behind a **forwarder**. Backend and app path are confirmed by 6d.
+Root cause was the API sending only `conversation.item.added` and `conversation.item.done` (no `response.done`) after `function_call_output`; the proxy now treats item.done as completion. See "Debug log analysis" and "E2E validation" below.
 
 ---
 
@@ -128,6 +130,7 @@ Backend was run with `LOG_LEVEL=debug npm run backend:log` (fixed script); E2E t
 
 ## References
 
+- REMAINING-STEPS.md — summary of remaining steps. RELEASE-CHECKLIST.md — full release checklist (aligned with GitHub release template).
 - DEFECT-ISOLATION-PROPOSAL.md — hypotheses A–E, tests 1–6, recommended order.
 - TDD-PLAN.md — Fix 1 & 2, recovery, follow-up.
 - test-app/scripts/backend-server.js — spawns OpenAI proxy subprocess, sets E2E_FUNCTION_CALL_DEBUG_LOG when LOG_LEVEL=debug. test-app/package.json `backend:log` no longer overrides LOG_LEVEL so `LOG_LEVEL=debug npm run backend:log` works.
