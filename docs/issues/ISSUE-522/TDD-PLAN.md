@@ -38,20 +38,20 @@
 
 ### 1.1 RED — Tests that would fail without the fix
 
-- [ ] **Integration (mock):** In `tests/integration/openai-proxy-integration.test.ts`, add or extend a test that asserts: after client sends FunctionCallResponse, the proxy does **not** send `response.create` to the upstream until the mock has sent `response.done` or `response.output_text.done`. Without the fix, the proxy currently sends `response.create` immediately, so the test must capture “messages sent to upstream” and assert order: function_call_output item first, then no `response.create` until after completion event.
-- [ ] **Integration (real API, if applicable):** Ensure existing real-API test “Issue #470 real-API: function-call flow completes without conversation_already_has_active_response” (or equivalent) still passes after the proxy change; run with `USE_REAL_APIS=1`.
-- [ ] **E2E (if in repo):** Any E2E that asserts no `conversation_already_has_active_response` during a single function-call flow (e.g. test-app or partner test) should pass after the fix.
+- [x] **Integration (mock):** In `tests/integration/openai-proxy-integration.test.ts`, add or extend a test that asserts: after client sends FunctionCallResponse, the proxy does **not** send `response.create` to the upstream until the mock has sent `response.done` or `response.output_text.done`. Without the fix, the proxy currently sends `response.create` immediately, so the test must capture “messages sent to upstream” and assert order: function_call_output item first, then no `response.create` until after completion event.
+- [x] **Integration (real API, if applicable):** Ensure existing real-API test “Issue #470 real-API: function-call flow completes without conversation_already_has_active_response” (or equivalent) still passes after the proxy change; run with `USE_REAL_APIS=1`.
+- [x] **E2E (if in repo):** Any E2E that asserts no `conversation_already_has_active_response` during a single function-call flow (e.g. test-app or partner test) should pass after the fix.
 
 **Done when:** New/updated tests are in place and **fail** when the proxy sends `response.create` immediately after function_call_output (RED).
 
 ### 1.2 GREEN — Implementation
 
-- [ ] **Proxy:** In `packages/voice-agent-backend/scripts/openai-proxy/server.ts`, in the `FunctionCallResponse` branch (~350–358):
+- [x] **Proxy:** In `packages/voice-agent-backend/scripts/openai-proxy/server.ts`, in the `FunctionCallResponse` branch (~350–358):
   - **Remove** the immediate `upstream.send(JSON.stringify({ type: 'response.create' }))` and `onResponseStarted()`.
   - **Set** `pendingResponseCreateAfterFunctionCallOutput = true` and **do not** send `response.create` here.
   - **Keep** sending `AgentThinking` to the client so the component can clear “waiting for next agent message” and idle timeout can run when the turn completes.
   - Rely on the existing handlers for `response.output_text.done` and `response.done` to send the deferred `response.create` when received (they already have the `if (pendingResponseCreateAfterFunctionCallOutput) { ... upstream.send(JSON.stringify({ type: 'response.create' })); ... }` logic).
-- [ ] **Protocol doc:** Update `packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md` to state that after FunctionCallResponse we **defer** `response.create` until `response.done` or `response.output_text.done` (remove or correct any wording that suggests sending immediately for Issue #489).
+- [x] **Protocol doc:** Update `packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md` to state that after FunctionCallResponse we **defer** `response.create` until `response.done` or `response.output_text.done` (remove or correct any wording that suggests sending immediately for Issue #489).
 
 **Done when:** Proxy no longer sends `response.create` in the FunctionCallResponse branch; it only sends it from the `response.output_text.done` / `response.done` handlers when `pendingResponseCreateAfterFunctionCallOutput` is true. All tests from 1.1 pass (GREEN).
 
@@ -68,15 +68,15 @@
 
 ### 2.1 RED — Tests that would fail without the fix
 
-- [ ] **Unit or integration:** Add or extend a test: when the upstream sends an `error` event with `code: 'conversation_already_has_active_response'`, the proxy either (a) does not forward it as a fatal error that would trigger client re-Settings, or (b) forwards it in a way the component treats as non-fatal (e.g. not as “connection error” / “component failure”). Define expected behavior (e.g. forward as warning or specific error type that does not trigger reconnect).
-- [ ] **Component (if change is in voice-agent-react):** If the component is the one that triggers re-Settings on this error, add a test that when the component receives this error from the backend it does **not** reconnect or re-send Settings. Document where the “fatal” handling lives (proxy vs component).
+- [x] **Unit or integration:** Add or extend a test: when the upstream sends an `error` event with `code: 'conversation_already_has_active_response'`, the proxy either (a) does not forward it as a fatal error that would trigger client re-Settings, or (b) forwards it in a way the component treats as non-fatal (e.g. not as “connection error” / “component failure”). Define expected behavior (e.g. forward as warning or specific error type that does not trigger reconnect).
+- [x] **Component (if change is in voice-agent-react):** If the component is the one that triggers re-Settings on this error, add a test that when the component receives this error from the backend it does **not** reconnect or re-send Settings. Document where the “fatal” handling lives (proxy vs component).
 
 **Done when:** Tests are written and **fail** with current behavior (RED).
 
 ### 2.2 GREEN — Implementation
 
 - [x] **Proxy:** In the upstream `error` message handler in `server.ts`, if `componentError.code === 'conversation_already_has_active_response'`, log at INFO and **do not forward** the error to the client (client never sees it, so no reconnect/re-Settings).
-- [ ] **Component (if applicable):** If the component treats any backend Error as fatal and re-Settings, add a branch so that when the error code is `conversation_already_has_active_response` it does **not** trigger reconnection or re-Settings. Optionally still surface a non-fatal warning to the app. (Not required when proxy suppresses the error.)
+- [x] **Component (if applicable):** If the component treats any backend Error as fatal and re-Settings, add a branch so that when the error code is `conversation_already_has_active_response` it does **not** trigger reconnection or re-Settings. Optionally still surface a non-fatal warning to the app. (Not required when proxy suppresses the error.)
 
 **Done when:** The API error no longer triggers retries or re-Settings; tests from 2.1 pass (GREEN).
 
@@ -92,8 +92,8 @@
 - [x] **Real API:** Run integration (and, if available, E2E) with real OpenAI API where applicable (`USE_REAL_APIS=1`) to confirm no `conversation_already_has_active_response` in the function-call flow. See project rules: proxy/API defects must be validated against real API before release.
 - [x] **E2E in this repo (same scenario as voice-commerce):** Test **6b** in `test-app/tests/e2e/openai-proxy-e2e.spec.js` — “Issue #462 / #470: function-call flow completes without conversation_already_has_active_response (partner scenario)”. It uses `assertNoRecoverableAgentErrors(page)` (fails if any agent error, including `conversation_already_has_active_response`). **Run from test-app:** Backend and dev server running, then: `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b"`. See test-app/tests/e2e/README.md. This is our equivalent of voice-commerce’s Issue #1066 E2E. **Validated:** Passed with real API after item.done mitigation (backend restarted; agent returned time; 0 recoverable errors).
 - [ ] **Partner test (voice-commerce repo):** Partner cannot validate without release. After release, voice-commerce run their own E2E in **their** repo after upgrading. Document in release notes that partners can use that test (or our test 6b) to validate post-upgrade.
-- [ ] **Idle timeout / completion:** Ensure that deferring `response.create` does not break the idle-timeout-after-function-call flow (component still receives completion signal when upstream sends `response.done` / `response.output_text.done`). Existing E2E or integration tests for that path should still pass.
-- [ ] **Release:** Version bump and release notes for voice-agent-backend (and voice-agent-react if changed). Note pairing of backend + react versions if needed.
+- [x] **Idle timeout / completion:** Ensure that deferring `response.create` does not break the idle-timeout-after-function-call flow (component still receives completion signal when upstream sends `response.done` / `response.output_text.done`). Existing E2E or integration tests for that path should still pass. _(issue-487-idle-timeout-after-function-result-component.test.tsx: 4/4 passed.)_
+- [x] **Release:** Version bump and release notes for voice-agent-backend (and voice-agent-react if changed). Note pairing of backend + react versions if needed. _(Backend 0.2.8; component 0.10.3; release created; see RELEASE-CHECKLIST.md.)_
 
 **Done when:** All validation steps pass and release is qualified.
 

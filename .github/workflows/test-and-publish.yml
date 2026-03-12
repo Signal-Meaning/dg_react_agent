@@ -1,8 +1,9 @@
 name: Test and Publish Package
 
-# Automatic triggers disabled; run manually via Actions tab or when creating a release.
-# Previously: release types [published]. Re-enable that block to run on GitHub release publish.
+# Runs on: (1) release published — so "Create release" in UI or gh release create triggers test + publish; (2) workflow_dispatch for manual runs.
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       test_only:

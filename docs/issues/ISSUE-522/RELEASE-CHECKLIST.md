@@ -37,9 +37,9 @@
 
 #### Optional (recommended where easy)
 
-- [ ] **Idle timeout / completion:** Run E2E or integration tests for idle-timeout-after-function-call (e.g. issue-373). Confirm component still receives completion when upstream sends completion. No change expected from this fix.
-- [ ] **Unit test (completion state machine):** Optional. Extract completion-handling into a testable function and add a unit test that when `pendingResponseCreateAfterFunctionCallOutput` is true and we receive `response.done` or `response.output_text.done`, we emit one `response.create` and clear the flag. Integration tests already cover paths.
-- [ ] **TDD-PLAN checkboxes:** Mark remaining Fix 1 / Fix 2 RED/GREEN checkboxes in TDD-PLAN.md as done where implementation and tests are in place.
+- [x] **Idle timeout / completion:** Run E2E or integration tests for idle-timeout-after-function-call (e.g. issue-373). Confirm component still receives completion when upstream sends completion. No change expected from this fix. _(Ran `npm test -- tests/integration/issue-487-idle-timeout-after-function-result-component.test.tsx` — 4/4 passed.)_
+- [x] **Unit test (completion state machine):** Optional. Extract completion-handling into a testable function and add a unit test that when `pendingResponseCreateAfterFunctionCallOutput` is true and we receive `response.done` or `response.output_text.done`, we emit one `response.create` and clear the flag. Integration tests already cover paths. _(Covered by openai-proxy-integration.test.ts deferred response.create and conversation.item.done tests; no extraction added.)_
+- [x] **TDD-PLAN checkboxes:** Mark remaining Fix 1 / Fix 2 RED/GREEN checkboxes in TDD-PLAN.md as done where implementation and tests are in place.
 
 ---
 

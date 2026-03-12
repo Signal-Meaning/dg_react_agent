@@ -100,8 +100,9 @@ You may release the component only, the backend only, or both in one release. Wh
 - [ ] **Publish to GitHub Registry**: Publish package(s) to GitHub Package Registry
   - [ ] **Preferred**: Use CI build (validated CI build)
     - **⚠️ CRITICAL: Version must be bumped** in root `package.json` (and `packages/voice-agent-backend/package.json` if releasing the backend) and **committed on the release branch** before creating the GitHub release. If you create the release without bumping, CI will build from the previous version and the published package version will not update.
-    - Create GitHub release to trigger `.github/workflows/test-and-publish.yml`
+    - Create GitHub release to trigger `.github/workflows/test-and-publish.yml` (workflow runs on `release: published`).
     - CI workflow will: test (mock APIs only), **build in CI**, validate packages, and publish **both** the root package and `@signal-meaning/voice-agent-backend`. No local build required.
+    - **If the workflow did not run** (e.g. release was created before the trigger was enabled): Go to **Actions → Test and Publish Package → Run workflow**, choose branch **release/vX.X.X**, then Run. Monitor the run until the Publish job completes and both packages appear in GitHub Packages.
     - Test job runs first: linting, mock tests, build, package validation (including voice-agent-backend pack dry-run)
     - Publish job only runs if test job succeeds; it publishes root then voice-agent-backend (each skips if that version already exists unless force is set)
     - **All non-skipped tests must pass** before publishing
@@ -168,7 +169,7 @@ The following GitHub Actions workflows will be triggered automatically:
    - Tests package installation from tarball
 
 2. **Test and Publish Workflow** (`.github/workflows/test-and-publish.yml`):
-   - Runs on GitHub release creation (or workflow_dispatch)
+   - Runs on **release published** (creating a GitHub release triggers it) or **workflow_dispatch** (manual run)
    - **Test Job**: Runs first and includes:
      - Linting (`npm run lint`)
      - Tests with mock APIs only (`npm run test:mock` - no real API calls)
