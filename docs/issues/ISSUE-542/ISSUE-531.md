@@ -4,11 +4,13 @@
 
 **Epic:** [#542](./README.md) · **TDD bundle:** A (observability)
 
+**Implementation:** **Option B** — when `LOG_LEVEL` / `logLevel` option are unset, `initProxyLogger` sets minimum severity to **error** and always initializes OTel so `emitLog` at ERROR reaches the console exporter.
+
 ---
 
 ## Problem (Section 1)
 
-`run.ts` passes `logLevel: undefined` when neither `LOG_LEVEL` nor `OPENAI_PROXY_DEBUG` is set. `initProxyLogger` then **does not** initialize the OTel logger (`logger.ts`: no provider when level unset). Every `emitLog` in `server.ts` becomes a no-op, including the branch that handles upstream `type: "error"`. Operators see nothing on stderr while the client may still receive a translated `Error`.
+Previously, `run.ts` passed `logLevel: undefined` when neither `LOG_LEVEL` nor `OPENAI_PROXY_DEBUG` was set. `initProxyLogger` did not initialize the OTel logger, so every `emitLog` in `server.ts` was a no-op, including the branch that handles upstream `type: "error"`.
 
 ---
 
@@ -22,28 +24,28 @@ Document in `packages/voice-agent-backend/scripts/openai-proxy/README.md` and/or
 
 ## TDD plan
 
-**Phases:** - [ ] RED · - [ ] GREEN · - [ ] REFACTOR · - [ ] Verified (all items below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (all items below)
 
 ### RED
 
-- [ ] Add failing test: with no `LOG_LEVEL` / `OPENAI_PROXY_DEBUG`, an upstream Realtime `error` still produces a visible ERROR log (unit on `logger.ts` with mock exporter **or** integration with stderr spy on `createOpenAIProxyServer` + mock upstream sending `{ type: 'error', ... }`).
-- [ ] Confirm test fails on current baseline (logger uninitialized → `emitLog` no-op).
+- [x] Add failing test: with no `LOG_LEVEL` / `OPENAI_PROXY_DEBUG`, an upstream Realtime `error` still produces a visible ERROR log (unit on `logger.ts` with mock exporter **or** integration with stderr spy on `createOpenAIProxyServer` + mock upstream sending `{ type: 'error', ... }`).
+- [x] Confirm test fails on current baseline (logger uninitialized → `emitLog` no-op).
 
 ### GREEN
 
-- [ ] Implement **Option A** (`console.error` fallback in `emitLog` when logger null and severity ≥ ERROR) **or** **Option B** (default `initProxyLogger` to `error` when env unset); document which in the PR / commit message.
-- [ ] Upstream `error` path continues to use ERROR severity for non-special cases (`server.ts`).
+- [x] Implement **Option A** (`console.error` fallback in `emitLog` when logger null and severity ≥ ERROR) **or** **Option B** (default `initProxyLogger` to `error` when env unset); document which in the PR / commit message.
+- [x] Upstream `error` path continues to use ERROR severity for non-special cases (`server.ts`).
 
 ### REFACTOR
 
-- [ ] Deduplicate “force emit critical logs” logic if both `console.error` and OTel are used.
-- [ ] Update proxy `README.md` and/or `run.ts` header: upstream errors always logged without opt-in.
+- [x] Deduplicate “force emit critical logs” logic if both `console.error` and OTel are used. _(N/A: Option B only — single OTel path.)_
+- [x] Update proxy `README.md` and/or `run.ts` header: upstream errors always logged without opt-in.
 
 ### Verified
 
-- [ ] Mock-based test passes in CI.
+- [x] Mock-based test passes in CI.
 - [ ] Manual or scripted run: unset `LOG_LEVEL`, trigger upstream error (e.g. bad model in `session.update`), confirm stderr shows the error.
-- [ ] No change that hides upstream errors behind synthetic success (`.cursorrules` proxy rules).
+- [x] No change that hides upstream errors behind synthetic success (`.cursorrules` proxy rules).
 
 ---
 
@@ -53,4 +55,4 @@ Document in `packages/voice-agent-backend/scripts/openai-proxy/README.md` and/or
 - `packages/voice-agent-backend/scripts/openai-proxy/run.ts` — default `logLevel`
 - `packages/voice-agent-backend/scripts/openai-proxy/server.ts` — upstream `error` handler (verify severity after fix)
 - `packages/voice-agent-backend/scripts/openai-proxy/README.md` — documentation
-- Tests: new or under `tests/` next to existing `openai-proxy*.test.ts`
+- Tests: `tests/logging-standard-proxy.test.ts`

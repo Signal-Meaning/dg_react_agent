@@ -1,5 +1,6 @@
 /**
  * Issue #437: Tests that the OpenAI proxy respects LOG_LEVEL (logging standard).
+ * Issue #531: When LOG_LEVEL is unset, ERROR logs still emit (upstream failures visible).
  * Enforces that each executable treats logging per the standard; proxy must filter by level.
  *
  * @jest-environment node
@@ -106,6 +107,62 @@ describe('OpenAI proxy logging standard (Issue #437)', () => {
         attributes: {},
       });
       expect(emitSpy).toHaveBeenCalledTimes(1);
+      emitSpy.mockRestore();
+    });
+  });
+
+  describe('Issue #531: ERROR without LOG_LEVEL', () => {
+    const origLogLevel = process.env.LOG_LEVEL;
+    const origOpenaiProxyDebug = process.env.OPENAI_PROXY_DEBUG;
+
+    afterEach(() => {
+      if (origLogLevel === undefined) {
+        delete process.env.LOG_LEVEL;
+      } else {
+        process.env.LOG_LEVEL = origLogLevel;
+      }
+      if (origOpenaiProxyDebug === undefined) {
+        delete process.env.OPENAI_PROXY_DEBUG;
+      } else {
+        process.env.OPENAI_PROXY_DEBUG = origOpenaiProxyDebug;
+      }
+    });
+
+    it('initializes OTel and emits ERROR when LOG_LEVEL and OPENAI_PROXY_DEBUG are unset', () => {
+      delete process.env.LOG_LEVEL;
+      delete process.env.OPENAI_PROXY_DEBUG;
+      initProxyLogger();
+      const logger = getLoggerForTesting();
+      expect(logger).not.toBeNull();
+      const emitSpy = jest.spyOn(logger!, 'emit');
+      emitLog({
+        severityNumber: SeverityNumber.ERROR,
+        severityText: 'ERROR',
+        body: 'upstream Realtime error',
+        attributes: { 'error.message': 'model_failed', connection_id: 'c1' },
+      });
+      expect(emitSpy).toHaveBeenCalledTimes(1);
+      expect(emitSpy.mock.calls[0][0]).toMatchObject({
+        body: 'upstream Realtime error',
+        severityNumber: SeverityNumber.ERROR,
+      });
+      emitSpy.mockRestore();
+    });
+
+    it('does not emit INFO when only the default error floor is active', () => {
+      delete process.env.LOG_LEVEL;
+      delete process.env.OPENAI_PROXY_DEBUG;
+      initProxyLogger();
+      const logger = getLoggerForTesting();
+      expect(logger).not.toBeNull();
+      const emitSpy = jest.spyOn(logger!, 'emit');
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'session.created received',
+        attributes: {},
+      });
+      expect(emitSpy).not.toHaveBeenCalled();
       emitSpy.mockRestore();
     });
   });

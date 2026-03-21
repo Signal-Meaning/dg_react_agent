@@ -14,7 +14,7 @@ Work can proceed issue-by-issue, but these groupings share code paths and tests:
 
 | Bundle | Issues | Shared surface | Primary tests | Done |
 |--------|--------|----------------|---------------|------|
-| **A — Observability** | [#531](./ISSUE-531.md) | `logger.ts` `initProxyLogger` / `emitLog`; `run.ts` defaults | Unit: logger; integration: synthetic upstream `error` with env unset | - [ ] |
+| **A — Observability** | [#531](./ISSUE-531.md) | `logger.ts` `initProxyLogger` / `emitLog`; `run.ts` defaults | Unit: logger; integration: synthetic upstream `error` with env unset | - [x] |
 | **B — Ordering / protocol** | [#534](./ISSUE-534.md), [#532](./ISSUE-532.md) | `server.ts` `forwardClientMessage`, `session.updated`, `hasSentSettingsApplied`, tools path | `tests/integration/openai-proxy-integration.test.ts` (extend with Settings+tools + early inject; close codes) | - [ ] |
 | **C — Client JSON boundary** | [#533](./ISSUE-533.md) | `server.ts` `else { upstream.send(raw) }` branch | Unit or integration: unknown `type` rejected or logged; no raw passthrough in strict mode | - [ ] |
 | **D — Settings → Realtime session** | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | `translator.ts` `mapSettingsToSessionUpdate`, component `Settings` types, `buildSettingsMessage` | `tests/openai-proxy.test.ts` (mapper snapshots); integration: outbound `session.update` shape with `USE_REAL_APIS=1` when needed | - [ ] |
@@ -71,7 +71,7 @@ Check **Area done** when every linked issue’s **Verified** checklist in its do
 
 | Priority | Area | Issues | Area done | Notes |
 |----------|------|--------|-----------|-------|
-| 1 | Section 1 — logging | [#531](./ISSUE-531.md) | - [ ] | |
+| 1 | Section 1 — logging | [#531](./ISSUE-531.md) | - [x] | Code landed; optional manual stderr check remains in ISSUE-531 doc |
 | 2 | Section 4 — `InjectUserMessage` gating | [#534](./ISSUE-534.md) | - [ ] | Do before / with Section 2 bundle B |
 | 3 | Section 2 — protocol / Settings + functions | [#532](./ISSUE-532.md) | - [ ] | Real-API qualification when root cause is ordering/timing |
 | 4 | Section 3 — JSON hardening | [#533](./ISSUE-533.md) | - [ ] | Prefer before strict removal of passthrough if mapping lags |

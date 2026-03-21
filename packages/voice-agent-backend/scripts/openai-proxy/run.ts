@@ -6,6 +6,9 @@
  * Set HTTPS=true or HTTPS=1 in .env (or env) to use HTTPS with a self-signed cert.
  * Requires OPENAI_API_KEY for upstream authentication.
  *
+ * Logging: set LOG_LEVEL (debug | info | warn | error) for verbose proxy logs. If unset,
+ * ERROR-level logs still emit (upstream Realtime errors are always visible — Issue #531).
+ *
  * Run with cwd = this package directory (voice-agent-backend) or repo root.
  * Loads .env from cwd, parent, or repo root so OPENAI_API_KEY works in monorepo or standalone.
  *
