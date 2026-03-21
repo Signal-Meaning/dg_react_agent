@@ -3,7 +3,7 @@
  *
  * Listens on a path (e.g. /openai); accepts component protocol (Settings, InjectUserMessage);
  * translates to OpenAI Realtime and forwards to upstream; translates upstream events back to component.
- * Logging uses OpenTelemetry (see logger.ts in this directory) when OPENAI_PROXY_DEBUG=1.
+ * Logging uses OpenTelemetry (see logger.ts). Always initialized; minimum level is ERROR when `logLevel` is unset (Issue #531).
  * See docs/issues/ISSUE-381/API-DISCONTINUITIES.md.
  */
 
@@ -111,9 +111,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     });
 
   const wss = new WebSocketServer({ server, path: options.path });
-  if (options.logLevel) {
-    initProxyLogger({ logLevel: options.logLevel });
-  }
+  // Issue #531: always init so ERROR logs emit when logLevel / LOG_LEVEL unset (Option B in logger.ts).
+  initProxyLogger({ logLevel: options.logLevel });
 
   const deferredResponseCreateTimeoutMs = options.deferredResponseCreateTimeoutMs ?? DEFERRED_RESPONSE_CREATE_TIMEOUT_MS;
 

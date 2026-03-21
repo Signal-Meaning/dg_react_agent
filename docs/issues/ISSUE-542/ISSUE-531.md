@@ -8,7 +8,9 @@
 
 **Option B only:** when `LOG_LEVEL` / `logLevel` are unset, `initProxyLogger` uses a minimum severity of **error** and initializes OTel so ERROR logs (including upstream Realtime `error`) always emit. **Do not** switch to Option A (`console.error` fallback in `emitLog` when the logger is null) unless product explicitly reverses this decision—Option B keeps a single OTel path and consistent attributes.
 
-**Implementation:** matches Option B above (landed on branch `davidrmcgee/epic-542`).
+**Why Option A is not required:** The supported entrypoint is `createOpenAIProxyServer`, which **must always** call `initProxyLogger` (even when `options.logLevel` is undefined) so Option B actually applies. Option A would only help if `emitLog` ran without a prior `initProxyLogger` (unsupported) or after `shutdownProxyLogger` during teardown (not worth a second logging path for normal ops).
+
+**Implementation:** Option B in `logger.ts` plus unconditional `initProxyLogger({ logLevel: options.logLevel })` in `server.ts` (Issue #531 wire-up).
 
 ---
 

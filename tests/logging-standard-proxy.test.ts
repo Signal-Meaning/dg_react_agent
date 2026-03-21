@@ -14,6 +14,7 @@ import {
   SeverityNumber,
   ATTR_TRACE_ID,
 } from '../packages/voice-agent-backend/scripts/openai-proxy/logger';
+import { createOpenAIProxyServer } from '../packages/voice-agent-backend/scripts/openai-proxy/server';
 
 describe('OpenAI proxy logging standard (Issue #437)', () => {
   beforeEach(async () => {
@@ -164,6 +165,18 @@ describe('OpenAI proxy logging standard (Issue #437)', () => {
       });
       expect(emitSpy).not.toHaveBeenCalled();
       emitSpy.mockRestore();
+    });
+
+    it('createOpenAIProxyServer with logLevel omitted still initializes logger (Issue #531 wire-up)', () => {
+      delete process.env.LOG_LEVEL;
+      delete process.env.OPENAI_PROXY_DEBUG;
+      const { wss, server: httpServer } = createOpenAIProxyServer({
+        path: '/openai-logging-issue531',
+        upstreamUrl: 'ws://127.0.0.1:59998/unused',
+      });
+      expect(getLoggerForTesting()).not.toBeNull();
+      wss.close();
+      httpServer.close();
     });
   });
 
