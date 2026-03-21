@@ -3409,6 +3409,56 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('error', done);
   });
 
+  /**
+   * Issue #540: integrator `agent.sessionAudioOutput` → upstream `session.audio.output`;
+   * `session.audio.input` proxy defaults unchanged.
+   */
+  itMockOnly('Issue #540: session.update includes audio.output from agent.sessionAudioOutput (mock upstream)', (done) => {
+    receivedSessionUpdatePayloads.length = 0;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(
+        JSON.stringify({
+          type: 'Settings',
+          agent: {
+            think: { prompt: 'Help.' },
+            sessionAudioOutput: { voice: 'marin', speed: 1 },
+          },
+        })
+      );
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string };
+        if (msg.type === 'SettingsApplied') {
+          expect(receivedSessionUpdatePayloads.length).toBe(1);
+          const sessionUpdate = receivedSessionUpdatePayloads[0];
+          const sess = sessionUpdate.session as {
+            audio?: {
+              input?: {
+                turn_detection?: unknown;
+                format?: { type?: string; rate?: number };
+                transcription?: { model?: string };
+              };
+              output?: { voice?: unknown; speed?: number };
+            };
+          };
+          expect(sess.audio?.input?.turn_detection).toBeNull();
+          expect(sess.audio?.input?.format).toEqual({ type: 'audio/pcm', rate: 24000 });
+          expect(sess.audio?.input?.transcription?.model).toBe('gpt-4o-transcribe');
+          expect(sess.audio?.output).toEqual({ voice: 'marin', speed: 1 });
+          client.close();
+          done();
+        }
+      } catch (err) {
+        client.close();
+        done(err);
+      }
+    });
+    client.on('error', done);
+  });
+
   itMockOnly('Issue #414 TDD: greeting delivers text to client only (nothing to upstream)', (done) => {
     mockReceived.length = 0;
     receivedConversationItems.length = 0;

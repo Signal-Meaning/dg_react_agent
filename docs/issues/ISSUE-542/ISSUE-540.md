@@ -45,6 +45,7 @@ Output-side session audio (`session.audio.output` in Realtime **RealtimeAudioCon
 ### Verified
 
 - [x] Unit tests pass.
+- [x] Mock integration: `tests/integration/openai-proxy-integration.test.ts` — `Issue #540: session.update includes audio.output from agent.sessionAudioOutput (mock upstream)`.
 - [ ] **Real API / E2E:** TTS/audio path regression in test-app proxy mode (per original issue).
 
 ---
@@ -54,7 +55,7 @@ Output-side session audio (`session.audio.output` in Realtime **RealtimeAudioCon
 - `packages/voice-agent-backend/scripts/openai-proxy/translator.ts` — `OpenAIRealtimeSessionAudioOutput`, `normalizeSessionAudioOutput`, `mapSettingsToSessionUpdate`
 - `src/types/agent.ts` — `SessionAudioOutputSettings`, `AgentSettingsMessage`, `AgentOptions`
 - `src/utils/buildSettingsMessage.ts`, `src/components/DeepgramVoiceInteraction/index.tsx`
-- `tests/openai-proxy.test.ts`, `tests/buildSettingsMessage.test.ts`
+- `tests/openai-proxy.test.ts`, `tests/buildSettingsMessage.test.ts`, `tests/integration/openai-proxy-integration.test.ts`
 - `packages/voice-agent-backend/scripts/openai-proxy/README.md`, `PROTOCOL-AND-MESSAGE-ORDERING.md`
 
 **Canonical API:** [session.update](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update) → `audio` → **RealtimeAudioConfig** `output` (**RealtimeAudioConfigOutput**).
