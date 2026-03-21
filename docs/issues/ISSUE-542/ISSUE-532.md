@@ -4,7 +4,7 @@
 
 **Epic:** [#542](./README.md) · **TDD bundle:** B (ordering / protocol) with [#534](./ISSUE-534.md)
 
-**Status (mock):** Section **2b** regression test and mock mode `mockIssue532Section2bToolsThenInject` added; client WebSocket **close** code/reason logged at INFO (`ATTR_CLIENT_CLOSE_CODE` / `ATTR_CLIENT_CLOSE_REASON`). **Real-API** qualification still open when `OPENAI_API_KEY` is available.
+**Status (mock):** Section **2b** regression test and mock mode `mockIssue532Section2bToolsThenInject` added; client WebSocket **close** code/reason logged at INFO (`ATTR_CLIENT_CLOSE_CODE` / `ATTR_CLIENT_CLOSE_REASON`). **Real-API:** full `openai-proxy-integration` suite with `USE_REAL_APIS=1` qualified (including partner-grade `Issue #470 real-API: function-call flow completes` with `outputModalities: ['text']` and early test order to avoid cross-test upstream pressure).
 
 ---
 
@@ -26,7 +26,7 @@ GitHub issue lists exact steps: WS to proxy; UTF-8 JSON only; Settings without f
 
 ## TDD plan
 
-**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (real API + optional E2E)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [x] Verified (real API) · - [ ] Verified (optional E2E)
 
 ### RED
 
@@ -45,7 +45,7 @@ GitHub issue lists exact steps: WS to proxy; UTF-8 JSON only; Settings without f
 ### Verified
 
 - [x] Full mock `openai-proxy-integration` suite (65+ tests) green.
-- [ ] **Real API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` with `OPENAI_API_KEY` for Settings+tools+inject path. **Partner-grade path (backend HTTP before `FunctionCallResponse`):** same suite, `-t "Issue #470 real-API: function-call flow completes"` (see ISSUE-462 / `.cursorrules`). If that test times out, treat as upstream/API flake and retry; do not mark this row checked until it passes locally/CI when you need qualification.
+- [x] **Real API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` with `OPENAI_API_KEY` — all real-API cases in that file, including Settings+tools+inject and **partner-grade** `Issue #470 real-API: function-call flow completes` (backend HTTP before `FunctionCallResponse`; `outputModalities: ['text']` only — Realtime rejects `['text','audio']` together). The #470 test is ordered **early** in the suite (after SettingsApplied) to limit cross-test upstream load.
 - [ ] If partner scenario matches, E2E with **real** backend HTTP before `FunctionCallResponse` (ISSUE-462).
 
 ---

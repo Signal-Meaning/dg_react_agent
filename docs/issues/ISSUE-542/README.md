@@ -75,7 +75,7 @@ Check **Area done** when every linked issue’s **Verified** checklist in its do
 |----------|------|--------|-----------|-------|
 | 1 | Section 1 — logging | [#531](./ISSUE-531.md) | - [x] | Code landed; optional manual stderr check remains in ISSUE-531 doc |
 | 2 | Section 4 — `InjectUserMessage` gating | [#534](./ISSUE-534.md) | - [x] | Proxy queue landed; optional React enforcement + real-API check open in ISSUE-534 doc |
-| 3 | Section 2 — protocol / Settings + functions | [#532](./ISSUE-532.md) | - [ ] | Mock Section 2b + client close log done; real-API row still open in ISSUE-532 |
+| 3 | Section 2 — protocol / Settings + functions | [#532](./ISSUE-532.md) | - [ ] | Mock Section 2b + client close log done; **real-API** full `openai-proxy-integration` with `USE_REAL_APIS=1` verified per ISSUE-532; optional E2E row still open there |
 | 4 | Section 3 — JSON hardening | [#533](./ISSUE-533.md) | - [x] | Strict default + `OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH` escape hatch |
 | 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [ ] | Mapping code + unit tests landed; **Area done** when all child **Verified** boxes closed (real-API/E2E where noted) |
 | 6 | Section 6 — lifecycle / audit / idempotence | [#541](./ISSUE-541.md) | - [x] | Matrix, idempotence test, component comment, ISSUE-541 **Verified** (re-confirm on release) |
