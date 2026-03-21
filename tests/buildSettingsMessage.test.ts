@@ -113,6 +113,139 @@ describe('buildSettingsMessage', () => {
     expect(think.prompt).toBe(minimalOptions.instructions);
   });
 
+  it('includes agent.think.provider.temperature when thinkTemperature is a number (Issue #538)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, thinkTemperature: 0.85 },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.think.provider).toMatchObject({ temperature: 0.85 });
+  });
+
+  it('omits agent.think.provider.temperature when thinkTemperature is undefined (Issue #538)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: false, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('temperature' in msg.agent.think.provider).toBe(false);
+  });
+
+  it('includes agent.think.toolChoice when thinkToolChoice is set (Issue #535)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, thinkToolChoice: 'auto' },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.think.toolChoice).toBe('auto');
+  });
+
+  it('includes agent.think.toolChoice object form for forced function (Issue #535)', () => {
+    const choice = { type: 'function' as const, name: 'get_time' };
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, thinkToolChoice: choice },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.think.toolChoice).toEqual(choice);
+  });
+
+  it('omits agent.think.toolChoice when thinkToolChoice is undefined (Issue #535)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('toolChoice' in msg.agent.think).toBe(false);
+  });
+
+  it('includes agent.think.outputModalities when thinkOutputModalities is non-empty (Issue #536)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, thinkOutputModalities: ['text'] },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.think.outputModalities).toEqual(['text']);
+  });
+
+  it('omits agent.think.outputModalities when thinkOutputModalities undefined or empty (Issue #536)', () => {
+    const noProp = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('outputModalities' in noProp.agent.think).toBe(false);
+    const empty = buildSettingsMessage(
+      { ...minimalOptions, thinkOutputModalities: [] },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('outputModalities' in empty.agent.think).toBe(false);
+  });
+
+  it('includes agent.think.maxOutputTokens when thinkMaxOutputTokens is a positive integer (Issue #537)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, thinkMaxOutputTokens: 512 },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.think.maxOutputTokens).toBe(512);
+  });
+
+  it('omits agent.think.maxOutputTokens when thinkMaxOutputTokens undefined (Issue #537)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('maxOutputTokens' in msg.agent.think).toBe(false);
+  });
+
+  it('omits agent.think.maxOutputTokens for invalid numbers (Issue #537)', () => {
+    for (const thinkMaxOutputTokens of [0, -10, 1.25, NaN]) {
+      const msg = buildSettingsMessage(
+        { ...minimalOptions, thinkMaxOutputTokens },
+        { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+      );
+      expect('maxOutputTokens' in msg.agent.think).toBe(false);
+    }
+  });
+
+  it('includes agent.think.managedPrompt when thinkManagedPrompt is valid (Issue #539)', () => {
+    const msg = buildSettingsMessage(
+      {
+        ...minimalOptions,
+        thinkManagedPrompt: { id: 'pmpt_1', version: 'a', variables: { x: 'y' } },
+      },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.think.managedPrompt).toEqual({ id: 'pmpt_1', version: 'a', variables: { x: 'y' } });
+  });
+
+  it('omits agent.think.managedPrompt when id missing or blank (Issue #539)', () => {
+    const noProp = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('managedPrompt' in noProp.agent.think).toBe(false);
+    const blank = buildSettingsMessage(
+      { ...minimalOptions, thinkManagedPrompt: { id: '  ' } },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('managedPrompt' in blank.agent.think).toBe(false);
+  });
+
+  it('includes agent.sessionAudioOutput when set and isOpenAIProxy (Issue #540)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, sessionAudioOutput: { voice: 'cedar', speed: 0.9 } },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.sessionAudioOutput).toEqual({ voice: 'cedar', speed: 0.9 });
+  });
+
+  it('omits agent.sessionAudioOutput when not OpenAI proxy or undefined (Issue #540)', () => {
+    const direct = buildSettingsMessage(
+      { ...minimalOptions, sessionAudioOutput: { voice: 'alloy' } },
+      { isOpenAIProxy: false, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('sessionAudioOutput' in direct.agent).toBe(false);
+    const proxyNoOpt = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('sessionAudioOutput' in proxyNoOpt.agent).toBe(false);
+  });
+
   it('sets speak provider model from options.voice', () => {
     const msg = buildSettingsMessage(
       { ...minimalOptions, voice: 'aura-luna-en' },

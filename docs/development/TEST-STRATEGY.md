@@ -33,7 +33,9 @@ Summary: **real APIs first (when available) → mocks**. **CI: mocks only.**
 - **CI:** Always run **mocks** only. No real API keys; fast and deterministic.
 - **Local / when keys available:** Run **real APIs first**, then mocks.
 
-- **When real APIs are requested:** Set **`USE_REAL_APIS=1`** and **`OPENAI_API_KEY`** (in `.env`, `test-app/.env`, or env), then run e.g. `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`. Mock-only tests are skipped; the rest run against the live OpenAI Realtime API. Optional: `OPENAI_REALTIME_URL` to override the upstream URL.
+- **When real APIs are requested:** Set **`USE_REAL_APIS=1`** and **`OPENAI_API_KEY`** (in `.env`, `test-app/.env`, or env), then run e.g. `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`. Mock-only tests are skipped; the rest run against the live OpenAI Realtime API. For **OpenAI proxy / `session.update` mapping** (e.g. Epic #542 Bundle D), that integration run is **required for qualification** when keys are available—not an extra optional pass. You may set **`OPENAI_REALTIME_URL`** to override the upstream URL.
+- **Managed prompt real-API test (Issue #539):** Set **`OPENAI_MANAGED_PROMPT_ID`** to your OpenAI dashboard prompt id to run the dedicated integration test; if **unset**, that test **skips**. Optional: **`OPENAI_MANAGED_PROMPT_VERSION`**, **`OPENAI_MANAGED_PROMPT_VARIABLES`** (JSON object string; invalid JSON fails the run with a clear error). See `docs/issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md`.
+- **Inject-before-Settings (Issue #534):** The integration suite includes **`Issue #534 real-API: InjectUserMessage before Settings completes without Error (USE_REAL_APIS=1)`** whenever `USE_REAL_APIS=1` and **`OPENAI_API_KEY`** are set (no extra env). It qualifies the proxy **inject queue** on the live API. Mock-only coverage: `Issue #534: InjectUserMessage before Settings deferred until session.updated`.
 
 - **Filtering by name does not enable real APIs.** Using **`--testNamePattern=real-API`** (or similar) only selects which tests run; it does **not** set `USE_REAL_APIS=1`. To run tests against the real API you must set the env var. Without it, real-API tests are skipped (they use `(useRealAPIs ? it : it.skip)`). So a run with `--testNamePattern=real-API` but without `USE_REAL_APIS=1` will skip those tests, not run them against the live API.
 
@@ -52,7 +54,10 @@ Summary: **real APIs first (when available) → mocks**. **CI: mocks only.**
 ## Document references
 
 - **Real-API test failures (do not fix by increasing timeouts):** `docs/issues/ISSUE-489/REAL-API-TEST-FAILURES.md` — investigation, alignment with OpenAI Realtime API, and open questions on spec clarity and test coverage.
-- **Integration tests (mock upstream):** `docs/issues/ISSUE-381/INTEGRATION-TEST-PLAN.md`, `tests/integration/openai-proxy-integration.test.ts`
+- **OpenAI proxy protocol + requirement matrix:** `tests/integration/PROTOCOL-SPECIFICATION.md`, `packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md`
+- **Backend / proxy contract (readiness, inject queue, message sources):** `docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md`, `docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md`
+- **Epic #542 (Voice Commerce proxy register):** `docs/issues/ISSUE-542/README.md`, `packages/voice-agent-backend/scripts/openai-proxy/REALTIME-SESSION-UPDATE-FIELD-MAP.md`
+- **Integration tests (mock + real API):** `docs/issues/ISSUE-381/INTEGRATION-TEST-PLAN.md`, `tests/integration/openai-proxy-integration.test.ts`, helpers under `tests/integration/helpers/` (`real-api-json-ws-session.ts`, `managed-prompt-env.ts`)
 - **E2E tests:** `test-app/tests/e2e/`, `docs/development/TESTING-QUICK-START.md`
 - **Transcript/VAD contract (Issue #414):** `docs/issues/ISSUE-414/COMPONENT-PROXY-INTERFACE-TDD.md`
 - **Backend/proxy and partner-reported defects:** `tests/docs/BACKEND-PROXY-DEFECTS-REAL-API.md`

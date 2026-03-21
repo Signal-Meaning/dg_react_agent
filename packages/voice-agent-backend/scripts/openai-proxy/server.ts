@@ -3,7 +3,7 @@
  *
  * Listens on a path (e.g. /openai); accepts component protocol (Settings, InjectUserMessage);
  * translates to OpenAI Realtime and forwards to upstream; translates upstream events back to component.
- * Logging uses OpenTelemetry (see logger.ts in this directory) when OPENAI_PROXY_DEBUG=1.
+ * Logging uses OpenTelemetry (see logger.ts). Always initialized; minimum level is ERROR when `logLevel` is unset (Issue #531).
  * See docs/issues/ISSUE-381/API-DISCONTINUITIES.md.
  */
 
@@ -51,6 +51,8 @@ import {
   ATTR_ERROR_MESSAGE,
   ATTR_UPSTREAM_CLOSE_CODE,
   ATTR_UPSTREAM_CLOSE_REASON,
+  ATTR_CLIENT_CLOSE_CODE,
+  ATTR_CLIENT_CLOSE_REASON,
 } from './logger';
 import { parse as parseUrl } from 'url';
 import {
@@ -58,6 +60,10 @@ import {
   assertMinAudioBeforeCommit,
   assertAppendChunkSize,
 } from './openai-audio-constants';
+import {
+  OPENAI_PROXY_CLIENT_JSON_TYPE,
+  getOpenAIProxyAllowedClientJsonTypesDescription,
+} from './client-protocol';
 
 /** Debounce delay (ms) after last binary chunk before sending commit + response.create. Must be long enough for upstream to process appends (real API returns "buffer too small ... 0.00ms" if commit is sent too soon). */
 const INPUT_AUDIO_COMMIT_DEBOUNCE_MS = 400;
@@ -93,6 +99,13 @@ export interface OpenAIProxyServerOptions {
    * For integration tests only (short timeout to test the "upstream withholds completion" path). Production uses default 20s.
    */
   deferredResponseCreateTimeoutMs?: number;
+  /**
+   * Issue #533: When true, unknown client JSON types are forwarded to upstream as raw text (legacy). Default false:
+   * only Settings, InjectUserMessage, FunctionCallResponse are translated; KeepAlive is always ignored (no OpenAI equivalent —
+   * see API-DISCONTINUITIES.md). Other unknown JSON is forwarded as raw only when this flag is true. Otherwise a component
+   * Error (`disallowed_client_message_type`). Set via `OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH=1` in run.ts for dev only.
+   */
+  allowClientJsonPassthrough?: boolean;
 }
 
 /**
@@ -111,11 +124,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     });
 
   const wss = new WebSocketServer({ server, path: options.path });
-  if (options.logLevel) {
-    initProxyLogger({ logLevel: options.logLevel });
-  }
+  // Issue #531: always init so ERROR logs emit when logLevel / LOG_LEVEL unset (Option B in logger.ts).
+  initProxyLogger({ logLevel: options.logLevel });
 
   const deferredResponseCreateTimeoutMs = options.deferredResponseCreateTimeoutMs ?? DEFERRED_RESPONSE_CREATE_TIMEOUT_MS;
+  const allowClientJsonPassthrough = options.allowClientJsonPassthrough === true;
 
   wss.on('connection', (clientWs: WebSocket, req: http.IncomingMessage) => {
     const connId = `c${++connectionCounter}`;
@@ -164,6 +177,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     /** Issue #489: Prior-session context is no longer sent as conversation items; it is passed in session.update instructions only. */
     /** Issue #414: defer input_audio_buffer.append until after session.updated so session is configured for audio. */
     const pendingAudioQueue: Buffer[] = [];
+    /** Issue #542 #534: defer InjectUserMessage (full client JSON frame) until after session.updated (same readiness as audio). */
+    const pendingInjectTextQueue: Buffer[] = [];
     /** TODO: Not expected to keep. Only forward the first Settings per connection; duplicate Settings (e.g. on reconnect/reload) must not send a second session.update or upstream can error. */
     let hasForwardedSessionUpdate = false;
     /** Issue #489: Last Settings had context (reconnect). On session.updated do not send greeting to client; they already have it. */
@@ -200,12 +215,27 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       hasReceivedOutputAudioDeltaForCurrentResponse = false;
     };
 
-    /** Issue #522: Send deferred response.create after function_call_output (REQUIRED-UPSTREAM-CONTRACT.md). Clears timeout, resets flag, sends response.create, calls onResponseStarted. Call only when pendingResponseCreateAfterFunctionCallOutput is true. */
-    const sendDeferredResponseCreate = (): void => {
-      if (deferredResponseCreateTimeoutId) {
+    /** Clear debounce timer and null handle (avoids stale timer ids; Issue #542 follow-up). */
+    const clearAudioCommitDebounce = (): void => {
+      if (audioCommitTimer != null) {
+        clearTimeout(audioCommitTimer);
+        audioCommitTimer = null;
+      }
+    };
+    const clearDeferredResponseCreateTimer = (): void => {
+      if (deferredResponseCreateTimeoutId != null) {
         clearTimeout(deferredResponseCreateTimeoutId);
         deferredResponseCreateTimeoutId = null;
       }
+    };
+    const clearProxyConnectionTimers = (): void => {
+      clearAudioCommitDebounce();
+      clearDeferredResponseCreateTimer();
+    };
+
+    /** Issue #522: Send deferred response.create after function_call_output (REQUIRED-UPSTREAM-CONTRACT.md). Clears timeout, resets flag, sends response.create, calls onResponseStarted. Call only when pendingResponseCreateAfterFunctionCallOutput is true. */
+    const sendDeferredResponseCreate = (): void => {
+      clearDeferredResponseCreateTimer();
       pendingResponseCreateAfterFunctionCallOutput = false;
       upstream.send(JSON.stringify({ type: 'response.create' }));
       onResponseStarted();
@@ -244,7 +274,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     };
 
     const scheduleAudioCommit = () => {
-      if (audioCommitTimer) clearTimeout(audioCommitTimer);
+      clearAudioCommitDebounce();
       audioCommitTimer = setTimeout(() => {
         audioCommitTimer = null;
         if (
@@ -274,22 +304,26 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       }, INPUT_AUDIO_COMMIT_DEBOUNCE_MS);
     };
 
+    /** `ws` emits this when upstream socket is closed before `open` (often client leg closed first). */
+    const WS_CLOSED_BEFORE_OPEN = 'WebSocket was closed before the connection was established';
+
     upstream.on('error', (err) => {
+      const errMsg = (err as Error).message;
+      const handshakeAborted = errMsg === WS_CLOSED_BEFORE_OPEN;
       emitLog({
-        severityNumber: SeverityNumber.ERROR,
-        severityText: 'ERROR',
-        body: (err as Error).message,
+        severityNumber: handshakeAborted ? SeverityNumber.INFO : SeverityNumber.ERROR,
+        severityText: handshakeAborted ? 'INFO' : 'ERROR',
+        body: handshakeAborted
+          ? `${errMsg} (upstream connect aborted; often client disconnected before handshake finished)`
+          : errMsg,
         attributes: {
           ...connectionAttrs,
           [ATTR_DIRECTION]: 'upstream',
-          [ATTR_ERROR_MESSAGE]: (err as Error).message,
+          [ATTR_ERROR_MESSAGE]: errMsg,
+          ...(handshakeAborted ? { upstream_handshake_aborted: '1' } : {}),
         },
       });
-      if (audioCommitTimer) clearTimeout(audioCommitTimer);
-      if (deferredResponseCreateTimeoutId) {
-        clearTimeout(deferredResponseCreateTimeoutId);
-        deferredResponseCreateTimeoutId = null;
-      }
+      clearProxyConnectionTimers();
       clientWs.close();
     });
     upstream.on('close', (code, reason) => {
@@ -304,11 +338,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           [ATTR_UPSTREAM_CLOSE_REASON]: reason?.toString() ?? '',
         },
       });
-      if (audioCommitTimer) clearTimeout(audioCommitTimer);
-      if (deferredResponseCreateTimeoutId) {
-        clearTimeout(deferredResponseCreateTimeoutId);
-        deferredResponseCreateTimeoutId = null;
-      }
+      clearProxyConnectionTimers();
     });
 
     const forwardClientMessage = (raw: Buffer) => {
@@ -326,7 +356,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             [ATTR_MESSAGE_TYPE]: msg.type ?? '(binary)',
           },
         });
-        if (msg.type === 'Settings') {
+        if (msg.type === OPENAI_PROXY_CLIENT_JSON_TYPE.Settings) {
           if (hasForwardedSessionUpdate) {
             // Duplicate Settings (e.g. test-app reload/reconnect): do not send second session.update to upstream.
             // Send SettingsApplied so the client does not block waiting.
@@ -363,7 +393,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           const g = settings.agent?.greeting;
           storedGreeting = typeof g === 'string' && g.trim().length > 0 ? g : undefined;
-        } else if (msg.type === 'FunctionCallResponse') {
+        } else if (msg.type === OPENAI_PROXY_CLIENT_JSON_TYPE.FunctionCallResponse) {
           const itemCreate = mapFunctionCallResponseToConversationItemCreate(
             msg as Parameters<typeof mapFunctionCallResponseToConversationItemCreate>[0]
           );
@@ -418,7 +448,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           // Enforce required upstream contract (REQUIRED-UPSTREAM-CONTRACT.md): if API never sends completion,
           // unstick after timeout so the client can get a next turn instead of hanging until idle timeout.
-          if (deferredResponseCreateTimeoutId) clearTimeout(deferredResponseCreateTimeoutId);
+          clearDeferredResponseCreateTimer();
           deferredResponseCreateTimeoutId = setTimeout(() => {
             deferredResponseCreateTimeoutId = null;
             if (!pendingResponseCreateAfterFunctionCallOutput || upstream.readyState !== WebSocket.OPEN) return;
@@ -440,7 +470,21 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           if (clientWs.readyState === WebSocket.OPEN) {
             clientWs.send(JSON.stringify({ type: 'AgentThinking', content: '' }));
           }
-        } else if (msg.type === 'InjectUserMessage') {
+        } else if (msg.type === OPENAI_PROXY_CLIENT_JSON_TYPE.InjectUserMessage) {
+          if (!hasSentSettingsApplied) {
+            pendingInjectTextQueue.push(Buffer.from(raw));
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: 'InjectUserMessage deferred (waiting for session.updated)',
+              attributes: {
+                ...connectionAttrs,
+                [ATTR_DIRECTION]: 'client→upstream',
+                'inject.queued_frames': pendingInjectTextQueue.length,
+              },
+            });
+            return;
+          }
           const injectMsg = msg as Parameters<typeof mapInjectUserMessageToConversationItemCreate>[0];
           const itemCreate = mapInjectUserMessageToConversationItemCreate(injectMsg);
           upstream.send(JSON.stringify(itemCreate));
@@ -453,8 +497,43 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             content: injectMsg.content ?? '',
           };
           clientWs.send(JSON.stringify(userEcho));
+        } else if (msg.type === OPENAI_PROXY_CLIENT_JSON_TYPE.KeepAlive) {
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: 'client KeepAlive ignored (not sent to OpenAI upstream; Issue #533)',
+            attributes: {
+              ...connectionAttrs,
+              [ATTR_DIRECTION]: 'client→upstream',
+              [ATTR_MESSAGE_TYPE]: 'KeepAlive',
+            },
+          });
+          return;
+        } else if (allowClientJsonPassthrough) {
+          // Send as UTF-8 text frame (same as session.update path), not binary — ws treats Buffer as binary opcode.
+          upstream.send(text);
         } else {
-          upstream.send(raw);
+          const rawType = msg.type ?? '(missing type)';
+          const description = `Disallowed client message type "${rawType}" for OpenAI proxy (Issue #533). Allowed: ${getOpenAIProxyAllowedClientJsonTypesDescription()} Enable OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH=1 only for legacy debugging.`;
+          emitLog({
+            severityNumber: SeverityNumber.WARN,
+            severityText: 'WARN',
+            body: description,
+            attributes: {
+              ...connectionAttrs,
+              [ATTR_DIRECTION]: 'client→upstream',
+              [ATTR_MESSAGE_TYPE]: String(rawType),
+            },
+          });
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(
+              JSON.stringify({
+                type: 'Error',
+                code: 'disallowed_client_message_type',
+                description,
+              })
+            );
+          }
         }
       } catch {
         if (raw.length > 0) {
@@ -491,6 +570,14 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           hasPendingAudio = true;
           scheduleAudioCommit();
         }
+      }
+    };
+
+    const flushPendingInjectMessages = () => {
+      while (pendingInjectTextQueue.length > 0) {
+        const buf = pendingInjectTextQueue.shift();
+        if (!buf || upstream.readyState !== WebSocket.OPEN) continue;
+        forwardClientMessage(buf);
       }
     };
 
@@ -607,6 +694,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           if (storedGreeting) storedGreeting = undefined;
           hadContextInLastSettings = false;
+          // Issue #542 #534: text inject before session.updated; then audio (Issue #414).
+          flushPendingInjectMessages();
           // Issue #414: session is now configured for audio; send any append chunks queued before session.updated.
           flushPendingAudio();
         } else if (msg.type === 'response.output_text.done') {
@@ -1018,7 +1107,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     });
 
     upstream.on('close', (code: number, reason?: Buffer) => {
-      if (audioCommitTimer) clearTimeout(audioCommitTimer);
+      clearProxyConnectionTimers();
       flushPendingIdleTimeoutError();
       // Issue #406: if upstream closed before we sent SettingsApplied, notify the client so the host sees a clear error instead of only "connection closed"
       if (!hasSentSettingsApplied && clientWs.readyState === WebSocket.OPEN) {
@@ -1046,8 +1135,22 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       }
       clientWs.close();
     });
-    (clientWs as unknown as WsLike).on('close', () => {
-      if (audioCommitTimer) clearTimeout(audioCommitTimer);
+    (clientWs as unknown as WsLike).on('close', (code: unknown, reason: unknown) => {
+      const closeCode = typeof code === 'number' ? code : 0;
+      const reasonStr =
+        typeof reason === 'string' ? reason : Buffer.isBuffer(reason) ? reason.toString('utf8') : '';
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: `client WebSocket closed (code=${closeCode}${reasonStr ? `, reason=${reasonStr}` : ''})`,
+        attributes: {
+          ...connectionAttrs,
+          [ATTR_DIRECTION]: 'client',
+          [ATTR_CLIENT_CLOSE_CODE]: String(closeCode),
+          [ATTR_CLIENT_CLOSE_REASON]: reasonStr,
+        },
+      });
+      clearProxyConnectionTimers();
       upstream.close();
     });
     (clientWs as unknown as WsLike).on('error', () => upstream.close());

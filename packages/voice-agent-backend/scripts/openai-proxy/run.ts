@@ -6,6 +6,12 @@
  * Set HTTPS=true or HTTPS=1 in .env (or env) to use HTTPS with a self-signed cert.
  * Requires OPENAI_API_KEY for upstream authentication.
  *
+ * Logging: set LOG_LEVEL (debug | info | warn | error) for verbose proxy logs. If unset,
+ * ERROR-level logs still emit (upstream Realtime errors are always visible — Issue #531).
+ *
+ * Client JSON: unknown message types are rejected by default (Issue #533). Set
+ * OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH=1 only to forward arbitrary JSON to upstream (not recommended).
+ *
  * Run with cwd = this package directory (voice-agent-backend) or repo root.
  * Loads .env from cwd, parent, or repo root so OPENAI_API_KEY works in monorepo or standalone.
  *
@@ -44,6 +50,10 @@ if (!apiKey || apiKey.trim().length === 0) {
 const openaiProxyDebug = process.env.OPENAI_PROXY_DEBUG === '1' || process.env.OPENAI_PROXY_DEBUG === 'true';
 const logLevel = process.env.LOG_LEVEL ?? (openaiProxyDebug ? 'debug' : undefined);
 const greetingTextOnly = process.env.OPENAI_PROXY_GREETING_TEXT_ONLY === '1' || process.env.OPENAI_PROXY_GREETING_TEXT_ONLY === 'true';
+/** Issue #533: legacy raw passthrough of unknown client JSON to upstream (discouraged). */
+const allowClientJsonPassthrough =
+  process.env.OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH === '1' ||
+  process.env.OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH === 'true';
 
 let server: ReturnType<typeof createOpenAIProxyServer>['server'] | undefined = undefined;
 if (useHttps) {
@@ -65,6 +75,7 @@ const { server: proxyServer } = createOpenAIProxyServer({
   upstreamHeaders: { Authorization: `Bearer ${apiKey.trim()}` },
   logLevel,
   greetingTextOnly,
+  allowClientJsonPassthrough,
 });
 
 const scheme = useHttps ? 'https' : 'http';

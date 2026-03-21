@@ -23,6 +23,7 @@
   ```
 - **Single spec:** `npm run test:e2e -- openai-proxy-e2e.spec.js`
 - **Only the 2 failing tests (6 and 6b):** `npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6. Simple function calling|6b. Issue #462"`
+- **Partner / ISSUE-462 qualification:** test **6b** (`6b. Issue #462 / #470: function-call flow completes…`) exercises real `POST /function-call` before `FunctionCallResponse` with live OpenAI; run with `USE_REAL_APIS=1` from `test-app`. Documented in [`docs/issues/ISSUE-542/ISSUE-532.md`](../../../docs/issues/ISSUE-542/ISSUE-532.md).
 - **One test by name:** `npm run test:e2e -- openai-proxy-e2e.spec.js --grep "Simple function calling"`
 
 Do **not** run `npm run test:e2e` without spec names when you only want to verify a subset (e.g. previously failing tests); that runs the entire suite.

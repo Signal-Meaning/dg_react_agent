@@ -74,6 +74,8 @@ The component considers the session **ready for the first user message** only af
 2. Send **SettingsApplied** back to the component (Deepgram sends it natively; a translation proxy must send it when the upstream confirms session/config, e.g. after `session.updated`).
 3. Keep the connection open so the component can send **InjectUserMessage** and receive responses.
 
+**OpenAI translation proxy (this repo):** If an `InjectUserMessage` arrives before the upstream session is ready, the proxy **queues** it and flushes after `session.updated` (Issue #534), mirroring the binary-audio gate. The component path below is unchanged.
+
 The component will not send the first `InjectUserMessage` until Settings are confirmed. If the proxy never sends `SettingsApplied` or closes the connection before the host sends the first message, the readiness contract is broken. See [Component–Proxy Contract (big picture)](./COMPONENT-PROXY-CONTRACT.md) for the full contract that applies to all proxies.
 
 ### Authentication Flow (Optional)

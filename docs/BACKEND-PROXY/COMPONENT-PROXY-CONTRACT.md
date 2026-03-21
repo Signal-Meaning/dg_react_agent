@@ -1,6 +1,6 @@
 # Component–Proxy Contract (Big Picture)
 
-This document describes the **contract between the component and any backend proxy** (Deepgram-native or translation proxy). The same contract applies regardless of which upstream service the proxy talks to. See also [Interface Contract](./INTERFACE-CONTRACT.md) for the Deepgram proxy specification and [Issue #381 API Discontinuities](../issues/ISSUE-381/API-DISCONTINUITIES.md) for OpenAI proxy translation.
+This document describes the **contract between the component and any backend proxy** (Deepgram-native or translation proxy). The same contract applies regardless of which upstream service the proxy talks to. See also [Interface Contract](./INTERFACE-CONTRACT.md) for the Deepgram proxy specification, [Issue #381 API Discontinuities](../issues/ISSUE-381/API-DISCONTINUITIES.md) for OpenAI proxy translation, and [REALTIME-CLIENT-EVENT-MATRIX.md](../../packages/voice-agent-backend/scripts/openai-proxy/REALTIME-CLIENT-EVENT-MATRIX.md) for which **OpenAI Realtime client events** the translation proxy emits (Issue #541).
 
 ## One component protocol, multiple backends
 
@@ -23,6 +23,10 @@ In both cases, the **component expects the same contract**: connection establish
   4. Keep the connection open so that the first `InjectUserMessage` can be sent and processed.
 
 If the proxy never sends `SettingsApplied` (e.g. because the upstream closes before sending the equivalent event), the component never enters “ready” state and the first user message cannot be sent successfully. Host apps that wait for “connection + Settings applied” before sending (e.g. via `onSettingsApplied` or a DOM flag like `[data-testid="has-sent-settings"]`) rely on this contract for **both** Deepgram and OpenAI (or any other) backend.
+
+### OpenAI translation proxy: `InjectUserMessage` before session ready (Issue #534)
+
+The **OpenAI** proxy in this repo **queues** full `InjectUserMessage` JSON frames when upstream session configuration is not yet applied (same readiness gate as binary audio: flush after `session.updated`). That is **defense in depth** if a custom or buggy client sends inject before `Settings` or before `SettingsApplied` would normally arrive. **Integrators should still follow the readiness contract above**; the queue does not replace it. See [PROTOCOL-AND-MESSAGE-ORDERING.md](../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) and [ISSUE-534](../issues/ISSUE-542/ISSUE-534.md).
 
 ## Function calls (Issue #407)
 
@@ -79,6 +83,6 @@ When using a **translation proxy** (e.g. OpenAI Realtime), the component receive
 | **ConversationText (assistant)** | **Only** from **conversation.item** (created/added/done) or greeting. Assistant text is **not** sent from control events such as `response.output_text.done` (upstream requirement; Issue #498, #500). Content includes text parts and **function_call** parts formatted as `"Function call: name(args)"` for parity with Deepgram (Issue #499). |
 | **Transcript** (user) | From **conversation.item.input_audio_transcription.completed** (final) and **.delta** (interim). The proxy accumulates deltas per item_id and sends interim Transcript with accumulated text (Issue #497). When the upstream sends them, `start`, `duration`, `channel`, `channel_index`, and `alternatives` are passed through (Issue #496). These events are emitted when transcription is enabled and audio is committed, including when server VAD is disabled (`turn_detection: null`) (Issue #495). |
 | **Raw upstream events** | The proxy **does not** forward raw upstream JSON (e.g. raw `conversation.item.added`) to the client. Only mapped component messages (ConversationText, Transcript, UtteranceEnd, etc.) and control messages (SettingsApplied, AgentAudioDone, Error) are sent (Issue #500). |
-| **Unmapped upstream events** | If the upstream sends an event type the proxy does not map, the proxy sends **Error** to the client with `code: 'unmapped_upstream_event'` (treated as a warning; goal is to map all events). It does not forward the raw event as text. |
+| **Unmapped upstream events** | If the upstream sends an event type the proxy does not map, the proxy **logs a warning only** (event type, payload length); it does **not** send **Error** to the client and does not forward the raw event as text (Issue #512). Goal: only unknown future API types hit this path. |
 
 Tests that cover these behaviors: see [PROTOCOL-SPECIFICATION](../../tests/integration/PROTOCOL-SPECIFICATION.md) §1 and §3 and the integration test file `openai-proxy-integration.test.ts`.

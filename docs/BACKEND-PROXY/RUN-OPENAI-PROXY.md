@@ -11,7 +11,10 @@
 | **OPENAI_API_KEY** | Proxy (server) | Required to connect proxy to OpenAI Realtime API. Set in `.env`, `test-app/.env`, or shell. |
 | **OPENAI_PROXY_PORT** | Proxy | Port for the proxy HTTP server (default `8080`). WebSocket path is `/openai`. |
 | **OPENAI_REALTIME_URL** | Proxy | Upstream WebSocket URL (default OpenAI Realtime). Override for a mock or alternate endpoint. |
-| **OPENAI_PROXY_DEBUG** | Proxy | Set to `1` to enable proxy logging (upstream→client message types, function_call_arguments.done, transcript-like events). |
+| **LOG_LEVEL** | Proxy | Optional. Proxy logger honors this (e.g. `debug`); see `packages/voice-agent-backend/scripts/openai-proxy/logger.ts` (Issue #531). |
+| **OPENAI_PROXY_DEBUG** | Proxy | Set to `1` to alias verbose logging (legacy; prefer `LOG_LEVEL` where documented). |
+| **USE_REAL_APIS** | Jest (repo root) | Set to `1` with **OPENAI_API_KEY** to run the **real-API subset** in `tests/integration/openai-proxy-integration.test.ts`. See [TEST-STRATEGY.md](../development/TEST-STRATEGY.md). |
+| **OPENAI_MANAGED_PROMPT_ID** | Jest (optional) | Non-empty → runs Issue **#539** managed-prompt real-API integration test; unset → that test **skips**. Optional: **OPENAI_MANAGED_PROMPT_VERSION**, **OPENAI_MANAGED_PROMPT_VARIABLES** (JSON object string). See [TDD-MANAGED-PROMPT-REAL-API.md](../issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md). |
 | **VITE_OPENAI_PROXY_ENDPOINT** | Test-app / E2E | WebSocket URL for the test-app to use the OpenAI proxy (e.g. `ws://localhost:8080/openai`). Playwright passes this to the test-app; default in config is `ws://localhost:8080/openai`. |
 | **E2E_BACKEND** | E2E only | `openai` (default) or `deepgram`. Chooses which proxy params to use for specs that support both. URL is built with `connectionMode` + `proxyEndpoint` query params. |
 | **HTTPS** | Test-app dev server | Set to `0` when Playwright starts the test-app so the app is served over HTTP (avoids TLS issues in Chromium). Does not affect the proxy. |
@@ -47,23 +50,35 @@ cd packages/voice-agent-backend && npx tsx scripts/openai-proxy/run.ts
 No proxy server or API key needed; tests use in-memory mappings.
 
 ```bash
-npm run test -- tests/openai-proxy.test.ts
+npm test -- tests/openai-proxy.test.ts
 ```
 
-- **32 tests** – Settings → session.update, InjectUserMessage, FunctionCallRequest/Response, context, session.updated → SettingsApplied, response events → ConversationText/FunctionCallRequest, error mapping, binary → input_audio_buffer.append, edge cases.
+- Covers `mapSettingsToSessionUpdate`, inject/context/function-call mappings, error mapping, and related translator behavior (see Jest output for current count).
 
 ---
 
 ## Run integration tests (proxy WebSocket server)
 
-No real OpenAI API needed; tests use a **mock upstream** WebSocket server.
+**Mock upstream (default / CI):** No `OPENAI_API_KEY` required for the mock leg; Jest starts an in-process mock OpenAI server.
 
 ```bash
-npm run test -- tests/integration/openai-proxy-integration.test.ts
+npm test -- tests/integration/openai-proxy-integration.test.ts
 ```
 
-- **11 tests** – Listen + upgrade, Settings → session.update → SettingsApplied, InjectUserMessage round-trip, binary + commit + response.create, function-call round-trip (FunctionCallRequest → FunctionCallResponse → function_call_output), FCR then CT order, transcript-only path (no FCR), transcript then .done order, user echo, context in Settings.
-- Runs in Node (Jest); same as other Jest tests in CI.
+- Exercises WebSocket upgrade, Settings → `session.update` → `session.updated` → SettingsApplied, **InjectUserMessage** queue before session ready (Issue **#534**, mock), binary gating, function-call ordering, protocol rows in [PROTOCOL-SPECIFICATION.md](../../tests/integration/PROTOCOL-SPECIFICATION.md), and more. **Test count** varies as specs grow; rely on `npm test` output.
+- Runs in Node (`@jest-environment node`).
+
+**Live OpenAI (local / release qualification):**
+
+```bash
+USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts
+```
+
+- Requires **OPENAI_API_KEY** (e.g. from `.env` / `test-app/.env`). Mock-only tests skip; tests whose names include `real-API` (and similar) run against the live Realtime API. For Epic **#542** / `session.update` mapping qualification, this run is **required** when keys are available ([TEST-STRATEGY.md](../development/TEST-STRATEGY.md)).
+- Optional: `OPENAI_MANAGED_PROMPT_ID=pmpt_...` to include the managed-prompt test ([TDD-MANAGED-PROMPT-REAL-API.md](../issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md)).
+- Helpers: `tests/integration/helpers/real-api-json-ws-session.ts`, `tests/integration/helpers/managed-prompt-env.ts`.
+
+**Further reading:** [REALTIME-SESSION-UPDATE-FIELD-MAP.md](../../packages/voice-agent-backend/scripts/openai-proxy/REALTIME-SESSION-UPDATE-FIELD-MAP.md), [Epic #542](../issues/ISSUE-542/README.md).
 
 ---
 

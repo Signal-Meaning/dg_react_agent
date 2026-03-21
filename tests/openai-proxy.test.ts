@@ -35,6 +35,55 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.session.model).toBe('gpt-4o-realtime-preview');
     });
 
+    it('does not forward agent.think.provider.temperature on session.update (Issue #538; REALTIME-SESSION-UPDATE-FIELD-MAP.md)', () => {
+      const withTemp = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Hi.',
+            provider: { model: 'gpt-realtime', temperature: 0.8 },
+          },
+        },
+      };
+      expect(mapSettingsToSessionUpdate(withTemp).session).not.toHaveProperty('temperature');
+      const noTemp = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Hi.', provider: { model: 'gpt-realtime' } } },
+      };
+      expect(mapSettingsToSessionUpdate(noTemp).session).not.toHaveProperty('temperature');
+    });
+
+    it('minimal Settings → session.update session keys (Issue #538 field map regression)', () => {
+      const out = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Hi' } },
+      });
+      expect(Object.keys(out.session).sort()).toEqual(['audio', 'instructions', 'model', 'type']);
+    });
+
+    it('full optional Settings → session.update includes mapped optional keys (Issue #538 field map)', () => {
+      const out = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            provider: { model: 'gpt-realtime-mini' },
+            toolChoice: 'auto',
+            outputModalities: ['text'],
+            maxOutputTokens: 256,
+            managedPrompt: { id: 'pmpt_123', variables: { topic: 'weather' } },
+            functions: [{ name: 'fn', description: 'd', parameters: { type: 'object' } }],
+          },
+          sessionAudioOutput: { voice: 'marin', speed: 1 },
+        },
+      });
+      const keys = Object.keys(out.session).sort();
+      expect(keys).toEqual(
+        ['audio', 'instructions', 'max_output_tokens', 'model', 'output_modalities', 'prompt', 'tool_choice', 'tools', 'type'].sort(),
+      );
+      expect(out.session).not.toHaveProperty('temperature');
+    });
+
     it('maps Settings with missing think to default instructions and model (no voice in session - API rejects session.voice)', () => {
       const settings = { type: 'Settings' as const };
       const out = mapSettingsToSessionUpdate(settings);
@@ -85,6 +134,316 @@ describe('OpenAI proxy translator (Issue #381)', () => {
         description: 'Get current time',
         parameters: { type: 'object' },
       });
+    });
+
+    it('maps agent.think.toolChoice to session.tool_choice (Issue #535; string modes)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            toolChoice: 'required' as const,
+            functions: [{ name: 'get_time', description: 't', parameters: {} }],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.tool_choice).toBe('required');
+    });
+
+    it('maps agent.think.toolChoice to session.tool_choice (Issue #535; force function)', () => {
+      const forced = { type: 'function' as const, name: 'get_time' };
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            toolChoice: forced,
+            functions: [{ name: 'get_time', description: 't', parameters: {} }],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.tool_choice).toEqual(forced);
+    });
+
+    it('omits session.tool_choice when agent.think.toolChoice is absent (Issue #535)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            functions: [{ name: 'get_time', description: 't', parameters: {} }],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session).not.toHaveProperty('tool_choice');
+    });
+
+    it('maps agent.think.outputModalities to session.output_modalities (Issue #536)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            outputModalities: ['text' as const],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.output_modalities).toEqual(['text']);
+    });
+
+    it('preserves order for audio+text output_modalities (Issue #536)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            outputModalities: ['audio' as const, 'text' as const],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.output_modalities).toEqual(['audio', 'text']);
+    });
+
+    it('filters invalid output modality strings (Issue #536)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            outputModalities: ['text', 'video', 'audio'] as ('text' | 'audio')[],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.output_modalities).toEqual(['text', 'audio']);
+    });
+
+    it('omits session.output_modalities when only invalid modality strings (Issue #536)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            outputModalities: ['video', 'image'] as ('text' | 'audio')[],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session).not.toHaveProperty('output_modalities');
+    });
+
+    it('omits session.output_modalities when agent.think.outputModalities absent or empty (Issue #536; API default unchanged)', () => {
+      const minimal = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.' } },
+      };
+      expect(mapSettingsToSessionUpdate(minimal).session).not.toHaveProperty('output_modalities');
+      const emptyArr = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.', outputModalities: [] } },
+      };
+      expect(mapSettingsToSessionUpdate(emptyArr).session).not.toHaveProperty('output_modalities');
+    });
+
+    it('maps agent.think.maxOutputTokens to session.max_output_tokens (Issue #537)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            maxOutputTokens: 256,
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.max_output_tokens).toBe(256);
+    });
+
+    it('omits session.max_output_tokens when agent.think.maxOutputTokens omitted (Issue #537; JSON has no undefined)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.' } },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session).not.toHaveProperty('max_output_tokens');
+      const roundTrip = JSON.parse(JSON.stringify(out.session)) as Record<string, unknown>;
+      expect(roundTrip).not.toHaveProperty('max_output_tokens');
+    });
+
+    it('omits session.max_output_tokens for non-positive or non-integer values (Issue #537)', () => {
+      const base = { type: 'Settings' as const, agent: { think: { prompt: 'Help.' } } };
+      for (const maxOutputTokens of [0, -1, 1.5, NaN, Infinity]) {
+        const out = mapSettingsToSessionUpdate({
+          ...base,
+          agent: { think: { ...base.agent.think, maxOutputTokens } },
+        });
+        expect(out.session).not.toHaveProperty('max_output_tokens');
+      }
+    });
+
+    it('omits session.max_output_tokens when value is not a safe integer (Issue #537)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            maxOutputTokens: Number.MAX_SAFE_INTEGER + 1,
+          },
+        },
+      };
+      expect(mapSettingsToSessionUpdate(settings).session).not.toHaveProperty('max_output_tokens');
+    });
+
+    it('maps agent.think.managedPrompt to session.prompt id/variables/version (Issue #539)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            managedPrompt: {
+              id: 'pmpt_abc',
+              version: '2',
+              variables: { customer_name: 'Ada' },
+            },
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.prompt).toEqual({
+        id: 'pmpt_abc',
+        version: '2',
+        variables: { customer_name: 'Ada' },
+      });
+    });
+
+    it('trims managedPrompt id and version; omits empty version (Issue #539)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            managedPrompt: { id: '  pmpt_x  ', version: '  v1  ' },
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.prompt).toEqual({ id: 'pmpt_x', version: 'v1' });
+      const noVersion = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.', managedPrompt: { id: 'p1', version: '   ' } } },
+      });
+      expect(noVersion.session.prompt).toEqual({ id: 'p1' });
+    });
+
+    it('omits session.prompt when managedPrompt missing or id empty (Issue #539)', () => {
+      const minimal = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.' } },
+      };
+      expect(mapSettingsToSessionUpdate(minimal).session).not.toHaveProperty('prompt');
+      const emptyId = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.', managedPrompt: { id: '  ' } } },
+      };
+      expect(mapSettingsToSessionUpdate(emptyId).session).not.toHaveProperty('prompt');
+    });
+
+    it('ignores invalid managedPrompt.variables; still emits prompt with id (Issue #539)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            managedPrompt: { id: 'p1', variables: [1, 2] as unknown as Record<string, unknown> },
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.prompt).toEqual({ id: 'p1' });
+    });
+
+    it('merges agent.sessionAudioOutput into session.audio.output; preserves proxy input defaults (Issue #540)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'Help.' },
+          sessionAudioOutput: { voice: 'marin', speed: 1.1 },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.audio?.input).toEqual({
+        turn_detection: null,
+        format: { type: 'audio/pcm', rate: 24000 },
+        transcription: { model: 'gpt-4o-transcribe', language: 'en', prompt: '' },
+      });
+      expect(out.session.audio?.output).toEqual({ voice: 'marin', speed: 1.1 });
+    });
+
+    it('maps sessionAudioOutput.format for pcm and pcmu (Issue #540)', () => {
+      const pcm = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'Help.' },
+          sessionAudioOutput: { format: { type: 'audio/pcm', rate: 24000 } },
+        },
+      });
+      expect(pcm.session.audio?.output?.format).toEqual({ type: 'audio/pcm', rate: 24000 });
+      const pcmBare = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'Help.' },
+          sessionAudioOutput: { format: { type: 'audio/pcm' } },
+        },
+      });
+      expect(pcmBare.session.audio?.output?.format).toEqual({ type: 'audio/pcm' });
+      const pcmu = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'Help.' },
+          sessionAudioOutput: { format: { type: 'audio/pcmu' } },
+        },
+      });
+      expect(pcmu.session.audio?.output?.format).toEqual({ type: 'audio/pcmu' });
+    });
+
+    it('omits session.audio.output when sessionAudioOutput absent or yields no valid fields (Issue #540)', () => {
+      const minimal = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.' } },
+      };
+      expect(mapSettingsToSessionUpdate(minimal).session.audio).not.toHaveProperty('output');
+      const badSpeed = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.' }, sessionAudioOutput: { speed: NaN } },
+      });
+      expect(badSpeed.session.audio).not.toHaveProperty('output');
+    });
+
+    it('omits invalid sessionAudioOutput.format type; keeps valid voice (Issue #540)', () => {
+      const out = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'Help.' },
+          sessionAudioOutput: { format: { type: 'audio/wav' }, voice: 'alloy' },
+        },
+      });
+      expect(out.session.audio?.output).toEqual({ voice: 'alloy' });
+    });
+
+    it('maps custom voice object on sessionAudioOutput (Issue #540)', () => {
+      const out = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'Help.' },
+          sessionAudioOutput: { voice: { id: 'voice_custom1' } },
+        },
+      });
+      expect(out.session.audio?.output).toEqual({ voice: { id: 'voice_custom1' } });
     });
 
     it('maps multiple functions to session.update tools (OpenAI API shape)', () => {

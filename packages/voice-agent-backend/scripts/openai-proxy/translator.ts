@@ -5,6 +5,121 @@
  * See docs/issues/ISSUE-381/API-DISCONTINUITIES.md.
  */
 
+/**
+ * OpenAI Realtime `session.tool_choice` (Issue #535).
+ * @see https://platform.openai.com/docs/api-reference/realtime-client-events/session/update
+ */
+export type OpenAIRealtimeSessionToolChoice =
+  | 'auto'
+  | 'none'
+  | 'required'
+  | { type: 'function'; name: string };
+
+/**
+ * OpenAI Realtime `session.output_modalities` entries (Issue #536).
+ * @see https://platform.openai.com/docs/api-reference/realtime-client-events/session/update
+ */
+export type OpenAIRealtimeOutputModality = 'text' | 'audio';
+
+/**
+ * Realtime `session.max_output_tokens`: positive safe integer only (Issue #537).
+ * Other values are ignored so the API keeps its default.
+ */
+function toSessionMaxOutputTokens(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  if (!Number.isInteger(value) || value <= 0) return undefined;
+  if (!Number.isSafeInteger(value)) return undefined;
+  return value;
+}
+
+/** OpenAI Realtime `session.audio.output` (RealtimeAudioConfigOutput) — Issue #540. */
+export interface OpenAIRealtimeSessionAudioOutput {
+  format?: { type: string; rate?: number };
+  speed?: number;
+  voice?: string | { id: string };
+}
+
+const REALTIME_OUTPUT_AUDIO_FORMAT_TYPES = new Set(['audio/pcm', 'audio/pcmu', 'audio/pcma']);
+
+/**
+ * Normalize Settings `agent.sessionAudioOutput` → `session.audio.output`.
+ * Invalid fields are dropped; returns undefined if nothing valid remains.
+ */
+export function normalizeSessionAudioOutput(raw: unknown): OpenAIRealtimeSessionAudioOutput | undefined {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const out: OpenAIRealtimeSessionAudioOutput = {};
+
+  const fmt = o.format;
+  if (fmt !== null && typeof fmt === 'object' && !Array.isArray(fmt)) {
+    const f = fmt as Record<string, unknown>;
+    const t = typeof f.type === 'string' ? f.type.trim() : '';
+    if (REALTIME_OUTPUT_AUDIO_FORMAT_TYPES.has(t)) {
+      if (t === 'audio/pcm') {
+        const rate = f.rate;
+        if (rate === undefined || rate === 24000) {
+          out.format = rate === 24000 ? { type: t, rate: 24000 } : { type: t };
+        } else {
+          out.format = { type: t };
+        }
+      } else {
+        out.format = { type: t };
+      }
+    }
+  }
+
+  const speed = o.speed;
+  if (typeof speed === 'number' && Number.isFinite(speed) && speed >= 0.25 && speed <= 1.5) {
+    out.speed = speed;
+  }
+
+  const voice = o.voice;
+  if (typeof voice === 'string' && voice.trim()) {
+    out.voice = voice.trim();
+  } else if (voice !== null && typeof voice === 'object' && !Array.isArray(voice)) {
+    const vid = (voice as Record<string, unknown>).id;
+    if (typeof vid === 'string' && vid.trim()) {
+      out.voice = { id: vid.trim() };
+    }
+  }
+
+  if (out.format === undefined && out.speed === undefined && out.voice === undefined) {
+    return undefined;
+  }
+  return out;
+}
+
+/**
+ * OpenAI Realtime `session.prompt` (ResponsePrompt: id, optional variables, optional version) — Issue #539.
+ * @see https://platform.openai.com/docs/api-reference/realtime-client-events/session/update
+ */
+export interface OpenAIRealtimeSessionPrompt {
+  id: string;
+  variables?: Record<string, unknown>;
+  version?: string;
+}
+
+/**
+ * Normalize Settings `agent.think.managedPrompt` → API `session.prompt`.
+ * Invalid shapes omit the whole reference (no partial prompt with empty id).
+ */
+function normalizeManagedPromptForSession(raw: unknown): OpenAIRealtimeSessionPrompt | undefined {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const id = typeof o.id === 'string' ? o.id.trim() : '';
+  if (!id) return undefined;
+  const out: OpenAIRealtimeSessionPrompt = { id };
+  if (typeof o.version === 'string') {
+    const v = o.version.trim();
+    if (v) out.version = v;
+  }
+  const vars = o.variables;
+  if (vars !== undefined && vars !== null && typeof vars === 'object' && !Array.isArray(vars)) {
+    out.variables = vars as Record<string, unknown>;
+  }
+  return out;
+}
+
 /** Component message: Settings (outgoing) */
 export interface ComponentSettings {
   type: 'Settings';
@@ -12,12 +127,26 @@ export interface ComponentSettings {
   agent?: {
     /** Idle timeout in ms; shared with component (WebSocketManager, useIdleTimeoutManager). Proxy sends in session.update. */
     idleTimeoutMs?: number;
-    think?: { provider?: { model?: string }; prompt?: string; functions?: Array<{ name: string; description?: string; parameters?: unknown }> };
+    think?: {
+      provider?: { model?: string; temperature?: number };
+      prompt?: string;
+      /** Issue #535: maps to Realtime `session.tool_choice` when set. */
+      toolChoice?: OpenAIRealtimeSessionToolChoice;
+      /** Issue #536: maps to Realtime `session.output_modalities` when non-empty after validation. */
+      outputModalities?: OpenAIRealtimeOutputModality[];
+      /** Issue #537: maps to Realtime `session.max_output_tokens` when a positive safe integer. */
+      maxOutputTokens?: number;
+      /** Issue #539: maps to Realtime `session.prompt` (managed prompt id / variables / version). */
+      managedPrompt?: OpenAIRealtimeSessionPrompt;
+      functions?: Array<{ name: string; description?: string; parameters?: unknown }>;
+    };
     speak?: { provider?: { voice?: string } };
     /** Conversation context for session continuity (Deepgram: in Settings; OpenAI: via conversation.item.create) */
     context?: { messages?: Array<{ type?: string; role: 'user' | 'assistant'; content: string }> };
     /** Optional greeting; proxy injects as initial assistant message after session.updated (Issue #381) */
     greeting?: string;
+    /** Issue #540: maps to Realtime `session.audio.output` when valid after normalization. */
+    sessionAudioOutput?: OpenAIRealtimeSessionAudioOutput;
   };
 }
 
@@ -38,8 +167,18 @@ export interface OpenAISessionUpdate {
         /** Enable input audio transcription for conversation.item.input_audio_transcription.* (Issue #414). */
         transcription?: { model: string; language?: string; prompt?: string };
       };
+      /** Issue #540: TTS/output format, speed, voice (integrator-controlled). */
+      output?: OpenAIRealtimeSessionAudioOutput;
     };
     tools?: Array<{ type: 'function'; name: string; description?: string; parameters?: unknown }>;
+    /** Issue #535: how the model selects tools (`auto` | `none` | `required` or force `{ type: 'function', name }`). */
+    tool_choice?: OpenAIRealtimeSessionToolChoice;
+    /** Issue #536: model output channels (`text`, `audio`, or both). */
+    output_modalities?: OpenAIRealtimeOutputModality[];
+    /** Issue #537: cap generated output tokens (separate from context window / instructions size). */
+    max_output_tokens?: number;
+    /** Issue #539: Dashboard / reusable prompt template reference (ResponsePrompt). */
+    prompt?: OpenAIRealtimeSessionPrompt;
     [key: string]: unknown;
   };
 }
@@ -232,6 +371,11 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
       },
     },
   };
+  // Issue #538: `think.provider.temperature` stays on the component Settings JSON (buildSettingsMessage) for
+  // app/UI parity, but we do **not** set `session.temperature` on WebSocket `session.update`. The GA
+  // RealtimeSessionCreateRequest schema (see REALTIME-SESSION-UPDATE-FIELD-MAP.md) does not include
+  // `temperature`; upstream returns unknown_parameter. Older REST/session docs that list temperature
+  // do not apply to this wire shape.
   if (settings.agent?.think?.functions?.length) {
     session.tools = settings.agent.think.functions.map((f) => ({
       type: 'function' as const,
@@ -239,6 +383,31 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
       description: f.description,
       parameters: f.parameters ?? {},
     }));
+  }
+  const toolChoice = settings.agent?.think?.toolChoice;
+  if (toolChoice !== undefined) {
+    session.tool_choice = toolChoice;
+  }
+  const rawModalities = settings.agent?.think?.outputModalities;
+  if (Array.isArray(rawModalities) && rawModalities.length > 0) {
+    const modalities = rawModalities.filter((m): m is OpenAIRealtimeOutputModality => m === 'text' || m === 'audio');
+    if (modalities.length > 0) {
+      session.output_modalities = modalities;
+    }
+  }
+  const maxOut = toSessionMaxOutputTokens(settings.agent?.think?.maxOutputTokens);
+  if (maxOut !== undefined) {
+    session.max_output_tokens = maxOut;
+  }
+  // Issue #539: managed prompt is independent of inline `instructions` (still built above).
+  // Upstream merges per OpenAI Realtime; use empty `think.prompt` / instructions if you want template-only behavior.
+  const managed = normalizeManagedPromptForSession(settings.agent?.think?.managedPrompt);
+  if (managed !== undefined) {
+    session.prompt = managed;
+  }
+  const sessionOut = normalizeSessionAudioOutput(settings.agent?.sessionAudioOutput);
+  if (sessionOut !== undefined) {
+    session.audio = { ...session.audio, output: sessionOut };
   }
   return { type: 'session.update', session };
 }

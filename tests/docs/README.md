@@ -13,3 +13,5 @@ This directory holds documentation for the project’s test suite (unit, integra
 - **[E2E_CI_TEST_STRATEGY.md](./E2E_CI_TEST_STRATEGY.md)** – E2E and CI test strategy
 
 For issue-specific test notes (e.g. why tests pass for a given issue), see `docs/issues/`.
+
+**OpenAI proxy (Jest, Node):** `tests/integration/openai-proxy-integration.test.ts` — mock upstream by default; `USE_REAL_APIS=1` + `OPENAI_API_KEY` for live Realtime subset. Protocol matrix: `tests/integration/PROTOCOL-SPECIFICATION.md`. Env and commands: `docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md`, `docs/development/TEST-STRATEGY.md`.

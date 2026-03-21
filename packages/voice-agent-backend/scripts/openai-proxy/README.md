@@ -5,7 +5,7 @@
 **Server** (`server.ts`): WebSocket server that listens on a path (e.g. `/openai`), accepts component protocol, translates to OpenAI Realtime, forwards to upstream (real or mock), and translates upstream events back to component. Buffers client messages until upstream is open.
 
 - **Unit tests**: `tests/openai-proxy.test.ts` (Jest).
-- **Integration tests**: `tests/integration/openai-proxy-integration.test.ts` (Jest, `@jest-environment node`).
+- **Integration tests**: `tests/integration/openai-proxy-integration.test.ts` (Jest, `@jest-environment node`). Real API: `USE_REAL_APIS=1` + `OPENAI_API_KEY`. Managed prompt live test (Issue #539): optional **`OPENAI_MANAGED_PROMPT_ID`** (and optional `OPENAI_MANAGED_PROMPT_VERSION`, `OPENAI_MANAGED_PROMPT_VARIABLES`); see [TDD-MANAGED-PROMPT-REAL-API.md](../../../docs/issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md).
 - **Contract:** [PROTOCOL-AND-MESSAGE-ORDERING.md](./PROTOCOL-AND-MESSAGE-ORDERING.md) (wire protocol and ordering); [docs/issues/ISSUE-381/API-DISCONTINUITIES.md](../../docs/issues/ISSUE-381/API-DISCONTINUITIES.md) (API mapping).
 
 ## Further reading (docs index)
@@ -13,18 +13,30 @@
 | Doc | Purpose |
 |-----|---------|
 | [UPSTREAM-EVENT-COMPLETE-MAP.md](./UPSTREAM-EVENT-COMPLETE-MAP.md) | Authoritative list of every upstream event and what the proxy does (map, control-only, or Error). |
+| [REALTIME-SESSION-UPDATE-FIELD-MAP.md](./REALTIME-SESSION-UPDATE-FIELD-MAP.md) | Component Settings → WebSocket `session.update` `session` object: each field, source, and exclusions (Issue #538). |
 | [Epic #493 / OPENAI-PROXY-EVENT-MAP-GAPS](../../../docs/issues/OPENAI-PROXY-EVENT-MAP-GAPS/EPIC.md) | Epic and sub-issues for event-mapping gaps (UtteranceEnd, Transcript, ConversationText, etc.). |
 | [PROTOCOL-SPECIFICATION.md](../../../tests/integration/PROTOCOL-SPECIFICATION.md) | Event map with test references; client-facing events; requirement ↔ test table. |
+| [REALTIME-CLIENT-EVENT-MATRIX.md](./REALTIME-CLIENT-EVENT-MATRIX.md) | OpenAI **client** events ↔ component protocol; `response.create` lifecycle (Issue #541). |
 | [COMPONENT-PROXY-CONTRACT](../../../docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md) | Component ↔ proxy contract; includes "Proxy → component: message sources" (Epic #493). |
 
 ## Translator exports
 
-- `mapSettingsToSessionUpdate(settings)` – component Settings → OpenAI `session.update`
+- `mapSettingsToSessionUpdate(settings)` – component Settings → OpenAI `session.update` (field-by-field map: [REALTIME-SESSION-UPDATE-FIELD-MAP.md](./REALTIME-SESSION-UPDATE-FIELD-MAP.md); `agent.think.provider.temperature` is **not** forwarded — Issue #538; `agent.think.toolChoice` → `session.tool_choice` — Issue #535; validated `agent.think.outputModalities` → `session.output_modalities` — Issue #536; `agent.think.maxOutputTokens` → `session.max_output_tokens` — Issue #537; `agent.think.managedPrompt` → `session.prompt` — Issue #539; `agent.sessionAudioOutput` → `session.audio.output` — Issue #540)
+- `normalizeSessionAudioOutput(raw)` – pure helper for Issue #540; used by `mapSettingsToSessionUpdate`
 - `mapInjectUserMessageToConversationItemCreate(msg)` – component InjectUserMessage → OpenAI `conversation.item.create`
 - `mapSessionUpdatedToSettingsApplied(event)` – OpenAI `session.updated` → component SettingsApplied
 - `mapGreetingToConversationItemCreate(greeting)` – greeting string → OpenAI `conversation.item.create` (assistant); used after session.updated (Issue #381)
 - `mapGreetingToConversationText(greeting)` – greeting string → component ConversationText (assistant); sent to component after session.updated
 - `mapErrorToComponentError(event)` – OpenAI `error` → component Error
+
+**`max_output_tokens` vs context:** `session.max_output_tokens` caps **generated** tokens in the model reply. It does not enlarge the context window or replace staying within model limits for `instructions` and conversation history (Issue #537).
+
+**Managed `session.prompt` vs `instructions`:** Inline instructions are still built from `think.prompt` and optional context (see `buildInstructionsWithContext`). When `managedPrompt` is set, both `instructions` and `session.prompt` are sent; OpenAI Realtime merges behavior per API. Prefer empty or minimal `think.prompt` if the template should be the primary system definition (Issue #539).
+
+| `session.audio` | Who sets it | Purpose |
+|-----------------|-------------|---------|
+| **`input`** | Proxy (`mapSettingsToSessionUpdate`) | `turn_detection: null`, PCM `format`, input `transcription` — required for client commit + `response.create` and Issue #414 transcripts; do not change without VAD/commit review. |
+| **`output`** | Integrator via **`Settings.agent.sessionAudioOutput`** (optional) | OpenAI **RealtimeAudioConfigOutput**: `format` (`audio/pcm` with optional 24k rate, `audio/pcmu`, `audio/pcma`), `speed` (0.25–1.5), `voice` (built-in name or `{ id }`). Omitted when unset or all fields invalid (Issue #540). |
 
 ## Server
 
@@ -49,11 +61,13 @@ That starts the backend server which hosts `/openai` (and `/deepgram-proxy`). Th
 
 **Standalone (optional):** Run from **this package directory** (voice-agent-backend). From repo root: `cd packages/voice-agent-backend && npx tsx scripts/openai-proxy/run.ts`. Requires `OPENAI_API_KEY` in `.env` or the environment; the script loads `.env` from the package dir and parent dirs. Listens on `http://localhost:8080/openai` by default. Use `OPENAI_PROXY_PORT` and `OPENAI_REALTIME_URL` to override.
 
-**Logging (Issue #437):** The proxy respects **`LOG_LEVEL`** (values: `debug`, `info`, `warn`, `error`). Only messages at or above the configured level are emitted. Set `LOG_LEVEL=info` for normal operation or `LOG_LEVEL=debug` for verbose client/upstream activity. **`OPENAI_PROXY_DEBUG=1`** is treated as an alias for `LOG_LEVEL=debug` for backward compatibility. Logging uses **OpenTelemetry** (`logger.ts` in this directory). If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
+**Logging (Issue #437, #531):** The proxy respects **`LOG_LEVEL`** (values: `debug`, `info`, `warn`, `error`). Only messages at or above the configured level are emitted. Set `LOG_LEVEL=info` for normal operation or `LOG_LEVEL=debug` for verbose client/upstream activity. **`OPENAI_PROXY_DEBUG=1`** is treated as an alias for `LOG_LEVEL=debug` for backward compatibility. If **`LOG_LEVEL`** is unset, the minimum level is **`error`** so upstream Realtime **`error`** events still produce ERROR logs without opt-in (Issue #531). Logging uses **OpenTelemetry** (`logger.ts` in this directory). If E2E tests never show an agent response, check proxy logs for upstream `error` events (e.g. auth or model issues).
 
 **Tracing (Issue #437 Phase 3):** For correlation with client and backend logs, pass **`traceId`** in the WebSocket URL query (e.g. `ws://localhost:8080/openai?traceId=my-request-id`). The proxy attaches `trace_id` to every log record for that connection. If the client does not send `traceId`, the proxy uses the connection id as fallback so every record still has a `trace_id`. See [PROPAGATION-CONTRACT.md](../../../docs/issues/ISSUE-412/PROPAGATION-CONTRACT.md).
 
 **Greeting-text-only (diagnostic):** Set `OPENAI_PROXY_GREETING_TEXT_ONLY=1` so the proxy sends the greeting to the client only (UI shows it) and does not send `conversation.item.create` (greeting) to OpenAI. If the error stops, the greeting injection was the cause. (Testing showed the error can persist without it, so the trigger may be elsewhere.)
+
+**Client JSON (Issue #533):** Only **Settings**, **InjectUserMessage**, and **FunctionCallResponse** are translated; **KeepAlive** is always ignored (component protocol only; not an OpenAI Realtime client event). Any other unknown JSON type yields a component **Error** (`disallowed_client_message_type`) by default. Set **`OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH=1`** only for legacy debugging to forward **arbitrary unknown JSON** as raw text to upstream (not recommended in production — bypasses translator guarantees; does **not** forward `KeepAlive`).
 
 **Idle timeout:** We use **`turn_detection: null`** (client/proxy controls commit), so the **OpenAI server has no server idle timeout**; we convey that as **`NO_SERVER_TIMEOUT_MS`** (`-1`). The component's client idle timeout (Settings.agent.idleTimeoutMs) is separate. When the upstream does send an idle timeout closure, the proxy maps it to code **`idle_timeout`**; the component treats it as expected closure. See PROTOCOL-AND-MESSAGE-ORDERING.md §3.9.
 

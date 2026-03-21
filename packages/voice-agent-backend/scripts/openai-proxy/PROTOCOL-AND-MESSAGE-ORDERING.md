@@ -2,7 +2,7 @@
 
 This document describes the **wire protocol and message ordering** for the OpenAI Realtime proxy: what the proxy accepts from the component (client), what it sends to the OpenAI upstream, what it receives from upstream, and what it sends back to the client. It is the single source of truth for **frame types** (text vs binary) and **ordering rules**.
 
-**See also:** [README.md](./README.md), [docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md](../../docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md), [docs/issues/ISSUE-381/API-DISCONTINUITIES.md](../../docs/issues/ISSUE-381/API-DISCONTINUITIES.md).
+**See also:** [README.md](./README.md), [REALTIME-CLIENT-EVENT-MATRIX.md](./REALTIME-CLIENT-EVENT-MATRIX.md) (OpenAI client events ↔ component protocol, Issue #541), [docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md](../../docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md), [docs/issues/ISSUE-381/API-DISCONTINUITIES.md](../../docs/issues/ISSUE-381/API-DISCONTINUITIES.md).
 
 ---
 
@@ -25,6 +25,8 @@ So: client sends **text** (JSON) and **binary** (PCM). The proxy never forwards 
 | **TTS PCM only** | **Binary** | **Only** the decoded payload of upstream `response.output_audio.delta` is sent to the client as **binary** (raw PCM 24 kHz mono 16-bit). No other upstream message is sent as binary. |
 
 **Critical:** Sending any other upstream message (e.g. `conversation.item.added`, `conversation.item.done`, or any JSON) as binary would cause the component to route it into the audio pipeline and corrupt playback. The proxy **must** send only `response.output_audio.delta` (decoded) as binary; everything else as text. See Issue #414 (root cause: JSON forwarded as binary).
+
+**Observability (Issue #532):** When the **client** WebSocket closes, the proxy logs INFO with `client.close_code` and `client.close_reason` so operators can compare upstream close (e.g. 1000) with the browser leg (e.g. 1005).
 
 ---
 
@@ -57,6 +59,8 @@ Order: **session.created** (ignored for injection) → **session.updated** (cont
 
 **Audio readiness (Issue #414):** The proxy does **not** send `input_audio_buffer.append` until after `session.updated` has been received. Binary received before `session.updated` is queued and sent in order when the session is ready. This avoids sending audio before the session is configured for it (which can contribute to upstream "server had an error").
 
+**Text inject readiness (Issue #534):** Same gate as audio: **`InjectUserMessage`** is not translated to `conversation.item.create` until after the proxy has received **`session.updated`** (i.e. when `hasSentSettingsApplied` is true). Messages received earlier are queued and flushed in FIFO order before queued binary (inject queue, then audio queue) on `session.updated`.
+
 ### 2.4 Firm audio connection (single source of truth)
 
 A connection is **ready for audio** (firm audio connection) when the proxy has received **session.updated** from upstream — i.e. after the client’s Settings have been applied and the proxy has sent **SettingsApplied** to the client.
@@ -72,10 +76,11 @@ This is the single source of truth for when audio may be sent. Integration tests
 
 | Client message (text) | Proxy action |
 |------------------------|--------------|
-| **Settings** | Map to `session.update`; send to upstream once per connection **only when no response is active** (Issue #459). If a response is in progress, send `SettingsApplied` only (no `session.update`). On duplicate Settings, send `SettingsApplied` only (no second `session.update`). Store context and greeting when session is updated. |
-| **InjectUserMessage** | Map to `conversation.item.create` (user, `input_text`); send to upstream. Set `pendingItemAddedBeforeResponseCreate = 1`. Send **user echo** (`ConversationText` role `user`) to client. Send `response.create` only after upstream confirms the item (see §4). |
+| **Settings** | Map to `session.update`; send to upstream once per connection **only when no response is active** (Issue #459). If a response is in progress, send `SettingsApplied` only (no `session.update`). On duplicate Settings, send `SettingsApplied` only (no second `session.update`). Store context and greeting when session is updated. `agent.think.provider.temperature` may appear on **Settings** JSON (`buildSettingsMessage`) but is **not** sent on WebSocket `session.update` (Issue #538; `RealtimeSessionCreateRequest` omits it — upstream `unknown_parameter`; see [REALTIME-SESSION-UPDATE-FIELD-MAP.md](./REALTIME-SESSION-UPDATE-FIELD-MAP.md)). When set, `agent.think.toolChoice` maps to `session.tool_choice` (`auto` \| `none` \| `required` or `{ type: 'function', name }` — Issue #535). When non-empty after validation, `agent.think.outputModalities` maps to `session.output_modalities` (`text` and/or `audio` — Issue #536). When set to a positive safe integer, `agent.think.maxOutputTokens` maps to `session.max_output_tokens` (Issue #537). When valid (non-empty trimmed `id`), `agent.think.managedPrompt` maps to `session.prompt` (`id`, optional `variables` object, optional `version` — Issue #539; OpenAI ResponsePrompt). When valid after normalization, `agent.sessionAudioOutput` maps to `session.audio.output` (`format` \| `speed` \| `voice` per RealtimeAudioConfigOutput — Issue #540); `session.audio.input` defaults (`turn_detection`, `format`, `transcription`) remain proxy-owned for commit/VAD and Issue #414 unless extended in a follow-up. |
+| **InjectUserMessage** | If **before** `session.updated`: queue the client frame; flush on `session.updated` (Issue #534). Otherwise map to `conversation.item.create` (user, `input_text`); send to upstream. Set `pendingItemAddedBeforeResponseCreate = 1`. Send **user echo** (`ConversationText` role `user`) to client. Send `response.create` only after upstream confirms the item (see §4). |
 | **FunctionCallResponse** | Map to `conversation.item.create` (function_call_output); send to upstream. **Do not** send `response.create` immediately (Issue #462 / #470 / #522): the API still has the previous response (the function-call request) active until it processes our item and sends `response.output_text.done` or `response.done`. Defer `response.create` until we receive one of those events (avoids `conversation_already_has_active_response`; voice-commerce #1066). **Issue #487:** Send **AgentThinking** to the client immediately so the component can clear "waiting for next agent message" and allow idle timeout to run once the turn completes (avoids connection never closing when API is slow or event order differs). |
-| **Other JSON** | Forward to upstream as-is (text). |
+| **KeepAlive** | **Never** sent to upstream (no-op at proxy; Issue #533). Component-protocol only; OpenAI Realtime has no client `KeepAlive` event ([Realtime client events](https://platform.openai.com/docs/api-reference/realtime-client-events)). Passthrough does not apply. |
+| **Other JSON** | **Default:** Send component **Error** with `code: disallowed_client_message_type`; do **not** forward to upstream. **Escape hatch:** `OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH=1` (run.ts) or `createOpenAIProxyServer({ allowClientJsonPassthrough: true })` forwards **unknown** JSON as raw text — legacy debugging only; not for `KeepAlive` (always ignored). |
 | **Binary** | Treat as PCM; **only after session.updated** send `input_audio_buffer.append` (base64) to upstream (Issue #414: session must be configured for audio first). If binary arrives before session.updated, queue and flush when session.updated is received. Set debounce timer for `input_audio_buffer.commit` + `response.create`. Chunk size and commit timing must respect [OpenAI buffer restrictions](#35-openai-input-audio-buffer-restrictions). |
 
 ### 3.5 OpenAI input audio buffer restrictions

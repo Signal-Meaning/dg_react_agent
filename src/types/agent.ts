@@ -71,6 +71,39 @@ export enum AgentResponseType {
 export type ConversationRole = 'user' | 'assistant';
 
 /**
+ * OpenAI Realtime `session.tool_choice` when using the OpenAI translation proxy (Issue #535).
+ * @see https://platform.openai.com/docs/api-reference/realtime-client-events/session/update
+ */
+export type ThinkToolChoice =
+  | 'auto'
+  | 'none'
+  | 'required'
+  | { type: 'function'; name: string };
+
+/**
+ * OpenAI Realtime `session.output_modalities` entries (Issue #536).
+ */
+export type ThinkOutputModality = 'text' | 'audio';
+
+/**
+ * OpenAI Realtime managed prompt (`session.prompt` / ResponsePrompt) — Issue #539.
+ */
+export interface ThinkManagedPrompt {
+  id: string;
+  version?: string;
+  variables?: Record<string, unknown>;
+}
+
+/**
+ * OpenAI Realtime `session.audio.output` (voice / speed / format) — Issue #540.
+ */
+export interface SessionAudioOutputSettings {
+  format?: { type: string; rate?: number };
+  speed?: number;
+  voice?: string | { id: string };
+}
+
+/**
  * Conversation message for context preservation
  */
 export interface ConversationMessage {
@@ -126,6 +159,14 @@ export interface AgentSettingsMessage {
       };
       functions?: AgentFunction[];
       prompt?: string;
+      /** OpenAI proxy: maps to Realtime `session.tool_choice` (Issue #535). */
+      toolChoice?: ThinkToolChoice;
+      /** OpenAI proxy: maps to Realtime `session.output_modalities` (Issue #536). */
+      outputModalities?: ThinkOutputModality[];
+      /** OpenAI proxy: maps to Realtime `session.max_output_tokens` when a positive safe integer (Issue #537). */
+      maxOutputTokens?: number;
+      /** OpenAI proxy: maps to Realtime `session.prompt` (Issue #539). */
+      managedPrompt?: ThinkManagedPrompt;
     };
     speak?: {
       provider: {
@@ -146,6 +187,8 @@ export interface AgentSettingsMessage {
     context?: ConversationMessage[]; // NEW: conversation context for lazy reconnection
     /** Idle timeout in ms; shared with backends (e.g. OpenAI proxy session.update). See AgentOptions.idleTimeoutMs. */
     idleTimeoutMs?: number;
+    /** OpenAI proxy: maps to Realtime `session.audio.output` (Issue #540). */
+    sessionAudioOutput?: SessionAudioOutputSettings;
   };
 }
 
@@ -415,6 +458,16 @@ export interface AgentOptions {
   thinkEndpointUrl?: string; // e.g., 'https://api.openai.com/v1/chat/completions'
   thinkApiKey?: string; // e.g., think LLM provider API key
   thinkTemperature?: number; // e.g., 0.7
+  /** OpenAI proxy: Realtime `session.tool_choice` (Issue #535). */
+  thinkToolChoice?: ThinkToolChoice;
+  /** OpenAI proxy: Realtime `session.output_modalities` (Issue #536). */
+  thinkOutputModalities?: ThinkOutputModality[];
+  /** OpenAI proxy: Realtime `session.max_output_tokens` (Issue #537). */
+  thinkMaxOutputTokens?: number;
+  /** OpenAI proxy: Realtime `session.prompt` managed template (Issue #539). */
+  thinkManagedPrompt?: ThinkManagedPrompt;
+  /** OpenAI proxy: Realtime `session.audio.output` (Issue #540). */
+  sessionAudioOutput?: SessionAudioOutputSettings;
   instructions?: string; // Base instructions for the agent
   
   // Speak settings

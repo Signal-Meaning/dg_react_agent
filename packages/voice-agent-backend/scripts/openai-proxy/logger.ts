@@ -1,8 +1,10 @@
 /**
- * OpenAI proxy – OpenTelemetry logging (Issue #381, #437)
+ * OpenAI proxy – OpenTelemetry logging (Issue #381, #437, #531)
  *
  * Reads LOG_LEVEL (debug | info | warn | error) and only emits logs at or above that level.
  * OPENAI_PROXY_DEBUG=1 is treated as LOG_LEVEL=debug for backward compatibility.
+ * When LOG_LEVEL is unset and no logLevel option is passed, the minimum level is **error** so
+ * upstream Realtime `error` events are always logged without opt-in (Issue #531).
  * See https://opentelemetry.io/docs/specs/otel/logs/
  */
 
@@ -36,6 +38,9 @@ export const ATTR_ERROR_CODE = 'error.code';
 export const ATTR_ERROR_MESSAGE = 'error.message';
 export const ATTR_UPSTREAM_CLOSE_CODE = 'upstream.close_code';
 export const ATTR_UPSTREAM_CLOSE_REASON = 'upstream.close_reason';
+/** Issue #532: client leg WebSocket close (integrator-visible code vs upstream 1000). */
+export const ATTR_CLIENT_CLOSE_CODE = 'client.close_code';
+export const ATTR_CLIENT_CLOSE_REASON = 'client.close_reason';
 
 export type ProxyLogAttributes = Record<string, string | number | boolean | undefined>;
 
@@ -63,15 +68,17 @@ export interface InitProxyLoggerOptions {
 
 /**
  * Initialize OpenTelemetry logging for the proxy. Call once with desired log level.
- * Reads options.logLevel or process.env.LOG_LEVEL; initializes OTel when a level is set.
+ * Reads options.logLevel or process.env.LOG_LEVEL. If neither is set, uses minimum **error**
+ * so ERROR logs (e.g. upstream Realtime failures) always emit (Issue #531).
  */
 export function initProxyLogger(options?: InitProxyLoggerOptions): void {
   const level = options?.logLevel ?? process.env.LOG_LEVEL;
   if (level !== undefined && level !== '') {
     minSeverityNumber = severityNumberFromLevel(level);
+  } else {
+    minSeverityNumber = SEVERITY_ERROR;
   }
   if (loggerProvider) return;
-  if (minSeverityNumber === undefined) return;
   loggerProvider = new LoggerProvider();
   loggerProvider.addLogRecordProcessor(
     new SimpleLogRecordProcessor(new ConsoleLogRecordExporter())
