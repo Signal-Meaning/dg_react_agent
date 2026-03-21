@@ -10,7 +10,10 @@
  * via the proxy. Integration tests verify translation and protocol, not live API behavior.
  *
  * Real upstream: set USE_REAL_APIS=1 and OPENAI_API_KEY to run a subset of tests
- * against the live OpenAI Realtime API. See docs/development/TEST-STRATEGY.md.
+ * against the live OpenAI Realtime API. See docs/development/TEST-STRATEGY.md and
+ * docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md. Optional: OPENAI_MANAGED_PROMPT_ID (+ VERSION / VARIABLES)
+ * for Issue #539 (docs/issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md). Shared helpers:
+ * tests/integration/helpers/real-api-json-ws-session.ts, managed-prompt-env.ts.
  *
  * Run order: integration tests first against real APIs (when keys available), then mocks.
  * CI runs mocks only.

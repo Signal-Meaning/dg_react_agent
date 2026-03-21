@@ -37,19 +37,26 @@ describe('Component Tests', () => {
 });
 ```
 
-### Jest with Node.js (WebSocket Connectivity Tests)
+### Jest with Node.js (WebSocket / OpenAI proxy integration)
 
-**Purpose:** Test actual Deepgram API connections without jsdom interference.
+**Purpose:** Real `ws` connections without jsdom — e.g. **Deepgram** connectivity tests, or the **OpenAI translation proxy** integration suite.
 
 **Environment:** `@jest-environment node`
 
 **WebSocket:** Uses real Node.js `ws` library
 
-**When to Use:**
+**OpenAI proxy integration** (`tests/integration/openai-proxy-integration.test.ts`):
+
+- **Default / CI:** Mock upstream WebSocket; no `OPENAI_API_KEY` required.
+- **Live Realtime:** `USE_REAL_APIS=1` and `OPENAI_API_KEY` (see `docs/development/TEST-STRATEGY.md`, `docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md`). Optional `OPENAI_MANAGED_PROMPT_ID` for managed-prompt real-API test ([TDD-MANAGED-PROMPT-REAL-API.md](../../docs/issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md)).
+- **Spec:** `tests/integration/PROTOCOL-SPECIFICATION.md` (requirements ↔ tests).
+
+**When to Use (general Node Jest):**
 - Testing WebSocket connectivity
 - Testing authentication
 - Testing connection lifecycle
 - Validating API compatibility
+- OpenAI proxy protocol, ordering, and translation against mock or live upstream
 
 **Example:**
 ```javascript

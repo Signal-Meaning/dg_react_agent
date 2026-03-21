@@ -9,6 +9,8 @@
 - [PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE.md](../../docs/issues/ISSUE-470/PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE.md) — known requirements and test matrix
 - [COMPONENT-PROXY-CONTRACT.md](../../docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md) — component ↔ proxy contract
 - [REAL-API-TEST-FAILURES.md](../../docs/issues/ISSUE-489/REAL-API-TEST-FAILURES.md) — real-API failure investigation and alignment
+- [REALTIME-SESSION-UPDATE-FIELD-MAP.md](../../packages/voice-agent-backend/scripts/openai-proxy/REALTIME-SESSION-UPDATE-FIELD-MAP.md) — Settings → `session.update` fields (Epic #542)
+- [RUN-OPENAI-PROXY.md](../../docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md) — env vars and how to run mock vs `USE_REAL_APIS=1` integration tests
 
 ---
 
@@ -40,6 +42,7 @@ Every upstream (OpenAI Realtime API) event the proxy receives and what it sends 
 ## 2. Required Ordering (summary)
 
 - **Session:** Client sends Settings → proxy sends `session.update` → upstream sends `session.updated` → proxy sends SettingsApplied, injects context, sends greeting (text-only). No context/append before session.updated. See PROTOCOL-AND-MESSAGE-ORDERING §2.
+- **Inject queue (Issue #534):** If the client sends **`InjectUserMessage` before `Settings` or before `session.updated`**, the proxy **queues** the inject JSON and flushes it after `session.updated` (same gate as binary audio). Mock: `Issue #534: InjectUserMessage before Settings deferred until session.updated`. Real API: `Issue #534 real-API: InjectUserMessage before Settings completes without Error (USE_REAL_APIS=1)`.
 - **Response create:** Proxy sends `response.create` only after item confirmation (conversation.item.added etc.) for InjectUserMessage; only after `response.output_text.done` or `response.done` for FunctionCallResponse. See §4 of PROTOCOL-AND-MESSAGE-ORDERING.
 - **Agent activity / idle:** For a turn, client must receive AgentStartedSpeaking before first response output; AgentAudioDone (or AgentDone) when response completes. If upstream sends idle_timeout error while response in progress, proxy buffers Error and sends it after ConversationText (assistant). See PROTOCOL-AND-MESSAGE-ORDERING §5–6 and REAL-API-TEST-FAILURES §2.
 
@@ -79,6 +82,9 @@ From PROTOCOL-REQUIREMENTS-AND-TEST-COVERAGE and PROTOCOL-ASSURANCE-GAPS. Each r
 | — | Session ready: client receives SettingsApplied within N s | `translates Settings to session.update and session.updated to SettingsApplied` | `Issue #489 real-API: client receives SettingsApplied within 10s of connect (session.updated)` |
 | — | Idle timeout: client receives Error (code idle_timeout); when response in progress, after ConversationText | `Issue #482: client receives ConversationText (assistant) before Error (idle_timeout) when upstream sends error before output_text.done` | `Issue #482 real-API: client receives ConversationText (assistant) before Error (idle_timeout)` |
 | — | After function call: client receives AgentThinking or equivalent then completion | `Issue #487: within 2s of FunctionCallResponse client receives AgentThinking or ConversationText (assistant) or AgentAudioDone` | `Issue #489 real-API: after FunctionCallResponse client receives AgentAudioDone` |
+| — | InjectUserMessage before session ready: queue until `session.updated` | `Issue #534: InjectUserMessage before Settings deferred until session.updated` | `Issue #534 real-API: InjectUserMessage before Settings completes without Error (USE_REAL_APIS=1)` |
+| — | `session.max_output_tokens` accepted on live Realtime | (mapper unit: `tests/openai-proxy.test.ts`) | `Issue #537 real-API: Settings with maxOutputTokens yields SettingsApplied and assistant reply without Error (USE_REAL_APIS=1)` |
+| — | `session.prompt` (managed prompt) on live Realtime | (mapper unit; env parser: `tests/managed-prompt-env.test.ts`) | `Issue #539 real-API: managed prompt from env yields SettingsApplied and assistant reply without Error (USE_REAL_APIS=1)` when **`OPENAI_MANAGED_PROMPT_ID`** set ([TDD-MANAGED-PROMPT-REAL-API.md](../../docs/issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md)) |
 | 9 | **Error handling: use structured codes; avoid message text** — **API codes:** map upstream `error` (and any events with a code) using the API's structured payload (e.g. `event.error?.code`), not message text. **Proxy codes:** when the proxy sends messages to the client (e.g. `Error` with `code`), use protocol-defined codes. Proxy should **avoid using text strings from messages** (API or client) for control flow or mapping if at all possible. When idle_timeout while response in progress, buffer Error and send after next `response.output_text.done`. | `when upstream sends error after session.updated, client receives Error`; `Issue #482: client receives ConversationText (assistant) before Error (idle_timeout) when upstream sends error before output_text.done` | `Issue #482 real-API: client receives ConversationText (assistant) before Error (idle_timeout)` |
 
 ---
@@ -100,5 +106,7 @@ When tests receive WebSocket messages from the proxy, they must follow these rul
 - **File:** `openai-proxy-integration.test.ts` in this directory.
 - **Mock-only tests:** Run with `npm test -- tests/integration/openai-proxy-integration.test.ts` (no env).
 - **Real-API tests:** Run with `USE_REAL_APIS=1` (and `OPENAI_API_KEY` set). **Note:** `--testNamePattern=real-API` alone does **not** enable real-API tests; the env var is required. See [TEST-STRATEGY.md](../../docs/development/TEST-STRATEGY.md).
+- **Optional env:** `OPENAI_MANAGED_PROMPT_ID` (and optional `OPENAI_MANAGED_PROMPT_VERSION`, `OPENAI_MANAGED_PROMPT_VARIABLES`) for Issue **#539** real-API test; see [TDD-MANAGED-PROMPT-REAL-API.md](../../docs/issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md).
+- **Helpers:** `tests/integration/helpers/real-api-json-ws-session.ts`, `tests/integration/helpers/managed-prompt-env.ts`.
 
 When adding or changing a protocol requirement, update (1) PROTOCOL-AND-MESSAGE-ORDERING.md, (2) this spec (§1–5), and (3) the test file so that every requirement has a corresponding test (or test section) listed here.
