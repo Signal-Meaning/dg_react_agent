@@ -74,7 +74,7 @@ Check **Area done** when every linked issue’s **Verified** checklist in its do
 | Priority | Area | Issues | Area done | Notes |
 |----------|------|--------|-----------|-------|
 | 1 | Section 1 — logging | [#531](./ISSUE-531.md) | - [x] | Code landed; optional manual stderr check remains in ISSUE-531 doc |
-| 2 | Section 4 — `InjectUserMessage` gating | [#534](./ISSUE-534.md) | - [x] | Proxy queue landed; optional React enforcement + real-API check open in ISSUE-534 doc |
+| 2 | Section 4 — `InjectUserMessage` gating | [#534](./ISSUE-534.md) | - [x] | Proxy queue + mock + **real-API** inject-before-Settings test ([ISSUE-534](./ISSUE-534.md)); optional React-only enforcement still open |
 | 3 | Section 2 — protocol / Settings + functions | [#532](./ISSUE-532.md) | - [x] | Mock 2b + real-API integration + E2E **6b** (`USE_REAL_APIS=1` from `test-app`) per ISSUE-532 |
 | 4 | Section 3 — JSON hardening | [#533](./ISSUE-533.md) | - [x] | Strict default + `OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH` escape hatch |
 | 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [x] | **#535–#540** verified per child docs; **#539** live `session.prompt` when **`OPENAI_MANAGED_PROMPT_ID`** set ([TDD-MANAGED-PROMPT-REAL-API.md](./TDD-MANAGED-PROMPT-REAL-API.md)) |

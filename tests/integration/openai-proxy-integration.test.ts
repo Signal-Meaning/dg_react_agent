@@ -765,6 +765,45 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 15000);
 
   /**
+   * Issue #534: Same client ordering as mock test (inject first, then Settings); proxy must queue inject until
+   * session.updated. Qualifies race on live OpenAI; distinct from #532 Section 2 shape.
+   */
+  (useRealAPIs ? it : it.skip)(
+    'Issue #534 real-API: InjectUserMessage before Settings completes without Error (USE_REAL_APIS=1)',
+    async () => {
+      let sawAssistant = false;
+      await runRealApiJsonWsSession({
+        url: `ws://localhost:${proxyPort}${PROXY_PATH}`,
+        deadlineMs: 25000,
+        onOpen(sendJson) {
+          sendJson({ type: 'InjectUserMessage', content: 'Say hello in one short sentence.' });
+          sendJson({
+            type: 'Settings',
+            agent: { think: { prompt: 'You are a helpful assistant. Reply briefly.' } },
+          });
+        },
+        onJsonMessage(msg) {
+          if (msg.type === 'Error' && typeof msg.description === 'string') {
+            return { fail: new Error(`Issue #534 real-API: ${msg.description}`) };
+          }
+          if (
+            msg.type === 'ConversationText' &&
+            msg.role === 'assistant' &&
+            typeof msg.content === 'string' &&
+            msg.content.trim().length > 0
+          ) {
+            sawAssistant = true;
+            return { done: true };
+          }
+          return undefined;
+        },
+      });
+      expect(sawAssistant).toBe(true);
+    },
+    30000
+  );
+
+  /**
    * Issue #537: Live Realtime must accept `session.max_output_tokens` on `session.update` (mapper → proxy → upstream).
    * Sends a modest cap (128), then a short user turn; asserts SettingsApplied and an assistant ConversationText
    * without component Error. Skipped in CI without `USE_REAL_APIS=1` and `OPENAI_API_KEY` (same pattern as other real-API cases).

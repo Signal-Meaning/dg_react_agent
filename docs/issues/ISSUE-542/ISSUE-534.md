@@ -27,7 +27,7 @@ Deepgram-native path: not applicable in the same form (OpenAI Realtime only).
 
 ## TDD plan
 
-**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (all items below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [x] Verified (proxy + mock + real API below)
 
 ### RED
 
@@ -38,7 +38,7 @@ Deepgram-native path: not applicable in the same form (OpenAI Realtime only).
 
 - [x] Queue injects when not ready (`pendingInjectTextQueue`); flush on `session.updated` before `flushPendingAudio`.
 - [x] Preserve `mapInjectUserMessageToConversationItemCreate` + `pendingItemAddedBeforeResponseCreate` behavior after flush.
-- [ ] If **component-only** path: React tests for early-inject rejection; still recommend proxy queue for defense in depth. _(Deferred.)_
+- [ ] **Optional follow-up (not required for #534):** React / component tests (or dev warning) if the client sends `InjectUserMessage` before `SettingsApplied` — **defense in depth** on top of the **proxy queue**, which is already implemented below.
 
 ### REFACTOR
 
@@ -46,8 +46,8 @@ Deepgram-native path: not applicable in the same form (OpenAI Realtime only).
 
 ### Verified
 
-- [x] Integration test passes (`Issue #534: InjectUserMessage before Settings…`; full mock `openai-proxy-integration` suite).
-- [ ] **Real API:** `USE_REAL_APIS=1` inject timing scenario when combined with Section 2 qualification.
+- [x] Mock integration: `Issue #534: InjectUserMessage before Settings deferred until session.updated` — asserts upstream order `session.update` before `conversation.item.create` when inject is sent first (`openai-proxy-integration.test.ts`).
+- [x] **Real API:** `Issue #534 real-API: InjectUserMessage before Settings completes without Error` — same client send order as mock; no component `Error`; assistant `ConversationText` received (`USE_REAL_APIS=1` + `OPENAI_API_KEY`). This is the **ordering/race** qualification distinct from Section 2 (#532), which stresses Settings+tools+inject with a different shape.
 
 ---
 
