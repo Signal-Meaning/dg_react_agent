@@ -189,11 +189,15 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let lastTtsChunk: Buffer | null = null;
     const ttsBoundaryDebug = process.env.OPENAI_PROXY_TTS_BOUNDARY_DEBUG === '1';
 
+    /** Voice-commerce #1118: For TTS turns, API may send output_text.done before output_audio.done. We must not send AgentAudioDone on output_text.done when this response has audio, or idle timer starts while playback continues. */
+    let hasReceivedOutputAudioDeltaForCurrentResponse = false;
+
     /** Issue #482: Response lifecycle helpers so agent-activity and idle_timeout buffering stay DRY. */
     const onResponseStarted = (): void => {
       responseInProgress = true;
       hasSentAgentStartedSpeakingForCurrentResponse = false;
       hasSentAgentAudioDoneForCurrentResponse = false;
+      hasReceivedOutputAudioDeltaForCurrentResponse = false;
     };
 
     /** Issue #522: Send deferred response.create after function_call_output (REQUIRED-UPSTREAM-CONTRACT.md). Clears timeout, resets flag, sends response.create, calls onResponseStarted. Call only when pendingResponseCreateAfterFunctionCallOutput is true. */
@@ -619,7 +623,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
           sendAgentStartedSpeakingIfNeeded();
-          sendAgentAudioDoneIfNeeded();
+          // Voice-commerce #1118: text may finish before audio; if we already streamed PCM, defer
+          // AgentAudioDone to response.output_audio.done so the client idle timer does not start early.
+          if (!hasReceivedOutputAudioDeltaForCurrentResponse) {
+            sendAgentAudioDoneIfNeeded();
+          }
           flushPendingIdleTimeoutError();
         } else if (msg.type === 'response.output_audio_transcript.done') {
           emitLog({
@@ -747,6 +755,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           if (delta && typeof delta === 'string') {
             const pcm = Buffer.from(delta, 'base64');
             if (pcm.length > 0) {
+              hasReceivedOutputAudioDeltaForCurrentResponse = true; // Voice-commerce #1118: defer AgentAudioDone from output_text.done until output_audio.done
               sendAgentStartedSpeakingIfNeeded();
               if (ttsBoundaryDebug && lastTtsChunk !== null) {
                 const bufA = lastTtsChunk;

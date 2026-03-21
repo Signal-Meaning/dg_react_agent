@@ -3469,6 +3469,75 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
+   * Voice-commerce #1118: upstream may send response.output_audio.delta before response.output_text.done.
+   * Agent receipt (AgentDone/AgentAudioDone) must be sent once when audio completes, not again on output_text.done
+   * (onResponseEnded clears the per-response sent flag; without deferral the client would get duplicate agent-done).
+   */
+  itMockOnly('Voice-commerce #1118: single AgentDone/AgentAudioDone when PCM precedes output_text.done', (done) => {
+    mockSendOutputAudioBeforeText = true;
+    const sequence: string[] = [];
+    let finished = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    const clearFallback = scheduleFallbackTimeout(8000, () => {
+      if (finished) return;
+      finished = true;
+      try {
+        client.close();
+      } catch {
+        /* ignore */
+      }
+      done(new Error('timeout waiting for ConversationText (assistant)'));
+    });
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      clearFallback();
+      try {
+        client.close();
+      } catch {
+        /* ignore */
+      }
+      if (err) done(err);
+      else done();
+    };
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (finished) return;
+      if (data.length > 0 && data[0] !== 0x7b) {
+        sequence.push('binary');
+        return;
+      }
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
+        if (!msg.type) return;
+        sequence.push(msg.type);
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hi' }));
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          try {
+            expect(sequence.filter((t) => t === 'AgentDone').length).toBe(1);
+            expect(sequence.filter((t) => t === 'AgentAudioDone').length).toBe(1);
+            const binIdx = sequence.indexOf('binary');
+            const audioDoneIdx = sequence.indexOf('AgentAudioDone');
+            expect(binIdx).toBeGreaterThanOrEqual(0);
+            expect(audioDoneIdx).toBeGreaterThan(binIdx);
+          } catch (e) {
+            finish(e as Error);
+            return;
+          }
+          finish();
+        }
+      } catch (e) {
+        finish(e as Error);
+      }
+    });
+    client.on('error', (err) => finish(err));
+  }, 12000);
+
+  /**
    * Protocol §2.1: Client messages queued until upstream open, then drained in order.
    * Client sends Settings then InjectUserMessage immediately; assert upstream receives session.update then conversation.item.create.
    */

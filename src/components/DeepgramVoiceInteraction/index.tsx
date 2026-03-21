@@ -2482,38 +2482,48 @@ function DeepgramVoiceInteraction(
     }
     
     // Agent done for the turn: accept either AgentDone (semantic) or AgentAudioDone (legacy receipt-complete).
-    // AgentDone = proxy signals "agent is done" (prefer when supported). AgentAudioDone = receipt complete only, not playback.
+    // Wire receipt is NOT playback complete: do not force isPlaying false or agent idle while AudioManager still has active playback.
     if (data.type === 'AgentDone' || data.type === 'AgentAudioDone') {
       const eventType = data.type as 'AgentDone' | 'AgentAudioDone';
       logConsole('debug', `🔊 [AGENT EVENT] ${eventType} received`);
-      logConsole('debug', `🎯 [AGENT] ${eventType} - agent done for turn (semantic); transitioning to idle`);
-      sleepLog(`${eventType} received - agent done for turn`);
+      logConsole('debug', `🎯 [AGENT] ${eventType} - agent turn output receipt complete (playback may continue)`);
+      sleepLog(`${eventType} received - agent turn receipt complete`);
 
-      // Transition to idle when in speaking, listening, or thinking so idle timeout can start.
-      // IdleTimeoutService requires isPlaying: false and agentState idle/listening to start the timeout.
+      const agentState = stateRef.current.agentState;
+      const playbackStillActive = audioManagerRef.current?.isPlaybackActive?.() === true;
+
       // Issue #489: In function-call flow we may receive AgentAudioDone while still in 'thinking' (no audio
       // for that turn); if we don't transition to idle here, the service never starts the idle timeout.
-      const agentState = stateRef.current.agentState;
-      if (agentState === 'speaking') {
-        logConsole('debug','🎯 [AGENT] Agent done - transitioning to idle (response complete)');
+      if (agentState === 'speaking' && playbackStillActive) {
+        logConsole(
+          'debug',
+          '🎯 [AGENT] Agent receipt done while TTS still playing — deferring idle/playback until AudioManager finishes'
+        );
+        handleMeaningfulActivity(eventType);
+      } else if (agentState === 'speaking') {
+        logConsole('debug','🎯 [AGENT] Agent done - transitioning to idle (response complete, no active playback)');
         agentStateServiceRef.current?.handleAudioPlaybackChange(false);
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
         dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+        pushIdleStateToIdleTimeoutService();
+        handleMeaningfulActivity(eventType);
       } else if (agentState === 'listening') {
         logConsole('debug','🎯 [AGENT] Agent done while listening - transitioning to idle (greeting/response done before playback)');
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
         dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+        pushIdleStateToIdleTimeoutService();
+        handleMeaningfulActivity(eventType);
       } else if (agentState === 'thinking') {
         logConsole('debug','🎯 [AGENT] Agent done while thinking - transitioning to idle (e.g. text-only turn after function call)');
         dispatch({ type: 'PLAYBACK_STATE_CHANGE', isPlaying: false });
         dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+        pushIdleStateToIdleTimeoutService();
+        handleMeaningfulActivity(eventType);
+      } else {
+        // Already idle (or unexpected); still sync idle timeout service and meaningful activity for #489 paths
+        pushIdleStateToIdleTimeoutService();
+        handleMeaningfulActivity(eventType);
       }
-
-      // Issue #489: Always push idle into the service so it can start the timeout (React state updates
-      // are async). If we only push when agentState is speaking/listening/thinking, then when
-      // agentState is already 'idle' the service may keep stale state (e.g. 'thinking') and never start.
-      pushIdleStateToIdleTimeoutService();
-      handleMeaningfulActivity(eventType);
 
       // TODO(issue-489): Remove before concluding Issue #489 — E2E flag to confirm proxy → component AgentAudioDone delivery.
       if (typeof window !== 'undefined') {
@@ -3777,6 +3787,8 @@ function DeepgramVoiceInteraction(
             
             // Also dispatch directly as fallback (redundant but safe)
             dispatch({ type: 'AGENT_STATE_CHANGE', state: 'idle' });
+            // After deferred AgentAudioDone (receipt before playback end), service may need explicit sync before hook effects run
+            pushIdleStateToIdleTimeoutService();
           } else {
             logConsole('debug',`🎯 [AGENT] Audio playback stopped but agent state is ${currentState} (not speaking) - skipping transition to idle`);
           }

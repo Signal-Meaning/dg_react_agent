@@ -1,14 +1,27 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { DEFAULT_IDLE_TIMEOUT_MS } from '../constants/voice-agent';
 import { VoiceInteractionState } from '../utils/state/VoiceInteractionState';
 import { WebSocketManager } from '../utils/websocket/WebSocketManager';
-import { IdleTimeoutService, IdleTimeoutEvent } from '../utils/IdleTimeoutService';
+import { IdleTimeoutService, type IdleTimeoutInteractionSnapshot } from '../utils/IdleTimeoutService';
 import { getLogger } from '../utils/logger';
 
+function interactionSnapshot(state: VoiceInteractionState): IdleTimeoutInteractionSnapshot {
+  return {
+    agentState: state.agentState,
+    isPlaying: state.isPlaying,
+    isUserSpeaking: state.isUserSpeaking,
+  };
+}
+
 /**
- * Custom hook for managing idle timeout using the IdleTimeoutService.
- * Uses the shared DEFAULT_IDLE_TIMEOUT_MS (or timeoutMs override) so the same
- * value can be used in Settings for the OpenAI proxy.
+ * Idle disconnect timer via `IdleTimeoutService`.
+ *
+ * **React interaction state** (`agentState`, `isPlaying`, `isUserSpeaking`) is pushed through a single
+ * API — `applyCommittedInteractionState` — from `useLayoutEffect` after commit, so the service does not
+ * rely on `useEffect` ordering relative to paint or other effects.
+ *
+ * **Other signals** (UtteranceEnd, tool/function lifecycle, WS meaningful activity, `pushIdleStateToIdleTimeoutService`)
+ * still call `handleEvent` / `updateStateDirectly` directly; they are not duplicated in the layout snapshot.
  */
 export function useIdleTimeoutManager(
   state: VoiceInteractionState,
@@ -29,10 +42,8 @@ export function useIdleTimeoutManager(
     callbackRef.current = onIdleTimeoutActiveChange;
   }, [onIdleTimeoutActiveChange]);
 
-  // Initialize the service
-  useEffect(() => {
-    // Issue #235: Destroy any existing service BEFORE creating a new one
-    // This prevents multiple timeout handlers from existing simultaneously
+  // Create / destroy service in layout phase so it exists before the committed-state sync below (same tick).
+  useLayoutEffect(() => {
     if (serviceRef.current) {
       logger.debug('Destroying existing IdleTimeoutService before creating new one');
       serviceRef.current.destroy();
@@ -44,32 +55,26 @@ export function useIdleTimeoutManager(
       timeoutMs,
       debug,
     });
-    logger.debug('IdleTimeoutService created successfully');
 
     serviceRef.current.onTimeout(() => {
       logger.info('Idle timeout reached - closing agent connection');
-      // E2E diagnostic (Issue #489): expose so tests can assert timeout fired even if close not yet reflected in UI
       if (typeof window !== 'undefined') {
         (window as unknown as { __idleTimeoutFired__?: boolean }).__idleTimeoutFired__ = true;
       }
       agentManagerRef.current?.close();
     });
 
-    // Set up callback to expose idle timeout active state changes
-    // Use ref to access latest callback without recreating service when callback changes
     prevTimeoutActiveRef.current = false;
     serviceRef.current.onStateChange(() => {
       const currentTimeoutActive = serviceRef.current?.isTimeoutActive() ?? false;
       if (currentTimeoutActive !== prevTimeoutActiveRef.current) {
         prevTimeoutActiveRef.current = currentTimeoutActive;
-        // Use ref to get latest callback, avoiding stale closures
         callbackRef.current?.(currentTimeoutActive);
       }
     });
 
     return () => {
       logger.debug('Destroying IdleTimeoutService (cleanup)');
-      // Issue #235: Ensure service is destroyed and timeout is cancelled
       if (serviceRef.current) {
         serviceRef.current.destroy();
         serviceRef.current = null;
@@ -77,88 +82,32 @@ export function useIdleTimeoutManager(
     };
   }, [debug, timeoutMs]);
 
-  // Set up state getter once (reads from ref to always get latest state)
-  useEffect(() => {
-    if (serviceRef.current) {
-      // Set up state getter for polling to read state directly from component
-      // Use ref to ensure we always read the latest state, not a captured value
-      serviceRef.current.setStateGetter(() => {
-        return {
-          agentState: currentStateRef.current.agentState,
-          isPlaying: currentStateRef.current.isPlaying,
-          isUserSpeaking: currentStateRef.current.isUserSpeaking,
-        };
-      });
-    }
-  }, []); // Only set once - reads from ref which is always current
-
-  // Handle state changes
+  // After service exists; re-attach when service instance is recreated (timeoutMs / debug).
   useEffect(() => {
     if (!serviceRef.current) return;
+    serviceRef.current.setStateGetter(() => ({
+      agentState: currentStateRef.current.agentState,
+      isPlaying: currentStateRef.current.isPlaying,
+      isUserSpeaking: currentStateRef.current.isUserSpeaking,
+    }));
+  }, [debug, timeoutMs]);
 
-    // Keep stateGetter's ref in sync so IdleTimeoutService sees latest state (fixes greeting idle timeout E2E)
+  // Single post-commit path: after React applies state, push one snapshot into IdleTimeoutService
+  // (merge + semantic transitions) before paint. Avoids useEffect ordering vs idle countdown.
+  useLayoutEffect(() => {
+    if (!serviceRef.current) return;
+
     currentStateRef.current = state;
 
-    const currentState = {
-      isUserSpeaking: state.isUserSpeaking,
-      agentState: state.agentState,
-      isPlaying: state.isPlaying,
-    };
+    const prevSnapshot = interactionSnapshot(prevStateRef.current);
+    const nextSnapshot = interactionSnapshot(state);
 
-    const prevState = {
-      isUserSpeaking: prevStateRef.current.isUserSpeaking,
-      agentState: prevStateRef.current.agentState,
-      isPlaying: prevStateRef.current.isPlaying,
-    };
-
-    // Issue #489: Sync full state to the service BEFORE emitting transition events.
-    // Otherwise the first event (e.g. AGENT_STATE_CHANGED) runs updateTimeoutBehavior() while
-    // the service still has stale isPlaying/agentState from the previous render, so we
-    // incorrectly call disableResets() and stop a timeout we just started.
-    const stateChanged =
-      currentState.agentState !== prevState.agentState ||
-      currentState.isPlaying !== prevState.isPlaying ||
-      currentState.isUserSpeaking !== prevState.isUserSpeaking;
-    if (stateChanged) {
-      serviceRef.current.updateStateDirectly({
-        agentState: currentState.agentState,
-        isPlaying: currentState.isPlaying,
-        isUserSpeaking: currentState.isUserSpeaking,
-      });
-    }
-
-    logger.debug('State change detected', {
-      prev: prevState,
-      current: currentState,
-      agentStateChanged: currentState.agentState !== prevState.agentState,
-      isPlayingChanged: currentState.isPlaying !== prevState.isPlaying,
-      isUserSpeakingChanged: currentState.isUserSpeaking !== prevState.isUserSpeaking
+    logger.debug('Committed interaction snapshot → IdleTimeoutService', {
+      prev: prevSnapshot,
+      next: nextSnapshot,
     });
 
-    // Emit events for state changes
-    if (currentState.isUserSpeaking !== prevState.isUserSpeaking) {
-      const event: IdleTimeoutEvent = currentState.isUserSpeaking 
-        ? { type: 'USER_STARTED_SPEAKING' }
-        : { type: 'USER_STOPPED_SPEAKING' };
-      logger.debug('Emitting USER_STARTED/STOPPED_SPEAKING event');
-      serviceRef.current.handleEvent(event);
-    }
-
-    if (currentState.agentState !== prevState.agentState) {
-      logger.debug(`Emitting AGENT_STATE_CHANGED: ${prevState.agentState} -> ${currentState.agentState}`);
-      serviceRef.current.handleEvent({ 
-        type: 'AGENT_STATE_CHANGED', 
-        state: currentState.agentState 
-      });
-    }
-
-    if (currentState.isPlaying !== prevState.isPlaying) {
-      logger.debug(`Emitting PLAYBACK_STATE_CHANGED: ${prevState.isPlaying} -> ${currentState.isPlaying}`);
-      serviceRef.current.handleEvent({ 
-        type: 'PLAYBACK_STATE_CHANGED', 
-        isPlaying: currentState.isPlaying 
-      });
-    }
+    serviceRef.current.applyCommittedInteractionState(prevSnapshot, nextSnapshot);
 
     prevStateRef.current = state;
   }, [state.isUserSpeaking, state.agentState, state.isPlaying, debug]);
@@ -223,11 +172,14 @@ export function useIdleTimeoutManager(
    */
   const pushIdleStateToIdleTimeoutService = useCallback(() => {
     if (serviceRef.current) {
-      serviceRef.current.updateStateDirectly({
-        agentState: 'idle',
-        isPlaying: false,
-        isUserSpeaking: false,
-      });
+      serviceRef.current.updateStateDirectly(
+        {
+          agentState: 'idle',
+          isPlaying: false,
+          isUserSpeaking: false,
+        },
+        { source: 'react-commit' }
+      );
     }
   }, []);
 
