@@ -155,6 +155,75 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.session).not.toHaveProperty('tool_choice');
     });
 
+    it('maps agent.think.outputModalities to session.output_modalities (Issue #536)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            outputModalities: ['text' as const],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.output_modalities).toEqual(['text']);
+    });
+
+    it('preserves order for audio+text output_modalities (Issue #536)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            outputModalities: ['audio' as const, 'text' as const],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.output_modalities).toEqual(['audio', 'text']);
+    });
+
+    it('filters invalid output modality strings (Issue #536)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            outputModalities: ['text', 'video', 'audio'] as ('text' | 'audio')[],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.output_modalities).toEqual(['text', 'audio']);
+    });
+
+    it('omits session.output_modalities when only invalid modality strings (Issue #536)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            outputModalities: ['video', 'image'] as ('text' | 'audio')[],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session).not.toHaveProperty('output_modalities');
+    });
+
+    it('omits session.output_modalities when agent.think.outputModalities absent or empty (Issue #536; API default unchanged)', () => {
+      const minimal = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.' } },
+      };
+      expect(mapSettingsToSessionUpdate(minimal).session).not.toHaveProperty('output_modalities');
+      const emptyArr = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.', outputModalities: [] } },
+      };
+      expect(mapSettingsToSessionUpdate(emptyArr).session).not.toHaveProperty('output_modalities');
+    });
+
     it('maps multiple functions to session.update tools (OpenAI API shape)', () => {
       const settings = {
         type: 'Settings' as const,

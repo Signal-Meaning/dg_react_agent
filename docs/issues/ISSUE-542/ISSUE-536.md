@@ -8,38 +8,48 @@
 
 ## Problem (Section 5, row 2)
 
-Integrators cannot select text-only vs audio (etc.) via `Settings`; Realtime `session.output_modalities` is not driven from the component protocol.
+Integrators cannot select text-only vs audio via `Settings`; Realtime `session.output_modalities` is not driven from the component protocol.
+
+---
+
+## Decision
+
+- **`agent.think.outputModalities`** (Settings JSON) maps to **`session.output_modalities`** on `session.update` when the array is non-empty **after** validation.
+- Supported entries align with [Realtime session.update](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update): **`text`** and **`audio`** only. Unknown strings are filtered; if none remain, **`output_modalities` is omitted** so the API keeps its implicit default.
+- **`AgentOptions.thinkOutputModalities`** and **`buildSettingsMessage`** pass the value through; component forwards from options.
 
 ---
 
 ## TDD plan
 
-**Phases:** - [ ] RED · - [ ] GREEN · - [ ] REFACTOR · - [ ] Verified (all items below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (real API row below)
 
 ### RED
 
-- [ ] Unit: Settings payload sets modalities (field path TBD) → `session.output_modalities` matches OpenAI array shape per current schema.
-- [ ] Unit: when unset, behavior matches chosen default (document implicit vs explicit default in test name or README).
+- [x] Unit (`tests/openai-proxy.test.ts`): `['text']`, `['audio','text']`, filter invalid, all-invalid → omit, absent/empty → omit.
+- [x] Unit (`tests/buildSettingsMessage.test.ts`): non-empty → `agent.think.outputModalities`; undefined/empty → property omitted.
 
 ### GREEN
 
-- [ ] Implement mapping in `translator.ts`; extend `ComponentSettings` / builder.
+- [x] `mapSettingsToSessionUpdate`, `ComponentSettings` / `OpenAISessionUpdate`, `ThinkOutputModality` / `thinkOutputModalities` / `buildSettingsMessage`, `DeepgramVoiceInteraction`.
 
 ### REFACTOR
 
-- [ ] Proxy README Section 5 row; optional shared validator with #537 / #538.
+- [x] Proxy README + PROTOCOL Settings row for `output_modalities`.
 
 ### Verified
 
-- [ ] Unit tests pass.
-- [ ] **Real API** and/or E2E: modality behavior matches expectation (e.g. text-only vs audio).
+- [x] Unit tests pass.
+- [ ] **Real API:** `USE_REAL_APIS=1` — e.g. text-only vs default audio+text behavior matches expectation.
 
 ---
 
 ## Files
 
-- `packages/voice-agent-backend/scripts/openai-proxy/translator.ts`
-- `tests/openai-proxy.test.ts`
-- Component types / `buildSettingsMessage` if surfaced to React
+- `packages/voice-agent-backend/scripts/openai-proxy/translator.ts` — `OpenAIRealtimeOutputModality`, `mapSettingsToSessionUpdate`, session type
+- `src/types/agent.ts` — `ThinkOutputModality`, `AgentSettingsMessage`, `AgentOptions`
+- `src/utils/buildSettingsMessage.ts`, `src/components/DeepgramVoiceInteraction/index.tsx`
+- `tests/openai-proxy.test.ts`, `tests/buildSettingsMessage.test.ts`
+- `packages/voice-agent-backend/scripts/openai-proxy/README.md`, `PROTOCOL-AND-MESSAGE-ORDERING.md`
 
-**Canonical API:** OpenAI `session.update` schema for `output_modalities`.
+**Canonical API:** [session.update](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update) `output_modalities`.

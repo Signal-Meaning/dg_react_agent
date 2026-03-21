@@ -15,6 +15,12 @@ export type OpenAIRealtimeSessionToolChoice =
   | 'required'
   | { type: 'function'; name: string };
 
+/**
+ * OpenAI Realtime `session.output_modalities` entries (Issue #536).
+ * @see https://platform.openai.com/docs/api-reference/realtime-client-events/session/update
+ */
+export type OpenAIRealtimeOutputModality = 'text' | 'audio';
+
 /** Component message: Settings (outgoing) */
 export interface ComponentSettings {
   type: 'Settings';
@@ -27,6 +33,8 @@ export interface ComponentSettings {
       prompt?: string;
       /** Issue #535: maps to Realtime `session.tool_choice` when set. */
       toolChoice?: OpenAIRealtimeSessionToolChoice;
+      /** Issue #536: maps to Realtime `session.output_modalities` when non-empty after validation. */
+      outputModalities?: OpenAIRealtimeOutputModality[];
       functions?: Array<{ name: string; description?: string; parameters?: unknown }>;
     };
     speak?: { provider?: { voice?: string } };
@@ -60,6 +68,8 @@ export interface OpenAISessionUpdate {
     tools?: Array<{ type: 'function'; name: string; description?: string; parameters?: unknown }>;
     /** Issue #535: how the model selects tools (`auto` | `none` | `required` or force `{ type: 'function', name }`). */
     tool_choice?: OpenAIRealtimeSessionToolChoice;
+    /** Issue #536: model output channels (`text`, `audio`, or both). */
+    output_modalities?: OpenAIRealtimeOutputModality[];
     [key: string]: unknown;
   };
 }
@@ -267,6 +277,13 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
   const toolChoice = settings.agent?.think?.toolChoice;
   if (toolChoice !== undefined) {
     session.tool_choice = toolChoice;
+  }
+  const rawModalities = settings.agent?.think?.outputModalities;
+  if (Array.isArray(rawModalities) && rawModalities.length > 0) {
+    const modalities = rawModalities.filter((m): m is OpenAIRealtimeOutputModality => m === 'text' || m === 'audio');
+    if (modalities.length > 0) {
+      session.output_modalities = modalities;
+    }
   }
   return { type: 'session.update', session };
 }

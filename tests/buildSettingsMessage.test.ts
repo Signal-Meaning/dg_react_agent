@@ -154,6 +154,27 @@ describe('buildSettingsMessage', () => {
     expect('toolChoice' in msg.agent.think).toBe(false);
   });
 
+  it('includes agent.think.outputModalities when thinkOutputModalities is non-empty (Issue #536)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, thinkOutputModalities: ['text'] },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.think.outputModalities).toEqual(['text']);
+  });
+
+  it('omits agent.think.outputModalities when thinkOutputModalities undefined or empty (Issue #536)', () => {
+    const noProp = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('outputModalities' in noProp.agent.think).toBe(false);
+    const empty = buildSettingsMessage(
+      { ...minimalOptions, thinkOutputModalities: [] },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('outputModalities' in empty.agent.think).toBe(false);
+  });
+
   it('sets speak provider model from options.voice', () => {
     const msg = buildSettingsMessage(
       { ...minimalOptions, voice: 'aura-luna-en' },

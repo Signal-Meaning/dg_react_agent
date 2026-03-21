@@ -2135,6 +2135,7 @@ function DeepgramVoiceInteraction(
         thinkApiKey: currentAgentOptions.thinkApiKey,
         thinkTemperature: currentAgentOptions.thinkTemperature,
         thinkToolChoice: currentAgentOptions.thinkToolChoice,
+        thinkOutputModalities: currentAgentOptions.thinkOutputModalities,
         functions: currentAgentOptions.functions,
         listenModel: currentAgentOptions.listenModel,
         greeting: currentAgentOptions.greeting,

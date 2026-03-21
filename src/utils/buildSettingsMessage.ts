@@ -5,7 +5,7 @@
  * No side effects; used by sendAgentSettings in the component.
  */
 
-import type { AgentFunction, ThinkToolChoice } from '../types/agent';
+import type { AgentFunction, ThinkOutputModality, ThinkToolChoice } from '../types/agent';
 import { filterFunctionsForSettings } from './function-utils';
 
 export interface BuildSettingsMessageOptions {
@@ -20,6 +20,8 @@ export interface BuildSettingsMessageOptions {
   thinkTemperature?: number;
   /** Passed to Settings agent.think.toolChoice → Realtime session.tool_choice (Issue #535). */
   thinkToolChoice?: ThinkToolChoice;
+  /** Passed to Settings agent.think.outputModalities → Realtime session.output_modalities (Issue #536). */
+  thinkOutputModalities?: ThinkOutputModality[];
   functions?: AgentFunction[];
   listenModel?: string;
   greeting?: string;
@@ -44,6 +46,7 @@ export interface SettingsMessagePayload {
       provider: { type: string; model: string; temperature?: number };
       prompt?: string;
       toolChoice?: ThinkToolChoice;
+      outputModalities?: ThinkOutputModality[];
       endpoint?: unknown;
       functions?: AgentFunction[];
     };
@@ -100,6 +103,9 @@ export function buildSettingsMessage(
           ? { functions: filterFunctionsForSettings(options.functions) }
           : {}),
         ...(options.thinkToolChoice !== undefined ? { toolChoice: options.thinkToolChoice } : {}),
+        ...(options.thinkOutputModalities !== undefined && options.thinkOutputModalities.length > 0
+          ? { outputModalities: options.thinkOutputModalities }
+          : {}),
       },
       speak: {
         provider: {

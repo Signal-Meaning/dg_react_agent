@@ -19,7 +19,7 @@
 
 ## Translator exports
 
-- `mapSettingsToSessionUpdate(settings)` – component Settings → OpenAI `session.update` (maps `agent.think.provider.temperature` → `session.temperature` when set — Issue #538; `agent.think.toolChoice` → `session.tool_choice` when set — Issue #535)
+- `mapSettingsToSessionUpdate(settings)` – component Settings → OpenAI `session.update` (maps `agent.think.provider.temperature` → `session.temperature` when set — Issue #538; `agent.think.toolChoice` → `session.tool_choice` when set — Issue #535; non-empty validated `agent.think.outputModalities` → `session.output_modalities` — Issue #536)
 - `mapInjectUserMessageToConversationItemCreate(msg)` – component InjectUserMessage → OpenAI `conversation.item.create`
 - `mapSessionUpdatedToSettingsApplied(event)` – OpenAI `session.updated` → component SettingsApplied
 - `mapGreetingToConversationItemCreate(greeting)` – greeting string → OpenAI `conversation.item.create` (assistant); used after session.updated (Issue #381)

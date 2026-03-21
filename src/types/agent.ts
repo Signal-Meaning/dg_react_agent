@@ -81,6 +81,11 @@ export type ThinkToolChoice =
   | { type: 'function'; name: string };
 
 /**
+ * OpenAI Realtime `session.output_modalities` entries (Issue #536).
+ */
+export type ThinkOutputModality = 'text' | 'audio';
+
+/**
  * Conversation message for context preservation
  */
 export interface ConversationMessage {
@@ -138,6 +143,8 @@ export interface AgentSettingsMessage {
       prompt?: string;
       /** OpenAI proxy: maps to Realtime `session.tool_choice` (Issue #535). */
       toolChoice?: ThinkToolChoice;
+      /** OpenAI proxy: maps to Realtime `session.output_modalities` (Issue #536). */
+      outputModalities?: ThinkOutputModality[];
     };
     speak?: {
       provider: {
@@ -429,6 +436,8 @@ export interface AgentOptions {
   thinkTemperature?: number; // e.g., 0.7
   /** OpenAI proxy: Realtime `session.tool_choice` (Issue #535). */
   thinkToolChoice?: ThinkToolChoice;
+  /** OpenAI proxy: Realtime `session.output_modalities` (Issue #536). */
+  thinkOutputModalities?: ThinkOutputModality[];
   instructions?: string; // Base instructions for the agent
   
   // Speak settings
