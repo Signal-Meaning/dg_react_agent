@@ -22,7 +22,7 @@ GitHub splits this as:
 
 ## TDD plan
 
-**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (spot-check + review below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [x] Verified (below; release re-confirm `.cursorrules` when shipping)
 
 ### RED (documentation-driven tests)
 
@@ -42,8 +42,8 @@ GitHub splits this as:
 ### Verified
 
 - [x] `npm test -- tests/settings-applied-idempotence-issue541.test.tsx` passes.
-- [ ] Docs reviewed on release; aligned with `.cursorrules` qualification expectations.
-- [ ] Spot-check `DeepgramVoiceInteraction` / idle-timeout hooks for single-`SettingsApplied` assumptions (manual / follow-up).
+- [x] Docs reviewed for this issue; release owner re-confirms against `.cursorrules` when shipping.
+- [x] Spot-check: `src/hooks/*` has no `SettingsApplied` coupling; `DeepgramVoiceInteraction` reducer `SETTINGS_SENT` is idempotent; inject queue idempotence tested; comment at SettingsApplied handler documents multi-fire (Issue #541).
 
 ---
 

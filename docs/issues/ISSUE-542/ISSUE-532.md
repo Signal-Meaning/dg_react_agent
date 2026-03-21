@@ -45,7 +45,7 @@ GitHub issue lists exact steps: WS to proxy; UTF-8 JSON only; Settings without f
 ### Verified
 
 - [x] Full mock `openai-proxy-integration` suite (65+ tests) green.
-- [ ] **Real API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` with `OPENAI_API_KEY` for Settings+tools+inject path.
+- [ ] **Real API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` with `OPENAI_API_KEY` for Settings+tools+inject path. **Partner-grade path (backend HTTP before `FunctionCallResponse`):** same suite, `-t "Issue #470 real-API: function-call flow completes"` (see ISSUE-462 / `.cursorrules`). If that test times out, treat as upstream/API flake and retry; do not mark this row checked until it passes locally/CI when you need qualification.
 - [ ] If partner scenario matches, E2E with **real** backend HTTP before `FunctionCallResponse` (ISSUE-462).
 
 ---

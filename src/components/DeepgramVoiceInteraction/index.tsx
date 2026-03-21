@@ -2435,6 +2435,9 @@ function DeepgramVoiceInteraction(
     
     // Handle SettingsApplied (Deepgram) or session.created (OpenAI proxy) - settings/session ready
     // Issue #428: OpenAI proxy may send session.created as readiness signal; treat same as SettingsApplied
+    // Issue #541: Multiple SettingsApplied (or session.created) per connection is valid (e.g. multiple
+    // session.updated). Host onSettingsApplied may run more than once; do not assume exactly-once for
+    // side effects without your own guard. Inject queue drains once per message (ref emptied in while).
     if (data.type === 'SettingsApplied' || data.type === 'session.created') {
       const source = data.type === 'SettingsApplied' ? 'SettingsApplied' : 'session.created';
       logger.info(`✅ [Protocol] ${source} received - settings are now active`);

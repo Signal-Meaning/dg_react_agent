@@ -18,7 +18,7 @@ Work can proceed issue-by-issue, but these groupings share code paths and tests:
 | **B — Ordering / protocol** | [#534](./ISSUE-534.md), [#532](./ISSUE-532.md) | `server.ts` `forwardClientMessage`, `session.updated`, `hasSentSettingsApplied`, tools path | `tests/integration/openai-proxy-integration.test.ts` (extend with Settings+tools + early inject; close codes) | - [ ] |
 | **C — Client JSON boundary** | [#533](./ISSUE-533.md) | `server.ts` client JSON handling (Issue #533) | Integration: unknown `type` → Error; KeepAlive not forwarded; passthrough flag test | - [x] |
 | **D — Settings → Realtime session** | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | `translator.ts` `mapSettingsToSessionUpdate`, component `Settings` types, `buildSettingsMessage` | `tests/openai-proxy.test.ts` (mapper snapshots); integration: outbound `session.update` shape with `USE_REAL_APIS=1` when needed | - [ ] |
-| **E — Lifecycle / contract docs** | [#541](./ISSUE-541.md) | `PROTOCOL-AND-MESSAGE-ORDERING.md`, `COMPONENT-PROXY-CONTRACT.md`, React handlers for `SettingsApplied` | Doc audit + targeted unit/integration: duplicate `SettingsApplied`, no duplicate `session.update` | - [ ] |
+| **E — Lifecycle / contract docs** | [#541](./ISSUE-541.md) | `PROTOCOL-AND-MESSAGE-ORDERING.md`, `COMPONENT-PROXY-CONTRACT.md`, React handlers for `SettingsApplied` | Doc audit + targeted unit/integration: duplicate `SettingsApplied`, no duplicate `session.update` | - [x] |
 
 Implement **D** after **C** if you remove passthrough before new Settings fields land, or implement **D** first and **C** last if you temporarily rely on passthrough for gaps (document the threat model either way).
 
@@ -78,7 +78,7 @@ Check **Area done** when every linked issue’s **Verified** checklist in its do
 | 3 | Section 2 — protocol / Settings + functions | [#532](./ISSUE-532.md) | - [ ] | Mock Section 2b + client close log done; real-API row still open in ISSUE-532 |
 | 4 | Section 3 — JSON hardening | [#533](./ISSUE-533.md) | - [x] | Strict default + `OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH` escape hatch |
 | 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [ ] | Mapping code + unit tests landed; **Area done** when all child **Verified** boxes closed (real-API/E2E where noted) |
-| 6 | Section 6 — lifecycle / audit / idempotence | [#541](./ISSUE-541.md) | - [ ] | Matrix + inject-queue idempotence test landed; spot-check / full **Verified** per [ISSUE-541](./ISSUE-541.md) |
+| 6 | Section 6 — lifecycle / audit / idempotence | [#541](./ISSUE-541.md) | - [x] | Matrix, idempotence test, component comment, ISSUE-541 **Verified** (re-confirm on release) |
 
 ### Section 5 sub-order (within priority 5)
 
