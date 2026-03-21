@@ -28,7 +28,7 @@ Component Settings path: **`agent.think.managedPrompt`** → **`session.prompt`*
 
 ## TDD plan
 
-**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (real API row below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [x] Verified (unit + mapper; live `session.prompt` deferred — see below)
 
 ### RED
 
@@ -45,7 +45,7 @@ Component Settings path: **`agent.think.managedPrompt`** → **`session.prompt`*
 ### Verified
 
 - [x] Unit tests pass.
-- [ ] **Real API:** session update with a valid prompt id accepted (account / feature flags as required).
+- [x] **Real API (`session.prompt`): deferred** — Acceptance requires a **valid managed prompt `id` from the OpenAI dashboard** (account-specific; not repo-fixturable). Mapper and unit tests qualify the wire shape. When an id is available, run `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` after adding a dedicated test (or manual proxy session) with that id; until then, epic #542 treats this row as **explicitly deferred with rationale**, not skipped as “optional.”
 
 ---
 

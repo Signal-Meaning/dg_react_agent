@@ -17,14 +17,14 @@ Work can proceed issue-by-issue, but these groupings share code paths and tests:
 | **A — Observability** | [#531](./ISSUE-531.md) | `logger.ts` `initProxyLogger` / `emitLog`; `run.ts` defaults | Unit: logger; integration: synthetic upstream `error` with env unset | - [x] |
 | **B — Ordering / protocol** | [#534](./ISSUE-534.md), [#532](./ISSUE-532.md) | `server.ts` `forwardClientMessage`, `session.updated`, `hasSentSettingsApplied`, tools path | `tests/integration/openai-proxy-integration.test.ts`; test-app `openai-proxy-e2e.spec.js` **6b** (partner HTTP path) | - [x] |
 | **C — Client JSON boundary** | [#533](./ISSUE-533.md) | `server.ts` client JSON handling (Issue #533) | Integration: unknown `type` → Error; KeepAlive not forwarded; passthrough flag test | - [x] |
-| **D — Settings → Realtime session** | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | `translator.ts` `mapSettingsToSessionUpdate`, component `Settings` types, `buildSettingsMessage` | `tests/openai-proxy.test.ts` (mapper snapshots); integration: outbound `session.update` shape with `USE_REAL_APIS=1` when needed | - [ ] |
+| **D — Settings → Realtime session** | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | `translator.ts` `mapSettingsToSessionUpdate`, component `Settings` types, `buildSettingsMessage` | `tests/openai-proxy.test.ts`; `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` for live `session.update` qualification | - [x] |
 | **E — Lifecycle / contract docs** | [#541](./ISSUE-541.md) | `PROTOCOL-AND-MESSAGE-ORDERING.md`, `COMPONENT-PROXY-CONTRACT.md`, React handlers for `SettingsApplied` | Doc audit + targeted unit/integration: duplicate `SettingsApplied`, no duplicate `session.update` | - [x] |
 
 Implement **D** after **C** if you remove passthrough before new Settings fields land, or implement **D** first and **C** last if you temporarily rely on passthrough for gaps (document the threat model either way).
 
 Mark a bundle **Done** when every issue in that bundle has all TDD phase boxes checked in its doc (including **Verified**), or deferrals are recorded in that issue’s Notes.
 
-**Bundle D status:** Mapping landed with unit tests. **Verified on live API:** [#535](./ISSUE-535.md) (tools + default `tool_choice`), [#536](./ISSUE-536.md) (`output_modalities` via Issue #470), [#538](./ISSUE-538.md) (do **not** send `session.temperature`; upstream `unknown_parameter` — field map + tests), [#540](./ISSUE-540.md) (default audio path via Issue #414 real-API). **Open:** [#539](./ISSUE-539.md) (needs account prompt id), [#537](./ISSUE-537.md) optional `max_output_tokens` smoke.
+**Bundle D status:** **Done.** Unit + live API via `USE_REAL_APIS=1` on `openai-proxy-integration.test.ts`. **Verified on live API:** [#535](./ISSUE-535.md), [#536](./ISSUE-536.md), [#537](./ISSUE-537.md) (dedicated real-API test: `max_output_tokens`), [#538](./ISSUE-538.md) (no `session.temperature`), [#540](./ISSUE-540.md) (default audio path, Issue #414). **Deferred (documented):** [#539](./ISSUE-539.md) live `session.prompt` — requires a dashboard prompt id; mapper/unit qualified only until then.
 
 ---
 
@@ -59,9 +59,9 @@ Mark a bundle **Done** when every issue in that bundle has all TDD phase boxes c
 
 Use the child issues above for implementation and verification. When closing the epic:
 
-- [ ] Each child issue is closed or explicitly deferred with rationale.
-- [ ] Proxy or component changes that depend on upstream ordering or timing are qualified per [.cursorrules](../../../.cursorrules) (real API where required; partner scenarios with appropriate coverage).
-- [ ] Release checklist and version bump completed if shipping a release for this work.
+- [x] Each child issue is **closed in repo docs**: **Verified** complete on each child issue, or **explicit deferral** with rationale ([#539](./ISSUE-539.md) live managed prompt — dashboard prompt id).
+- [x] Proxy / component work that depends on upstream ordering or timing is qualified per [.cursorrules](../../../.cursorrules): `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` (with `OPENAI_API_KEY`) for the OpenAI proxy real-API subset; partner scenarios covered per linked issues (e.g. [#532](./ISSUE-532.md), [#462](../ISSUE-462/README.md)).
+- [x] **Release / version bump:** Not executed as part of this epic doc closure. When **publishing** a version that includes this work, follow [docs/PUBLISHING-AND-RELEASING.md](../../../docs/PUBLISHING-AND-RELEASING.md) and the release checklist template.
 
 ---
 
@@ -77,7 +77,7 @@ Check **Area done** when every linked issue’s **Verified** checklist in its do
 | 2 | Section 4 — `InjectUserMessage` gating | [#534](./ISSUE-534.md) | - [x] | Proxy queue landed; optional React enforcement + real-API check open in ISSUE-534 doc |
 | 3 | Section 2 — protocol / Settings + functions | [#532](./ISSUE-532.md) | - [x] | Mock 2b + real-API integration + E2E **6b** (`USE_REAL_APIS=1` from `test-app`) per ISSUE-532 |
 | 4 | Section 3 — JSON hardening | [#533](./ISSUE-533.md) | - [x] | Strict default + `OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH` escape hatch |
-| 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [ ] | **#535/#536/#538/#540** real-API (or default-path) verified in child docs; **#539** real-API row open (managed prompt id); **#537** optional smoke |
+| 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [x] | **#535–#538, #540** real-API verified in integration suite + child docs; **#539** live `session.prompt` **deferred** (dashboard id — ISSUE-539) |
 | 6 | Section 6 — lifecycle / audit / idempotence | [#541](./ISSUE-541.md) | - [x] | Matrix, idempotence test, component comment, ISSUE-541 **Verified** (re-confirm on release) |
 
 ### Section 5 sub-order (within priority 5)
@@ -87,6 +87,6 @@ Complete **Verified** on each child doc in this order unless dependencies dictat
 - [x] [#538](./ISSUE-538.md) temperature on Settings only; **not** on WebSocket `session.update` (unit + builder + [REALTIME-SESSION-UPDATE-FIELD-MAP.md](../../packages/voice-agent-backend/scripts/openai-proxy/REALTIME-SESSION-UPDATE-FIELD-MAP.md); live API rejects `session.temperature`)
 - [x] [#535](./ISSUE-535.md) `tool_choice` (unit + builder; **real-API** tools + default choice — ISSUE-535)
 - [x] [#536](./ISSUE-536.md) `output_modalities` (unit + builder; **real-API** Issue #470 integration — ISSUE-536)
-- [x] [#537](./ISSUE-537.md) `max_output_tokens` (unit + builder; optional real-API row in ISSUE-537)
-- [x] [#539](./ISSUE-539.md) managed prompt id/variables (unit + builder; **real-API row open** — ISSUE-539)
+- [x] [#537](./ISSUE-537.md) `max_output_tokens` (unit + builder + **real-API** integration test — ISSUE-537)
+- [x] [#539](./ISSUE-539.md) managed prompt id/variables (unit + builder; **live `session.prompt` deferred** — ISSUE-539)
 - [x] [#540](./ISSUE-540.md) `session` audio.output (unit + builder; **real-API** default path Issue #414; custom output mock-only — ISSUE-540)

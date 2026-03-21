@@ -44,7 +44,7 @@
 
 - **Unit:** `tests/openai-proxy.test.ts` — `mapSettingsToSessionUpdate` (including session key expectations and non-forwarding of `temperature`).
 - **Integration (mock):** `tests/integration/openai-proxy-integration.test.ts` — session shape and protocol behavior.
-- **Integration (real API):** `USE_REAL_APIS=1` on `openai-proxy-integration.test.ts` when qualifying upstream.
+- **Integration (real API):** `USE_REAL_APIS=1` + `OPENAI_API_KEY` — run `openai-proxy-integration.test.ts` before release or epic closure for proxy/session mapping work. Includes **Issue #537** (`max_output_tokens`), **#538** (no `session.temperature`, among other cases), and related real-API cases. **Issue #539** (`session.prompt`): live acceptance deferred until a dashboard prompt id exists (see ISSUE-539.md).
 
 ---
 

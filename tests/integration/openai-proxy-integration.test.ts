@@ -760,6 +760,76 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 15000);
 
   /**
+   * Issue #537: Live Realtime must accept `session.max_output_tokens` on `session.update` (mapper → proxy → upstream).
+   * Sends a modest cap (128), then a short user turn; asserts SettingsApplied and an assistant ConversationText
+   * without component Error. Skipped in CI without `USE_REAL_APIS=1` and `OPENAI_API_KEY` (same pattern as other real-API cases).
+   */
+  (useRealAPIs ? it : it.skip)('Issue #537 real-API: Settings with maxOutputTokens yields SettingsApplied and assistant reply without Error (USE_REAL_APIS=1)', (done) => {
+    let finished = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const errorsReceived: string[] = [];
+    let sawAssistantText = false;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      try { client.close(); } catch { /* ignore */ }
+      if (err) done(err);
+      else done();
+    };
+
+    client.on('open', () => {
+      client.send(JSON.stringify({
+        type: 'Settings',
+        agent: {
+          think: {
+            prompt: 'You are a helpful assistant. Reply briefly.',
+            maxOutputTokens: 128,
+          },
+        },
+      }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; description?: string; role?: string; content?: string };
+        if (msg.type === 'Error' && msg.description) {
+          errorsReceived.push(msg.description);
+          finish(new Error(`Issue #537 real-API: upstream/proxy error: ${msg.description}`));
+          return;
+        }
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hello in one short sentence.' }));
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant' && typeof msg.content === 'string' && msg.content.trim().length > 0) {
+          sawAssistantText = true;
+          if (errorsReceived.length > 0) {
+            finish(new Error(`Issue #537 real-API: errors before assistant text: ${errorsReceived.join('; ')}`));
+            return;
+          }
+          setTimeout(() => finish(), 400);
+        }
+      } catch (e) {
+        if (e instanceof SyntaxError) return;
+        finish(e as Error);
+      }
+    });
+    client.on('error', (err) => finish(err));
+    timeoutId = setTimeout(() => {
+      if (!finished) {
+        finish(new Error(
+          `Issue #537 real-API: timeout (max_output_tokens path). sawAssistantText=${sawAssistantText}, errors=${errorsReceived.join('; ') || 'none'}`
+        ));
+      }
+    }, 25000);
+  }, 30000);
+
+  /**
    * Issue #470 / #462: Real-API integration test for function-call path. Uses real HTTP to a backend (no in-test
    * hardcoded FunctionCallResponse). Partner scenario: Settings → InjectUserMessage → FunctionCallRequest →
    * POST to backend → FunctionCallResponse → response. Asserts no conversation_already_has_active_response.

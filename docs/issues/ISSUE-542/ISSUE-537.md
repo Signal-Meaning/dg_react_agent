@@ -22,7 +22,7 @@
 
 ## TDD plan
 
-**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (optional real API below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [x] Verified
 
 ### RED
 
@@ -39,7 +39,7 @@
 ### Verified
 
 - [x] Unit tests pass.
-- [ ] **Real API (optional):** `USE_REAL_APIS=1` smoke with a small `max_output_tokens` if stable.
+- [x] **Real API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — **Issue #537 real-API:** Settings with `maxOutputTokens` → `SettingsApplied` → short turn without component `Error` (asserts live `session.max_output_tokens` acceptance).
 
 ---
 
