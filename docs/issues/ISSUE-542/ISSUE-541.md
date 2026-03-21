@@ -22,35 +22,36 @@ GitHub splits this as:
 
 ## TDD plan
 
-**Phases:** - [ ] RED · - [ ] GREEN · - [ ] REFACTOR · - [ ] Verified (all items below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (spot-check + review below)
 
 ### RED (documentation-driven tests)
 
-- [ ] Component/hook tests: two `SettingsApplied` in a row → no throw, no double teardown / double timer arm, idempotent config.
-- [ ] Proxy integration: any incorrect handling of duplicate `SettingsApplied` covered by new or existing failing test.
+- [x] Component test: second `SettingsApplied` after queued `injectUserMessage` must not send **`InjectUserMessage`** twice (`tests/settings-applied-idempotence-issue541.test.tsx`).
+- [x] Existing coverage: multiple `onSettingsApplied` invocations (`tests/on-settings-applied-callback.test.tsx`).
 
 ### GREEN
 
-- [ ] Fix non-idempotent handlers found above.
-- [ ] Add **client → upstream** event matrix (`REALTIME-CLIENT-EVENT-MATRIX.md` or sibling to [UPSTREAM-EVENT-COMPLETE-MAP.md](../../../packages/voice-agent-backend/scripts/openai-proxy/UPSTREAM-EVENT-COMPLETE-MAP.md)): event name, supported Y/N, component equivalent, notes.
-- [ ] Extend [PROTOCOL-AND-MESSAGE-ORDERING.md](../../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md): who sends `response.create`, proxy-managed vs host-visible knobs.
+- [x] No code change required for inject queue (already idempotent).
+- [x] **client → upstream** matrix: [REALTIME-CLIENT-EVENT-MATRIX.md](../../../packages/voice-agent-backend/scripts/openai-proxy/REALTIME-CLIENT-EVENT-MATRIX.md) (includes `response.create` lifecycle summary).
+- [x] [PROTOCOL-AND-MESSAGE-ORDERING.md](../../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md): link to matrix (§0 See also).
 
 ### REFACTOR
 
-- [ ] Cross-link matrix from [COMPONENT-PROXY-CONTRACT.md](../../BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md).
+- [x] Cross-link matrix from [COMPONENT-PROXY-CONTRACT.md](../../BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md).
 
 ### Verified
 
-- [ ] Idempotence tests pass.
-- [ ] Docs reviewed; aligned with `.cursorrules` qualification expectations.
-- [ ] Spot-check `DeepgramVoiceInteraction` / idle-timeout hooks for single-`SettingsApplied` assumptions.
+- [x] `npm test -- tests/settings-applied-idempotence-issue541.test.tsx` passes.
+- [ ] Docs reviewed on release; aligned with `.cursorrules` qualification expectations.
+- [ ] Spot-check `DeepgramVoiceInteraction` / idle-timeout hooks for single-`SettingsApplied` assumptions (manual / follow-up).
 
 ---
 
 ## Files (expected touch set)
 
 - `packages/voice-agent-backend/scripts/openai-proxy/server.ts` — reference only unless bugs found
-- `src/components/DeepgramVoiceInteraction/` — idempotence fixes if needed
+- `src/components/DeepgramVoiceInteraction/` — idempotence fixes if needed (none for inject queue)
 - `src/hooks/` — idle timeout / settings applied coupling
-- `docs/` or `packages/.../openai-proxy/*.md` — event matrix + lifecycle narrative
-- `tests/` — component + integration tests as needed
+- `packages/voice-agent-backend/scripts/openai-proxy/REALTIME-CLIENT-EVENT-MATRIX.md` — client event matrix
+- `tests/settings-applied-idempotence-issue541.test.tsx` — duplicate SettingsApplied + inject queue
+- `docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md`, `PROTOCOL-AND-MESSAGE-ORDERING.md` — cross-links

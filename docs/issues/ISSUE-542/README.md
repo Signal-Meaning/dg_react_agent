@@ -78,7 +78,7 @@ Check **Area done** when every linked issue’s **Verified** checklist in its do
 | 3 | Section 2 — protocol / Settings + functions | [#532](./ISSUE-532.md) | - [ ] | Mock Section 2b + client close log done; real-API row still open in ISSUE-532 |
 | 4 | Section 3 — JSON hardening | [#533](./ISSUE-533.md) | - [x] | Strict default + `OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH` escape hatch |
 | 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [ ] | Mapping code + unit tests landed; **Area done** when all child **Verified** boxes closed (real-API/E2E where noted) |
-| 6 | Section 6 — lifecycle / audit / idempotence | [#541](./ISSUE-541.md) | - [ ] | #533 / #534 shipped; scope and sequencing per [ISSUE-541](./ISSUE-541.md) |
+| 6 | Section 6 — lifecycle / audit / idempotence | [#541](./ISSUE-541.md) | - [ ] | Matrix + inject-queue idempotence test landed; spot-check / full **Verified** per [ISSUE-541](./ISSUE-541.md) |
 
 ### Section 5 sub-order (within priority 5)
 

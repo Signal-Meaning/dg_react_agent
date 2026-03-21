@@ -1,6 +1,6 @@
 # Component–Proxy Contract (Big Picture)
 
-This document describes the **contract between the component and any backend proxy** (Deepgram-native or translation proxy). The same contract applies regardless of which upstream service the proxy talks to. See also [Interface Contract](./INTERFACE-CONTRACT.md) for the Deepgram proxy specification and [Issue #381 API Discontinuities](../issues/ISSUE-381/API-DISCONTINUITIES.md) for OpenAI proxy translation.
+This document describes the **contract between the component and any backend proxy** (Deepgram-native or translation proxy). The same contract applies regardless of which upstream service the proxy talks to. See also [Interface Contract](./INTERFACE-CONTRACT.md) for the Deepgram proxy specification, [Issue #381 API Discontinuities](../issues/ISSUE-381/API-DISCONTINUITIES.md) for OpenAI proxy translation, and [REALTIME-CLIENT-EVENT-MATRIX.md](../../packages/voice-agent-backend/scripts/openai-proxy/REALTIME-CLIENT-EVENT-MATRIX.md) for which **OpenAI Realtime client events** the translation proxy emits (Issue #541).
 
 ## One component protocol, multiple backends
 

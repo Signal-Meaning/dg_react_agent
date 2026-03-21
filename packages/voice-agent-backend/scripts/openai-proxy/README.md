@@ -15,6 +15,7 @@
 | [UPSTREAM-EVENT-COMPLETE-MAP.md](./UPSTREAM-EVENT-COMPLETE-MAP.md) | Authoritative list of every upstream event and what the proxy does (map, control-only, or Error). |
 | [Epic #493 / OPENAI-PROXY-EVENT-MAP-GAPS](../../../docs/issues/OPENAI-PROXY-EVENT-MAP-GAPS/EPIC.md) | Epic and sub-issues for event-mapping gaps (UtteranceEnd, Transcript, ConversationText, etc.). |
 | [PROTOCOL-SPECIFICATION.md](../../../tests/integration/PROTOCOL-SPECIFICATION.md) | Event map with test references; client-facing events; requirement ↔ test table. |
+| [REALTIME-CLIENT-EVENT-MATRIX.md](./REALTIME-CLIENT-EVENT-MATRIX.md) | OpenAI **client** events ↔ component protocol; `response.create` lifecycle (Issue #541). |
 | [COMPONENT-PROXY-CONTRACT](../../../docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md) | Component ↔ proxy contract; includes "Proxy → component: message sources" (Epic #493). |
 
 ## Translator exports
