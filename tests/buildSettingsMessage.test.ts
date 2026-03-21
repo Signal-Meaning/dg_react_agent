@@ -129,6 +129,31 @@ describe('buildSettingsMessage', () => {
     expect('temperature' in msg.agent.think.provider).toBe(false);
   });
 
+  it('includes agent.think.toolChoice when thinkToolChoice is set (Issue #535)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, thinkToolChoice: 'auto' },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.think.toolChoice).toBe('auto');
+  });
+
+  it('includes agent.think.toolChoice object form for forced function (Issue #535)', () => {
+    const choice = { type: 'function' as const, name: 'get_time' };
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, thinkToolChoice: choice },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.think.toolChoice).toEqual(choice);
+  });
+
+  it('omits agent.think.toolChoice when thinkToolChoice is undefined (Issue #535)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('toolChoice' in msg.agent.think).toBe(false);
+  });
+
   it('sets speak provider model from options.voice', () => {
     const msg = buildSettingsMessage(
       { ...minimalOptions, voice: 'aura-luna-en' },

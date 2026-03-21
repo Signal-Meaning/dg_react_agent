@@ -14,37 +14,43 @@ GitHub checklist references optional strict env coverage (e.g. `ISSUE_1110_STRIC
 
 ---
 
+## Decision
+
+- **`agent.think.toolChoice`** (Settings JSON) maps to **`session.tool_choice`** on `session.update`.
+- Supported values align with [Realtime session.update](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update): string modes **`auto`**, **`none`**, **`required`**, or force a function with **`{ type: 'function', name: string }`**. MCP-shaped tool choice is not modeled here (use escape hatch or a follow-up issue if needed).
+- **`AgentOptions.thinkToolChoice`** and **`buildSettingsMessage`** pass the value through; component forwards from options.
+
+---
+
 ## TDD plan
 
-**Phases:** - [ ] RED · - [ ] GREEN · - [ ] REFACTOR · - [ ] Verified (all items below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (real API row below)
 
 ### RED
 
-- [ ] Unit (`tests/openai-proxy.test.ts`): `Settings` with new field → `mapSettingsToSessionUpdate(settings).session.tool_choice` equals expected (per current Realtime docs).
-- [ ] Unit: when field omitted, `tool_choice` absent or default per documented rule (test encodes decision).
+- [x] Unit (`tests/openai-proxy.test.ts`): `toolChoice: 'required'` and object form → `session.tool_choice`; omitted → property absent.
 
 ### GREEN
 
-- [ ] Extend `ComponentSettings` / `think` types and `mapSettingsToSessionUpdate`.
-- [ ] Wire React `buildSettingsMessage` / props if exposed; component tests updated.
+- [x] Extend `ComponentSettings` / `OpenAISessionUpdate`, `mapSettingsToSessionUpdate`, `ThinkToolChoice` / `thinkToolChoice` / `buildSettingsMessage`, `DeepgramVoiceInteraction`.
 
 ### REFACTOR
 
-- [ ] Proxy README: Section 5 mapping row for `tool_choice`.
-- [ ] Optional: env-gated strict tool round-trip test if parent Section 7 still requires it.
+- [x] Proxy README + PROTOCOL Settings row for `tool_choice`.
 
 ### Verified
 
-- [ ] Unit tests pass.
+- [x] Unit tests pass.
 - [ ] **Real API:** `USE_REAL_APIS=1` — valid `tools` + `tool_choice` pair accepted by OpenAI.
 
 ---
 
 ## Files
 
-- `packages/voice-agent-backend/scripts/openai-proxy/translator.ts` — `mapSettingsToSessionUpdate`, `ComponentSettings` types
-- `src/` — settings message builder and types if exposed to apps
-- `tests/openai-proxy.test.ts`
-- `tests/integration/openai-proxy-integration.test.ts` (optional real API)
+- `packages/voice-agent-backend/scripts/openai-proxy/translator.ts` — `OpenAIRealtimeSessionToolChoice`, `mapSettingsToSessionUpdate`, session type
+- `src/types/agent.ts` — `ThinkToolChoice`, `AgentSettingsMessage`, `AgentOptions`
+- `src/utils/buildSettingsMessage.ts`, `src/components/DeepgramVoiceInteraction/index.tsx`
+- `tests/openai-proxy.test.ts`, `tests/buildSettingsMessage.test.ts`
+- `packages/voice-agent-backend/scripts/openai-proxy/README.md`, `PROTOCOL-AND-MESSAGE-ORDERING.md`
 
-**Canonical API:** Verify field names against current OpenAI Realtime `session.update` documentation before locking types.
+**Canonical API:** [session.update](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update) `tool_choice`.

@@ -5,7 +5,7 @@
  * No side effects; used by sendAgentSettings in the component.
  */
 
-import type { AgentFunction } from '../types/agent';
+import type { AgentFunction, ThinkToolChoice } from '../types/agent';
 import { filterFunctionsForSettings } from './function-utils';
 
 export interface BuildSettingsMessageOptions {
@@ -18,6 +18,8 @@ export interface BuildSettingsMessageOptions {
   thinkApiKey?: string;
   /** Passed to Settings agent.think.provider.temperature (OpenAI Realtime session.update; Issue #538). */
   thinkTemperature?: number;
+  /** Passed to Settings agent.think.toolChoice → Realtime session.tool_choice (Issue #535). */
+  thinkToolChoice?: ThinkToolChoice;
   functions?: AgentFunction[];
   listenModel?: string;
   greeting?: string;
@@ -41,6 +43,7 @@ export interface SettingsMessagePayload {
     think: {
       provider: { type: string; model: string; temperature?: number };
       prompt?: string;
+      toolChoice?: ThinkToolChoice;
       endpoint?: unknown;
       functions?: AgentFunction[];
     };
@@ -96,6 +99,7 @@ export function buildSettingsMessage(
         ...(options.functions && options.functions.length > 0
           ? { functions: filterFunctionsForSettings(options.functions) }
           : {}),
+        ...(options.thinkToolChoice !== undefined ? { toolChoice: options.thinkToolChoice } : {}),
       },
       speak: {
         provider: {

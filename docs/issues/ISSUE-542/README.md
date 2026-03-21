@@ -83,7 +83,7 @@ Check **Area done** when every linked issue’s **Verified** checklist in its do
 Complete **Verified** on each child doc in this order unless dependencies dictate otherwise: **#538** (honest `temperature` surface) → **#535** `tool_choice` → **#536** `output_modalities` → **#537** `max_output_tokens` → **#539** managed prompt → **#540** `audio.output` (highest regression risk—last).
 
 - [x] [#538](./ISSUE-538.md) temperature → `session.update` (unit + builder; real-API row open in ISSUE-538)
-- [ ] [#535](./ISSUE-535.md) `tool_choice`
+- [x] [#535](./ISSUE-535.md) `tool_choice` (unit + builder; real-API row open in ISSUE-535)
 - [ ] [#536](./ISSUE-536.md) `output_modalities`
 - [ ] [#537](./ISSUE-537.md) `max_output_tokens`
 - [ ] [#539](./ISSUE-539.md) managed prompt id/variables

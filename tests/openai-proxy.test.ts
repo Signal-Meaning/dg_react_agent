@@ -110,6 +110,51 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       });
     });
 
+    it('maps agent.think.toolChoice to session.tool_choice (Issue #535; string modes)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            toolChoice: 'required' as const,
+            functions: [{ name: 'get_time', description: 't', parameters: {} }],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.tool_choice).toBe('required');
+    });
+
+    it('maps agent.think.toolChoice to session.tool_choice (Issue #535; force function)', () => {
+      const forced = { type: 'function' as const, name: 'get_time' };
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            toolChoice: forced,
+            functions: [{ name: 'get_time', description: 't', parameters: {} }],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.tool_choice).toEqual(forced);
+    });
+
+    it('omits session.tool_choice when agent.think.toolChoice is absent (Issue #535)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            functions: [{ name: 'get_time', description: 't', parameters: {} }],
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session).not.toHaveProperty('tool_choice');
+    });
+
     it('maps multiple functions to session.update tools (OpenAI API shape)', () => {
       const settings = {
         type: 'Settings' as const,

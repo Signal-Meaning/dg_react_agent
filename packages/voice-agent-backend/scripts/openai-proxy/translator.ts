@@ -5,6 +5,16 @@
  * See docs/issues/ISSUE-381/API-DISCONTINUITIES.md.
  */
 
+/**
+ * OpenAI Realtime `session.tool_choice` (Issue #535).
+ * @see https://platform.openai.com/docs/api-reference/realtime-client-events/session/update
+ */
+export type OpenAIRealtimeSessionToolChoice =
+  | 'auto'
+  | 'none'
+  | 'required'
+  | { type: 'function'; name: string };
+
 /** Component message: Settings (outgoing) */
 export interface ComponentSettings {
   type: 'Settings';
@@ -15,6 +25,8 @@ export interface ComponentSettings {
     think?: {
       provider?: { model?: string; temperature?: number };
       prompt?: string;
+      /** Issue #535: maps to Realtime `session.tool_choice` when set. */
+      toolChoice?: OpenAIRealtimeSessionToolChoice;
       functions?: Array<{ name: string; description?: string; parameters?: unknown }>;
     };
     speak?: { provider?: { voice?: string } };
@@ -46,6 +58,8 @@ export interface OpenAISessionUpdate {
       };
     };
     tools?: Array<{ type: 'function'; name: string; description?: string; parameters?: unknown }>;
+    /** Issue #535: how the model selects tools (`auto` | `none` | `required` or force `{ type: 'function', name }`). */
+    tool_choice?: OpenAIRealtimeSessionToolChoice;
     [key: string]: unknown;
   };
 }
@@ -249,6 +263,10 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
       description: f.description,
       parameters: f.parameters ?? {},
     }));
+  }
+  const toolChoice = settings.agent?.think?.toolChoice;
+  if (toolChoice !== undefined) {
+    session.tool_choice = toolChoice;
   }
   return { type: 'session.update', session };
 }

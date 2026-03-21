@@ -71,6 +71,16 @@ export enum AgentResponseType {
 export type ConversationRole = 'user' | 'assistant';
 
 /**
+ * OpenAI Realtime `session.tool_choice` when using the OpenAI translation proxy (Issue #535).
+ * @see https://platform.openai.com/docs/api-reference/realtime-client-events/session/update
+ */
+export type ThinkToolChoice =
+  | 'auto'
+  | 'none'
+  | 'required'
+  | { type: 'function'; name: string };
+
+/**
  * Conversation message for context preservation
  */
 export interface ConversationMessage {
@@ -126,6 +136,8 @@ export interface AgentSettingsMessage {
       };
       functions?: AgentFunction[];
       prompt?: string;
+      /** OpenAI proxy: maps to Realtime `session.tool_choice` (Issue #535). */
+      toolChoice?: ThinkToolChoice;
     };
     speak?: {
       provider: {
@@ -415,6 +427,8 @@ export interface AgentOptions {
   thinkEndpointUrl?: string; // e.g., 'https://api.openai.com/v1/chat/completions'
   thinkApiKey?: string; // e.g., think LLM provider API key
   thinkTemperature?: number; // e.g., 0.7
+  /** OpenAI proxy: Realtime `session.tool_choice` (Issue #535). */
+  thinkToolChoice?: ThinkToolChoice;
   instructions?: string; // Base instructions for the agent
   
   // Speak settings
