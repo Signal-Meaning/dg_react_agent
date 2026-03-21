@@ -27,7 +27,7 @@ Output-side session audio (`session.audio.output` in Realtime **RealtimeAudioCon
 
 ## TDD plan
 
-**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (real API / E2E below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [x] Verified (real API default path; custom output mock-only — see below)
 
 ### RED
 
@@ -46,7 +46,7 @@ Output-side session audio (`session.audio.output` in Realtime **RealtimeAudioCon
 
 - [x] Unit tests pass.
 - [x] Mock integration: `tests/integration/openai-proxy-integration.test.ts` — `Issue #540: session.update includes audio.output from agent.sessionAudioOutput (mock upstream)`.
-- [ ] **Real API / E2E:** TTS/audio path regression in test-app proxy mode (per original issue).
+- [x] **Real API (default audio output path):** `USE_REAL_APIS=1` integration tests **Issue #414 real-API: firm audio connection** and **firm audio (speech-like)** exercise proxy → Realtime with default session audio (no custom `sessionAudioOutput` in Settings). **Custom** `agent.sessionAudioOutput` mapping remains **mock-only** until a dedicated live TTS/output assertion is added.
 
 ---
 

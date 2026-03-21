@@ -44,7 +44,7 @@ Either:
 ### Verified
 
 - [x] Unit tests pass.
-- [ ] **Real API:** `USE_REAL_APIS=1` — OpenAI accepts `session.update` with `temperature` (qualify when keys available).
+- [ ] **Real API:** Live Realtime (e.g. default `gpt-realtime` session in integration harness) returned `unknown_parameter` for `session.temperature` on `session.update` (Mar 2026). Do not mark this row until the supported surface is re-checked against [session.update](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update) or the proxy conditionally omits `temperature` for models that reject it.
 
 ---
 

@@ -24,7 +24,7 @@ GitHub checklist references optional strict env coverage (e.g. `ISSUE_1110_STRIC
 
 ## TDD plan
 
-**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (real API row below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [x] Verified (real API row below)
 
 ### RED
 
@@ -41,7 +41,7 @@ GitHub checklist references optional strict env coverage (e.g. `ISSUE_1110_STRIC
 ### Verified
 
 - [x] Unit tests pass.
-- [ ] **Real API:** `USE_REAL_APIS=1` — valid `tools` + `tool_choice` pair accepted by OpenAI.
+- [x] **Real API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — multiple cases send `Settings` with `agent.think.functions` → upstream `tools`; `tool_choice` omitted → API default (`auto`). Explicit `tool_choice: 'required' \| 'none' \| { type, name }` not separately matrix-tested on live API.
 
 ---
 

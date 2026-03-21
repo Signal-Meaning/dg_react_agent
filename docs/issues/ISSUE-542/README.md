@@ -15,7 +15,7 @@ Work can proceed issue-by-issue, but these groupings share code paths and tests:
 | Bundle | Issues | Shared surface | Primary tests | Done |
 |--------|--------|----------------|---------------|------|
 | **A — Observability** | [#531](./ISSUE-531.md) | `logger.ts` `initProxyLogger` / `emitLog`; `run.ts` defaults | Unit: logger; integration: synthetic upstream `error` with env unset | - [x] |
-| **B — Ordering / protocol** | [#534](./ISSUE-534.md), [#532](./ISSUE-532.md) | `server.ts` `forwardClientMessage`, `session.updated`, `hasSentSettingsApplied`, tools path | `tests/integration/openai-proxy-integration.test.ts` (extend with Settings+tools + early inject; close codes) | - [ ] |
+| **B — Ordering / protocol** | [#534](./ISSUE-534.md), [#532](./ISSUE-532.md) | `server.ts` `forwardClientMessage`, `session.updated`, `hasSentSettingsApplied`, tools path | `tests/integration/openai-proxy-integration.test.ts`; test-app `openai-proxy-e2e.spec.js` **6b** (partner HTTP path) | - [x] |
 | **C — Client JSON boundary** | [#533](./ISSUE-533.md) | `server.ts` client JSON handling (Issue #533) | Integration: unknown `type` → Error; KeepAlive not forwarded; passthrough flag test | - [x] |
 | **D — Settings → Realtime session** | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | `translator.ts` `mapSettingsToSessionUpdate`, component `Settings` types, `buildSettingsMessage` | `tests/openai-proxy.test.ts` (mapper snapshots); integration: outbound `session.update` shape with `USE_REAL_APIS=1` when needed | - [ ] |
 | **E — Lifecycle / contract docs** | [#541](./ISSUE-541.md) | `PROTOCOL-AND-MESSAGE-ORDERING.md`, `COMPONENT-PROXY-CONTRACT.md`, React handlers for `SettingsApplied` | Doc audit + targeted unit/integration: duplicate `SettingsApplied`, no duplicate `session.update` | - [x] |
@@ -24,7 +24,7 @@ Implement **D** after **C** if you remove passthrough before new Settings fields
 
 Mark a bundle **Done** when every issue in that bundle has all TDD phase boxes checked in its doc (including **Verified**), or deferrals are recorded in that issue’s Notes.
 
-**Bundle D status:** Section 5 **Settings → session** mapping is implemented in code (**#535–#540**, **#538–#539**) with unit tests + `buildSettingsMessage` + component wiring. Keep bundle **D** unchecked until each child’s **Verified** checklist is complete (including optional **real-API** / **E2E** rows where those issues require them).
+**Bundle D status:** Mapping landed with unit tests. **Verified on live API:** [#535](./ISSUE-535.md) (tools + default `tool_choice`), [#536](./ISSUE-536.md) (`output_modalities` via Issue #470), [#540](./ISSUE-540.md) (default audio path via Issue #414 real-API). **Open:** [#538](./ISSUE-538.md) real-API row (upstream rejected `session.temperature` in harness — see issue), [#539](./ISSUE-539.md) (needs account prompt id), [#537](./ISSUE-537.md) optional `max_output_tokens` smoke.
 
 ---
 
@@ -75,18 +75,18 @@ Check **Area done** when every linked issue’s **Verified** checklist in its do
 |----------|------|--------|-----------|-------|
 | 1 | Section 1 — logging | [#531](./ISSUE-531.md) | - [x] | Code landed; optional manual stderr check remains in ISSUE-531 doc |
 | 2 | Section 4 — `InjectUserMessage` gating | [#534](./ISSUE-534.md) | - [x] | Proxy queue landed; optional React enforcement + real-API check open in ISSUE-534 doc |
-| 3 | Section 2 — protocol / Settings + functions | [#532](./ISSUE-532.md) | - [ ] | Mock Section 2b + client close log done; **real-API** full `openai-proxy-integration` with `USE_REAL_APIS=1` verified per ISSUE-532; optional E2E row still open there |
+| 3 | Section 2 — protocol / Settings + functions | [#532](./ISSUE-532.md) | - [x] | Mock 2b + real-API integration + E2E **6b** (`USE_REAL_APIS=1` from `test-app`) per ISSUE-532 |
 | 4 | Section 3 — JSON hardening | [#533](./ISSUE-533.md) | - [x] | Strict default + `OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH` escape hatch |
-| 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [ ] | Mapping code + unit tests landed; **Area done** when all child **Verified** boxes closed (real-API/E2E where noted) |
+| 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [ ] | **#535/#536/#540** real-API (or default-path) verified in child docs; **#538** / **#539** real-API rows still open; **#537** optional |
 | 6 | Section 6 — lifecycle / audit / idempotence | [#541](./ISSUE-541.md) | - [x] | Matrix, idempotence test, component comment, ISSUE-541 **Verified** (re-confirm on release) |
 
 ### Section 5 sub-order (within priority 5)
 
 Complete **Verified** on each child doc in this order unless dependencies dictate otherwise: **#538** (honest `temperature` surface) → **#535** `tool_choice` → **#536** `output_modalities` → **#537** `max_output_tokens` → **#539** managed prompt → **#540** `audio.output` (highest regression risk—last).
 
-- [x] [#538](./ISSUE-538.md) temperature → `session.update` (unit + builder; real-API row open in ISSUE-538)
-- [x] [#535](./ISSUE-535.md) `tool_choice` (unit + builder; real-API row open in ISSUE-535)
-- [x] [#536](./ISSUE-536.md) `output_modalities` (unit + builder; real-API row open in ISSUE-536)
+- [x] [#538](./ISSUE-538.md) temperature → `session.update` (unit + builder; **real-API row open** — upstream `unknown_parameter` for `session.temperature` in current harness)
+- [x] [#535](./ISSUE-535.md) `tool_choice` (unit + builder; **real-API** tools + default choice — ISSUE-535)
+- [x] [#536](./ISSUE-536.md) `output_modalities` (unit + builder; **real-API** Issue #470 integration — ISSUE-536)
 - [x] [#537](./ISSUE-537.md) `max_output_tokens` (unit + builder; optional real-API row in ISSUE-537)
-- [x] [#539](./ISSUE-539.md) managed prompt id/variables (unit + builder; real-API row open in ISSUE-539)
-- [x] [#540](./ISSUE-540.md) `session` audio.output (unit + builder; real-API / test-app E2E row open in ISSUE-540)
+- [x] [#539](./ISSUE-539.md) managed prompt id/variables (unit + builder; **real-API row open** — ISSUE-539)
+- [x] [#540](./ISSUE-540.md) `session` audio.output (unit + builder; **real-API** default path Issue #414; custom output mock-only — ISSUE-540)

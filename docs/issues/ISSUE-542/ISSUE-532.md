@@ -4,7 +4,7 @@
 
 **Epic:** [#542](./README.md) · **TDD bundle:** B (ordering / protocol) with [#534](./ISSUE-534.md)
 
-**Status (mock):** Section **2b** regression test and mock mode `mockIssue532Section2bToolsThenInject` added; client WebSocket **close** code/reason logged at INFO (`ATTR_CLIENT_CLOSE_CODE` / `ATTR_CLIENT_CLOSE_REASON`). **Real-API:** full `openai-proxy-integration` suite with `USE_REAL_APIS=1` qualified (including partner-grade `Issue #470 real-API: function-call flow completes` with `outputModalities: ['text']` and early test order to avoid cross-test upstream pressure).
+**Status:** Section **2b** mock + **real-API** integration (`USE_REAL_APIS=1` full `openai-proxy-integration`) + **E2E** partner path (`openai-proxy-e2e.spec.js` test **6b**, `USE_REAL_APIS=1`, Playwright starts dev server + `npm run backend`; real `POST /function-call` before `FunctionCallResponse`). Client **close** code/reason logged at INFO (`ATTR_CLIENT_CLOSE_CODE` / `ATTR_CLIENT_CLOSE_REASON`).
 
 ---
 
@@ -26,7 +26,7 @@ GitHub issue lists exact steps: WS to proxy; UTF-8 JSON only; Settings without f
 
 ## TDD plan
 
-**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [x] Verified (real API) · - [ ] Verified (optional E2E)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [x] Verified (real API + E2E)
 
 ### RED
 
@@ -46,7 +46,7 @@ GitHub issue lists exact steps: WS to proxy; UTF-8 JSON only; Settings without f
 
 - [x] Full mock `openai-proxy-integration` suite (65+ tests) green.
 - [x] **Real API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` with `OPENAI_API_KEY` — all real-API cases in that file, including Settings+tools+inject and **partner-grade** `Issue #470 real-API: function-call flow completes` (backend HTTP before `FunctionCallResponse`; `outputModalities: ['text']` only — Realtime rejects `['text','audio']` together). The #470 test is ordered **early** in the suite (after SettingsApplied) to limit cross-test upstream load.
-- [ ] If partner scenario matches, E2E with **real** backend HTTP before `FunctionCallResponse` (ISSUE-462).
+- [x] **E2E (test-app):** From `test-app`, with keys in `.env` (`OPENAI_API_KEY`, etc.): `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b. Issue #462"` (and **6** for the same backend path). See [`test-app/tests/e2e/README.md`](../../../test-app/tests/e2e/README.md) § running specific specs; [`openai-proxy-e2e.spec.js`](../../../test-app/tests/e2e/openai-proxy-e2e.spec.js) test **6b** (ISSUE-462 / #470 partner scenario).
 
 ---
 

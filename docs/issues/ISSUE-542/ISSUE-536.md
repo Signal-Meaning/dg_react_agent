@@ -22,7 +22,7 @@ Integrators cannot select text-only vs audio via `Settings`; Realtime `session.o
 
 ## TDD plan
 
-**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (real API row below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [x] Verified (real API row below)
 
 ### RED
 
@@ -40,7 +40,7 @@ Integrators cannot select text-only vs audio via `Settings`; Realtime `session.o
 ### Verified
 
 - [x] Unit tests pass.
-- [ ] **Real API:** `USE_REAL_APIS=1` — e.g. text-only vs default audio+text behavior matches expectation.
+- [x] **Real API:** `Issue #470 real-API: function-call flow completes` sends `agent.think.outputModalities: ['text']` (Realtime allows `['text']` or `['audio']` only, not both). Full suite: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`.
 
 ---
 
