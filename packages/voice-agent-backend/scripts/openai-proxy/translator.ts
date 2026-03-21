@@ -12,7 +12,11 @@ export interface ComponentSettings {
   agent?: {
     /** Idle timeout in ms; shared with component (WebSocketManager, useIdleTimeoutManager). Proxy sends in session.update. */
     idleTimeoutMs?: number;
-    think?: { provider?: { model?: string }; prompt?: string; functions?: Array<{ name: string; description?: string; parameters?: unknown }> };
+    think?: {
+      provider?: { model?: string; temperature?: number };
+      prompt?: string;
+      functions?: Array<{ name: string; description?: string; parameters?: unknown }>;
+    };
     speak?: { provider?: { voice?: string } };
     /** Conversation context for session continuity (Deepgram: in Settings; OpenAI: via conversation.item.create) */
     context?: { messages?: Array<{ type?: string; role: 'user' | 'assistant'; content: string }> };
@@ -27,6 +31,8 @@ export interface OpenAISessionUpdate {
   session: {
     type: 'realtime';
     model?: string;
+    /** OpenAI Realtime: sampling temperature, typically [0.6, 1.2] for audio models (API reference). */
+    temperature?: number;
     instructions?: string;
     voice?: string;
     /** GA API: audio config under session.audio.input (see REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2). */
@@ -232,6 +238,10 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
       },
     },
   };
+  const providerTemp = settings.agent?.think?.provider?.temperature;
+  if (typeof providerTemp === 'number' && !Number.isNaN(providerTemp)) {
+    session.temperature = providerTemp;
+  }
   if (settings.agent?.think?.functions?.length) {
     session.tools = settings.agent.think.functions.map((f) => ({
       type: 'function' as const,

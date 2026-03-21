@@ -113,6 +113,22 @@ describe('buildSettingsMessage', () => {
     expect(think.prompt).toBe(minimalOptions.instructions);
   });
 
+  it('includes agent.think.provider.temperature when thinkTemperature is a number (Issue #538)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, thinkTemperature: 0.85 },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.think.provider).toMatchObject({ temperature: 0.85 });
+  });
+
+  it('omits agent.think.provider.temperature when thinkTemperature is undefined (Issue #538)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: false, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('temperature' in msg.agent.think.provider).toBe(false);
+  });
+
   it('sets speak provider model from options.voice', () => {
     const msg = buildSettingsMessage(
       { ...minimalOptions, voice: 'aura-luna-en' },

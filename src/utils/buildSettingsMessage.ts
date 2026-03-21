@@ -16,6 +16,8 @@ export interface BuildSettingsMessageOptions {
   thinkModel?: string;
   thinkEndpointUrl?: string;
   thinkApiKey?: string;
+  /** Passed to Settings agent.think.provider.temperature (OpenAI Realtime session.update; Issue #538). */
+  thinkTemperature?: number;
   functions?: AgentFunction[];
   listenModel?: string;
   greeting?: string;
@@ -36,7 +38,12 @@ export interface SettingsMessagePayload {
     output: { encoding: string; sample_rate: number };
   };
   agent: {
-    think: { provider: { type: string; model: string }; prompt?: string; endpoint?: unknown; functions?: AgentFunction[] };
+    think: {
+      provider: { type: string; model: string; temperature?: number };
+      prompt?: string;
+      endpoint?: unknown;
+      functions?: AgentFunction[];
+    };
     speak: { provider: { type: string; model: string } };
     [key: string]: unknown;
   };
@@ -73,6 +80,9 @@ export function buildSettingsMessage(
         provider: {
           type: options.thinkProviderType || 'open_ai',
           model: options.thinkModel || 'gpt-4o-mini',
+          ...(typeof options.thinkTemperature === 'number' && !Number.isNaN(options.thinkTemperature)
+            ? { temperature: options.thinkTemperature }
+            : {}),
         },
         prompt: options.instructions || 'You are a helpful voice assistant.',
         ...(options.thinkEndpointUrl && options.thinkApiKey

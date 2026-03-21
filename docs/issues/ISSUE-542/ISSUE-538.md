@@ -21,32 +21,37 @@ Either:
 
 ---
 
+## Decision
+
+- **Map** `agent.think.provider.temperature` → OpenAI Realtime `session.temperature` on `session.update` ([API reference](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update): optional number, typically [0.6, 1.2] for audio models). Invalid values are left to the API to reject.
+
 ## TDD plan
 
-**Phases:** - [ ] RED · - [ ] GREEN · - [ ] REFACTOR · - [ ] Verified (all items below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (real API row below)
 
 ### RED
 
-- [ ] Unit: `agent.think.provider.temperature: 0.7` → assert mapped field on `session` **or** assert removal path (types/builder reject or omit); fails today (ignored).
+- [x] Unit: `agent.think.provider.temperature` → `session.temperature`; omit when absent (`tests/openai-proxy.test.ts`).
 
 ### GREEN
 
-- [ ] Implement Realtime `session.update` mapping **or** remove surface + changelog entry.
+- [x] `mapSettingsToSessionUpdate` sets `session.temperature` when a finite number is present (`translator.ts`).
 
 ### REFACTOR
 
-- [ ] Test-app / docs aligned (no dead `temperature` UX if removed).
+- [x] `buildSettingsMessage` + `thinkTemperature` from `AgentOptions`; `DeepgramVoiceInteraction` passes it through (`tests/buildSettingsMessage.test.ts`).
 
 ### Verified
 
-- [ ] Unit tests pass.
-- [ ] **Real API:** If mapped, OpenAI accepts `session.update` with temperature.
+- [x] Unit tests pass.
+- [ ] **Real API:** `USE_REAL_APIS=1` — OpenAI accepts `session.update` with `temperature` (qualify when keys available).
 
 ---
 
 ## Files
 
-- `packages/voice-agent-backend/scripts/openai-proxy/translator.ts`
-- `src/` types and settings builder
-- `tests/openai-proxy.test.ts`
-- Component / test-app references to `temperature`
+- `packages/voice-agent-backend/scripts/openai-proxy/translator.ts` — `ComponentSettings`, `mapSettingsToSessionUpdate`, `OpenAISessionUpdate.session.temperature`
+- `src/utils/buildSettingsMessage.ts` — `thinkTemperature` → `agent.think.provider.temperature`
+- `src/components/DeepgramVoiceInteraction/index.tsx` — pass `thinkTemperature`
+- `tests/openai-proxy.test.ts`, `tests/buildSettingsMessage.test.ts`
+- `src/types/agent.ts` — `AgentOptions.thinkTemperature` (already present)

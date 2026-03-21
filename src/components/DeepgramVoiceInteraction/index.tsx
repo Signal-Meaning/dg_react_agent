@@ -2133,6 +2133,7 @@ function DeepgramVoiceInteraction(
         thinkModel: currentAgentOptions.thinkModel,
         thinkEndpointUrl: currentAgentOptions.thinkEndpointUrl,
         thinkApiKey: currentAgentOptions.thinkApiKey,
+        thinkTemperature: currentAgentOptions.thinkTemperature,
         functions: currentAgentOptions.functions,
         listenModel: currentAgentOptions.listenModel,
         greeting: currentAgentOptions.greeting,

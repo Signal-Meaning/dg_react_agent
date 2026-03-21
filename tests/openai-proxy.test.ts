@@ -35,6 +35,29 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.session.model).toBe('gpt-4o-realtime-preview');
     });
 
+    it('maps agent.think.provider.temperature to session.temperature (Issue #538; OpenAI Realtime session.update)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Hi.',
+            provider: { model: 'gpt-realtime', temperature: 0.8 },
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.temperature).toBe(0.8);
+    });
+
+    it('omits session.temperature when think.provider.temperature is absent (Issue #538)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Hi.', provider: { model: 'gpt-realtime' } } },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session).not.toHaveProperty('temperature');
+    });
+
     it('maps Settings with missing think to default instructions and model (no voice in session - API rejects session.voice)', () => {
       const settings = { type: 'Settings' as const };
       const out = mapSettingsToSessionUpdate(settings);
