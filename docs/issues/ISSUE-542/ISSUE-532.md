@@ -4,6 +4,8 @@
 
 **Epic:** [#542](./README.md) · **TDD bundle:** B (ordering / protocol) with [#534](./ISSUE-534.md)
 
+**Status (mock):** Section **2b** regression test and mock mode `mockIssue532Section2bToolsThenInject` added; client WebSocket **close** code/reason logged at INFO (`ATTR_CLIENT_CLOSE_CODE` / `ATTR_CLIENT_CLOSE_REASON`). **Real-API** qualification still open when `OPENAI_API_KEY` is available.
+
 ---
 
 ## Problem (Section 2)
@@ -24,26 +26,26 @@ GitHub issue lists exact steps: WS to proxy; UTF-8 JSON only; Settings without f
 
 ## TDD plan
 
-**Phases:** - [ ] RED · - [ ] GREEN · - [ ] REFACTOR · - [ ] Verified (all items below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (real API + optional E2E)
 
 ### RED
 
-- [ ] Integration (mock upstream): Section 2b flow in `tests/integration/openai-proxy-integration.test.ts` (or sibling) — `Settings` with tools → `session.updated` / `SettingsApplied` → `InjectUserMessage` → item acks → `response.function_call_arguments.done` → `FunctionCallResponse` → deferred `response.create`; assert no premature component `Error` (or assert golden message order).
-- [ ] Close-frame: test or log assertion that when upstream closes 1000, **client** leg close code/reason is logged (`server.ts` `clientWs` close handler if extended).
+- [x] Integration (mock): `Issue #532 Section 2b: Settings with example_echo…` — Settings with `example_echo` tool → `SettingsApplied` → `InjectUserMessage` → FCR → in-socket `FunctionCallResponse` → assistant `Hello from mock`; fail on any component `Error`.
+- [x] Close observability: `clientWs` `close` handler emits INFO log with `client.close_code` / `client.close_reason` (Issue #532 triage vs upstream 1000 vs browser 1005).
 
 ### GREEN
 
-- [ ] Fix root cause in `server.ts` / `translator.ts` (ordering, `session.update`, `response.create`, tools schema, etc.) driven by failing tests — no fake success.
-- [ ] Behavior matches [PROTOCOL-AND-MESSAGE-ORDERING.md](../../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) and Issues #462 / #522 deferred `response.create` rules.
+- [x] Mock path passes with existing proxy (ordering improved by [#534](./ISSUE-534.md) inject queue + deferred `response.create` rules). No protocol-fake success.
+- [x] Behavior matches [PROTOCOL-AND-MESSAGE-ORDERING.md](../../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) and Issues #462 / #522.
 
 ### REFACTOR
 
-- [ ] Extract long mock upstream scripts into fixtures/helpers if tests exceed ~80 lines.
+- [x] Mock logic scoped to flags `mockIssue532Section2bToolsThenInject` + per-connection counters (no new helper file yet).
 
 ### Verified
 
-- [ ] Mock integration test green.
-- [ ] **Real API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` (or targeted describe) with `OPENAI_API_KEY` for Settings+tools+inject — required per `.cursorrules` when root cause is ordering/timing.
+- [x] Full mock `openai-proxy-integration` suite (65+ tests) green.
+- [ ] **Real API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` with `OPENAI_API_KEY` for Settings+tools+inject path.
 - [ ] If partner scenario matches, E2E with **real** backend HTTP before `FunctionCallResponse` (ISSUE-462).
 
 ---

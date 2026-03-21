@@ -145,6 +145,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   let mockSendErrorOnAssistantResponseCreate = false;
   /** When true, mock sends response.function_call_arguments.done after session.updated (for function-call test) */
   let mockSendFunctionCallAfterSession = false;
+  /**
+   * Issue #532 Section 2b: `session.update` includes `tools`; FCR for `example_echo` is sent on the first
+   * `response.create` after a user `InjectUserMessage` (not immediately after session.updated).
+   */
+  let mockIssue532Section2bToolsThenInject = false;
   /** When true, mock sends only response.output_audio_transcript.done with "Function call: ..." after session.updated (no .done event) */
   let mockSendTranscriptOnlyAfterSession = false;
   /** When true, mock sends only response.output_text.done with "Function call: ..." after session.updated (no .done event) */
@@ -262,6 +267,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockWss!.on('connection', (socket: import('ws')) => {
       /** Issue #406: per-connection; true after we have sent session.updated (used when mockEnforceSessionBeforeContext). */
       let sessionUpdatedSent = false;
+      /** Issue #532: per-connection; session had tools from Settings; next user turn gets example_echo FCR on response.create. */
+      let issue532ToolsSessionActive = false;
+      let issue532SendExampleEchoFcrOnNextResponseCreate = false;
       /** Issue #414 TDD: per-connection counters for protocol enforcement. */
       let itemCreateCount = 0;
       let itemAckedCount = 0;
@@ -374,6 +382,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                     item: { id: 'item_mock_1', type: 'message', status: 'completed', role: 'user', content: msg.item?.content ?? [{ type: 'input_text', text: 'hi' }] },
                   }));
                   itemAckedCount++;
+                  if (mockIssue532Section2bToolsThenInject && issue532ToolsSessionActive) {
+                    issue532SendExampleEchoFcrOnNextResponseCreate = true;
+                  }
                   if (mockSendItemDoneAfterAdded) {
                     socket.send(JSON.stringify({
                       type: 'conversation.item.done',
@@ -416,6 +427,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           }
           if (msg.type === 'session.update') {
             receivedSessionUpdatePayloads.push(msg as typeof receivedSessionUpdatePayloads[number]);
+            const sessionTools = (msg as { session?: { tools?: unknown[] } }).session?.tools;
+            if (
+              mockIssue532Section2bToolsThenInject &&
+              Array.isArray(sessionTools) &&
+              sessionTools.length > 0
+            ) {
+              issue532ToolsSessionActive = true;
+            }
             // Debug: log when mock receives session.update and which follow-up path is taken (for itMockOnly function-call tests).
             const debugMock = process.env.DEBUG_OPENAI_PROXY_INTEGRATION === '1';
             if (debugMock) {
@@ -554,6 +573,16 @@ describe('OpenAI proxy integration (Issue #381)', () => {
               }));
               return; // No normal response — matches real API behavior
             }
+            if (mockIssue532Section2bToolsThenInject && issue532SendExampleEchoFcrOnNextResponseCreate) {
+              issue532SendExampleEchoFcrOnNextResponseCreate = false;
+              socket.send(JSON.stringify({
+                type: 'response.function_call_arguments.done',
+                call_id: 'call_echo_532',
+                name: 'example_echo',
+                arguments: '{"message":"hello"}',
+              }));
+              return;
+            }
             const MOCK_RESPONSE_TEXT = 'Hello from mock';
             const sendAssistantItemDone = () => {
               socket.send(JSON.stringify({
@@ -665,6 +694,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     }
     // Issue #470: reset so tests that expect output_text.done (e.g. "Hello from mock") are not affected by the response.done-only test.
     mockSendResponseDoneOnlyAfterFunctionCallOutput = false;
+    mockIssue532Section2bToolsThenInject = false;
   });
 
 
@@ -3574,6 +3604,104 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       mockEnforceSessionBeforeContext = false;
       done(err);
     });
+  }, 8000);
+
+  /**
+   * Issue #532 Section 2b: Settings with `agent.think.functions` (example_echo) → SettingsApplied →
+   * InjectUserMessage → FunctionCallRequest → FunctionCallResponse on same socket (no HTTP executor).
+   * Fails if any component `Error` is received before assistant completion.
+   */
+  itMockOnly('Issue #532 Section 2b: Settings with example_echo, inject, in-socket FunctionCallResponse, no Error', (done) => {
+    mockIssue532Section2bToolsThenInject = true;
+    mockReceived.length = 0;
+    receivedConversationItems.length = 0;
+    const exampleEchoTool = {
+      name: 'example_echo',
+      description: 'Echoes the message',
+      parameters: {
+        type: 'object',
+        properties: { message: { type: 'string' } },
+      },
+    };
+    const settingsWithTools = {
+      type: 'Settings' as const,
+      agent: {
+        think: {
+          prompt: 'Use example_echo when the user asks.',
+          functions: [exampleEchoTool],
+        },
+      },
+    };
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    let sentInject = false;
+    let sentFunctionCallResponse = false;
+
+    const finish = (err?: Error) => {
+      mockIssue532Section2bToolsThenInject = false;
+      try {
+        client.close();
+      } catch {
+        // ignore
+      }
+      if (err) done(err);
+      else done();
+    };
+
+    client.on('open', () => {
+      client.send(JSON.stringify(settingsWithTools));
+    });
+
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as {
+          type?: string;
+          description?: string;
+          role?: string;
+          content?: string;
+          functions?: Array<{ id: string; name: string }>;
+        };
+        if (msg.type === 'Error' && msg.description) {
+          finish(new Error(`Issue #532: unexpected component Error before success: ${msg.description}`));
+          return;
+        }
+        if (msg.type === 'SettingsApplied' && !sentInject) {
+          sentInject = true;
+          client.send(JSON.stringify({
+            type: 'InjectUserMessage',
+            content: 'Call example_echo with message hello',
+          }));
+          return;
+        }
+        if (msg.type === 'FunctionCallRequest' && msg.functions?.length) {
+          expect(msg.functions[0].name).toBe('example_echo');
+          expect(msg.functions[0].id).toBe('call_echo_532');
+          client.send(JSON.stringify({
+            type: 'FunctionCallResponse',
+            id: 'call_echo_532',
+            name: 'example_echo',
+            content: '{"message":"hello"}',
+          }));
+          sentFunctionCallResponse = true;
+          return;
+        }
+        if (
+          msg.type === 'ConversationText' &&
+          msg.role === 'assistant' &&
+          sentFunctionCallResponse &&
+          msg.content === 'Hello from mock'
+        ) {
+          const fco = receivedConversationItems.find((m) => m.item?.type === 'function_call_output');
+          expect(fco?.item?.call_id).toBe('call_echo_532');
+          expect(protocolErrors.length).toBe(0);
+          finish();
+        }
+      } catch (e) {
+        finish(e as Error);
+      }
+    });
+
+    client.on('error', (err) => finish(err));
   }, 8000);
 
   /**

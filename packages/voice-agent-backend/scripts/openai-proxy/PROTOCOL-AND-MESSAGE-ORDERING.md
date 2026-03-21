@@ -26,6 +26,8 @@ So: client sends **text** (JSON) and **binary** (PCM). The proxy never forwards 
 
 **Critical:** Sending any other upstream message (e.g. `conversation.item.added`, `conversation.item.done`, or any JSON) as binary would cause the component to route it into the audio pipeline and corrupt playback. The proxy **must** send only `response.output_audio.delta` (decoded) as binary; everything else as text. See Issue #414 (root cause: JSON forwarded as binary).
 
+**Observability (Issue #532):** When the **client** WebSocket closes, the proxy logs INFO with `client.close_code` and `client.close_reason` so operators can compare upstream close (e.g. 1000) with the browser leg (e.g. 1005).
+
 ---
 
 ## 2. Connection and session ordering

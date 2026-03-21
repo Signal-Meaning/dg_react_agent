@@ -51,6 +51,8 @@ import {
   ATTR_ERROR_MESSAGE,
   ATTR_UPSTREAM_CLOSE_CODE,
   ATTR_UPSTREAM_CLOSE_REASON,
+  ATTR_CLIENT_CLOSE_CODE,
+  ATTR_CLIENT_CLOSE_REASON,
 } from './logger';
 import { parse as parseUrl } from 'url';
 import {
@@ -1071,7 +1073,21 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       }
       clientWs.close();
     });
-    (clientWs as unknown as WsLike).on('close', () => {
+    (clientWs as unknown as WsLike).on('close', (code: unknown, reason: unknown) => {
+      const closeCode = typeof code === 'number' ? code : 0;
+      const reasonStr =
+        typeof reason === 'string' ? reason : Buffer.isBuffer(reason) ? reason.toString('utf8') : '';
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: `client WebSocket closed (code=${closeCode}${reasonStr ? `, reason=${reasonStr}` : ''})`,
+        attributes: {
+          ...connectionAttrs,
+          [ATTR_DIRECTION]: 'client',
+          [ATTR_CLIENT_CLOSE_CODE]: String(closeCode),
+          [ATTR_CLIENT_CLOSE_REASON]: reasonStr,
+        },
+      });
       if (audioCommitTimer) clearTimeout(audioCommitTimer);
       upstream.close();
     });

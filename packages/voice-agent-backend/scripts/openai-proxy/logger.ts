@@ -38,6 +38,9 @@ export const ATTR_ERROR_CODE = 'error.code';
 export const ATTR_ERROR_MESSAGE = 'error.message';
 export const ATTR_UPSTREAM_CLOSE_CODE = 'upstream.close_code';
 export const ATTR_UPSTREAM_CLOSE_REASON = 'upstream.close_reason';
+/** Issue #532: client leg WebSocket close (integrator-visible code vs upstream 1000). */
+export const ATTR_CLIENT_CLOSE_CODE = 'client.close_code';
+export const ATTR_CLIENT_CLOSE_REASON = 'client.close_reason';
 
 export type ProxyLogAttributes = Record<string, string | number | boolean | undefined>;
 
