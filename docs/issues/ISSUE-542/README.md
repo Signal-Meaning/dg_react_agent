@@ -16,7 +16,7 @@ Work can proceed issue-by-issue, but these groupings share code paths and tests:
 |--------|--------|----------------|---------------|------|
 | **A — Observability** | [#531](./ISSUE-531.md) | `logger.ts` `initProxyLogger` / `emitLog`; `run.ts` defaults | Unit: logger; integration: synthetic upstream `error` with env unset | - [x] |
 | **B — Ordering / protocol** | [#534](./ISSUE-534.md), [#532](./ISSUE-532.md) | `server.ts` `forwardClientMessage`, `session.updated`, `hasSentSettingsApplied`, tools path | `tests/integration/openai-proxy-integration.test.ts` (extend with Settings+tools + early inject; close codes) | - [ ] |
-| **C — Client JSON boundary** | [#533](./ISSUE-533.md) | `server.ts` `else { upstream.send(raw) }` branch | Unit or integration: unknown `type` rejected or logged; no raw passthrough in strict mode | - [ ] |
+| **C — Client JSON boundary** | [#533](./ISSUE-533.md) | `server.ts` client JSON handling (Issue #533) | Integration: unknown `type` → Error; KeepAlive not forwarded; passthrough flag test | - [x] |
 | **D — Settings → Realtime session** | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | `translator.ts` `mapSettingsToSessionUpdate`, component `Settings` types, `buildSettingsMessage` | `tests/openai-proxy.test.ts` (mapper snapshots); integration: outbound `session.update` shape with `USE_REAL_APIS=1` when needed | - [ ] |
 | **E — Lifecycle / contract docs** | [#541](./ISSUE-541.md) | `PROTOCOL-AND-MESSAGE-ORDERING.md`, `COMPONENT-PROXY-CONTRACT.md`, React handlers for `SettingsApplied` | Doc audit + targeted unit/integration: duplicate `SettingsApplied`, no duplicate `session.update` | - [ ] |
 
@@ -74,7 +74,7 @@ Check **Area done** when every linked issue’s **Verified** checklist in its do
 | 1 | Section 1 — logging | [#531](./ISSUE-531.md) | - [x] | Code landed; optional manual stderr check remains in ISSUE-531 doc |
 | 2 | Section 4 — `InjectUserMessage` gating | [#534](./ISSUE-534.md) | - [x] | Proxy queue landed; optional React enforcement + real-API check open in ISSUE-534 doc |
 | 3 | Section 2 — protocol / Settings + functions | [#532](./ISSUE-532.md) | - [ ] | Mock Section 2b + client close log done; real-API row still open in ISSUE-532 |
-| 4 | Section 3 — JSON hardening | [#533](./ISSUE-533.md) | - [ ] | Prefer before strict removal of passthrough if mapping lags |
+| 4 | Section 3 — JSON hardening | [#533](./ISSUE-533.md) | - [x] | Strict default + `OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH` escape hatch |
 | 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [ ] | Sub-order below |
 | 6 | Section 6 — lifecycle / audit / idempotence | [#541](./ISSUE-541.md) | - [ ] | Partially blocked on 533/534 until those ship |
 

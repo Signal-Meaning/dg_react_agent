@@ -3776,9 +3776,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
-   * Protocol §3: Other client JSON (unknown type) forwarded to upstream as-is.
+   * Protocol / Issue #533: KeepAlive must not be forwarded to OpenAI (ignored); conversation still proceeds.
    */
-  itMockOnly('Protocol: other client JSON (e.g. KeepAlive) forwarded to upstream', (done) => {
+  itMockOnly('Protocol: KeepAlive not forwarded to upstream (Issue #533)', (done) => {
     mockReceived.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
@@ -3794,7 +3794,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         }
         if (msg.type === 'ConversationText' && msg.role === 'assistant') {
           const hasKeepAlive = mockReceived.some((m) => m.type === 'KeepAlive');
-          expect(hasKeepAlive).toBe(true);
+          expect(hasKeepAlive).toBe(false);
           client.close();
           done();
         }
@@ -3804,6 +3804,181 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     });
     client.on('error', done);
   }, 8000);
+
+  /**
+   * Issue #533: unknown client JSON → component Error; upstream never receives that frame.
+   */
+  itMockOnly('Issue #533: disallowed client JSON type yields Error and is not forwarded', (done) => {
+    mockReceived.length = 0;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; code?: string; description?: string; role?: string };
+        if (msg.type === 'SettingsApplied') {
+          client.send(JSON.stringify({ type: 'CustomPassthroughProbe', foo: 1 }));
+          return;
+        }
+        if (msg.type === 'Error' && msg.code === 'disallowed_client_message_type') {
+          expect(msg.description).toContain('CustomPassthroughProbe');
+          const hasProbe = mockReceived.some((m) => (m as { type: string }).type === 'CustomPassthroughProbe');
+          expect(hasProbe).toBe(false);
+          client.close();
+          done();
+          return;
+        }
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          done(new Error('Expected disallowed_client_message_type Error before assistant reply'));
+        }
+      } catch (e) {
+        done(e as Error);
+      }
+    });
+    client.on('error', done);
+  }, 8000);
+
+  /**
+   * Issue #533: Second proxy with `allowClientJsonPassthrough: true` — documents escape hatch (OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH).
+   */
+  describe('Issue #533 client JSON passthrough escape hatch', () => {
+    let passthroughProxyHttp: http.Server | null = null;
+    let passthroughProxyWss: InstanceType<typeof WebSocketServer> | null = null;
+    let passthroughProxyPort = 0;
+
+    beforeAll(async () => {
+      if (useRealAPIs) return;
+      if (mockPort <= 0) {
+        throw new Error('Issue #533 passthrough: mockPort must be set (parent beforeAll incomplete)');
+      }
+      const server = http.createServer((_req, res) => {
+        res.writeHead(404);
+        res.end();
+      });
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+      passthroughProxyPort = (server.address() as { port: number }).port;
+      passthroughProxyHttp = server;
+      const passthrough = createOpenAIProxyServer({
+        server,
+        path: PROXY_PATH,
+        upstreamUrl: `ws://127.0.0.1:${mockPort}`,
+        allowClientJsonPassthrough: true,
+      });
+      passthroughProxyWss = passthrough.wss;
+    });
+
+    afterAll((done) => {
+      if (!passthroughProxyHttp) {
+        done();
+        return;
+      }
+      const closeHttp = () => {
+        passthroughProxyHttp!.close(() => {
+          passthroughProxyHttp = null;
+          done();
+        });
+      };
+      if (passthroughProxyWss) {
+        passthroughProxyWss.close(() => {
+          passthroughProxyWss = null;
+          closeHttp();
+        });
+        return;
+      }
+      closeHttp();
+    });
+
+    /** Not KeepAlive: OpenAI Realtime does not define that client event; passthrough is for arbitrary unknown JSON only. */
+    const PASSTHROUGH_PROBE_TYPE = 'CustomPassthroughDevProbe';
+
+    itMockOnly('Issue #533: with allowClientJsonPassthrough, unknown client JSON is forwarded to upstream', (done) => {
+      mockReceived.length = 0;
+      const client = new WebSocket(`ws://127.0.0.1:${passthroughProxyPort}${PROXY_PATH}`);
+      let probeSent = false;
+      let finished = false;
+      const finish = (err?: Error) => {
+        if (finished) return;
+        finished = true;
+        try {
+          client.close();
+        } catch {
+          // ignore
+        }
+        if (err) done(err);
+        else done();
+      };
+      const pollForProbe = (deadlineMs: number) => {
+        const tick = () => {
+          if (finished) return;
+          if (mockReceived.some((m) => m.type === PASSTHROUGH_PROBE_TYPE)) {
+            finish();
+            return;
+          }
+          if (Date.now() > deadlineMs) {
+            const types = mockReceived.map((m) => m.type);
+            finish(
+              new Error(
+                `Issue #533 passthrough: expected mock to receive ${PASSTHROUGH_PROBE_TYPE}; mockReceived types=${JSON.stringify(types)}`,
+              ),
+            );
+            return;
+          }
+          setTimeout(tick, 25);
+        };
+        setTimeout(tick, 0);
+      };
+      client.on('open', () => {
+        client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      });
+      client.on('message', (data: Buffer) => {
+        if (data.length === 0 || data[0] !== 0x7b) return;
+        try {
+          const msg = JSON.parse(data.toString()) as { type?: string; code?: string };
+          if (msg.type === 'SettingsApplied' && !probeSent) {
+            probeSent = true;
+            client.send(JSON.stringify({ type: PASSTHROUGH_PROBE_TYPE, probe: true }));
+            pollForProbe(Date.now() + 3000);
+          }
+          if (msg.type === 'Error' && msg.code === 'disallowed_client_message_type') {
+            finish(
+              new Error(
+                `Issue #533 passthrough: proxy rejected probe (allowClientJsonPassthrough not active?); mock types=${JSON.stringify(mockReceived.map((m) => m.type))}`,
+              ),
+            );
+          }
+        } catch (e) {
+          finish(e as Error);
+        }
+      });
+      client.on('error', (err) => finish(err));
+    }, 8000);
+
+    itMockOnly('Issue #533: with allowClientJsonPassthrough, KeepAlive is still not forwarded', (done) => {
+      mockReceived.length = 0;
+      const client = new WebSocket(`ws://127.0.0.1:${passthroughProxyPort}${PROXY_PATH}`);
+      client.on('open', () => {
+        client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      });
+      client.on('message', (data: Buffer) => {
+        if (data.length === 0 || data[0] !== 0x7b) return;
+        try {
+          const msg = JSON.parse(data.toString()) as { type?: string };
+          if (msg.type === 'SettingsApplied') {
+            client.send(JSON.stringify({ type: 'KeepAlive' }));
+            const hasKeepAlive = mockReceived.some((m) => m.type === 'KeepAlive');
+            expect(hasKeepAlive).toBe(false);
+            client.close();
+            done();
+          }
+        } catch (e) {
+          done(e as Error);
+        }
+      });
+      client.on('error', done);
+    }, 8000);
+  });
 
   /**
    * Issue #514: After a successful function call (host sends one FunctionCallResponse), the client must receive exactly one

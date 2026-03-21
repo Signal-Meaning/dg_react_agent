@@ -60,6 +60,10 @@ import {
   assertMinAudioBeforeCommit,
   assertAppendChunkSize,
 } from './openai-audio-constants';
+import {
+  OPENAI_PROXY_CLIENT_JSON_TYPE,
+  getOpenAIProxyAllowedClientJsonTypesDescription,
+} from './client-protocol';
 
 /** Debounce delay (ms) after last binary chunk before sending commit + response.create. Must be long enough for upstream to process appends (real API returns "buffer too small ... 0.00ms" if commit is sent too soon). */
 const INPUT_AUDIO_COMMIT_DEBOUNCE_MS = 400;
@@ -95,6 +99,13 @@ export interface OpenAIProxyServerOptions {
    * For integration tests only (short timeout to test the "upstream withholds completion" path). Production uses default 20s.
    */
   deferredResponseCreateTimeoutMs?: number;
+  /**
+   * Issue #533: When true, unknown client JSON types are forwarded to upstream as raw text (legacy). Default false:
+   * only Settings, InjectUserMessage, FunctionCallResponse are translated; KeepAlive is always ignored (no OpenAI equivalent —
+   * see API-DISCONTINUITIES.md). Other unknown JSON is forwarded as raw only when this flag is true. Otherwise a component
+   * Error (`disallowed_client_message_type`). Set via `OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH=1` in run.ts for dev only.
+   */
+  allowClientJsonPassthrough?: boolean;
 }
 
 /**
@@ -117,6 +128,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
   initProxyLogger({ logLevel: options.logLevel });
 
   const deferredResponseCreateTimeoutMs = options.deferredResponseCreateTimeoutMs ?? DEFERRED_RESPONSE_CREATE_TIMEOUT_MS;
+  const allowClientJsonPassthrough = options.allowClientJsonPassthrough === true;
 
   wss.on('connection', (clientWs: WebSocket, req: http.IncomingMessage) => {
     const connId = `c${++connectionCounter}`;
@@ -329,7 +341,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             [ATTR_MESSAGE_TYPE]: msg.type ?? '(binary)',
           },
         });
-        if (msg.type === 'Settings') {
+        if (msg.type === OPENAI_PROXY_CLIENT_JSON_TYPE.Settings) {
           if (hasForwardedSessionUpdate) {
             // Duplicate Settings (e.g. test-app reload/reconnect): do not send second session.update to upstream.
             // Send SettingsApplied so the client does not block waiting.
@@ -366,7 +378,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           const g = settings.agent?.greeting;
           storedGreeting = typeof g === 'string' && g.trim().length > 0 ? g : undefined;
-        } else if (msg.type === 'FunctionCallResponse') {
+        } else if (msg.type === OPENAI_PROXY_CLIENT_JSON_TYPE.FunctionCallResponse) {
           const itemCreate = mapFunctionCallResponseToConversationItemCreate(
             msg as Parameters<typeof mapFunctionCallResponseToConversationItemCreate>[0]
           );
@@ -443,7 +455,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           if (clientWs.readyState === WebSocket.OPEN) {
             clientWs.send(JSON.stringify({ type: 'AgentThinking', content: '' }));
           }
-        } else if (msg.type === 'InjectUserMessage') {
+        } else if (msg.type === OPENAI_PROXY_CLIENT_JSON_TYPE.InjectUserMessage) {
           if (!hasSentSettingsApplied) {
             pendingInjectTextQueue.push(Buffer.from(raw));
             emitLog({
@@ -470,8 +482,43 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             content: injectMsg.content ?? '',
           };
           clientWs.send(JSON.stringify(userEcho));
+        } else if (msg.type === OPENAI_PROXY_CLIENT_JSON_TYPE.KeepAlive) {
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: 'client KeepAlive ignored (not sent to OpenAI upstream; Issue #533)',
+            attributes: {
+              ...connectionAttrs,
+              [ATTR_DIRECTION]: 'client→upstream',
+              [ATTR_MESSAGE_TYPE]: 'KeepAlive',
+            },
+          });
+          return;
+        } else if (allowClientJsonPassthrough) {
+          // Send as UTF-8 text frame (same as session.update path), not binary — ws treats Buffer as binary opcode.
+          upstream.send(text);
         } else {
-          upstream.send(raw);
+          const rawType = msg.type ?? '(missing type)';
+          const description = `Disallowed client message type "${rawType}" for OpenAI proxy (Issue #533). Allowed: ${getOpenAIProxyAllowedClientJsonTypesDescription()} Enable OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH=1 only for legacy debugging.`;
+          emitLog({
+            severityNumber: SeverityNumber.WARN,
+            severityText: 'WARN',
+            body: description,
+            attributes: {
+              ...connectionAttrs,
+              [ATTR_DIRECTION]: 'client→upstream',
+              [ATTR_MESSAGE_TYPE]: String(rawType),
+            },
+          });
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(
+              JSON.stringify({
+                type: 'Error',
+                code: 'disallowed_client_message_type',
+                description,
+              })
+            );
+          }
         }
       } catch {
         if (raw.length > 0) {
