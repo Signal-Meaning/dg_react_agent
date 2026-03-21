@@ -145,6 +145,8 @@ export interface AgentSettingsMessage {
       toolChoice?: ThinkToolChoice;
       /** OpenAI proxy: maps to Realtime `session.output_modalities` (Issue #536). */
       outputModalities?: ThinkOutputModality[];
+      /** OpenAI proxy: maps to Realtime `session.max_output_tokens` when a positive safe integer (Issue #537). */
+      maxOutputTokens?: number;
     };
     speak?: {
       provider: {
@@ -438,6 +440,8 @@ export interface AgentOptions {
   thinkToolChoice?: ThinkToolChoice;
   /** OpenAI proxy: Realtime `session.output_modalities` (Issue #536). */
   thinkOutputModalities?: ThinkOutputModality[];
+  /** OpenAI proxy: Realtime `session.max_output_tokens` (Issue #537). */
+  thinkMaxOutputTokens?: number;
   instructions?: string; // Base instructions for the agent
   
   // Speak settings

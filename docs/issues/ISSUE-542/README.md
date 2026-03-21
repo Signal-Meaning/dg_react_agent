@@ -85,6 +85,6 @@ Complete **Verified** on each child doc in this order unless dependencies dictat
 - [x] [#538](./ISSUE-538.md) temperature → `session.update` (unit + builder; real-API row open in ISSUE-538)
 - [x] [#535](./ISSUE-535.md) `tool_choice` (unit + builder; real-API row open in ISSUE-535)
 - [x] [#536](./ISSUE-536.md) `output_modalities` (unit + builder; real-API row open in ISSUE-536)
-- [ ] [#537](./ISSUE-537.md) `max_output_tokens`
+- [x] [#537](./ISSUE-537.md) `max_output_tokens` (unit + builder; optional real-API row in ISSUE-537)
 - [ ] [#539](./ISSUE-539.md) managed prompt id/variables
 - [ ] [#540](./ISSUE-540.md) `session` audio.output

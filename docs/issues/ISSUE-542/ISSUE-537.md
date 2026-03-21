@@ -12,31 +12,44 @@
 
 ---
 
+## Decision
+
+- **`agent.think.maxOutputTokens`** (Settings JSON) maps to **`session.max_output_tokens`** when the value is a **positive safe integer**. Non-finite, non-integer, ≤ 0, or unsafe integers are **omitted** so the API default applies and JSON never carries `undefined`.
+- **`AgentOptions.thinkMaxOutputTokens`** and **`buildSettingsMessage`** use the same validation before including the field.
+- **Semantics:** caps model **output** length; separate from context window / instruction size (see proxy README note).
+
+---
+
 ## TDD plan
 
-**Phases:** - [ ] RED · - [ ] GREEN · - [ ] REFACTOR · - [ ] Verified (all items below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (optional real API below)
 
 ### RED
 
-- [ ] Unit: Settings with `max_output_tokens` → `mapSettingsToSessionUpdate(...).session.max_output_tokens` matches.
-- [ ] Unit: when omitted, key absent on serialized `session` (no `undefined` in JSON).
+- [x] Unit (`tests/openai-proxy.test.ts`): valid integer → `session.max_output_tokens`; omitted → property absent after `JSON.parse(JSON.stringify(session))`; invalid / unsafe integer → omit.
 
 ### GREEN
 
-- [ ] Implement mapping; optional range validation per API docs.
+- [x] `toSessionMaxOutputTokens` in `translator.ts`, `ComponentSettings` / `OpenAISessionUpdate`, `mapSettingsToSessionUpdate`, `AgentOptions` / `AgentSettingsMessage`, `buildSettingsMessage`, `DeepgramVoiceInteraction`.
 
 ### REFACTOR
 
-- [ ] Proxy README note on context limits vs `max_output_tokens`.
+- [x] Proxy README note (context vs `max_output_tokens`); PROTOCOL Settings row.
 
 ### Verified
 
-- [ ] Unit tests pass.
-- [ ] Optional **Real API** smoke: small `max_output_tokens` if stable in CI.
+- [x] Unit tests pass.
+- [ ] **Real API (optional):** `USE_REAL_APIS=1` smoke with a small `max_output_tokens` if stable.
 
 ---
 
 ## Files
 
 - `packages/voice-agent-backend/scripts/openai-proxy/translator.ts`
-- `tests/openai-proxy.test.ts`
+- `src/types/agent.ts`
+- `src/utils/buildSettingsMessage.ts`
+- `src/components/DeepgramVoiceInteraction/index.tsx`
+- `tests/openai-proxy.test.ts`, `tests/buildSettingsMessage.test.ts`
+- `packages/voice-agent-backend/scripts/openai-proxy/README.md`, `PROTOCOL-AND-MESSAGE-ORDERING.md`
+
+**Canonical API:** [session.update](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update) `max_output_tokens`.

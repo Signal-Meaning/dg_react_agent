@@ -175,6 +175,32 @@ describe('buildSettingsMessage', () => {
     expect('outputModalities' in empty.agent.think).toBe(false);
   });
 
+  it('includes agent.think.maxOutputTokens when thinkMaxOutputTokens is a positive integer (Issue #537)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, thinkMaxOutputTokens: 512 },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.think.maxOutputTokens).toBe(512);
+  });
+
+  it('omits agent.think.maxOutputTokens when thinkMaxOutputTokens undefined (Issue #537)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('maxOutputTokens' in msg.agent.think).toBe(false);
+  });
+
+  it('omits agent.think.maxOutputTokens for invalid numbers (Issue #537)', () => {
+    for (const thinkMaxOutputTokens of [0, -10, 1.25, NaN]) {
+      const msg = buildSettingsMessage(
+        { ...minimalOptions, thinkMaxOutputTokens },
+        { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+      );
+      expect('maxOutputTokens' in msg.agent.think).toBe(false);
+    }
+  });
+
   it('sets speak provider model from options.voice', () => {
     const msg = buildSettingsMessage(
       { ...minimalOptions, voice: 'aura-luna-en' },

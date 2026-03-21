@@ -224,6 +224,55 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(mapSettingsToSessionUpdate(emptyArr).session).not.toHaveProperty('output_modalities');
     });
 
+    it('maps agent.think.maxOutputTokens to session.max_output_tokens (Issue #537)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            maxOutputTokens: 256,
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.max_output_tokens).toBe(256);
+    });
+
+    it('omits session.max_output_tokens when agent.think.maxOutputTokens omitted (Issue #537; JSON has no undefined)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.' } },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session).not.toHaveProperty('max_output_tokens');
+      const roundTrip = JSON.parse(JSON.stringify(out.session)) as Record<string, unknown>;
+      expect(roundTrip).not.toHaveProperty('max_output_tokens');
+    });
+
+    it('omits session.max_output_tokens for non-positive or non-integer values (Issue #537)', () => {
+      const base = { type: 'Settings' as const, agent: { think: { prompt: 'Help.' } } };
+      for (const maxOutputTokens of [0, -1, 1.5, NaN, Infinity]) {
+        const out = mapSettingsToSessionUpdate({
+          ...base,
+          agent: { think: { ...base.agent.think, maxOutputTokens } },
+        });
+        expect(out.session).not.toHaveProperty('max_output_tokens');
+      }
+    });
+
+    it('omits session.max_output_tokens when value is not a safe integer (Issue #537)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            maxOutputTokens: Number.MAX_SAFE_INTEGER + 1,
+          },
+        },
+      };
+      expect(mapSettingsToSessionUpdate(settings).session).not.toHaveProperty('max_output_tokens');
+    });
+
     it('maps multiple functions to session.update tools (OpenAI API shape)', () => {
       const settings = {
         type: 'Settings' as const,

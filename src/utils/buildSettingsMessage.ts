@@ -22,6 +22,8 @@ export interface BuildSettingsMessageOptions {
   thinkToolChoice?: ThinkToolChoice;
   /** Passed to Settings agent.think.outputModalities → Realtime session.output_modalities (Issue #536). */
   thinkOutputModalities?: ThinkOutputModality[];
+  /** Passed to Settings agent.think.maxOutputTokens → Realtime session.max_output_tokens (Issue #537). */
+  thinkMaxOutputTokens?: number;
   functions?: AgentFunction[];
   listenModel?: string;
   greeting?: string;
@@ -47,6 +49,7 @@ export interface SettingsMessagePayload {
       prompt?: string;
       toolChoice?: ThinkToolChoice;
       outputModalities?: ThinkOutputModality[];
+      maxOutputTokens?: number;
       endpoint?: unknown;
       functions?: AgentFunction[];
     };
@@ -105,6 +108,12 @@ export function buildSettingsMessage(
         ...(options.thinkToolChoice !== undefined ? { toolChoice: options.thinkToolChoice } : {}),
         ...(options.thinkOutputModalities !== undefined && options.thinkOutputModalities.length > 0
           ? { outputModalities: options.thinkOutputModalities }
+          : {}),
+        ...(typeof options.thinkMaxOutputTokens === 'number' &&
+        Number.isInteger(options.thinkMaxOutputTokens) &&
+        options.thinkMaxOutputTokens > 0 &&
+        Number.isSafeInteger(options.thinkMaxOutputTokens)
+          ? { maxOutputTokens: options.thinkMaxOutputTokens }
           : {}),
       },
       speak: {

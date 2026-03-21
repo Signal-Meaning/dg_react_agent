@@ -21,6 +21,17 @@ export type OpenAIRealtimeSessionToolChoice =
  */
 export type OpenAIRealtimeOutputModality = 'text' | 'audio';
 
+/**
+ * Realtime `session.max_output_tokens`: positive safe integer only (Issue #537).
+ * Other values are ignored so the API keeps its default.
+ */
+function toSessionMaxOutputTokens(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  if (!Number.isInteger(value) || value <= 0) return undefined;
+  if (!Number.isSafeInteger(value)) return undefined;
+  return value;
+}
+
 /** Component message: Settings (outgoing) */
 export interface ComponentSettings {
   type: 'Settings';
@@ -35,6 +46,8 @@ export interface ComponentSettings {
       toolChoice?: OpenAIRealtimeSessionToolChoice;
       /** Issue #536: maps to Realtime `session.output_modalities` when non-empty after validation. */
       outputModalities?: OpenAIRealtimeOutputModality[];
+      /** Issue #537: maps to Realtime `session.max_output_tokens` when a positive safe integer. */
+      maxOutputTokens?: number;
       functions?: Array<{ name: string; description?: string; parameters?: unknown }>;
     };
     speak?: { provider?: { voice?: string } };
@@ -70,6 +83,8 @@ export interface OpenAISessionUpdate {
     tool_choice?: OpenAIRealtimeSessionToolChoice;
     /** Issue #536: model output channels (`text`, `audio`, or both). */
     output_modalities?: OpenAIRealtimeOutputModality[];
+    /** Issue #537: cap generated output tokens (separate from context window / instructions size). */
+    max_output_tokens?: number;
     [key: string]: unknown;
   };
 }
@@ -284,6 +299,10 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
     if (modalities.length > 0) {
       session.output_modalities = modalities;
     }
+  }
+  const maxOut = toSessionMaxOutputTokens(settings.agent?.think?.maxOutputTokens);
+  if (maxOut !== undefined) {
+    session.max_output_tokens = maxOut;
   }
   return { type: 'session.update', session };
 }
