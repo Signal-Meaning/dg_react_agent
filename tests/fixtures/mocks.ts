@@ -67,6 +67,8 @@ export const createMockAudioManager = () => ({
     resume: jest.fn(),
   }),
   abortPlayback: jest.fn(),
+  /** When true, AgentAudioDone/AgentDone must not force idle until playback ends (OpenAI proxy / TTS pipeline). */
+  isPlaybackActive: jest.fn().mockReturnValue(false),
 });
 
 /**

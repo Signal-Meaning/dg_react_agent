@@ -23,6 +23,21 @@ export interface IdleTimeoutState {
   isPlaying: boolean;
 }
 
+/** Subset of {@link IdleTimeoutState} synced from React after commit (`applyCommittedInteractionState`). */
+export type IdleTimeoutInteractionSnapshot = Pick<
+  IdleTimeoutState,
+  'agentState' | 'isPlaying' | 'isUserSpeaking'
+>;
+
+/** Options for {@link IdleTimeoutService.updateStateDirectly}. */
+export type UpdateStateDirectlyOptions = {
+  /**
+   * `react-commit`: state comes from `useLayoutEffect` after React applied the tree — merge immediately
+   * (do not defer "busy" merges). Used by {@link IdleTimeoutService.applyCommittedInteractionState}.
+   */
+  source?: 'default' | 'react-commit';
+};
+
 export type IdleTimeoutEvent = 
   | { type: 'USER_STARTED_SPEAKING' }
   | { type: 'USER_STOPPED_SPEAKING' }
@@ -49,19 +64,22 @@ export class IdleTimeoutService {
   // Issue #373: Track active function calls to prevent idle timeout during execution
   private activeFunctionCalls: Set<string> = new Set();
   /**
-   * Issue #487: After the app sends a function result, we block the idle timer until we have
-   * a signal that the agent has become active (so we're not closing before the reply). Cleared when:
-   * (1) AGENT_STATE_CHANGED to 'thinking' or 'speaking' — agent became active (primary).
-   * (2) AGENT_MESSAGE_RECEIVED — invoked only by WebSocketManager when it emits a message (single path).
-   * (3) Max-wait fallback (capped at timeoutMs) — if backend sends no signal, we allow the
-   *     idle timer to start after at most one idle-timeout period so the connection can close.
+   * After the app sends a **tool/function result** to the model, there is often a **silent window** where
+   * the UI still looks idle but the assistant is actually working on the follow-up. We must not start the
+   * "disconnect if inactive" timer in that window, or we would hang up before the user hears the answer.
+   *
+   * This flag is **not** the product rule by itself — it is a latch for that window. We clear it when we
+   * see **real assistant activity** (same idea as "thinking / forming a result"), via:
+   * - `AGENT_STATE_CHANGED` → `thinking` or `speaking`
+   * - `AGENT_MESSAGE_RECEIVED` (WebSocketManager: any agent→client message on the wire)
+   * - `MEANINGFUL_USER_ACTIVITY` with `AgentAudioDone` / `AgentDone` (turn complete after tool follow-up)
+   * - `FUNCTION_CALL_STARTED` (chained tool call = assistant continued)
+   * - max-wait timer (bounded fallback if the provider sends nothing)
    */
   private waitingForNextAgentMessageAfterFunctionResult = false;
   /**
-   * Fallback timer (not a second idle timer): after FUNCTION_CALL_COMPLETED we set waitingForNextAgentMessageAfterFunctionResult.
-   * If the backend never sends AgentAudioDone/AgentThinking/next message, we would block the idle timeout forever.
-   * This single timer fires after maxWaitForAgentReplyMs (capped at timeoutMs) and clears the waiting flag so the idle timeout can start.
-   * When we clear the flag via the normal path (e.g. MEANINGFUL_USER_ACTIVITY(AgentAudioDone)), we cancel this fallback with stopMaxWaitForAgentReplyTimer().
+   * If the provider never sends any of the signals above, we would block idle disconnect forever; this
+   * timer clears the latch after `maxWaitForAgentReplyMs` (capped by `timeoutMs`). Normal clears cancel it.
    */
   private maxWaitForAgentReplyTimeoutId: number | null = null;
   private logger: Logger;
@@ -102,22 +120,60 @@ export class IdleTimeoutService {
   }
 
   /**
+   * Apply the latest React-committed interaction snapshot (user speaking, agent phase, playback) in one call.
+   * The hook runs this from `useLayoutEffect` so DOM and state match before the idle-timeout service runs.
+   */
+  public applyCommittedInteractionState(
+    prev: Readonly<IdleTimeoutInteractionSnapshot>,
+    next: Readonly<IdleTimeoutInteractionSnapshot>
+  ): void {
+    const changed =
+      prev.agentState !== next.agentState ||
+      prev.isPlaying !== next.isPlaying ||
+      prev.isUserSpeaking !== next.isUserSpeaking;
+    if (!changed) {
+      return;
+    }
+
+    this.updateStateDirectly(
+      {
+        agentState: next.agentState,
+        isPlaying: next.isPlaying,
+        isUserSpeaking: next.isUserSpeaking,
+      },
+      { source: 'react-commit' }
+    );
+
+    if (prev.isUserSpeaking !== next.isUserSpeaking) {
+      this.handleEvent(
+        next.isUserSpeaking ? { type: 'USER_STARTED_SPEAKING' } : { type: 'USER_STOPPED_SPEAKING' }
+      );
+    }
+    if (prev.agentState !== next.agentState) {
+      this.handleEvent({ type: 'AGENT_STATE_CHANGED', state: next.agentState });
+    }
+    if (prev.isPlaying !== next.isPlaying) {
+      this.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: next.isPlaying });
+    }
+  }
+
+  /**
    * Directly update state (bypasses event system)
    * This is used when events aren't arriving but we know the state has changed
    * (e.g., DOM shows state has changed but useEffect didn't fire)
    */
-  public updateStateDirectly(state: Partial<IdleTimeoutState>): void {
+  public updateStateDirectly(state: Partial<IdleTimeoutState>, options?: UpdateStateDirectlyOptions): void {
     const prevState = { ...this.currentState };
-    
-    // Issue #489: When we have an active timeout and this update would disable resets (and thus
-    // stop the timeout), the state may be stale (e.g. hook effect ran with pre-commit state).
-    // Defer: re-read from stateGetter next tick and then run updateTimeoutBehavior, so we don't
-    // stop the timeout on stale state. If state is still "blocking" after the tick, we'll stop then.
+    const skipDefer = options?.source === 'react-commit';
+
+    // Disconnect countdown is running and a direct state update would look "busy" and cancel it — but that
+    // update may predate what React has committed. Defer one tick and re-read live UI via stateGetter;
+    // only then decide whether to cancel the countdown.
     const wouldDisable =
       (state.agentState !== undefined && state.agentState !== 'idle' && state.agentState !== 'listening') ||
       (state.isPlaying !== undefined && state.isPlaying) ||
       (state.isUserSpeaking !== undefined && state.isUserSpeaking);
-    if (this.timeoutId !== null && wouldDisable) {
+    if (!skipDefer && this.timeoutId !== null && wouldDisable) {
       this.log('updateStateDirectly() would disable resets while timeout active; deferring to next tick and re-reading state');
       window.setTimeout(() => {
         if (this.stateGetter) {
@@ -208,18 +264,7 @@ export class IdleTimeoutService {
             this.log('AGENT_STATE_CHANGED to ' + event.state + ' - agent became active, no longer waiting');
           }
         }
-        
-        // Issue #373: If agent enters thinking state, stop any running timeout (unless we might have
-        // stale state from the hook - Issue #489: when we have a timeout we skip stop to avoid
-        // clearing a timeout we just started after AgentAudioDone).
-        if (event.state === 'thinking') {
-          this.log('Agent entered thinking state - stopping any running timeout unless skip (active timeout)');
-          if (this.timeoutId === null) {
-            this.stopTimeout();
-          }
-          this.disableResets(this.timeoutId !== null); // skip stop when timeout active (may be stale)
-        }
-        
+
         // CRITICAL: If agent becomes idle and playback has stopped, ensure timeout starts
         // This handles the case where AGENT_STATE_CHANGED with 'idle' arrives
         // after PLAYBACK_STATE_CHANGED with isPlaying=false
@@ -229,8 +274,9 @@ export class IdleTimeoutService {
             !this.currentState.isUserSpeaking) {
           // Agent is idle and playback stopped, so enable resets and start timeout
           this.enableResetsAndUpdateBehavior();
-        } else if (event.state !== 'thinking') {
-          // Normal update behavior (skip if we already handled thinking state above)
+        } else {
+          // Assistant is mid-turn (thinking/speaking/etc.): normally cancel a running "disconnect if idle" countdown
+          // so we do not hang up while the user is still getting a response (see updateTimeoutBehavior).
           this.updateTimeoutBehavior();
         }
         break;
@@ -262,7 +308,9 @@ export class IdleTimeoutService {
           this.stopMaxWaitForAgentReplyTimer();
           if (this.waitingForNextAgentMessageAfterFunctionResult) {
             this.waitingForNextAgentMessageAfterFunctionResult = false;
-            this.log('MEANINGFUL_USER_ACTIVITY(' + event.activity + ') - agent turn done, no longer waiting for next agent message');
+            this.log(
+              'MEANINGFUL_USER_ACTIVITY(' + event.activity + ') — assistant turn complete; clearing post-tool idle block if set'
+            );
           }
         }
         // CRITICAL FIX: If agent is idle and not playing, enable resets and RESET timeout
@@ -300,7 +348,9 @@ export class IdleTimeoutService {
         // Issue #487 (voice-commerce #1058): App sent function result; agent is still busy until next agent message.
         if (this.activeFunctionCalls.size === 0) {
           this.waitingForNextAgentMessageAfterFunctionResult = true;
-          this.log('Waiting for next agent message after function result - idle timeout will not start');
+          this.log(
+            'Tool output sent — blocking idle disconnect until assistant activity (thinking/speaking, WS message, AgentAudioDone, or max-wait)'
+          );
           this.startMaxWaitForAgentReplyTimer();
         }
         // If no more active function calls, update behavior (timeout still must not start until AGENT_MESSAGE_RECEIVED or max-wait fires)
@@ -314,7 +364,7 @@ export class IdleTimeoutService {
         this.stopMaxWaitForAgentReplyTimer();
         if (this.waitingForNextAgentMessageAfterFunctionResult) {
           this.waitingForNextAgentMessageAfterFunctionResult = false;
-          this.log('AGENT_MESSAGE_RECEIVED - no longer waiting for next agent message');
+          this.log('AGENT_MESSAGE_RECEIVED — assistant traffic seen; clearing post-tool idle block if set');
         }
         this.updateTimeoutBehavior();
         break;
@@ -343,8 +393,8 @@ export class IdleTimeoutService {
   /**
    * Check if timeout can start based on current state.
    * Timeout is paused until first user activity; after that it can start when conditions are idle.
-   * waitingForNextAgentMessageAfterFunctionResult: block until we have a signal that the agent
-   * is working (thinking/speaking) or any agent message, or the max-wait fallback (capped at timeoutMs).
+   * Tool-output latch (see `waitingForNextAgentMessageAfterFunctionResult`): block idle disconnect until
+   * assistant activity or max-wait, as documented on that field.
    */
   private canStartTimeout(state: IdleTimeoutState = this.currentState): boolean {
     return this.hasSeenUserActivityThisSession &&
@@ -369,19 +419,82 @@ export class IdleTimeoutService {
   }
 
   /**
-   * Update timeout behavior based on current state
+   * User- or tool-driven reasons to cancel a running idle disconnect countdown immediately.
+   * These are never treated as "late" signals: the user is talking, a tool call is in flight, or we are waiting
+   * for the assistant's next message after the app sent a function result.
+   */
+  private isUserOrToolSessionBlockingIdleClose(): boolean {
+    return (
+      this.currentState.isUserSpeaking ||
+      this.hasActiveFunctionCalls() ||
+      this.waitingForNextAgentMessageAfterFunctionResult
+    );
+  }
+
+  /**
+   * **Why two opinions can disagree:** The service updates from **effect-driven events** (same tick as React
+   * state, but not always the same ordering as "what the user already sees"). The `stateGetter` reads the
+   * component's **current** React snapshot. Right after a turn completes, it is common for one more
+   * `AGENT_STATE_CHANGED` / `PLAYBACK_STATE_CHANGED` from the **previous** render to arrive — so the service
+   * briefly thinks "assistant busy" while the UI already shows "done". That is a **pipeline defect** in the
+   * strict sense; the robust fix is to emit idle-timeout inputs from a **single post-commit path** (e.g. one
+   * `useLayoutEffect`, or only from the reducer after dispatches settle) so event order matches UI. Until then,
+   * when a disconnect countdown is already running, we use the **live UI** (`stateGetter`) as tie-breaker:
+   * if it says idle-capable and the only mismatch is assistant/playback fields, treat the event as stale.
+   *
+   * **Why not user/tool flags here:** Those come from different sources (mic, function-call lifecycle, tool
+   * latch). They were not the source of the "late busy after real idle" bug; applying the same deferral to
+   * them would risk keeping a countdown when the user is actually talking or a tool is in flight.
+   */
+  private shouldIgnoreLateAssistantBusySignal(): boolean {
+    if (this.timeoutId === null || !this.stateGetter) {
+      return false;
+    }
+    if (this.hasActiveFunctionCalls() || this.waitingForNextAgentMessageAfterFunctionResult) {
+      return false;
+    }
+    const s = this.stateGetter();
+    if (!s || s.isUserSpeaking) {
+      return false;
+    }
+    const componentIdleReady =
+      this.isAgentIdle(s) && !s.isPlaying;
+    if (!componentIdleReady) {
+      return false;
+    }
+    const serviceClaimsAgentOrPlaybackBusy =
+      !this.isAgentIdle(this.currentState) ||
+      this.currentState.isPlaying ||
+      this.currentState.isUserSpeaking;
+    return serviceClaimsAgentOrPlaybackBusy;
+  }
+
+  /**
+   * Drive the "disconnect if everyone is idle" timer from the service's picture of the session.
+   *
+   * **User behavior**
+   * - When something real is going on (user speaking, tool call, assistant responding or audio playing), we
+   *   must not count down to disconnect — or we must **cancel** an already-running countdown so we do not hang
+   *   up mid-response.
+   * - When the session is truly idle (user quiet, assistant done, not playing), we allow the countdown to run
+   *   or start so the app can eventually close the connection after inactivity.
+   * - **Exception:** Assistant/playback can be **wrongly busy** in the event stream while the live UI is already
+   *   idle (`shouldIgnoreLateAssistantBusySignal`) — keep the countdown; see that method for why we cannot
+   *   rely on event order alone until a single post-commit source exists.
    */
   private updateTimeoutBehavior(): void {
     this.log(`updateTimeoutBehavior() called with state: isUserSpeaking=${this.currentState.isUserSpeaking}, agentState=${this.currentState.agentState}, isPlaying=${this.currentState.isPlaying}, isDisabled=${this.isDisabled}`);
-    // Issue #373: Also disable timeout if there are active function calls
     if (this.shouldDisableTimeoutResets()) {
-      // Issue #489: When blocking reason is only isPlaying/agentState (often stale from hook effect),
-      // do not stop an active timeout; only stop when user speaking, function calls, or waiting.
-      const onlyPlaybackOrAgentState =
-        !this.currentState.isUserSpeaking &&
-        !this.hasActiveFunctionCalls() &&
-        !this.waitingForNextAgentMessageAfterFunctionResult;
-      this.disableResets(onlyPlaybackOrAgentState);
+      if (this.isUserOrToolSessionBlockingIdleClose()) {
+        this.disableResets(false);
+      } else if (this.shouldIgnoreLateAssistantBusySignal()) {
+        this.log(
+          'updateTimeoutBehavior() - keep idle disconnect countdown: live UI already idle; ignoring late assistant/playback signal'
+        );
+        this.disableResets(true);
+      } else {
+        this.disableResets(false);
+      }
     } else {
       this.enableResets();
       // Start timeout when all conditions are idle
@@ -414,12 +527,12 @@ export class IdleTimeoutService {
     if (this.stateGetter) {
       const componentState = this.stateGetter();
       if (componentState) {
-        // Issue #489: When we have an active timeout, do not overwrite with component state that
-        // says isUserSpeaking: true. The component may not have committed USER_SPEAKING_STATE_CHANGE(false)
-        // yet (e.g. after AgentAudioDone we dispatch it after handleMeaningfulActivity), so stateGetter
-        // can return stale isUserSpeaking and we would incorrectly stop the timeout we just started.
+        // When a disconnect countdown just started, the live UI may still briefly report "user speaking"
+        // before React applies "user stopped". Do not trust that snapshot to cancel the countdown.
         if (this.timeoutId !== null && componentState.isUserSpeaking) {
-          this.log('checkAndStartTimeoutIfNeeded() - have active timeout and stateGetter says user speaking; skip overwrite to avoid stopping on stale state');
+          this.log(
+            'checkAndStartTimeoutIfNeeded() - idle countdown active; skipping state sync that would treat user as still speaking (prevents false cancel)'
+          );
         } else {
           this.currentState = componentState;
           stateToCheck = componentState;
@@ -506,13 +619,11 @@ export class IdleTimeoutService {
   }
 
   /**
-   * Disable idle timeout resets (during activity)
-   */
-  /**
-   * @param skipStopIfTimeoutActive - When true and we have an active timeout, set isDisabled but do not
-   * stop the timeout (Issue #489: avoids stopping on stale isPlaying/agentState from the hook's effect).
-   * When false or from USER_STARTED_SPEAKING, always stop. Pass true only when blocking reason is
-   * solely isPlaying or agentState (thinking/speaking); pass false for function calls, waiting, or isUserSpeaking.
+   * Mark the session as "not idle" for reset purposes (user or assistant activity).
+   *
+   * @param skipStopIfTimeoutActive - If true and a disconnect countdown is already running, keep it running
+   * (only used when {@link shouldIgnoreLateAssistantBusySignal} is true — live UI idle, late busy event).
+   * Otherwise pass false so we cancel any in-flight countdown whenever we know work is really happening.
    */
   private disableResets(skipStopIfTimeoutActive: boolean = false): void {
     this.log('disableResets() called');
