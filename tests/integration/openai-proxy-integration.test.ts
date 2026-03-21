@@ -2068,7 +2068,12 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             type: 'Settings',
             agent: {
               think: {
-                prompt: 'You are a helpful assistant. Use tools when needed.',
+                // Issue #470 / #478: default Realtime output is often audio-heavy; proxy maps assistant
+                // ConversationText only from conversation.item.* (not output_audio_transcript). Request text
+                // output so the model emits item content we can assert (12:00 / UTC) without longer waits.
+                outputModalities: ['text'],
+                prompt:
+                  'You are a helpful assistant. Use tools when needed. When you use a tool, incorporate its result in your reply using the same time and timezone strings returned (e.g. 12:00 and UTC).',
                 functions: [
                   {
                     name: 'get_current_time',
