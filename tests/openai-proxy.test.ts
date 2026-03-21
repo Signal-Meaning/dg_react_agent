@@ -35,8 +35,8 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.session.model).toBe('gpt-4o-realtime-preview');
     });
 
-    it('maps agent.think.provider.temperature to session.temperature (Issue #538; OpenAI Realtime session.update)', () => {
-      const settings = {
+    it('does not forward agent.think.provider.temperature on session.update (Issue #538; REALTIME-SESSION-UPDATE-FIELD-MAP.md)', () => {
+      const withTemp = {
         type: 'Settings' as const,
         agent: {
           think: {
@@ -45,16 +45,42 @@ describe('OpenAI proxy translator (Issue #381)', () => {
           },
         },
       };
-      const out = mapSettingsToSessionUpdate(settings);
-      expect(out.session.temperature).toBe(0.8);
-    });
-
-    it('omits session.temperature when think.provider.temperature is absent (Issue #538)', () => {
-      const settings = {
+      expect(mapSettingsToSessionUpdate(withTemp).session).not.toHaveProperty('temperature');
+      const noTemp = {
         type: 'Settings' as const,
         agent: { think: { prompt: 'Hi.', provider: { model: 'gpt-realtime' } } },
       };
-      const out = mapSettingsToSessionUpdate(settings);
+      expect(mapSettingsToSessionUpdate(noTemp).session).not.toHaveProperty('temperature');
+    });
+
+    it('minimal Settings → session.update session keys (Issue #538 field map regression)', () => {
+      const out = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Hi' } },
+      });
+      expect(Object.keys(out.session).sort()).toEqual(['audio', 'instructions', 'model', 'type']);
+    });
+
+    it('full optional Settings → session.update includes mapped optional keys (Issue #538 field map)', () => {
+      const out = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            provider: { model: 'gpt-realtime-mini' },
+            toolChoice: 'auto',
+            outputModalities: ['text'],
+            maxOutputTokens: 256,
+            managedPrompt: { id: 'pmpt_123', variables: { topic: 'weather' } },
+            functions: [{ name: 'fn', description: 'd', parameters: { type: 'object' } }],
+          },
+          sessionAudioOutput: { voice: 'marin', speed: 1 },
+        },
+      });
+      const keys = Object.keys(out.session).sort();
+      expect(keys).toEqual(
+        ['audio', 'instructions', 'max_output_tokens', 'model', 'output_modalities', 'prompt', 'tool_choice', 'tools', 'type'].sort(),
+      );
       expect(out.session).not.toHaveProperty('temperature');
     });
 

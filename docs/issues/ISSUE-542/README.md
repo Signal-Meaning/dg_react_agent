@@ -24,7 +24,7 @@ Implement **D** after **C** if you remove passthrough before new Settings fields
 
 Mark a bundle **Done** when every issue in that bundle has all TDD phase boxes checked in its doc (including **Verified**), or deferrals are recorded in that issue’s Notes.
 
-**Bundle D status:** Mapping landed with unit tests. **Verified on live API:** [#535](./ISSUE-535.md) (tools + default `tool_choice`), [#536](./ISSUE-536.md) (`output_modalities` via Issue #470), [#540](./ISSUE-540.md) (default audio path via Issue #414 real-API). **Open:** [#538](./ISSUE-538.md) real-API row (upstream rejected `session.temperature` in harness — see issue), [#539](./ISSUE-539.md) (needs account prompt id), [#537](./ISSUE-537.md) optional `max_output_tokens` smoke.
+**Bundle D status:** Mapping landed with unit tests. **Verified on live API:** [#535](./ISSUE-535.md) (tools + default `tool_choice`), [#536](./ISSUE-536.md) (`output_modalities` via Issue #470), [#538](./ISSUE-538.md) (do **not** send `session.temperature`; upstream `unknown_parameter` — field map + tests), [#540](./ISSUE-540.md) (default audio path via Issue #414 real-API). **Open:** [#539](./ISSUE-539.md) (needs account prompt id), [#537](./ISSUE-537.md) optional `max_output_tokens` smoke.
 
 ---
 
@@ -77,14 +77,14 @@ Check **Area done** when every linked issue’s **Verified** checklist in its do
 | 2 | Section 4 — `InjectUserMessage` gating | [#534](./ISSUE-534.md) | - [x] | Proxy queue landed; optional React enforcement + real-API check open in ISSUE-534 doc |
 | 3 | Section 2 — protocol / Settings + functions | [#532](./ISSUE-532.md) | - [x] | Mock 2b + real-API integration + E2E **6b** (`USE_REAL_APIS=1` from `test-app`) per ISSUE-532 |
 | 4 | Section 3 — JSON hardening | [#533](./ISSUE-533.md) | - [x] | Strict default + `OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH` escape hatch |
-| 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [ ] | **#535/#536/#540** real-API (or default-path) verified in child docs; **#538** / **#539** real-API rows still open; **#537** optional |
+| 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [ ] | **#535/#536/#538/#540** real-API (or default-path) verified in child docs; **#539** real-API row open (managed prompt id); **#537** optional smoke |
 | 6 | Section 6 — lifecycle / audit / idempotence | [#541](./ISSUE-541.md) | - [x] | Matrix, idempotence test, component comment, ISSUE-541 **Verified** (re-confirm on release) |
 
 ### Section 5 sub-order (within priority 5)
 
 Complete **Verified** on each child doc in this order unless dependencies dictate otherwise: **#538** (honest `temperature` surface) → **#535** `tool_choice` → **#536** `output_modalities` → **#537** `max_output_tokens` → **#539** managed prompt → **#540** `audio.output` (highest regression risk—last).
 
-- [x] [#538](./ISSUE-538.md) temperature → `session.update` (unit + builder; **real-API row open** — upstream `unknown_parameter` for `session.temperature` in current harness)
+- [x] [#538](./ISSUE-538.md) temperature on Settings only; **not** on WebSocket `session.update` (unit + builder + [REALTIME-SESSION-UPDATE-FIELD-MAP.md](../../packages/voice-agent-backend/scripts/openai-proxy/REALTIME-SESSION-UPDATE-FIELD-MAP.md); live API rejects `session.temperature`)
 - [x] [#535](./ISSUE-535.md) `tool_choice` (unit + builder; **real-API** tools + default choice — ISSUE-535)
 - [x] [#536](./ISSUE-536.md) `output_modalities` (unit + builder; **real-API** Issue #470 integration — ISSUE-536)
 - [x] [#537](./ISSUE-537.md) `max_output_tokens` (unit + builder; optional real-API row in ISSUE-537)

@@ -1,57 +1,27 @@
-# Issue #538: Apply `think.provider.temperature` in `session.update` or remove type (Section 5.4)
+# Issue #538: `think.provider.temperature` vs WebSocket `session.update` (Section 5.4)
 
-**GitHub:** [#538](https://github.com/Signal-Meaning/dg_react_agent/issues/538)
+**Epic:** [#542](./README.md)  
+**Status:** Resolved (do not forward on `session.update`; document + test)
 
-**Epic:** [#542](./README.md) · **TDD bundle:** D (Settings → session)
+## Problem
 
----
-
-## Problem (Section 5, row 4)
-
-React/types expose `think.provider.temperature` but `mapSettingsToSessionUpdate` does **not** set Realtime `session` temperature. That is a misleading public surface.
-
----
-
-## Expected
-
-Either:
-
-- Map temperature into a field OpenAI accepts on `session.update` for the current API, **or**
-- Remove the type/prop until supported (breaking change — note in changelog).
-
----
+React/types and `buildSettingsMessage` expose `agent.think.provider.temperature` on **Settings** JSON. The proxy must map component **Settings** to OpenAI Realtime **WebSocket** `session.update`, whose `session` object is typed in the API reference as **`RealtimeSessionCreateRequest`** with `type: "realtime"`. That schema does **not** include `temperature`. Sending `session.temperature` caused live upstream **`unknown_parameter: 'session.temperature'`** (Mar 2026).
 
 ## Decision
 
-- **Map** `agent.think.provider.temperature` → OpenAI Realtime `session.temperature` on `session.update` ([API reference](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update): optional number, typically [0.6, 1.2] for audio models). Invalid values are left to the API to reject.
+- **Keep** `thinkTemperature` → `agent.think.provider.temperature` on **Settings** (component/UI parity; `buildSettingsMessage.ts`).
+- **Do not** set `session.temperature` in `mapSettingsToSessionUpdate` / WebSocket `session.update`.
+- **Document** the full `session` mapping in [REALTIME-SESSION-UPDATE-FIELD-MAP.md](../../../packages/voice-agent-backend/scripts/openai-proxy/REALTIME-SESSION-UPDATE-FIELD-MAP.md).
 
-## TDD plan
+## Verification
 
-**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (real API row below)
+- [x] Unit: `agent.think.provider.temperature` is **not** present on mapped `session.update` (`tests/openai-proxy.test.ts`).
+- [x] Unit: full optional Settings → expected `session` keys; no `temperature` (`tests/openai-proxy.test.ts`).
+- [x] Unit: Settings JSON still includes `agent.think.provider.temperature` when `thinkTemperature` is set (`tests/buildSettingsMessage.test.ts`).
+- [x] **Real API:** Omitting `session.temperature` avoids `unknown_parameter`. Qualified with `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` (18 passed, 63 skipped mock-only; Mar 2026). If OpenAI adds `temperature` to `RealtimeSessionCreateRequest`, re-open mapping with a new issue.
 
-### RED
+## References
 
-- [x] Unit: `agent.think.provider.temperature` → `session.temperature`; omit when absent (`tests/openai-proxy.test.ts`).
-
-### GREEN
-
-- [x] `mapSettingsToSessionUpdate` sets `session.temperature` when a finite number is present (`translator.ts`).
-
-### REFACTOR
-
-- [x] `buildSettingsMessage` + `thinkTemperature` from `AgentOptions`; `DeepgramVoiceInteraction` passes it through (`tests/buildSettingsMessage.test.ts`).
-
-### Verified
-
-- [x] Unit tests pass.
-- [ ] **Real API:** Live Realtime (e.g. default `gpt-realtime` session in integration harness) returned `unknown_parameter` for `session.temperature` on `session.update` (Mar 2026). Do not mark this row until the supported surface is re-checked against [session.update](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update) or the proxy conditionally omits `temperature` for models that reject it.
-
----
-
-## Files
-
-- `packages/voice-agent-backend/scripts/openai-proxy/translator.ts` — `ComponentSettings`, `mapSettingsToSessionUpdate`, `OpenAISessionUpdate.session.temperature`
-- `src/utils/buildSettingsMessage.ts` — `thinkTemperature` → `agent.think.provider.temperature`
-- `src/components/DeepgramVoiceInteraction/index.tsx` — pass `thinkTemperature`
-- `tests/openai-proxy.test.ts`, `tests/buildSettingsMessage.test.ts`
-- `src/types/agent.ts` — `AgentOptions.thinkTemperature` (already present)
+- [session.update (client event)](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update)
+- `packages/voice-agent-backend/scripts/openai-proxy/translator.ts` — `mapSettingsToSessionUpdate`
+- `src/utils/buildSettingsMessage.ts` — `thinkTemperature`

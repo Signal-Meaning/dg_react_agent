@@ -13,6 +13,7 @@
 | Doc | Purpose |
 |-----|---------|
 | [UPSTREAM-EVENT-COMPLETE-MAP.md](./UPSTREAM-EVENT-COMPLETE-MAP.md) | Authoritative list of every upstream event and what the proxy does (map, control-only, or Error). |
+| [REALTIME-SESSION-UPDATE-FIELD-MAP.md](./REALTIME-SESSION-UPDATE-FIELD-MAP.md) | Component Settings → WebSocket `session.update` `session` object: each field, source, and exclusions (Issue #538). |
 | [Epic #493 / OPENAI-PROXY-EVENT-MAP-GAPS](../../../docs/issues/OPENAI-PROXY-EVENT-MAP-GAPS/EPIC.md) | Epic and sub-issues for event-mapping gaps (UtteranceEnd, Transcript, ConversationText, etc.). |
 | [PROTOCOL-SPECIFICATION.md](../../../tests/integration/PROTOCOL-SPECIFICATION.md) | Event map with test references; client-facing events; requirement ↔ test table. |
 | [REALTIME-CLIENT-EVENT-MATRIX.md](./REALTIME-CLIENT-EVENT-MATRIX.md) | OpenAI **client** events ↔ component protocol; `response.create` lifecycle (Issue #541). |
@@ -20,7 +21,7 @@
 
 ## Translator exports
 
-- `mapSettingsToSessionUpdate(settings)` – component Settings → OpenAI `session.update` (maps `agent.think.provider.temperature` → `session.temperature` when set — Issue #538; `agent.think.toolChoice` → `session.tool_choice` when set — Issue #535; non-empty validated `agent.think.outputModalities` → `session.output_modalities` — Issue #536; positive safe-integer `agent.think.maxOutputTokens` → `session.max_output_tokens` — Issue #537; validated `agent.think.managedPrompt` → `session.prompt` — Issue #539; validated `agent.sessionAudioOutput` → `session.audio.output` — Issue #540)
+- `mapSettingsToSessionUpdate(settings)` – component Settings → OpenAI `session.update` (field-by-field map: [REALTIME-SESSION-UPDATE-FIELD-MAP.md](./REALTIME-SESSION-UPDATE-FIELD-MAP.md); `agent.think.provider.temperature` is **not** forwarded — Issue #538; `agent.think.toolChoice` → `session.tool_choice` — Issue #535; validated `agent.think.outputModalities` → `session.output_modalities` — Issue #536; `agent.think.maxOutputTokens` → `session.max_output_tokens` — Issue #537; `agent.think.managedPrompt` → `session.prompt` — Issue #539; `agent.sessionAudioOutput` → `session.audio.output` — Issue #540)
 - `normalizeSessionAudioOutput(raw)` – pure helper for Issue #540; used by `mapSettingsToSessionUpdate`
 - `mapInjectUserMessageToConversationItemCreate(msg)` – component InjectUserMessage → OpenAI `conversation.item.create`
 - `mapSessionUpdatedToSettingsApplied(event)` – OpenAI `session.updated` → component SettingsApplied

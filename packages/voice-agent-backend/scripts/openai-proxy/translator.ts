@@ -156,8 +156,6 @@ export interface OpenAISessionUpdate {
   session: {
     type: 'realtime';
     model?: string;
-    /** OpenAI Realtime: sampling temperature, typically [0.6, 1.2] for audio models (API reference). */
-    temperature?: number;
     instructions?: string;
     voice?: string;
     /** GA API: audio config under session.audio.input (see REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2). */
@@ -373,10 +371,11 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
       },
     },
   };
-  const providerTemp = settings.agent?.think?.provider?.temperature;
-  if (typeof providerTemp === 'number' && !Number.isNaN(providerTemp)) {
-    session.temperature = providerTemp;
-  }
+  // Issue #538: `think.provider.temperature` stays on the component Settings JSON (buildSettingsMessage) for
+  // app/UI parity, but we do **not** set `session.temperature` on WebSocket `session.update`. The GA
+  // RealtimeSessionCreateRequest schema (see REALTIME-SESSION-UPDATE-FIELD-MAP.md) does not include
+  // `temperature`; upstream returns unknown_parameter. Older REST/session docs that list temperature
+  // do not apply to this wire shape.
   if (settings.agent?.think?.functions?.length) {
     session.tools = settings.agent.think.functions.map((f) => ({
       type: 'function' as const,

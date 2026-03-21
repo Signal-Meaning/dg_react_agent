@@ -22,7 +22,10 @@ export interface BuildSettingsMessageOptions {
   thinkModel?: string;
   thinkEndpointUrl?: string;
   thinkApiKey?: string;
-  /** Passed to Settings agent.think.provider.temperature (OpenAI Realtime session.update; Issue #538). */
+  /**
+   * Passed to Settings `agent.think.provider.temperature` for component/UI parity (Issue #538).
+   * Not forwarded on OpenAI WebSocket `session.update` — see `REALTIME-SESSION-UPDATE-FIELD-MAP.md`.
+   */
   thinkTemperature?: number;
   /** Passed to Settings agent.think.toolChoice → Realtime session.tool_choice (Issue #535). */
   thinkToolChoice?: ThinkToolChoice;
