@@ -307,9 +307,9 @@ describe('Agent State Message Handling', () => {
       expect(currentState.isUserSpeaking).toBe(false);
       
       jest.advanceTimersByTime(100);
-      // Issue #489: We do not stop an active timeout when agent goes to speaking (avoid stale state).
-      // A timeout may have been started after USER_STOPPED_SPEAKING when state was still idle.
-      expect(idleTimeoutService.isTimeoutActive()).toBe(true); // current design: timeout not stopped
+      // A countdown may have started after USER_STOPPED_SPEAKING while the agent was still idle; entering
+      // speaking must clear it so we do not close mid-turn (see agent-receipt-vs-playback-idle-timeout).
+      expect(idleTimeoutService.isTimeoutActive()).toBe(false);
       
       jest.useRealTimers();
     });
@@ -355,6 +355,65 @@ describe('Agent State Message Handling', () => {
       
       // Now timeout resets should work
       idleTimeoutService.handleEvent({ type: 'MEANINGFUL_USER_ACTIVITY', activity: 'after-idle' });
+    });
+  });
+
+  describe('IdleTimeoutService: idle disconnect countdown vs late assistant "busy" signals', () => {
+    it('keeps idle disconnect countdown when live UI is idle but a stale thinking event arrives', () => {
+      jest.useFakeTimers();
+      const onTimeout = jest.fn();
+      const svc = new IdleTimeoutService({ timeoutMs: 10000, debug: true });
+      svc.onTimeout(onTimeout);
+      svc.setStateGetter(() => ({
+        agentState: 'idle',
+        isPlaying: false,
+        isUserSpeaking: false,
+      }));
+      svc.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      svc.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      svc.handleEvent({ type: 'UTTERANCE_END' });
+      expect(svc.isTimeoutActive()).toBe(true);
+      // Stale hook: AGENT_STATE_CHANGED(thinking) arrives after idle was committed; deferral must not clear timer.
+      svc.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'thinking' });
+      // checkAndStartTimeoutIfNeeded may sync agentState back from stateGetter to idle — timer must still run.
+      expect(svc.isTimeoutActive()).toBe(true);
+      jest.advanceTimersByTime(10001);
+      expect(onTimeout).toHaveBeenCalledTimes(1);
+      jest.useRealTimers();
+      svc.destroy();
+    });
+
+    it('cancels idle disconnect countdown on thinking when there is no live UI snapshot (isolated service)', () => {
+      jest.useFakeTimers();
+      const svc = new IdleTimeoutService({ timeoutMs: 10000, debug: true });
+      svc.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      svc.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      svc.handleEvent({ type: 'UTTERANCE_END' });
+      expect(svc.isTimeoutActive()).toBe(true);
+      svc.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'thinking' });
+      expect(svc.isTimeoutActive()).toBe(false);
+      jest.useRealTimers();
+      svc.destroy();
+    });
+
+    it('cancels idle disconnect countdown when live UI and events both show assistant thinking', () => {
+      jest.useFakeTimers();
+      const svc = new IdleTimeoutService({ timeoutMs: 10000, debug: true });
+      const getterState = { agentState: 'idle' as string, isPlaying: false, isUserSpeaking: false };
+      svc.setStateGetter(() => ({
+        agentState: getterState.agentState,
+        isPlaying: getterState.isPlaying,
+        isUserSpeaking: getterState.isUserSpeaking,
+      }));
+      svc.handleEvent({ type: 'UTTERANCE_END' });
+      svc.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
+      svc.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
+      expect(svc.isTimeoutActive()).toBe(true);
+      getterState.agentState = 'thinking';
+      svc.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'thinking' });
+      expect(svc.isTimeoutActive()).toBe(false);
+      jest.useRealTimers();
+      svc.destroy();
     });
   });
 
@@ -436,13 +495,11 @@ describe('Agent State Message Handling', () => {
       // Clear and test transition to agent speaking
       onIdleTimeoutActiveChange.mockClear();
       
-      // Trigger agent speaking. Issue #489: we do not stop an active timeout on thinking/speaking
-      // to avoid stopping on stale state, so timeout may remain active.
+      // Entering speaking stops any running idle countdown (mid-turn protection).
       testService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'speaking' });
 
-      // Current design: timeout is not stopped when agent goes to speaking (avoid stale state)
-      expect(testService.isTimeoutActive()).toBe(true);
-      // onIdleTimeoutActiveChange is not called with false because we did not stop the timeout
+      expect(testService.isTimeoutActive()).toBe(false);
+      expect(onIdleTimeoutActiveChange).toHaveBeenCalledWith(false);
       
       testService.destroy();
     });
@@ -686,15 +743,14 @@ describe('Agent State Message Handling', () => {
       
       expect(idleTimeoutService.isTimeoutActive()).toBe(true);
       
-      // Agent starts speaking. Issue #489: we do not stop the timeout (avoid stale state).
+      // Agent starts speaking — idle countdown is cleared; it must not fire while the agent speaks.
       idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'speaking' });
-      expect(idleTimeoutService.isTimeoutActive()).toBe(true); // current design: not stopped
+      expect(idleTimeoutService.isTimeoutActive()).toBe(false);
       
-      // Fast-forward - callback will fire (timeout was not stopped)
       jest.advanceTimersByTime(10000);
-      expect(timeoutCallback).toHaveBeenCalledTimes(1);
+      expect(timeoutCallback).not.toHaveBeenCalled();
       
-      // Restart: go back to idle and advance again for a second fire
+      // Restart: go back to idle and advance again for a fire
       timeoutCallback.mockClear();
       idleTimeoutService.handleEvent({ type: 'PLAYBACK_STATE_CHANGED', isPlaying: false });
       idleTimeoutService.handleEvent({ type: 'AGENT_STATE_CHANGED', state: 'idle' });
