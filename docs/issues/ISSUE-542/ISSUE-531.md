@@ -4,7 +4,11 @@
 
 **Epic:** [#542](./README.md) · **TDD bundle:** A (observability)
 
-**Implementation:** **Option B** — when `LOG_LEVEL` / `logLevel` option are unset, `initProxyLogger` sets minimum severity to **error** and always initializes OTel so `emitLog` at ERROR reaches the console exporter.
+## Decision (canonical)
+
+**Option B only:** when `LOG_LEVEL` / `logLevel` are unset, `initProxyLogger` uses a minimum severity of **error** and initializes OTel so ERROR logs (including upstream Realtime `error`) always emit. **Do not** switch to Option A (`console.error` fallback in `emitLog` when the logger is null) unless product explicitly reverses this decision—Option B keeps a single OTel path and consistent attributes.
+
+**Implementation:** matches Option B above (landed on branch `davidrmcgee/epic-542`).
 
 ---
 
@@ -33,7 +37,7 @@ Document in `packages/voice-agent-backend/scripts/openai-proxy/README.md` and/or
 
 ### GREEN
 
-- [x] Implement **Option A** (`console.error` fallback in `emitLog` when logger null and severity ≥ ERROR) **or** **Option B** (default `initProxyLogger` to `error` when env unset); document which in the PR / commit message.
+- [x] Implement **Option B** (default `initProxyLogger` minimum severity to **error** when env/option unset); see **Decision** above.
 - [x] Upstream `error` path continues to use ERROR severity for non-special cases (`server.ts`).
 
 ### REFACTOR
