@@ -163,6 +163,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     /** Issue #489: Prior-session context is no longer sent as conversation items; it is passed in session.update instructions only. */
     /** Issue #414: defer input_audio_buffer.append until after session.updated so session is configured for audio. */
     const pendingAudioQueue: Buffer[] = [];
+    /** Issue #542 #534: defer InjectUserMessage (full client JSON frame) until after session.updated (same readiness as audio). */
+    const pendingInjectTextQueue: Buffer[] = [];
     /** TODO: Not expected to keep. Only forward the first Settings per connection; duplicate Settings (e.g. on reconnect/reload) must not send a second session.update or upstream can error. */
     let hasForwardedSessionUpdate = false;
     /** Issue #489: Last Settings had context (reconnect). On session.updated do not send greeting to client; they already have it. */
@@ -440,6 +442,20 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             clientWs.send(JSON.stringify({ type: 'AgentThinking', content: '' }));
           }
         } else if (msg.type === 'InjectUserMessage') {
+          if (!hasSentSettingsApplied) {
+            pendingInjectTextQueue.push(Buffer.from(raw));
+            emitLog({
+              severityNumber: SeverityNumber.INFO,
+              severityText: 'INFO',
+              body: 'InjectUserMessage deferred (waiting for session.updated)',
+              attributes: {
+                ...connectionAttrs,
+                [ATTR_DIRECTION]: 'client→upstream',
+                'inject.queued_frames': pendingInjectTextQueue.length,
+              },
+            });
+            return;
+          }
           const injectMsg = msg as Parameters<typeof mapInjectUserMessageToConversationItemCreate>[0];
           const itemCreate = mapInjectUserMessageToConversationItemCreate(injectMsg);
           upstream.send(JSON.stringify(itemCreate));
@@ -490,6 +506,14 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           hasPendingAudio = true;
           scheduleAudioCommit();
         }
+      }
+    };
+
+    const flushPendingInjectMessages = () => {
+      while (pendingInjectTextQueue.length > 0) {
+        const buf = pendingInjectTextQueue.shift();
+        if (!buf || upstream.readyState !== WebSocket.OPEN) continue;
+        forwardClientMessage(buf);
       }
     };
 
@@ -606,6 +630,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           if (storedGreeting) storedGreeting = undefined;
           hadContextInLastSettings = false;
+          // Issue #542 #534: text inject before session.updated; then audio (Issue #414).
+          flushPendingInjectMessages();
           // Issue #414: session is now configured for audio; send any append chunks queued before session.updated.
           flushPendingAudio();
         } else if (msg.type === 'response.output_text.done') {

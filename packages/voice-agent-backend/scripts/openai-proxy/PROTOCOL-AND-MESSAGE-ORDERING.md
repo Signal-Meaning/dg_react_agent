@@ -57,6 +57,8 @@ Order: **session.created** (ignored for injection) → **session.updated** (cont
 
 **Audio readiness (Issue #414):** The proxy does **not** send `input_audio_buffer.append` until after `session.updated` has been received. Binary received before `session.updated` is queued and sent in order when the session is ready. This avoids sending audio before the session is configured for it (which can contribute to upstream "server had an error").
 
+**Text inject readiness (Issue #534):** Same gate as audio: **`InjectUserMessage`** is not translated to `conversation.item.create` until after the proxy has received **`session.updated`** (i.e. when `hasSentSettingsApplied` is true). Messages received earlier are queued and flushed in FIFO order before queued binary (inject queue, then audio queue) on `session.updated`.
+
 ### 2.4 Firm audio connection (single source of truth)
 
 A connection is **ready for audio** (firm audio connection) when the proxy has received **session.updated** from upstream — i.e. after the client’s Settings have been applied and the proxy has sent **SettingsApplied** to the client.
@@ -73,7 +75,7 @@ This is the single source of truth for when audio may be sent. Integration tests
 | Client message (text) | Proxy action |
 |------------------------|--------------|
 | **Settings** | Map to `session.update`; send to upstream once per connection **only when no response is active** (Issue #459). If a response is in progress, send `SettingsApplied` only (no `session.update`). On duplicate Settings, send `SettingsApplied` only (no second `session.update`). Store context and greeting when session is updated. |
-| **InjectUserMessage** | Map to `conversation.item.create` (user, `input_text`); send to upstream. Set `pendingItemAddedBeforeResponseCreate = 1`. Send **user echo** (`ConversationText` role `user`) to client. Send `response.create` only after upstream confirms the item (see §4). |
+| **InjectUserMessage** | If **before** `session.updated`: queue the client frame; flush on `session.updated` (Issue #534). Otherwise map to `conversation.item.create` (user, `input_text`); send to upstream. Set `pendingItemAddedBeforeResponseCreate = 1`. Send **user echo** (`ConversationText` role `user`) to client. Send `response.create` only after upstream confirms the item (see §4). |
 | **FunctionCallResponse** | Map to `conversation.item.create` (function_call_output); send to upstream. **Do not** send `response.create` immediately (Issue #462 / #470 / #522): the API still has the previous response (the function-call request) active until it processes our item and sends `response.output_text.done` or `response.done`. Defer `response.create` until we receive one of those events (avoids `conversation_already_has_active_response`; voice-commerce #1066). **Issue #487:** Send **AgentThinking** to the client immediately so the component can clear "waiting for next agent message" and allow idle timeout to run once the turn completes (avoids connection never closing when API is slow or event order differs). |
 | **Other JSON** | Forward to upstream as-is (text). |
 | **Binary** | Treat as PCM; **only after session.updated** send `input_audio_buffer.append` (base64) to upstream (Issue #414: session must be configured for audio first). If binary arrives before session.updated, queue and flush when session.updated is received. Set debounce timer for `input_audio_buffer.commit` + `response.create`. Chunk size and commit timing must respect [OpenAI buffer restrictions](#35-openai-input-audio-buffer-restrictions). |

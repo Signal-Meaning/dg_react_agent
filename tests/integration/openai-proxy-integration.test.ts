@@ -3538,6 +3538,45 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 12000);
 
   /**
+   * Issue #542 #534: InjectUserMessage before Settings must not hit upstream until after session.updated
+   * (same readiness gate as binary audio). Client sends inject first, then Settings; mock delays session.updated
+   * (mockEnforceSessionBeforeContext); assert conversation.item.create only after session.update.
+   */
+  itMockOnly('Issue #534: InjectUserMessage before Settings deferred until session.updated (order vs session.update)', (done) => {
+    mockReceived.length = 0;
+    mockEnforceSessionBeforeContext = true;
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Before settings' }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
+        if (msg.type === 'ConversationText' && msg.role === 'assistant') {
+          const types = mockReceived.map((m) => m.type);
+          const sessionUpdateIdx = types.indexOf('session.update');
+          const itemCreateIdx = types.indexOf('conversation.item.create');
+          expect(sessionUpdateIdx).toBeGreaterThanOrEqual(0);
+          expect(itemCreateIdx).toBeGreaterThan(sessionUpdateIdx);
+          expect(protocolErrors.length).toBe(0);
+          mockEnforceSessionBeforeContext = false;
+          client.close();
+          done();
+        }
+      } catch (e) {
+        mockEnforceSessionBeforeContext = false;
+        done(e as Error);
+      }
+    });
+    client.on('error', (err) => {
+      mockEnforceSessionBeforeContext = false;
+      done(err);
+    });
+  }, 8000);
+
+  /**
    * Protocol §2.1: Client messages queued until upstream open, then drained in order.
    * Client sends Settings then InjectUserMessage immediately; assert upstream receives session.update then conversation.item.create.
    */
