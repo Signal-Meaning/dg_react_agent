@@ -1,6 +1,6 @@
 # Epic #542: Voice Commerce OpenAI proxy defect register (Sections 1–6)
 
-**GitHub:** [#542 Epic: Voice Commerce OpenAI proxy defect register](https://github.com/Signal-Meaning/dg_react_agent/issues/542)
+**GitHub:** [#542 Epic: Voice Commerce OpenAI proxy defect register](https://github.com/Signal-Meaning/dg_react_agent/issues/542) (**closed** — merged via [#543](https://github.com/Signal-Meaning/dg_react_agent/pull/543))
 
 **Labels:** epic, protocol, voice-agent
 
