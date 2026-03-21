@@ -24,6 +24,8 @@ Implement **D** after **C** if you remove passthrough before new Settings fields
 
 Mark a bundle **Done** when every issue in that bundle has all TDD phase boxes checked in its doc (including **Verified**), or deferrals are recorded in that issue’s Notes.
 
+**Bundle D status:** Section 5 **Settings → session** mapping is implemented in code (**#535–#540**, **#538–#539**) with unit tests + `buildSettingsMessage` + component wiring. Keep bundle **D** unchecked until each child’s **Verified** checklist is complete (including optional **real-API** / **E2E** rows where those issues require them).
+
 ---
 
 ## Related docs in this repo
@@ -75,8 +77,8 @@ Check **Area done** when every linked issue’s **Verified** checklist in its do
 | 2 | Section 4 — `InjectUserMessage` gating | [#534](./ISSUE-534.md) | - [x] | Proxy queue landed; optional React enforcement + real-API check open in ISSUE-534 doc |
 | 3 | Section 2 — protocol / Settings + functions | [#532](./ISSUE-532.md) | - [ ] | Mock Section 2b + client close log done; real-API row still open in ISSUE-532 |
 | 4 | Section 3 — JSON hardening | [#533](./ISSUE-533.md) | - [x] | Strict default + `OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH` escape hatch |
-| 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [ ] | Sub-order below |
-| 6 | Section 6 — lifecycle / audit / idempotence | [#541](./ISSUE-541.md) | - [ ] | Partially blocked on 533/534 until those ship |
+| 5 | Section 5 — Settings → session mapping | [#535](./ISSUE-535.md)–[#540](./ISSUE-540.md) | - [ ] | Mapping code + unit tests landed; **Area done** when all child **Verified** boxes closed (real-API/E2E where noted) |
+| 6 | Section 6 — lifecycle / audit / idempotence | [#541](./ISSUE-541.md) | - [ ] | #533 / #534 shipped; scope and sequencing per [ISSUE-541](./ISSUE-541.md) |
 
 ### Section 5 sub-order (within priority 5)
 
@@ -87,4 +89,4 @@ Complete **Verified** on each child doc in this order unless dependencies dictat
 - [x] [#536](./ISSUE-536.md) `output_modalities` (unit + builder; real-API row open in ISSUE-536)
 - [x] [#537](./ISSUE-537.md) `max_output_tokens` (unit + builder; optional real-API row in ISSUE-537)
 - [x] [#539](./ISSUE-539.md) managed prompt id/variables (unit + builder; real-API row open in ISSUE-539)
-- [ ] [#540](./ISSUE-540.md) `session` audio.output
+- [x] [#540](./ISSUE-540.md) `session` audio.output (unit + builder; real-API / test-app E2E row open in ISSUE-540)

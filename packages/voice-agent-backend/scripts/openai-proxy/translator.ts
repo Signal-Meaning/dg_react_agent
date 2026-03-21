@@ -32,6 +32,63 @@ function toSessionMaxOutputTokens(value: unknown): number | undefined {
   return value;
 }
 
+/** OpenAI Realtime `session.audio.output` (RealtimeAudioConfigOutput) — Issue #540. */
+export interface OpenAIRealtimeSessionAudioOutput {
+  format?: { type: string; rate?: number };
+  speed?: number;
+  voice?: string | { id: string };
+}
+
+const REALTIME_OUTPUT_AUDIO_FORMAT_TYPES = new Set(['audio/pcm', 'audio/pcmu', 'audio/pcma']);
+
+/**
+ * Normalize Settings `agent.sessionAudioOutput` → `session.audio.output`.
+ * Invalid fields are dropped; returns undefined if nothing valid remains.
+ */
+export function normalizeSessionAudioOutput(raw: unknown): OpenAIRealtimeSessionAudioOutput | undefined {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const out: OpenAIRealtimeSessionAudioOutput = {};
+
+  const fmt = o.format;
+  if (fmt !== null && typeof fmt === 'object' && !Array.isArray(fmt)) {
+    const f = fmt as Record<string, unknown>;
+    const t = typeof f.type === 'string' ? f.type.trim() : '';
+    if (REALTIME_OUTPUT_AUDIO_FORMAT_TYPES.has(t)) {
+      if (t === 'audio/pcm') {
+        const rate = f.rate;
+        if (rate === undefined || rate === 24000) {
+          out.format = rate === 24000 ? { type: t, rate: 24000 } : { type: t };
+        } else {
+          out.format = { type: t };
+        }
+      } else {
+        out.format = { type: t };
+      }
+    }
+  }
+
+  const speed = o.speed;
+  if (typeof speed === 'number' && Number.isFinite(speed) && speed >= 0.25 && speed <= 1.5) {
+    out.speed = speed;
+  }
+
+  const voice = o.voice;
+  if (typeof voice === 'string' && voice.trim()) {
+    out.voice = voice.trim();
+  } else if (voice !== null && typeof voice === 'object' && !Array.isArray(voice)) {
+    const vid = (voice as Record<string, unknown>).id;
+    if (typeof vid === 'string' && vid.trim()) {
+      out.voice = { id: vid.trim() };
+    }
+  }
+
+  if (out.format === undefined && out.speed === undefined && out.voice === undefined) {
+    return undefined;
+  }
+  return out;
+}
+
 /**
  * OpenAI Realtime `session.prompt` (ResponsePrompt: id, optional variables, optional version) — Issue #539.
  * @see https://platform.openai.com/docs/api-reference/realtime-client-events/session/update
@@ -88,6 +145,8 @@ export interface ComponentSettings {
     context?: { messages?: Array<{ type?: string; role: 'user' | 'assistant'; content: string }> };
     /** Optional greeting; proxy injects as initial assistant message after session.updated (Issue #381) */
     greeting?: string;
+    /** Issue #540: maps to Realtime `session.audio.output` when valid after normalization. */
+    sessionAudioOutput?: OpenAIRealtimeSessionAudioOutput;
   };
 }
 
@@ -110,6 +169,8 @@ export interface OpenAISessionUpdate {
         /** Enable input audio transcription for conversation.item.input_audio_transcription.* (Issue #414). */
         transcription?: { model: string; language?: string; prompt?: string };
       };
+      /** Issue #540: TTS/output format, speed, voice (integrator-controlled). */
+      output?: OpenAIRealtimeSessionAudioOutput;
     };
     tools?: Array<{ type: 'function'; name: string; description?: string; parameters?: unknown }>;
     /** Issue #535: how the model selects tools (`auto` | `none` | `required` or force `{ type: 'function', name }`). */
@@ -344,6 +405,10 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
   const managed = normalizeManagedPromptForSession(settings.agent?.think?.managedPrompt);
   if (managed !== undefined) {
     session.prompt = managed;
+  }
+  const sessionOut = normalizeSessionAudioOutput(settings.agent?.sessionAudioOutput);
+  if (sessionOut !== undefined) {
+    session.audio = { ...session.audio, output: sessionOut };
   }
   return { type: 'session.update', session };
 }

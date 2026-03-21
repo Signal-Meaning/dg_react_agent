@@ -95,6 +95,15 @@ export interface ThinkManagedPrompt {
 }
 
 /**
+ * OpenAI Realtime `session.audio.output` (voice / speed / format) — Issue #540.
+ */
+export interface SessionAudioOutputSettings {
+  format?: { type: string; rate?: number };
+  speed?: number;
+  voice?: string | { id: string };
+}
+
+/**
  * Conversation message for context preservation
  */
 export interface ConversationMessage {
@@ -178,6 +187,8 @@ export interface AgentSettingsMessage {
     context?: ConversationMessage[]; // NEW: conversation context for lazy reconnection
     /** Idle timeout in ms; shared with backends (e.g. OpenAI proxy session.update). See AgentOptions.idleTimeoutMs. */
     idleTimeoutMs?: number;
+    /** OpenAI proxy: maps to Realtime `session.audio.output` (Issue #540). */
+    sessionAudioOutput?: SessionAudioOutputSettings;
   };
 }
 
@@ -455,6 +466,8 @@ export interface AgentOptions {
   thinkMaxOutputTokens?: number;
   /** OpenAI proxy: Realtime `session.prompt` managed template (Issue #539). */
   thinkManagedPrompt?: ThinkManagedPrompt;
+  /** OpenAI proxy: Realtime `session.audio.output` (Issue #540). */
+  sessionAudioOutput?: SessionAudioOutputSettings;
   instructions?: string; // Base instructions for the agent
   
   // Speak settings

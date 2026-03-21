@@ -341,6 +341,85 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(out.session.prompt).toEqual({ id: 'p1' });
     });
 
+    it('merges agent.sessionAudioOutput into session.audio.output; preserves proxy input defaults (Issue #540)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'Help.' },
+          sessionAudioOutput: { voice: 'marin', speed: 1.1 },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.audio?.input).toEqual({
+        turn_detection: null,
+        format: { type: 'audio/pcm', rate: 24000 },
+        transcription: { model: 'gpt-4o-transcribe', language: 'en', prompt: '' },
+      });
+      expect(out.session.audio?.output).toEqual({ voice: 'marin', speed: 1.1 });
+    });
+
+    it('maps sessionAudioOutput.format for pcm and pcmu (Issue #540)', () => {
+      const pcm = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'Help.' },
+          sessionAudioOutput: { format: { type: 'audio/pcm', rate: 24000 } },
+        },
+      });
+      expect(pcm.session.audio?.output?.format).toEqual({ type: 'audio/pcm', rate: 24000 });
+      const pcmBare = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'Help.' },
+          sessionAudioOutput: { format: { type: 'audio/pcm' } },
+        },
+      });
+      expect(pcmBare.session.audio?.output?.format).toEqual({ type: 'audio/pcm' });
+      const pcmu = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'Help.' },
+          sessionAudioOutput: { format: { type: 'audio/pcmu' } },
+        },
+      });
+      expect(pcmu.session.audio?.output?.format).toEqual({ type: 'audio/pcmu' });
+    });
+
+    it('omits session.audio.output when sessionAudioOutput absent or yields no valid fields (Issue #540)', () => {
+      const minimal = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.' } },
+      };
+      expect(mapSettingsToSessionUpdate(minimal).session.audio).not.toHaveProperty('output');
+      const badSpeed = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.' }, sessionAudioOutput: { speed: NaN } },
+      });
+      expect(badSpeed.session.audio).not.toHaveProperty('output');
+    });
+
+    it('omits invalid sessionAudioOutput.format type; keeps valid voice (Issue #540)', () => {
+      const out = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'Help.' },
+          sessionAudioOutput: { format: { type: 'audio/wav' }, voice: 'alloy' },
+        },
+      });
+      expect(out.session.audio?.output).toEqual({ voice: 'alloy' });
+    });
+
+    it('maps custom voice object on sessionAudioOutput (Issue #540)', () => {
+      const out = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: {
+          think: { prompt: 'Help.' },
+          sessionAudioOutput: { voice: { id: 'voice_custom1' } },
+        },
+      });
+      expect(out.session.audio?.output).toEqual({ voice: { id: 'voice_custom1' } });
+    });
+
     it('maps multiple functions to session.update tools (OpenAI API shape)', () => {
       const settings = {
         type: 'Settings' as const,

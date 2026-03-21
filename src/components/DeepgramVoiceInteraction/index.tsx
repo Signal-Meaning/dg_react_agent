@@ -2138,6 +2138,7 @@ function DeepgramVoiceInteraction(
         thinkOutputModalities: currentAgentOptions.thinkOutputModalities,
         thinkMaxOutputTokens: currentAgentOptions.thinkMaxOutputTokens,
         thinkManagedPrompt: currentAgentOptions.thinkManagedPrompt,
+        sessionAudioOutput: currentAgentOptions.sessionAudioOutput,
         functions: currentAgentOptions.functions,
         listenModel: currentAgentOptions.listenModel,
         greeting: currentAgentOptions.greeting,

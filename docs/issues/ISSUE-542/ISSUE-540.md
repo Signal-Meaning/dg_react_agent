@@ -8,39 +8,53 @@
 
 ## Problem (Section 5, row 6)
 
-Output-side session audio (`session.audio.output` or current equivalent) should be configurable via a stable `Settings` surface instead of ad hoc or rejected historical fields.
+Output-side session audio (`session.audio.output` in Realtime **RealtimeAudioConfig**) should be configurable via a stable **Settings** surface instead of ad hoc or rejected historical fields.
 
-**Report note:** Document (not hide) hardcoded `session.audio.input` fields in the translator today — `turn_detection`, `format`, `transcription` — used for proxy/VAD/commit. Expose on `Settings` if integrators need control, **not** via Section 3 passthrough.
+**Report note:** Proxy-owned **`session.audio.input`** (`turn_detection`, `format`, `transcription`) stays documented and defaulted in `mapSettingsToSessionUpdate` for #414 / #451; exposing **input** on Settings is a follow-up if needed, not Section 3 passthrough.
+
+---
+
+## Decision
+
+- **`Settings.agent.sessionAudioOutput`** (camelCase, sibling of `think`) maps to **`session.audio.output`** after **`normalizeSessionAudioOutput`**.
+- Allowed **`format.type`:** `audio/pcm` (optional `rate` only `24000` when present), `audio/pcmu`, `audio/pcma`. Other types dropped.
+- **`speed`:** finite number in **[0.25, 1.5]** inclusive; otherwise omitted.
+- **`voice`:** non-empty trimmed string, or object **`{ id: string }`** with non-empty trimmed `id`.
+- **`AgentOptions.sessionAudioOutput`**, **`buildSettingsMessage`** (when `isOpenAIProxy`), and **`DeepgramVoiceInteraction`** pass the field through.
+- **`session.audio.input`** is unchanged when output is set (merged onto existing `session.audio`).
 
 ---
 
 ## TDD plan
 
-**Phases:** - [ ] RED · - [ ] GREEN · - [ ] REFACTOR · - [ ] Verified (all items below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (real API / E2E below)
 
 ### RED
 
-- [ ] Unit: Settings drives `session.audio.output` (or current API equivalent); assert merged payload.
-- [ ] Unit or doc snapshot: input defaults (`turn_detection`, format, transcription) documented or optionally configurable without breaking #414 / #451.
+- [x] Unit: `sessionAudioOutput` → merged `session.audio` with stable `input` + expected `output`.
+- [x] Unit: invalid fields dropped; no `output` key when nothing valid.
 
 ### GREEN
 
-- [ ] Merge integrator output settings with safe input defaults in `mapSettingsToSessionUpdate`.
+- [x] `normalizeSessionAudioOutput`, `mapSettingsToSessionUpdate`, types, builder, component.
 
 ### REFACTOR
 
-- [ ] README table: audio input (proxy defaults) vs output (integrator); link `PROTOCOL-AND-MESSAGE-ORDERING.md`.
+- [x] Proxy README table (input vs output); PROTOCOL Settings row.
 
 ### Verified
 
-- [ ] Unit tests pass.
-- [ ] **Real API / E2E:** TTS/audio path regression check in test-app proxy mode.
+- [x] Unit tests pass.
+- [ ] **Real API / E2E:** TTS/audio path regression in test-app proxy mode (per original issue).
 
 ---
 
 ## Files
 
-- `packages/voice-agent-backend/scripts/openai-proxy/translator.ts` — `mapSettingsToSessionUpdate` `session.audio`
+- `packages/voice-agent-backend/scripts/openai-proxy/translator.ts` — `OpenAIRealtimeSessionAudioOutput`, `normalizeSessionAudioOutput`, `mapSettingsToSessionUpdate`
+- `src/types/agent.ts` — `SessionAudioOutputSettings`, `AgentSettingsMessage`, `AgentOptions`
+- `src/utils/buildSettingsMessage.ts`, `src/components/DeepgramVoiceInteraction/index.tsx`
+- `tests/openai-proxy.test.ts`, `tests/buildSettingsMessage.test.ts`
 - `packages/voice-agent-backend/scripts/openai-proxy/README.md`, `PROTOCOL-AND-MESSAGE-ORDERING.md`
-- `tests/openai-proxy.test.ts`
-- Possible E2E: `test-app/tests/e2e/` for proxy audio path
+
+**Canonical API:** [session.update](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update) → `audio` → **RealtimeAudioConfig** `output` (**RealtimeAudioConfigOutput**).

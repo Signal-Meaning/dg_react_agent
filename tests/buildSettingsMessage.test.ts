@@ -225,6 +225,27 @@ describe('buildSettingsMessage', () => {
     expect('managedPrompt' in blank.agent.think).toBe(false);
   });
 
+  it('includes agent.sessionAudioOutput when set and isOpenAIProxy (Issue #540)', () => {
+    const msg = buildSettingsMessage(
+      { ...minimalOptions, sessionAudioOutput: { voice: 'cedar', speed: 0.9 } },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.sessionAudioOutput).toEqual({ voice: 'cedar', speed: 0.9 });
+  });
+
+  it('omits agent.sessionAudioOutput when not OpenAI proxy or undefined (Issue #540)', () => {
+    const direct = buildSettingsMessage(
+      { ...minimalOptions, sessionAudioOutput: { voice: 'alloy' } },
+      { isOpenAIProxy: false, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('sessionAudioOutput' in direct.agent).toBe(false);
+    const proxyNoOpt = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('sessionAudioOutput' in proxyNoOpt.agent).toBe(false);
+  });
+
   it('sets speak provider model from options.voice', () => {
     const msg = buildSettingsMessage(
       { ...minimalOptions, voice: 'aura-luna-en' },

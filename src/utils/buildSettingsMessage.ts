@@ -5,7 +5,13 @@
  * No side effects; used by sendAgentSettings in the component.
  */
 
-import type { AgentFunction, ThinkManagedPrompt, ThinkOutputModality, ThinkToolChoice } from '../types/agent';
+import type {
+  AgentFunction,
+  SessionAudioOutputSettings,
+  ThinkManagedPrompt,
+  ThinkOutputModality,
+  ThinkToolChoice,
+} from '../types/agent';
 import { filterFunctionsForSettings } from './function-utils';
 
 export interface BuildSettingsMessageOptions {
@@ -26,6 +32,8 @@ export interface BuildSettingsMessageOptions {
   thinkMaxOutputTokens?: number;
   /** Passed to Settings agent.think.managedPrompt → Realtime session.prompt (Issue #539). */
   thinkManagedPrompt?: ThinkManagedPrompt;
+  /** OpenAI proxy: Settings agent.sessionAudioOutput → Realtime session.audio.output (Issue #540). */
+  sessionAudioOutput?: SessionAudioOutputSettings;
   functions?: AgentFunction[];
   listenModel?: string;
   greeting?: string;
@@ -57,6 +65,7 @@ export interface SettingsMessagePayload {
       functions?: AgentFunction[];
     };
     speak: { provider: { type: string; model: string } };
+    sessionAudioOutput?: SessionAudioOutputSettings;
     [key: string]: unknown;
   };
 }
@@ -81,6 +90,9 @@ export function buildSettingsMessage(
     },
     agent: {
       ...(isOpenAIProxy ? { idleTimeoutMs: options.idleTimeoutMs ?? defaultIdleTimeoutMs } : {}),
+      ...(isOpenAIProxy && options.sessionAudioOutput !== undefined && options.sessionAudioOutput !== null
+        ? { sessionAudioOutput: options.sessionAudioOutput }
+        : {}),
       language: options.language || 'en',
       ...(options.listenModel
         ? {
