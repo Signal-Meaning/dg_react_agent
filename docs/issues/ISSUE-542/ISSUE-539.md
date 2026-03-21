@@ -8,37 +8,53 @@
 
 ## Problem (Section 5, row 5)
 
-Realtime API supports managed **prompt** identifiers and variables distinct from raw `instructions`. Voice Agent `Settings` does not yet map that surface, so integrators cannot use managed prompts without passthrough.
+Realtime API supports managed **prompt** identifiers and variables distinct from raw `instructions`. Voice Agent `Settings` did not map that surface, so integrators could not use managed prompts without passthrough.
+
+---
+
+## Decision (field names — OpenAI Realtime)
+
+Per [session.update](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update), the session object includes **`prompt`**: a **ResponsePrompt** with:
+
+- **`id`** (string, required in API; we require non-empty after trim)
+- **`variables`** (optional map; values may be strings or structured input types per OpenAI — we accept a JSON object and forward it)
+- **`version`** (optional string; empty after trim is omitted)
+
+Component Settings path: **`agent.think.managedPrompt`** → **`session.prompt`**.
+
+**Precedence:** We **continue** to send **`instructions`** from `buildInstructionsWithContext` (`think.prompt` + serialized context + function hint). **`session.prompt`** is added **in addition** when `managedPrompt` is valid. Upstream defines how template and instructions combine; use minimal `think.prompt` / `instructions` if the managed template should dominate (see proxy README).
 
 ---
 
 ## TDD plan
 
-**Phases:** - [ ] RED · - [ ] GREEN · - [ ] REFACTOR · - [ ] Verified (all items below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [ ] Verified (real API row below)
 
 ### RED
 
-- [ ] Docs spike: lock OpenAI Realtime `session.update` field names for managed prompt id/variables (no guessing).
-- [ ] Unit: agreed `Settings` shape → `mapSettingsToSessionUpdate` emits correct `session` subtree; fails until implemented.
+- [x] Unit: fixture `managedPrompt` → `session.prompt` shape; absent / invalid id → `prompt` omitted; invalid `variables` shape → omitted, id retained.
 
 ### GREEN
 
-- [ ] Types + mapping; precedence vs `buildInstructionsWithContext` documented in code + README.
+- [x] `normalizeManagedPromptForSession`, `ComponentSettings` / `OpenAISessionUpdate`, `mapSettingsToSessionUpdate`, types, `buildSettingsMessage`, component.
 
 ### REFACTOR
 
-- [ ] Single source of truth documented if managed prompt supersedes inline instructions.
+- [x] Proxy README: `instructions` vs managed `prompt`.
 
 ### Verified
 
-- [ ] Unit tests with fixture payloads.
-- [ ] **Real API** before ship: session update with prompt reference accepted (account flags as needed).
+- [x] Unit tests pass.
+- [ ] **Real API:** session update with a valid prompt id accepted (account / feature flags as required).
 
 ---
 
 ## Files
 
-- `packages/voice-agent-backend/scripts/openai-proxy/translator.ts`
-- Component Settings types and builder
-- `tests/openai-proxy.test.ts`
-- `docs/` or proxy README — mapping rules vs inline prompt
+- `packages/voice-agent-backend/scripts/openai-proxy/translator.ts` — `OpenAIRealtimeSessionPrompt`, mapping
+- `src/types/agent.ts` — `ThinkManagedPrompt`, `AgentSettingsMessage`, `AgentOptions`
+- `src/utils/buildSettingsMessage.ts`, `src/components/DeepgramVoiceInteraction/index.tsx`
+- `tests/openai-proxy.test.ts`, `tests/buildSettingsMessage.test.ts`
+- `packages/voice-agent-backend/scripts/openai-proxy/README.md`, `PROTOCOL-AND-MESSAGE-ORDERING.md`
+
+**Canonical API:** [session.update](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update) `prompt` (ResponsePrompt).

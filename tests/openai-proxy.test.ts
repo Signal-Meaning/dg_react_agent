@@ -273,6 +273,74 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(mapSettingsToSessionUpdate(settings).session).not.toHaveProperty('max_output_tokens');
     });
 
+    it('maps agent.think.managedPrompt to session.prompt id/variables/version (Issue #539)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            managedPrompt: {
+              id: 'pmpt_abc',
+              version: '2',
+              variables: { customer_name: 'Ada' },
+            },
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.prompt).toEqual({
+        id: 'pmpt_abc',
+        version: '2',
+        variables: { customer_name: 'Ada' },
+      });
+    });
+
+    it('trims managedPrompt id and version; omits empty version (Issue #539)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            managedPrompt: { id: '  pmpt_x  ', version: '  v1  ' },
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.prompt).toEqual({ id: 'pmpt_x', version: 'v1' });
+      const noVersion = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.', managedPrompt: { id: 'p1', version: '   ' } } },
+      });
+      expect(noVersion.session.prompt).toEqual({ id: 'p1' });
+    });
+
+    it('omits session.prompt when managedPrompt missing or id empty (Issue #539)', () => {
+      const minimal = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.' } },
+      };
+      expect(mapSettingsToSessionUpdate(minimal).session).not.toHaveProperty('prompt');
+      const emptyId = {
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'Help.', managedPrompt: { id: '  ' } } },
+      };
+      expect(mapSettingsToSessionUpdate(emptyId).session).not.toHaveProperty('prompt');
+    });
+
+    it('ignores invalid managedPrompt.variables; still emits prompt with id (Issue #539)', () => {
+      const settings = {
+        type: 'Settings' as const,
+        agent: {
+          think: {
+            prompt: 'Help.',
+            managedPrompt: { id: 'p1', variables: [1, 2] as unknown as Record<string, unknown> },
+          },
+        },
+      };
+      const out = mapSettingsToSessionUpdate(settings);
+      expect(out.session.prompt).toEqual({ id: 'p1' });
+    });
+
     it('maps multiple functions to session.update tools (OpenAI API shape)', () => {
       const settings = {
         type: 'Settings' as const,

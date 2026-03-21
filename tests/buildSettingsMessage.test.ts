@@ -201,6 +201,30 @@ describe('buildSettingsMessage', () => {
     }
   });
 
+  it('includes agent.think.managedPrompt when thinkManagedPrompt is valid (Issue #539)', () => {
+    const msg = buildSettingsMessage(
+      {
+        ...minimalOptions,
+        thinkManagedPrompt: { id: 'pmpt_1', version: 'a', variables: { x: 'y' } },
+      },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect(msg.agent.think.managedPrompt).toEqual({ id: 'pmpt_1', version: 'a', variables: { x: 'y' } });
+  });
+
+  it('omits agent.think.managedPrompt when id missing or blank (Issue #539)', () => {
+    const noProp = buildSettingsMessage(
+      { ...minimalOptions },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('managedPrompt' in noProp.agent.think).toBe(false);
+    const blank = buildSettingsMessage(
+      { ...minimalOptions, thinkManagedPrompt: { id: '  ' } },
+      { isOpenAIProxy: true, defaultIdleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS }
+    );
+    expect('managedPrompt' in blank.agent.think).toBe(false);
+  });
+
   it('sets speak provider model from options.voice', () => {
     const msg = buildSettingsMessage(
       { ...minimalOptions, voice: 'aura-luna-en' },

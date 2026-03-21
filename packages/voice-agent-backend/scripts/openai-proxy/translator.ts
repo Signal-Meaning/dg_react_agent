@@ -32,6 +32,37 @@ function toSessionMaxOutputTokens(value: unknown): number | undefined {
   return value;
 }
 
+/**
+ * OpenAI Realtime `session.prompt` (ResponsePrompt: id, optional variables, optional version) — Issue #539.
+ * @see https://platform.openai.com/docs/api-reference/realtime-client-events/session/update
+ */
+export interface OpenAIRealtimeSessionPrompt {
+  id: string;
+  variables?: Record<string, unknown>;
+  version?: string;
+}
+
+/**
+ * Normalize Settings `agent.think.managedPrompt` → API `session.prompt`.
+ * Invalid shapes omit the whole reference (no partial prompt with empty id).
+ */
+function normalizeManagedPromptForSession(raw: unknown): OpenAIRealtimeSessionPrompt | undefined {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const id = typeof o.id === 'string' ? o.id.trim() : '';
+  if (!id) return undefined;
+  const out: OpenAIRealtimeSessionPrompt = { id };
+  if (typeof o.version === 'string') {
+    const v = o.version.trim();
+    if (v) out.version = v;
+  }
+  const vars = o.variables;
+  if (vars !== undefined && vars !== null && typeof vars === 'object' && !Array.isArray(vars)) {
+    out.variables = vars as Record<string, unknown>;
+  }
+  return out;
+}
+
 /** Component message: Settings (outgoing) */
 export interface ComponentSettings {
   type: 'Settings';
@@ -48,6 +79,8 @@ export interface ComponentSettings {
       outputModalities?: OpenAIRealtimeOutputModality[];
       /** Issue #537: maps to Realtime `session.max_output_tokens` when a positive safe integer. */
       maxOutputTokens?: number;
+      /** Issue #539: maps to Realtime `session.prompt` (managed prompt id / variables / version). */
+      managedPrompt?: OpenAIRealtimeSessionPrompt;
       functions?: Array<{ name: string; description?: string; parameters?: unknown }>;
     };
     speak?: { provider?: { voice?: string } };
@@ -85,6 +118,8 @@ export interface OpenAISessionUpdate {
     output_modalities?: OpenAIRealtimeOutputModality[];
     /** Issue #537: cap generated output tokens (separate from context window / instructions size). */
     max_output_tokens?: number;
+    /** Issue #539: Dashboard / reusable prompt template reference (ResponsePrompt). */
+    prompt?: OpenAIRealtimeSessionPrompt;
     [key: string]: unknown;
   };
 }
@@ -303,6 +338,12 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
   const maxOut = toSessionMaxOutputTokens(settings.agent?.think?.maxOutputTokens);
   if (maxOut !== undefined) {
     session.max_output_tokens = maxOut;
+  }
+  // Issue #539: managed prompt is independent of inline `instructions` (still built above).
+  // Upstream merges per OpenAI Realtime; use empty `think.prompt` / instructions if you want template-only behavior.
+  const managed = normalizeManagedPromptForSession(settings.agent?.think?.managedPrompt);
+  if (managed !== undefined) {
+    session.prompt = managed;
   }
   return { type: 'session.update', session };
 }

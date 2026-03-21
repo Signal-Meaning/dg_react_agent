@@ -5,7 +5,7 @@
  * No side effects; used by sendAgentSettings in the component.
  */
 
-import type { AgentFunction, ThinkOutputModality, ThinkToolChoice } from '../types/agent';
+import type { AgentFunction, ThinkManagedPrompt, ThinkOutputModality, ThinkToolChoice } from '../types/agent';
 import { filterFunctionsForSettings } from './function-utils';
 
 export interface BuildSettingsMessageOptions {
@@ -24,6 +24,8 @@ export interface BuildSettingsMessageOptions {
   thinkOutputModalities?: ThinkOutputModality[];
   /** Passed to Settings agent.think.maxOutputTokens → Realtime session.max_output_tokens (Issue #537). */
   thinkMaxOutputTokens?: number;
+  /** Passed to Settings agent.think.managedPrompt → Realtime session.prompt (Issue #539). */
+  thinkManagedPrompt?: ThinkManagedPrompt;
   functions?: AgentFunction[];
   listenModel?: string;
   greeting?: string;
@@ -50,6 +52,7 @@ export interface SettingsMessagePayload {
       toolChoice?: ThinkToolChoice;
       outputModalities?: ThinkOutputModality[];
       maxOutputTokens?: number;
+      managedPrompt?: ThinkManagedPrompt;
       endpoint?: unknown;
       functions?: AgentFunction[];
     };
@@ -68,6 +71,7 @@ export function buildSettingsMessage(
   const { isOpenAIProxy, defaultIdleTimeoutMs } = config;
   const effectiveContext = options.context;
   const hasContextMessages = (effectiveContext?.messages?.length ?? 0) > 0;
+  const managedPrompt = pickThinkManagedPromptForSettings(options.thinkManagedPrompt);
 
   return {
     type: 'Settings',
@@ -115,6 +119,7 @@ export function buildSettingsMessage(
         Number.isSafeInteger(options.thinkMaxOutputTokens)
           ? { maxOutputTokens: options.thinkMaxOutputTokens }
           : {}),
+        ...(managedPrompt ? { managedPrompt } : {}),
       },
       speak: {
         provider: {
@@ -126,4 +131,23 @@ export function buildSettingsMessage(
       context: effectiveContext,
     },
   };
+}
+
+/** Mirrors proxy `normalizeManagedPromptForSession` so Settings JSON matches translator expectations (Issue #539). */
+function pickThinkManagedPromptForSettings(raw: ThinkManagedPrompt | undefined): ThinkManagedPrompt | undefined {
+  if (!raw || typeof raw.id !== 'string' || !raw.id.trim()) return undefined;
+  const id = raw.id.trim();
+  const out: ThinkManagedPrompt = { id };
+  if (typeof raw.version === 'string' && raw.version.trim()) {
+    out.version = raw.version.trim();
+  }
+  if (
+    raw.variables !== undefined &&
+    raw.variables !== null &&
+    typeof raw.variables === 'object' &&
+    !Array.isArray(raw.variables)
+  ) {
+    out.variables = raw.variables;
+  }
+  return out;
 }

@@ -19,14 +19,16 @@
 
 ## Translator exports
 
-- `mapSettingsToSessionUpdate(settings)` – component Settings → OpenAI `session.update` (maps `agent.think.provider.temperature` → `session.temperature` when set — Issue #538; `agent.think.toolChoice` → `session.tool_choice` when set — Issue #535; non-empty validated `agent.think.outputModalities` → `session.output_modalities` — Issue #536; positive safe-integer `agent.think.maxOutputTokens` → `session.max_output_tokens` — Issue #537)
-
-**`max_output_tokens` vs context:** `session.max_output_tokens` caps **generated** tokens in the model reply. It does not enlarge the context window or replace staying within model limits for `instructions` and conversation history (Issue #537).
+- `mapSettingsToSessionUpdate(settings)` – component Settings → OpenAI `session.update` (maps `agent.think.provider.temperature` → `session.temperature` when set — Issue #538; `agent.think.toolChoice` → `session.tool_choice` when set — Issue #535; non-empty validated `agent.think.outputModalities` → `session.output_modalities` — Issue #536; positive safe-integer `agent.think.maxOutputTokens` → `session.max_output_tokens` — Issue #537; validated `agent.think.managedPrompt` → `session.prompt` — Issue #539)
 - `mapInjectUserMessageToConversationItemCreate(msg)` – component InjectUserMessage → OpenAI `conversation.item.create`
 - `mapSessionUpdatedToSettingsApplied(event)` – OpenAI `session.updated` → component SettingsApplied
 - `mapGreetingToConversationItemCreate(greeting)` – greeting string → OpenAI `conversation.item.create` (assistant); used after session.updated (Issue #381)
 - `mapGreetingToConversationText(greeting)` – greeting string → component ConversationText (assistant); sent to component after session.updated
 - `mapErrorToComponentError(event)` – OpenAI `error` → component Error
+
+**`max_output_tokens` vs context:** `session.max_output_tokens` caps **generated** tokens in the model reply. It does not enlarge the context window or replace staying within model limits for `instructions` and conversation history (Issue #537).
+
+**Managed `session.prompt` vs `instructions`:** Inline instructions are still built from `think.prompt` and optional context (see `buildInstructionsWithContext`). When `managedPrompt` is set, both `instructions` and `session.prompt` are sent; OpenAI Realtime merges behavior per API. Prefer empty or minimal `think.prompt` if the template should be the primary system definition (Issue #539).
 
 ## Server
 

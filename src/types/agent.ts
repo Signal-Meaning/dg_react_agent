@@ -86,6 +86,15 @@ export type ThinkToolChoice =
 export type ThinkOutputModality = 'text' | 'audio';
 
 /**
+ * OpenAI Realtime managed prompt (`session.prompt` / ResponsePrompt) — Issue #539.
+ */
+export interface ThinkManagedPrompt {
+  id: string;
+  version?: string;
+  variables?: Record<string, unknown>;
+}
+
+/**
  * Conversation message for context preservation
  */
 export interface ConversationMessage {
@@ -147,6 +156,8 @@ export interface AgentSettingsMessage {
       outputModalities?: ThinkOutputModality[];
       /** OpenAI proxy: maps to Realtime `session.max_output_tokens` when a positive safe integer (Issue #537). */
       maxOutputTokens?: number;
+      /** OpenAI proxy: maps to Realtime `session.prompt` (Issue #539). */
+      managedPrompt?: ThinkManagedPrompt;
     };
     speak?: {
       provider: {
@@ -442,6 +453,8 @@ export interface AgentOptions {
   thinkOutputModalities?: ThinkOutputModality[];
   /** OpenAI proxy: Realtime `session.max_output_tokens` (Issue #537). */
   thinkMaxOutputTokens?: number;
+  /** OpenAI proxy: Realtime `session.prompt` managed template (Issue #539). */
+  thinkManagedPrompt?: ThinkManagedPrompt;
   instructions?: string; // Base instructions for the agent
   
   // Speak settings
