@@ -215,12 +215,27 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       hasReceivedOutputAudioDeltaForCurrentResponse = false;
     };
 
-    /** Issue #522: Send deferred response.create after function_call_output (REQUIRED-UPSTREAM-CONTRACT.md). Clears timeout, resets flag, sends response.create, calls onResponseStarted. Call only when pendingResponseCreateAfterFunctionCallOutput is true. */
-    const sendDeferredResponseCreate = (): void => {
-      if (deferredResponseCreateTimeoutId) {
+    /** Clear debounce timer and null handle (avoids stale timer ids; Issue #542 follow-up). */
+    const clearAudioCommitDebounce = (): void => {
+      if (audioCommitTimer != null) {
+        clearTimeout(audioCommitTimer);
+        audioCommitTimer = null;
+      }
+    };
+    const clearDeferredResponseCreateTimer = (): void => {
+      if (deferredResponseCreateTimeoutId != null) {
         clearTimeout(deferredResponseCreateTimeoutId);
         deferredResponseCreateTimeoutId = null;
       }
+    };
+    const clearProxyConnectionTimers = (): void => {
+      clearAudioCommitDebounce();
+      clearDeferredResponseCreateTimer();
+    };
+
+    /** Issue #522: Send deferred response.create after function_call_output (REQUIRED-UPSTREAM-CONTRACT.md). Clears timeout, resets flag, sends response.create, calls onResponseStarted. Call only when pendingResponseCreateAfterFunctionCallOutput is true. */
+    const sendDeferredResponseCreate = (): void => {
+      clearDeferredResponseCreateTimer();
       pendingResponseCreateAfterFunctionCallOutput = false;
       upstream.send(JSON.stringify({ type: 'response.create' }));
       onResponseStarted();
@@ -259,7 +274,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     };
 
     const scheduleAudioCommit = () => {
-      if (audioCommitTimer) clearTimeout(audioCommitTimer);
+      clearAudioCommitDebounce();
       audioCommitTimer = setTimeout(() => {
         audioCommitTimer = null;
         if (
@@ -289,22 +304,26 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       }, INPUT_AUDIO_COMMIT_DEBOUNCE_MS);
     };
 
+    /** `ws` emits this when upstream socket is closed before `open` (often client leg closed first). */
+    const WS_CLOSED_BEFORE_OPEN = 'WebSocket was closed before the connection was established';
+
     upstream.on('error', (err) => {
+      const errMsg = (err as Error).message;
+      const handshakeAborted = errMsg === WS_CLOSED_BEFORE_OPEN;
       emitLog({
-        severityNumber: SeverityNumber.ERROR,
-        severityText: 'ERROR',
-        body: (err as Error).message,
+        severityNumber: handshakeAborted ? SeverityNumber.INFO : SeverityNumber.ERROR,
+        severityText: handshakeAborted ? 'INFO' : 'ERROR',
+        body: handshakeAborted
+          ? `${errMsg} (upstream connect aborted; often client disconnected before handshake finished)`
+          : errMsg,
         attributes: {
           ...connectionAttrs,
           [ATTR_DIRECTION]: 'upstream',
-          [ATTR_ERROR_MESSAGE]: (err as Error).message,
+          [ATTR_ERROR_MESSAGE]: errMsg,
+          ...(handshakeAborted ? { upstream_handshake_aborted: '1' } : {}),
         },
       });
-      if (audioCommitTimer) clearTimeout(audioCommitTimer);
-      if (deferredResponseCreateTimeoutId) {
-        clearTimeout(deferredResponseCreateTimeoutId);
-        deferredResponseCreateTimeoutId = null;
-      }
+      clearProxyConnectionTimers();
       clientWs.close();
     });
     upstream.on('close', (code, reason) => {
@@ -319,11 +338,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           [ATTR_UPSTREAM_CLOSE_REASON]: reason?.toString() ?? '',
         },
       });
-      if (audioCommitTimer) clearTimeout(audioCommitTimer);
-      if (deferredResponseCreateTimeoutId) {
-        clearTimeout(deferredResponseCreateTimeoutId);
-        deferredResponseCreateTimeoutId = null;
-      }
+      clearProxyConnectionTimers();
     });
 
     const forwardClientMessage = (raw: Buffer) => {
@@ -433,7 +448,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           // Enforce required upstream contract (REQUIRED-UPSTREAM-CONTRACT.md): if API never sends completion,
           // unstick after timeout so the client can get a next turn instead of hanging until idle timeout.
-          if (deferredResponseCreateTimeoutId) clearTimeout(deferredResponseCreateTimeoutId);
+          clearDeferredResponseCreateTimer();
           deferredResponseCreateTimeoutId = setTimeout(() => {
             deferredResponseCreateTimeoutId = null;
             if (!pendingResponseCreateAfterFunctionCallOutput || upstream.readyState !== WebSocket.OPEN) return;
@@ -1092,7 +1107,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     });
 
     upstream.on('close', (code: number, reason?: Buffer) => {
-      if (audioCommitTimer) clearTimeout(audioCommitTimer);
+      clearProxyConnectionTimers();
       flushPendingIdleTimeoutError();
       // Issue #406: if upstream closed before we sent SettingsApplied, notify the client so the host sees a clear error instead of only "connection closed"
       if (!hasSentSettingsApplied && clientWs.readyState === WebSocket.OPEN) {
@@ -1135,7 +1150,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           [ATTR_CLIENT_CLOSE_REASON]: reasonStr,
         },
       });
-      if (audioCommitTimer) clearTimeout(audioCommitTimer);
+      clearProxyConnectionTimers();
       upstream.close();
     });
     (clientWs as unknown as WsLike).on('error', () => upstream.close());

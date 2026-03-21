@@ -28,7 +28,7 @@ Component Settings path: **`agent.think.managedPrompt`** → **`session.prompt`*
 
 ## TDD plan
 
-**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [x] Verified (unit + mapper; live `session.prompt` deferred — see below)
+**Phases:** - [x] RED · - [x] GREEN · - [x] REFACTOR · - [x] Verified (unit + mapper + env-gated real API — see below)
 
 ### RED
 
@@ -44,8 +44,10 @@ Component Settings path: **`agent.think.managedPrompt`** → **`session.prompt`*
 
 ### Verified
 
-- [x] Unit tests pass.
-- [x] **Real API (`session.prompt`): deferred** — Acceptance requires a **valid managed prompt `id` from the OpenAI dashboard** (account-specific; not repo-fixturable). Mapper and unit tests qualify the wire shape. When an id is available, run `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` after adding a dedicated test (or manual proxy session) with that id; until then, epic #542 treats this row as **explicitly deferred with rationale**, not skipped as “optional.”
+- [x] Unit tests pass (`tests/openai-proxy.test.ts`, `tests/buildSettingsMessage.test.ts`, `tests/managed-prompt-env.test.ts`).
+- [x] **Real API (`session.prompt`):** Set **`OPENAI_MANAGED_PROMPT_ID`** (dashboard prompt id for your API key). Optional: **`OPENAI_MANAGED_PROMPT_VERSION`**, **`OPENAI_MANAGED_PROMPT_VARIABLES`** (JSON object string). Then:
+  `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts --testNamePattern="Issue #539 real-API"`.
+  **Unset id** → test **skipped** (not a failure). **Invalid `VARIABLES` JSON** → throws with a clear error (fix env). TDD: [TDD-MANAGED-PROMPT-REAL-API.md](./TDD-MANAGED-PROMPT-REAL-API.md).
 
 ---
 
@@ -54,7 +56,8 @@ Component Settings path: **`agent.think.managedPrompt`** → **`session.prompt`*
 - `packages/voice-agent-backend/scripts/openai-proxy/translator.ts` — `OpenAIRealtimeSessionPrompt`, mapping
 - `src/types/agent.ts` — `ThinkManagedPrompt`, `AgentSettingsMessage`, `AgentOptions`
 - `src/utils/buildSettingsMessage.ts`, `src/components/DeepgramVoiceInteraction/index.tsx`
-- `tests/openai-proxy.test.ts`, `tests/buildSettingsMessage.test.ts`
+- `tests/openai-proxy.test.ts`, `tests/buildSettingsMessage.test.ts`, `tests/managed-prompt-env.test.ts`
+- `tests/integration/helpers/managed-prompt-env.ts`, `tests/integration/helpers/real-api-json-ws-session.ts`, `tests/integration/openai-proxy-integration.test.ts`
 - `packages/voice-agent-backend/scripts/openai-proxy/README.md`, `PROTOCOL-AND-MESSAGE-ORDERING.md`
 
 **Canonical API:** [session.update](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update) `prompt` (ResponsePrompt).

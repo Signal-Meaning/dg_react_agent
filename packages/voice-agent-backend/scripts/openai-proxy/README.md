@@ -5,7 +5,7 @@
 **Server** (`server.ts`): WebSocket server that listens on a path (e.g. `/openai`), accepts component protocol, translates to OpenAI Realtime, forwards to upstream (real or mock), and translates upstream events back to component. Buffers client messages until upstream is open.
 
 - **Unit tests**: `tests/openai-proxy.test.ts` (Jest).
-- **Integration tests**: `tests/integration/openai-proxy-integration.test.ts` (Jest, `@jest-environment node`).
+- **Integration tests**: `tests/integration/openai-proxy-integration.test.ts` (Jest, `@jest-environment node`). Real API: `USE_REAL_APIS=1` + `OPENAI_API_KEY`. Managed prompt live test (Issue #539): optional **`OPENAI_MANAGED_PROMPT_ID`** (and optional `OPENAI_MANAGED_PROMPT_VERSION`, `OPENAI_MANAGED_PROMPT_VARIABLES`); see [TDD-MANAGED-PROMPT-REAL-API.md](../../../docs/issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md).
 - **Contract:** [PROTOCOL-AND-MESSAGE-ORDERING.md](./PROTOCOL-AND-MESSAGE-ORDERING.md) (wire protocol and ordering); [docs/issues/ISSUE-381/API-DISCONTINUITIES.md](../../docs/issues/ISSUE-381/API-DISCONTINUITIES.md) (API mapping).
 
 ## Further reading (docs index)

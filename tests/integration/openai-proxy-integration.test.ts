@@ -41,9 +41,14 @@ import { DEFAULT_SERVER_TIMEOUT_MS, NO_SERVER_TIMEOUT_MS, SERVER_TIMEOUT_ERROR_C
 import {
   createOpenAIProxyServer,
 } from '../../packages/voice-agent-backend/scripts/openai-proxy/server';
+import { parseManagedPromptFromEnv } from './helpers/managed-prompt-env';
+import { runRealApiJsonWsSession } from './helpers/real-api-json-ws-session';
 
 /** When true, proxy uses real OpenAI Realtime URL and auth; mock is not started. Requires OPENAI_API_KEY. */
 const useRealAPIs = (process.env.USE_REAL_APIS === '1' || process.env.USE_REAL_APIS === 'true') && !!process.env.OPENAI_API_KEY?.trim();
+
+/** Real-API managed prompt test runs only with id set; unset id → skip (not failure). See TDD-MANAGED-PROMPT-REAL-API.md */
+const hasManagedPromptIdEnv = !!process.env.OPENAI_MANAGED_PROMPT_ID?.trim();
 
 /**
  * Issue #462: Minimal in-process backend for function-call flow. Ensures we qualify on real HTTP to a backend,
@@ -764,70 +769,93 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Sends a modest cap (128), then a short user turn; asserts SettingsApplied and an assistant ConversationText
    * without component Error. Skipped in CI without `USE_REAL_APIS=1` and `OPENAI_API_KEY` (same pattern as other real-API cases).
    */
-  (useRealAPIs ? it : it.skip)('Issue #537 real-API: Settings with maxOutputTokens yields SettingsApplied and assistant reply without Error (USE_REAL_APIS=1)', (done) => {
-    let finished = false;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    const errorsReceived: string[] = [];
-    let sawAssistantText = false;
-    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
-
-    const finish = (err?: Error) => {
-      if (finished) return;
-      finished = true;
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      try { client.close(); } catch { /* ignore */ }
-      if (err) done(err);
-      else done();
-    };
-
-    client.on('open', () => {
-      client.send(JSON.stringify({
-        type: 'Settings',
-        agent: {
-          think: {
-            prompt: 'You are a helpful assistant. Reply briefly.',
-            maxOutputTokens: 128,
+  (useRealAPIs ? it : it.skip)('Issue #537 real-API: Settings with maxOutputTokens yields SettingsApplied and assistant reply without Error (USE_REAL_APIS=1)', async () => {
+    let sawAssistant = false;
+    await runRealApiJsonWsSession({
+      url: `ws://localhost:${proxyPort}${PROXY_PATH}`,
+      deadlineMs: 25000,
+      onOpen(sendJson) {
+        sendJson({
+          type: 'Settings',
+          agent: {
+            think: {
+              prompt: 'You are a helpful assistant. Reply briefly.',
+              maxOutputTokens: 128,
+            },
           },
-        },
-      }));
-    });
-    client.on('message', (data: Buffer) => {
-      if (data.length === 0 || data[0] !== 0x7b) return;
-      try {
-        const msg = JSON.parse(data.toString()) as { type?: string; description?: string; role?: string; content?: string };
-        if (msg.type === 'Error' && msg.description) {
-          errorsReceived.push(msg.description);
-          finish(new Error(`Issue #537 real-API: upstream/proxy error: ${msg.description}`));
-          return;
+        });
+      },
+      onJsonMessage(msg, sendJson) {
+        if (msg.type === 'Error' && typeof msg.description === 'string') {
+          return { fail: new Error(`Issue #537 real-API: upstream/proxy error: ${msg.description}`) };
         }
         if (msg.type === 'SettingsApplied') {
-          client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Say hello in one short sentence.' }));
+          sendJson({ type: 'InjectUserMessage', content: 'Say hello in one short sentence.' });
         }
-        if (msg.type === 'ConversationText' && msg.role === 'assistant' && typeof msg.content === 'string' && msg.content.trim().length > 0) {
-          sawAssistantText = true;
-          if (errorsReceived.length > 0) {
-            finish(new Error(`Issue #537 real-API: errors before assistant text: ${errorsReceived.join('; ')}`));
-            return;
-          }
-          setTimeout(() => finish(), 400);
+        if (
+          msg.type === 'ConversationText' &&
+          msg.role === 'assistant' &&
+          typeof msg.content === 'string' &&
+          msg.content.trim().length > 0
+        ) {
+          sawAssistant = true;
+          return { done: true };
         }
-      } catch (e) {
-        if (e instanceof SyntaxError) return;
-        finish(e as Error);
-      }
+        return undefined;
+      },
     });
-    client.on('error', (err) => finish(err));
-    timeoutId = setTimeout(() => {
-      if (!finished) {
-        finish(new Error(
-          `Issue #537 real-API: timeout (max_output_tokens path). sawAssistantText=${sawAssistantText}, errors=${errorsReceived.join('; ') || 'none'}`
-        ));
-      }
-    }, 25000);
+    expect(sawAssistant).toBe(true);
   }, 30000);
+
+  /**
+   * Issue #539: Live Realtime accepts session.prompt when OPENAI_MANAGED_PROMPT_ID is set (dashboard prompt).
+   * Unset id → skip. Invalid OPENAI_MANAGED_PROMPT_VARIABLES → parseManagedPromptFromEnv throws (fail fast).
+   * See docs/issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md
+   */
+  (useRealAPIs && hasManagedPromptIdEnv ? it : it.skip)(
+    'Issue #539 real-API: managed prompt from env yields SettingsApplied and assistant reply without Error (USE_REAL_APIS=1)',
+    async () => {
+      const managedFromEnv = parseManagedPromptFromEnv();
+      expect(managedFromEnv).toBeDefined();
+      const managed = managedFromEnv!;
+      let sawAssistant = false;
+      await runRealApiJsonWsSession({
+        url: `ws://localhost:${proxyPort}${PROXY_PATH}`,
+        deadlineMs: 25000,
+        onOpen(sendJson) {
+          sendJson({
+            type: 'Settings',
+            agent: {
+              think: {
+                prompt: 'Follow the session template. Reply briefly.',
+                managedPrompt: managed,
+              },
+            },
+          });
+        },
+        onJsonMessage(msg, sendJson) {
+          if (msg.type === 'Error' && typeof msg.description === 'string') {
+            return { fail: new Error(`Issue #539 real-API: ${msg.description}`) };
+          }
+          if (msg.type === 'SettingsApplied') {
+            sendJson({ type: 'InjectUserMessage', content: 'Say hello in one short sentence.' });
+          }
+          if (
+            msg.type === 'ConversationText' &&
+            msg.role === 'assistant' &&
+            typeof msg.content === 'string' &&
+            msg.content.trim().length > 0
+          ) {
+            sawAssistant = true;
+            return { done: true };
+          }
+          return undefined;
+        },
+      });
+      expect(sawAssistant).toBe(true);
+    },
+    30000
+  );
 
   /**
    * Issue #470 / #462: Real-API integration test for function-call path. Uses real HTTP to a backend (no in-test

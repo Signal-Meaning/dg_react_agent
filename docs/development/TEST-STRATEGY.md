@@ -34,6 +34,7 @@ Summary: **real APIs first (when available) → mocks**. **CI: mocks only.**
 - **Local / when keys available:** Run **real APIs first**, then mocks.
 
 - **When real APIs are requested:** Set **`USE_REAL_APIS=1`** and **`OPENAI_API_KEY`** (in `.env`, `test-app/.env`, or env), then run e.g. `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`. Mock-only tests are skipped; the rest run against the live OpenAI Realtime API. For **OpenAI proxy / `session.update` mapping** (e.g. Epic #542 Bundle D), that integration run is **required for qualification** when keys are available—not an extra optional pass. You may set **`OPENAI_REALTIME_URL`** to override the upstream URL.
+- **Managed prompt real-API test (Issue #539):** Set **`OPENAI_MANAGED_PROMPT_ID`** to your OpenAI dashboard prompt id to run the dedicated integration test; if **unset**, that test **skips**. Optional: **`OPENAI_MANAGED_PROMPT_VERSION`**, **`OPENAI_MANAGED_PROMPT_VARIABLES`** (JSON object string; invalid JSON fails the run with a clear error). See `docs/issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md`.
 
 - **Filtering by name does not enable real APIs.** Using **`--testNamePattern=real-API`** (or similar) only selects which tests run; it does **not** set `USE_REAL_APIS=1`. To run tests against the real API you must set the env var. Without it, real-API tests are skipped (they use `(useRealAPIs ? it : it.skip)`). So a run with `--testNamePattern=real-API` but without `USE_REAL_APIS=1` will skip those tests, not run them against the live API.
 
