@@ -2563,7 +2563,9 @@ function DeepgramVoiceInteraction(
       // Always log assistant message received (not gated by debug) for observability
       if (data.role === 'assistant') {
         const preview = content.length > 80 ? `${content.slice(0, 80)}…` : content;
-        logger.info('💬 [AGENT] Assistant message received: ' + (preview || '(empty)'));
+        // Never echo Deepgram-style secrets if the model or upstream ever reflects them (Issue #544 / E2E api-key).
+        const safePreview = preview.replace(/dg_[a-zA-Z0-9_-]{35,}/g, '[REDACTED]');
+        logger.info('💬 [AGENT] Assistant message received: ' + (safePreview || '(empty)'));
       }
       const timestamp = Date.now();
       const role = data.role as ConversationMessage['role'];
@@ -3168,7 +3170,7 @@ function DeepgramVoiceInteraction(
   };
 
   // Start the connection
-  const start = async (options?: { agent?: boolean; transcription?: boolean }): Promise<void> => {
+  const start = async (options?: { agent?: boolean; transcription?: boolean; userInitiated?: boolean }): Promise<void> => {
     try {
       log('Start method called', options ? `with options: ${JSON.stringify(options)}` : 'without options');
       
@@ -3303,6 +3305,12 @@ function DeepgramVoiceInteraction(
         log('AudioManager not available - this is expected for text-only agent interactions');
       }
       
+      // Issue #544: Text-input / mic-button flows call start() from a user gesture; latch idle-timeout
+      // "session may disconnect when idle" without waiting for InjectUserMessage or VAD (E2E auto-connect).
+      if (shouldStartAgent && options?.userInitiated) {
+        handleMeaningfulActivity('UserInitiatedAgentStart');
+      }
+
       // Set ready state to true after successful start
       dispatch({ type: 'READY_STATE_CHANGE', isReady: true });
       log('Start method completed successfully');

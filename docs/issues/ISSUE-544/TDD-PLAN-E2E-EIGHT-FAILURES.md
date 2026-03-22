@@ -4,6 +4,8 @@
 
 **Principle:** Red → Green → Refactor. Prefer **failing tests that encode the correct product rule**, then minimal implementation. Do not weaken security assertions or idle semantics to go green without an explicit decision.
 
+**Implementation (2026-03-21 — first pass):** User-driven `start({ userInitiated: true })` from test-app (text focus + mic + start button) calls `MEANINGFUL_USER_ACTIVITY('UserInitiatedAgentStart')` so idle countdown can run after greeting without InjectUserMessage. `Started idle timeout` is logged at **info** for Playwright. Test-app `addLog` redacts `VITE_DEEPGRAM_API_KEY`; assistant `ConversationText` logs redact `dg_*` substrings. E2E hardening: `deepgram-client-message-timeout` skips on default OpenAI backend; narrower console capture; `deepgram-backend-proxy-authentication` skips token-expiration-during-session when `E2E_BACKEND !== deepgram`; `callback-test` playback waits extended for OpenAI. Jest: `tests/IdleTimeoutService-user-initiated-session.test.ts`. Re-run full `USE_PROXY_MODE=true npm run test:e2e` from test-app to confirm all eight pass.
+
 **Integration baseline (separate from E2E):** Real-API Jest for the OpenAI proxy **passes** (20 ran, 64 skipped):
 
 ```bash
