@@ -35,7 +35,7 @@ Done on **`issue-544`** / **`release/v0.10.5`** (same commit after branch creati
 - Pushed **`issue-544`** and **`release/v0.10.5`** to `origin`.
 - Updated **`.github/ISSUE_TEMPLATE/release-checklist.md`**: GitHub Release must **target `release/vX.X.X`**, not `main`.
 
-Still required before **publish**: **proxy E2E** (with backend + test-app); **real-API integration** with `OPENAI_API_KEY` (mandatory for claiming upstream qualification — see [TRACKING.md](./TRACKING.md) if deferred); **GitHub Release** from **`release/v0.10.5`**, CI publish, then PR merge to `main`.
+Still required before **publish**: **proxy E2E** (with backend + test-app) — **8 failures** tracked in [TDD-PLAN-E2E-EIGHT-FAILURES.md](./TDD-PLAN-E2E-EIGHT-FAILURES.md); **real-API integration** with `OPENAI_API_KEY` (mandatory for claiming upstream qualification — see [TRACKING.md](./TRACKING.md) if deferred); **GitHub Release** from **`release/v0.10.5`**, CI publish, then PR merge to `main`.
 
 ---
 

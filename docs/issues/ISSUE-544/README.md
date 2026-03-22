@@ -28,6 +28,7 @@ Issue #544 is the **release driver** for a **patch** of the published pair **aft
 | [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md) | Repo-local release and qualification steps with fixed versions and commands. |
 | [SCOPE.md](./SCOPE.md) | What is in this release (surfaces, tests, docs). |
 | [TRACKING.md](./TRACKING.md) | PR links and verification log as you run checks. |
+| [TDD-PLAN-E2E-EIGHT-FAILURES.md](./TDD-PLAN-E2E-EIGHT-FAILURES.md) | TDD plan for the eight failing proxy E2E tests blocking full suite green. |
 
 The **full step-by-step checklist** (same structure as the release template) lives in the **body of GitHub Issue #544**. Use that issue for checkbox tracking; use this folder for stable links and copy-paste commands from the repo.
 
