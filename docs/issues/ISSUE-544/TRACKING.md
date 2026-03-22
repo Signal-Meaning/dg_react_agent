@@ -26,9 +26,13 @@ Record each qualification run as a bullet with date, command, and outcome.
 - **2026-03-21:** `npm run lint` — pass.
 - **2026-03-21:** `npm run test:mock` — pass.
 - **2026-03-21:** `npm audit --audit-level=high` — pass (exit 0).
+- **2026-03-21:** `npm test -- tests/openai-proxy-event-coverage.test.ts` — pass.
+- **2026-03-21:** `npm run build` and `npm run validate` — pass (`dist/` gitignored).
 
 ---
 
 ## Documented exceptions
 
 If a required step (for example real-API integration) was skipped, add a bullet with date, which step, reason, and confirmation that the exception is stated on Issue #544.
+
+- **2026-03-21 — Real-API openai-proxy integration:** Not run in this environment (`OPENAI_API_KEY` unavailable). **Required** before claiming “qualified against real API” for this proxy release; run locally or in CI with secrets: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`, then note the result on GitHub Issue #544.
