@@ -519,12 +519,27 @@ test.describe('Idle Timeout Behavior', () => {
     expect(initialStatus).toBe('connected');
     console.log('✅ Connection established');
     
+    const idleMs = await page.evaluate(() =>
+      (typeof window !== 'undefined' && window.__idleTimeoutMs) ? window.__idleTimeoutMs : 10000
+    );
+
     // Wait for agent to finish (puts us in idle state where timeout can start)
     await page.waitForTimeout(2000);
-    
-    // Wait until timeout is close to firing (~9 seconds into 10s timeout)
-    console.log('⏳ Waiting ~9 seconds to get close to idle timeout...');
-    await page.waitForTimeout(9000);
+
+    // Playwright webServer sets VITE_IDLE_TIMEOUT_MS=1000 by default — a fixed 9s wait always misses the window.
+    // Anchor on the real countdown start (info log from IdleTimeoutService) then pause until just before fire.
+    const idleCountdownPromise = page.waitForEvent('console', {
+      predicate: (msg) => msg.text().includes('Started idle timeout'),
+      timeout: 25000,
+    });
+    await idleCountdownPromise.catch(() => {
+      console.log('⚠️ No "Started idle timeout" log within 25s; continuing (timing may be flaky)');
+    });
+    // Leave enough slack for startAudioCapture() (~2–3s of awaits); a 9s pause on a 10s timer fires mid-call.
+    const slackMs = Math.max(3500, Math.min(5000, Math.floor(idleMs * 0.45)));
+    const nearFireWait = Math.max(100, idleMs - slackMs);
+    console.log(`⏳ Waiting ${nearFireWait}ms after idle countdown start (idleMs=${idleMs}, slack=${slackMs}) before startAudioCapture()...`);
+    await page.waitForTimeout(nearFireWait);
     
     // Monitor connection closes
     const connectionCloses = [];

@@ -3831,7 +3831,10 @@ function DeepgramVoiceInteraction(
   const startAudioCapture = async (): Promise<void> => {
     try {
       log('startAudioCapture called - initializing audio manager lazily');
-      
+      // Issue #222: reset idle timeout immediately — async work below can take >1s; if we only
+      // notify after startRecording(), the disconnect countdown can fire mid-await and close the session.
+      handleMeaningfulActivity('startAudioCapture');
+
       const config = configRef.current;
       const isTranscriptionConfigured = !!config.transcriptionOptions;
       const isAgentConfigured = !!config.agentOptions;

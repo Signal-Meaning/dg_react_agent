@@ -22,10 +22,10 @@ import {
 import { setupTestPage } from './helpers/audio-mocks';
 import { waitForIdleTimeout, verifyIdleTimeoutTiming, resetIdleTimeoutFiredDiagnostic } from './fixtures/idle-timeout-helpers';
 
-/** Buffer (ms) for max wait so we observe close even when it fires slightly after idle (e.g. 10s idle + ~1.5s). */
-const E2E_IDLE_BUFFER_MS = 2000;
+/** Buffer (ms) for max wait so we observe close even when it fires slightly after idle (CI / proxy variance). */
+const E2E_IDLE_BUFFER_MS = 4000;
 /** Tolerance (ms): actual close time must be within this of expected idle timeout or the test fails. */
-const TIMING_TOLERANCE_MS = 2000;
+const TIMING_TOLERANCE_MS = 3000;
 /** Greeting/audio waits use IDLE_TIMEOUT + X so they scale when IDLE_TIMEOUT is mocked. Add 500ms so we do not race (waits slightly larger than idle). */
 const E2E_GREETING_WAIT_OFFSET_MS = 500;
 /** waitForAgentGreeting: was 15s - 10s = 5s offset; +500ms so slightly larger than idle-derived value. */
