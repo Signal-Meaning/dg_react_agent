@@ -14,7 +14,7 @@ v0.10.6 ships **@signal-meaning/voice-agent-backend@0.2.11** with **Epic [#546](
 
 ## Validation
 
-- **CI-equivalent (mock):** `CI=true npm run test:mock`, `npm run lint`, `npm audit --audit-level=high` (see CI workflow; local audit may match registry advisories).
+- **CI-equivalent (mock):** `CI=true npm run test:mock`, `npm run lint`, `npm audit --audit-level=high` (clean after lockfile `npm audit fix` on this release branch).
 - **Proxy:** `npm test -- tests/openai-proxy-listen-tls`, `npm test -- voice-agent-backend-runtime-dependencies`, `npm test -- openai-proxy-tls-integrator-docs`, `npm test -- tests/integration/openai-proxy-integration.test.ts` (mock).
 - **Real API (when `OPENAI_API_KEY` available):** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` per `.cursorrules` for proxy releases.
 - **Packaging smoke (maintainer):** `npm pack` in `packages/voice-agent-backend`, install tarball in a clean temp project, start proxy — see `docs/issues/epic-546/RELEASE-AND-QUALIFICATION.md`.

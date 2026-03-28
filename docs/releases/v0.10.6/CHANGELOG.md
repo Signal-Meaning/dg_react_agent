@@ -13,6 +13,10 @@ All changes in this release are documented here. [Keep a Changelog](https://keep
 
 - **@signal-meaning/voice-agent-react** republished at **0.10.6** with the same component sources as 0.10.5 (release train with backend 0.2.11).
 
+## Security
+
+- **Root dev/build tree:** `npm audit fix` applied so `npm audit --audit-level=high` is clean (addresses transitive **node-forge**, **picomatch**, and related advisories reported at release prep).
+
 ## Backward Compatibility
 
 ✅ **Component API unchanged.**  
