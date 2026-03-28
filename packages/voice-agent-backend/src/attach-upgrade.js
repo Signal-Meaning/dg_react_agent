@@ -241,10 +241,22 @@ async function attachVoiceAgentUpgrade(server, options = {}) {
   if (openaiOpts?.spawn) {
     const { spawn } = require('child_process');
     const { cwd, command, args, env = {}, port } = openaiOpts.spawn;
+    // EPIC-546: Do not forward host HTTPS= into the OpenAI proxy subprocess (Voice Commerce / packaging).
+    // When the parent serves wss, set explicit dev TLS unless PEM paths are already provided.
+    const merged = { ...process.env, ...env, OPENAI_PROXY_PORT: String(port) };
+    delete merged.HTTPS;
+    if (useHttps) {
+      const k = merged.OPENAI_PROXY_TLS_KEY_PATH && String(merged.OPENAI_PROXY_TLS_KEY_PATH).trim() !== '';
+      const c = merged.OPENAI_PROXY_TLS_CERT_PATH && String(merged.OPENAI_PROXY_TLS_CERT_PATH).trim() !== '';
+      const hasPem = k && c;
+      if (!hasPem) {
+        merged.OPENAI_PROXY_INSECURE_DEV_TLS = merged.OPENAI_PROXY_INSECURE_DEV_TLS || '1';
+      }
+    }
     openaiChild = spawn(command, args, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, ...env, OPENAI_PROXY_PORT: String(port) },
+      env: merged,
     });
     openaiChild.stdout?.on('data', (d) => process.stdout.write(d));
     openaiChild.stderr?.on('data', (d) => process.stderr.write(d));
