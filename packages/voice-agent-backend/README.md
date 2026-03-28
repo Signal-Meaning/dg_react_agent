@@ -117,7 +117,18 @@ Any npm module that shipped proxy code **`require()`s** or statically imports on
 
 #### Migration from older behavior
 
-Previously, `HTTPS=1` alone caused `run.ts` to load in-process self-signed TLS. **Replace** that with `OPENAI_PROXY_INSECURE_DEV_TLS=1` for the proxy subprocess, or with PEM path variables, or run the proxy over HTTP. When using **`attachVoiceAgentUpgrade`** with `https: true`, the package sets the insecure-dev flag for you unless PEM paths are set.
+**What changed:** In older `@signal-meaning/voice-agent-backend` releases, `run.ts` treated **`HTTPS=true`** or **`HTTPS=1`** like a switch: “listen with HTTPS and generate a self-signed cert in memory.” That had two problems: (1) **packaging** — `selfsigned` lived only in `devDependencies`, so a normal `npm install` of the backend package did not install it and the proxy crashed with `MODULE_NOT_FOUND` when integrators forwarded the same `HTTPS` they used for their main API. (2) **Semantics** — the main Express/Vite server and the OpenAI proxy subprocess are different listeners; inheriting a **global** `HTTPS` flag conflated “my site uses TLS” with “this subprocess should use self-signed TLS.”
+
+**What to do now:**
+
+| Your setup | Before (old proxy) | After (current) |
+|------------|-------------------|-----------------|
+| You spawn `run.ts` and used to set only `HTTPS=1` for TLS | Proxy listened with in-process self-signed TLS | Set **`OPENAI_PROXY_INSECURE_DEV_TLS=1`** for the same effect, **or** set **`OPENAI_PROXY_TLS_KEY_PATH`** + **`OPENAI_PROXY_TLS_CERT_PATH`**, **or** leave TLS off and use **`ws://`** (and serve the SPA over HTTP or fix mixed content another way). |
+| You use **`attachVoiceAgentUpgrade`** with **`https: true`** (e.g. test-app / voice-agent-backend pattern) | Same as above if `HTTPS` was in the parent env | You usually **need no change**: the package **strips `HTTPS`** from the subprocess and sets **`OPENAI_PROXY_INSECURE_DEV_TLS=1`** when there are no PEM paths, so internal **wss** still matches the outer server. |
+| You want trusted local certs (e.g. mkcert) | N/A or manual alignment | Set **both** PEM path env vars on the subprocess; no `selfsigned` on that path. |
+| Production | Old code could still hit `selfsigned` if `HTTPS=1` leaked in | **`OPENAI_PROXY_INSECURE_DEV_TLS` is rejected** when **`NODE_ENV=production`**; use PEM files or HTTP as appropriate. |
+
+**Summary:** Stop relying on **`HTTPS` alone** for the OpenAI proxy. Prefer explicit **`OPENAI_PROXY_INSECURE_DEV_TLS`** (dev only), **PEM paths**, or **HTTP**; if you attach via **`attachVoiceAgentUpgrade`** with **`https: true`**, the package applies the insecure-dev opt-in for you unless PEM paths are set.
 
 #### Maintainer references
 
