@@ -15,29 +15,26 @@ Include the **packaging rule**: runtime `require()` ⇒ listed under `dependenci
 
 ## Specification links
 
-- [SPEC-PROXY-TLS-AND-ENV.md](./SPEC-PROXY-TLS-AND-ENV.md) (keep in sync; implementation may update spec first)
+- [SPEC-PROXY-TLS-AND-ENV.md](./SPEC-PROXY-TLS-AND-ENV.md)
 - [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md)
-
-## TDD note
-
-Documentation work is still **acceptance-driven**: do not mark this issue done until **#549–#551** behavior is implemented and tests exist; docs must match shipped behavior.
 
 ## Checklist
 
-- [ ] Update `packages/voice-agent-backend/README.md` (or agreed primary doc) with **Supported modes** section.
-- [ ] Add or update repo `docs/` cross-links if maintainers index from there (e.g. `docs/BACKEND-PROXY/` if proxy is documented there — search repo for “openai-proxy” / “OPENAI_PROXY”).
-- [ ] Document **subprocess env contract**: which vars the host should pass vs strip (`HTTPS`, proxy-specific vars).
-- [ ] Document **migration** from pre-epic `HTTPS=1` self-signed behavior.
-- [ ] Add **packaging rule** verbatim or by reference to spec.
-- [ ] Optional: short “Voice Commerce / EPIC-1131” pointer for traceability (neutral wording).
+- [x] Update `packages/voice-agent-backend/README.md` with **Supported modes** section (§ OpenAI proxy: TLS modes and subprocess environment).
+- [x] Add or update repo `docs/` cross-links: [RUN-OPENAI-PROXY.md](../../BACKEND-PROXY/RUN-OPENAI-PROXY.md), [BACKEND-PROXY/README.md](../../BACKEND-PROXY/README.md), [OPENAI-PROXY-PACKAGING.md](../../OPENAI-PROXY-PACKAGING.md), `scripts/openai-proxy/README.md`.
+- [x] Document **subprocess env contract**: `HTTPS` ignored by `run.ts`; `attachVoiceAgentUpgrade` strips `HTTPS` and sets `OPENAI_PROXY_INSECURE_DEV_TLS` when appropriate.
+- [x] Document **migration** from pre-epic `HTTPS=1` self-signed behavior.
+- [x] Add **packaging rule** and pointer to `voice-agent-backend-runtime-dependencies.test.ts`.
+- [x] Voice Commerce / EPIC-1131 traceability (neutral) in package README.
+- [x] Regression tests: `tests/docs/openai-proxy-tls-integrator-docs.test.ts`.
 
 ## Definition of done
 
-- [ ] New developer can configure all supported modes from docs alone.
-- [ ] Examples use final env var names from implementation.
-- [ ] Links to GitHub #546 / sub-issues or this folder as needed.
-- [ ] GitHub #552 closed with PR link and this file.
+- [x] New developer can configure all supported modes from docs alone (primary: package README + RUN-OPENAI-PROXY).
+- [x] Examples use final env var names from implementation.
+- [x] Links to GitHub #546 / #552 and `docs/issues/epic-546/`.
+- [ ] GitHub #552 closed with PR link (maintainer action after merge).
 
 ## Verification log
 
-- [ ] _Peer review: maintainer followed docs on clean machine — date / reviewer / notes_
+- **2026-03-28:** `npm test -- openai-proxy-tls-integrator-docs` — pass.

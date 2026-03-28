@@ -13,6 +13,7 @@
 | **Integration**               | `tests/integration/openai-proxy-integration.test.ts`                                  | Proxy server creation, WebSocket path, optional HTTPS/WSS with test certs or HTTP                      |
 | **Packaging / install smoke** | Script or CI job (see [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md)) | `npm pack` + production `npm install` + spawn proxy; assert no `MODULE_NOT_FOUND`                      |
 | **E2E**                       | `test-app/tests/e2e/`                                                                 | Only if browser/ws mixed-content or full stack must be proven; run from `test-app` per project rules   |
+| **Doc contract (#552)**       | `tests/docs/openai-proxy-tls-integrator-docs.test.ts`                                | Asserts integrator docs contain TLS env names, `attachVoiceAgentUpgrade`, packaging rule, epic link      |
 
 
 ---

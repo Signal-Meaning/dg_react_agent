@@ -1,8 +1,8 @@
 # Specification — OpenAI proxy TLS modes and environment (EPIC-546)
 
-**Status:** Target contract for implementation driven by [#549](https://github.com/Signal-Meaning/dg_react_agent/issues/549)–[#551](https://github.com/Signal-Meaning/dg_react_agent/issues/551). Until implemented, behavior may differ; update this doc when behavior lands.
+**Status:** Implemented in `listen-tls.ts`, `run.ts`, and `attach-upgrade.js`. Integrator-facing documentation: **packages/voice-agent-backend/README.md** (TLS section), [RUN-OPENAI-PROXY.md](../../BACKEND-PROXY/RUN-OPENAI-PROXY.md), Issue [#552](https://github.com/Signal-Meaning/dg_react_agent/issues/552). Doc regression: `tests/docs/openai-proxy-tls-integrator-docs.test.ts`.
 
-**Code anchor:** `packages/voice-agent-backend/scripts/openai-proxy/run.ts` and related `server.ts`.
+**Code anchor:** `packages/voice-agent-backend/scripts/openai-proxy/run.ts`, `listen-tls.ts`, `server.ts`.
 
 ---
 
@@ -15,7 +15,7 @@
 
 ---
 
-## Supported modes (normative target)
+## Supported modes (normative)
 
 ### Mode 1 — HTTP / WS (default for integrated proxy)
 
@@ -25,41 +25,37 @@
 
 ### Mode 2 — TLS from PEM paths (recommended for local HTTPS)
 
-- Operator provides **key** and **certificate** file paths via env (exact names **TBD** in implementation; placeholder names below).
-- Proxy uses `https.createServer({ key, cert })` reading from disk.
+- Operator sets **`OPENAI_PROXY_TLS_KEY_PATH`** and **`OPENAI_PROXY_TLS_CERT_PATH`** to PEM files.
+- Proxy uses `https.createServer` reading key/cert from disk.
 - **No** `selfsigned.generate()` on this path.
-
-**Placeholder env (to be finalized in implementation + docs):**
-
-- `OPENAI_PROXY_TLS_KEY_PATH` — filesystem path to PEM private key  
-- `OPENAI_PROXY_TLS_CERT_PATH` — filesystem path to PEM certificate  
 
 ### Mode 3 — Explicit insecure dev TLS (in-process cert)
 
-- Enabled **only** when a **dedicated** env is set (exact name **TBD**; e.g. `OPENAI_PROXY_INSECURE_DEV_TLS=1`).
-- May use `selfsigned` or equivalent; module must be a **runtime** dependency if this path ships.
-- **Must not** activate in production: when `NODE_ENV === 'production'`, do not run in-process generation; prefer Mode 1 or 2 only (see [#551](https://github.com/Signal-Meaning/dg_react_agent/issues/551)).
+- Set **`OPENAI_PROXY_INSECURE_DEV_TLS=1`** (or `true`).
+- Uses `selfsigned`; listed under **`dependencies`**.
+- **Blocked** when `NODE_ENV=production` (fatal exit).
 
 ---
 
-## Deprecation / migration (from current behavior)
+## Deprecation / migration
 
-**Current (pre-epic):** `HTTPS=true` or `HTTPS=1` triggers `require('selfsigned')` and in-memory cert.
+**Previous behavior:** `HTTPS=true` or `HTTPS=1` triggered in-process self-signed TLS in `run.ts`.
 
-**Target:**
+**Current:**
 
-- [ ] Generic `HTTPS` is **not** the sole signal for proxy TLS (or is ignored for proxy unless documented bridge period).
-- [ ] Document migration for integrators: set PEM paths, or unset `HTTPS` for proxy subprocess, or set explicit dev flag during transition.
+- [x] Generic `HTTPS` is **not** the signal for proxy listen TLS (`run.ts` ignores it).
+- [x] **`attachVoiceAgentUpgrade`** strips `HTTPS` from the subprocess and sets `OPENAI_PROXY_INSECURE_DEV_TLS` when the outer server is HTTPS and PEM paths are absent.
+- [x] Integrator migration documented in package README and RUN-OPENAI-PROXY.
 
 ---
 
 ## Priority of configuration (resolution order)
 
-Define in implementation and tests (example order — adjust to match code):
+Matches `resolveOpenAIProxyListenMode` + `run.ts`:
 
-1. If `NODE_ENV === 'production'` **and** explicit dev TLS requested → **error or ignore dev TLS** (tests must lock behavior).
-2. If PEM key + cert paths valid → **Mode 2**.
-3. If explicit dev TLS flag → **Mode 3** (non-production).
+1. `NODE_ENV=production` and `OPENAI_PROXY_INSECURE_DEV_TLS` → **fatal**.
+2. Both PEM paths set → **Mode 2** (file read errors exit).
+3. `OPENAI_PROXY_INSECURE_DEV_TLS` → **Mode 3** (non-production).
 4. Else → **Mode 1**.
 
 ---
@@ -73,4 +69,4 @@ Define in implementation and tests (example order — adjust to match code):
 ## References
 
 - Partner context: [PARTNER-REPORT-SUMMARY.md](./PARTNER-REPORT-SUMMARY.md)
-- Tracking: [TRACKING-549.md](./TRACKING-549.md), [TRACKING-550.md](./TRACKING-550.md), [TRACKING-551.md](./TRACKING-551.md)
+- Tracking: [TRACKING-549.md](./TRACKING-549.md)–[TRACKING-552.md](./TRACKING-552.md)

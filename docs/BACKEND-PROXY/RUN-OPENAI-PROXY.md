@@ -17,7 +17,10 @@
 | **OPENAI_MANAGED_PROMPT_ID** | Jest (optional) | Non-empty → runs Issue **#539** managed-prompt real-API integration test; unset → that test **skips**. Optional: **OPENAI_MANAGED_PROMPT_VERSION**, **OPENAI_MANAGED_PROMPT_VARIABLES** (JSON object string). See [TDD-MANAGED-PROMPT-REAL-API.md](../issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md). |
 | **VITE_OPENAI_PROXY_ENDPOINT** | Test-app / E2E | WebSocket URL for the test-app to use the OpenAI proxy (e.g. `ws://localhost:8080/openai`). Playwright passes this to the test-app; default in config is `ws://localhost:8080/openai`. |
 | **E2E_BACKEND** | E2E only | `openai` (default) or `deepgram`. Chooses which proxy params to use for specs that support both. URL is built with `connectionMode` + `proxyEndpoint` query params. |
-| **HTTPS** | Test-app dev server | Set to `0` when Playwright starts the test-app so the app is served over HTTP (avoids TLS issues in Chromium). Does not affect the proxy. |
+| **HTTPS** | Test-app Vite dev server | When `true`/`1`, Vite serves the SPA over HTTPS. **Not** used by `run.ts` to choose proxy listen TLS (EPIC-546). The test-app backend uses `attachVoiceAgentUpgrade`; when the outer server is HTTPS it sets `OPENAI_PROXY_INSECURE_DEV_TLS` for the OpenAI subprocess unless PEM paths are set. For Playwright, often use `HTTPS=0` to avoid mixed TLS friction. |
+| **OPENAI_PROXY_TLS_KEY_PATH** | OpenAI proxy (`run.ts`) | Filesystem path to PEM **private key**. Must be set together with `OPENAI_PROXY_TLS_CERT_PATH` for TLS from files (mkcert / operator certs). |
+| **OPENAI_PROXY_TLS_CERT_PATH** | OpenAI proxy (`run.ts`) | Filesystem path to PEM **certificate**. Paired with `OPENAI_PROXY_TLS_KEY_PATH`. |
+| **OPENAI_PROXY_INSECURE_DEV_TLS** | OpenAI proxy (`run.ts`) | Set to `1` or `true` for in-process self-signed localhost TLS. **Forbidden** with `NODE_ENV=production`. Usually set automatically when using `attachVoiceAgentUpgrade` with `https: true` and no PEM paths. |
 | **VITE_BASE_URL** | Test-app | Base URL for the test-app (default `http://localhost:5173`). Override if you run the app on a different host/port. |
 
 **Safety – real API E2E:** Run OpenAI proxy E2E only when **OPENAI_API_KEY** is set (truthy). The proxy will not start without it. Do not run real-API E2E in environments where the key is unset or a placeholder (e.g. CI without secrets).
@@ -36,10 +39,11 @@
 cd packages/voice-agent-backend && npx tsx scripts/openai-proxy/run.ts
 ```
 
-- Listens on **http://localhost:8080**; WebSocket path **/openai** → `ws://localhost:8080/openai`.
+- Listens on **http://localhost:8080** by default; WebSocket path **/openai** → `ws://localhost:8080/openai` (or **https** / **wss** when TLS env modes are active—see **packages/voice-agent-backend/README.md** § OpenAI proxy TLS, EPIC-546).
 - Loads `.env` from the package dir or repo root; put `OPENAI_API_KEY=sk-...` in `.env` or the environment.
 - Optional: `OPENAI_PROXY_PORT=9000` to use a different port.
 - Optional: `OPENAI_PROXY_DEBUG=1` to log upstream→client message types.
+- TLS: `OPENAI_PROXY_TLS_KEY_PATH` + `OPENAI_PROXY_TLS_CERT_PATH`, or `OPENAI_PROXY_INSECURE_DEV_TLS=1` for dev self-signed. Generic **`HTTPS=1` does not** enable proxy listen TLS by itself.
 
 **Integrators (e.g. voice-commerce):** Use `@signal-meaning/voice-agent-backend` only. Set spawn `cwd` to `path.dirname(require.resolve('@signal-meaning/voice-agent-backend/package.json'))` and run `npx tsx scripts/openai-proxy/run.ts`. Do not resolve or depend on `@signal-meaning/voice-agent-react` to run the proxy. See `packages/voice-agent-backend/README.md` and [OPENAI-PROXY-PACKAGING.md](../OPENAI-PROXY-PACKAGING.md).
 

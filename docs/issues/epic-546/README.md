@@ -41,7 +41,7 @@ Use this table for **at-a-glance** status. Detail lives in each `TRACKING-*.md`.
 - [ ] **#549** — PEM path mode implemented and tested (see [TRACKING-549.md](./TRACKING-549.md))
 - [ ] **#550** — Proxy TLS toggled only by proxy-specific contract; default embedded path documented (see [TRACKING-550.md](./TRACKING-550.md))
 - [ ] **#551** — In-process cert only on explicit dev opt-in; blocked in production (see [TRACKING-551.md](./TRACKING-551.md))
-- [ ] **#552** — Integrator-facing docs published; packaging rule stated (see [TRACKING-552.md](./TRACKING-552.md))
+- [x] **#552** — Integrator-facing docs published; packaging rule stated (see [TRACKING-552.md](./TRACKING-552.md))
 - [ ] **#554** — Patch release executed per [ISSUE-554/TRACKING.md](./ISSUE-554/TRACKING.md) and GitHub [#554](https://github.com/Signal-Meaning/dg_react_agent/issues/554)
 - [ ] **Release qualification** — [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md) completed for the shipping version(s)
 - [ ] **GitHub** — Epic #546 and sub-issues closed with pointers to this folder

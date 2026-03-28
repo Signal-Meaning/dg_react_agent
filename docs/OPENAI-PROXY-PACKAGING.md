@@ -34,6 +34,10 @@ const backendPkgDir = path.dirname(require.resolve('@signal-meaning/voice-agent-
 
 See **packages/voice-agent-backend/README.md** for the full `attachVoiceAgentUpgrade` options and example.
 
+### TLS and environment (EPIC-546 / Issue #552)
+
+Do **not** assume `HTTPS=1` in the parent process turns on TLS inside `run.ts`. Use **`OPENAI_PROXY_TLS_KEY_PATH`** + **`OPENAI_PROXY_TLS_CERT_PATH`** (PEM files), or **`OPENAI_PROXY_INSECURE_DEV_TLS=1`** for explicit dev self-signed TLS, or leave both unset for HTTP. When you use **`attachVoiceAgentUpgrade`** with **`https: true`**, this package adjusts the subprocess env for you (strips `HTTPS`, sets insecure-dev TLS unless PEM paths are set). Full detail: **packages/voice-agent-backend/README.md** § *OpenAI proxy: TLS modes and subprocess environment* and [RUN-OPENAI-PROXY.md](./BACKEND-PROXY/RUN-OPENAI-PROXY.md).
+
 ---
 
 ## Why not the React package?
