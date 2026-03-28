@@ -20,9 +20,10 @@ import {
   waitForAgentResponse
 } from './helpers/test-helpers.js';
 import { skipIfNoRealAPI } from './helpers/test-helpers.js';
+import { getE2EBackend } from './helpers/test-helpers.mjs';
 
 function skipIfOpenAIProxy(reason = 'CLIENT_MESSAGE_TIMEOUT is Deepgram-only; skip when using OpenAI proxy') {
-  if (process.env.VITE_OPENAI_PROXY_ENDPOINT) {
+  if (process.env.VITE_OPENAI_PROXY_ENDPOINT || getE2EBackend() === 'openai') {
     test.skip(true, reason);
   }
 }
@@ -72,7 +73,7 @@ test.describe('CLIENT_MESSAGE_TIMEOUT Error Handling', () => {
     
     page.on('console', msg => {
       const text = msg.text();
-      if (text.includes('CLIENT_MESSAGE_TIMEOUT') || text.includes('Error')) {
+      if (text.includes('CLIENT_MESSAGE_TIMEOUT')) {
         errors.push({ timestamp: Date.now(), text });
       }
     });
@@ -176,7 +177,7 @@ test.describe('CLIENT_MESSAGE_TIMEOUT Error Handling', () => {
     
     page.on('console', msg => {
       const text = msg.text();
-      if (text.includes('CLIENT_MESSAGE_TIMEOUT') || text.includes('Error')) {
+      if (text.includes('CLIENT_MESSAGE_TIMEOUT')) {
         errors.push({ timestamp: Date.now(), text });
         console.log(`[ERROR] ${text}`);
       }

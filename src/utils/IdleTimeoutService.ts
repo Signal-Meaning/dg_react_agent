@@ -504,7 +504,7 @@ export class IdleTimeoutService {
         this.log('updateTimeoutBehavior() - conditions met, starting timeout');
         this.startTimeout();
       } else {
-        this.log(`updateTimeoutBehavior() - conditions not met for starting timeout: agentState=${this.currentState.agentState}, isUserSpeaking=${this.currentState.isUserSpeaking}, isPlaying=${this.currentState.isPlaying}, hasActiveFunctionCalls=${this.hasActiveFunctionCalls()}, waitingForNextAgentMessage=${this.waitingForNextAgentMessageAfterFunctionResult}`);
+        this.log(`updateTimeoutBehavior() - conditions not met for starting timeout: hasSeenUserActivity=${this.hasSeenUserActivityThisSession}, agentState=${this.currentState.agentState}, isUserSpeaking=${this.currentState.isUserSpeaking}, isPlaying=${this.currentState.isPlaying}, hasActiveFunctionCalls=${this.hasActiveFunctionCalls()}, waitingForNextAgentMessage=${this.waitingForNextAgentMessageAfterFunctionResult}, isDisabled=${this.isDisabled}`);
       }
     }
     
@@ -662,7 +662,9 @@ export class IdleTimeoutService {
   private startTimeout(): void {
     // Only start if conditions allow (e.g. user has spoken at least once)
     if (!this.canStartTimeout()) {
-      this.log('startTimeout() skipped - canStartTimeout() false (e.g. no user activity this session yet)');
+      this.log(
+        `startTimeout() skipped - canStartTimeout() false (hasSeenUserActivity=${this.hasSeenUserActivityThisSession}, agentIdle=${this.isAgentIdle(this.currentState)}, isUserSpeaking=${this.currentState.isUserSpeaking}, isPlaying=${this.currentState.isPlaying}, isDisabled=${this.isDisabled}, hasActiveFunctionCalls=${this.hasActiveFunctionCalls()}, waitingForNextAgentMessage=${this.waitingForNextAgentMessageAfterFunctionResult})`
+      );
       return;
     }
     // Only start if timeout is not already running (prevents unnecessary restarts)
@@ -679,7 +681,8 @@ export class IdleTimeoutService {
       this.stopPolling();
       this.onTimeoutCallback?.();
     }, this.config.timeoutMs);
-    this.log(`Started idle timeout (${this.config.timeoutMs}ms)`);
+    // Info so browser E2E (Playwright console) reliably observes timeout start; other service lines stay debug.
+    this.logger.info(`[IDLE_TIMEOUT_SERVICE] Started idle timeout (${this.config.timeoutMs}ms)`);
     // E2E diagnostic (Issue #489): expose so tests can assert timeout was started
     if (typeof window !== 'undefined') {
       (window as unknown as { __idleTimeoutStarted__?: boolean }).__idleTimeoutStarted__ = true;

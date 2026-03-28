@@ -6,7 +6,6 @@ import {
   MicrophoneHelpers,
   sendTextMessage,
   waitForAudioPlaybackStart,
-  waitForAgentGreeting,
   waitForAgentResponse,
   getAudioPlayingStatus,
   setupAudioSendingPrerequisites,
@@ -195,13 +194,17 @@ test.describe('Callback Test Suite', () => {
     const testMessage = 'Hello, can you help me?';
     await sendTextMessage(page, testMessage);
 
-    // Wait for audio playback to start (extended for OpenAI proxy)
-    await waitForAudioPlaybackStart(page, 35000);
+    const useOpenAI = hasOpenAIProxyEndpoint();
+    const phaseTimeout = useOpenAI ? 60000 : 35000;
+
+    await waitForAgentResponse(page, null, phaseTimeout);
+    await waitForAudioPlaybackStart(page, phaseTimeout);
     const audioPlayingStatus = await getAudioPlayingStatus(page);
     expect(audioPlayingStatus).toBe('true');
-    await waitForAgentGreeting(page, 25000);
 
-    // Verify audio playing status is false
+    await expect(page.locator('[data-testid="audio-playing-status"]')).toHaveText('false', {
+      timeout: useOpenAI ? 90000 : 45000,
+    });
     const finalAudioStatus = await getAudioPlayingStatus(page);
     expect(finalAudioStatus).toBe('false');
 

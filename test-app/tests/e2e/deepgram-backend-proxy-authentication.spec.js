@@ -27,7 +27,7 @@
 
 import { test, expect } from '@playwright/test';
 import { pathWithQuery } from './helpers/app-paths.mjs';
-import { BASE_URL, getDeepgramProxyParams } from './helpers/test-helpers.mjs';
+import { BASE_URL, getDeepgramProxyParams, getE2EBackend } from './helpers/test-helpers.mjs';
 
 const PROXY_ENDPOINT = getDeepgramProxyParams().proxyEndpoint;
 const IS_PROXY_MODE = process.env.USE_PROXY_MODE === 'true';
@@ -252,6 +252,9 @@ test.describe('Backend Proxy Authentication', () => {
   });
 
   test('should handle connection closure due to token expiration during session', async ({ page }) => {
+    if (getE2EBackend() !== 'deepgram') {
+      test.skip(true, 'proxyAuthToken lifecycle is validated against Deepgram proxy; use E2E_BACKEND=deepgram');
+    }
     const validToken = 'valid-token-123';
     
     await page.goto(pathWithQuery({

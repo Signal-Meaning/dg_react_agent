@@ -170,6 +170,21 @@ const localStorageConversationStorage: ConversationStorage = {
   },
 };
 
+/** Prevent Deepgram key material from reaching sessionLogger / Playwright console (Issue #544). */
+function redactLikelyApiKeysInTestAppLog(message: string, deepgramKey: string | undefined): string {
+  let s = message;
+  if (typeof deepgramKey === 'string' && deepgramKey.length >= 20) {
+    if (s.includes(deepgramKey)) {
+      s = s.split(deepgramKey).join('[REDACTED]');
+    }
+    const mid = deepgramKey.substring(10, deepgramKey.length - 10);
+    if (mid.length > 10 && s.includes(mid)) {
+      s = s.split(mid).join('[REDACTED]');
+    }
+  }
+  return s.replace(/dg_[a-zA-Z0-9_-]{35,}/g, '[REDACTED]');
+}
+
 function App() {
   // Fail-fast check for required API key
   const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
@@ -361,7 +376,9 @@ function App() {
 
   // Helper to add logs - memoized
   const addLog = useCallback((message: string) => {
-    const timestampedMessage = `${new Date().toISOString().substring(11, 19)} - ${message}`;
+    const dg = import.meta.env.VITE_DEEPGRAM_API_KEY as string | undefined;
+    const safe = redactLikelyApiKeysInTestAppLog(message, dg);
+    const timestampedMessage = `${new Date().toISOString().substring(11, 19)} - ${safe}`;
     setLogs(prev => [...prev, timestampedMessage]);
     sessionLogger.info(timestampedMessage);
   }, [sessionLogger]);
@@ -1009,7 +1026,9 @@ function App() {
     try {
       const useOpenAIProxy = (proxyEndpoint ?? '').includes('/openai');
       await deepgramRef.current?.start(
-        useOpenAIProxy ? { agent: true, transcription: false } : undefined
+        useOpenAIProxy
+          ? { agent: true, transcription: false, userInitiated: true }
+          : { userInitiated: true }
       );
       setIsRecording(true);
       addLog('Started interaction');
@@ -1104,11 +1123,11 @@ function App() {
           if (useOpenAIProxy) {
             sessionLogger.debug('Starting agent only (OpenAI proxy – transcript/VAD via agent)...');
             addLog('Starting agent (OpenAI proxy)...');
-            await deepgramRef.current.start({ agent: true, transcription: false });
+            await deepgramRef.current.start({ agent: true, transcription: false, userInitiated: true });
           } else {
             sessionLogger.debug('Starting both agent and transcription services...');
             addLog('Starting agent and transcription services...');
-            await deepgramRef.current.start({ agent: true, transcription: true });
+            await deepgramRef.current.start({ agent: true, transcription: true, userInitiated: true });
           }
           sessionLogger.debug('Services started (or already connected)');
           if (typeof deepgramRef.current.startAudioCapture === 'function') {
@@ -1692,7 +1711,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
               } else {
                 try {
                   addLog('Starting agent connection on text focus gesture');
-                  await deepgramRef.current?.start?.({ agent: true, transcription: false });
+                  await deepgramRef.current?.start?.({ agent: true, transcription: false, userInitiated: true });
                 } catch (e) {
                   lastAgentStartFailureRef.current = now;
                   const msg = e instanceof Error ? e.message : String(e);

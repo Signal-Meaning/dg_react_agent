@@ -30,6 +30,8 @@ The repository publishes **two packages** to GitHub Package Registry. CI (`.gith
 
 You may release the component only, the backend only, or both in one release. Whichever packages you bump and publish, record their versions in the table above and use those versions in the checklist (bump, dist-tag, release notes).
 
+**Release branch (required):** Every version is prepared and published from a dedicated branch **`release/vX.X.X`**. Version bumps and `docs/releases/vX.X.X/` must be **committed on that branch** before you create the GitHub Release. Do **not** point the GitHub Release or the release tag at `main` while `main` still lacks those commits — CI publishes from the ref you attach the tag to.
+
 ### 📋 Release Checklist
 
 **Process order — do not skip:** Complete **Pre-Release Preparation** (tests, lint, audit) before Version Management, release branch, or publishing. The release branch may be created early for planning, but do **not** create the GitHub release or publish until Pre-Release Preparation is complete.
@@ -138,8 +140,8 @@ You may release the component only, the backend only, or both in one release. Wh
 - [ ] **Create GitHub Release**: Create release on GitHub
   - [ ] Title: `Release vX.X.X`
   - [ ] Description: Include changelog and migration notes
-  - [ ] Tag: `vX.X.X`
-  - [ ] Target: `main` branch
+  - [ ] Tag: `vX.X.X` (create the tag from **`release/vX.X.X`**, not from `main`, unless `main` and the release branch are identical at that commit)
+  - [ ] **Target branch: `release/vX.X.X`** — the release tag must reference the branch that contains the version bump and release docs so CI builds and publishes the correct tree
 - [ ] **Add Release Labels**: Label the release appropriately
   - [ ] Add: `release` label
   - [ ] Add: `vX.X.X` label
@@ -213,7 +215,7 @@ Follow the established documentation structure in `docs/releases/`:
 3. **Testing**: All tests must pass before release
 4. **Documentation**: Comprehensive documentation is required
 5. **Breaking Changes**: Must be clearly documented in MIGRATION.md
-6. **Merge to main via PR**: Branch protection may require changes through a pull request. Do **not** push a local merge directly to `main`; open a PR from `release/vX.X.X` to `main` and merge the PR.
+6. **Publish from `release/vX.X.X`**: Create the GitHub Release (and tag) from the **release branch** after bumps and docs are committed there. **Merge to `main` via PR** only **after** publish (or per your policy): open `release/vX.X.X` → `main`; do **not** push a local merge directly to `main` if branch protection applies.
 
 ### 🔗 Related Documentation
 
