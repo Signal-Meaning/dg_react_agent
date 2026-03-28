@@ -5,8 +5,20 @@
 
 ## Goal
 
-- In-process self-signed certificate generation only when a **dedicated** opt-in env is set (exact name **TBD**; e.g. `OPENAI_PROXY_INSECURE_DEV_TLS=1`).
-- When **`NODE_ENV=production`** (and any other agreed “deployed” signals), **do not** call `selfsigned.generate()`; use HTTP or PEM paths only.
+- In-process self-signed certificate generation only when a **dedicated** opt-in env is set: **`OPENAI_PROXY_INSECURE_DEV_TLS=1`** or **`true`**.
+- When **`NODE_ENV=production`**, **do not** use in-process dev TLS — resolver returns **`fatal`**; use HTTP or PEM paths only.
+
+> **Parallel epic track:** [#555](./ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md) — production **cert** policy remains this issue; #555 is **upstream Realtime** behavior.
+
+## Repository status (accurate for current tree)
+
+| Item | State |
+|------|--------|
+| **Env name** | **`OPENAI_PROXY_INSECURE_DEV_TLS`** (final; documented in README + `run.ts`). |
+| **`listen-tls.ts`** | **`insecureDevSelfSigned`** only when flag truthy and **not** `NODE_ENV=production`. |
+| **Production + flag** | **`fatal`** with message forbidding dev TLS in production. |
+| **`run.ts`** | **`require('selfsigned')`** only inside **`insecureDevSelfSigned`** branch. |
+| **`dependencies`** | **`selfsigned`** present for consumers on that path ([#547](./TRACKING-547.md)). |
 
 ## Specification links
 
@@ -15,24 +27,24 @@
 
 ## TDD — RED
 
-- [ ] Test: `NODE_ENV=production` + explicit dev TLS flag → **error exit** or **ignored with documented code path** (choose one; test locks behavior).
-- [ ] Test: non-production + explicit dev TLS flag → in-process cert path works (if still supported).
-- [ ] Test: dev TLS flag unset → no `selfsigned` load (unless #547 temporarily still moves dep — align with final design).
+- [x] **`NODE_ENV=production` + `OPENAI_PROXY_INSECURE_DEV_TLS=1`** → **`fatal`** — `openai-proxy-listen-tls.test.ts`.
+- [x] **Non-production + flag** → **`insecureDevSelfSigned`** — same file.
+- [x] **Flag unset** → **`http`** (no `selfsigned` branch in resolver; `run.ts` does not load `selfsigned` on HTTP path).
 
 ## TDD — GREEN
 
-- [ ] Implement guards around `selfsigned.generate()`.
-- [ ] Ensure `dependencies` still satisfy any remaining dev path ([#547](./TRACKING-547.md), [#548](./TRACKING-548.md)).
+- [x] Guards in **`resolveOpenAIProxyListenMode`** + **`run.ts`** branch.
+- [x] **`dependencies`** include **`selfsigned`** for dev TLS path.
 
 ## TDD — REFACTOR
 
-- [ ] Clear error messages for misconfiguration (prod + dev TLS).
+- [x] Clear **`fatal`** message string for prod + dev TLS (see `listen-tls.ts`).
 
 ## Definition of done
 
-- [ ] Behavior documented in integrator docs ([#552](./TRACKING-552.md)).
+- [x] Behavior documented in integrator docs ([#552](./TRACKING-552.md) / README).
 - [ ] GitHub #551 closed with PR link and this file.
 
 ## Verification log
 
-- [ ] _Jest/integration: date / command / outcome_
+- **2026-03-28:** `npm test -- openai-proxy-listen-tls` — **PASS** (includes production + insecure dev cases).

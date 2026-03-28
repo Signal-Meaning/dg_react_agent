@@ -8,4 +8,5 @@ Local docs for the **real-API integration qualification** regression (`USE_REAL_
 | File | Purpose |
 |------|---------|
 | [GITHUB-ISSUE-BODY.md](./GITHUB-ISSUE-BODY.md) | Markdown posted as the GitHub issue body. |
-| [TRACKING.md](./TRACKING.md) | Maintainer checklist and verification log. |
+| [TRACKING.md](./TRACKING.md) | **TDD → PR merge** checklist, **pre-release** qualification, verification log. |
+| [../TDD-EPIC-546.md](../TDD-EPIC-546.md) | Epic-wide TDD hub, command reference, tracking index (#547–#555, #554). |

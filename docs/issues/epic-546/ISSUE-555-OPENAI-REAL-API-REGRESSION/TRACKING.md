@@ -7,23 +7,45 @@
 
 Restore confidence in **`USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`** for release qualification: classify failures (repo vs OpenAI), fix or document, and close with evidence.
 
-## Symptoms (recorded)
+## TDD → PR merge (first things first)
+
+**Policy:** Nothing is “done” for merge until the cycle is visible here: **🔴 RED → 🟢 GREEN → 🟡 REFACTOR (gold)** on the tests that define the behavior, **then** merge via PR. **Pre-release** (`USE_REAL_APIS` burn-in, bisect, packaging) is **after** this lane (or parallel only where your process explicitly allows).
+
+| Step | Meaning | #555 (this workstream) |
+|------|---------|-------------------------|
+| 🔴 **RED** | Failing tests exist **before** or **as** the regression is fixed—they encode the required behavior and **must fail** until implementation catches up. | **Done (logged):** Pre-fix **`USE_REAL_APIS`** run showed Issue **#470** real-API **FAIL** (timeout, no assistant text after tool). **Automated RED coverage** added/updated: `tests/openai-proxy.test.ts` (e.g. §6b / `output_text.done` path), `tests/integration/openai-proxy-integration.test.ts` (mock upstream + Issue #555 fallback), test-app Jest on `/function-call` + Playwright **6**/**6b** token assertions. *If your bar is “run RED locally before green,” paste the failing command output into the verification log when you open the PR.* |
+| 🟢 **GREEN** | Minimal implementation; **same tests pass** (mock + unit + integration **without** `USE_REAL_APIS` for proxy; test-app Jest + targeted E2E as scoped). | **Done (logged):** `npm test -- tests/openai-proxy.test.ts tests/integration/openai-proxy-integration.test.ts` **PASS**; test-app `npm test` **PASS**; Playwright **6**/**6b** **PASS** with `USE_REAL_APIS=1` for E2E (see log). |
+| 🟡 **REFACTOR** | Improve design while **keeping tests green** (no behavior change). | **Open** — check when you complete an explicit refactor pass, or mark **N/A** and note why. |
+| **Merged PR** | Fix lands on target branch with link + short root-cause note. | **Open** — fill PR URL when merged. |
+
+**Checklist (copy to PR description if useful)**
+
+- [x] 🔴 RED evidenced (failing test output and/or pre-fix real-API capture in verification log)
+- [x] 🟢 GREEN evidenced (commands + PASS in verification log)
+- [ ] 🟡 REFACTOR complete or N/A (brief note)
+- [ ] PR merged (link)
+
+## Pre-release / qualification (not a substitute for TDD)
+
+Run **after** the TDD lane above is satisfied for merge (or per release policy **in addition** to it).
+
+- [ ] **`USE_REAL_APIS=1`** — full file and/or `-t "Issue #470 real-API"` (ideally **3×**); log here. *(Pre-fix run failed #470; post-fix run not yet logged in this file.)*
+- [ ] **Bisect / baseline** — compare to last known-good tag or branch; note “upstream flake” vs repo regression
+- [ ] **`openai-proxy-run-ts-entrypoint.test.ts`** — green on the branch you are shipping
+- [ ] **504 / gateway** — intermittent; document repeat runs if it blocks qualification
+
+**Symptoms (for context)**
 
 | Case | Failure mode |
 |------|----------------|
 | Issue #470 real-API | 60s timeout — no assistant `ConversationText` after function-call backend HTTP + `FunctionCallResponse` |
 | `translates InjectUserMessage …` (real API) | 25s Jest timeout; upstream log **`Unexpected server response: 504`** on Realtime WebSocket |
 
-## Work plan
-
-- [ ] Bisect / compare with last green baseline (tag or branch); note commit or “upstream flake”
-- [ ] Multiple real-API runs; capture logs (`LOG_LEVEL=debug` if useful)
-- [ ] Implement fix **or** document qualification exception + any monitoring
-- [ ] Keep `openai-proxy-run-ts-entrypoint.test.ts` green in CI (mock, `run.ts` path)
-
 ## Definition of done
 
-Mirror GitHub issue checkboxes; close #555 with PR link and short root-cause note.
+1. **TDD → PR:** Checklist under **TDD → PR merge** complete — 🔴 RED evidenced, 🟢 GREEN evidenced, 🟡 REFACTOR complete or **N/A** (with note), **merged PR** link filled in.  
+2. **Pre-release (as needed):** Checklist under **Pre-release / qualification** ticked for the release you are cutting.  
+3. **GitHub #555:** Mirror issue checkboxes; close with short root-cause note.
 
 ## Verification log
 
@@ -74,5 +96,20 @@ _Add dated entries (command, outcome, operator)._
 **Implementation:** `extractAssistantTextFromResponseOutputTextDone` in `translator.ts`; in `server.ts`, on `response.output_text.done`, emit `ConversationText` (assistant) when extractable text exists and no assistant text was emitted yet for the response; dedupe when the same string arrives again on `conversation.item.done` (mock sends both). `AgentStartedSpeaking` is sent before the fallback (#482 order). Unit tests in `tests/openai-proxy.test.ts` (6b); integration mock test renamed/updated for Issue #555 fallback.
 
 **Verification:** `npm test -- tests/openai-proxy.test.ts tests/integration/openai-proxy-integration.test.ts` — PASS. Targeted real-API run may still hit **504** or timeout when OpenAI is flaky; re-run `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts -t "Issue #470 real-API: function-call flow"` when the gateway is stable.
+
+### 2026-03-28 — test-app E2E parity with Issue #470 `e2eVerify` contract
+
+**Intent:** OpenAI-proxy Playwright tests **6** and **6b** qualify function-call execution with the **same opaque token** as integration Issue #470 (`dg-openai-proxy-fc-e2e-v1`), not a loose time/UTC substring match.
+
+**Implementation (summary)**
+
+- `test-app/scripts/function-call-handlers.js` — `get_current_time` result JSON includes **`e2eVerify`** (exported token constant; keep in sync with `tests/integration/openai-proxy-integration.test.ts`).
+- `openai-proxy-e2e.spec.js` — `setupTestPageForBackend` adds **`fc-e2e-verify=true`**; after `waitForFunctionCall`, assert **`toContainText`** for the token on `[data-testid="agent-response"]`. Test **6d** uses the same query flag for a consistent Settings/instructions path (diagnostics unchanged).
+- `test-app/src/App.tsx` — when **`fc-e2e-verify`** and **`enable-function-calling`** are true, append instructions that **spell the literal token twice** and forbid timestamps/UUIDs as substitutes. (A weaker “copy the e2eVerify field” line caused the model to invent values such as `e2eVerify:21:33:48`.)
+- Jest: `test-app` `function-call-endpoint-integration` / `backend-integration` assert `parsed.e2eVerify` on `/function-call` responses. Docs: `test-app/tests/e2e/README.md` (function-call bullet), `docs/BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md` (optional test-app-only fields).
+
+**Command (agent run)**
+
+- From `test-app`: `USE_REAL_APIS=1 USE_PROXY_MODE=true E2E_USE_HTTP=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6. Simple function calling|6b. Issue #462"` — **PASS** (2 passed).
 
 - _Further dated runs: add below._

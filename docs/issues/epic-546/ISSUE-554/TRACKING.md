@@ -5,6 +5,12 @@
 
 Use **checkboxes on GitHub issue #554** as the primary checklist (same content as [GITHUB-ISSUE-BODY.md](./GITHUB-ISSUE-BODY.md)). Update this file when major milestones complete so the epic folder stays auditable without opening GitHub.
 
+## TDD → PR vs pre-release (order)
+
+**First (development):** For proxy / test-app fixes that fall under [#555](../ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md), follow **🔴 RED → 🟢 GREEN → 🟡 REFACTOR (gold)** on the tests that define behavior, **then** merge the PR. That progress is tracked in **ISSUE-555** (TDD checklist + verification log), not by the boxes below.
+
+**Second (shipping):** The sections below (**Epic gates**, **Release execution**) are **pre-release and publish** only. They stay unchecked until you deliberately run that workflow. Passing tests or merged #555 work does **not** auto-check them.
+
 ## Epic gates (before starting release checklist)
 
 - [ ] [#547](https://github.com/Signal-Meaning/dg_react_agent/issues/547) (and any co-shipped code) merged: consumer no longer hits `MODULE_NOT_FOUND: selfsigned` on supported path
@@ -28,8 +34,6 @@ Mirror the sections from the GitHub issue; check here when each **section** is d
 
 _Add dated entries (command, outcome, operator)._
 
-- [ ] _…_
-
 ### Real-API integration failure identification (2026-03-28)
 
 `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` reported:
@@ -40,3 +44,8 @@ _Add dated entries (command, outcome, operator)._
 **Interpretation:** **504** is an HTTP status on the Realtime **upgrade** (or immediate gateway response), i.e. **upstream / edge** failure or overload, not a missing `server.ts` handler. The Issue #470 timeout is **absence of a completed assistant turn** within 60s (same suite shares process; can compound if sessions are slow or degraded). **EPIC-546** commits did not change `server.ts`; bisect vs last green release and **repeat** real-API runs still required to prove a deterministic repo regression vs API flake.
 
 **Mitigation for qualification:** Run `npm test -- tests/integration/openai-proxy-run-ts-entrypoint.test.ts` (mock, **run.ts** path) in CI; keep real-API runs for ordering/tooling when keys are available.
+
+**Update (2026-03-28) — proxy + E2E alignment ([#555](../ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md))**
+
+- **Issue #470-shaped failure (no assistant text after tool output):** Addressed in-tree by emitting **`ConversationText`** from **`response.output_text.done`** when Realtime delivers the final string only on that event after `function_call_output` (see ISSUE-555 tracking — `translator.ts` / `server.ts`, unit tests in `tests/openai-proxy.test.ts`). Re-run **`USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts -t "Issue #470 real-API"`** (and full file) when signing a release; **504** can still appear intermittently on the upstream leg.
+- **Partner-style E2E (function call → real `POST /function-call` → reply):** `test-app` **openai-proxy-e2e** tests **6** / **6b** now assert the same **`e2eVerify`** literal as integration (`fc-e2e-verify` + backend JSON + strict instruction text in `App.tsx`). Example: from `test-app`, `USE_REAL_APIS=1 USE_PROXY_MODE=true E2E_USE_HTTP=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6. Simple function calling|6b. Issue #462"` — use when qualifying proxy + test-app together.

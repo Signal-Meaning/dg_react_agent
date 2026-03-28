@@ -65,6 +65,7 @@ const hasManagedPromptIdEnv = !!process.env.OPENAI_MANAGED_PROMPT_ID?.trim();
  * proving end-to-end: FCR → backend POST → FCR with payload → model read tool output → assistant text.
  * Prefer this over matching natural-language time phrases (e.g. "12:00", "UTC"), which models may rephrase.
  */
+/** Keep in sync with OPENAI_PROXY_FC_E2E_VERIFY_TOKEN in test-app/scripts/function-call-handlers.js. */
 const OPENAI_PROXY_FC_E2E_VERIFY_TOKEN = 'dg-openai-proxy-fc-e2e-v1';
 
 /**

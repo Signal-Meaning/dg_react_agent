@@ -54,19 +54,12 @@ import {
 import { loadAndSendAudioSample, loadAndSendAudioSampleAt24k, waitForVADEvents, CHUNK_20MS_16K_MONO } from './fixtures/audio-helpers.js';
 import path from 'path';
 import fs from 'fs';
+import { OPENAI_PROXY_FC_E2E_VERIFY_TOKEN } from '../../scripts/function-call-handlers.js';
 
 const AGENT_RESPONSE_TIMEOUT = 20000;
 /** Issue #478: function-call round-trip (backend + model reply) can exceed 20s; use longer wait for result content. */
 const FUNCTION_CALL_RESULT_TIMEOUT = 45000;
-/** Agent state value used when waiting for final response before asserting (test 6 / 6b). */
-const AGENT_STATE_IDLE = 'idle';
-/**
- * Pattern for "agent replied with a time" after get_current_time. Backend returns { time, timezone } (default
- * timezone UTC); the model may say "14:32 UTC", "2:32 PM", or "The time is 12:00 UTC". We accept either a
- * time-like substring (HH:MM or H:MM) or the literal "UTC" so we don't depend on exact phrasing.
- */
-const FUNCTION_CALL_TIME_RESPONSE_PATTERN = /\d{1,2}:\d{2}|UTC/;
-/** Tests 6 and 6b use setupFunctionCallingTest(page, { useBackend: true }) then setupTestPageForBackend with enable-function-calling; they wait for function-call-tracker before asserting time. Same backend path as other proxy E2E; useBackend ensures prerequisites (tracking arrays, testFunctions) without overriding handleFunctionCall. See test-app/tests/e2e/README.md § "Function-call tests". */
+/** Tests 6 and 6b use setupFunctionCallingTest(page, { useBackend: true }), fc-e2e-verify (app appends instruction to echo e2eVerify), POST /function-call JSON includes e2eVerify; assert that token in agent-response (same contract as Issue #470 integration). See test-app/scripts/function-call-handlers.js. */
 
 test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   test.beforeEach(() => {
@@ -293,17 +286,17 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
       test.skip(true, 'Backend does not support get_current_time; start backend (e.g. npm run backend) or run without E2E_USE_EXISTING_SERVER so Playwright starts it');
     }
     await setupFunctionCallingTest(page, { useBackend: true });
-    await setupTestPageForBackend(page, { extraParams: { 'test-mode': 'true', 'enable-function-calling': 'true' } });
+    await setupTestPageForBackend(page, {
+      extraParams: { 'test-mode': 'true', 'enable-function-calling': 'true', 'fc-e2e-verify': 'true' },
+    });
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, "What time is it?");
     // Wait for component to receive FunctionCallRequest (same backend as other tests; isolates protocol/setup vs backend).
     const functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
     expect(functionCallInfo.count, 'FunctionCallRequest should be received (function-call-tracker); if 0, check proxy/API and enable-function-calling').toBeGreaterThanOrEqual(1);
-    // Issue #478: Wait for the function result (time) to appear. Do not pass on greeting — agent-response
-    // shows the latest assistant message; we must wait for the one that contains the time (backend /function-call).
     const agentResponseEl = page.locator('[data-testid="agent-response"]');
-    await expect(agentResponseEl).toHaveText(FUNCTION_CALL_TIME_RESPONSE_PATTERN, { timeout: FUNCTION_CALL_RESULT_TIMEOUT });
+    await expect(agentResponseEl).toContainText(OPENAI_PROXY_FC_E2E_VERIFY_TOKEN, { timeout: FUNCTION_CALL_RESULT_TIMEOUT });
     const response = await agentResponseEl.textContent();
     testInfo.annotations.push({ type: 'agent-response', description: response ?? '(empty)' });
     if (process.env.CI !== '1') {
@@ -330,16 +323,17 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
       test.skip(true, 'Backend does not support get_current_time; start backend (e.g. npm run backend) or run without E2E_USE_EXISTING_SERVER so Playwright starts it');
     }
     await setupFunctionCallingTest(page, { useBackend: true });
-    await setupTestPageForBackend(page, { extraParams: { 'test-mode': 'true', 'enable-function-calling': 'true' } });
+    await setupTestPageForBackend(page, {
+      extraParams: { 'test-mode': 'true', 'enable-function-calling': 'true', 'fc-e2e-verify': 'true' },
+    });
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
     await sendTextMessage(page, 'What time is it?');
     // Wait for component to receive FunctionCallRequest (same backend as other tests; isolates protocol/setup vs backend).
     const functionCallInfo = await waitForFunctionCall(page, { timeout: 20000 });
     expect(functionCallInfo.count, 'FunctionCallRequest should be received (function-call-tracker); if 0, check proxy/API and enable-function-calling').toBeGreaterThanOrEqual(1);
-    // Wait for function result (time) to appear in agent-response (same as test 6).
     const agentResponseEl = page.locator('[data-testid="agent-response"]');
-    await expect(agentResponseEl).toHaveText(FUNCTION_CALL_TIME_RESPONSE_PATTERN, { timeout: FUNCTION_CALL_RESULT_TIMEOUT });
+    await expect(agentResponseEl).toContainText(OPENAI_PROXY_FC_E2E_VERIFY_TOKEN, { timeout: FUNCTION_CALL_RESULT_TIMEOUT });
     const response = await agentResponseEl.textContent();
     testInfo.annotations.push({ type: 'agent-response', description: response ?? '(empty)' });
     if (process.env.CI !== '1') {
@@ -367,7 +361,9 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
       test.skip(true, 'Backend does not support get_current_time; start backend or run without E2E_USE_EXISTING_SERVER');
     }
     await setupFunctionCallingTest(page, { useBackend: true });
-    await setupTestPageForBackend(page, { extraParams: { 'test-mode': 'true', 'enable-function-calling': 'true' } });
+    await setupTestPageForBackend(page, {
+      extraParams: { 'test-mode': 'true', 'enable-function-calling': 'true', 'fc-e2e-verify': 'true' },
+    });
 
     // Automated network capture for /function-call (Issue #489: no manual inspection)
     const functionCallRequests = [];

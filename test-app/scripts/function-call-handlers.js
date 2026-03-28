@@ -4,10 +4,13 @@
  * Contract: see docs/BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md
  */
 
+/** Opaque string echoed by assistant when test-app uses fc-e2e-verify (Issue #470 / openai-proxy E2E 6, 6b). Keep in sync with OPENAI_PROXY_FC_E2E_VERIFY_TOKEN in tests/integration/openai-proxy-integration.test.ts. */
+export const OPENAI_PROXY_FC_E2E_VERIFY_TOKEN = 'dg-openai-proxy-fc-e2e-v1';
+
 /**
  * get_current_time — returns current time, optionally in a timezone.
  * @param {object} args - Parsed arguments (e.g. { timezone?: string })
- * @returns {{ time: string }}
+ * @returns {{ time: string, timezone: string, e2eVerify: string }}
  */
 function getCurrentTime(args = {}) {
   const tz = args.timezone || 'UTC';
@@ -20,7 +23,7 @@ function getCurrentTime(args = {}) {
     second: '2-digit',
   });
   const time = formatter.format(now);
-  return { time, timezone: tz };
+  return { time, timezone: tz, e2eVerify: OPENAI_PROXY_FC_E2E_VERIFY_TOKEN };
 }
 
 const HANDLERS = {

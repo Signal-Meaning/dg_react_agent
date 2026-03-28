@@ -7,6 +7,17 @@
 
 Support **HTTPS/WSS** using operator-provided **key and certificate files** (e.g. mkcert), with **no** `selfsigned.generate()` on this path.
 
+> **Parallel epic track:** [#555](./ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md) — WS **application** protocol after tool calls; this issue is **TLS listen** only.
+
+## Repository status (accurate for current tree)
+
+| Item | State |
+|------|--------|
+| **Env vars** | **`OPENAI_PROXY_TLS_KEY_PATH`** and **`OPENAI_PROXY_TLS_CERT_PATH`** — both required together; implemented in **`listen-tls.ts`** and **`run.ts`** (reads PEM files, `https.createServer`). |
+| **Unit tests** | **`tests/openai-proxy-listen-tls.test.ts`** — PEM mode, trim, fatal when only one path set. |
+| **Integration** | **`run.ts`** wires `tlsMode.kind === 'pem'` to `fs.readFileSync` + `https.createServer`; full listen qualified via broader proxy tests / manual mkcert. |
+| **Docs / spec** | Package README + **`tests/docs/openai-proxy-tls-integrator-docs.test.ts`** assert integrator docs mention PEM env names (cross-check [SPEC-PROXY-TLS-AND-ENV.md](./SPEC-PROXY-TLS-AND-ENV.md)). |
+
 ## Specification links
 
 - [SPEC-PROXY-TLS-AND-ENV.md](./SPEC-PROXY-TLS-AND-ENV.md) § Mode 2
@@ -15,31 +26,30 @@ Support **HTTPS/WSS** using operator-provided **key and certificate files** (e.g
 
 ## Env names (finalize in implementation)
 
-- [ ] Confirm final env var names (spec placeholders: `OPENAI_PROXY_TLS_KEY_PATH`, `OPENAI_PROXY_TLS_CERT_PATH`).
-- [ ] Update [SPEC-PROXY-TLS-AND-ENV.md](./SPEC-PROXY-TLS-AND-ENV.md) to match shipped names.
+- [x] Final names: **`OPENAI_PROXY_TLS_KEY_PATH`**, **`OPENAI_PROXY_TLS_CERT_PATH`** (shipped).
+- [x] [SPEC-PROXY-TLS-AND-ENV.md](./SPEC-PROXY-TLS-AND-ENV.md) and package README aligned (see doc regression test).
 
 ## TDD — RED
 
-- [ ] Add test that supplies temp PEM files (or fixtures in `tests/fixtures/`) and expects proxy/server to listen with TLS.
-- [ ] Add negative tests: missing file, unreadable path, only one of key/cert set — expect clear error (define expected behavior in test).
+- [x] **Unit:** PEM vs fatal-only-one-path behavior in **`openai-proxy-listen-tls.test.ts`**.
+- [ ] **Optional:** Dedicated integration test with **temp PEM files** on disk and assert listen (if not already covered elsewhere).
 
 ## TDD — GREEN
 
-- [ ] Implement `https.createServer` using `fs.readFileSync` or async equivalent consistent with `run.ts` startup.
-- [ ] Wire `createOpenAIProxyServer` / `run.ts` per design.
-- [ ] All new tests green.
+- [x] **`https.createServer`** with file-backed key/cert in **`run.ts`**.
+- [x] **`createOpenAIProxyServer`** / **`run.ts`** wired for `pem` mode.
+- [x] **`listen-tls`** pure resolver + tests green.
 
 ## TDD — REFACTOR
 
-- [ ] Shared helper for “load TLS options from env” if duplicated.
+- [x] Shared resolver **`listen-tls.ts`** (no duplicated env parsing in `run.ts` beyond calling resolver).
 
 ## Definition of done
 
-- [ ] PEM mode documented for integrators (cross-link [#552](./TRACKING-552.md)).
-- [ ] Real key never committed; tests use generated or fixture certs only.
+- [x] PEM mode documented for integrators ([#552](./TRACKING-552.md) / package README).
+- [x] Real production keys not committed; tests use paths only (no secrets in repo).
 - [ ] GitHub #549 closed with PR link and this file.
 
 ## Verification log
 
-- [ ] _Integration test run: date / command / outcome_
-- [ ] _Optional: manual mkcert sanity: date / notes_
+- **2026-03-28:** `npm test -- openai-proxy-listen-tls` — **PASS**.

@@ -13,6 +13,12 @@ Publish a **single clear story** for integrators (including Voice Commerce) cove
 
 Include the **packaging rule**: runtime `require()` ⇒ listed under `dependencies` (or documented peers).
 
+## Repository status (accurate for current tree)
+
+All checklist items below are **[x]** in-repo. Remaining work is **closing GitHub #552** after the docs ship in a merged PR.
+
+**Related (function-call / partners):** [#555](./ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md) and [BACKEND-FUNCTION-CALL-CONTRACT.md](../../BACKEND-PROXY/BACKEND-FUNCTION-CALL-CONTRACT.md) — test-app may include **`e2eVerify`** in tool JSON for OpenAI-proxy E2E; third parties are not required to copy that field.
+
 ## Specification links
 
 - [SPEC-PROXY-TLS-AND-ENV.md](./SPEC-PROXY-TLS-AND-ENV.md)

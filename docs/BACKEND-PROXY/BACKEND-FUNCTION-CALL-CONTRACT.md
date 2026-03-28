@@ -60,6 +60,8 @@ Example:
 }
 ```
 
+The test-app implementation of `get_current_time` may include extra fields in the JSON object (for example `e2eVerify`) used only to qualify OpenAI-proxy E2E and integration tests; third-party backends are not required to mirror that shape.
+
 ### Error (4xx / 5xx or 200 with error payload)
 
 - **Body:** `{ "error": "<string>" }`
