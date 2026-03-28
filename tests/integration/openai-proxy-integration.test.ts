@@ -1811,7 +1811,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', (err) => finish(err));
-  }, useRealAPIs ? 25000 : 5000);
+    // Real Realtime often exceeds 25s under load; match other real-API timeouts in this suite (~60s).
+  }, useRealAPIs ? 60000 : 5000);
 
   /** Issue #414: OpenAI requires ≥100ms audio before commit. Proxy must not send commit when total appended bytes < 100ms (4800 bytes at 24kHz 16-bit; proxy uses 24k so both 16k and 24k clients work). */
   itMockOnly('does not send input_audio_buffer.commit when total appended audio < 100ms (Issue #414 buffer too small)', (done) => {

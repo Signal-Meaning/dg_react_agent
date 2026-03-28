@@ -7,7 +7,7 @@ Use **checkboxes on GitHub issue #554** as the primary checklist (same content a
 
 ## Release status
 
-**Pre-release has started** (not deferred): **2026-03-28** on branch **`release/v0.10.6`** — lint, CI-parity Jest, event coverage, and audit are **done** for this session; **Pre-release preparation** remains **open** until E2E proxy mode and (when applicable) real-API integration rows are satisfied per policy. **Do not** create the GitHub Release or publish until that rollup checkbox is fully green.
+**Pre-release has started** (not deferred): **2026-03-28** on branch **`release/v0.10.6`** — lint, CI-parity Jest, event coverage, and audit are **done**; **E2E** and **real-API integration** were **executed** the same day but **did not fully pass** (see table + verification log). **Pre-release preparation** stays **open** until those rows are green or an explicit exception is recorded. **Do not** create the GitHub Release or publish until that rollup checkbox is fully green.
 
 **CI-parity Jest:** `CI=true RUN_REAL_API_TESTS=false npm run test:mock` — **PASS** (2026-03-28), same env as the **Test and Publish** workflow’s Jest step.
 
@@ -47,8 +47,8 @@ Started **2026-03-28** (repo root). Keep the rollup checkbox **open** until ever
 | `npm run test:mock` — **plain local** (no `CI` / `RUN_REAL_API_TESTS`) | **Done** — **2026-03-28:** PASS (exit 0); live Deepgram **`websocket-connectivity`** is **opt-in** only — see [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556) and section below (no longer blocks default local Jest) |
 | `npm test -- tests/openai-proxy-event-coverage.test.ts` | **Done** — PASS |
 | `npm audit --audit-level=high` | **Done** — 0 vulnerabilities |
-| E2E proxy mode (`cd test-app && npm run backend` + `USE_PROXY_MODE=true npm run test:e2e`) | **Not run** this session |
-| `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` | **Not run** this session — **recommended** for proxy/API qualification when `OPENAI_API_KEY` available ([#555](../ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md)) |
+| E2E proxy mode (`cd test-app && npm run backend` + `USE_PROXY_MODE=true npm run test:e2e`) | **Partial / FAIL (2026-03-28)** — Full **`npm run test:e2e`** (252 tests) was **not** completed in-agent (first spec repeatedly timed out waiting for connection/Settings). **`npm run test:e2e:ci`** (Playwright-managed dev + backend; CI subset: 19 tests, proxy + `E2E_USE_HTTP=1`) **finished** in **~9m** with **exit 1**: **8 passed, 11 failed** — failures cluster on **`page-content`** (`[data-testid="voice-agent"]` not found), **`lazy-initialization-e2e`**, and **`deepgram-ux-protocol`**. Re-run after fixing test-app/DOM or env; use **`npm run test:e2e`** when you want the full suite. |
+| `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` | **Run, FAIL (2026-03-28)** — **exit 1**; **19 passed**, **1 failed**, 64 skipped (mock-only tests). **Failed:** `translates InjectUserMessage … response.output_text.done to ConversationText` — Jest **25s** timeout (`done()` never called); aligns with prior **504 / slow upstream** notes in the log below. Jest also reported **did not exit** (open handles) after the run — use `--detectOpenHandles` if debugging. **Re-run** when signing the release; see [#555](../ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md). |
 
 ### Deepgram `websocket-connectivity.test.js` (opt-in; backlog [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556))
 
@@ -93,3 +93,16 @@ _Add dated entries (command, outcome, operator)._
 
 - **Issue #470-shaped failure (no assistant text after tool output):** Addressed in-tree by emitting **`ConversationText`** from **`response.output_text.done`** when Realtime delivers the final string only on that event after `function_call_output` (see ISSUE-555 tracking — `translator.ts` / `server.ts`, unit tests in `tests/openai-proxy.test.ts`). Re-run **`USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts -t "Issue #470 real-API"`** (and full file) when signing a release; **504** can still appear intermittently on the upstream leg.
 - **Partner-style E2E (function call → real `POST /function-call` → reply):** `test-app` **openai-proxy-e2e** tests **6** / **6b** now assert the same **`e2eVerify`** literal as integration (`fc-e2e-verify` + backend JSON + strict instruction text in `App.tsx`). Example: from `test-app`, `USE_REAL_APIS=1 USE_PROXY_MODE=true E2E_USE_HTTP=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6. Simple function calling|6b. Issue #462"` — use when qualifying proxy + test-app together.
+
+### 2026-03-28 — E2E CI subset + real-API integration (agent)
+
+- **`cd test-app && npm run test:e2e:ci`** — **FAIL** (exit **1**), **~9m**, **8 passed / 11 failed**; failures in **`page-content.spec.js`** (no `[data-testid="voice-agent"]`), **`lazy-initialization-e2e.spec.js`**, **`deepgram-ux-protocol.spec.js`**.
+- **`USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`** (repo root) — **FAIL** (exit **1**), **~91s**, **19 passed / 1 failed / 64 skipped**; lone failure: **`translates InjectUserMessage … ConversationText`** (25s timeout, `done()` not called). **Issue #470** real-API case **passed** in this run.
+
+### Investigation (2026-03-28) — root causes and mitigations
+
+1. **E2E: `[data-testid="voice-agent"]` missing** — `App.tsx` only mounts that node when **`shouldShowError`** is false. In **non–test-mode**, any of these forced the error banner (no voice-agent): missing/placeholder **`VITE_DEEPGRAM_*`**, **`test-` API key prefix**, or bad project id — even in **proxy mode**, where the browser does not send the Deepgram secret (the backend proxy holds it). **Mitigation (in-tree):** if **`connectionMode` is proxy** and a **proxy endpoint** is resolved (URL param or `VITE_*_PROXY_ENDPOINT`, including the default `ws(s)://127.0.0.1:8080/openai`), **skip** the browser Deepgram key fail-fast so proxy E2E and local proxy dev can render the main shell.
+
+2. **`translates InjectUserMessage … ConversationText` (real API)** — The test completes only after **`ConversationText` (assistant)**; binary/audio-only paths are ignored. Failure modes: slow or stalled Realtime (**504** / gateway), or assistant text arriving after the **25s** Jest budget. **Mitigation (in-tree):** raised the real-API timeout for this case to **60s** (still fails fast if upstream errors with **`Error`**). **Jest “did not exit”** on failure: the `done()` callback test can leave a WebSocket open on timeout; use **`--detectOpenHandles`** when debugging.
+
+3. **Re-verify:** `cd test-app && npm run test:e2e:ci` and `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` after the above.
