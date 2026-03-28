@@ -1,7 +1,7 @@
 ## EPIC-546 — Execute patch release (Voice Commerce packaging / proxy)
 
 **Parent epic:** [#546](https://github.com/Signal-Meaning/dg_react_agent/issues/546)  
-**Docs hub:** `docs/issues/required/epic-546/README.md`, `RELEASE-AND-QUALIFICATION.md`
+**Docs hub:** `docs/issues/epic-546/README.md`, `RELEASE-AND-QUALIFICATION.md`
 
 This issue tracks **running the full release checklist** to publish the patch that addresses OpenAI proxy consumer installs (e.g. `selfsigned` / dependency audit in [#547](https://github.com/Signal-Meaning/dg_react_agent/issues/547), [#548](https://github.com/Signal-Meaning/dg_react_agent/issues/548)). Complete implementation PRs **before** executing the steps below.
 
@@ -16,7 +16,7 @@ This issue tracks **running the full release checklist** to publish the patch th
 
 ### Qualification highlights for this release
 
-- [ ] **Packaging smoke:** After `npm pack` of `voice-agent-backend`, install tarball in a clean temp project and start the OpenAI proxy — no `MODULE_NOT_FOUND` (see `docs/issues/required/epic-546/RELEASE-AND-QUALIFICATION.md`).
+- [ ] **Packaging smoke:** After `npm pack` of `voice-agent-backend`, install tarball in a clean temp project and start the OpenAI proxy — no `MODULE_NOT_FOUND` (see `docs/issues/epic-546/RELEASE-AND-QUALIFICATION.md`).
 - [ ] **Proxy / API:** If the merged PRs touch proxy↔API behavior, run `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` when `OPENAI_API_KEY` is available.
 
 ---
