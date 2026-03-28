@@ -85,16 +85,6 @@ server.listen(8080);
 
 **Running the OpenAI proxy:** The proxy lives in this package at `scripts/openai-proxy/`. Set `cwd` to the backend package directory (e.g. `path.dirname(require.resolve('@signal-meaning/voice-agent-backend/package.json'))`) and run `npx tsx scripts/openai-proxy/run.ts`. Requires `OPENAI_API_KEY` in the environment or a `.env` file. See `scripts/openai-proxy/README.md` in this package for details. For integrators (e.g. voice-commerce): do not resolve or depend on the React package to run the proxy; see **docs/OPENAI-PROXY-PACKAGING.md** in the repo.
 
-**OpenAI proxy TLS (EPIC-546):** The subprocess does **not** enable TLS from generic `HTTPS=true` alone (avoids accidental inheritance from the host). Supported modes:
-
-| Mode | Environment |
-|------|-------------|
-| HTTP / WS | Default — no TLS-related vars. |
-| HTTPS with PEM | `OPENAI_PROXY_TLS_KEY_PATH` and `OPENAI_PROXY_TLS_CERT_PATH` (e.g. mkcert files). |
-| HTTPS with in-memory dev cert | `OPENAI_PROXY_INSECURE_DEV_TLS=1` — **not** allowed when `NODE_ENV=production`. |
-
-When using `attachVoiceAgentUpgrade` with **`https: true`**, the package strips `HTTPS` from the subprocess environment and sets `OPENAI_PROXY_INSECURE_DEV_TLS=1` unless PEM paths are already provided, so the child matches the parent’s wss expectation without relying on host `HTTPS`.
-
 Options: **deepgram** — path, apiKey, agentUrl?, transcriptionUrl?, verifyClient?(info), setSecurityHeaders?(res). **openai** — path, proxyUrl? (forward to URL), or spawn? (cwd, command, args, env, port), **openai.upstreamOptions?** — merged with package defaults (e.g. `rejectUnauthorized: false` when HTTPS); use for WebSocket client options such as `headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY }` for the OpenAI Realtime API (Issue #441). **logger** — { info, warn, error, debug }. Returns a Promise that resolves to `{ shutdown() }` for graceful close.
 
 **Deepgram proxy – AgentAudioDone (idle timeout):** The component starts its idle timeout only when the agent is idle. For turns that include **audio**, the proxy should send `AgentAudioDone` after the assistant’s `ConversationText` so the component can transition to idle. For **text-only** greeting or turns (no binary forwarded), the component handles the transition internally; the proxy must **not** send `AgentAudioDone` before any audio in that connection, or the idle timer can start and then be cancelled when audio arrives. This package’s Deepgram proxy (`src/attach-upgrade.js`) sends `AgentAudioDone` after the first assistant `ConversationText` only when it has already forwarded at least one binary message. See docs [Component–Proxy Contract](https://github.com/Signal-Meaning/dg_react_agent/blob/main/docs/BACKEND-PROXY/COMPONENT-PROXY-CONTRACT.md#idle-timeout-and-agent-completion-agentaudiodone--text-only-path) and [E2E-FAILURES-RESOLUTION](https://github.com/Signal-Meaning/dg_react_agent/blob/main/docs/issues/ISSUE-489/E2E-FAILURES-RESOLUTION.md).

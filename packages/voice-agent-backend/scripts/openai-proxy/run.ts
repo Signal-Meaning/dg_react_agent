@@ -4,13 +4,10 @@
  *
  * Listens on http://localhost:8080/openai (or OPENAI_PROXY_PORT).
  *
- * **TLS (EPIC-546):** Generic `HTTPS=true` is **not** used for this process. Choose one:
- * - **HTTP** (default): no TLS env.
- * - **PEM files:** `OPENAI_PROXY_TLS_KEY_PATH` + `OPENAI_PROXY_TLS_CERT_PATH` (e.g. mkcert).
- * - **Dev self-signed:** `OPENAI_PROXY_INSECURE_DEV_TLS=1` (disallowed when `NODE_ENV=production`).
- *
- * When spawned from `attachVoiceAgentUpgrade` with `https: true`, the parent sets
- * `OPENAI_PROXY_INSECURE_DEV_TLS` and strips `HTTPS` so host `HTTPS` does not imply proxy TLS alone.
+ * TLS (EPIC-546 — do not use generic HTTPS=1; avoids host env inheritance, Issue #550):
+ * - **File certs (recommended):** set OPENAI_PROXY_TLS_KEY_PATH and OPENAI_PROXY_TLS_CERT_PATH (PEM).
+ * - **Dev self-signed:** set OPENAI_PROXY_INSECURE_DEV_TLS=1 or true (not allowed when NODE_ENV=production).
+ * - **HTTP:** default when neither applies.
  *
  * Requires OPENAI_API_KEY for upstream authentication.
  *
@@ -30,9 +27,9 @@
  */
 
 import path from 'path';
+import fs from 'fs';
 import https from 'https';
 import dotenv from 'dotenv';
-import { resolveOpenAIProxyListenTls } from './resolve-proxy-tls';
 
 const cwd = process.cwd();
 // Load .env from cwd (package dir or repo root), then common alternate locations (monorepo)
@@ -43,6 +40,7 @@ dotenv.config({ path: path.resolve(cwd, '..', '..', '.env') });
 dotenv.config({ path: path.resolve(cwd, '..', '..', 'test-app', '.env') });
 
 import { createOpenAIProxyServer } from './server';
+import { resolveOpenAIProxyListenMode } from './listen-tls';
 
 const apiKey = process.env.OPENAI_API_KEY;
 const port = parseInt(process.env.OPENAI_PROXY_PORT ?? '8080', 10);
@@ -51,12 +49,6 @@ const upstreamUrl =
 
 if (!apiKey || apiKey.trim().length === 0) {
   console.error('OPENAI_API_KEY is required. Set it in .env (or pass it in the environment) and run again.');
-  process.exit(1);
-}
-
-const tlsResolved = resolveOpenAIProxyListenTls(process.env);
-if (!tlsResolved.ok) {
-  console.error(tlsResolved.exitMessage);
   process.exit(1);
 }
 
@@ -69,20 +61,36 @@ const allowClientJsonPassthrough =
   process.env.OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH === '1' ||
   process.env.OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH === 'true';
 
-const useTls =
-  tlsResolved.ok &&
-  (tlsResolved.mode === 'https-pem' || tlsResolved.mode === 'https-insecure-selfsigned');
+const tlsMode = resolveOpenAIProxyListenMode(process.env);
+if (tlsMode.kind === 'fatal') {
+  console.error(tlsMode.message);
+  process.exit(1);
+}
 
 let server: ReturnType<typeof createOpenAIProxyServer>['server'] | undefined = undefined;
-if (tlsResolved.ok && tlsResolved.mode === 'https-pem') {
+let useTlsForScheme = false;
+
+if (tlsMode.kind === 'pem') {
+  useTlsForScheme = true;
+  let key: string;
+  let cert: string;
+  try {
+    key = fs.readFileSync(tlsMode.keyPath, 'utf8');
+    cert = fs.readFileSync(tlsMode.certPath, 'utf8');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`Failed to read TLS key/cert: ${msg}`);
+    process.exit(1);
+  }
   server = https.createServer(
-    { key: tlsResolved.key, cert: tlsResolved.cert },
+    { key, cert },
     (_req, res) => {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('Not Found');
     }
   );
-} else if (tlsResolved.ok && tlsResolved.mode === 'https-insecure-selfsigned') {
+} else if (tlsMode.kind === 'insecureDevSelfSigned') {
+  useTlsForScheme = true;
   const { generate: generateSelfSigned } = require('selfsigned') as {
     generate: (
       attrs: Array<{ name: string; value: string }>,
@@ -109,8 +117,8 @@ const { server: proxyServer } = createOpenAIProxyServer({
   allowClientJsonPassthrough,
 });
 
-const scheme = useTls ? 'https' : 'http';
-const wsScheme = useTls ? 'wss' : 'ws';
+const scheme = useTlsForScheme ? 'https' : 'http';
+const wsScheme = useTlsForScheme ? 'wss' : 'ws';
 proxyServer.listen(port, () => {
   console.log(`OpenAI proxy listening on ${scheme}://localhost:${port}/openai`);
   console.log(`Set VITE_OPENAI_PROXY_ENDPOINT=${wsScheme}://localhost:${port}/openai to run E2E tests.`);

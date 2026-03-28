@@ -241,8 +241,9 @@ async function attachVoiceAgentUpgrade(server, options = {}) {
   if (openaiOpts?.spawn) {
     const { spawn } = require('child_process');
     const { cwd, command, args, env = {}, port } = openaiOpts.spawn;
-    // EPIC-546: Do not forward host HTTPS= into the OpenAI proxy subprocess (Voice Commerce / packaging).
-    // When the parent serves wss, set explicit dev TLS unless PEM paths are already provided.
+    // EPIC-546: run.ts ignores generic HTTPS=1. Strip HTTPS from the subprocess so host .env cannot
+    // accidentally imply proxy TLS. When this attachment serves wss (useHttps), opt in to dev TLS
+    // unless the caller already set PEM paths (mkcert / operator certs).
     const merged = { ...process.env, ...env, OPENAI_PROXY_PORT: String(port) };
     delete merged.HTTPS;
     if (useHttps) {

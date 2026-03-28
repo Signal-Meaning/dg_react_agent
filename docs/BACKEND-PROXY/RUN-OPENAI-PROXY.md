@@ -17,9 +17,7 @@
 | **OPENAI_MANAGED_PROMPT_ID** | Jest (optional) | Non-empty → runs Issue **#539** managed-prompt real-API integration test; unset → that test **skips**. Optional: **OPENAI_MANAGED_PROMPT_VERSION**, **OPENAI_MANAGED_PROMPT_VARIABLES** (JSON object string). See [TDD-MANAGED-PROMPT-REAL-API.md](../issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md). |
 | **VITE_OPENAI_PROXY_ENDPOINT** | Test-app / E2E | WebSocket URL for the test-app to use the OpenAI proxy (e.g. `ws://localhost:8080/openai`). Playwright passes this to the test-app; default in config is `ws://localhost:8080/openai`. |
 | **E2E_BACKEND** | E2E only | `openai` (default) or `deepgram`. Chooses which proxy params to use for specs that support both. URL is built with `connectionMode` + `proxyEndpoint` query params. |
-| **HTTPS** | Test-app dev server / main backend | Controls Vite and the **test-app backend** outer server (Deepgram/OpenAI upgrade). It is **not** forwarded into the OpenAI proxy subprocess (EPIC-546). When the backend uses HTTPS, `attachVoiceAgentUpgrade` sets `OPENAI_PROXY_INSECURE_DEV_TLS` on the child unless PEM paths are set. |
-| **OPENAI_PROXY_TLS_KEY_PATH** / **OPENAI_PROXY_TLS_CERT_PATH** | OpenAI proxy (`run.ts`) | Optional. Both required for HTTPS using PEM files (e.g. mkcert). |
-| **OPENAI_PROXY_INSECURE_DEV_TLS** | OpenAI proxy (`run.ts`) | Set to `1` or `true` for in-memory localhost self-signed TLS in **non-production**. Disallowed when `NODE_ENV=production`. |
+| **HTTPS** | Test-app dev server | Set to `0` when Playwright starts the test-app so the app is served over HTTP (avoids TLS issues in Chromium). Does not affect the proxy. |
 | **VITE_BASE_URL** | Test-app | Base URL for the test-app (default `http://localhost:5173`). Override if you run the app on a different host/port. |
 
 **Safety – real API E2E:** Run OpenAI proxy E2E only when **OPENAI_API_KEY** is set (truthy). The proxy will not start without it. Do not run real-API E2E in environments where the key is unset or a placeholder (e.g. CI without secrets).

@@ -9,7 +9,7 @@
 
 | Layer                         | Location (typical)                                                                    | Use for EPIC-546                                                                                       |
 | ----------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Unit**                      | `tests/` (Jest, repo root)                                                            | `openai-proxy-tls-resolve.test.ts`, `packaging/voice-agent-backend-runtime-deps.test.ts`, and other pure helpers |
+| **Unit**                      | `tests/` (Jest, repo root)                                                            | Pure helpers: env parsing, TLS mode selection, “would load selfsigned” guards, path resolution for PEM |
 | **Integration**               | `tests/integration/openai-proxy-integration.test.ts`                                  | Proxy server creation, WebSocket path, optional HTTPS/WSS with test certs or HTTP                      |
 | **Packaging / install smoke** | Script or CI job (see [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md)) | `npm pack` + production `npm install` + spawn proxy; assert no `MODULE_NOT_FOUND`                      |
 | **E2E**                       | `test-app/tests/e2e/`                                                                 | Only if browser/ws mixed-content or full stack must be proven; run from `test-app` per project rules   |
@@ -54,5 +54,6 @@ From **test-app** (E2E only if needed):
 
 Epic TDD is done when:
 
-- [ ] Every sub-issue tracking file has its “Definition of done” checkboxes satisfied.
-- [ ] [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md) is checked off for the release that ships the work.
+- Every sub-issue tracking file has its “Definition of done” checkboxes satisfied.
+- [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md) is checked off for the release that ships the work.
+
