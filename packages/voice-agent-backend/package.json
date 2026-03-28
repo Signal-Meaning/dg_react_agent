@@ -1,6 +1,6 @@
 {
   "name": "@signal-meaning/voice-agent-backend",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "Backend and proxy package for Deepgram and OpenAI voice agent; mountable routes for test-app and voice-commerce.",
   "main": "src/index.js",
   "bin": { "voice-agent-backend": "src/cli.js" },
@@ -18,14 +18,14 @@
     "@signal-meaning:registry": "https://npm.pkg.github.com"
   },
   "dependencies": {
+    "@opentelemetry/api-logs": "^0.52.0",
+    "@opentelemetry/sdk-logs": "^0.52.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.0",
+    "selfsigned": "^2.4.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@opentelemetry/api-logs": "^0.52.0",
-    "@opentelemetry/sdk-logs": "^0.52.0",
-    "selfsigned": "^2.4.1",
     "tsx": "^4.20.6",
     "typescript": "^4.7.3"
   }

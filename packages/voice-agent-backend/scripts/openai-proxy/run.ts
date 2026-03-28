@@ -3,7 +3,12 @@
  * Run the OpenAI Realtime proxy (Issue #381).
  *
  * Listens on http://localhost:8080/openai (or OPENAI_PROXY_PORT).
- * Set HTTPS=true or HTTPS=1 in .env (or env) to use HTTPS with a self-signed cert.
+ *
+ * TLS (EPIC-546 — do not use generic HTTPS=1; avoids host env inheritance, Issue #550):
+ * - **File certs (recommended):** set OPENAI_PROXY_TLS_KEY_PATH and OPENAI_PROXY_TLS_CERT_PATH (PEM).
+ * - **Dev self-signed:** set OPENAI_PROXY_INSECURE_DEV_TLS=1 or true (not allowed when NODE_ENV=production).
+ * - **HTTP:** default when neither applies.
+ *
  * Requires OPENAI_API_KEY for upstream authentication.
  *
  * Logging: set LOG_LEVEL (debug | info | warn | error) for verbose proxy logs. If unset,
@@ -22,6 +27,7 @@
  */
 
 import path from 'path';
+import fs from 'fs';
 import https from 'https';
 import dotenv from 'dotenv';
 
@@ -34,12 +40,12 @@ dotenv.config({ path: path.resolve(cwd, '..', '..', '.env') });
 dotenv.config({ path: path.resolve(cwd, '..', '..', 'test-app', '.env') });
 
 import { createOpenAIProxyServer } from './server';
+import { resolveOpenAIProxyListenMode } from './listen-tls';
 
 const apiKey = process.env.OPENAI_API_KEY;
 const port = parseInt(process.env.OPENAI_PROXY_PORT ?? '8080', 10);
 const upstreamUrl =
   process.env.OPENAI_REALTIME_URL ?? 'wss://api.openai.com/v1/realtime?model=gpt-realtime';
-const useHttps = process.env.HTTPS === 'true' || process.env.HTTPS === '1';
 
 if (!apiKey || apiKey.trim().length === 0) {
   console.error('OPENAI_API_KEY is required. Set it in .env (or pass it in the environment) and run again.');
@@ -55,9 +61,42 @@ const allowClientJsonPassthrough =
   process.env.OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH === '1' ||
   process.env.OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH === 'true';
 
+const tlsMode = resolveOpenAIProxyListenMode(process.env);
+if (tlsMode.kind === 'fatal') {
+  console.error(tlsMode.message);
+  process.exit(1);
+}
+
 let server: ReturnType<typeof createOpenAIProxyServer>['server'] | undefined = undefined;
-if (useHttps) {
-  const { generate: generateSelfSigned } = require('selfsigned') as { generate: (attrs: Array<{ name: string; value: string }>, options: { keySize: number; days: number }) => { cert: string; private: string } };
+let useTlsForScheme = false;
+
+if (tlsMode.kind === 'pem') {
+  useTlsForScheme = true;
+  let key: string;
+  let cert: string;
+  try {
+    key = fs.readFileSync(tlsMode.keyPath, 'utf8');
+    cert = fs.readFileSync(tlsMode.certPath, 'utf8');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`Failed to read TLS key/cert: ${msg}`);
+    process.exit(1);
+  }
+  server = https.createServer(
+    { key, cert },
+    (_req, res) => {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not Found');
+    }
+  );
+} else if (tlsMode.kind === 'insecureDevSelfSigned') {
+  useTlsForScheme = true;
+  const { generate: generateSelfSigned } = require('selfsigned') as {
+    generate: (
+      attrs: Array<{ name: string; value: string }>,
+      options: { keySize: number; days: number }
+    ) => { cert: string; private: string };
+  };
   const pems = generateSelfSigned([{ name: 'commonName', value: 'localhost' }], { keySize: 2048, days: 365 });
   server = https.createServer(
     { key: pems.private, cert: pems.cert },
@@ -78,8 +117,8 @@ const { server: proxyServer } = createOpenAIProxyServer({
   allowClientJsonPassthrough,
 });
 
-const scheme = useHttps ? 'https' : 'http';
-const wsScheme = useHttps ? 'wss' : 'ws';
+const scheme = useTlsForScheme ? 'https' : 'http';
+const wsScheme = useTlsForScheme ? 'wss' : 'ws';
 proxyServer.listen(port, () => {
   console.log(`OpenAI proxy listening on ${scheme}://localhost:${port}/openai`);
   console.log(`Set VITE_OPENAI_PROXY_ENDPOINT=${wsScheme}://localhost:${port}/openai to run E2E tests.`);

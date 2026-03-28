@@ -42,6 +42,7 @@ This repo **promotes and maintains** proxy and translator code that we document 
 ### OpenAI proxy (translation layer)
 
 - **[Run the OpenAI proxy and tests](./RUN-OPENAI-PROXY.md)** – Env vars, how to run the proxy (canonical and standalone), unit/integration/E2E test commands, CI notes. Proxy lives in `packages/voice-agent-backend/scripts/openai-proxy/` (Issue #445).
+- **TLS / subprocess contract (EPIC-546):** Canonical integrator story is **packages/voice-agent-backend/README.md** § *OpenAI proxy: TLS modes and subprocess environment* (Issue [#552](https://github.com/Signal-Meaning/dg_react_agent/issues/552)); env tables in [RUN-OPENAI-PROXY.md](./RUN-OPENAI-PROXY.md).
 
 ### Implementation Guides
 

@@ -1,5 +1,7 @@
 # OpenAI Realtime proxy – translation layer and server (Issue #381)
 
+**TLS and subprocess contract (EPIC-546):** The `run.ts` entrypoint chooses HTTP vs TLS using **`OPENAI_PROXY_TLS_KEY_PATH`**, **`OPENAI_PROXY_TLS_CERT_PATH`**, and **`OPENAI_PROXY_INSECURE_DEV_TLS`** only—it **does not** enable listen TLS from generic **`HTTPS=1`**. Integrators: read **packages/voice-agent-backend/README.md** (section *OpenAI proxy: TLS modes and subprocess environment*) and [RUN-OPENAI-PROXY.md](../../../docs/BACKEND-PROXY/RUN-OPENAI-PROXY.md).
+
 **Translator** (`translator.ts`): Pure mapping functions – component (Deepgram Voice Agent protocol) ↔ OpenAI Realtime client/server events.
 
 **Server** (`server.ts`): WebSocket server that listens on a path (e.g. `/openai`), accepts component protocol, translates to OpenAI Realtime, forwards to upstream (real or mock), and translates upstream events back to component. Buffers client messages until upstream is open.
