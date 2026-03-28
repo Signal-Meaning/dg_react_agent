@@ -33,7 +33,7 @@ Consumers who install `@signal-meaning/voice-agent-backend` as a normal dependen
 
 - [ ] `packages/voice-agent-backend/package.json` matches runtime needs for the chosen fix path.
 - [ ] [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md) **Packaging smoke** section executed for this fix.
-- [ ] Patch version published (e.g. **0.2.11**) or superseded by minor if bundled with breaking env changes (document in release notes).
+- [ ] Patch version published (e.g. **0.2.11**) or superseded by minor if bundled with breaking env changes (document in release notes). **Execution** of the full publish flow is tracked in GitHub [#554](https://github.com/Signal-Meaning/dg_react_agent/issues/554) and [ISSUE-554/TRACKING.md](./ISSUE-554/TRACKING.md).
 - [ ] GitHub #547 closed with link to PR and this file.
 
 ## Verification log

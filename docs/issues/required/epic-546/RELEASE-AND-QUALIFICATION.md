@@ -2,6 +2,8 @@
 
 Use this checklist when shipping `@signal-meaning/voice-agent-backend` changes for the OpenAI proxy (packaging + TLS contract).
 
+**Full release process (branch, docs, GitHub Release, CI publish, dist-tags, merge to `main`):** GitHub [#554](https://github.com/Signal-Meaning/dg_react_agent/issues/554) — see [ISSUE-554/](./ISSUE-554/README.md).
+
 ---
 
 ## Versioning
