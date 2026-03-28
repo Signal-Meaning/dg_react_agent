@@ -45,7 +45,7 @@ GitHub issue lists exact steps: WS to proxy; UTF-8 JSON only; Settings without f
 ### Verified
 
 - [x] Full mock `openai-proxy-integration` suite (65+ tests) green.
-- [x] **Real API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` with `OPENAI_API_KEY` — all real-API cases in that file, including Settings+tools+inject and **partner-grade** `Issue #470 real-API: function-call flow completes` (backend HTTP before `FunctionCallResponse`; `outputModalities: ['text']` only — Realtime rejects `['text','audio']` together). The #470 test is ordered **early** in the suite (after SettingsApplied) to limit cross-test upstream load.
+- [x] **Real API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` with `OPENAI_API_KEY` — all real-API cases in that file, including Settings+tools+inject and **partner-grade** `Issue #470 real-API: function-call flow completes` (backend HTTP before `FunctionCallResponse`; **omits** `outputModalities` so Realtime uses default output modality; assistant reply must include the integration **`e2eVerify` token** from tool JSON). The #470 test is ordered **early** in the suite (after SettingsApplied) to limit cross-test upstream load.
 - [x] **E2E (test-app):** From `test-app`, with keys in `.env` (`OPENAI_API_KEY`, etc.): `USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6b. Issue #462"` (and **6** for the same backend path). See [`test-app/tests/e2e/README.md`](../../../test-app/tests/e2e/README.md) § running specific specs; [`openai-proxy-e2e.spec.js`](../../../test-app/tests/e2e/openai-proxy-e2e.spec.js) test **6b** (ISSUE-462 / #470 partner scenario).
 
 ---

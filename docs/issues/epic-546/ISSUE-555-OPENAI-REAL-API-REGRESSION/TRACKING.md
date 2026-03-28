@@ -44,15 +44,15 @@ _Add dated entries (command, outcome, operator)._
    - **Working hypothesis:** infrastructure / gateway flake at OpenAI (or path to `api.openai.com`), not a change in `server.ts` from EPIC-546. **Still needs:** repeat runs + optional bisect to rule out dependency (`ws`, Node) or env differences.
 
 2. **Issue #470 real-API function-call timeout (~60s)**  
-   - Flow: Settings (tools + `outputModalities: ['text']`) → `InjectUserMessage` → `FunctionCallRequest` → real `POST /function-call` → `FunctionCallResponse` → wait for assistant `ConversationText` containing **`12:00` or `UTC`** (```1026:1031:tests/integration/openai-proxy-integration.test.ts```).  
-   - Timeout with message “no assistant … after function call” means either no assistant text after FCR, or text that **does not** include those literals (assertion failure path vs hang path — distinguish via timeout error text and collected `assistantContentAfterFunctionCall` in logs).  
-   - **Working hypotheses:** (A) model reply wording drift (no longer echoes backend strings); (B) proxy / Realtime ordering bug with real upstream; (C) slow or stalled upstream after tool output. EPIC-546 did not touch `server.ts`, but **lockfile / `ws` / runtime** could still affect behavior.
+   - Flow: Settings (tools; **no** forced `outputModalities`) → `InjectUserMessage` → `FunctionCallRequest` → real `POST /function-call` → `FunctionCallResponse` → wait for assistant `ConversationText` containing the **`e2eVerify` token** from the tool JSON (opaque string, not natural-language time).  
+   - Timeout with message “no assistant … after function call” means no qualifying assistant text after FCR within the deadline, or a **test harness** issue (e.g. `fetch`/WebSocket microtask ordering — see file header comment in `openai-proxy-integration.test.ts`).  
+   - **Note:** A prior revision used `outputModalities: ['text']` and substring `12:00`/`UTC`; that is **no longer** the qualification shape.
 
 **Recommended next steps (for bisect / qualification)**
 
 - Run `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` **3×** on a clean shell; record which tests fail and whether 504 reproduces.  
 - **Bisect** between last tag/commit known green for this suite and `HEAD` (or `release/v0.10.6`): if failures occur on old commits too → document **upstream / network exception**; if only on newer commits → hunt **repo** changes (deps, test expectations, env).  
-- If (470) fails with assistant text present but without `12:00`/`UTC`, consider whether the assertion should stay as-is (strict partner contract) or be adjusted with product sign-off.
+- If (470) fails with assistant text present but without the `e2eVerify` token, the model did not follow instructions to copy the tool field; re-run or tighten the prompt. If the token never appears in tool JSON, check the minimal HTTP backend and `FunctionCallResponse` payload.
 
 ### 2026-03-28 — Full real-API openai-proxy-integration run (agent)
 

@@ -25,6 +25,12 @@
  * only parse when the frame looks like a complete JSON object. When parse throws, surface
  * the error (fail the test)—never skip frames on error so we can correct the cause.
  *
+ * **Function-call + `fetch` + WebSocket (Issues #470 / #489):** Use one `async` IIFE; set any
+ * `sentFunctionCallResponse` (or equivalent) flag in the **same synchronous turn** as
+ * `client.send(FunctionCallResponse)`. Chained `fetch().then(() => res.json()).then(...)` can
+ * deliver `AgentAudioDone` / `ConversationText` between microtasks while flags are still false,
+ * so the test misses real completions and times out.
+ *
  * @jest-environment node
  */
 
@@ -54,6 +60,14 @@ const useRealAPIs = (process.env.USE_REAL_APIS === '1' || process.env.USE_REAL_A
 const hasManagedPromptIdEnv = !!process.env.OPENAI_MANAGED_PROMPT_ID?.trim();
 
 /**
+ * Issue #470 / #478: Opaque token placed only in the HTTP tool result JSON (not in Settings text).
+ * The real-API test asserts the assistant reply includes this substring after `FunctionCallResponse`,
+ * proving end-to-end: FCR → backend POST → FCR with payload → model read tool output → assistant text.
+ * Prefer this over matching natural-language time phrases (e.g. "12:00", "UTC"), which models may rephrase.
+ */
+const OPENAI_PROXY_FC_E2E_VERIFY_TOKEN = 'dg-openai-proxy-fc-e2e-v1';
+
+/**
  * Issue #462: Minimal in-process backend for function-call flow. Ensures we qualify on real HTTP to a backend,
  * not in-test hardcoded FunctionCallResponse. Contract: POST /function-call with { id, name, arguments };
  * responds with { content: string } (JSON string of result). Returns server and port; call server.close() when done.
@@ -72,7 +86,12 @@ function createMinimalFunctionCallBackend(): Promise<{ server: http.Server; port
         void body;
         res.setHeader('Content-Type', 'application/json');
         // Contract: return { content: string } — same as test-app backend (Issue #407).
-        const content = JSON.stringify({ time: '12:00', timezone: 'UTC' });
+        // e2eVerify: only in tool JSON; Issue #470 asserts assistant text contains it after tool use.
+        const content = JSON.stringify({
+          time: '12:00',
+          timezone: 'UTC',
+          e2eVerify: OPENAI_PROXY_FC_E2E_VERIFY_TOKEN,
+        });
         res.end(JSON.stringify({ content }));
       });
     });
@@ -904,6 +923,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Issue #470 / #462: Real-API integration test for function-call path. Uses real HTTP to a backend (no in-test
    * hardcoded FunctionCallResponse). Partner scenario: Settings → InjectUserMessage → FunctionCallRequest →
    * POST to backend → FunctionCallResponse → response. Asserts no conversation_already_has_active_response.
+   * After tool use, assistant text must include `OPENAI_PROXY_FC_E2E_VERIFY_TOKEN` from the tool JSON (not from Settings).
    * Runs only with USE_REAL_APIS=1. See docs/issues/ISSUE-462/VOICE-COMMERCE-FUNCTION-CALL-REPORT.md.
    *
    * Placed early in the file so it runs before long real-API audio tests (~25s+ each), which reduces
@@ -944,11 +964,10 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             type: 'Settings',
             agent: {
               think: {
-                // Do not set outputModalities: ['text'] here: the live API often completes the post-tool turn with
-                // AgentAudioDone but omits assistant ConversationText on the text-only path, causing timeout (#470).
-                // Issue #478 still requires the model to mention 12:00 or UTC from the tool JSON result.
+                // Omit agent.think.outputModalities so Realtime uses its default output modality for this qualification
+                // (see REALTIME-SESSION-UPDATE-FIELD-MAP.md § output_modalities — unit tests cover explicit ['text']/['audio']).
                 prompt:
-                  'You are a helpful assistant. Use tools when needed. When you use a tool, incorporate its result in your reply using the same time and timezone strings returned (e.g. 12:00 and UTC).',
+                  'You are a helpful assistant. Use tools when the user asks about time. When you call get_current_time, the tool returns JSON that includes an e2eVerify string. You must include that exact e2eVerify value in your reply to the user, unchanged, so tests can confirm the tool ran. You may also summarize the time for the user.',
                 functions: [
                   {
                     name: 'get_current_time',
@@ -1007,7 +1026,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                     finish(new Error(`Function-call backend returned error: ${body.error}`));
                     return;
                   }
-                  const content = typeof body.content === 'string' ? body.content : JSON.stringify({ time: '12:00', timezone: 'UTC' });
+                  const content =
+                    typeof body.content === 'string'
+                      ? body.content
+                      : JSON.stringify({
+                          time: '12:00',
+                          timezone: 'UTC',
+                          e2eVerify: OPENAI_PROXY_FC_E2E_VERIFY_TOKEN,
+                        });
                   // Same turn as send: post-tool assistant messages must not be ignored between chained .then microtasks.
                   sentFunctionCallResponse = true;
                   client.send(JSON.stringify({
@@ -1030,12 +1056,16 @@ describe('OpenAI proxy integration (Issue #381)', () => {
               if (typeof msg.content === 'string') assistantContentAfterFunctionCall.push(msg.content);
               receivedAssistantResponseAfterFunctionCall = true;
               setTimeout(() => {
-                // Issue #478: assert the agent's reply presents the function result to the user (backend returns time 12:00, timezone UTC).
-                const includesFunctionResult = assistantContentAfterFunctionCall.some(
-                  (c) => c.includes('12:00') || c.includes('UTC'),
+                // Issue #478: token exists only in HTTP tool JSON → substring in assistant reply implies tool output reached the model.
+                const includesVerifyToken = assistantContentAfterFunctionCall.some((c) =>
+                  c.includes(OPENAI_PROXY_FC_E2E_VERIFY_TOKEN),
                 );
-                if (!includesFunctionResult) {
-                  finish(new Error(`Issue #478: assistant response did not include function result (12:00 or UTC). Received: ${assistantContentAfterFunctionCall.join(' | ')}`));
+                if (!includesVerifyToken) {
+                  finish(
+                    new Error(
+                      `Issue #478: assistant response did not include tool e2eVerify token "${OPENAI_PROXY_FC_E2E_VERIFY_TOKEN}". Received: ${assistantContentAfterFunctionCall.join(' | ')}`,
+                    ),
+                  );
                   return;
                 }
                 finish();
@@ -2419,7 +2449,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                     finish(new Error(`Function-call backend returned error: ${body.error}`));
                     return;
                   }
-                  const content = typeof body.content === 'string' ? body.content : JSON.stringify({ time: '12:00', timezone: 'UTC' });
+                  const content =
+                    typeof body.content === 'string'
+                      ? body.content
+                      : JSON.stringify({
+                          time: '12:00',
+                          timezone: 'UTC',
+                          e2eVerify: OPENAI_PROXY_FC_E2E_VERIFY_TOKEN,
+                        });
                   // Set in the same turn as send so AgentAudioDone is not dropped between .then() microtasks (Issue #489).
                   sentFunctionCallResponse = true;
                   client!.send(JSON.stringify({

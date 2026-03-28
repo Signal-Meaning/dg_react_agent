@@ -40,7 +40,7 @@ Integrators cannot select text-only vs audio via `Settings`; Realtime `session.o
 ### Verified
 
 - [x] Unit tests pass.
-- [x] **Real API:** `Issue #470 real-API: function-call flow completes` sends `agent.think.outputModalities: ['text']` (Realtime allows `['text']` or `['audio']` only, not both). Full suite: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`.
+- [x] **Real API:** `Issue #470 real-API: function-call flow completes` runs **without** setting `agent.think.outputModalities` (Realtime default modality for that session). The test asserts the function-call path using an **`e2eVerify` token** in the HTTP tool JSON and assistant `ConversationText`, not text-only modality. Explicit `['text']` / `['audio']` mapping is covered in **unit** tests; per-modality real-API matrices are documented as a gap in [REALTIME-SESSION-UPDATE-FIELD-MAP.md](../../../packages/voice-agent-backend/scripts/openai-proxy/REALTIME-SESSION-UPDATE-FIELD-MAP.md) § `output_modalities` — how thorough are we?
 
 ---
 
