@@ -18,7 +18,7 @@ Statuses follow each **TRACKING*.md** / **ISSUE-*/TRACKING.md** (update this tab
 | #550 Scoped TLS env (`HTTPS` inheritance) | **Done in tree** — **close #550** on merge | [TRACKING-550.md](./TRACKING-550.md) | Behavior |
 | #551 Dev TLS opt-in + production guard | **Done in tree** — **close #551** on merge | [TRACKING-551.md](./TRACKING-551.md) | Behavior |
 | #552 Integrator docs | **Done in tree** — close **GitHub #552** on merge | [TRACKING-552.md](./TRACKING-552.md) | Docs + doc tests |
-| #554 **Release execution** (publish) | **Open** — no publish checklist completed here | [ISSUE-554/TRACKING.md](./ISSUE-554/TRACKING.md) | Pre-release / ship (not a substitute for TDD) |
+| #554 **Release execution** (publish) | **Pre-release in progress** — checklist started 2026-03-28 on `release/v0.10.6`; publish / GitHub Release not done | [ISSUE-554/TRACKING.md](./ISSUE-554/TRACKING.md) | Pre-release / ship (not a substitute for TDD) |
 | #555 **Real-API regression + protocol** | **In progress** — TDD 🔴/🟢 evidenced; 🟡 REFACTOR, merged PR, and pre-release `USE_REAL_APIS` logs **open** | [ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md](./ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md) | `USE_REAL_APIS`, Issue #470 path, TDD checklist + verification log |
 
 Sub-issues **#547–#551** use per-file **TDD — RED / GREEN / REFACTOR** sections. **#555** adds a rollup table + PR checklist; **#554** separates **TDD → PR** from **release execution**.

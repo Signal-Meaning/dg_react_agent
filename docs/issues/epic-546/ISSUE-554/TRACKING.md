@@ -5,6 +5,12 @@
 
 Use **checkboxes on GitHub issue #554** as the primary checklist (same content as [GITHUB-ISSUE-BODY.md](./GITHUB-ISSUE-BODY.md)). Update this file when major milestones complete so the epic folder stays auditable without opening GitHub.
 
+## Release status
+
+**Pre-release has started** (not deferred): **2026-03-28** on branch **`release/v0.10.6`** — lint, CI-parity Jest, event coverage, and audit are **done** for this session; **Pre-release preparation** remains **open** until E2E proxy mode and (when applicable) real-API integration rows are satisfied per policy. **Do not** create the GitHub Release or publish until that rollup checkbox is fully green.
+
+**CI-parity Jest:** `CI=true RUN_REAL_API_TESTS=false npm run test:mock` — **PASS** (2026-03-28), same env as the **Test and Publish** workflow’s Jest step.
+
 ## TDD → PR vs pre-release (order)
 
 **First (development):** For proxy / test-app fixes that fall under [#555](../ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md), follow **🔴 RED → 🟢 GREEN → 🟡 REFACTOR (gold)** on the tests that define behavior, **then** merge the PR. That progress is tracked in **ISSUE-555** (TDD checklist + verification log), not by the boxes below.
@@ -13,26 +19,64 @@ Use **checkboxes on GitHub issue #554** as the primary checklist (same content a
 
 ## Epic gates (before starting release checklist)
 
-- [ ] [#547](https://github.com/Signal-Meaning/dg_react_agent/issues/547) (and any co-shipped code) merged: consumer no longer hits `MODULE_NOT_FOUND: selfsigned` on supported path
-- [ ] [#548](https://github.com/Signal-Meaning/dg_react_agent/issues/548) resolved if included in same publish: runtime `dependencies` match proxy imports
-- [ ] Version numbers in #554 Overview table confirmed (backend **0.2.11** or chosen patch; React bump or **no bump**)
+- [x] [#547](https://github.com/Signal-Meaning/dg_react_agent/issues/547) — **Code on release branch:** `selfsigned` in **`dependencies`**, packaging guard test (see [TRACKING-547.md](../TRACKING-547.md)). **Still:** close GitHub #547 after publish / merge to `main` as appropriate.
+- [x] [#548](https://github.com/Signal-Meaning/dg_react_agent/issues/548) — **Code on release branch:** default proxy path runtime imports covered by `dependencies` + `voice-agent-backend-runtime-dependencies` test (see [TRACKING-548.md](../TRACKING-548.md)). **Still:** close GitHub #548 after publish.
+- [x] **Version numbers confirmed in tree** — `@signal-meaning/voice-agent-backend` **0.2.11**; root `@signal-meaning/voice-agent-react` **0.10.6** (`package.json` files on `release/v0.10.6`). **Action:** If the [#554](https://github.com/Signal-Meaning/dg_react_agent/issues/554) Overview table on GitHub still says React **0.10.5**, update it to match or document intentional dual-ship.
 
 ## Release execution (rollup)
 
 Mirror the sections from the GitHub issue; check here when each **section** is done.
 
-- [ ] **Pre-release preparation** — lint, `test:mock`, E2E proxy mode, real-API integration if proxy touched, `openai-proxy-event-coverage`, `npm audit --audit-level=high`
+- [ ] **Pre-release preparation** — lint, `test:mock`, E2E proxy mode, real-API integration if proxy touched, `openai-proxy-event-coverage`, `npm audit --audit-level=high` — **in progress**; see [Pre-release preparation (progress)](#pre-release-preparation-progress) below
 - [ ] **EPIC-546 packaging smoke** — `npm pack` → clean install → start proxy; no missing modules ([`../RELEASE-AND-QUALIFICATION.md`](../RELEASE-AND-QUALIFICATION.md))
 - [ ] **Version management** — `packages/voice-agent-backend/package.json` (and root if bumped)
 - [ ] **Release docs** — `docs/releases/v…/` per patch rules (CHANGELOG, PACKAGE-STRUCTURE, validate script)
-- [ ] **Release branch** — `release/v…` with commits
+- [ ] **Release branch** — `release/v…` with commits (**current work:** `release/v0.10.6`)
 - [ ] **GitHub Release + CI publish** — workflow green; packages in registry
 - [ ] **`latest` dist-tag** — only for packages actually published
 - [ ] **Post-release** — PR `release/v…` → `main`; notify integrators (e.g. Voice Commerce); close #554 and update epic #546
 
+### Pre-release preparation (progress)
+
+Started **2026-03-28** (repo root). Keep the rollup checkbox **open** until every required row is **Done** for your environment / CI.
+
+| Step | Status |
+|------|--------|
+| `npm run lint` | **Done** — exit 0; **4 warnings** (`no-console` in `src/test-utils/test-helpers.ts`), 0 errors |
+| `npm run test:mock` — **CI parity** (`CI=true RUN_REAL_API_TESTS=false`) | **Done** — **2026-03-28:** 122 suites passed, 1166 tests passed, 25 skipped (matches [`.github/workflows/test-and-publish.yml`](../../../../.github/workflows/test-and-publish.yml) Jest step) |
+| `npm run test:mock` — **plain local** (no `CI` / `RUN_REAL_API_TESTS`) | **Done** — **2026-03-28:** PASS (exit 0); live Deepgram **`websocket-connectivity`** is **opt-in** only — see [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556) and section below (no longer blocks default local Jest) |
+| `npm test -- tests/openai-proxy-event-coverage.test.ts` | **Done** — PASS |
+| `npm audit --audit-level=high` | **Done** — 0 vulnerabilities |
+| E2E proxy mode (`cd test-app && npm run backend` + `USE_PROXY_MODE=true npm run test:e2e`) | **Not run** this session |
+| `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` | **Not run** this session — **recommended** for proxy/API qualification when `OPENAI_API_KEY` available ([#555](../ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md)) |
+
+### Deepgram `websocket-connectivity.test.js` (opt-in; backlog [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556))
+
+**This file is not part of OpenAI proxy or EPIC-546 packaging qualification.** It only exercises live Deepgram Voice Agent WebSocket auth.
+
+1. **`npm run test:mock` is not “mock-only” for every file** — it runs **`jest` with no path filter**, the same as `npm test`. The name reflects **CI** usage, not that every test uses mocks.
+
+2. **What the suite does** — Opens **`wss://agent.deepgram.com/v1/agent/converse`** with the **`token` subprotocol** and **`DEEPGRAM_API_KEY` or `VITE_DEEPGRAM_API_KEY`** from **`test-app/.env`** (`override: true` vs root `.env`).
+
+3. **When it runs (current behavior)** — The whole describe is **skipped** unless **`RUN_DEEPGRAM_CONNECTIVITY_TESTS=1`** (or `true`). It is **also** skipped under the same **CI + no real APIs** condition as before (`CI === 'true'` and `RUN_REAL_API_TESTS` false/unset), matching [`test-and-publish.yml`](../../../../.github/workflows/test-and-publish.yml). Default **local** `npm run test:mock` therefore **does not** hit Deepgram for this file.
+
+4. **Why it was made opt-in** — **401 Unauthorized** on the upgrade is common when the key is expired, wrong product, or unrelated to the current workstream. Tracking and optional re-enable / key renewal: **GitHub [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)**.
+
+5. **To run it deliberately** — `RUN_DEEPGRAM_CONNECTIVITY_TESTS=1 npm run test:mock -- tests/integration/websocket-connectivity.test.js` with a **valid** Deepgram key in **`test-app/.env`**.
+
 ## Verification log
 
 _Add dated entries (command, outcome, operator)._
+
+### 2026-03-28 — Release #554 begun; pre-release partial (agent)
+
+- Declared **pre-release started** on `release/v0.10.6`; epic gates checked against **in-tree** state + TRACKING-547/548.
+- Commands: `npm run lint` (pass, warnings noted); plain `npm run test:mock` initially **fail** (`websocket-connectivity` 401); **`CI=true RUN_REAL_API_TESTS=false npm run test:mock`** (**pass** — 122 suites / 1166 tests / 25 skipped, workflow parity); `npm test -- tests/openai-proxy-event-coverage.test.ts` (pass); `npm audit --audit-level=high` (pass).
+
+### 2026-03-28 — Deepgram connectivity opt-in + backlog #556
+
+- **`tests/integration/websocket-connectivity.test.js`** now runs only when **`RUN_DEEPGRAM_CONNECTIVITY_TESTS=1`** (else skipped; skip reason references [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)).
+- Plain **`npm run test:mock`** — **PASS** (exit 0) after the change (this run: 120 suites passed, 3 skipped suites / 1155 passed tests — counts vary slightly vs CI parity due to other conditional skips).
 
 ### Real-API integration failure identification (2026-03-28)
 

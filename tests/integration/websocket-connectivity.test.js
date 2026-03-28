@@ -7,8 +7,9 @@
  * Uses Node.js environment (not jsdom) to avoid WebSocket wrapper interference.
  * 
  * ⚠️ REQUIRES REAL API KEY: These tests make actual WebSocket connections to Deepgram.
- * - Skipped in CI (requires real API key, see .github/workflows/test-and-publish.yml)
- * - Run locally with DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY in test-app/.env
+ * - Skipped by default locally unless RUN_DEEPGRAM_CONNECTIVITY_TESTS=1 (see GitHub #556: key/401 backlog)
+ * - Skipped in CI when RUN_REAL_API_TESTS is false (see .github/workflows/test-and-publish.yml)
+ * - When enabled: set DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY in test-app/.env
  * 
  * Best Practice: Test WebSocket connectivity separately from React component tests.
  * See docs/issues/ISSUE-341/JEST-WEBSOCKET-BEST-PRACTICES.md for details.
@@ -24,25 +25,32 @@ require('dotenv').config({
   override: true // Override any values loaded from root .env by tests/setup.js
 });
 
-// Skip in CI or when RUN_REAL_API_TESTS is false (consistent with other real-API tests)
+// Skip in CI when RUN_REAL_API_TESTS is false (consistent with other real-API tests)
 // Pattern matches: start-stop-methods.test.js, duplicate-settings.test.js
-// Note: process.env values are strings, so 'false' is truthy - need explicit check
-const shouldSkipInCI = process.env.CI === 'true' && 
-                       (process.env.RUN_REAL_API_TESTS === 'false' || !process.env.RUN_REAL_API_TESTS);
+const shouldSkipInCI =
+  process.env.CI === 'true' &&
+  (process.env.RUN_REAL_API_TESTS === 'false' || !process.env.RUN_REAL_API_TESTS);
+
+// Opt-in only: live Deepgram handshakes are non-essential for most workstreams (401 if key expired, etc.)
+// https://github.com/Signal-Meaning/dg_react_agent/issues/556
+const runDeepgramConnectivity =
+  process.env.RUN_DEEPGRAM_CONNECTIVITY_TESTS === '1' ||
+  process.env.RUN_DEEPGRAM_CONNECTIVITY_TESTS === 'true';
+
+const shouldSkipDeepgramConnectivity = shouldSkipInCI || !runDeepgramConnectivity;
 
 // Get API key and clean it (trim whitespace/newlines)
 const rawApiKey = process.env.DEEPGRAM_API_KEY || process.env.VITE_DEEPGRAM_API_KEY;
 const apiKey = rawApiKey ? rawApiKey.trim() : null;
 const url = 'wss://agent.deepgram.com/v1/agent/converse';
 
-// Use consistent pattern with other real-API tests: (shouldSkipInCI ? describe.skip : describe)
-(shouldSkipInCI ? describe.skip : describe)('Deepgram WebSocket Connectivity', () => {
+const SUITE_NAME = 'Deepgram WebSocket Connectivity';
+const SUITE_NAME_SKIPPED = `${SUITE_NAME} (skipped: set RUN_DEEPGRAM_CONNECTIVITY_TESTS=1 — https://github.com/Signal-Meaning/dg_react_agent/issues/556)`;
+
+(shouldSkipDeepgramConnectivity ? describe.skip : describe)(
+  shouldSkipDeepgramConnectivity ? SUITE_NAME_SKIPPED : SUITE_NAME,
+  () => {
   beforeAll(() => {
-    if (shouldSkipInCI) {
-      console.warn('⚠️  Skipping real API tests in CI (requires real API key)');
-      return;
-    }
-    
     if (!apiKey) {
       console.warn('⚠️  DEEPGRAM_API_KEY not set - skipping real API tests');
       console.warn('   Set DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY in test-app/.env');
@@ -63,8 +71,8 @@ const url = 'wss://agent.deepgram.com/v1/agent/converse';
 
   describe('Connection Lifecycle', () => {
     it('should connect to Deepgram API successfully', async () => {
-      if (shouldSkipInCI || !apiKey) {
-        return; // Skip in CI or if no API key
+      if (!apiKey) {
+        return;
       }
 
       // Include headers like the standalone validation script
@@ -110,8 +118,8 @@ const url = 'wss://agent.deepgram.com/v1/agent/converse';
     });
 
     it('should handle connection errors gracefully', async () => {
-      if (shouldSkipInCI || !apiKey) {
-        return; // Skip in CI or if no API key
+      if (!apiKey) {
+        return;
       }
 
       // Test with invalid API key
@@ -153,8 +161,8 @@ const url = 'wss://agent.deepgram.com/v1/agent/converse';
 
   describe('Protocol Handling', () => {
     it('should accept token protocol', async () => {
-      if (shouldSkipInCI || !apiKey) {
-        return; // Skip in CI or if no API key
+      if (!apiKey) {
+        return;
       }
 
       // Include headers like the standalone validation script
@@ -194,8 +202,8 @@ const url = 'wss://agent.deepgram.com/v1/agent/converse';
 
   describe('Connection State', () => {
     it('should transition through connection states', async () => {
-      if (shouldSkipInCI || !apiKey) {
-        return; // Skip in CI or if no API key
+      if (!apiKey) {
+        return;
       }
 
       // Include headers like the standalone validation script
