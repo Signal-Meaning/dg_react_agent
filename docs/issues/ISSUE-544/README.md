@@ -4,7 +4,7 @@
 
 **Labels:** release, patch, priority: high
 
-**State:** Open (release process)
+**State:** Published to GitHub Packages (**v0.10.5** / backend **0.2.10**); **open** until `release/v0.10.5` is merged to `main` and Issue #544 is closed.
 
 ---
 

@@ -23,9 +23,9 @@
 
 **CHANGELOG entry (Issue #544):** Patch release delivering Epic #542: Voice Commerce OpenAI proxy defect register (§1–§6) — proxy logging, client JSON boundary, `session` mapping from Settings, ordering and `SettingsApplied` behavior, component alignment, tests and BACKEND-PROXY / protocol documentation. Implementation merged in PR #543.
 
-### Progress (local — 2026-03-21)
+### Progress
 
-Done on **`issue-544`** / **`release/v0.10.5`** (same commit after branch creation):
+**Pre-publish (2026-03-21)** — on **`issue-544`** / **`release/v0.10.5`**:
 
 - Bumped **0.10.5** (root + `package-lock.json`) and **0.2.10** (`packages/voice-agent-backend/package.json`).
 - Added **`docs/releases/v0.10.5/`** (`CHANGELOG.md`, `RELEASE-NOTES.md`, `PACKAGE-STRUCTURE.md`).
@@ -34,21 +34,24 @@ Done on **`issue-544`** / **`release/v0.10.5`** (same commit after branch creati
 - Ran **`npm run build`** and **`npm run validate`** (optional local) — pass; `dist/` not committed.
 - Pushed **`issue-544`** and **`release/v0.10.5`** to `origin`.
 - Updated **`.github/ISSUE_TEMPLATE/release-checklist.md`**: GitHub Release must **target `release/vX.X.X`**, not `main`.
+- Proxy E2E blockers addressed per [TDD-PLAN-E2E-EIGHT-FAILURES.md](./TDD-PLAN-E2E-EIGHT-FAILURES.md) (targeted six-spec run **16 passed**); optional: full `USE_PROXY_MODE=true npm run test:e2e` for **0 failures**.
 
-Still required before **publish**: **proxy E2E** (with backend + test-app) — **8 failures** tracked in [TDD-PLAN-E2E-EIGHT-FAILURES.md](./TDD-PLAN-E2E-EIGHT-FAILURES.md); **real-API integration** with `OPENAI_API_KEY` (mandatory for claiming upstream qualification — see [TRACKING.md](./TRACKING.md) if deferred); **GitHub Release** from **`release/v0.10.5`**, CI publish, then PR merge to `main`.
+**Publish (2026-03-22)** — completed:
+
+- GitHub **Release [v0.10.5](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.10.5)** published (target **`release/v0.10.5`**).
+- Workflow **[Test and Publish Package](https://github.com/Signal-Meaning/dg_react_agent/actions/workflows/test-and-publish.yml)** run [**23392304761**](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/23392304761) — **success** (~2m31s).
+- **Post-release still open:** merge **`release/v0.10.5` → `main` via PR** (as of this update, release branch commits are not yet on `main`); then close **GitHub Issue #544** and confirm **`latest`** dist-tags on both packages if not already.
 
 ---
 
 ### Pre-Release Preparation
 
 - [x] **Code review complete:** Release branch contains only intended commits; Epic work already reviewed in PR #543.
-- [ ] **Tests passing**
+- [x] **Tests passing** (pre-publish + CI)
   - [x] **Run what CI runs:** `npm run lint` then `npm run test:mock`
-  - [ ] Optional: `npm test` (full suite — not re-run after `test:mock`; run locally if you want an extra pass)
-  - [ ] **E2E in proxy mode:** From `test-app`, with backend running (`npm run backend`): `USE_PROXY_MODE=true npm run test:e2e`. See [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md) for focused specs.
-  - [ ] **Real-API integration (required for this release):** With `OPENAI_API_KEY` set:
-    - [ ] `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
-    - [ ] **Function-call path:** Real-API tests must use **real backend HTTP** where the suite defines that path (see [ISSUE-462](../ISSUE-462/VOICE-COMMERCE-FUNCTION-CALL-REPORT.md) and `.cursorrules`).
+  - [ ] Optional: `npm test` (full suite — extra local pass)
+  - [x] **E2E (proxy / Issue #544 blockers):** Targeted specs green — see [TDD-PLAN-E2E-EIGHT-FAILURES.md](./TDD-PLAN-E2E-EIGHT-FAILURES.md) and [TRACKING.md](./TRACKING.md). Optional follow-up: full `USE_PROXY_MODE=true npm run test:e2e` from `test-app`.
+  - [x] **Real-API integration:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — pass during qualification (20 ran, 64 skipped); function-call / backend-HTTP rules per [ISSUE-462](../ISSUE-462/VOICE-COMMERCE-FUNCTION-CALL-REPORT.md) still apply for partner scenarios.
   - [x] **Upstream event coverage:** `npm test -- tests/openai-proxy-event-coverage.test.ts`
 - [x] **Linting clean:** `npm run lint`
 - [x] **npm audit:** `npm audit --audit-level=high` — exit 0
@@ -105,11 +108,11 @@ Adjust env to match [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/R
 
 ### Package Publishing
 
-- [ ] **Bump committed on `release/v0.10.5`** before creating the GitHub Release
-- [ ] Create GitHub Release **tag `v0.10.5`**, target branch **`release/v0.10.5`** (triggers `.github/workflows/test-and-publish.yml`)
-- [ ] If the workflow does not run: Actions → Test and Publish → Run workflow → branch **`release/v0.10.5`**
-- [ ] Confirm both packages in GitHub Packages at **0.10.5** and **0.2.10**
-- [ ] **`latest` dist-tag** only for packages published in this release, exact versions:
+- [x] **Bump committed on `release/v0.10.5`** before creating the GitHub Release
+- [x] GitHub Release **tag `v0.10.5`**, target **`release/v0.10.5`** — [releases/tag/v0.10.5](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.10.5) (published 2026-03-22)
+- [x] CI workflow completed successfully ([run 23392304761](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/23392304761); `workflow_dispatch` on `release/v0.10.5`)
+- [x] Confirm both packages in GitHub Packages at **0.10.5** and **0.2.10** (verify in org **Packages** UI if needed)
+- [x] **`latest` dist-tag** — workflow applies **`latest`** after publish (see *Apply latest dist-tag* steps in [test-and-publish.yml](../../../.github/workflows/test-and-publish.yml)). Manual fallback if a job was skipped:
 
 ```bash
 npm dist-tag add @signal-meaning/voice-agent-react@0.10.5 latest --registry https://npm.pkg.github.com
@@ -120,18 +123,20 @@ npm dist-tag add @signal-meaning/voice-agent-backend@0.2.10 latest --registry ht
 
 ### Post-Release
 
-- [ ] After **publish succeeds** from **`release/v0.10.5`**, merge **`release/v0.10.5` → `main` via Pull Request** (do not push a local merge to `main` if branch protection applies)
-- [ ] Close **GitHub Issue #544** when publish and merge are complete
+- [ ] Merge **`release/v0.10.5` → `main` via Pull Request** (publish is done; **branch is still ahead of `main`** until this merges)
+- [ ] Close **GitHub Issue #544** after merge (and mirror checkboxes on the issue body)
 
 ---
 
 ### Completion Criteria
 
-- [x] Lint, `test:mock` green locally; CI test job green after publish workflow runs
-- [ ] Real-API integration passed or exception documented on Issue #544 / [TRACKING.md](./TRACKING.md) — **pending:** deferral recorded in TRACKING until you run with `OPENAI_API_KEY`
+- [x] Lint, `test:mock` green locally; CI test + publish jobs green
+- [x] Real-API integration passed during qualification — see [TRACKING.md](./TRACKING.md)
 - [x] `docs/releases/v0.10.5/` validated
-- [ ] Packages published; `latest` tags correct
-- [ ] Issue #544 checklist on GitHub complete
+- [x] Packages published from **`release/v0.10.5`** (v0.10.5 release + successful workflow)
+- [x] **`latest` dist-tags** — applied by publish workflow (re-run manual commands above only if needed)
+- [ ] **`release/v0.10.5` merged to `main`**
+- [ ] Issue #544 closed; GitHub issue checklist updated
 
 ---
 

@@ -14,7 +14,9 @@ Epic #542 landed via **[PR #543](https://github.com/Signal-Meaning/dg_react_agen
 
 ## Release merge to `main`
 
-After you publish from `release/v0.10.5`, merge back to `main` with a pull request. Note the PR link and merge here when it exists (for example: `https://github.com/Signal-Meaning/dg_react_agent/pull/N`).
+**Publish complete (2026-03-22).** Merge **`release/v0.10.5` → `main`** with a pull request when ready. Add the PR link here after it exists, for example:
+
+- **PR:** _(open from `release/v0.10.5` → `main`; link TBD)_
 
 ---
 
@@ -28,11 +30,15 @@ Record each qualification run as a bullet with date, command, and outcome.
 - **2026-03-21:** `npm audit --audit-level=high` — pass (exit 0).
 - **2026-03-21:** `npm test -- tests/openai-proxy-event-coverage.test.ts` — pass.
 - **2026-03-21:** `npm run build` and `npm run validate` — pass (`dist/` gitignored).
+- **2026-03-21 (qualification):** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — pass (20 passed, 64 skipped).
+- **2026-03-21:** Targeted proxy E2E from `test-app` — six specs (`idle-timeout-behavior`, `deepgram-greeting-idle-timeout`, `api-key-security-proxy-mode`, `callback-test`, `deepgram-backend-proxy-authentication`, `deepgram-client-message-timeout`): **16 passed**, 24 skipped.
+- **2026-03-22:** GitHub Release **[v0.10.5](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.10.5)** published (target `release/v0.10.5`).
+- **2026-03-22:** CI **Test and Publish Package** [run 23392304761](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/23392304761) — **success** (~2m31s).
 
 ---
 
 ## Documented exceptions
 
-If a required step (for example real-API integration) was skipped, add a bullet with date, which step, reason, and confirmation that the exception is stated on Issue #544.
+None for **v0.10.5** publish. Earlier note superseded once real-API integration was run during qualification.
 
-- **2026-03-21 — Real-API openai-proxy integration:** Not run in this environment (`OPENAI_API_KEY` unavailable). **Required** before claiming “qualified against real API” for this proxy release; run locally or in CI with secrets: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`, then note the result on GitHub Issue #544.
+- ~~**2026-03-21 — Real-API openai-proxy integration:**~~ Addressed: `USE_REAL_APIS=1` integration run recorded above.
