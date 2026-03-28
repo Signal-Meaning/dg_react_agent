@@ -31,6 +31,9 @@ import {
   mapFunctionCallResponseToConversationItemCreate,
   mapGreetingToConversationText,
   mapConversationItemAddedToConversationText,
+  mergeAssistantTextFromOutputTextDoneAndDeltas,
+  extractAssistantTextFromResponseDoneEvent,
+  mapOutputAudioTranscriptDoneToConversationText,
   mapErrorToComponentError,
   type ComponentError,
   type OpenAIConversationItemEvent,
@@ -207,12 +210,25 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     /** Voice-commerce #1118: For TTS turns, API may send output_text.done before output_audio.done. We must not send AgentAudioDone on output_text.done when this response has audio, or idle timer starts while playback continues. */
     let hasReceivedOutputAudioDeltaForCurrentResponse = false;
 
+    /**
+     * Issue #555: Realtime may finalize assistant text only on response.output_text.done (no mappable conversation.item).
+     * Emit ConversationText from that event when we have not yet emitted assistant text for this response. When the
+     * mock sends the same string again on conversation.item.done, dedupe with lastEmittedAssistantConversationTextForDedupe.
+     */
+    let assistantConversationTextEmittedForCurrentResponse = false;
+    let lastEmittedAssistantConversationTextForDedupe: string | null = null;
+    /** Issue #555: Accumulate `response.output_text.delta` until `response.output_text.done` (Realtime streams text via deltas). */
+    let outputTextDeltaAccumulator = '';
+
     /** Issue #482: Response lifecycle helpers so agent-activity and idle_timeout buffering stay DRY. */
     const onResponseStarted = (): void => {
       responseInProgress = true;
       hasSentAgentStartedSpeakingForCurrentResponse = false;
       hasSentAgentAudioDoneForCurrentResponse = false;
       hasReceivedOutputAudioDeltaForCurrentResponse = false;
+      assistantConversationTextEmittedForCurrentResponse = false;
+      lastEmittedAssistantConversationTextForDedupe = null;
+      outputTextDeltaAccumulator = '';
     };
 
     /** Clear debounce timer and null handle (avoids stale timer ids; Issue #542 follow-up). */
@@ -699,7 +715,28 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // Issue #414: session is now configured for audio; send any append chunks queued before session.updated.
           flushPendingAudio();
         } else if (msg.type === 'response.output_text.done') {
-          // Upstream requirement: use conversation.item for finalized message and conversation history; response.output_text.done is control only. We do not map this event to ConversationText.
+          // Issue #482: AgentStartedSpeaking before ConversationText (assistant) for the same turn.
+          sendAgentStartedSpeakingIfNeeded();
+          // Issue #555: Real API may finalize assistant text only here (no mappable conversation.item), e.g. after
+          // function_call_output. Emit before onResponseEnded / sendDeferredResponseCreate so flags are not reset early.
+          // When upstream also sends conversation.item.* with the same text (mock parity), we dedupe in the item branch.
+          const outputTextDoneFallback = mergeAssistantTextFromOutputTextDoneAndDeltas(msg, outputTextDeltaAccumulator);
+          outputTextDeltaAccumulator = '';
+          if (
+            outputTextDoneFallback &&
+            clientWs.readyState === WebSocket.OPEN &&
+            !assistantConversationTextEmittedForCurrentResponse
+          ) {
+            clientWs.send(
+              JSON.stringify({
+                type: 'ConversationText',
+                role: 'assistant',
+                content: outputTextDoneFallback,
+              })
+            );
+            assistantConversationTextEmittedForCurrentResponse = true;
+            lastEmittedAssistantConversationTextForDedupe = outputTextDoneFallback.trim();
+          }
           onResponseEnded();
           // Issue #462 / #470: After function_call_output we deferred response.create; send it now so the API can start the next turn.
           if (pendingResponseCreateAfterFunctionCallOutput) {
@@ -708,10 +745,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: 'response.output_text.done → control only (upstream requirement: assistant text from conversation.item.*)',
+            body: outputTextDoneFallback
+              ? 'response.output_text.done → control + ConversationText fallback when no item text yet (Issue #555)'
+              : 'response.output_text.done → control; assistant text from conversation.item.* when present',
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
-          sendAgentStartedSpeakingIfNeeded();
           // Voice-commerce #1118: text may finish before audio; if we already streamed PCM, defer
           // AgentAudioDone to response.output_audio.done so the client idle timer does not start early.
           if (!hasReceivedOutputAudioDeltaForCurrentResponse) {
@@ -719,13 +757,28 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           }
           flushPendingIdleTimeoutError();
         } else if (msg.type === 'response.output_audio_transcript.done') {
+          const transcriptMsg = msg as Parameters<typeof mapOutputAudioTranscriptDoneToConversationText>[0];
+          const trimmedTranscript = (transcriptMsg.transcript ?? '').trim();
+          const canEmitTranscriptFallback =
+            trimmedTranscript.length > 0 &&
+            clientWs.readyState === WebSocket.OPEN &&
+            !assistantConversationTextEmittedForCurrentResponse;
+          if (canEmitTranscriptFallback) {
+            // Issue #470 real-API: text-only sessions sometimes finalize assistant text here, not on output_text / items.
+            sendAgentStartedSpeakingIfNeeded();
+            const ct = mapOutputAudioTranscriptDoneToConversationText(transcriptMsg);
+            clientWs.send(JSON.stringify(ct));
+            assistantConversationTextEmittedForCurrentResponse = true;
+            lastEmittedAssistantConversationTextForDedupe = trimmedTranscript;
+          }
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
-            body: `upstream→client: ${msg.type} (control only; upstream requirement: assistant text from conversation.item.*)`,
+            body: canEmitTranscriptFallback
+              ? `upstream→client: ${msg.type} → ConversationText (assistant) fallback`
+              : `upstream→client: ${msg.type} (no assistant fallback: empty transcript or assistant text already emitted)`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: msg.type },
           });
-          // Upstream requirement: ConversationText only from conversation.item.*; do not map control events.
         } else if (msg.type === 'response.output_audio_transcript.delta') {
           // Real API streams transcript deltas; we use conversation.item.* for finalized text (Epic #493).
           emitLog({
@@ -885,6 +938,33 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           // output_text.done; clearing here would allow a subsequent Settings → session.update while the API
           // still has an active response → conversation_already_has_active_response. Clear only on output_text.done.
         } else if (msg.type === 'response.done') {
+          // Issue #555: Realtime may send response.done without a preceding response.output_text.done; streamed text
+          // would only exist in outputTextDeltaAccumulator — emit before clearing (was wiping deltas too early).
+          // Issue #470 real-API: finalized text may appear only on response.done → response.output (ConversationItem[]), not on deltas or items.
+          let streamFallbackBeforeDone = mergeAssistantTextFromOutputTextDoneAndDeltas(
+            { type: 'response.output_text.done' },
+            outputTextDeltaAccumulator,
+          );
+          outputTextDeltaAccumulator = '';
+          if (!streamFallbackBeforeDone) {
+            streamFallbackBeforeDone = extractAssistantTextFromResponseDoneEvent(msg);
+          }
+          if (
+            streamFallbackBeforeDone &&
+            clientWs.readyState === WebSocket.OPEN &&
+            !assistantConversationTextEmittedForCurrentResponse
+          ) {
+            sendAgentStartedSpeakingIfNeeded();
+            clientWs.send(
+              JSON.stringify({
+                type: 'ConversationText',
+                role: 'assistant',
+                content: streamFallbackBeforeDone,
+              })
+            );
+            assistantConversationTextEmittedForCurrentResponse = true;
+            lastEmittedAssistantConversationTextForDedupe = streamFallbackBeforeDone.trim();
+          }
           // Issue #482 / #489: Ensure client gets AgentAudioDone so component can transition to idle (e.g. when API sends response.done without output_text.done/output_audio.done).
           emitLog({
             severityNumber: SeverityNumber.INFO,
@@ -938,6 +1018,25 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             severityText: 'DEBUG',
             body: `upstream: ${msg.type} (no client message)`,
             attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.output_text.added' },
+          });
+        } else if (msg.type === 'response.output_text.delta') {
+          const raw = (msg as { delta?: unknown }).delta;
+          let piece = '';
+          if (typeof raw === 'string' && raw.length > 0) {
+            piece = raw;
+          } else if (raw !== null && typeof raw === 'object') {
+            const o = raw as Record<string, unknown>;
+            if (typeof o.text === 'string' && o.text.length > 0) piece = o.text;
+            else if (typeof o.delta === 'string' && o.delta.length > 0) piece = o.delta;
+          }
+          if (piece.length > 0) {
+            outputTextDeltaAccumulator += piece;
+          }
+          emitLog({
+            severityNumber: SeverityNumber.DEBUG,
+            severityText: 'DEBUG',
+            body: `upstream: ${msg.type} (accumulate for ConversationText fallback; len=${outputTextDeltaAccumulator.length})`,
+            attributes: { ...connectionAttrs, [ATTR_DIRECTION]: 'upstream→client', [ATTR_MESSAGE_TYPE]: 'response.output_text.delta' },
           });
         } else if (msg.type === 'conversation.created') {
           // Issue #517: Real API sends when a conversation is created; control event only. Explicitly ignore (log only) so we don't hit unmapped.
@@ -1040,12 +1139,21 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             const conversationText = mapConversationItemAddedToConversationText(msg as OpenAIConversationItemEvent);
             let didSend = false;
             if (conversationText) {
+              const trimmedContent = conversationText.content.trim();
+              const duplicateOfOutputTextFallback =
+                lastEmittedAssistantConversationTextForDedupe !== null &&
+                trimmedContent === lastEmittedAssistantConversationTextForDedupe;
               if (itemId && sentConversationTextItemIds.has(itemId)) {
                 // Already sent ConversationText for this item (e.g. from another of .created/.added/.done).
+              } else if (duplicateOfOutputTextFallback) {
+                if (itemId) sentConversationTextItemIds.add(itemId);
+                // Issue #555: mock/real may send response.output_text.done then the same string on conversation.item.done.
               } else {
                 if (itemId) sentConversationTextItemIds.add(itemId);
                 clientWs.send(JSON.stringify(conversationText));
                 didSend = true;
+                assistantConversationTextEmittedForCurrentResponse = true;
+                lastEmittedAssistantConversationTextForDedupe = trimmedContent;
               }
             }
             // Diagnostic: log every assistant item event so we can see what the real API sends and whether we mapped/sent.

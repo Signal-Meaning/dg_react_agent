@@ -39,6 +39,7 @@ export const OPENAI_REALTIME_SERVER_EVENT_TYPES: readonly string[] = [
   'response.output_item.added',
   'response.output_item.done',
   'response.output_text.added',
+  'response.output_text.delta',
   'response.output_text.done',
   'session.created',
   'session.updated',
