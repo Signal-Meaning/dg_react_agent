@@ -123,8 +123,8 @@ npm dist-tag add @signal-meaning/voice-agent-backend@0.2.10 latest --registry ht
 
 ### Post-Release
 
-- [ ] Merge **`release/v0.10.5` → `main` via Pull Request** (publish is done; **branch is still ahead of `main`** until this merges)
-- [ ] Close **GitHub Issue #544** after merge (and mirror checkboxes on the issue body)
+- [x] Merge **`release/v0.10.5` → `main` via Pull Request** — [PR #545](https://github.com/Signal-Meaning/dg_react_agent/pull/545) merged 2026-03-28 (`df54a48`)
+- [x] Close **GitHub Issue #544** — closed as **completed** with resolution comment
 
 ---
 
@@ -135,8 +135,8 @@ npm dist-tag add @signal-meaning/voice-agent-backend@0.2.10 latest --registry ht
 - [x] `docs/releases/v0.10.5/` validated
 - [x] Packages published from **`release/v0.10.5`** (v0.10.5 release + successful workflow)
 - [x] **`latest` dist-tags** — applied by publish workflow (re-run manual commands above only if needed)
-- [ ] **`release/v0.10.5` merged to `main`**
-- [ ] Issue #544 closed; GitHub issue checklist updated
+- [x] **`release/v0.10.5` merged to `main`** ([PR #545](https://github.com/Signal-Meaning/dg_react_agent/pull/545))
+- [x] Issue #544 closed (completed); resolution recorded on the issue
 
 ---
 

@@ -4,7 +4,7 @@
 
 **Labels:** release, patch, priority: high
 
-**State:** Published to GitHub Packages (**v0.10.5** / backend **0.2.10**); **open** until `release/v0.10.5` is merged to `main` and Issue #544 is closed.
+**State:** **Complete.** Published (**v0.10.5** / backend **0.2.10**); [PR #545](https://github.com/Signal-Meaning/dg_react_agent/pull/545) merged `release/v0.10.5` → `main` (2026-03-28); [Issue #544](https://github.com/Signal-Meaning/dg_react_agent/issues/544) closed.
 
 ---
 
