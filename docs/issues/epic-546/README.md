@@ -31,6 +31,7 @@
 | 551 | Explicit dev TLS + production guardrails | [TRACKING-551.md](./TRACKING-551.md) |
 | 552 | Documentation (supported modes + integrators) | [TRACKING-552.md](./TRACKING-552.md) |
 | 554 | **Execute patch release** (GitHub release template checklist) | [ISSUE-554/](./ISSUE-554/README.md) |
+| 555 | **Real-API integration regression** (`USE_REAL_APIS`, bisect / fix / document) | [ISSUE-555-OPENAI-REAL-API-REGRESSION/](./ISSUE-555-OPENAI-REAL-API-REGRESSION/README.md) |
 
 ## Epic completion checklist (rollup)
 
@@ -44,6 +45,7 @@ Use this table for **at-a-glance** status. Detail lives in each `TRACKING-*.md`.
 - [x] **#552** — Integrator-facing docs published; packaging rule stated (see [TRACKING-552.md](./TRACKING-552.md))
 - [ ] **#554** — Patch release executed per [ISSUE-554/TRACKING.md](./ISSUE-554/TRACKING.md) and GitHub [#554](https://github.com/Signal-Meaning/dg_react_agent/issues/554)
 - [ ] **Release qualification** — [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md) completed for the shipping version(s)
+- [ ] **#555** — Real-API integration suite reliable again or qualification exception documented (see [ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md](./ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md))
 - [ ] **GitHub** — Epic #546 and sub-issues closed with pointers to this folder
 
 ## Suggested implementation order

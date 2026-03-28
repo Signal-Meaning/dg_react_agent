@@ -17,6 +17,7 @@ Use this checklist when shipping `@signal-meaning/voice-agent-backend` changes f
 
 - [ ] `npm test` (root) passes.
 - [ ] `npm test -- tests/integration/openai-proxy-integration.test.ts` passes (mock upstream).
+- [ ] `npm test -- tests/integration/openai-proxy-run-ts-entrypoint.test.ts` passes — **same entrypoint as test-app** (`npx tsx scripts/openai-proxy/run.ts` from `packages/voice-agent-backend`, mock upstream via `OPENAI_REALTIME_URL`).
 - [ ] Lint / build per release checklist if this repo ties them to publish.
 - [ ] If behavior touches proxy↔API ordering or timing: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` when `OPENAI_API_KEY` is available (per `.cursorrules` release qualification).
 

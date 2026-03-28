@@ -11,6 +11,7 @@
 | ----------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | **Unit**                      | `tests/` (Jest, repo root)                                                            | Pure helpers: env parsing, TLS mode selection, “would load selfsigned” guards, path resolution for PEM |
 | **Integration**               | `tests/integration/openai-proxy-integration.test.ts`                                  | Proxy server creation, WebSocket path, optional HTTPS/WSS with test certs or HTTP                      |
+| **Integration (run.ts path)** | `tests/integration/openai-proxy-run-ts-entrypoint.test.ts`                             | Spawn `scripts/openai-proxy/run.ts` like test-app; mock upstream; sanitizes TLS env so `.env` cannot skew HTTP listen |
 | **Packaging / install smoke** | Script or CI job (see [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md)) | `npm pack` + production `npm install` + spawn proxy; assert no `MODULE_NOT_FOUND`                      |
 | **E2E**                       | `test-app/tests/e2e/`                                                                 | Only if browser/ws mixed-content or full stack must be proven; run from `test-app` per project rules   |
 | **Doc contract (#552)**       | `tests/docs/openai-proxy-tls-integrator-docs.test.ts`                                | Asserts integrator docs contain TLS env names, `attachVoiceAgentUpgrade`, packaging rule, epic link      |
@@ -34,6 +35,7 @@ From **repo root** (unless noted):
 
 - `npm test` — full Jest suite (mock-first CI expectation).
 - `npm test -- tests/integration/openai-proxy-integration.test.ts` — proxy integration.
+- `npm test -- tests/integration/openai-proxy-run-ts-entrypoint.test.ts` — **test-app–aligned** `run.ts` entry (mock upstream).
 - `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — when release qualification requires real upstream (see workspace rules for proxy fixes).
 
 From **test-app** (E2E only if needed):
