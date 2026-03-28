@@ -1,6 +1,12 @@
 /**
  * Lazy Initialization E2E Tests
- * 
+ *
+ * **Mic activation test (`should verify lazy initialization via microphone activation`):** Under Playwright
+ * `webServer`, `VITE_IDLE_TIMEOUT_MS` defaults to **1000** (see `tests/playwright.config.mjs`). The agent
+ * connection often goes `closed` due to idle **before** `microphone-helpers` finishes its reconnect wait — not
+ * a Deepgram-specific failure. That test passes **`allowDisconnectAfterConnect: true`** so we still assert
+ * lazy connect + mic enabled without requiring auto-reconnect after idle.
+ *
  * IMPORTANT: These tests require a REAL Deepgram API key!
  * 
  * These tests validate that Issue #206 changes work correctly in a real browser:
@@ -377,8 +383,8 @@ test.describe('Lazy Initialization E2E Tests', () => {
     // Wait for component to be ready
     await expect(page.locator('[data-testid="component-ready-status"]')).toContainText('true', { timeout: 5000 });
     
-    // Use the microphone helper to ensure proper setup
-    const result = await MicrophoneHelpers.waitForMicrophoneReady(page);
+    // Playwright E2E uses 1s idle timeout by default — connection may drop before helper's reconnect loop; see file header.
+    const result = await MicrophoneHelpers.waitForMicrophoneReady(page, { allowDisconnectAfterConnect: true });
     
     // Verify the result - lazy initialization worked (mic click triggered connection)
     expect(result.success).toBe(true);

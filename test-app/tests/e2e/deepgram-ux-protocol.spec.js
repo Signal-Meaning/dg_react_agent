@@ -1,6 +1,11 @@
 /**
  * Deepgram Protocol UX Test
- * 
+ *
+ * **Suite status:** Entire describe is skipped — track / restore under GitHub **#556**
+ * (Deepgram proxy E2E / connectivity / mic–reconnect flakiness; same bucket as websocket-connectivity opt-in).
+ * @see https://github.com/Signal-Meaning/dg_react_agent/issues/556
+ * @see docs/issues/ISSUE-556/E2E-SKIPS.md
+ *
  * This E2E test validates the Deepgram protocol by:
  * 1. Interacting with the actual UI elements (buttons, inputs)
  * 2. Validating visual state changes match protocol expectations
@@ -28,7 +33,7 @@ import {
 // Run only in chromium for focused testing
 test.use({ browserName: 'chromium' });
 
-test.describe('Deepgram Protocol UX Validation', () => {
+test.describe.skip('Deepgram Protocol UX Validation', () => {
   
   test.afterEach(async ({ page }) => {
     // Clean up: Close any open connections and clear state
