@@ -16,7 +16,7 @@ This issue tracks **running the full release checklist** to publish the patch th
 
 ### Qualification highlights for this release
 
-- [ ] **Packaging smoke:** After `npm pack` of `voice-agent-backend`, install tarball in a clean temp project and start the OpenAI proxy — no `MODULE_NOT_FOUND` (see `docs/issues/epic-546/RELEASE-AND-QUALIFICATION.md`).
+- [x] **Packaging smoke:** **CI equivalent** **2026-03-29** — `test-and-publish.yml` run **23697831472**: root tarball install + `require()`, backend `npm pack --dry-run`, registry verify after publish. Optional manual proxy-from-tarball: `docs/issues/epic-546/RELEASE-AND-QUALIFICATION.md`.
 - [x] **Proxy / API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` when `OPENAI_API_KEY` is available — **PASS** (logged **2026-03-28** in [ISSUE-554/TRACKING.md](./TRACKING.md)).
 
 ---

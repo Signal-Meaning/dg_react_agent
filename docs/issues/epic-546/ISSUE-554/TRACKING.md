@@ -7,7 +7,7 @@ Use **checkboxes on GitHub issue #554** as the primary checklist (same content a
 
 ## Release status
 
-**Pre-release preparation** on **`release/v0.10.6`:** **`[x]` complete** (2026-03-29 verify) — lint (**0 errors**, 4 `no-console` warnings), **CI-parity** + **plain** `test:mock`, `openai-proxy-event-coverage`, **`openai-proxy-run-ts-entrypoint`**, **`lazy-initialization.test.js`**, `npm audit --audit-level=high` (**0** high), **real-API** `USE_REAL_APIS=1 openai-proxy-integration` (**PASS** 2026-03-28), **`npm run test:e2e:ci`** (**PASS** 2026-03-29 — **9 passed**, **3 skipped** for **`deepgram-ux-protocol`** [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)). Issue #206: **`tests/lazy-initialization.test.js`** only (Playwright lazy-init E2E removed). **Release docs:** **`[x]`** — [`docs/releases/v0.10.6/`](../../../releases/v0.10.6/) (**CHANGELOG**, **PACKAGE-STRUCTURE**, **RELEASE-NOTES**); **`npm run validate:release-docs`** **PASS** (patch required files). **Next:** packaging smoke, GitHub Release + publish (rollup items still open below).
+**Pre-release preparation** on **`release/v0.10.6`:** **`[x]` complete** (2026-03-29 verify) — lint (**0 errors**, 4 `no-console` warnings), **CI-parity** + **plain** `test:mock`, `openai-proxy-event-coverage`, **`openai-proxy-run-ts-entrypoint`**, **`lazy-initialization.test.js`**, `npm audit --audit-level=high` (**0** high), **real-API** `USE_REAL_APIS=1 openai-proxy-integration` (**PASS** 2026-03-28), **`npm run test:e2e:ci`** (**PASS** 2026-03-29 — **9 passed**, **3 skipped** for **`deepgram-ux-protocol`** [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)). Issue #206: **`tests/lazy-initialization.test.js`** only (Playwright lazy-init E2E removed). **Release docs:** **`[x]`** — [`docs/releases/v0.10.6/`](../../../releases/v0.10.6/) (**CHANGELOG**, **PACKAGE-STRUCTURE**, **RELEASE-NOTES**); **`npm run validate:release-docs`** **PASS** (patch required files). **Published:** **2026-03-29** — [GitHub Release **v0.10.6**](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.10.6); workflow [**23697831472**](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/23697831472) **success** (Jest + pack/install checks + publish + **`latest`** dist-tags). **Next:** post-release (PR → `main`, close issues, notify integrators).
 
 **CI-parity Jest:** `CI=true RUN_REAL_API_TESTS=false npm run test:mock` — **PASS** (2026-03-28), same env as the **Test and Publish** workflow’s Jest step.
 
@@ -30,13 +30,13 @@ Use **checkboxes on GitHub issue #554** as the primary checklist (same content a
 Mirror the sections from the GitHub issue; check here when each **section** is done.
 
 - [x] **Pre-release preparation** — lint, `test:mock`, E2E CI subset, real-API integration, `openai-proxy-event-coverage`, `npm audit --audit-level=high` — **done** **2026-03-29** (see [Pre-release preparation (progress)](#pre-release-preparation-progress) below)
-- [ ] **EPIC-546 packaging smoke** — `npm pack` → clean install → start proxy; no missing modules ([`../RELEASE-AND-QUALIFICATION.md`](../RELEASE-AND-QUALIFICATION.md))
+- [x] **EPIC-546 packaging smoke** — **CI equivalent** **2026-03-29** — [`test-and-publish.yml`](../../../../.github/workflows/test-and-publish.yml) on run [**23697831472**](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/23697831472): root **`package:local`** + tarball install + `require()`; backend **`npm pack --dry-run`**; publish job verifies installs from registry. Optional manual temp-project proxy boot: [`../RELEASE-AND-QUALIFICATION.md`](../RELEASE-AND-QUALIFICATION.md).
 - [x] **Version management** — **`@signal-meaning/voice-agent-backend` 0.2.11** and root **`@signal-meaning/voice-agent-react` 0.10.6** confirmed in tree on **`release/v0.10.6`** (no further bump required for this patch)
 - [x] **Release docs** — [`docs/releases/v0.10.6/`](../../../releases/v0.10.6/) (**CHANGELOG.md**, **PACKAGE-STRUCTURE.md**, **RELEASE-NOTES.md**). Validated: **`npm run validate:release-docs`** **PASS** **2026-03-29** (uses root `package.json` version **0.10.6**). Dual-ship **voice-agent-backend 0.2.11** is documented in that CHANGELOG / release notes (no separate `docs/releases/v0.2.11/` folder).
 - [x] **Release branch** — **`release/v0.10.6`** with qualifying commits (**pre-release checks green**)
-- [ ] **GitHub Release + CI publish** — workflow green; packages in registry
-- [ ] **`latest` dist-tag** — only for packages actually published
-- [ ] **Post-release** — PR `release/v…` → `main`; notify integrators (e.g. Voice Commerce); close #554 and update epic #546
+- [x] **GitHub Release + CI publish** — **2026-03-29** — [Release **v0.10.6**](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.10.6); [**Test and Publish Package** run **23697831472**](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/23697831472) **success**
+- [x] **`latest` dist-tag** — **2026-03-29** — applied in same workflow for published packages (**voice-agent-react** **0.10.6**, **voice-agent-backend** **0.2.11**)
+- [ ] **Post-release** — PR `release/v0.10.6` → `main`; notify integrators (e.g. Voice Commerce); close #554 / #547 / #548 as appropriate; update epic #546
 
 ### Pre-release preparation (progress)
 
@@ -127,6 +127,11 @@ _Add dated entries (command, outcome, operator)._
 
 - Aligned **release status**, **E2E table row**, and **qualification doc** with current CI subset, **#556** skip, lazy-init E2E removal, and **Jest** lazy-init ownership.
 
+### 2026-03-29 — GitHub Release v0.10.6 published (agent)
+
+- **`gh release create v0.10.6`** — target **`release/v0.10.6`**, notes from **`docs/releases/v0.10.6/RELEASE-NOTES.md`**, **`--latest`**. URL: https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.10.6
+- **`Test and Publish Package`** — [**23697831472**](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/23697831472) **success** (~2m30s): Jest (mock), tarball packaging + install test, backend pack dry-run, publish both packages, **`latest`** dist-tags, verify installs. **E2E** job **skipped** (`if: false` in workflow).
+
 ### 2026-03-29 — Pre-release rollup verified (agent)
 
 - **`CI=true RUN_REAL_API_TESTS=false npm run test:mock`** — **PASS** (122 suites, 1166 passed, 25 skipped).
@@ -134,4 +139,4 @@ _Add dated entries (command, outcome, operator)._
 - **`npm run lint`** — **PASS** (0 errors, 4 `no-console` warnings in `src/test-utils/test-helpers.ts`).
 - **`npm audit --audit-level=high`** — **PASS** (0 vulnerabilities).
 - **`cd test-app && npm run test:e2e:ci`** (via Playwright on CI file list) — **PASS**, **9 passed / 3 skipped** (#556).
-- **Rollup:** **`[x]` Pre-release preparation**, **`[x]` Version management** (0.2.11 / 0.10.6 in tree), **`[x]` Release branch** `release/v0.10.6`, **`[x]` Release docs** (`docs/releases/v0.10.6/`, `validate:release-docs`). **Still open:** packaging smoke, GitHub Release + publish, dist-tag, post-release.
+- **Rollup:** **`[x]` Pre-release preparation**, **`[x]` EPIC-546 packaging smoke** (CI tarball + dry-run + registry verify on **23697831472**), **`[x]` Version management**, **`[x]` Release docs**, **`[x]` Release branch**, **`[x]` GitHub Release + CI publish**, **`[x]` `latest` dist-tag**. **Still open:** **post-release** (PR → `main`, issue hygiene, integrator comms).
