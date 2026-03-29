@@ -10,8 +10,8 @@ Use this checklist when shipping `@signal-meaning/voice-agent-backend` changes f
 
 ## Versioning
 
-- [ ] **Patch** (e.g. `0.2.11`) for packaging-only fix ([#547](https://github.com/Signal-Meaning/dg_react_agent/issues/547)) if behavior is unchanged except dependency graph / crash fix.
-- [ ] **Minor** (e.g. `0.3.0`) if env contract is **breaking** (e.g. removing `HTTPS` as trigger without compatibility shim) — follow semver and changelog.
+- [x] **Patch** (e.g. `0.2.11`) for packaging-only fix ([#547](https://github.com/Signal-Meaning/dg_react_agent/issues/547)) if behavior is unchanged except dependency graph / crash fix. — **Selected** for #554 / EPIC-546: **voice-agent-backend 0.2.11**, root **voice-agent-react 0.10.6** on **`release/v0.10.6`**.
+- [ ] **Minor** (e.g. `0.3.0`) if env contract is **breaking** (e.g. removing `HTTPS` as trigger without compatibility shim) — follow semver and changelog. — **Not** this release.
 
 ---
 
@@ -19,27 +19,27 @@ Use this checklist when shipping `@signal-meaning/voice-agent-backend` changes f
 
 ### Jest (root)
 
-- [ ] `npm test` (root) passes, or **`CI=true RUN_REAL_API_TESTS=false npm run test:mock`** for parity with the **Test and Publish** workflow Jest step.
-- [ ] `npm test -- tests/integration/openai-proxy-integration.test.ts` passes (mock upstream).
-- [ ] `npm test -- tests/integration/openai-proxy-run-ts-entrypoint.test.ts` passes — **same entrypoint as test-app** (`npx tsx scripts/openai-proxy/run.ts` from `packages/voice-agent-backend`, mock upstream via `OPENAI_REALTIME_URL`).
-- [ ] `npm test -- tests/openai-proxy-event-coverage.test.ts` passes (event mapping guard).
-- [ ] **`tests/lazy-initialization.test.js`** passes (Issue #206 — lazy WebSocket managers; **not** covered by removed Playwright `lazy-initialization-e2e`).
+- [x] `npm test` (root) passes, or **`CI=true RUN_REAL_API_TESTS=false npm run test:mock`** for parity with the **Test and Publish** workflow Jest step. — **PASS** **2026-03-29** (122 suites / 1166 tests passed; see [ISSUE-554/TRACKING.md](./ISSUE-554/TRACKING.md)).
+- [x] `npm test -- tests/integration/openai-proxy-integration.test.ts` passes (mock upstream). — **PASS** (batched **2026-03-29** with other Jest targets).
+- [x] `npm test -- tests/integration/openai-proxy-run-ts-entrypoint.test.ts` passes — **same entrypoint as test-app** (`npx tsx scripts/openai-proxy/run.ts` from `packages/voice-agent-backend`, mock upstream via `OPENAI_REALTIME_URL`). — **PASS** **2026-03-29**.
+- [x] `npm test -- tests/openai-proxy-event-coverage.test.ts` passes (event mapping guard). — **PASS** **2026-03-29**.
+- [x] **`tests/lazy-initialization.test.js`** passes (Issue #206 — lazy WebSocket managers; **not** covered by removed Playwright `lazy-initialization-e2e`). — **PASS** **2026-03-29**.
 
 ### Real OpenAI (when `OPENAI_API_KEY` is available)
 
-- [ ] If this release changes proxy↔API ordering, timing, or translator behavior: **`USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`** (per `.cursorrules` release qualification). Log outcome in [ISSUE-554/TRACKING.md](./ISSUE-554/TRACKING.md) or release notes.
+- [x] If this release changes proxy↔API ordering, timing, or translator behavior: **`USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`** (per `.cursorrules` release qualification). Log outcome in [ISSUE-554/TRACKING.md](./ISSUE-554/TRACKING.md) or release notes. — **PASS** **2026-03-28** (20 passed, 0 failed); logged in TRACKING.
 
 ### Lint, audit, optional Deepgram
 
-- [ ] `npm run lint` (root) passes (or note warnings if policy allows).
-- [ ] `npm audit --audit-level=high` passes at root (or document exceptions).
-- [ ] Live Deepgram Voice Agent auth is **opt-in**: `tests/integration/websocket-connectivity.test.js` runs only with **`RUN_DEEPGRAM_CONNECTIVITY_TESTS=1`** — see GitHub [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556); **not** required for OpenAI proxy / packaging qualification.
+- [x] `npm run lint` (root) passes (or note warnings if policy allows). — **PASS** **2026-03-29** (**0 errors**, **4** `no-console` warnings in `src/test-utils/test-helpers.ts`).
+- [x] `npm audit --audit-level=high` passes at root (or document exceptions). — **PASS** **2026-03-29** (0 vulnerabilities).
+- [x] Live Deepgram Voice Agent auth is **opt-in**: `tests/integration/websocket-connectivity.test.js` runs only with **`RUN_DEEPGRAM_CONNECTIVITY_TESTS=1`** — see GitHub [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556); **not** required for OpenAI proxy / packaging qualification. — **N/A** for #554 qualification (documented under #556).
 
 ### E2E (test-app, CI subset)
 
 From **`test-app`** (see `npm run test:e2e:ci` in `test-app/package.json`):
 
-- [ ] **`npm run test:e2e:ci`** — runs **`api-key-validation.spec.js`**, **`page-content.spec.js`**, **`deepgram-ux-protocol.spec.js`**, **`protocol-validation-modes.spec.js`** with proxy mode + `E2E_USE_HTTP=1` (Playwright starts dev + backend unless you use `E2E_USE_EXISTING_SERVER=1` per [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md)).
+- [x] **`npm run test:e2e:ci`** — runs **`api-key-validation.spec.js`**, **`page-content.spec.js`**, **`deepgram-ux-protocol.spec.js`**, **`protocol-validation-modes.spec.js`** with proxy mode + `E2E_USE_HTTP=1` (Playwright starts dev + backend unless you use `E2E_USE_EXISTING_SERVER=1` per [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md)). — **PASS** **2026-03-29** (**9 passed**, **3 skipped** — **deepgram-ux-protocol** suite skipped, [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)).
 
 **Known skips / debt:**
 

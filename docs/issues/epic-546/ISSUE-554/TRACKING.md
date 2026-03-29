@@ -7,7 +7,7 @@ Use **checkboxes on GitHub issue #554** as the primary checklist (same content a
 
 ## Release status
 
-**Pre-release** on **`release/v0.10.6`** (2026-03-28): **Done in tree** — lint, CI-parity Jest, plain local `test:mock`, `openai-proxy-event-coverage`, `npm audit --audit-level=high`, **real-API** `openai-proxy-integration` (rerun **PASS**). **E2E:** `test:e2e:ci` uses **four** spec files; **`deepgram-ux-protocol.spec.js`** is **`describe.skip`** ([#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)); **`lazy-initialization-e2e.spec.js`** was **removed** (Issue #206 → **`tests/lazy-initialization.test.js`**). **Re-run** `cd test-app && npm run test:e2e:ci` and log outcome below — expect **only** non-skipped tests to execute; treat #556 skip as known debt or document an exception before calling the rollup **green**.
+**Pre-release preparation** on **`release/v0.10.6`:** **`[x]` complete** (2026-03-29 verify) — lint (**0 errors**, 4 `no-console` warnings), **CI-parity** + **plain** `test:mock`, `openai-proxy-event-coverage`, **`openai-proxy-run-ts-entrypoint`**, **`lazy-initialization.test.js`**, `npm audit --audit-level=high` (**0** high), **real-API** `USE_REAL_APIS=1 openai-proxy-integration` (**PASS** 2026-03-28), **`npm run test:e2e:ci`** (**PASS** 2026-03-29 — **9 passed**, **3 skipped** for **`deepgram-ux-protocol`** [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)). Issue #206: **`tests/lazy-initialization.test.js`** only (Playwright lazy-init E2E removed). **Next:** packaging smoke, release docs, GitHub Release + publish (rollup items still open below).
 
 **CI-parity Jest:** `CI=true RUN_REAL_API_TESTS=false npm run test:mock` — **PASS** (2026-03-28), same env as the **Test and Publish** workflow’s Jest step.
 
@@ -17,7 +17,7 @@ Use **checkboxes on GitHub issue #554** as the primary checklist (same content a
 
 **First (development):** For proxy / test-app fixes that fall under [#555](../ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md), follow **🔴 RED → 🟢 GREEN → 🟡 REFACTOR (gold)** on the tests that define behavior, **then** merge the PR. That progress is tracked in **ISSUE-555** (TDD checklist + verification log), not by the boxes below.
 
-**Second (shipping):** The sections below (**Epic gates**, **Release execution**) are **pre-release and publish** only. They stay unchecked until you deliberately run that workflow. Passing tests or merged #555 work does **not** auto-check them.
+**Second (shipping):** The sections below (**Epic gates**, **Release execution**) are **pre-release and publish** only. Checkboxes are set **`[x]`** only after the step is **verified** (commands run, outcome logged). Merged #555 code does **not** auto-check them — the operator does.
 
 ## Epic gates (before starting release checklist)
 
@@ -29,27 +29,27 @@ Use **checkboxes on GitHub issue #554** as the primary checklist (same content a
 
 Mirror the sections from the GitHub issue; check here when each **section** is done.
 
-- [ ] **Pre-release preparation** — lint, `test:mock`, E2E proxy mode, real-API integration if proxy touched, `openai-proxy-event-coverage`, `npm audit --audit-level=high` — **in progress**; see [Pre-release preparation (progress)](#pre-release-preparation-progress) below
+- [x] **Pre-release preparation** — lint, `test:mock`, E2E CI subset, real-API integration, `openai-proxy-event-coverage`, `npm audit --audit-level=high` — **done** **2026-03-29** (see [Pre-release preparation (progress)](#pre-release-preparation-progress) below)
 - [ ] **EPIC-546 packaging smoke** — `npm pack` → clean install → start proxy; no missing modules ([`../RELEASE-AND-QUALIFICATION.md`](../RELEASE-AND-QUALIFICATION.md))
-- [ ] **Version management** — `packages/voice-agent-backend/package.json` (and root if bumped)
+- [x] **Version management** — **`@signal-meaning/voice-agent-backend` 0.2.11** and root **`@signal-meaning/voice-agent-react` 0.10.6** confirmed in tree on **`release/v0.10.6`** (no further bump required for this patch)
 - [ ] **Release docs** — `docs/releases/v…/` per patch rules (CHANGELOG, PACKAGE-STRUCTURE, validate script)
-- [ ] **Release branch** — `release/v…` with commits (**current work:** `release/v0.10.6`)
+- [x] **Release branch** — **`release/v0.10.6`** with qualifying commits (**pre-release checks green**)
 - [ ] **GitHub Release + CI publish** — workflow green; packages in registry
 - [ ] **`latest` dist-tag** — only for packages actually published
 - [ ] **Post-release** — PR `release/v…` → `main`; notify integrators (e.g. Voice Commerce); close #554 and update epic #546
 
 ### Pre-release preparation (progress)
 
-Started **2026-03-28** (repo root). Keep the rollup checkbox **open** until every required row is **Done** for your environment / CI.
+Started **2026-03-28** (repo root). **Pre-release rollup checked** **2026-03-29** after re-verification (see log entry below).
 
 | Step | Status |
 |------|--------|
 | `npm run lint` | **Done** — exit 0; **4 warnings** (`no-console` in `src/test-utils/test-helpers.ts`), 0 errors |
-| `npm run test:mock` — **CI parity** (`CI=true RUN_REAL_API_TESTS=false`) | **Done** — **2026-03-28:** 122 suites passed, 1166 tests passed, 25 skipped (matches [`.github/workflows/test-and-publish.yml`](../../../../.github/workflows/test-and-publish.yml) Jest step) |
+| `npm run test:mock` — **CI parity** (`CI=true RUN_REAL_API_TESTS=false`) | **Done** — **2026-03-29:** 122 suites passed, 1166 tests passed, 25 skipped (matches [`.github/workflows/test-and-publish.yml`](../../../../.github/workflows/test-and-publish.yml) Jest step) |
 | `npm run test:mock` — **plain local** (no `CI` / `RUN_REAL_API_TESTS`) | **Done** — **2026-03-28:** PASS (exit 0); live Deepgram **`websocket-connectivity`** is **opt-in** only — see [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556) and section below (no longer blocks default local Jest) |
 | `npm test -- tests/openai-proxy-event-coverage.test.ts` | **Done** — PASS |
 | `npm audit --audit-level=high` | **Done** — 0 vulnerabilities |
-| E2E proxy mode (`cd test-app && npm run test:e2e:ci`; full suite: `npm run test:e2e`) | **CI script** (`test-app/package.json`): **`api-key-validation.spec.js`**, **`page-content.spec.js`**, **`deepgram-ux-protocol.spec.js`** (**whole describe skipped**, [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556) — see [`ISSUE-556/E2E-SKIPS.md`](../ISSUE-556/E2E-SKIPS.md)), **`protocol-validation-modes.spec.js`**. **Lazy init (Issue #206):** **`tests/lazy-initialization.test.js`** (root Jest); **`lazy-initialization-e2e.spec.js`** **removed** (no unique E2E requirement). **Historical:** last run **before** skip + removal failed on deepgram UX + lazy-init mic (idle/reconnect). **Action:** run **`npm run test:e2e:ci`** after current `release/v0.10.6` tip and record **PASS**/FAIL + counts here or in verification log. |
+| E2E proxy mode (`cd test-app && npm run test:e2e:ci`; full suite: `npm run test:e2e`) | **Done (2026-03-29)** — **`npm run test:e2e:ci`**: **PASS** (exit **0**), **~10s**, **9 passed**, **3 skipped** (**deepgram-ux-protocol** describe skipped, [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)). **CI files:** `api-key-validation`, `page-content`, `deepgram-ux-protocol`, `protocol-validation-modes`. **Lazy init:** **`tests/lazy-initialization.test.js`** only. Full **`npm run test:e2e`** not required for this rollup. |
 | `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` | **Done (rerun 2026-03-28)** — **PASS**, **exit 0**, **~74s**; **20 passed**, **64 skipped**, **0 failed** (includes **`translates InjectUserMessage … ConversationText`** after **60s** timeout + proxy fail-fast fixes). Jest still prints **did not exit** (open handles) — optional **`--detectOpenHandles`**. **First run** same day: **exit 1** (1 failed, 25s timeout). See [#555](../ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md). |
 
 ### Deepgram `websocket-connectivity.test.js` (opt-in; backlog [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556))
@@ -126,3 +126,12 @@ _Add dated entries (command, outcome, operator)._
 ### Doc sync (TRACKING + RELEASE-AND-QUALIFICATION)
 
 - Aligned **release status**, **E2E table row**, and **qualification doc** with current CI subset, **#556** skip, lazy-init E2E removal, and **Jest** lazy-init ownership.
+
+### 2026-03-29 — Pre-release rollup verified (agent)
+
+- **`CI=true RUN_REAL_API_TESTS=false npm run test:mock`** — **PASS** (122 suites, 1166 passed, 25 skipped).
+- **`npm test`** — targeted **PASS**: `openai-proxy-integration` (mock), `openai-proxy-run-ts-entrypoint`, `openai-proxy-event-coverage`, `lazy-initialization.test.js` (4 suites).
+- **`npm run lint`** — **PASS** (0 errors, 4 `no-console` warnings in `src/test-utils/test-helpers.ts`).
+- **`npm audit --audit-level=high`** — **PASS** (0 vulnerabilities).
+- **`cd test-app && npm run test:e2e:ci`** (via Playwright on CI file list) — **PASS**, **9 passed / 3 skipped** (#556).
+- **Rollup:** **`[x]` Pre-release preparation**, **`[x]` Version management** (0.2.11 / 0.10.6 in tree), **`[x]` Release branch** `release/v0.10.6`. **Still open:** packaging smoke, release docs, GitHub Release + publish, dist-tag, post-release.
