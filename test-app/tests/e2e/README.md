@@ -370,8 +370,6 @@ The monitor displays:
 - **`deepgram-ux-protocol.spec.js`** - UX-focused protocol validation tests (3 tests)
 - **`protocol-validation-modes.spec.js`** - Real API + Mock mode validation (2 tests)
 - **`api-key-validation.spec.js`** - API key validation and error handling
-- **`lazy-initialization-e2e.spec.js`** - Lazy initialization behavior (no auto-connect, Issue #206)
-
 ### Security & Authentication Tests
 - **`deepgram-backend-proxy-authentication.spec.js`** - Backend proxy authentication and security tests (11 tests)
   - Basic authentication (Issue #242)

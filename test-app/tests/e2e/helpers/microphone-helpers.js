@@ -27,9 +27,6 @@ import { setupTestPage } from './audio-mocks.js';
  * @param {number} options.greetingTimeout - Timeout for agent greeting completion (default: 8000)
  * @param {number} options.micEnableTimeout - Timeout for microphone enablement (default: 5000)
  * @param {boolean} options.skipGreetingWait - Skip waiting for agent greeting (default: false)
- * @param {boolean} options.allowDisconnectAfterConnect - If true, when the agent socket goes `closed` after connect
- *   (e.g. Playwright webServer sets `VITE_IDLE_TIMEOUT_MS=1000`) but the mic is still **Enabled**, return success
- *   instead of requiring reconnection. Use for lazy-init tests that only need "connected once + mic on".
  * @returns {Promise<Object>} - Result object with status information
  */
 export async function waitForMicrophoneReady(page, options = {}) {
@@ -37,8 +34,7 @@ export async function waitForMicrophoneReady(page, options = {}) {
     connectionTimeout = 10000,
     greetingTimeout = 8000,
     micEnableTimeout = 5000,
-    skipGreetingWait = false,
-    allowDisconnectAfterConnect = false
+    skipGreetingWait = false
   } = options;
 
   console.log('🎤 [MICROPHONE_HELPER] Starting microphone activation sequence...');
@@ -136,22 +132,6 @@ export async function waitForMicrophoneReady(page, options = {}) {
     }
     
     if (!reconnected) {
-      if (allowDisconnectAfterConnect) {
-        const micAfterDrop = await page.locator(SELECTORS.micStatus).textContent();
-        if (micAfterDrop === 'Enabled') {
-          const closedStatus = await page.locator(SELECTORS.connectionStatus).textContent();
-          console.log(
-            '🎤 [MICROPHONE_HELPER] Connection stayed closed (likely idle timeout) but mic enabled — accepting (allowDisconnectAfterConnect)'
-          );
-          return {
-            success: true,
-            connectionStatus: closedStatus ?? 'closed',
-            micStatus: 'Enabled',
-            timestamp: Date.now(),
-            idleDisconnectAccepted: true
-          };
-        }
-      }
       const finalConnectionStatus = await page.locator(SELECTORS.connectionStatus).textContent();
       throw new Error(`Connection failed to re-establish after mic click. Final status: ${finalConnectionStatus}`);
     }
