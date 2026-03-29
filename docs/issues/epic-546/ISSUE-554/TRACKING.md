@@ -7,9 +7,11 @@ Use **checkboxes on GitHub issue #554** as the primary checklist (same content a
 
 ## Release status
 
-**Pre-release has started** (not deferred): **2026-03-28** on branch **`release/v0.10.6`** — lint, CI-parity Jest, event coverage, audit, and **real-API OpenAI proxy integration** (rerun) are **green**; **`npm run test:e2e:ci`** runs four spec files ( **`deepgram-ux-protocol`** still **skipped** in-file for #556 — see table). **Pre-release preparation** stays **open** until the E2E row is green or an explicit exception is recorded. **Do not** create the GitHub Release or publish until that rollup checkbox is fully green.
+**Pre-release** on **`release/v0.10.6`** (2026-03-28): **Done in tree** — lint, CI-parity Jest, plain local `test:mock`, `openai-proxy-event-coverage`, `npm audit --audit-level=high`, **real-API** `openai-proxy-integration` (rerun **PASS**). **E2E:** `test:e2e:ci` uses **four** spec files; **`deepgram-ux-protocol.spec.js`** is **`describe.skip`** ([#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)); **`lazy-initialization-e2e.spec.js`** was **removed** (Issue #206 → **`tests/lazy-initialization.test.js`**). **Re-run** `cd test-app && npm run test:e2e:ci` and log outcome below — expect **only** non-skipped tests to execute; treat #556 skip as known debt or document an exception before calling the rollup **green**.
 
 **CI-parity Jest:** `CI=true RUN_REAL_API_TESTS=false npm run test:mock` — **PASS** (2026-03-28), same env as the **Test and Publish** workflow’s Jest step.
+
+**Qualification reference:** [RELEASE-AND-QUALIFICATION.md](../RELEASE-AND-QUALIFICATION.md) (packaging smoke, publish, post-publish).
 
 ## TDD → PR vs pre-release (order)
 
@@ -47,7 +49,7 @@ Started **2026-03-28** (repo root). Keep the rollup checkbox **open** until ever
 | `npm run test:mock` — **plain local** (no `CI` / `RUN_REAL_API_TESTS`) | **Done** — **2026-03-28:** PASS (exit 0); live Deepgram **`websocket-connectivity`** is **opt-in** only — see [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556) and section below (no longer blocks default local Jest) |
 | `npm test -- tests/openai-proxy-event-coverage.test.ts` | **Done** — PASS |
 | `npm audit --audit-level=high` | **Done** — 0 vulnerabilities |
-| E2E proxy mode (`cd test-app && npm run backend` + `USE_PROXY_MODE=true npm run test:e2e`) | **Last full `test:e2e:ci` run (2026-03-28):** **exit 1** when **`lazy-initialization-e2e.spec.js`** + active **`deepgram-ux-protocol`** tests were in the list; **15 passed / 4 failed** (deepgram UX ×3, lazy-init mic ×1). **`lazy-initialization-e2e.spec.js`** **removed** from repo — Issue #206 lazy init is **only** in **`tests/lazy-initialization.test.js`** (Jest). **`deepgram-ux-protocol.spec.js`** is **`describe.skip`** (#556). Current CI list: **api-key-validation**, **page-content**, **deepgram-ux-protocol** (skipped), **protocol-validation-modes** — **re-run `npm run test:e2e:ci`** to refresh counts. Full **`npm run test:e2e`** (252) not re-run here. |
+| E2E proxy mode (`cd test-app && npm run test:e2e:ci`; full suite: `npm run test:e2e`) | **CI script** (`test-app/package.json`): **`api-key-validation.spec.js`**, **`page-content.spec.js`**, **`deepgram-ux-protocol.spec.js`** (**whole describe skipped**, [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556) — see [`ISSUE-556/E2E-SKIPS.md`](../ISSUE-556/E2E-SKIPS.md)), **`protocol-validation-modes.spec.js`**. **Lazy init (Issue #206):** **`tests/lazy-initialization.test.js`** (root Jest); **`lazy-initialization-e2e.spec.js`** **removed** (no unique E2E requirement). **Historical:** last run **before** skip + removal failed on deepgram UX + lazy-init mic (idle/reconnect). **Action:** run **`npm run test:e2e:ci`** after current `release/v0.10.6` tip and record **PASS**/FAIL + counts here or in verification log. |
 | `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` | **Done (rerun 2026-03-28)** — **PASS**, **exit 0**, **~74s**; **20 passed**, **64 skipped**, **0 failed** (includes **`translates InjectUserMessage … ConversationText`** after **60s** timeout + proxy fail-fast fixes). Jest still prints **did not exit** (open handles) — optional **`--detectOpenHandles`**. **First run** same day: **exit 1** (1 failed, 25s timeout). See [#555](../ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md). |
 
 ### Deepgram `websocket-connectivity.test.js` (opt-in; backlog [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556))
@@ -119,4 +121,8 @@ _Add dated entries (command, outcome, operator)._
 
 ### 2026-03-28 — Remove lazy-init E2E
 
-- Deleted **`test-app/tests/e2e/lazy-initialization-e2e.spec.js`**; dropped from **`test:e2e:ci`** in **`test-app/package.json`**. Reverted **`allowDisconnectAfterConnect`** in **`microphone-helpers.js`**. Docs: **`CI-E2E-SUBSET.md`**, **`test-app/tests/e2e/README.md`**, **`docs/issues/ISSUE-556/E2E-SKIPS.md`**.
+- Deleted **`test-app/tests/e2e/lazy-initialization-e2e.spec.js`**; dropped from **`test:e2e:ci`** in **`test-app/package.json`**. Reverted **`allowDisconnectAfterConnect`** in **`microphone-helpers.js`**. Docs: **`CI-E2E-SUBSET.md`**, **`test-app/tests/e2e/README.md`**, **`docs/issues/ISSUE-556/E2E-SKIPS.md`**, **`RELEASE-AND-QUALIFICATION.md`**.
+
+### Doc sync (TRACKING + RELEASE-AND-QUALIFICATION)
+
+- Aligned **release status**, **E2E table row**, and **qualification doc** with current CI subset, **#556** skip, lazy-init E2E removal, and **Jest** lazy-init ownership.
