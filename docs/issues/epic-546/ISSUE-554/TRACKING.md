@@ -7,7 +7,7 @@ Use **checkboxes on GitHub issue #554** as the primary checklist (same content a
 
 ## Release status
 
-**Pre-release preparation** on **`release/v0.10.6`:** **`[x]` complete** (2026-03-29 verify) — lint (**0 errors**, 4 `no-console` warnings), **CI-parity** + **plain** `test:mock`, `openai-proxy-event-coverage`, **`openai-proxy-run-ts-entrypoint`**, **`lazy-initialization.test.js`**, `npm audit --audit-level=high` (**0** high), **real-API** `USE_REAL_APIS=1 openai-proxy-integration` (**PASS** 2026-03-28), **`npm run test:e2e:ci`** (**PASS** 2026-03-29 — **9 passed**, **3 skipped** for **`deepgram-ux-protocol`** [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)). Issue #206: **`tests/lazy-initialization.test.js`** only (Playwright lazy-init E2E removed). **Next:** packaging smoke, release docs, GitHub Release + publish (rollup items still open below).
+**Pre-release preparation** on **`release/v0.10.6`:** **`[x]` complete** (2026-03-29 verify) — lint (**0 errors**, 4 `no-console` warnings), **CI-parity** + **plain** `test:mock`, `openai-proxy-event-coverage`, **`openai-proxy-run-ts-entrypoint`**, **`lazy-initialization.test.js`**, `npm audit --audit-level=high` (**0** high), **real-API** `USE_REAL_APIS=1 openai-proxy-integration` (**PASS** 2026-03-28), **`npm run test:e2e:ci`** (**PASS** 2026-03-29 — **9 passed**, **3 skipped** for **`deepgram-ux-protocol`** [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)). Issue #206: **`tests/lazy-initialization.test.js`** only (Playwright lazy-init E2E removed). **Release docs:** **`[x]`** — [`docs/releases/v0.10.6/`](../../../releases/v0.10.6/) (**CHANGELOG**, **PACKAGE-STRUCTURE**, **RELEASE-NOTES**); **`npm run validate:release-docs`** **PASS** (patch required files). **Next:** packaging smoke, GitHub Release + publish (rollup items still open below).
 
 **CI-parity Jest:** `CI=true RUN_REAL_API_TESTS=false npm run test:mock` — **PASS** (2026-03-28), same env as the **Test and Publish** workflow’s Jest step.
 
@@ -32,7 +32,7 @@ Mirror the sections from the GitHub issue; check here when each **section** is d
 - [x] **Pre-release preparation** — lint, `test:mock`, E2E CI subset, real-API integration, `openai-proxy-event-coverage`, `npm audit --audit-level=high` — **done** **2026-03-29** (see [Pre-release preparation (progress)](#pre-release-preparation-progress) below)
 - [ ] **EPIC-546 packaging smoke** — `npm pack` → clean install → start proxy; no missing modules ([`../RELEASE-AND-QUALIFICATION.md`](../RELEASE-AND-QUALIFICATION.md))
 - [x] **Version management** — **`@signal-meaning/voice-agent-backend` 0.2.11** and root **`@signal-meaning/voice-agent-react` 0.10.6** confirmed in tree on **`release/v0.10.6`** (no further bump required for this patch)
-- [ ] **Release docs** — `docs/releases/v…/` per patch rules (CHANGELOG, PACKAGE-STRUCTURE, validate script)
+- [x] **Release docs** — [`docs/releases/v0.10.6/`](../../../releases/v0.10.6/) (**CHANGELOG.md**, **PACKAGE-STRUCTURE.md**, **RELEASE-NOTES.md**). Validated: **`npm run validate:release-docs`** **PASS** **2026-03-29** (uses root `package.json` version **0.10.6**). Dual-ship **voice-agent-backend 0.2.11** is documented in that CHANGELOG / release notes (no separate `docs/releases/v0.2.11/` folder).
 - [x] **Release branch** — **`release/v0.10.6`** with qualifying commits (**pre-release checks green**)
 - [ ] **GitHub Release + CI publish** — workflow green; packages in registry
 - [ ] **`latest` dist-tag** — only for packages actually published
@@ -134,4 +134,4 @@ _Add dated entries (command, outcome, operator)._
 - **`npm run lint`** — **PASS** (0 errors, 4 `no-console` warnings in `src/test-utils/test-helpers.ts`).
 - **`npm audit --audit-level=high`** — **PASS** (0 vulnerabilities).
 - **`cd test-app && npm run test:e2e:ci`** (via Playwright on CI file list) — **PASS**, **9 passed / 3 skipped** (#556).
-- **Rollup:** **`[x]` Pre-release preparation**, **`[x]` Version management** (0.2.11 / 0.10.6 in tree), **`[x]` Release branch** `release/v0.10.6`. **Still open:** packaging smoke, release docs, GitHub Release + publish, dist-tag, post-release.
+- **Rollup:** **`[x]` Pre-release preparation**, **`[x]` Version management** (0.2.11 / 0.10.6 in tree), **`[x]` Release branch** `release/v0.10.6`, **`[x]` Release docs** (`docs/releases/v0.10.6/`, `validate:release-docs`). **Still open:** packaging smoke, GitHub Release + publish, dist-tag, post-release.
