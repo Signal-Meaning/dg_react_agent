@@ -29,10 +29,11 @@ Create a curated set of E2E tests that are known to work reliably in CI:
 **CI-Safe Tests:**
 - `api-key-validation.spec.js` - API key validation
 - `text-only-conversation.spec.js` - Text input without audio
-- `lazy-initialization-e2e.spec.js` - Component initialization
 - `page-content.spec.js` - Basic rendering
 - `deepgram-ux-protocol.spec.js` - Protocol validation
 - `protocol-validation-modes.spec.js` - Protocol modes
+
+Lazy initialization (Issue #206) is covered by root **`tests/lazy-initialization.test.js`** (Jest), not CI E2E.
 
 **Implementation:**
 1. Add a `--grep` filter to Playwright config for CI
@@ -138,7 +139,6 @@ Instead of tags, filter by file pattern in CI:
     npx playwright test \
       tests/e2e/api-key-validation.spec.js \
       tests/e2e/text-only-conversation.spec.js \
-      tests/e2e/lazy-initialization-e2e.spec.js \
       tests/e2e/page-content.spec.js \
       tests/e2e/deepgram-ux-protocol.spec.js \
       tests/e2e/protocol-validation-modes.spec.js \

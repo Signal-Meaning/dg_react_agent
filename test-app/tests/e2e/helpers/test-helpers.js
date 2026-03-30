@@ -6,6 +6,7 @@
  * Load test-app/.env so skip checks (e.g. USE_REAL_APIS + OPENAI_API_KEY) see keys when run in workers.
  */
 import { expect, test } from '@playwright/test';
+import { OPENAI_PROXY_FC_E2E_VERIFY_TOKEN } from '../../../scripts/function-call-handlers.js';
 import { createRequire } from 'module';
 import dotenv from 'dotenv';
 import * as fs from 'fs';
@@ -1879,7 +1880,8 @@ async function setupFunctionCallingTest(page, options = {}) {
           hour12: true
         }),
         timezone: timezone,
-        timestamp: now.toISOString()
+        timestamp: now.toISOString(),
+        e2eVerify: OPENAI_PROXY_FC_E2E_VERIFY_TOKEN,
       };
     }
     return { success: false, error: 'Unknown function' };

@@ -44,7 +44,20 @@
 
 - **Unit:** `tests/openai-proxy.test.ts` — `mapSettingsToSessionUpdate` (including session key expectations and non-forwarding of `temperature`).
 - **Integration (mock):** `tests/integration/openai-proxy-integration.test.ts` — session shape and protocol behavior.
-- **Integration (real API):** `USE_REAL_APIS=1` + `OPENAI_API_KEY` — run `openai-proxy-integration.test.ts` before release or epic closure for proxy/session mapping work. Includes **Issue #537** (`max_output_tokens`), **#538** (no `session.temperature`, among other cases), and related real-API cases. **Issue #539** (`session.prompt`): set **`OPENAI_MANAGED_PROMPT_ID`** to run the live test; unset → skipped. See [TDD-MANAGED-PROMPT-REAL-API.md](../../../docs/issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md).
+- **Integration (real API):** `USE_REAL_APIS=1` + `OPENAI_API_KEY` — run `openai-proxy-integration.test.ts` before release or epic closure for proxy/session mapping work. Includes **Issue #537** (`max_output_tokens`), **#538** (no `session.temperature`, among other cases), and related real-API cases. **Issue #539** (`session.prompt`): set **`OPENAI_MANAGED_PROMPT_ID`** to run the live test; unset → skipped. See [TDD-MANAGED-PROMPT-REAL-API.md](../../../../docs/issues/ISSUE-542/TDD-MANAGED-PROMPT-REAL-API.md).
+
+### `output_modalities` — how thorough are we?
+
+| Layer | What runs | `output_modalities` |
+|-------|-----------|---------------------|
+| **Unit (translator)** | `tests/openai-proxy.test.ts` | **`['text']`**, **`['audio','text']`** order, invalid filtered, all-invalid → field omitted, absent/empty → omitted. |
+| **Unit (Settings JSON)** | `tests/buildSettingsMessage.test.ts` | `agent.think.outputModalities` passed through or omitted. |
+| **Integration mock** | `openai-proxy-integration.test.ts` | Many protocol tests **do not** set `outputModalities`; they rely on the proxy omitting the field (API default). No mock matrix that asserts different client-visible behavior per modality. |
+| **Integration real API** | Same file with `USE_REAL_APIS=1` | **No** dedicated real-API test that only exists to assert `session.output_modalities: ['text']` vs `['audio']` behavior end-to-end. The Issue **#470** real-API function-call test intentionally **omits** `agent.think.outputModalities` so Realtime uses its default for that qualification run (see [ISSUE-536.md](../../../../docs/issues/ISSUE-542/ISSUE-536.md)). |
+
+**Conclusion:** Mapping of `outputModalities` → `session.output_modalities` is **well covered in unit tests**. **Per-modality real-API** behavior (text-only vs audio-default event mix) is **not** exhaustively qualified in this repo; add explicit real-API (or high-fidelity mock) cases if product requires guaranteed behavior for each modality.
+
+**Canonical API:** [session.update — `output_modalities`](https://platform.openai.com/docs/api-reference/realtime-client-events/session/update).
 
 ---
 

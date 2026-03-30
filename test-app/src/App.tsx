@@ -189,6 +189,21 @@ function App() {
   // Fail-fast check for required API key
   const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
   const projectId = import.meta.env.VITE_DEEPGRAM_PROJECT_ID;
+
+  // Mirror memoizedProxyConfig defaults: in proxy mode the browser talks to the local proxy only;
+  // Deepgram/OpenAI credentials live on the server. Without this, E2E (and devs) hit the error page
+  // when VITE_DEEPGRAM_* are missing, test-prefixed, or placeholder even though proxy mode works.
+  const earlyUrlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const earlyConnectionMode = earlyUrlParams?.get('connectionMode') === 'direct' ? 'direct' : 'proxy';
+  const defaultSchemeEarly = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const earlyDefaultProxyEndpoint = `${defaultSchemeEarly}://127.0.0.1:8080/openai`;
+  const earlyProxyEndpoint =
+    earlyUrlParams?.get('proxyEndpoint') ||
+    import.meta.env.VITE_OPENAI_PROXY_ENDPOINT ||
+    import.meta.env.VITE_DEEPGRAM_PROXY_ENDPOINT ||
+    import.meta.env.VITE_PROXY_ENDPOINT ||
+    (earlyConnectionMode === 'proxy' ? earlyDefaultProxyEndpoint : '');
+  const proxyModeBypassBrowserKeyCheck = earlyConnectionMode === 'proxy' && Boolean(earlyProxyEndpoint);
   
   // Check for test mode override (for Playwright tests)
   const isTestMode = window.location.search.includes('test-mode=true');
@@ -196,8 +211,9 @@ function App() {
     ((window as Window & { testApiKey?: string }).testApiKey === 'missing' || 
      (window as Window & { testApiKey?: string }).testApiKey === 'placeholder' || 
      (window as Window & { testApiKey?: string }).testApiKey === 'test-prefix') :
+    (proxyModeBypassBrowserKeyCheck ? false :
     (!apiKey || apiKey === 'your-deepgram-api-key-here' || apiKey === 'your_actual_deepgram_api_key_here' || apiKey.startsWith('test-') || 
-     !projectId || projectId === 'your-real-project-id');
+     !projectId || projectId === 'your-real-project-id'));
 
   const deepgramRef = useRef<DeepgramVoiceInteractionHandle>(null);
   /** Issue #489/9a: Last non-empty conversation seen (from callbacks/ref). Used when component ref/state are empty on reconnect (e.g. OpenAI path). */
@@ -558,6 +574,7 @@ function App() {
     // Check for function calling test mode via URL parameter
     const urlParams = new URLSearchParams(urlParamsString);
     const enableFunctionCalling = urlParams.get('enable-function-calling') === 'true';
+    const fcE2eVerify = urlParams.get('fc-e2e-verify') === 'true';
     const functionType = urlParams.get('function-type') || 'standard'; // 'standard', 'minimal', 'minimal-with-required'
     
     // Log for debugging E2E tests
@@ -571,7 +588,18 @@ function App() {
     
     // Use factory function to get function definitions (extracted for testability)
     const functions = getFunctionDefinitions(enableFunctionCalling, functionType, testOverride);
-    
+
+    const baseInstructions =
+      loadedInstructions || 'You are a helpful voice assistant. Keep your responses concise and informative.';
+    /** Opaque E2E token; must match OPENAI_PROXY_FC_E2E_VERIFY_TOKEN in scripts/function-call-handlers.js. */
+    const fcE2eToken = 'dg-openai-proxy-fc-e2e-v1';
+    const fcE2eVerifyInstruction =
+      ` When you call get_current_time, the tool result JSON includes e2eVerify with the exact literal value "${fcE2eToken}". ` +
+      `Your assistant reply MUST contain that exact substring "${fcE2eToken}" (same characters, no timestamps, no UUIDs, no paraphrase). ` +
+      `You may also state the time for the user in the same message.`;
+    const instructions =
+      enableFunctionCalling && fcE2eVerify ? `${baseInstructions}${fcE2eVerifyInstruction}` : baseInstructions;
+
     return {
       // Use environment variables with sensible defaults
       language: import.meta.env.VITE_AGENT_LANGUAGE || 'en',
@@ -587,7 +615,7 @@ function App() {
       //thinkEndpointUrl: 'https://api.openai.com/v1/chat/completions',
       //thinkApiKey: import.meta.env.VITE_THINK_API_KEY || '',
       voice: import.meta.env.VITE_AGENT_VOICE || 'aura-asteria-en',
-      instructions: loadedInstructions || 'You are a helpful voice assistant. Keep your responses concise and informative.',
+      instructions,
       greeting: import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?',
       // Include functions if function calling is enabled
       functions: functions,

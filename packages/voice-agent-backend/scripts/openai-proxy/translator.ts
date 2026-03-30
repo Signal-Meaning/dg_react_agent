@@ -518,6 +518,75 @@ function extractTextFromContentPart(part: unknown): string | null {
 }
 
 /**
+ * Extract finalized assistant text from `response.output_text.done` when the Realtime API does not mirror the
+ * same text on `conversation.item.*` (observed after tool results on gpt-realtime; Issue #555). Returns null if
+ * absent or whitespace-only. Handles mock shape `{ text }` and nested shapes used by the API.
+ */
+export function extractAssistantTextFromResponseOutputTextDone(event: unknown): string | null {
+  if (!event || typeof event !== 'object') return null;
+  const e = event as Record<string, unknown>;
+  if (typeof e.text === 'string') {
+    const t = e.text.trim();
+    if (t) return t;
+  }
+  const part = e.part;
+  if (part && typeof part === 'object') {
+    const p = part as Record<string, unknown>;
+    if (typeof p.text === 'string') {
+      const t = p.text.trim();
+      if (t) return t;
+    }
+  }
+  return null;
+}
+
+/**
+ * Prefer finalized `text` on `response.output_text.done` (OpenAI spec); if missing or empty, use accumulated
+ * `response.output_text.delta` strings (Issue #555 / #470 real API).
+ */
+export function mergeAssistantTextFromOutputTextDoneAndDeltas(
+  doneEvent: unknown,
+  accumulatedDeltas: string,
+): string | null {
+  const fromDone = extractAssistantTextFromResponseOutputTextDone(doneEvent);
+  if (fromDone) return fromDone;
+  const acc = typeof accumulatedDeltas === 'string' ? accumulatedDeltas.trim() : '';
+  return acc.length > 0 ? acc : null;
+}
+
+/**
+ * Extract assistant-visible text from `response.done`'s embedded `response.output` (OpenAI Realtime RealtimeResponse).
+ * The API often omits separate `conversation.item.*` or empty `response.output_text.done` while still including
+ * finalized text here (Issue #470 real-API post-tool turns).
+ */
+export function extractAssistantTextFromResponseDoneEvent(event: unknown): string | null {
+  if (!event || typeof event !== 'object') return null;
+  const e = event as Record<string, unknown>;
+  return extractAssistantTextFromRealtimeResponseOutput(e.response);
+}
+
+function extractAssistantTextFromRealtimeResponseOutput(response: unknown): string | null {
+  if (!response || typeof response !== 'object') return null;
+  const r = response as Record<string, unknown>;
+  const output = r.output;
+  if (!Array.isArray(output)) return null;
+  const parts: string[] = [];
+  for (const item of output) {
+    if (!item || typeof item !== 'object') continue;
+    const it = item as Record<string, unknown>;
+    if (it.role !== 'assistant') continue;
+    const content = it.content;
+    const contentArray = Array.isArray(content) ? content : content && typeof content === 'object' ? [content] : [];
+    for (const part of contentArray) {
+      const text = extractTextFromContentPart(part);
+      if (text) parts.push(text);
+    }
+  }
+  if (parts.length === 0) return null;
+  return parts.join('\n');
+}
+
+/**
  * Map OpenAI conversation.item.created / .added / .done (assistant message with content) → component ConversationText (assistant).
  * This is the primary pipeline for assistant text. Returns null when the item is not an assistant
  * message or has no extractable text content. Issue #489.

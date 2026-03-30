@@ -17,7 +17,7 @@ Flagged for refactoring or removal (grep for these testids in `test-app/tests/`)
 | `context-retention-agent-usage.spec.js` | Waits for connection; uses disconnectComponent. Refactor to use session-disconnect-button path. |
 | `deepgram-greeting-idle-timeout.spec.js` | Reads connection-status. Refactor to Session or keep if only reading value. |
 | `deepgram-text-session-flow.spec.js` | Disconnect and re-establish. Use disconnectViaSettingsSession. |
-| `lazy-initialization-e2e.spec.js` | Reads both connection-status and transcription-connection-status. Refactor or keep. |
+| ~~`lazy-initialization-e2e.spec.js`~~ | **Removed** (2026-03-28). Use **`tests/lazy-initialization.test.js`** (Jest) for Issue #206. |
 | Other specs | Any test that only reads `connection-status` / `transcription-connection-status` for assertions may stay as-is until refactor; prefer Session-centric assertions where possible. |
 
 ## New preferred pattern

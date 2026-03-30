@@ -9,17 +9,18 @@ CI runs only a small **essential** subset of E2E tests. All other E2E specs are 
 | Spec | Purpose |
 |------|--------|
 | `api-key-validation.spec.js` | Fail-fast when API keys are missing or invalid; setup instructions in error banner. |
-| `lazy-initialization-e2e.spec.js` | Lazy init of WebSocket/agent managers; no managers until start/capture/inject. |
 | `page-content.spec.js` | App and voice agent component render; basic page structure. |
-| `deepgram-ux-protocol.spec.js` | Core protocol flow and UX states (proxy mode). |
+| `deepgram-ux-protocol.spec.js` | Core protocol flow and UX states (proxy mode); currently **skipped** in-file pending [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556). |
 | `protocol-validation-modes.spec.js` | Mock vs real mode; WebSocket behavior without real API key. |
 
-These five specs are **mock-only**: they do not require real Deepgram or OpenAI API keys. CI sets `USE_PROXY_MODE=true`, `E2E_USE_HTTP=1`, and a placeholder `DEEPGRAM_API_KEY` so the backend starts; tests use the test-app proxy that mocks upstream.
+**Lazy initialization (Issue #206)** is covered by **`tests/lazy-initialization.test.js`** (root Jest, mocked managers) — not duplicated in CI E2E.
+
+These four spec **files** are listed for CI; **`deepgram-ux-protocol`** contributes only skipped tests until #556 is resolved. CI sets `USE_PROXY_MODE=true`, `E2E_USE_HTTP=1`, and a placeholder `DEEPGRAM_API_KEY` so the backend starts; tests use the test-app proxy that mocks upstream.
 
 ## How CI runs the subset
 
 - **Workflow:** [test-and-publish.yml](../../../.github/workflows/test-and-publish.yml) → job **E2E Tests (mocks, no real APIs)**.
-- **Script:** From `test-app`, run `npm run test:e2e:ci`. That script runs only the five specs above with CI-friendly env (proxy mode, HTTP, no real keys).
+- **Script:** From `test-app`, run `npm run test:e2e:ci`. That script runs only the four spec files above with CI-friendly env (proxy mode, HTTP, no real keys).
 - **Non-essential specs:** All other E2E spec files (60+ specs) are **not** invoked in CI; they are skipped by virtue of not being in the CI spec list.
 
 ## Running locally

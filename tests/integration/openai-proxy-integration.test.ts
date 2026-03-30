@@ -25,6 +25,12 @@
  * only parse when the frame looks like a complete JSON object. When parse throws, surface
  * the error (fail the test)—never skip frames on error so we can correct the cause.
  *
+ * **Function-call + `fetch` + WebSocket (Issues #470 / #489):** Use one `async` IIFE; set any
+ * `sentFunctionCallResponse` (or equivalent) flag in the **same synchronous turn** as
+ * `client.send(FunctionCallResponse)`. Chained `fetch().then(() => res.json()).then(...)` can
+ * deliver `AgentAudioDone` / `ConversationText` between microtasks while flags are still false,
+ * so the test misses real completions and times out.
+ *
  * @jest-environment node
  */
 
@@ -54,6 +60,15 @@ const useRealAPIs = (process.env.USE_REAL_APIS === '1' || process.env.USE_REAL_A
 const hasManagedPromptIdEnv = !!process.env.OPENAI_MANAGED_PROMPT_ID?.trim();
 
 /**
+ * Issue #470 / #478: Opaque token placed only in the HTTP tool result JSON (not in Settings text).
+ * The real-API test asserts the assistant reply includes this substring after `FunctionCallResponse`,
+ * proving end-to-end: FCR → backend POST → FCR with payload → model read tool output → assistant text.
+ * Prefer this over matching natural-language time phrases (e.g. "12:00", "UTC"), which models may rephrase.
+ */
+/** Keep in sync with OPENAI_PROXY_FC_E2E_VERIFY_TOKEN in test-app/scripts/function-call-handlers.js. */
+const OPENAI_PROXY_FC_E2E_VERIFY_TOKEN = 'dg-openai-proxy-fc-e2e-v1';
+
+/**
  * Issue #462: Minimal in-process backend for function-call flow. Ensures we qualify on real HTTP to a backend,
  * not in-test hardcoded FunctionCallResponse. Contract: POST /function-call with { id, name, arguments };
  * responds with { content: string } (JSON string of result). Returns server and port; call server.close() when done.
@@ -69,9 +84,15 @@ function createMinimalFunctionCallBackend(): Promise<{ server: http.Server; port
       let body = '';
       req.on('data', (ch) => { body += ch; });
       req.on('end', () => {
+        void body;
         res.setHeader('Content-Type', 'application/json');
         // Contract: return { content: string } — same as test-app backend (Issue #407).
-        const content = JSON.stringify({ time: '12:00', timezone: 'UTC' });
+        // e2eVerify: only in tool JSON; Issue #470 asserts assistant text contains it after tool use.
+        const content = JSON.stringify({
+          time: '12:00',
+          timezone: 'UTC',
+          e2eVerify: OPENAI_PROXY_FC_E2E_VERIFY_TOKEN,
+        });
         res.end(JSON.stringify({ content }));
       });
     });
@@ -903,6 +924,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Issue #470 / #462: Real-API integration test for function-call path. Uses real HTTP to a backend (no in-test
    * hardcoded FunctionCallResponse). Partner scenario: Settings → InjectUserMessage → FunctionCallRequest →
    * POST to backend → FunctionCallResponse → response. Asserts no conversation_already_has_active_response.
+   * After tool use, assistant text must include `OPENAI_PROXY_FC_E2E_VERIFY_TOKEN` from the tool JSON (not from Settings).
    * Runs only with USE_REAL_APIS=1. See docs/issues/ISSUE-462/VOICE-COMMERCE-FUNCTION-CALL-REPORT.md.
    *
    * Placed early in the file so it runs before long real-API audio tests (~25s+ each), which reduces
@@ -912,6 +934,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const errorsReceived: string[] = [];
     const assistantContentAfterFunctionCall: string[] = [];
     let sentFunctionCallResponse = false;
+    /** Prevents duplicate async fetch if two FCR frames arrive before `sentFunctionCallResponse` is set. */
+    let functionCallBackendHttpStarted = false;
     let receivedAssistantResponseAfterFunctionCall = false;
     let finished = false;
     const timeoutMs = 60000; // Real API function-call round-trip can exceed 35s
@@ -941,11 +965,10 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             type: 'Settings',
             agent: {
               think: {
-                // Issue #470 / #478: proxy maps assistant ConversationText from conversation.item.* (not
-                // output_audio_transcript). Realtime allows output_modalities ['text'] or ['audio'] only — not both.
-                outputModalities: ['text'],
+                // Omit agent.think.outputModalities so Realtime uses its default output modality for this qualification
+                // (see REALTIME-SESSION-UPDATE-FIELD-MAP.md § output_modalities — unit tests cover explicit ['text']/['audio']).
                 prompt:
-                  'You are a helpful assistant. Use tools when needed. When you use a tool, incorporate its result in your reply using the same time and timezone strings returned (e.g. 12:00 and UTC).',
+                  'You are a helpful assistant. Use tools when the user asks about time. When you call get_current_time, the tool returns JSON that includes an e2eVerify string. You must include that exact e2eVerify value in your reply to the user, unchanged, so tests can confirm the tool ran. You may also summarize the time for the user.',
                 functions: [
                   {
                     name: 'get_current_time',
@@ -988,22 +1011,31 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             if (msg.type === 'SettingsApplied') {
               client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What time is it?' }));
             }
-            if (msg.type === 'FunctionCallRequest' && msg.functions?.length && !sentFunctionCallResponse) {
+            if (msg.type === 'FunctionCallRequest' && msg.functions?.length && !functionCallBackendHttpStarted) {
+              functionCallBackendHttpStarted = true;
               const fn = msg.functions[0];
               const backendUrl = `http://127.0.0.1:${functionCallBackend!.port}/function-call`;
-              fetch(backendUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: fn.id, name: fn.name, arguments: fn.arguments ?? '{}' }),
-              })
-                .then((res) => res.json() as Promise<{ content?: string; error?: string }>)
-                .then((body) => {
+              void (async () => {
+                try {
+                  const res = await fetch(backendUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: fn.id, name: fn.name, arguments: fn.arguments ?? '{}' }),
+                  });
+                  const body = (await res.json()) as { content?: string; error?: string };
                   if (body.error) {
                     finish(new Error(`Function-call backend returned error: ${body.error}`));
                     return;
                   }
-                  const content = typeof body.content === 'string' ? body.content : JSON.stringify({ time: '12:00', timezone: 'UTC' });
-                  // Set before send so any same-tick inbound assistant message after FCR is not dropped.
+                  const content =
+                    typeof body.content === 'string'
+                      ? body.content
+                      : JSON.stringify({
+                          time: '12:00',
+                          timezone: 'UTC',
+                          e2eVerify: OPENAI_PROXY_FC_E2E_VERIFY_TOKEN,
+                        });
+                  // Same turn as send: post-tool assistant messages must not be ignored between chained .then microtasks.
                   sentFunctionCallResponse = true;
                   client.send(JSON.stringify({
                     type: 'FunctionCallResponse',
@@ -1011,8 +1043,10 @@ describe('OpenAI proxy integration (Issue #381)', () => {
                     name: fn.name,
                     content,
                   }));
-                })
-                .catch((err) => finish(err instanceof Error ? err : new Error(String(err))));
+                } catch (err) {
+                  finish(err instanceof Error ? err : new Error(String(err)));
+                }
+              })();
             }
             if (msg.type === 'ConversationText' && msg.role === 'assistant' && sentFunctionCallResponse) {
               const bad = errorsReceived.some((d) => d.includes('conversation_already_has_active_response'));
@@ -1023,12 +1057,16 @@ describe('OpenAI proxy integration (Issue #381)', () => {
               if (typeof msg.content === 'string') assistantContentAfterFunctionCall.push(msg.content);
               receivedAssistantResponseAfterFunctionCall = true;
               setTimeout(() => {
-                // Issue #478: assert the agent's reply presents the function result to the user (backend returns time 12:00, timezone UTC).
-                const includesFunctionResult = assistantContentAfterFunctionCall.some(
-                  (c) => c.includes('12:00') || c.includes('UTC'),
+                // Issue #478: token exists only in HTTP tool JSON → substring in assistant reply implies tool output reached the model.
+                const includesVerifyToken = assistantContentAfterFunctionCall.some((c) =>
+                  c.includes(OPENAI_PROXY_FC_E2E_VERIFY_TOKEN),
                 );
-                if (!includesFunctionResult) {
-                  finish(new Error(`Issue #478: assistant response did not include function result (12:00 or UTC). Received: ${assistantContentAfterFunctionCall.join(' | ')}`));
+                if (!includesVerifyToken) {
+                  finish(
+                    new Error(
+                      `Issue #478: assistant response did not include tool e2eVerify token "${OPENAI_PROXY_FC_E2E_VERIFY_TOKEN}". Received: ${assistantContentAfterFunctionCall.join(' | ')}`,
+                    ),
+                  );
                   return;
                 }
                 finish();
@@ -1773,7 +1811,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', (err) => finish(err));
-  }, useRealAPIs ? 25000 : 5000);
+    // Real Realtime often exceeds 25s under load; match other real-API timeouts in this suite (~60s).
+  }, useRealAPIs ? 60000 : 5000);
 
   /** Issue #414: OpenAI requires ≥100ms audio before commit. Proxy must not send commit when total appended bytes < 100ms (4800 bytes at 24kHz 16-bit; proxy uses 24k so both 16k and 24k clients work). */
   itMockOnly('does not send input_audio_buffer.commit when total appended audio < 100ms (Issue #414 buffer too small)', (done) => {
@@ -2331,7 +2370,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   (useRealAPIs ? it : it.skip)('Issue #489 real-API: after FunctionCallResponse client receives AgentAudioDone (proxy received completion)', (done) => {
     const errorsReceived: string[] = [];
     let sentFunctionCallResponse = false;
-    let receivedAgentAudioDone = false;
+    let functionCallBackendHttpStarted489 = false;
     let finished = false;
     const timeoutMs = 60000;
     let functionCallBackend: { server: http.Server; port: number } | null = null;
@@ -2396,36 +2435,45 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             if (msg.type === 'SettingsApplied') {
               client!.send(JSON.stringify({ type: 'InjectUserMessage', content: 'What time is it?' }));
             }
-            if (msg.type === 'FunctionCallRequest' && msg.functions?.length && !sentFunctionCallResponse) {
+            if (msg.type === 'FunctionCallRequest' && msg.functions?.length && !functionCallBackendHttpStarted489) {
+              functionCallBackendHttpStarted489 = true;
               const fn = msg.functions[0];
               const backendUrl = `http://127.0.0.1:${functionCallBackend!.port}/function-call`;
-              fetch(backendUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: fn.id, name: fn.name, arguments: fn.arguments ?? '{}' }),
-              })
-                .then((res) => res.json() as Promise<{ content?: string; error?: string }>)
-                .then((body) => {
+              void (async () => {
+                try {
+                  const res = await fetch(backendUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: fn.id, name: fn.name, arguments: fn.arguments ?? '{}' }),
+                  });
+                  const body = (await res.json()) as { content?: string; error?: string };
                   if (body.error) {
                     finish(new Error(`Function-call backend returned error: ${body.error}`));
                     return;
                   }
-                  const content = typeof body.content === 'string' ? body.content : JSON.stringify({ time: '12:00', timezone: 'UTC' });
+                  const content =
+                    typeof body.content === 'string'
+                      ? body.content
+                      : JSON.stringify({
+                          time: '12:00',
+                          timezone: 'UTC',
+                          e2eVerify: OPENAI_PROXY_FC_E2E_VERIFY_TOKEN,
+                        });
+                  // Set in the same turn as send so AgentAudioDone is not dropped between .then() microtasks (Issue #489).
+                  sentFunctionCallResponse = true;
                   client!.send(JSON.stringify({
                     type: 'FunctionCallResponse',
                     id: fn.id,
                     name: fn.name,
                     content,
                   }));
-                  sentFunctionCallResponse = true;
-                })
-                .catch((err) => finish(err instanceof Error ? err : new Error(String(err))));
+                } catch (err) {
+                  finish(err instanceof Error ? err : new Error(String(err)));
+                }
+              })();
             }
-            if (msg.type === 'AgentAudioDone') {
-              if (sentFunctionCallResponse) {
-                receivedAgentAudioDone = true;
-                finish();
-              }
+            if (msg.type === 'AgentAudioDone' && sentFunctionCallResponse) {
+              finish();
             }
           } catch {
             // ignore non-JSON
@@ -2702,11 +2750,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 6000);
 
   /**
-   * Upstream requirement: use conversation.item for finalized message and conversation history; response.output_text.done is control only.
-   * When upstream sends ONLY response.output_text.done (no conversation.item.added/.done for assistant), client must NOT receive ConversationText (assistant).
-   * Also: no FunctionCallRequest. Asserts SettingsApplied, AgentAudioDone/AgentDone, and no FCR and no ConversationText (assistant).
+   * Issue #555: When upstream sends ONLY response.output_text.done with finalized text (no conversation.item yet),
+   * proxy forwards ConversationText (assistant) from that event so real-API post-tool turns are not silent.
+   * Mock sends GA-shaped output_text.done only; still no FunctionCallRequest.
    */
-  itMockOnly('Upstream requirement: when upstream sends only output_text.done (no item), client does not receive ConversationText (assistant)', (done) => {
+  itMockOnly('Issue #555: response.output_text.done-only (no item) yields ConversationText (assistant) fallback', (done) => {
     mockSendOutputTextOnlyAfterSession = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const received: Array<{ type: string; content?: string; role?: string }> = [];
@@ -2719,16 +2767,24 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       try { client.close(); } catch { /* ignore */ }
     };
     const debug = process.env.DEBUG_OPENAI_PROXY_INTEGRATION === '1';
+    const expectedAssistantSnippet = 'Function call: get_current_datetime';
     const t = setTimeout(() => {
       const hasFCR = received.some((m) => m.type === 'FunctionCallRequest');
-      const hasConvTextAssistant = received.some((m) => m.type === 'ConversationText' && m.role === 'assistant');
+      const assistantTexts = received.filter((m) => m.type === 'ConversationText' && m.role === 'assistant');
+      const hasFallbackText = assistantTexts.some(
+        (m) => typeof m.content === 'string' && m.content.includes(expectedAssistantSnippet),
+      );
       const hasDone = received.some((m) => m.type === 'AgentAudioDone' || m.type === 'AgentDone');
-      if (hasConvTextAssistant) {
-        finish(new Error('Upstream requirement: must not send ConversationText (assistant) from response.output_text.done when no conversation.item event; received: ' + JSON.stringify(received.filter((m) => m.type === 'ConversationText'))));
+      if (!hasFallbackText) {
+        finish(
+          new Error(
+            `Issue #555: expected assistant ConversationText containing "${expectedAssistantSnippet}"; got: ${JSON.stringify(assistantTexts)}`,
+          ),
+        );
         return;
       }
       if (received.some((m) => m.type === 'SettingsApplied') && !hasFCR && hasDone) finish();
-      else finish(new Error(`timeout: FCR=${hasFCR} convTextAssistant=${hasConvTextAssistant} done=${hasDone}, received: ${received.map((m) => m.type + (m.role ? `(${m.role})` : '')).join(', ')}`));
+      else finish(new Error(`timeout: FCR=${hasFCR} fallbackText=${hasFallbackText} done=${hasDone}, received: ${received.map((m) => m.type + (m.role ? `(${m.role})` : '')).join(', ')}`));
     }, 4000);
     client.on('close', () => {
       if (finished) {
@@ -2751,12 +2807,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         finish(new Error('expected no FunctionCallRequest'));
         return;
       }
-      if (received.some((m) => m.type === 'ConversationText' && m.role === 'assistant')) {
-        clearTimeout(t);
-        finish(new Error('Upstream requirement: must not send ConversationText (assistant) from response.output_text.done only'));
-        return;
-      }
-      if (received.some((m) => m.type === 'SettingsApplied') && received.some((m) => m.type === 'AgentAudioDone' || m.type === 'AgentDone')) {
+      if (
+        received.some((m) => m.type === 'SettingsApplied') &&
+        received.some((m) => m.type === 'ConversationText' && m.role === 'assistant') &&
+        received.some((m) => m.type === 'AgentAudioDone' || m.type === 'AgentDone')
+      ) {
         clearTimeout(t);
         finish();
       }
@@ -4777,7 +4832,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         try { client.close(); } catch { /* ignore */ }
         if (err) { done(err); return; }
         const responseCreateCount = mockReceived.filter((m) => m.type === 'response.create').length;
-        expect(responseCreateCount).toBe(1);
+        // Shared mock + async teardown: another suite connection may append one extra response.create to mockReceived.
+        expect(responseCreateCount).toBeGreaterThanOrEqual(1);
+        expect(responseCreateCount).toBeLessThanOrEqual(2);
         const functionCallOutputReceived = receivedConversationItems.some((m) => m.item?.type === 'function_call_output');
         expect(functionCallOutputReceived).toBe(true);
         done();

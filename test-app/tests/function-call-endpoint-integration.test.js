@@ -144,6 +144,7 @@ describe('POST /function-call (Issue #407)', () => {
     const parsed = JSON.parse(body.content);
     expect(parsed).toBeDefined();
     expect(parsed).toHaveProperty('time');
+    expect(parsed.e2eVerify).toBe('dg-openai-proxy-fc-e2e-v1');
   });
 
   it('returns 200 and { content } for get_current_time with timezone argument', async () => {
@@ -158,6 +159,7 @@ describe('POST /function-call (Issue #407)', () => {
     expect(body.content.length).toBeGreaterThan(0);
     const parsed = JSON.parse(body.content);
     expect(parsed).toHaveProperty('time');
+    expect(parsed.e2eVerify).toBe('dg-openai-proxy-fc-e2e-v1');
   });
 
   it('returns error payload for unknown function name', async () => {

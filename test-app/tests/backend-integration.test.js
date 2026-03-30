@@ -227,6 +227,7 @@ describe('Backend integration (Issue #489)', () => {
       expect(res.body.content.length).toBeGreaterThan(0);
       const parsed = JSON.parse(res.body.content);
       expect(parsed).toHaveProperty('time');
+      expect(parsed.e2eVerify).toBe('dg-openai-proxy-fc-e2e-v1');
     });
 
     it('returns 200 and { content } for get_current_time with timezone', async () => {
@@ -239,6 +240,7 @@ describe('Backend integration (Issue #489)', () => {
       expect(res.body).toHaveProperty('content');
       const parsed = JSON.parse(res.body.content);
       expect(parsed).toHaveProperty('time');
+      expect(parsed.e2eVerify).toBe('dg-openai-proxy-fc-e2e-v1');
     });
 
     it('returns error payload for unknown function', async () => {

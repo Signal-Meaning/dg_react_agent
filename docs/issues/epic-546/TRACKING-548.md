@@ -7,11 +7,17 @@
 
 Every `require()` / static `import` reachable when an integrator runs the **shipped** OpenAI proxy entrypoint must resolve from **`dependencies`** (or documented **`peerDependencies`**) of `@signal-meaning/voice-agent-backend`.
 
-**Known audit items (initial):**
+> **Parallel epic track:** [#555 — Real-API / protocol regression](./ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md) (translator/server); separate from this **dependencies audit** issue.
 
-- `logger.ts` → `@opentelemetry/api-logs`, `@opentelemetry/sdk-logs` (currently `devDependencies` only).
-- `run.ts` → `selfsigned` when HTTPS branch (tracked in [#547](./TRACKING-547.md)).
-- `speaker-sink.ts` → `speaker` (confirm not executed on default subprocess path).
+## Repository status (accurate for current tree)
+
+| Item | State |
+|------|--------|
+| **Default path: `run.ts` → `server.ts` (+ `listen-tls`, `logger`, `translator`, …)** | **`dependencies`** include `ws`, `dotenv`, `selfsigned`, `@opentelemetry/api-logs`, `@opentelemetry/sdk-logs`, `express` (see `package.json`). |
+| **Automated guard** | **`tests/packaging/voice-agent-backend-runtime-dependencies.test.ts`** asserts `selfsigned` + both OpenTelemetry log packages are under **`dependencies`**. |
+| **`speaker` (`speaker-sink.ts`)** | **Not** listed in `package.json`. Loaded only via **dynamic `require('speaker')`** when **`cli.ts`** uses `createSpeakerSink` — **CLI / optional playback**, not the default `run.ts` WebSocket proxy path. Treat as **documented optional** or future **`peerDependencies` / optional dep** if you guarantee CLI without install. |
+
+**Historical note (stale):** OpenTelemetry packages were once **`devDependencies`-only**; they are now **`dependencies`** — matches `logger.ts` always loading on proxy startup.
 
 ## Specification links
 
@@ -19,38 +25,39 @@ Every `require()` / static `import` reachable when an integrator runs the **ship
 - [TDD-EPIC-546.md](./TDD-EPIC-546.md)
 - [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md)
 
-## Inventory
+## Inventory (default proxy subprocess path)
 
-- [ ] List all files under `packages/voice-agent-backend/scripts/openai-proxy/` with runtime imports/requires.
-- [ ] Mark each symbol as: **default proxy path** / **CLI-only** / **optional dynamic**.
-- [ ] Record table in this section (append below) or in a short `AUDIT-OPENAI-PROXY-DEPS.md` in this folder if the table is large.
+| File / area | Runtime module | Default `run.ts` path? | In `dependencies`? |
+|-------------|----------------|------------------------|---------------------|
+| `server.ts` | `ws`, Node `http`/`https`/`path`/`fs`/`url` | Yes | `ws` yes; Node built-ins |
+| `run.ts` | `dotenv`, `selfsigned` (branch), `./server`, `./listen-tls` | Yes | `dotenv`, `selfsigned` yes |
+| `logger.ts` | `@opentelemetry/api-logs`, `@opentelemetry/sdk-logs` | Yes (via server) | Yes |
+| `speaker-sink.ts` | `speaker` (dynamic) | **No** (CLI / `cli.ts`) | **No** — optional |
 
-```text
-(File / import / default path? / required action)
-```
+- [x] Core **`run.ts` + `createOpenAIProxyServer`** imports satisfied by **`dependencies`** (verified by packaging test + manual review above).
+- [ ] **Optional:** Expand inventory for every file under `scripts/openai-proxy/` or add `AUDIT-OPENAI-PROXY-DEPS.md` if the table grows.
 
 ## TDD — RED
 
-- [ ] Add test or CI step that fails when a **required** runtime import is missing from `dependencies` (ideas: minimal install + `node -e "require('...')"` from package entry; or Jest that resolves modules as consumer).
-- [ ] Or: integration test that boots proxy from compiled/copied tree without monorepo hoisting (document approach).
+- [x] **Guard test** — `tests/packaging/voice-agent-backend-runtime-dependencies.test.ts` fails if required runtime packages drop out of **`dependencies`**.
+- [ ] **Optional:** Minimal-install boot test (consumer tree) without monorepo hoisting — not required if packaging test + release smoke suffice.
 
 ## TDD — GREEN
 
-- [ ] Promote required packages to **`dependencies`** (OpenTelemetry packages if default path loads `logger.ts`).
-- [ ] Or refactor so optional code paths use dynamic `import()` / `require()` only when feature flag + document `peerDependencies` if appropriate.
+- [x] **OpenTelemetry** packages promoted to **`dependencies`** (default path loads `logger.ts`).
+- [x] **`selfsigned`** in **`dependencies`** ([#547](./TRACKING-547.md)).
 
 ## TDD — REFACTOR
 
-- [ ] Align `package.json` and lockfiles; no duplicate/conflicting version ranges without reason.
+- [x] `package.json` aligns with shipped proxy path; lockfile updated in repo.
 
 ## Definition of done
 
-- [ ] Inventory complete; no known gap between runtime path and `dependencies`.
-- [ ] Tests / CI guard documented in PR.
-- [ ] [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md) packaging smoke re-run after dep changes.
+- [x] No known gap between **default** runtime path and **`dependencies`** (CLI `speaker` exception documented above).
+- [x] Tests / CI guard: **`voice-agent-backend-runtime-dependencies`** (document in PR when closing #548).
+- [ ] [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md) packaging smoke for the **published** tarball when releasing.
 - [ ] GitHub #548 closed with link to PR and this file.
 
 ## Verification log
 
-- [ ] _Root Jest + targeted integration: date / command / outcome_
-- [ ] _Pack smoke: date / command / outcome_
+- **2026-03-28:** `npm test -- voice-agent-backend-runtime-dependencies` (repo root) — **PASS**.

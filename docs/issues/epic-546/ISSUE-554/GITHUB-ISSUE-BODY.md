@@ -9,15 +9,15 @@ This issue tracks **running the full release checklist** to publish the patch th
 
 | Package | Location | Version for this release |
 |---------|----------|--------------------------|
-| **@signal-meaning/voice-agent-react** | Root `package.json` | **No bump** (remain **0.10.5**) unless you intentionally dual-ship with a component change |
+| **@signal-meaning/voice-agent-react** | Root `package.json` | **0.10.6** on branch **`release/v0.10.6`** (update GitHub Overview if it still shows 0.10.5) |
 | **@signal-meaning/voice-agent-backend** | `packages/voice-agent-backend/package.json` | **0.2.11** (patch; adjust if a different patch is chosen) |
 
 **Release branch / tag:** Follow `.github/ISSUE_TEMPLATE/release-checklist.md` and `docs/PUBLISHING-AND-RELEASING.md`; confirm `release/v*` branch and tag with CI (`test-and-publish.yml`) when only `voice-agent-backend` version changes.
 
 ### Qualification highlights for this release
 
-- [ ] **Packaging smoke:** After `npm pack` of `voice-agent-backend`, install tarball in a clean temp project and start the OpenAI proxy — no `MODULE_NOT_FOUND` (see `docs/issues/epic-546/RELEASE-AND-QUALIFICATION.md`).
-- [ ] **Proxy / API:** If the merged PRs touch proxy↔API behavior, run `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` when `OPENAI_API_KEY` is available.
+- [x] **Packaging smoke:** **CI equivalent** **2026-03-29** — `test-and-publish.yml` run **23697831472**: root tarball install + `require()`, backend `npm pack --dry-run`, registry verify after publish. Optional manual proxy-from-tarball: `docs/issues/epic-546/RELEASE-AND-QUALIFICATION.md`.
+- [x] **Proxy / API:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` when `OPENAI_API_KEY` is available — **PASS** (logged **2026-03-28** in [ISSUE-554/TRACKING.md](./TRACKING.md)).
 
 ---
 

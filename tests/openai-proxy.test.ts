@@ -17,6 +17,9 @@ import {
   mapGreetingToConversationItemCreate,
   mapGreetingToConversationText,
   mapConversationItemAddedToConversationText,
+  extractAssistantTextFromResponseOutputTextDone,
+  mergeAssistantTextFromOutputTextDoneAndDeltas,
+  extractAssistantTextFromResponseDoneEvent,
   mapErrorToComponentError,
   binaryToInputAudioBufferAppend,
 } from '../packages/voice-agent-backend/scripts/openai-proxy/translator';
@@ -872,6 +875,94 @@ describe('OpenAI proxy translator (Issue #381)', () => {
         role: 'assistant',
         content: "The capital of France is Paris. It's a major European city and a global center for art, fashion, and culture.",
       });
+    });
+  });
+
+  describe('6b. response.output_text.done fallback text (Issue #555)', () => {
+    it('extracts text from top-level .text (mock / common shape)', () => {
+      expect(
+        extractAssistantTextFromResponseOutputTextDone({
+          type: 'response.output_text.done',
+          text: '  Hello  ',
+        })
+      ).toBe('Hello');
+    });
+
+    it('extracts text from nested part.text', () => {
+      expect(
+        extractAssistantTextFromResponseOutputTextDone({
+          type: 'response.output_text.done',
+          part: { text: 'Nested reply.' },
+        })
+      ).toBe('Nested reply.');
+    });
+
+    it('returns null when text missing or whitespace', () => {
+      expect(extractAssistantTextFromResponseOutputTextDone({ type: 'response.output_text.done' })).toBeNull();
+      expect(extractAssistantTextFromResponseOutputTextDone({ type: 'response.output_text.done', text: '   ' })).toBeNull();
+      expect(extractAssistantTextFromResponseOutputTextDone(null)).toBeNull();
+    });
+
+    it('mergeAssistantTextFromOutputTextDoneAndDeltas prefers .done text over accumulated deltas', () => {
+      expect(
+        mergeAssistantTextFromOutputTextDoneAndDeltas({ type: 'response.output_text.done', text: 'Final.' }, 'partial')
+      ).toBe('Final.');
+    });
+
+    it('mergeAssistantTextFromOutputTextDoneAndDeltas uses deltas when .done has no text', () => {
+      expect(mergeAssistantTextFromOutputTextDoneAndDeltas({ type: 'response.output_text.done' }, '  noon UTC  ')).toBe(
+        'noon UTC',
+      );
+    });
+
+    it('mergeAssistantTextFromOutputTextDoneAndDeltas returns null when both empty', () => {
+      expect(mergeAssistantTextFromOutputTextDoneAndDeltas({ type: 'response.output_text.done' }, '')).toBeNull();
+      expect(mergeAssistantTextFromOutputTextDoneAndDeltas({ type: 'response.output_text.done', text: '   ' }, '')).toBeNull();
+    });
+  });
+
+  describe('6c. response.done embedded response.output (Issue #470 real API)', () => {
+    it('extractAssistantTextFromResponseDoneEvent reads assistant message from response.output', () => {
+      const event = {
+        type: 'response.done',
+        response: {
+          id: 'resp_1',
+          output: [
+            {
+              type: 'message',
+              role: 'assistant',
+              content: [{ type: 'output_text', text: 'The time is 12:00 in UTC.' }],
+            },
+          ],
+        },
+      };
+      expect(extractAssistantTextFromResponseDoneEvent(event)).toBe('The time is 12:00 in UTC.');
+    });
+
+    it('extractAssistantTextFromResponseDoneEvent joins multiple text parts with newline', () => {
+      const event = {
+        type: 'response.done',
+        response: {
+          output: [
+            {
+              role: 'assistant',
+              content: [{ type: 'output_text', text: 'Line A' }, { type: 'output_text', text: 'Line B' }],
+            },
+          ],
+        },
+      };
+      expect(extractAssistantTextFromResponseDoneEvent(event)).toBe('Line A\nLine B');
+    });
+
+    it('extractAssistantTextFromResponseDoneEvent returns null when no assistant output', () => {
+      expect(extractAssistantTextFromResponseDoneEvent({ type: 'response.done' })).toBeNull();
+      expect(extractAssistantTextFromResponseDoneEvent({ type: 'response.done', response: {} })).toBeNull();
+      expect(
+        extractAssistantTextFromResponseDoneEvent({
+          type: 'response.done',
+          response: { output: [{ role: 'user', content: [{ type: 'input_text', text: 'hi' }] }] },
+        }),
+      ).toBeNull();
     });
   });
 
