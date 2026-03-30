@@ -7,7 +7,7 @@ Use **checkboxes on GitHub issue #554** as the primary checklist (same content a
 
 ## Release status
 
-**Pre-release preparation** on **`release/v0.10.6`:** **`[x]` complete** (2026-03-29 verify) — lint (**0 errors**, 4 `no-console` warnings), **CI-parity** + **plain** `test:mock`, `openai-proxy-event-coverage`, **`openai-proxy-run-ts-entrypoint`**, **`lazy-initialization.test.js`**, `npm audit --audit-level=high` (**0** high), **real-API** `USE_REAL_APIS=1 openai-proxy-integration` (**PASS** 2026-03-28), **`npm run test:e2e:ci`** (**PASS** 2026-03-29 — **9 passed**, **3 skipped** for **`deepgram-ux-protocol`** [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)). Issue #206: **`tests/lazy-initialization.test.js`** only (Playwright lazy-init E2E removed). **Release docs:** **`[x]`** — [`docs/releases/v0.10.6/`](../../../releases/v0.10.6/) (**CHANGELOG**, **PACKAGE-STRUCTURE**, **RELEASE-NOTES**); **`npm run validate:release-docs`** **PASS** (patch required files). **Published:** **2026-03-29** — [GitHub Release **v0.10.6**](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.10.6); workflow [**23697831472**](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/23697831472) **success** (Jest + pack/install checks + publish + **`latest`** dist-tags). **Next:** post-release (PR → `main`, close issues, notify integrators).
+**Pre-release preparation** on **`release/v0.10.6`:** **`[x]` complete** (2026-03-29 verify) — lint (**0 errors**, 4 `no-console` warnings), **CI-parity** + **plain** `test:mock`, `openai-proxy-event-coverage`, **`openai-proxy-run-ts-entrypoint`**, **`lazy-initialization.test.js`**, `npm audit --audit-level=high` (**0** high), **real-API** `USE_REAL_APIS=1 openai-proxy-integration` (**PASS** 2026-03-28), **`npm run test:e2e:ci`** (**PASS** 2026-03-29 — **9 passed**, **3 skipped** for **`deepgram-ux-protocol`** [#556](https://github.com/Signal-Meaning/dg_react_agent/issues/556)). Issue #206: **`tests/lazy-initialization.test.js`** only (Playwright lazy-init E2E removed). **Release docs:** **`[x]`** — [`docs/releases/v0.10.6/`](../../../releases/v0.10.6/) (**CHANGELOG**, **PACKAGE-STRUCTURE**, **RELEASE-NOTES**); **`npm run validate:release-docs`** **PASS** (patch required files). **Published:** **2026-03-29** — [GitHub Release **v0.10.6**](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.10.6); workflow [**23697831472**](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/23697831472) **success** (Jest + pack/install checks + publish + **`latest`** dist-tags). **Merged to `main`:** **2026-03-30** — [PR **#557**](https://github.com/Signal-Meaning/dg_react_agent/pull/557) (**Closes** #554, #547, #548, #546). **Optional:** notify integrators (e.g. Voice Commerce).
 
 **CI-parity Jest:** `CI=true RUN_REAL_API_TESTS=false npm run test:mock` — **PASS** (2026-03-28), same env as the **Test and Publish** workflow’s Jest step.
 
@@ -21,8 +21,8 @@ Use **checkboxes on GitHub issue #554** as the primary checklist (same content a
 
 ## Epic gates (before starting release checklist)
 
-- [x] [#547](https://github.com/Signal-Meaning/dg_react_agent/issues/547) — **Code on release branch:** `selfsigned` in **`dependencies`**, packaging guard test (see [TRACKING-547.md](../TRACKING-547.md)). **Still:** close GitHub #547 after publish / merge to `main` as appropriate.
-- [x] [#548](https://github.com/Signal-Meaning/dg_react_agent/issues/548) — **Code on release branch:** default proxy path runtime imports covered by `dependencies` + `voice-agent-backend-runtime-dependencies` test (see [TRACKING-548.md](../TRACKING-548.md)). **Still:** close GitHub #548 after publish.
+- [x] [#547](https://github.com/Signal-Meaning/dg_react_agent/issues/547) — **Code on release branch:** `selfsigned` in **`dependencies`**, packaging guard test (see [TRACKING-547.md](../TRACKING-547.md)). **Closed** with [PR #557](https://github.com/Signal-Meaning/dg_react_agent/pull/557) **2026-03-30**.
+- [x] [#548](https://github.com/Signal-Meaning/dg_react_agent/issues/548) — **Code on release branch:** default proxy path runtime imports covered by `dependencies` + `voice-agent-backend-runtime-dependencies` test (see [TRACKING-548.md](../TRACKING-548.md)). **Closed** with [PR #557](https://github.com/Signal-Meaning/dg_react_agent/pull/557) **2026-03-30**.
 - [x] **Version numbers confirmed in tree** — `@signal-meaning/voice-agent-backend` **0.2.11**; root `@signal-meaning/voice-agent-react` **0.10.6** (`package.json` files on `release/v0.10.6`). **Action:** If the [#554](https://github.com/Signal-Meaning/dg_react_agent/issues/554) Overview table on GitHub still says React **0.10.5**, update it to match or document intentional dual-ship.
 
 ## Release execution (rollup)
@@ -36,7 +36,7 @@ Mirror the sections from the GitHub issue; check here when each **section** is d
 - [x] **Release branch** — **`release/v0.10.6`** with qualifying commits (**pre-release checks green**)
 - [x] **GitHub Release + CI publish** — **2026-03-29** — [Release **v0.10.6**](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.10.6); [**Test and Publish Package** run **23697831472**](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/23697831472) **success**
 - [x] **`latest` dist-tag** — **2026-03-29** — applied in same workflow for published packages (**voice-agent-react** **0.10.6**, **voice-agent-backend** **0.2.11**)
-- [ ] **Post-release** — PR `release/v0.10.6` → `main`; notify integrators (e.g. Voice Commerce); close #554 / #547 / #548 as appropriate; update epic #546
+- [x] **Post-release** — **2026-03-30** — [PR **#557**](https://github.com/Signal-Meaning/dg_react_agent/pull/557) merged **`release/v0.10.6` → `main`**; GitHub **closed** #554, #547, #548, #546 (PR body). **Optional:** integrator notification (e.g. Voice Commerce).
 
 ### Pre-release preparation (progress)
 
@@ -127,6 +127,10 @@ _Add dated entries (command, outcome, operator)._
 
 - Aligned **release status**, **E2E table row**, and **qualification doc** with current CI subset, **#556** skip, lazy-init E2E removal, and **Jest** lazy-init ownership.
 
+### 2026-03-30 — Merge release branch to `main` (agent)
+
+- **[PR #557](https://github.com/Signal-Meaning/dg_react_agent/pull/557)** — **`release/v0.10.6` → `main`**, merge commit **2026-03-30T15:09:30Z**. Body **Closes** #554, #547, #548, #546. **`release/v0.10.6`** branch retained (not deleted).
+
 ### 2026-03-29 — GitHub Release v0.10.6 published (agent)
 
 - **`gh release create v0.10.6`** — target **`release/v0.10.6`**, notes from **`docs/releases/v0.10.6/RELEASE-NOTES.md`**, **`--latest`**. URL: https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.10.6
@@ -139,4 +143,4 @@ _Add dated entries (command, outcome, operator)._
 - **`npm run lint`** — **PASS** (0 errors, 4 `no-console` warnings in `src/test-utils/test-helpers.ts`).
 - **`npm audit --audit-level=high`** — **PASS** (0 vulnerabilities).
 - **`cd test-app && npm run test:e2e:ci`** (via Playwright on CI file list) — **PASS**, **9 passed / 3 skipped** (#556).
-- **Rollup:** **`[x]` Pre-release preparation**, **`[x]` EPIC-546 packaging smoke** (CI tarball + dry-run + registry verify on **23697831472**), **`[x]` Version management**, **`[x]` Release docs**, **`[x]` Release branch**, **`[x]` GitHub Release + CI publish**, **`[x]` `latest` dist-tag**. **Still open:** **post-release** (PR → `main`, issue hygiene, integrator comms).
+- **Rollup:** **`[x]`** through **post-release** — [PR **#557**](https://github.com/Signal-Meaning/dg_react_agent/pull/557) merged **2026-03-30**; issues **#554**, **#547**, **#548**, **#546** closed via PR body.
