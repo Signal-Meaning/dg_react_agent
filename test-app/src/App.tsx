@@ -76,6 +76,8 @@ declare global {
     __e2eRestoredAgentContext?: AgentOptions['context'];
     /** Issue #489/9a: App-persisted last known conversation (survives remount so reconnect Settings get context). */
     __appLastKnownConversation?: Array<{ role: string; content: string; timestamp?: number }>;
+    /** Issue #561 E2E: `startAudioCapture` completed (`?e2e-mic-assertions=1`). */
+    __e2eStartAudioCaptureCompletedAt?: number;
   }
 }
 
@@ -1102,6 +1104,16 @@ function App() {
       await deepgramRef.current.startAudioCapture();
       addLog('Audio capture started successfully');
       setMicEnabled(true);
+      if (typeof window !== 'undefined') {
+        const tw = window as TestWindow;
+        try {
+          if (new URLSearchParams(window.location.search).get('e2e-mic-assertions') === '1') {
+            tw.__e2eStartAudioCaptureCompletedAt = Date.now();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
     } else {
       addLog('❌ [APP] startAudioCapture method not found on ref');
       throw new Error('startAudioCapture not available');
