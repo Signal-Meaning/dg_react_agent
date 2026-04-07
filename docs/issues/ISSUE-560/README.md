@@ -4,13 +4,28 @@
 
 **Labels:** bug, audio, voice-agent, testing, priority: medium
 
+**Branch:** `issue-560` (work here; merge via PR when ready)
+
 ---
 
 ## What this issue is
 
-Track **partner-reported microphone activation regression** (voice-commerce), **reproduction in test-app**, and **test-app `npm run build` / `tsc -b` failures** that currently block a clean demo build.
+Track **partner-reported microphone activation regression** (voice-commerce), **test-app `npm run build` / `tsc -b` failures**, and—now that **local manual repro** exists from [Issue #561](../ISSUE-561/README.md)—**where the defect actually lives**.
+
+**Current focus:** **Isolate the defect in our deliverable** (`@signal-meaning/voice-agent-react`, repo `src/`) versus **test-app–only** wiring, UI, or env. Repro steps and Live/proxy context live with #561; #560 is the place to decide “package bug vs integration bug” and fix or qualify accordingly.
 
 Use the **GitHub issue** for checkboxes and discussion; use this folder for stable repo-local notes, TDD plans, and command snippets as work proceeds.
+
+---
+
+## Local docs
+
+| Doc | Purpose |
+|-----|---------|
+| [CURRENT-STATUS.md](./CURRENT-STATUS.md) | Phase table (repro → isolation → fix), symptoms, build state, **package vs test-app conclusion**. **Update after each slice.** |
+| [NEXT-STEP.md](./NEXT-STEP.md) | Queue head: **isolate defect in deliverable** vs test-app; build capture. **Update after each slice.** |
+| [TDD-PLAN.md](./TDD-PLAN.md) | TDD phases: inventory, RED/GREEN at **correct layer**, `tsc`/build. |
+| [TRACKING.md](./TRACKING.md) | Checklist and status while implementing. |
 
 ---
 
@@ -18,3 +33,4 @@ Use the **GitHub issue** for checkboxes and discussion; use this folder for stab
 
 - [Issue #544](../ISSUE-544/README.md) — user-initiated `start()`, idle timeout, E2E context.
 - [Issue #462](../ISSUE-462/README.md) — voice-commerce process lessons (partner scenarios).
+- [Issue #561](../ISSUE-561/README.md) — Live mode UI and **local manual repro** paths; #560 isolates whether remaining gap is the **package** vs **test-app**.
