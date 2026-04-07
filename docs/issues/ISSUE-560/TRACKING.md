@@ -7,11 +7,11 @@
 | Item | Status |
 |------|--------|
 | Branch `issue-560` | Created from `issue-561` |
-| Local manual repro (test-app / Live / proxy paths) | **Done** — via [#561](../ISSUE-561/README.md); see [#561 CURRENT-STATUS](../ISSUE-561/CURRENT-STATUS.md) |
-| **Isolate defect: package (`src/`) vs test-app** | **In progress** — [NEXT-STEP.md](./NEXT-STEP.md) |
-| Documented conclusion (which layer + one-line rationale) | Not started — add to [CURRENT-STATUS.md](./CURRENT-STATUS.md) |
-| `test-app` `npm run build` / `tsc -b` | **Open** — failures to list in CURRENT-STATUS |
-| Minimal test lock on the isolated contract | Not started — [TDD-PLAN.md](./TDD-PLAN.md) |
+| Local manual repro (test-app / Live / proxy paths) | **Done** — via [#561](../ISSUE-561/README.md) |
+| **Isolation trace (round 1)** | **Done** — [CURRENT-STATUS.md](./CURRENT-STATUS.md) §Isolation trace |
+| `test-app` `npm run build` / `tsc -b` | **Green** locally (2026-04-05); record CI failures in CURRENT-STATUS if any |
+| Unit lock: `getVoiceAgentStartOptions` | **Done** — `test-app/tests/unit/voiceAgentStartOptions.test.ts` |
+| Partner parity check / package-deep trace | **Next** — [NEXT-STEP.md](./NEXT-STEP.md) |
 | Fix merged / issue closed on GitHub | Not started |
 
 Notes: After each slice, edit **CURRENT-STATUS**, **NEXT-STEP**, and checkboxes in **TDD-PLAN**.

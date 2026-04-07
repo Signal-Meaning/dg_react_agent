@@ -27,6 +27,8 @@ Use the **GitHub issue** for checkboxes and discussion; use this folder for stab
 | [TDD-PLAN.md](./TDD-PLAN.md) | TDD phases: inventory, RED/GREEN at **correct layer**, `tsc`/build. |
 | [TRACKING.md](./TRACKING.md) | Checklist and status while implementing. |
 
+**Code artifact (integration contract):** `test-app/src/live-mode/voiceAgentStartOptions.ts` — maps `proxyEndpoint` to `start()` options used by mic / Live; unit-tested under `test-app/tests/unit/`.
+
 ---
 
 ## Related references

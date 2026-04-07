@@ -30,6 +30,7 @@ import {
   getLiveSessionPhase,
 } from './live-mode/liveModePresentation';
 import { shouldClearMicOnAgentDisconnect } from './live-mode/syncMicFromAgentConnection';
+import { getVoiceAgentStartOptions } from './live-mode/voiceAgentStartOptions';
 import {
   openAiInputTranscriptImpliesUserSpeaking,
   openAiTranscriptShouldEndMicActivityPulse,
@@ -1148,14 +1149,13 @@ function App() {
       addLog('❌ [APP] deepgramRef.current is null - cannot start services');
       throw new Error('Deepgram ref not available');
     }
-    const useOpenAIProxy = (proxyEndpoint ?? '').includes('/openai');
-    if (useOpenAIProxy) {
+    const startOpts = getVoiceAgentStartOptions(proxyEndpoint);
+    if (startOpts.transcription === false) {
       addLog('Starting agent (OpenAI proxy)...');
-      await deepgramRef.current.start({ agent: true, transcription: false, userInitiated: true });
     } else {
       addLog('Starting agent and transcription services...');
-      await deepgramRef.current.start({ agent: true, transcription: true, userInitiated: true });
     }
+    await deepgramRef.current.start(startOpts);
     if (typeof deepgramRef.current.startAudioCapture === 'function') {
       await deepgramRef.current.startAudioCapture();
       addLog('Audio capture started successfully');

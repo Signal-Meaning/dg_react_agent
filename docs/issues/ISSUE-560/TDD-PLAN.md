@@ -36,25 +36,26 @@
 ## 3. Phase A — Inventory
 
 - [x] **Local manual repro** — satisfied by [#561](../ISSUE-561/README.md) work (Live, proxy, mic paths); keep using that flow while isolating.
-- [ ] Run `cd test-app && npm run build` — paste failures into [CURRENT-STATUS.md](./CURRENT-STATUS.md).
-- [ ] **Write isolation conclusion** in CURRENT-STATUS: **package** vs **test-app** (one paragraph + optional file/line anchor).
+- [x] Run `cd test-app && npm run build` — **green** on `issue-560` (2026-04-05); failures (if any in CI) go in [CURRENT-STATUS.md](./CURRENT-STATUS.md).
+- [x] **Isolation conclusion (round 1)** — call chain + boundary in [CURRENT-STATUS.md](./CURRENT-STATUS.md) §Isolation trace.
 
 ---
 
 ## 4. Phase B — RED: failing tests
 
-*(Add concrete tests **after** isolation. Prefer the smallest contract at the failing layer.)*
+*(Prefer the smallest contract at the failing layer.)*
 
-- [ ] **Build:** optional **Jest** / TS guard if `build` failure is non-obvious; otherwise fix types and rely on `npm run build`.
-- [ ] **Package (`src/`):** failing test under repo `tests/` against **public API** (e.g. `start()` / audio / connection) **if** isolation points here.
-- [ ] **test-app only:** unit or focused Playwright under `test-app/tests/` **if** isolation points here; reuse #561 specs where they already encode the policy.
+- [x] **Build:** `npm run build` sufficient when green; no extra Jest guard needed yet.
+- [ ] **Package (`src/`):** add under repo `tests/` **if** partner matches test-app wiring and defect is inside `DeepgramVoiceInteraction`.
+- [x] **test-app integration contract:** `test-app/tests/unit/voiceAgentStartOptions.test.ts` + `voiceAgentStartOptions.ts` (OpenAI proxy vs Deepgram `start()` flags for mic/Live).
 
 ---
 
 ## 5. Phase C — GREEN: fixes
 
-- [ ] Implement smallest change in **`src/`** or **test-app** (per isolation), then satisfy tests and partner scenario.
-- [ ] Run root `npm test` / `test-app` scripts as appropriate for the layer touched (npm scripts only).
+- [x] **Refactor / lock:** `App.tsx` `startServicesAndMicrophone` uses `getVoiceAgentStartOptions` (tests green).
+- [ ] **Partner-visible fix** — pending parity check; may be **`src/`** or **docs for integrators** once root cause is confirmed.
+- [x] Ran `test-app` tests + build for this slice (`npm test -- voiceAgentStartOptions.test.ts`, `npm run build`).
 
 ---
 
