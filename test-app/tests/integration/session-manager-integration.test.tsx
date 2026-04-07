@@ -10,10 +10,11 @@
  * Component integration tests are complex due to Jest module resolution issues.
  */
 
-const { SessionManager } = require('../../src/session-management');
+import type { ConversationMessage } from '../../src/session-management';
+import { SessionManager } from '../../src/session-management';
 
 describe('SessionManager Integration Tests', () => {
-  let sessionManager;
+  let sessionManager: SessionManager;
 
   beforeEach(() => {
     sessionManager = new SessionManager();
@@ -22,8 +23,8 @@ describe('SessionManager Integration Tests', () => {
   afterEach(() => {
     // Clean up any test sessions
     const sessions = sessionManager.getAllSessions();
-    sessions.forEach(session => {
-      sessionManager.deleteSession(session.id);
+    sessions.forEach((_session, sessionId) => {
+      sessionManager.deleteSession(sessionId);
     });
   });
 
@@ -33,24 +34,29 @@ describe('SessionManager Integration Tests', () => {
     expect(typeof sessionId).toBe('string');
 
     const context = sessionManager.getSessionContext(sessionId);
-    expect(context).toBeDefined();
-    expect(context.context.messages).toEqual([]);
+    expect(context).not.toBeNull();
+    expect(context!.context.messages).toEqual([]);
   });
 
   test('should maintain conversation history across operations', () => {
     const sessionId = sessionManager.createSession();
     
     // Add messages
-    const userMessage = { role: 'user', content: 'Hello', timestamp: Date.now() };
-    const agentMessage = { role: 'assistant', content: 'Hi there!', timestamp: Date.now() };
+    const userMessage: ConversationMessage = { role: 'user', content: 'Hello', timestamp: Date.now() };
+    const agentMessage: ConversationMessage = {
+      role: 'assistant',
+      content: 'Hi there!',
+      timestamp: Date.now(),
+    };
     
     sessionManager.addMessage(userMessage);
     sessionManager.addMessage(agentMessage);
     
     const context = sessionManager.getSessionContext(sessionId);
-    expect(context.context.messages).toHaveLength(2);
-    expect(context.context.messages[0].content).toBe('Hello');
-    expect(context.context.messages[1].content).toBe('Hi there!');
+    expect(context).not.toBeNull();
+    expect(context!.context.messages).toHaveLength(2);
+    expect(context!.context.messages[0].content).toBe('Hello');
+    expect(context!.context.messages[1].content).toBe('Hi there!');
   });
 
   test('should handle multiple sessions independently', () => {
@@ -61,24 +67,34 @@ describe('SessionManager Integration Tests', () => {
     
     // Switch to session1 and add message
     sessionManager.setCurrentSessionId(session1);
-    sessionManager.addMessage({ role: 'user', content: 'Session 1 message' });
+    sessionManager.addMessage({
+      role: 'user',
+      content: 'Session 1 message',
+      timestamp: Date.now(),
+    });
     
     // Switch to session2 and add message
     sessionManager.setCurrentSessionId(session2);
-    sessionManager.addMessage({ role: 'user', content: 'Session 2 message' });
+    sessionManager.addMessage({
+      role: 'user',
+      content: 'Session 2 message',
+      timestamp: Date.now(),
+    });
     
     const context1 = sessionManager.getSessionContext(session1);
     const context2 = sessionManager.getSessionContext(session2);
-    
-    expect(context1.context.messages).toHaveLength(1);
-    expect(context2.context.messages).toHaveLength(1);
-    expect(context1.context.messages[0].content).toBe('Session 1 message');
-    expect(context2.context.messages[0].content).toBe('Session 2 message');
+
+    expect(context1).not.toBeNull();
+    expect(context2).not.toBeNull();
+    expect(context1!.context.messages).toHaveLength(1);
+    expect(context2!.context.messages).toHaveLength(1);
+    expect(context1!.context.messages[0].content).toBe('Session 1 message');
+    expect(context2!.context.messages[0].content).toBe('Session 2 message');
   });
 
   test('should handle session cleanup', () => {
     const sessionId = sessionManager.createSession();
-    sessionManager.addMessage({ role: 'user', content: 'Test message' });
+    sessionManager.addMessage({ role: 'user', content: 'Test message', timestamp: Date.now() });
     
     expect(sessionManager.getSessionContext(sessionId)).toBeDefined();
     

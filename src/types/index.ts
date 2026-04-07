@@ -448,7 +448,12 @@ export interface DeepgramVoiceInteractionHandle {
    * ⚠️ Note: This method connects WebSocket(s) but does NOT start audio recording.
    * To start recording, call `startAudioCapture()` separately.
    */
-  start: (options?: { agent?: boolean; transcription?: boolean }) => Promise<void>;
+  start: (options?: {
+    agent?: boolean;
+    transcription?: boolean;
+    /** When true, latches meaningful user activity for idle timeout (Issue #544). */
+    userInitiated?: boolean;
+  }) => Promise<void>;
   
   /**
    * Stop the voice interaction

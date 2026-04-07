@@ -10,7 +10,16 @@
 
 Rewire the test-app **Start** control so it enters **Live** mode (ChatGPT **Voice mode**–style): simplified, glanceable UI for **on-the-go / mostly hands-free** use (e.g. vehicle). Test-app scope: visualize **voice activity** and **agent activity** (including **thinking / tool-calling** when signals exist).
 
-Repo-local notes, mockups, and TDD plans can live in this folder as work proceeds.
+Repo-local notes, mockups, and TDD plans live in this folder as work proceeds.
+
+## Local docs
+
+| Doc | Purpose |
+|-----|---------|
+| [CURRENT-STATUS.md](./CURRENT-STATUS.md) | **Rolling snapshot:** TDD phase, locked decisions, artifacts, blockers. **Update after each slice.** |
+| [NEXT-STEP.md](./NEXT-STEP.md) | **Single queue head:** immediate next action; **update after each slice.** |
+| [TDD-PLAN.md](./TDD-PLAN.md) | **TDD plan:** RED/GREEN/REFACTOR phases, product rules, unit + E2E scope, commands. |
+| [TRACKING.md](./TRACKING.md) | Checklist and status while implementing. |
 
 ---
 

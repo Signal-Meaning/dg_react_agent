@@ -1,6 +1,6 @@
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, type ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 
@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 function localhostHint() {
   return {
     name: 'localhost-hint',
-    configureServer(server: { httpServer?: { once: (e: string, fn: () => void) => void } }) {
+    configureServer(server: ViteDevServer) {
       server.httpServer?.once('listening', () => {
         const scheme = process.env.HTTPS === 'true' || process.env.HTTPS === '1' ? 'https' : 'http'
         console.log(`  ➜  If localhost fails, try: ${scheme}://127.0.0.1:5173/`)
@@ -41,7 +41,8 @@ export default defineConfig(({ mode }) => {
       host: true, // listen on all interfaces (E2E, curl, etc.)
       port: 5173,
       strictPort: true, // Don't try other ports if 5173 is busy
-      https: useHttps,
+      // Vite typings expect https options object when TLS is on; basic-ssl supplies certs.
+      ...(useHttps ? { https: {} } : {}),
       fs: {
         allow: ['..', '../..', '../../..']
       }
