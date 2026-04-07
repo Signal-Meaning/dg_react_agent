@@ -29,6 +29,11 @@ import {
   getLiveAgentPresentation,
   getLiveSessionPhase,
 } from './live-mode/liveModePresentation';
+import { shouldClearMicOnAgentDisconnect } from './live-mode/syncMicFromAgentConnection';
+import {
+  openAiInputTranscriptImpliesUserSpeaking,
+  openAiTranscriptShouldEndMicActivityPulse,
+} from './live-mode/liveMicActivityOpenAI';
 
 // Type declaration for E2E test support
 // Only used in test-app for E2E testing, not part of the component's public API
@@ -318,10 +323,30 @@ function App() {
   const [userStartedSpeaking, setUserStartedSpeaking] = useState<string | null>(null);
   const [userStoppedSpeaking, setUserStoppedSpeaking] = useState<string | null>(null);
   const [utteranceEnd, setUtteranceEnd] = useState<string | null>(null);
-  
   // Idle timeout state
   const [idleTimeoutActive, setIdleTimeoutActive] = useState<boolean>(false);
-  
+  /** Issue #561 Live Mic activity: OpenAI proxy has no UserStartedSpeaking (turn_detection null) — also driven by input transcription. */
+  const [liveMicActivityPhase, setLiveMicActivityPhase] = useState<'idle' | 'speaking'>('idle');
+  const liveMicIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!liveMode) {
+      if (liveMicIdleTimerRef.current) {
+        clearTimeout(liveMicIdleTimerRef.current);
+        liveMicIdleTimerRef.current = null;
+      }
+      setLiveMicActivityPhase('idle');
+    }
+  }, [liveMode]);
+
+  useEffect(() => {
+    return () => {
+      if (liveMicIdleTimerRef.current) {
+        clearTimeout(liveMicIdleTimerRef.current);
+      }
+    };
+  }, []);
+
   // Backend proxy mode state (Issue #242)
   // Allow override via URL query params for E2E testing (same pattern as audioConstraints)
   const memoizedProxyConfig = useMemo(() => {
@@ -780,6 +805,22 @@ function App() {
         ? (transcriptEntry.speech_final ? 'final (speech_final)' : 'final')
         : 'interim';
       sessionLogger.debug(`TRANSCRIPT-CAPTURE: Stored ${transcriptTypeLabel} transcript`, { textPreview: text.substring(0, 50), is_final: transcriptEntry.is_final, speech_final: transcriptEntry.speech_final });
+
+      // Issue #561: OpenAI proxy uses turn_detection null — upstream never sends UserStartedSpeaking;
+      // user speech still arrives as input_audio_transcription → onTranscriptUpdate.
+      const useOpenAIProxy = (proxyEndpoint ?? '').includes('/openai');
+      if (useOpenAIProxy && openAiInputTranscriptImpliesUserSpeaking(transcript)) {
+        setLiveMicActivityPhase('speaking');
+        if (openAiTranscriptShouldEndMicActivityPulse(transcript)) {
+          if (liveMicIdleTimerRef.current) {
+            clearTimeout(liveMicIdleTimerRef.current);
+          }
+          liveMicIdleTimerRef.current = setTimeout(() => {
+            setLiveMicActivityPhase('idle');
+            liveMicIdleTimerRef.current = null;
+          }, 450);
+        }
+      }
     } else {
       // Log warning if we can't extract text from transcript
       sessionLogger.warn('Could not extract text from transcript', {
@@ -789,7 +830,7 @@ function App() {
         keys: Object.keys(transcript)
       });
     }
-  }, [addLog, sessionLogger]);
+  }, [addLog, sessionLogger, proxyEndpoint]);
 
   const handleAgentUtterance = useCallback((utterance: LLMResponse, conversationHistory?: Array<{ role: ConversationRole; content: string; timestamp?: number }>) => {
     const history = conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? [];
@@ -871,14 +912,23 @@ function App() {
       ...prev,
       [service]: state
     }));
-    // Session ID: set when agent connects, clear when closed (for Settings panel)
     if (service === 'agent') {
       if (state === 'connected') setSessionId(generateSessionId());
-      if (state === 'closed') setSessionId(null);
-    }
-    // Reset hasSentSettings mirror on agent disconnect/stop for clean reconnect assertions
-    if (service === 'agent' && state === 'closed') {
-      setHasSentSettingsDom(false);
+      if (state === 'closed') {
+        setSessionId(null);
+        setHasSentSettingsDom(false);
+      }
+      // Idle timeout, errors, or explicit stop: mic UI must match no capture (Issue #561)
+      if (shouldClearMicOnAgentDisconnect(state)) {
+        setMicEnabled(false);
+        setDeclarativeStartAudioCapture(false);
+        setIsRecording(false);
+        setLiveMicActivityPhase('idle');
+        if (liveMicIdleTimerRef.current) {
+          clearTimeout(liveMicIdleTimerRef.current);
+          liveMicIdleTimerRef.current = null;
+        }
+      }
     }
     // Connection states are now tracked via DOM elements (data-testid attributes)
     // Tests can read connection state directly from the DOM without callbacks
@@ -919,6 +969,7 @@ function App() {
   const handleUserStartedSpeaking = useCallback(() => {
     const timestamp = new Date().toISOString().substring(11, 19);
     setUserStartedSpeaking(timestamp);
+    setLiveMicActivityPhase('speaking');
     utteranceEndDetected.current = false; // Reset flag for new speech session
     
     // Only log user speaking events in debug mode to reduce console spam
@@ -930,6 +981,11 @@ function App() {
   const handleUserStoppedSpeaking = useCallback(() => {
     const timestamp = new Date().toISOString().substring(11, 19);
     setUserStoppedSpeaking(timestamp);
+    setLiveMicActivityPhase('idle');
+    if (liveMicIdleTimerRef.current) {
+      clearTimeout(liveMicIdleTimerRef.current);
+      liveMicIdleTimerRef.current = null;
+    }
     
     // Only log user stopped speaking events in debug mode to reduce console spam
     if (isDebugMode) {
@@ -1299,8 +1355,30 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       maxWidth: '800px', 
       margin: '0 auto', 
       padding: '20px',
-      pointerEvents: 'auto' // Allow pointer events for E2E tests
+      pointerEvents: 'auto', // Allow pointer events for E2E tests
+      position: 'relative',
     }} data-testid="voice-agent">
+      {/*
+        Issue #561: Live mode unmounts debug-main-layout; E2E waitForSettingsApplied and tooling
+        must still read SettingsApplied. Keep a single stable sentinel in the DOM.
+      */}
+      <span
+        data-testid="has-sent-settings"
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          width: 1,
+          height: 1,
+          padding: 0,
+          margin: -1,
+          overflow: 'hidden',
+          clip: 'rect(0,0,0,0)',
+          whiteSpace: 'nowrap',
+          border: 0,
+        }}
+      >
+        {String(hasSentSettingsDom)}
+      </span>
       <div data-testid="deepgram-component">
         <DeepgramVoiceInteraction
         ref={deepgramRef}
@@ -1358,18 +1436,34 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       </div>
 
       {liveMode ? (
-        <LiveModeView
-          agentPresentation={getLiveAgentPresentation(agentState, {
-            functionCallPending: functionCallInFlight,
-          })}
-          sessionPhase={getLiveSessionPhase({
-            agentConnected: connectionStates.agent === 'connected',
-            microphoneCapturing: micEnabled,
-          })}
-          voicePhase={userStartedSpeaking ? 'speaking' : 'idle'}
-          onEndLive={() => void stopInteraction()}
-          onResumeMic={() => void resumeMicrophoneInLive()}
-        />
+        <div
+          data-testid="live-mode-screen"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 50,
+            display: 'flex',
+            flexDirection: 'column',
+            backgroundColor: '#0b0b0c',
+            padding: '12px 16px env(safe-area-inset-bottom, 16px)',
+            boxSizing: 'border-box',
+          }}
+        >
+          <LiveModeView
+            agentPresentation={getLiveAgentPresentation(agentState, {
+              functionCallPending: functionCallInFlight,
+            })}
+            sessionPhase={getLiveSessionPhase({
+              agentConnected: connectionStates.agent === 'connected',
+              microphoneCapturing: micEnabled,
+            })}
+            voicePhase={liveMicActivityPhase}
+            agentOutputActive={isPlaying || agentState === 'speaking'}
+            conversationMessages={conversationForDisplay}
+            onEndLive={() => void stopInteraction()}
+            onResumeMic={() => void resumeMicrophoneInLive()}
+          />
+        </div>
       ) : (
       <div data-testid="debug-main-layout">
       <h1>Deepgram Voice Interaction Test</h1>
@@ -1534,9 +1628,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
             onClick={() => void enterLiveMode()} 
             disabled={!isReady || isRecording || micLoading}
             style={{ padding: '10px 20px', pointerEvents: 'auto' }}
-            data-testid="start-button"
+            data-testid="live-entry-button"
           >
-            Start
+            Live
           </button>
         ) : (
           <button 
@@ -1549,7 +1643,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           </button>
         )}
         <div style={{ fontSize: '14px' }}>
-          Settings Applied: <strong data-testid="has-sent-settings">{String(hasSentSettingsDom)}</strong>
+          Settings Applied: <strong>{String(hasSentSettingsDom)}</strong>
         </div>
         {/* Function call tracker for E2E tests (Issue #336) */}
         <div style={{ fontSize: '14px', display: 'none' }}>

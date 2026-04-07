@@ -1,4 +1,4 @@
-# TDD Plan: Issue #561 — Live mode (Start rewire, voice-first test-app UI)
+# TDD Plan: Issue #561 — Live mode (Live entry, voice-first test-app UI)
 
 **Issue:** [#561 — Refactor: Start → Live mode](https://github.com/Signal-Meaning/dg_react_agent/issues/561)
 
@@ -19,10 +19,12 @@
 
 ### 1.1 Product goals
 
-- **Start** enters **Live mode**: a **simplified, glanceable** UI (ChatGPT **Voice mode**–style) aimed at **on-the-go / mostly hands-free** use (e.g. vehicle).
+- **Live** (primary control; `data-testid="live-entry-button"`) enters **Live mode**: a **simplified, glanceable** UI (ChatGPT **Voice mode**–style) aimed at **on-the-go / mostly hands-free** use (e.g. vehicle).
 - Live mode should **surface**:
   - **User / voice activity** (speaking vs idle, using existing app or component signals).
   - **Agent activity**: listening / speaking / **thinking** / **tool-calling** (and completion where observable), using existing callbacks and `AgentState` (or equivalent) already wired in `test-app/src/App.tsx`.
+  - **Conversation history** (same messages as debug `conversationForDisplay`) so proxy/debug sessions show **user/assistant** evidence without leaving Live.
+  - **Optional centered agent visual** driven while the assistant responds (see [DESIGN-LIVE-AGENT-VISUAL.md](./DESIGN-LIVE-AGENT-VISUAL.md)); placeholder acceptable before SVG/canvas work.
 - **Stop** (or a dedicated **Leave Live** control) exits Live mode and returns to the **full developer / debug** layout (or a documented default), without surprising teardown unless that is explicitly desired (document choice in implementation notes).
 
 ### 1.2 Technical scope
@@ -44,18 +46,21 @@
 
 These are the behaviors tests should lock:
 
-1. **Enter Live mode:** From the default test-app view, a user action bound to **Start** sets `liveMode === true` (or equivalent) and shows the **Live** shell (large targets, minimal chrome).
+1. **Enter Live mode:** From the default test-app view, a user action bound to **Live** sets `liveMode === true` (or equivalent) and shows the **Live** shell (large targets, minimal chrome, full-screen overlay recommended).
 2. **Session wiring (mic on by default in Live):** Entering Live mode performs a **documented** sequence: **`ref.start(...)`** using the **same** OpenAI-proxy vs Deepgram-direct flags as the **mic button** in `App.tsx` (agent-only vs agent+transcription, including `userInitiated` where required for idle—see #544 / #560), **then** **`ref.startAudioCapture()`** (or declarative equivalent). **Tests must fail** if Live skips connection, skips mic capture on entry, or uses the broken **`start({ userInitiated: true })`-only** pattern on non-proxy.
 3. **Voice activity visibility:** While in Live mode, when the app receives **user-started-speaking** / **user-stopped-speaking** (or the signals you wire), the Live UI reflects **listening** vs **not listening** in a way E2E can assert via `data-testid` (e.g. `live-voice-state`).
 4. **Agent activity visibility:** While in Live mode, agent **idle / speaking / thinking** (and **function call in progress** if distinguishable from existing `onFunctionCallRequest` / state) is reflected with stable `data-testid`s (e.g. `live-agent-state`, `live-tool-status`).
 5. **Exit Live mode (explicit):** **Stop** or **Leave Live** clears Live mode UI and returns to the full layout; connection teardown matches an explicit rule (e.g. `stop()` on exit—**document in [CURRENT-STATUS.md](./CURRENT-STATUS.md)** when chosen), and E2E asserts the transition.
 6. **Idle timeout retained; session end observable; resume via mic:** **Do not** weaken idle disconnect behavior for #561. If the session ends **while the user remains in Live** (idle disconnect, connection close, etc.), the Live UI must show an **observable** **stopped / disconnected** state (stable `data-testid`, glanceable copy). The user must have a **clear control to continue in Live mode** by **reactivating the microphone** (re-run `start` / `startAudioCapture` as needed per the same proxy/direct rules). Tests should cover this path where feasible (E2E may be conditional/skip in CI—document in spec).
+7. **Mic / capture UI tracks agent connection:** When the agent service reports **`closed`** or **`error`**, the app must clear **mic-enabled / declarative capture / “recording”** mirrors so the **microphone** control and **Resume microphone** in Live do not imply an active capture path after idle timeout or failures (policy: `shouldClearMicOnAgentDisconnect`).
 
 ---
 
 ## 3. Phase A — RED: unit tests (test-app)
 
 **Location:** `test-app/tests/unit/` (new files as needed).
+
+**Recovery note (2026-04-04):** Phase A was **extended** after Bug 1–3 reports: add **disconnect/mic policy** tests, **Live shell** tests for **labels**, **conversation**, **agent visual**, and **footer** anchoring. Keep RED → GREEN when changing behavior.
 
 ### 3.1 Live mode state machine or shell (choose one approach)
 
@@ -67,6 +72,8 @@ These are the behaviors tests should lock:
 **Tests:**
 
 - [x] **RED/GREEN:** `live-mode-presentation.test.ts` — table-driven expectations: given `AgentState` + “function call pending,” expect **`tool`** or passthrough state; **`getLiveSessionPhase`** for `active` / `mic_off` / `disconnected` (Issue #561 resume-mic semantics).
+- [x] **RED/GREEN:** `syncMicFromAgentConnection.test.ts` — `shouldClearMicOnAgentDisconnect` is **true** only for **`closed`** and **`error`** (agent service disconnect / idle / failure sync for mic UI).
+- [x] **RED/GREEN:** `liveMicActivityOpenAI.test.ts` — OpenAI proxy has **no** `UserStartedSpeaking` (`turn_detection: null`); Live **Mic activity** derives from **input_audio_transcription** via `openAiInputTranscriptImpliesUserSpeaking` / `openAiTranscriptShouldEndMicActivityPulse` (`liveMicActivityOpenAI.ts`).
 - [ ] **RED:** If auto-mic policy is encoded in the helper, tests for **OpenAI proxy vs not** and “user explicitly disabled mic” if applicable (optional — may live in shared `startLiveSession` helper in Phase C).
 
 **Done when:** Tests fail on `main` (or current branch) before Live UI exists.
@@ -74,6 +81,10 @@ These are the behaviors tests should lock:
 ### 3.2 Presentational component (**required**)
 
 - [x] **RED/GREEN:** `LiveModeView.test.tsx` (RTL) + `src/live-mode/LiveModeView.tsx` — `live-mode-root` (region + `aria-label`), `live-voice-state`, `live-agent-state`, `live-session-phase`; optional **`live-end-live-button`** / **`live-resume-mic-button`** when callbacks provided (resume shown for `mic_off` / `disconnected` only).
+- [x] **RED/GREEN:** **Labeled** status rows (**Mic activity**, **Assistant activity**, **Session**) so duplicate raw values (e.g. two `idle`) are not ambiguous (Bug 3); **Conversation history** appears **above** that block; **End Live** / **Resume** directly under it in the footer.
+- [x] **RED/GREEN:** **`live-conversation-history`** + **`live-conversation-message-*`** when `conversationMessages` prop is non-empty (Bug 1 visibility).
+- [x] **RED/GREEN:** **`live-agent-visual`** present; **`agentOutputActive`** toggles animation driver (Change 2 / Phase 1 placeholder).
+- [x] **RED/GREEN:** **`live-mode-footer`** contains primary Live actions (End Live / Resume mic).
 
 **Done when:** Component tests green (no WebSocket in view).
 
@@ -87,12 +98,13 @@ These are the behaviors tests should lock:
 
 ### 4.1 Smoke (mock-friendly where possible)
 
-- [x] **GREEN:** `live-mode.spec.js` — (1) **test-mode:** `debug-main-layout` visible, `live-mode-root` not mounted. (2) **Start → Live → End Live:** `live-mode-root` visible, debug unmounted; **End Live** restores debug (requires running dev server + agent connection for part 2).
+- [x] **GREEN:** `live-mode.spec.js` — (1) **test-mode:** `debug-main-layout` visible, `live-mode-root` not mounted. (2) **Live → Live shell → End Live:** `live-mode-root` visible (inside `live-mode-screen`), debug unmounted; **End Live** restores debug (requires running dev server + agent connection for part 2). Selector: **`live-entry-button`** (replaces `start-button`).
 - [x] **Exit Live:** `live-end-live-button` restores `debug-main-layout` (same spec).
-- [ ] **RED (may skip / real API):** After idle or forced disconnect while Live, expect **`live-session-state`** (or agreed id) shows **stopped**; after **resume mic** control, expect session/capture path active again without leaving Live shell.
+- [ ] **RED (may skip / real API):** After idle or forced disconnect while Live, expect **`live-session-phase`** shows **`disconnected`** (or **`mic_off`** per scenario); after **resume mic** control, expect session/capture path active again without leaving Live shell.
 
 ### 4.2 Activity affordances (may require real API or staged mocks—document in spec)
 
+- [x] **GREEN:** `live-mode-openai-proxy.spec.js` — **OpenAI proxy** + **Live** + **injected PCM** (`sendAudioData` via fixture) → **assistant** content in **`live-conversation-history`**; also requires **`has-sent-settings`** in DOM while Live (sentinel on `voice-agent`, not only debug layout).
 - [ ] **RED:** After Live + mic path (or mocked audio), assert `live-voice-state` transitions when the app already exposes user speaking (may be `test.skip` until env stable; **prefer** conditional skip with comment referencing #561).
 - [ ] **RED:** Assert `live-agent-state` shows **thinking** when `agentState === 'thinking'` is driven by proxy/component (OpenAI proxy E2E subset if that is the only reliable path—align with [.cursorrules](../../../.cursorrules) real-API guidance for partner-visible behavior).
 
@@ -106,9 +118,10 @@ Order suggestions (adjust if tests demand otherwise):
 
 1. [x] Add **Live mode state** (`useState` `liveMode`; optional `?live=1` later).
 2. [x] **`LiveModeView`** — wired with session phase, voice, agent presentation, **End Live** / **Resume mic**.
-3. [x] Rewire **Start** → **`enterLiveMode`** + **`startServicesAndMicrophone()`** (mic default on — §2).
+3. [x] Rewire **Live** entry → **`enterLiveMode`** + **`startServicesAndMicrophone()`** (mic default on — §2).
 4. [x] Map **`userStartedSpeaking`**, **`agentState`**, **`connectionStates`**, **`micEnabled`**, **`functionCallInFlight`** (wrapped **`sendResponse`**) into Live **`tool`** row.
 5. [x] **`stopInteraction`** clears Live (§2.5). §2.6 **resume** control wired; idle/disconnect E2E still **optional**.
+6. [x] **Conversation** in Live (`conversationMessages` / `live-conversation-history`); **full-screen** `live-mode-screen`; **`agentOutputActive`** + **`LiveAgentVisual`** placeholder; **`handleConnectionStateChange`** clears mic/capture/`isRecording` on agent **`closed`/`error`** (§2.7).
 
 **Done when:** All Phase A–B tests pass (GREEN).
 
@@ -116,7 +129,7 @@ Order suggestions (adjust if tests demand otherwise):
 
 ## 6. Phase D — REFACTOR
 
-- [ ] Deduplicate **start + optional mic** logic between **mic button** and **Live Start** (shared async helper in `App.tsx` or small module under `test-app/src/`).
+- [ ] Deduplicate **start + optional mic** logic between **mic button** and **Live** entry (shared async helper in `App.tsx` or small module under `test-app/src/`).
 - [ ] Trim duplicate **logs** in Live path; keep **security** redaction rules unchanged.
 - [ ] Update [README.md](./README.md) **Local docs** table, [TRACKING.md](./TRACKING.md), [CURRENT-STATUS.md](./CURRENT-STATUS.md), and [NEXT-STEP.md](./NEXT-STEP.md) with spec file names and `data-testid` inventory.
 
@@ -131,7 +144,7 @@ Order suggestions (adjust if tests demand otherwise):
 npm test
 
 # test-app unit
-cd test-app && npm test -- tests/unit/live-mode-presentation.test.ts
+cd test-app && npm test -- tests/unit/live-mode-presentation.test.ts tests/unit/LiveModeView.test.tsx tests/unit/syncMicFromAgentConnection.test.ts
 
 # test-app E2E (targeted)
 cd test-app && npm run test:e2e -- live-mode.spec.js
@@ -143,6 +156,7 @@ For OpenAI-proxy–specific agent states, follow project guidance: run with real
 
 ## 8. References
 
+- [DESIGN-LIVE-AGENT-VISUAL.md](./DESIGN-LIVE-AGENT-VISUAL.md) — waveform / mouth visual, phased approach
 - [Issue #561 README](./README.md)
 - [Issue #560](../ISSUE-560/README.md) — Start/mic / build backlog
 - [Issue #544](../ISSUE-544/README.md) — `userInitiated`, idle timeout

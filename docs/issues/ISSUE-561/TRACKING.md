@@ -7,10 +7,13 @@
 | Item | Status |
 |------|--------|
 | Branch `issue-561` | Created from `main` |
-| [TDD-PLAN.md](./TDD-PLAN.md) | Updated — mic default on in Live; idle retained; observable stop + resume mic (§2.6) |
-| Phase A unit tests (test-app) | **Done** — presentation helpers + `LiveModeView` + RTL tests |
-| Phase B E2E `live-mode.spec.js` | Smoke tests added (run with dev server + backend for full flow) |
-| Phase C App wiring + Start → Live | **Slice done** — resume/tool/idle E2E optional next |
+| [TDD-PLAN.md](./TDD-PLAN.md) | Updated — Live entry, Phase A extensions, Bug 1–3 notes |
+| Phase A unit tests (test-app) | **Extended** — presentation + `LiveModeView` + **`syncMicFromAgentConnection`** |
+| Phase B E2E `live-mode.spec.js` | Smoke — **`live-entry-button`** |
+| Phase C App wiring + Live UX | **In progress** — full-screen Live, history, visual placeholder, mic sync on disconnect |
 | Phase D refactor / dedupe start+mic | Not started |
+| Bug 1 (proxy / no replies) | **Open** — conversation visible; root cause TBD |
+| Bug 2 (mic UI vs disconnect) | **Mitigated** in app + unit policy tests |
+| Bug 3 (duplicate idle / layout) | **Mitigated** — labels + footer + centered column |
 
 Notes: After each slice, edit **CURRENT-STATUS**, **NEXT-STEP**, and checkboxes in **TDD-PLAN**.

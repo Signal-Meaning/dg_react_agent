@@ -1,7 +1,7 @@
 /**
  * Issue #561 — Live mode (voice-first shell) E2E.
  *
- * **How Live mode is activated:** the **Start** button calls `enterLiveMode()` →
+ * **How Live mode is activated:** the **Live** button calls `enterLiveMode()` →
  * `startServicesAndMicrophone()` (agent `start()` + `startAudioCapture()`), then shows `LiveModeView`.
  *
  * Run from test-app with dev server (and backend for the Live flow):
@@ -34,7 +34,7 @@ test.describe('Live mode (Issue #561)', () => {
       await page.addInitScript(installMicE2eTelemetry);
     });
 
-    test('Start enters Live; permission, GUM, PCM over WebSocket, app hook; End Live restores debug', async ({
+    test('Live enters Live mode; permission, GUM, PCM over WebSocket, app hook; End Live restores debug', async ({
       page,
     }) => {
       test.setTimeout(120_000);
@@ -64,7 +64,7 @@ test.describe('Live mode (Issue #561)', () => {
         expect(permBefore).toBe('granted');
       }
 
-      await page.getByTestId('start-button').click();
+      await page.getByTestId('live-entry-button').click();
 
       await expect(page.getByTestId('live-mode-root')).toBeVisible({ timeout: 120_000 });
       await expect(page.getByTestId('debug-main-layout')).toHaveCount(0);
