@@ -14,7 +14,7 @@
  *   cd test-app && npm run backend
  *
  * Environment Variables (from test-app/.env):
- *   - DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY: Deepgram API key (optional if OPENAI_API_KEY set)
+ *   - DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY: Deepgram API key (optional if OPENAI_API_KEY set); when set, /deepgram-proxy is attached
  *   - OPENAI_API_KEY: OpenAI API key for /openai (optional if Deepgram key set)
  *   - PROXY_PORT: Port to run on (default: 8080)
  *   - PROXY_PATH: Deepgram WebSocket path (default: /deepgram-proxy)

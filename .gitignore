@@ -13,10 +13,8 @@ build/
 # Package files
 *.tgz
 
-# E2E run logs
-e2e-run.log
-e2e-remaining-run.log
-e2e-proxy-run.log
+# E2E / local run logs (npm run test:e2e:log writes logs/e2e-run.log, etc.)
+logs/
 
 # TypeScript cache
 *.tsbuildinfo
