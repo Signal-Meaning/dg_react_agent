@@ -1,6 +1,6 @@
 # Issue #561 — current status
 
-**Last updated:** 2026-04-05 (Phase B/C slice — App + E2E)
+**Last updated:** 2026-04-05 (`functionCallInFlight` → Live **tool** row)
 
 **GitHub:** [#561](https://github.com/Signal-Meaning/dg_react_agent/issues/561)
 
@@ -12,10 +12,10 @@
 |-------|--------|--------|
 | **A** — Unit (`test-app/tests/unit/`) | **Complete** | `live-mode-presentation.test.ts`, `LiveModeView.test.tsx`, `liveModePresentation.ts`, `LiveModeView.tsx` — all **GREEN**. |
 | **B** — E2E (`live-mode.spec.js`) | **Smoke added** | Structure + Start/End flow (needs backend for test 2). |
-| **C** — GREEN (App + `LiveModeView`) | **In progress** | `liveMode`, `enterLiveMode`, shared `startServicesAndMicrophone`, `debug-main-layout`, wired `LiveModeView`. |
+| **C** — GREEN (App + `LiveModeView`) | **In progress** | Above + **`functionCallInFlight`** / wrapped **`sendResponse`** for **`tool`** in Live during function calls. |
 | **D** — REFACTOR | **Not started** | — |
 
-**Branch:** `issue-561` (scaffold commit only; feature work not landed).
+**Branch:** `issue-561` — feature work in progress; push when ready.
 
 ---
 

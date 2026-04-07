@@ -10,14 +10,14 @@
 
 ## Immediate next step (do this first)
 
-1. **`functionCallPending` in Live:** Wrap `sendResponse` in `handleFunctionCallRequest` (or equivalent) so `getLiveAgentPresentation(..., { functionCallPending: true })` shows **tool** in Live (see unit tests).
-2. **Idle disconnect + resume E2E:** Assert `live-session-phase` / resume control after disconnect (may `test.skip` without stable env) — [TDD-PLAN.md](./TDD-PLAN.md) §4.1 third bullet.
-3. **Live polish:** Larger typography, glanceable agent copy (vehicle use), optional `?live=1` deep-link.
+1. **Idle disconnect + resume E2E:** Assert `live-session-phase` / resume control after disconnect (may `test.skip` without stable env) — [TDD-PLAN.md](./TDD-PLAN.md) §4.1 third bullet.
+2. **Live polish:** Larger typography, glanceable agent copy (vehicle use), optional `?live=1` deep-link.
 
 ---
 
 ## Done recently
 
+- **2026-04-05:** `functionCallInFlight` + wrapped `sendResponse` in `handleFunctionCallRequest` → Live **`tool`** row during function calls.
 - **2026-04-05:** `App.tsx`: `liveMode`, `enterLiveMode` (Start), `startServicesAndMicrophone` (shared with mic button), `stopInteraction` clears Live, `debug-main-layout`, `LiveModeView` wiring; `live-mode.spec.js` E2E.
 - **2026-04-05:** `LiveModeView` + RTL; presentation helpers + unit tests.
 

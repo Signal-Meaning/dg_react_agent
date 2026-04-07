@@ -107,7 +107,7 @@ Order suggestions (adjust if tests demand otherwise):
 1. [x] Add **Live mode state** (`useState` `liveMode`; optional `?live=1` later).
 2. [x] **`LiveModeView`** — wired with session phase, voice, agent presentation, **End Live** / **Resume mic**.
 3. [x] Rewire **Start** → **`enterLiveMode`** + **`startServicesAndMicrophone()`** (mic default on — §2).
-4. [x] Map **`userStartedSpeaking`**, **`agentState`**, **`connectionStates`**, **`micEnabled`** into Live props (`functionCallPending` still **false** until next slice).
+4. [x] Map **`userStartedSpeaking`**, **`agentState`**, **`connectionStates`**, **`micEnabled`**, **`functionCallInFlight`** (wrapped **`sendResponse`**) into Live **`tool`** row.
 5. [x] **`stopInteraction`** clears Live (§2.5). §2.6 **resume** control wired; idle/disconnect E2E still **optional**.
 
 **Done when:** All Phase A–B tests pass (GREEN).

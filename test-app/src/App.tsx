@@ -300,6 +300,8 @@ function App() {
   const [agentSilent, setAgentSilent] = useState(false);
   // Function call tracking for E2E tests (Issue #336)
   const [functionCallCount, setFunctionCallCount] = useState(0);
+  /** Issue #561: true until FunctionCallResponse is sent (Live shows `tool`). */
+  const [functionCallInFlight, setFunctionCallInFlight] = useState(false);
   // Greeting status indicator for E2E tests
   const [greetingSent, setGreetingSent] = useState(false);
   const hasShownGreetingRef = useRef(false);
@@ -979,6 +981,18 @@ function App() {
 
   // Function call request handler (Issue #305, #407) - must be defined before early returns
   const handleFunctionCallRequest = useCallback((request: FunctionCallRequest, sendResponse: (response: FunctionCallResponse) => void) => {
+    let finished = false;
+    const finishInFlight = () => {
+      if (finished) return;
+      finished = true;
+      setFunctionCallInFlight(false);
+    };
+    const wrappedSend: typeof sendResponse = (response) => {
+      finishInFlight();
+      sendResponse(response);
+    };
+
+    setFunctionCallInFlight(true);
     sessionLogger.debug('FunctionCallRequest received', { name: request.name, id: request.id });
     setFunctionCallCount(prev => prev + 1);
 
@@ -990,23 +1004,37 @@ function App() {
     }
 
     if (handler) {
-      // E2E/demo: use in-browser handler (Issue #305). Return any value or Promise so the component
-      // waits for async handlers (e.g. Promise<void>) before sending the default "no response" error.
-      const result = handler(request, sendResponse);
-      if (result !== undefined && result !== null) return result;
-      testWindow.__testFunctionCallResponseSent = true;
-      return;
+      try {
+        // E2E/demo: use in-browser handler (Issue #305). Return any value or Promise so the component
+        // waits for async handlers (e.g. Promise<void>) before sending the default "no response" error.
+        const result = handler(request, wrappedSend);
+        if (result !== undefined && result !== null) {
+          const maybePromise = result as Promise<unknown>;
+          if (typeof maybePromise?.finally === 'function') {
+            return maybePromise.finally(() => finishInFlight()) as Promise<void>;
+          }
+          return result as void | FunctionCallResponse | Promise<FunctionCallResponse>;
+        }
+        testWindow.__testFunctionCallResponseSent = true;
+        return;
+      } catch (e) {
+        finishInFlight();
+        throw e;
+      }
     }
 
     // Issue #407: Forward to app backend. Return the Promise so the component waits for the
     // backend round-trip; otherwise it treats void return as "no response" and sends the default error (Issue #489).
     const baseUrl = getFunctionCallBackendBaseUrl(proxyEndpoint);
     if (baseUrl) {
-      return forwardFunctionCallToBackend(request, sendResponse, baseUrl);
+      return forwardFunctionCallToBackend(request, wrappedSend, baseUrl, sessionTraceId).finally(() =>
+        finishInFlight()
+      ) as Promise<void>;
     }
 
+    finishInFlight();
     sessionLogger.warn('No function-call handler or backend URL; request not handled', { name: request.name });
-  }, [proxyEndpoint]);
+  }, [proxyEndpoint, sessionTraceId, sessionLogger]);
 
   // Auto-connect dual mode event handlers
 
@@ -1319,7 +1347,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
 
       {liveMode ? (
         <LiveModeView
-          agentPresentation={getLiveAgentPresentation(agentState, { functionCallPending: false })}
+          agentPresentation={getLiveAgentPresentation(agentState, {
+            functionCallPending: functionCallInFlight,
+          })}
           sessionPhase={getLiveSessionPhase({
             agentConnected: connectionStates.agent === 'connected',
             microphoneCapturing: micEnabled,
