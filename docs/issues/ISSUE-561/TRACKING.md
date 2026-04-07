@@ -9,8 +9,8 @@
 | Branch `issue-561` | Created from `main` |
 | [TDD-PLAN.md](./TDD-PLAN.md) | Updated — mic default on in Live; idle retained; observable stop + resume mic (§2.6) |
 | Phase A unit tests (test-app) | **Done** — presentation helpers + `LiveModeView` + RTL tests |
-| Phase B E2E `live-mode.spec.js` | Not started |
-| Phase C Live UI + Start rewire + resume mic | Not started |
+| Phase B E2E `live-mode.spec.js` | Smoke tests added (run with dev server + backend for full flow) |
+| Phase C App wiring + Start → Live | **Slice done** — resume/tool/idle E2E optional next |
 | Phase D refactor / dedupe start+mic | Not started |
 
 Notes: After each slice, edit **CURRENT-STATUS**, **NEXT-STEP**, and checkboxes in **TDD-PLAN**.

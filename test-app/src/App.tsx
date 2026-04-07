@@ -24,6 +24,11 @@ import { getFunctionDefinitions } from './utils/functionDefinitions';
 import { getContextForSettings } from './utils/context-for-settings';
 import { getFunctionCallBackendBaseUrl, forwardFunctionCallToBackend } from './utils/functionCallBackend';
 import { generateSessionId } from './session-management';
+import { LiveModeView } from './live-mode/LiveModeView';
+import {
+  getLiveAgentPresentation,
+  getLiveSessionPhase,
+} from './live-mode/liveModePresentation';
 
 // Type declaration for E2E test support
 // Only used in test-app for E2E testing, not part of the component's public API
@@ -238,6 +243,8 @@ function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [micLoading, setMicLoading] = useState(false);
+  /** Issue #561: Voice-first Live shell (ChatGPT-style); hides debug-main-layout. */
+  const [liveMode, setLiveMode] = useState(false);
   
   // Instructions state
   const [loadedInstructions, setLoadedInstructions] = useState<string>('');
@@ -1049,31 +1056,70 @@ function App() {
     // Component logs playback/state; no redundant addLog here
   }, []);
 
-  // Control functions
-  const startInteraction = async () => {
-    try {
-      const useOpenAIProxy = (proxyEndpoint ?? '').includes('/openai');
-      await deepgramRef.current?.start(
-        useOpenAIProxy
-          ? { agent: true, transcription: false, userInitiated: true }
-          : { userInitiated: true }
-      );
-      setIsRecording(true);
-      addLog('Started interaction');
-    } catch (error) {
-      addLog(`Error starting: ${(error as Error).message}`);
-      sessionLogger.error('Start error', { error: error instanceof Error ? error.message : String(error) });
+  // Control functions — Issue #561: shared start + mic (OpenAI proxy vs Deepgram-direct) for mic button and Live mode
+  const startServicesAndMicrophone = useCallback(async () => {
+    if (!deepgramRef.current) {
+      addLog('❌ [APP] deepgramRef.current is null - cannot start services');
+      throw new Error('Deepgram ref not available');
     }
-  };
-  
+    const useOpenAIProxy = (proxyEndpoint ?? '').includes('/openai');
+    if (useOpenAIProxy) {
+      addLog('Starting agent (OpenAI proxy)...');
+      await deepgramRef.current.start({ agent: true, transcription: false, userInitiated: true });
+    } else {
+      addLog('Starting agent and transcription services...');
+      await deepgramRef.current.start({ agent: true, transcription: true, userInitiated: true });
+    }
+    if (typeof deepgramRef.current.startAudioCapture === 'function') {
+      await deepgramRef.current.startAudioCapture();
+      addLog('Audio capture started successfully');
+      setMicEnabled(true);
+    } else {
+      addLog('❌ [APP] startAudioCapture method not found on ref');
+      throw new Error('startAudioCapture not available');
+    }
+  }, [proxyEndpoint, addLog]);
+
   const stopInteraction = async () => {
     try {
       await deepgramRef.current?.stop();
       setIsRecording(false);
+      setMicEnabled(false);
+      setLiveMode(false);
       addLog('Stopped interaction');
     } catch (error) {
       addLog(`Error stopping: ${(error as Error).message}`);
       sessionLogger.error('Stop error', { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  /** Issue #561: Start → Live mode with mic on by default (correct start flags, not userInitiated-only on non-proxy). */
+  const enterLiveMode = async () => {
+    try {
+      setLiveMode(true);
+      setMicLoading(true);
+      await startServicesAndMicrophone();
+      setIsRecording(true);
+      addLog('Live mode on (microphone default on)');
+    } catch (error) {
+      setLiveMode(false);
+      addLog(`Error entering Live mode: ${(error as Error).message}`);
+      sessionLogger.error('Live mode error', { error: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setMicLoading(false);
+    }
+  };
+
+  const resumeMicrophoneInLive = async () => {
+    try {
+      setMicLoading(true);
+      await startServicesAndMicrophone();
+      addLog('Microphone resumed in Live mode');
+    } catch (error) {
+      addLog(`Error resuming mic: ${(error as Error).message}`);
+      sessionLogger.error('Resume mic error', { error: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setMicLoading(false);
     }
   };
   
@@ -1142,36 +1188,8 @@ function App() {
       if (!micEnabled) {
         setMicLoading(true);
         addLog('Starting audio capture (lazy initialization)');
-        sessionLogger.debug('About to call startAudioCapture()');
-        if (deepgramRef.current) {
-          sessionLogger.debug('deepgramRef.current exists, calling startAudioCapture()', { methods: Object.keys(deepgramRef.current) });
-          // With OpenAI proxy, transcript/VAD come from the agent connection (Issue #414); do not
-          // start a separate Deepgram transcription WebSocket. With Deepgram proxy, start both.
-          const useOpenAIProxy = (proxyEndpoint ?? '').includes('/openai');
-          if (useOpenAIProxy) {
-            sessionLogger.debug('Starting agent only (OpenAI proxy – transcript/VAD via agent)...');
-            addLog('Starting agent (OpenAI proxy)...');
-            await deepgramRef.current.start({ agent: true, transcription: false, userInitiated: true });
-          } else {
-            sessionLogger.debug('Starting both agent and transcription services...');
-            addLog('Starting agent and transcription services...');
-            await deepgramRef.current.start({ agent: true, transcription: true, userInitiated: true });
-          }
-          sessionLogger.debug('Services started (or already connected)');
-          if (typeof deepgramRef.current.startAudioCapture === 'function') {
-            sessionLogger.debug('startAudioCapture method exists, calling it');
-            await deepgramRef.current.startAudioCapture();
-            sessionLogger.debug('startAudioCapture() completed successfully');
-            addLog('Audio capture started successfully');
-            setMicEnabled(true);
-          } else {
-            sessionLogger.debug('startAudioCapture method does not exist');
-            addLog('❌ [APP] startAudioCapture method not found on ref');
-          }
-        } else {
-          sessionLogger.debug('deepgramRef.current is null');
-          addLog('❌ [APP] deepgramRef.current is null - cannot start audio capture');
-        }
+        sessionLogger.debug('About to call startServicesAndMicrophone()');
+        await startServicesAndMicrophone();
         setMicLoading(false);
       } else {
         sessionLogger.debug('Disabling microphone');
@@ -1243,8 +1261,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       padding: '20px',
       pointerEvents: 'auto' // Allow pointer events for E2E tests
     }} data-testid="voice-agent">
-      <h1>Deepgram Voice Interaction Test</h1>
-      
       <div data-testid="deepgram-component">
         <DeepgramVoiceInteraction
         ref={deepgramRef}
@@ -1300,6 +1316,21 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         conversationStorageKey={CONVERSATION_STORAGE_KEY}
         />
       </div>
+
+      {liveMode ? (
+        <LiveModeView
+          agentPresentation={getLiveAgentPresentation(agentState, { functionCallPending: false })}
+          sessionPhase={getLiveSessionPhase({
+            agentConnected: connectionStates.agent === 'connected',
+            microphoneCapturing: micEnabled,
+          })}
+          voicePhase={userStartedSpeaking ? 'speaking' : 'idle'}
+          onEndLive={() => void stopInteraction()}
+          onResumeMic={() => void resumeMicrophoneInLive()}
+        />
+      ) : (
+      <div data-testid="debug-main-layout">
+      <h1>Deepgram Voice Interaction Test</h1>
       
       <div style={{ border: '1px solid blue', padding: '10px', margin: '15px 0' }}>
         <h4>Component States:</h4>
@@ -1458,8 +1489,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       <div style={{ margin: '20px 0', display: 'flex', gap: '10px', alignItems: 'center', pointerEvents: 'auto' }}>
         {!isRecording ? (
           <button 
-            onClick={startInteraction} 
-            disabled={!isReady || isRecording}
+            onClick={() => void enterLiveMode()} 
+            disabled={!isReady || isRecording || micLoading}
             style={{ padding: '10px 20px', pointerEvents: 'auto' }}
             data-testid="start-button"
           >
@@ -1804,6 +1835,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           {logs.slice().reverse().join('\n')}
         </pre>
       </div>
+      </div>
+      )}
     </div>
   );
 }

@@ -87,8 +87,8 @@ These are the behaviors tests should lock:
 
 ### 4.1 Smoke (mock-friendly where possible)
 
-- [ ] **RED:** `live-mode.spec.js` — **Enter Live:** click Start (or the control that replaces it), expect `data-testid="live-mode-root"` (or agreed id) **visible**; expect `data-testid="debug-main-layout"` (or agreed id for dense UI) **hidden** when Live is active.
-- [ ] **RED:** **Exit Live:** click Stop / Leave Live; expect Live root **hidden** and debug layout **visible** again.
+- [x] **GREEN:** `live-mode.spec.js` — (1) **test-mode:** `debug-main-layout` visible, `live-mode-root` not mounted. (2) **Start → Live → End Live:** `live-mode-root` visible, debug unmounted; **End Live** restores debug (requires running dev server + agent connection for part 2).
+- [x] **Exit Live:** `live-end-live-button` restores `debug-main-layout` (same spec).
 - [ ] **RED (may skip / real API):** After idle or forced disconnect while Live, expect **`live-session-state`** (or agreed id) shows **stopped**; after **resume mic** control, expect session/capture path active again without leaving Live shell.
 
 ### 4.2 Activity affordances (may require real API or staged mocks—document in spec)
@@ -104,11 +104,11 @@ These are the behaviors tests should lock:
 
 Order suggestions (adjust if tests demand otherwise):
 
-1. [ ] Add **Live mode state** (`useState` / URL query `?live=1`—pick one; **URL** helps E2E deep-links and vehicle bookmarking).
-2. [ ] Extract **`LiveModeView`** (props: voice snapshot, agent snapshot, tool snapshot, **live session / connection** snapshot, primary actions: **end Live**, **resume mic** when session stopped, optional mute).
-3. [ ] Rewire **Start** to set Live mode and run **shared start + `startAudioCapture()`** (mic **on** by default in Live—see §2).
-4. [ ] Map existing `App.tsx` state (`userStartedSpeaking`, `agentState`, function-call handler state, connection / idle / error) into Live view props.
-5. [ ] Ensure **Stop** / exit behavior matches §2.5 and E2E; ensure **§2.6** observable stopped state + **resume mic** while still in Live.
+1. [x] Add **Live mode state** (`useState` `liveMode`; optional `?live=1` later).
+2. [x] **`LiveModeView`** — wired with session phase, voice, agent presentation, **End Live** / **Resume mic**.
+3. [x] Rewire **Start** → **`enterLiveMode`** + **`startServicesAndMicrophone()`** (mic default on — §2).
+4. [x] Map **`userStartedSpeaking`**, **`agentState`**, **`connectionStates`**, **`micEnabled`** into Live props (`functionCallPending` still **false** until next slice).
+5. [x] **`stopInteraction`** clears Live (§2.5). §2.6 **resume** control wired; idle/disconnect E2E still **optional**.
 
 **Done when:** All Phase A–B tests pass (GREEN).
 

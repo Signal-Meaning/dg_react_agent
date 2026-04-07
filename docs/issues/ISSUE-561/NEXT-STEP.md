@@ -1,6 +1,6 @@
 # Issue #561 — next step
 
-**Last updated:** 2026-04-05 (Phase A complete)
+**Last updated:** 2026-04-05 (after App + E2E smoke)
 
 **GitHub:** [#561](https://github.com/Signal-Meaning/dg_react_agent/issues/561)
 
@@ -10,21 +10,22 @@
 
 ## Immediate next step (do this first)
 
-**Phase B — RED:** Add `test-app/tests/e2e/live-mode.spec.js` — **enter Live** / **exit Live** smoke: `live-mode-root` visible, `debug-main-layout` hidden when Live is on; reverse on exit. Tests fail until `App.tsx` wires `LiveModeView` and `data-testid="debug-main-layout"` on the dense panel.
+1. **`functionCallPending` in Live:** Wrap `sendResponse` in `handleFunctionCallRequest` (or equivalent) so `getLiveAgentPresentation(..., { functionCallPending: true })` shows **tool** in Live (see unit tests).
+2. **Idle disconnect + resume E2E:** Assert `live-session-phase` / resume control after disconnect (may `test.skip` without stable env) — [TDD-PLAN.md](./TDD-PLAN.md) §4.1 third bullet.
+3. **Live polish:** Larger typography, glanceable agent copy (vehicle use), optional `?live=1` deep-link.
 
 ---
 
 ## Done recently
 
-- **2026-04-05:** `LiveModeView.tsx` + `LiveModeView.test.tsx` (7 tests); `data-testid`s: root, voice, agent, session phase, end Live, resume mic.
-- **2026-04-05:** `liveModePresentation.ts` + `live-mode-presentation.test.ts` (15 tests).
+- **2026-04-05:** `App.tsx`: `liveMode`, `enterLiveMode` (Start), `startServicesAndMicrophone` (shared with mic button), `stopInteraction` clears Live, `debug-main-layout`, `LiveModeView` wiring; `live-mode.spec.js` E2E.
+- **2026-04-05:** `LiveModeView` + RTL; presentation helpers + unit tests.
 
 ---
 
 ## After that (queue; do not skip updating this doc)
 
-1. **Phase B (idle + resume):** E2E or integration test plan for **observable stopped state** after idle/disconnect and **mic reactivation** while still in Live shell (may be `test.skip` with env gate until stable).
-2. **Phase C — GREEN:** `liveMode` state, `LiveModeView`, rewire **Start** with **mic on by default** + shared start/mic helper; wire **session ended** + **resume mic** UI per [CURRENT-STATUS.md](./CURRENT-STATUS.md).
+See **Immediate next step** above (tool state, idle E2E, polish).
 
 ---
 
