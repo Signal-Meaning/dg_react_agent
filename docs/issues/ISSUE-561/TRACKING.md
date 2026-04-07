@@ -8,7 +8,7 @@
 |------|--------|
 | Branch `issue-561` | Created from `main` |
 | [TDD-PLAN.md](./TDD-PLAN.md) | Updated — mic default on in Live; idle retained; observable stop + resume mic (§2.6) |
-| Phase A unit tests (test-app) | **Slice 1 done** — `liveModePresentation.ts` + `live-mode-presentation.test.ts`; optional RTL next — [NEXT-STEP.md](./NEXT-STEP.md) |
+| Phase A unit tests (test-app) | **Done** — presentation helpers + `LiveModeView` + RTL tests |
 | Phase B E2E `live-mode.spec.js` | Not started |
 | Phase C Live UI + Start rewire + resume mic | Not started |
 | Phase D refactor / dedupe start+mic | Not started |

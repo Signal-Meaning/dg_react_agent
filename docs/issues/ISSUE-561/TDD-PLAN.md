@@ -71,13 +71,11 @@ These are the behaviors tests should lock:
 
 **Done when:** Tests fail on `main` (or current branch) before Live UI exists.
 
-### 3.2 Presentational component (optional but recommended)
+### 3.2 Presentational component (**required**)
 
-If `LiveModeView` is a separate component:
+- [x] **RED/GREEN:** `LiveModeView.test.tsx` (RTL) + `src/live-mode/LiveModeView.tsx` — `live-mode-root` (region + `aria-label`), `live-voice-state`, `live-agent-state`, `live-session-phase`; optional **`live-end-live-button`** / **`live-resume-mic-button`** when callbacks provided (resume shown for `mic_off` / `disconnected` only).
 
-- [ ] **RED:** `LiveModeView.test.tsx` (RTL) — renders **voice** and **agent** regions; assert `data-testid` presence and text/aria from **props** (no real WebSocket).
-
-**Done when:** Component tests fail until `LiveModeView` exists.
+**Done when:** Component tests green (no WebSocket in view).
 
 ---
 

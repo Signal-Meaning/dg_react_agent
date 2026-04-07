@@ -1,6 +1,6 @@
 # Issue #561 — next step
 
-**Last updated:** 2026-04-05 (Phase A slice 1 done)
+**Last updated:** 2026-04-05 (Phase A complete)
 
 **GitHub:** [#561](https://github.com/Signal-Meaning/dg_react_agent/issues/561)
 
@@ -10,19 +10,14 @@
 
 ## Immediate next step (do this first)
 
-**Phase A (continued) or Phase B — pick one:**
-
-1. **Optional:** `LiveModeView.test.tsx` (RTL) — props-only, assert `data-testid`s for `live-mode-root`, `live-agent-state`, `live-session-phase`, etc. — see [TDD-PLAN.md](./TDD-PLAN.md) §3.2.
-
-**— or —**
-
-2. **Phase B — RED:** Add `test-app/tests/e2e/live-mode.spec.js` — minimum: **enter Live** / **exit Live** smoke with `live-mode-root` and `debug-main-layout` (or agreed ids). Tests fail until `App.tsx` implements Live shell.
+**Phase B — RED:** Add `test-app/tests/e2e/live-mode.spec.js` — **enter Live** / **exit Live** smoke: `live-mode-root` visible, `debug-main-layout` hidden when Live is on; reverse on exit. Tests fail until `App.tsx` wires `LiveModeView` and `data-testid="debug-main-layout"` on the dense panel.
 
 ---
 
 ## Done recently
 
-- **2026-04-05:** `test-app/src/live-mode/liveModePresentation.ts` with `getLiveAgentPresentation` / `getLiveSessionPhase`; `test-app/tests/unit/live-mode-presentation.test.ts` (15 tests, green).
+- **2026-04-05:** `LiveModeView.tsx` + `LiveModeView.test.tsx` (7 tests); `data-testid`s: root, voice, agent, session phase, end Live, resume mic.
+- **2026-04-05:** `liveModePresentation.ts` + `live-mode-presentation.test.ts` (15 tests).
 
 ---
 

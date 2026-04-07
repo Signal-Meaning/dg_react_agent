@@ -1,6 +1,6 @@
 # Issue #561 — current status
 
-**Last updated:** 2026-04-05
+**Last updated:** 2026-04-05 (LiveModeView)
 
 **GitHub:** [#561](https://github.com/Signal-Meaning/dg_react_agent/issues/561)
 
@@ -10,7 +10,7 @@
 
 | Phase | Status | Notes |
 |-------|--------|--------|
-| **A** — Unit (`test-app/tests/unit/`) | **In progress** | `live-mode-presentation.test.ts` + `src/live-mode/liveModePresentation.ts` (**GREEN**). Optional `LiveModeView.test.tsx` not started. |
+| **A** — Unit (`test-app/tests/unit/`) | **Complete** | `live-mode-presentation.test.ts`, `LiveModeView.test.tsx`, `liveModePresentation.ts`, `LiveModeView.tsx` — all **GREEN**. |
 | **B** — E2E RED (`live-mode.spec.js`) | **Not started** | Spec file not created |
 | **C** — GREEN (Live UI + wiring) | **Not started** | — |
 | **D** — REFACTOR | **Not started** | — |
@@ -44,6 +44,8 @@
 | Next action | [NEXT-STEP.md](./NEXT-STEP.md) |
 | Unit tests | `test-app/tests/unit/live-mode-presentation.test.ts` |
 | Presentation helpers | `test-app/src/live-mode/liveModePresentation.ts` — `getLiveAgentPresentation`, `getLiveSessionPhase` |
+| Live shell | `test-app/src/live-mode/LiveModeView.tsx` |
+| `data-testid` (Live) | `live-mode-root`, `live-voice-state`, `live-agent-state`, `live-session-phase`, `live-end-live-button`, `live-resume-mic-button` |
 | E2E spec | *(none yet)* |
 | `data-testid` inventory | *(document in NEXT-STEP or here when stable)* |
 
