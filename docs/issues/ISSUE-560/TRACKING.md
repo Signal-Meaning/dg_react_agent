@@ -19,7 +19,7 @@
 | Package: **`stopAudioCapture`** ref API (Issue #560) | **Done** — `DeepgramVoiceInteraction` + types + API docs + Jest validation |
 | test-app: **`e2eIdleTimeoutMs`** URL idle override | **Done** — `e2eIdleTimeoutMs.ts` + `App.tsx` + unit test |
 | Real-API re-qualify (OpenAI proxy E2E test 5 + Live, `USE_REAL_APIS=1`) | **Next** — [NEXT-STEP.md](./NEXT-STEP.md); [#564](https://github.com/Signal-Meaning/dg_react_agent/issues/564) still deferred for Deepgram |
-| `USE_REAL_APIS=1` **`openai-proxy-integration.test.ts`** | **Partial** — **Issue #489** real-API AgentAudioDone-after-FCR: **pass** with **`toolChoice: 'required'`** + prompt; pre-fix failure was **no FunctionCallRequest** (model chit-chat). Full file + E2E still per release checklist. Mock **Issue #487** tightened earlier. [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md). |
+| `USE_REAL_APIS=1` **`openai-proxy-integration.test.ts`** | **Green (2026-04-08)** — 20 executed, all passed ~73s (mock-only tests skipped when `USE_REAL_APIS=1`). **Issue #489** path uses **`toolChoice: 'required'`** + prompt; [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md). CI still runs mock-only cases without real APIs. |
 | Fix merged / issue closed on GitHub | Not started |
 
 Notes: After each slice, edit **CURRENT-STATUS**, **NEXT-STEP**, and checkboxes in **TDD-PLAN**.

@@ -1,6 +1,6 @@
 # Issue #560 — current status
 
-**Last updated:** 2026-04-08 (Issue #489 real-API: **pass** after **`toolChoice: 'required'`** + stricter prompt; pre-fix logs showed conversational reply with **no** `function_call_arguments.done`. [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md). Issue #487 mock **`openai-proxy-integration`** slice unchanged from prior note.)
+**Last updated:** 2026-04-08 (Root **`USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`**: **20 passed** ~73s; mock-only cases skipped when real APIs on. Issue #489: **`toolChoice: 'required'`** + prompt — [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md). **Open:** Playwright **`openai-proxy-e2e.spec.js`** (≥ test 5) + **`live-mode-openai-proxy.spec.js`** with dev + backend — [NEXT-STEP.md](./NEXT-STEP.md).)
 
 **GitHub:** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560)
 
@@ -14,7 +14,7 @@
 |-------|--------|
 | **Repro (manual, local)** | **Done** — exercised during [Issue #561](../ISSUE-561/README.md) (Live mode, OpenAI proxy vs Deepgram, mic / `start()` / `startAudioCapture()` policy, idle disconnect sync). See [#561 CURRENT-STATUS](../ISSUE-561/CURRENT-STATUS.md) for bug tables and locked decisions. |
 | **Isolation** | **Documented (round 1 + round 2)** — see **Isolation trace** and **Uplink parity (code)** below; **not** closed: manual repro can still diverge from E2E for **room audio / timing / upstream**, but **package uplink entry** is the same for mic and injected PCM. |
-| **Fix + tests** | **Mock-path green** — package **`settingsSentTimeRef`** fix + Live E2E: **`stopAudioCapture()`** on ref (Issue #560) so Playwright fake mic does not contend with **`sendAudioData`** injection on OpenAI `input_audio_buffer`; **`e2eIdleTimeoutMs`** query overrides short global `VITE_IDLE_TIMEOUT_MS` when needed (**Jest:** `test-app/tests/e2eIdleTimeoutMs.test.ts`, `tests/send-audio-after-settings-applied-issue560.test.tsx`). **Open:** `USE_REAL_APIS=1` + keys — re-run **test 5** + **`live-mode-openai-proxy.spec.js`** per release qualification. |
+| **Fix + tests** | **Mock-path green** — package **`settingsSentTimeRef`** fix + Live E2E: **`stopAudioCapture()`** on ref (Issue #560) so Playwright fake mic does not contend with **`sendAudioData`** injection on OpenAI `input_audio_buffer`; **`e2eIdleTimeoutMs`** query overrides short global `VITE_IDLE_TIMEOUT_MS` when needed (**Jest:** `test-app/tests/e2eIdleTimeoutMs.test.ts`, `tests/send-audio-after-settings-applied-issue560.test.tsx`). **Root real-API integration:** `USE_REAL_APIS=1` **`openai-proxy-integration.test.ts`** green (2026-04-08). **Open:** Playwright **`USE_REAL_APIS=1`** **`openai-proxy-e2e.spec.js`** + **`live-mode-openai-proxy.spec.js`** (dev + backend). |
 
 ---
 
