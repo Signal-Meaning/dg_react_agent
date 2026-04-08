@@ -1,6 +1,6 @@
 # Issue #560 — next step
 
-**Last updated:** 2026-04-08 (**OpenAI proxy:** **`onResponseEnded`** → **`scheduleAudioCommit`** for queued PCM; Jest Issue #560 integration test. **Manual mic:** re-run with backend debug log. **OTel:** [#565](https://github.com/Signal-Meaning/dg_react_agent/issues/565).)
+**Last updated:** 2026-04-08 (**Shipped on `issue-560`:** commit **`e9e13f4f`** — proxy reschedule + docs + Jest. **Mock verify:** full **`openai-proxy-integration.test.ts`** 70 passed / 15 skipped. **Manual mic:** still **queue #1** — re-run with **`LOG_LEVEL=debug`** **`backend:log`**. **OTel:** [#565](https://github.com/Signal-Meaning/dg_react_agent/issues/565).)
 
 **GitHub:** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560)
 

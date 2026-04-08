@@ -1,6 +1,6 @@
 # Issue #560 — current status
 
-**Last updated:** 2026-04-08 (**Proxy fix:** **`onResponseEnded`** → **`scheduleAudioCommit()`** when pending audio ≥ min bytes — addresses **append-only** tail when debounce fired during **`responseInProgress`**; Jest **`openai-proxy-integration`** Issue #560 test. **Manual mic** repro still documented — bogus STT **`.`** / UI strings need **re-qualification** on device. [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md). **OTel logs:** [#565](https://github.com/Signal-Meaning/dg_react_agent/issues/565). [NEXT-STEP.md](./NEXT-STEP.md).)
+**Last updated:** 2026-04-08 (**Branch `issue-560`:** **`e9e13f4f`** pushed. **Proxy fix:** **`onResponseEnded`** → **`scheduleAudioCommit()`** when pending audio ≥ min bytes — addresses **append-only** tail when debounce fired during **`responseInProgress`**; Jest Issue #560 + **full** mock **`openai-proxy-integration`** (70 passed). **Manual mic** repro still documented — bogus STT **`.`** / UI need **re-test** on device. [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md). **OTel logs:** [#565](https://github.com/Signal-Meaning/dg_react_agent/issues/565). [NEXT-STEP.md](./NEXT-STEP.md).)
 
 **GitHub:** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560)
 
