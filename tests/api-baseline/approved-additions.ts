@@ -22,6 +22,14 @@ export const APPROVED_COMPONENT_METHOD_ADDITIONS = {
     breaking: false,
     confirmed: true, // Confirmed as intentional addition
   },
+  'stopAudioCapture': {
+    addedIn: 'v0.10.6',
+    issue: 'Issue #560',
+    rationale: 'Stops microphone uplink without closing the agent socket; pairs with startAudioCapture. Needed when Live E2E uses fake mic plus sendAudioData injection (OpenAI buffer conflict).',
+    breaking: false,
+    confirmed: true,
+    usage: 'test-app/tests/e2e/live-mode-openai-proxy.spec.js',
+  },
   'getAudioContext': {
     addedIn: 'v0.5.0',
     issue: 'ISSUE-XXX',

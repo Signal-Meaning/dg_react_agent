@@ -16,15 +16,11 @@
  * 3. Component behavior unchanged when using apiKey
  */
 
-import React, { useRef } from 'react';
+import React from 'react';
 import { render, act } from '@testing-library/react';
 import { DeepgramVoiceInteractionHandle, DeepgramVoiceInteractionProps } from '../src/types';
 import { createMockWebSocketManager, createMockAudioManager } from './fixtures/mocks';
-import {
-  resetTestState,
-  MOCK_API_KEY,
-  setupComponentAndConnect,
-} from './utils/component-test-helpers';
+import { resetTestState, MOCK_API_KEY } from './utils/component-test-helpers';
 import DeepgramVoiceInteraction from '../src/components/DeepgramVoiceInteraction';
 
 // Mock WebSocket and Audio managers
@@ -33,6 +29,13 @@ jest.mock('../src/utils/audio/AudioManager');
 
 const { WebSocketManager } = require('../src/utils/websocket/WebSocketManager');
 const { AudioManager } = require('../src/utils/audio/AudioManager');
+
+/** First argument to mocked `WebSocketManager` constructor in these tests */
+type MockWebSocketManagerCtorOptions = {
+  service?: string;
+  url?: string;
+  apiKey?: string;
+};
 
 describe('Backward Compatibility - apiKey Prop', () => {
   beforeEach(() => {
@@ -69,17 +72,15 @@ describe('Backward Compatibility - apiKey Prop', () => {
 
       // Verify WebSocketManager was called with apiKey
       expect(WebSocketManager).toHaveBeenCalled();
-    
-    const agentManagerCall = WebSocketManager.mock.calls.find(
-      (call: unknown[]) => {
-        const options = call[0];
-        return options?.service === 'agent';
-      }
-    );
+
+    const agentManagerCall = WebSocketManager.mock.calls.find((call: unknown[]) => {
+      const options = call[0] as MockWebSocketManagerCtorOptions;
+      return options?.service === 'agent';
+    });
 
     expect(agentManagerCall).toBeDefined();
     if (agentManagerCall) {
-      const options = agentManagerCall[0];
+      const options = agentManagerCall[0] as MockWebSocketManagerCtorOptions;
       // Should use Deepgram's direct endpoint
       expect(options.url).toContain('agent.deepgram.com');
       // API key should be included
@@ -114,6 +115,7 @@ describe('Backward Compatibility - apiKey Prop', () => {
     // Verify component methods are available
     expect(ref.current).toBeTruthy();
     expect(typeof ref.current?.startAudioCapture).toBe('function');
+    expect(typeof ref.current?.stopAudioCapture).toBe('function');
     expect(typeof ref.current?.start).toBe('function');
     expect(typeof ref.current?.stop).toBe('function');
     expect(typeof ref.current?.injectUserMessage).toBe('function');
@@ -142,16 +144,14 @@ describe('Backward Compatibility - apiKey Prop', () => {
       });
 
     // Verify connection is made to Deepgram, not a proxy
-    const agentManagerCall = WebSocketManager.mock.calls.find(
-      (call: unknown[]) => {
-        const options = call[0];
-        return options?.service === 'agent';
-      }
-    );
+    const agentManagerCall = WebSocketManager.mock.calls.find((call: unknown[]) => {
+      const options = call[0] as MockWebSocketManagerCtorOptions;
+      return options?.service === 'agent';
+    });
 
     expect(agentManagerCall).toBeDefined();
     if (agentManagerCall) {
-      const options = agentManagerCall[0];
+      const options = agentManagerCall[0] as MockWebSocketManagerCtorOptions;
       // Should NOT be a proxy endpoint
       expect(options.url).not.toContain('example.com');
       expect(options.url).not.toContain('proxy');
@@ -190,19 +190,15 @@ describe('Backward Compatibility - apiKey Prop', () => {
       });
 
     // Should create both transcription and agent managers
-    const transcriptionCalls = WebSocketManager.mock.calls.filter(
-      (call: unknown[]) => {
-        const options = call[0];
-        return options?.service === 'transcription';
-      }
-    );
+    const transcriptionCalls = WebSocketManager.mock.calls.filter((call: unknown[]) => {
+      const options = call[0] as MockWebSocketManagerCtorOptions;
+      return options?.service === 'transcription';
+    });
 
-    const agentCalls = WebSocketManager.mock.calls.filter(
-      (call: unknown[]) => {
-        const options = call[0];
-        return options?.service === 'agent';
-      }
-    );
+    const agentCalls = WebSocketManager.mock.calls.filter((call: unknown[]) => {
+      const options = call[0] as MockWebSocketManagerCtorOptions;
+      return options?.service === 'agent';
+    });
 
     // Both services should be initialized
     expect(transcriptionCalls.length).toBeGreaterThan(0);
@@ -210,12 +206,12 @@ describe('Backward Compatibility - apiKey Prop', () => {
 
     // Both should use apiKey
     transcriptionCalls.forEach((call: unknown[]) => {
-      const options = call[0];
+      const options = call[0] as MockWebSocketManagerCtorOptions;
       expect(options.apiKey).toBe(MOCK_API_KEY);
     });
 
     agentCalls.forEach((call: unknown[]) => {
-      const options = call[0];
+      const options = call[0] as MockWebSocketManagerCtorOptions;
       expect(options.apiKey).toBe(MOCK_API_KEY);
     });
   });

@@ -15,8 +15,11 @@
 | Code trace: E2E `sendAudioData` vs mic → same `sendAudioData` (round 2) | **Done** — [CURRENT-STATUS.md](./CURRENT-STATUS.md) §Uplink parity |
 | Unit lock: `agentUtteranceGreetingPolicy` (Issue #414 / Agent Response readout) | **Done** — `test-app/tests/unit/agentUtteranceGreetingPolicy.test.ts` |
 | Text-input focus uses `getVoiceAgentStartOptions` (align with mic/Live) | **Done** — `App.tsx` + `voiceAgentStartOptions.test.ts` |
-| Live OpenAI E2E isolation (test shape vs test 5, PCM assert, 650ms gate) | **Done** — [LIVE-MODE-OPENAI-E2E-ISOLATION.md](./LIVE-MODE-OPENAI-E2E-ISOLATION.md); transcript step still red in agent run — next: proxy debug logs |
-| Internal: manual confirmation + sharper tests (no voice-commerce until concrete ask) | **Next** — [NEXT-STEP.md](./NEXT-STEP.md); Deepgram manual blocked by [#564](https://github.com/Signal-Meaning/dg_react_agent/issues/564) until key renewed |
+| Live OpenAI E2E isolation + mock-path green | **Done** — [LIVE-MODE-OPENAI-E2E-ISOLATION.md](./LIVE-MODE-OPENAI-E2E-ISOLATION.md); **`stopAudioCapture`** before inject + **`e2eIdleTimeoutMs`**; `live-mode-openai-proxy.spec.js` passes with mock/proxy |
+| Package: **`stopAudioCapture`** ref API (Issue #560) | **Done** — `DeepgramVoiceInteraction` + types + API docs + Jest validation |
+| test-app: **`e2eIdleTimeoutMs`** URL idle override | **Done** — `e2eIdleTimeoutMs.ts` + `App.tsx` + unit test |
+| Real-API re-qualify (OpenAI proxy E2E test 5 + Live, `USE_REAL_APIS=1`) | **Next** — [NEXT-STEP.md](./NEXT-STEP.md); [#564](https://github.com/Signal-Meaning/dg_react_agent/issues/564) still deferred for Deepgram |
+| `USE_REAL_APIS=1` **`openai-proxy-integration.test.ts`** (2026-04-08) | **Partial** — 19 passed; **Issue #489** real-API AgentAudioDone-after-FunctionCallResponse **timed out** (not #560 Live inject path) |
 | Fix merged / issue closed on GitHub | Not started |
 
 Notes: After each slice, edit **CURRENT-STATUS**, **NEXT-STEP**, and checkboxes in **TDD-PLAN**.

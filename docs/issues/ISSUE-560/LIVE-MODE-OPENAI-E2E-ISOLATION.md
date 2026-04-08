@@ -12,9 +12,11 @@
 
 ## B. Live spec shape (current)
 
-1. `setupTestPageWithOpenAIProxy` — component ready, then **Live** → `enterLiveMode` → `start()` + `startAudioCapture()`.
-2. **`waitForSettingsApplied`** (DOM **`has-sent-settings === true`**).
-3. **`loadAndSendAudioSample`** with the same **distinctive phrase** sample as test 5; PCM delta on **`__e2eWsBinarySendCount`**; **`waitForFinalUserTranscriptNormalized`**.
+1. `setupTestPageWithOpenAIProxy` (optional query **`e2eIdleTimeoutMs`** merged via `extraParams` — overrides short Playwright **`VITE_IDLE_TIMEOUT_MS`** for long idle during greeting + audio).
+2. Component ready, then **Live** → `enterLiveMode` → `start()` + `startAudioCapture()` (Playwright fake mic starts uplink).
+3. **`waitForSettingsApplied`** (DOM **`has-sent-settings === true`**).
+4. **`window.deepgramRef.current.stopAudioCapture()`** — **Issue #560:** without this, **fake mic PCM** and **injected** `sendAudioData` both feed OpenAI **`input_audio_buffer`**; user STT stayed empty while **`__e2eWsBinarySendCount`** still increased (inject-only path). Test 5 avoids the conflict because it never starts **`startAudioCapture`**.
+5. **`loadAndSendAudioSample`** (same distinctive phrase as test 5); PCM delta on **`__e2eWsBinarySendCount`**; **`waitForFinalUserTranscriptNormalized`**.
 
 ## C. Client-side gates (package)
 
@@ -33,14 +35,17 @@
 | 4 | Upstream JSON includes transcription events | If missing → **session.update** transcription config or API behavior (compare `translator.ts` `audio.input.transcription`) |
 | 5 | Component logs / `Transcript` handling | **normalizeTranscriptMessageToResponse** + `handleAgentMessage` Transcript branch (Issue #414) |
 
-## G. Observed in automated runs (2026-04-05, pre–settings-time clear)
+## G. Observed in automated runs
 
-After adding **650ms** post-`has-sent-settings` and **`hello`** sample parity, **`live-mode-openai-proxy.spec.js`** still timed out on transcript wait, but **`__e2eWsBinarySendCount`** **passed** — pointing **downstream of browser send**. **Re-qualify** after the package fix (clear **`settingsSentTimeRef`** on confirmation) and the updated specs (**no** fixed 650ms sleep; **`waitForFinalUserTranscriptNormalized`** + distinctive sample).
+**2026-04-05 (pre–settings-time clear):** After **650ms** post-`has-sent-settings` and **`hello`** sample parity, Live spec still timed out on transcript while PCM delta **passed** — initially read as downstream of browser send.
+
+**Resolved on mock path (post–`settingsSentTimeRef` clear + Live spec update):** Empty **`__e2eTranscriptEvents`** with PCM OK was often **dual uplink** in Playwright Live: fake **`getUserMedia`** plus **`sendAudioData`** inject both feeding **`input_audio_buffer`**. Fix: package ref **`stopAudioCapture()`** + call it in Live spec before inject; optional **`e2eIdleTimeoutMs`** on the app URL. **Re-qualify with real APIs** (`USE_REAL_APIS=1` + keys) per [NEXT-STEP.md](./NEXT-STEP.md).
 
 ## E. Test alignment changes (repo)
 
-- **Package:** Clear **`settingsSentTimeRef`** when **`SettingsApplied`** / **`session.created`** arrives — see Jest **`tests/send-audio-after-settings-applied-issue560.test.tsx`**.
-- **Live + test 5:** Use **`waitForSettingsApplied`** / DOM **`has-sent-settings`**; assert **`__e2eWsBinarySendCount`** increases after **`loadAndSendAudioSample`**; user STT via **`waitForFinalUserTranscriptNormalized`** and shared sample constants in **`test-helpers.js`** (no arbitrary post-settings sleep for the old gate).
+- **Package:** Clear **`settingsSentTimeRef`** when **`SettingsApplied`** / **`session.created`** arrives — Jest **`tests/send-audio-after-settings-applied-issue560.test.tsx`**. **`stopAudioCapture()`** on ref — symmetry with **`startAudioCapture`**; API validation + **`tests/api-baseline/approved-additions.ts`**.
+- **test-app:** **`resolveE2eIdleTimeoutMs`** + URL **`e2eIdleTimeoutMs`** in **`App.tsx`** memoized agent options — Jest **`test-app/tests/e2eIdleTimeoutMs.test.ts`**.
+- **Live + test 5:** **`waitForSettingsApplied`**; Live: **`stopAudioCapture`** then inject; assert **`__e2eWsBinarySendCount`** increases; user STT via **`waitForFinalUserTranscriptNormalized`** and shared sample constants in **`test-helpers.js`**.
 - Prefer the **distinctive phrase** sample for OpenAI STT matching, not generic **hello**.
 
 ## F. Protocol note

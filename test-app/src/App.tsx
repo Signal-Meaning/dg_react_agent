@@ -42,6 +42,7 @@ import {
   openAiInputTranscriptImpliesUserSpeaking,
   openAiTranscriptShouldEndMicActivityPulse,
 } from './live-mode/liveMicActivityOpenAI';
+import { resolveE2eIdleTimeoutMs } from './utils/e2eIdleTimeoutMs';
 
 // Type declaration for E2E test support
 // Only used in test-app for E2E testing, not part of the component's public API
@@ -680,10 +681,14 @@ function App() {
       greeting: import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?',
       // Include functions if function calling is enabled
       functions: functions,
-      // Idle timeout (ms). When set via VITE_IDLE_TIMEOUT_MS, used for agent session and component; omit to use component default.
-      ...(import.meta.env.VITE_IDLE_TIMEOUT_MS
-        ? { idleTimeoutMs: Number(import.meta.env.VITE_IDLE_TIMEOUT_MS) }
-        : {}),
+      // Idle timeout (ms). VITE_IDLE_TIMEOUT_MS (often 1s in E2E) or URL e2eIdleTimeoutMs (overrides Vite for long flows e.g. Live + audio).
+      ...((): { idleTimeoutMs?: number } => {
+        const idleMs = resolveE2eIdleTimeoutMs(
+          urlParams.get('e2eIdleTimeoutMs'),
+          import.meta.env.VITE_IDLE_TIMEOUT_MS
+        );
+        return idleMs !== undefined ? { idleTimeoutMs: idleMs } : {};
+      })(),
       // Pass conversation history as context for session retention on reconnect (Issue #489 / E2E test 9).
       // Prefer conversationForDisplay (synced from callbacks); fallback to component ref so we always
       // send context when the component has history, even if callbacks haven't updated app state yet.

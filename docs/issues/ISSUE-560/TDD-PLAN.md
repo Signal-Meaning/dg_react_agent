@@ -49,7 +49,7 @@
 *(Prefer the smallest contract at the failing layer.)*
 
 - [x] **Build:** `npm run build` sufficient when green; no extra Jest guard needed yet.
-- [ ] **Package (`src/`):** add under repo `tests/` **if** partner matches test-app wiring and defect is inside `DeepgramVoiceInteraction`.
+- [x] **Package (`src/`):** **`stopAudioCapture()`** on ref (pairs with **`startAudioCapture`**); Jest in **`voice-agent-api-validation.test.tsx`** + **`approved-additions.ts`** — addresses Live E2E dual-uplink (fake mic + inject), not partner-only.
 - [x] **test-app integration contract:** `test-app/tests/unit/voiceAgentStartOptions.test.ts` + `voiceAgentStartOptions.ts` (OpenAI proxy vs Deepgram `start()` flags for mic/Live + **text-input focus** on `App.tsx`).
 - [x] **test-app Agent Response / greeting rule:** `test-app/tests/unit/agentUtteranceGreetingPolicy.test.ts` + `agentUtteranceGreetingPolicy.ts` (Issue #414 suppression predicate; avoids mistaking debug readout for uplink bugs).
 - [x] **E2E transcript + assistant shape:** `waitForUserSpeechTranscriptSignal` + `assertMinimalAgentReplyShape` in `test-app/tests/e2e/helpers/test-helpers.js`; used by `openai-proxy-e2e.spec.js` (test 5) and `live-mode-openai-proxy.spec.js`. **`waitForUserSpeechTranscriptSignal`** also aggregates **`window.__e2eTranscriptEvents`** so OpenAI-proxy user STT is visible when Live hides the debug transcript `<pre>` (still requires real upstream transcript).
@@ -64,6 +64,7 @@
 - [ ] **Partner-visible fix** — pending parity check; may be **`src/`** or **docs for integrators** once root cause is confirmed.
 - [x] Ran `test-app` tests + build for this slice (`npm test -- voiceAgentStartOptions.test.ts`, `npm run build`).
 - [x] Ran `npm test -- agentUtteranceGreetingPolicy.test.ts` for greeting / Agent Response policy slice.
+- [x] **Live OpenAI E2E mock path:** `live-mode-openai-proxy.spec.js` green with **`stopAudioCapture`** + **`e2eIdleTimeoutMs`**; **`test-app/tests/e2eIdleTimeoutMs.test.ts`** for URL idle resolution.
 
 ---
 

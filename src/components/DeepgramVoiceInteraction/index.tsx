@@ -3991,6 +3991,29 @@ function DeepgramVoiceInteraction(
     }
   };
 
+  /** Stop mic uplink only; keeps agent connection (same as declarative startAudioCapture={false}). Issue #560 / E2E Live + inject. */
+  const stopAudioCapture = (): void => {
+    if (!audioManagerRef.current) {
+      log('stopAudioCapture called but AudioManager not initialized');
+      return;
+    }
+    if (!audioManagerRef.current.isRecordingActive()) {
+      log('stopAudioCapture called but recording not active');
+      return;
+    }
+    try {
+      audioManagerRef.current.stopRecording();
+      log('stopAudioCapture: recording stopped');
+    } catch (error) {
+      log('stopAudioCapture failed:', error);
+      handleError({
+        service: 'transcription',
+        code: 'audio_capture_stop_failed',
+        message: `Failed to stop audio capture: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  };
+
   // Declarative Props Implementation (Issue #305)
   // Refs to track previous prop values to prevent duplicate actions
   const prevUserMessageRef = useRef<string | null | undefined>(undefined);
@@ -4115,14 +4138,7 @@ function DeepgramVoiceInteraction(
         return;
       }
       log('[Declarative] startAudioCapture prop set to false, stopping audio capture');
-      if (audioManagerRef.current) {
-        try {
-          audioManagerRef.current.stopRecording();
-          log('[Declarative] Audio capture stopped successfully');
-        } catch (error) {
-          createDeclarativeErrorHandler('transcription', 'audio_capture_stop_failed', 'stop audio capture')(error);
-        }
-      }
+      stopAudioCapture();
     },
     undefined, // No onComplete
     true, // skipFirstRender
@@ -4147,6 +4163,7 @@ function DeepgramVoiceInteraction(
     
     // Microphone control
     startAudioCapture,
+    stopAudioCapture,
     
     // Function calling
     sendFunctionCallResponse,

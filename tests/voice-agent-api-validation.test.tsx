@@ -75,7 +75,7 @@
  *   - Agent Control: updateAgentInstructions, interruptAgent
  *   - Sleep/Wake: sleep, wake, toggleSleep
  *   - Message Injection: injectAgentMessage, injectUserMessage
- *   - Audio: startAudioCapture, getAudioContext
+ *   - Audio: startAudioCapture, stopAudioCapture, getAudioContext
  * 
  * EXCLUDED (Debug/Testing Methods):
  *   - getState (testing only)
@@ -878,6 +878,25 @@ describe('Component API Surface Validation', () => {
       });
     });
 
+    it('should expose stopAudioCapture() method', async () => {
+      const ref = React.createRef<any>();
+
+      render(
+        <DeepgramVoiceInteraction
+          ref={ref}
+          apiKey={MOCK_API_KEY}
+          agentOptions={createMockAgentOptions()}
+        />
+      );
+
+      await waitFor(() => {
+        expect(ref.current).toBeTruthy();
+      });
+
+      expect(typeof ref.current.stopAudioCapture).toBe('function');
+      expect(() => ref.current.stopAudioCapture()).not.toThrow();
+    });
+
     it('should expose getAudioContext() method', async () => {
       const ref = React.createRef<any>();
       
@@ -1180,6 +1199,7 @@ describe('Component API Surface Validation', () => {
         'injectAgentMessage',
         'injectUserMessage',
         'startAudioCapture',
+        'stopAudioCapture',
         'getAudioContext',
         'getAgentManager', // Issue #429: idle-timeout control (Deepgram + OpenAI proxy parity)
       ];

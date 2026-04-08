@@ -503,6 +503,7 @@ voiceRef.current?.stop();
 | Method | Parameters | Return | Description |
 |--------|------------|--------|-------------|
 | `startAudioCapture` | None | `Promise<void>` | Start audio capture (lazy initialization). Triggers browser's microphone permission prompt and initializes AudioManager for voice interactions. Should only be called when user explicitly requests microphone access. |
+| `stopAudioCapture` | None | `void` | Stop microphone capture without closing the agent WebSocket (Issue #560). No-op if recording is not active. Pairs with `startAudioCapture` and matches declarative `startAudioCapture={false}`. |
 | `getAudioContext` | None | `AudioContext \| undefined` | Get the AudioContext instance for debugging and testing. Returns undefined if AudioManager not initialized. Used for browser autoplay policy compliance (e.g., resuming suspended AudioContext). |
 
 ### Idle Timeout / Agent Manager (Issue #429)

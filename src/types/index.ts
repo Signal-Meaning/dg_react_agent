@@ -509,6 +509,12 @@ export interface DeepgramVoiceInteractionHandle {
    * requests microphone access.
    */
   startAudioCapture: () => Promise<void>;
+
+  /**
+   * Stop microphone capture without closing the agent WebSocket (Issue #560).
+   * Pairs with {@link startAudioCapture}; no-op if recording is not active.
+   */
+  stopAudioCapture: () => void;
   
   /**
    * Get the AudioContext for debugging and testing

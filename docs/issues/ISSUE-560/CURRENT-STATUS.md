@@ -1,6 +1,6 @@
 # Issue #560 — current status
 
-**Last updated:** 2026-04-06 (clear `settingsSentTimeRef` on SettingsApplied; OpenAI E2E transcript strict match + Playwright `webServer` env typing; VAD specs on `__e2eTranscriptEvents`)
+**Last updated:** 2026-04-08 (ISSUE-560 folder refresh: isolation §B/G/E, TRACKING/TDD-PLAN/NEXT-STEP; mock E2E test 5 + Live re-run green; `USE_REAL_APIS=1` integration run hit **Issue #489** AgentAudioDone timeout — not the #560 Live transcript path)
 
 **GitHub:** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560)
 
@@ -14,7 +14,7 @@
 |-------|--------|
 | **Repro (manual, local)** | **Done** — exercised during [Issue #561](../ISSUE-561/README.md) (Live mode, OpenAI proxy vs Deepgram, mic / `start()` / `startAudioCapture()` policy, idle disconnect sync). See [#561 CURRENT-STATUS](../ISSUE-561/CURRENT-STATUS.md) for bug tables and locked decisions. |
 | **Isolation** | **Documented (round 1 + round 2)** — see **Isolation trace** and **Uplink parity (code)** below; **not** closed: manual repro can still diverge from E2E for **room audio / timing / upstream**, but **package uplink entry** is the same for mic and injected PCM. |
-| **Fix + tests** | **Partial** — same as below, plus **Issue #560** package fix: **`settingsSentTimeRef`** cleared on **`SettingsApplied` / `session.created`** so PCM is not blocked by the 500 ms post-Settings window after confirmation (**Jest:** `tests/send-audio-after-settings-applied-issue560.test.tsx`). **Open:** re-qualify **OpenAI proxy** Live + test 5 E2E with real APIs; human confirmation for any remaining “no response” vs env/upstream. |
+| **Fix + tests** | **Mock-path green** — package **`settingsSentTimeRef`** fix + Live E2E: **`stopAudioCapture()`** on ref (Issue #560) so Playwright fake mic does not contend with **`sendAudioData`** injection on OpenAI `input_audio_buffer`; **`e2eIdleTimeoutMs`** query overrides short global `VITE_IDLE_TIMEOUT_MS` when needed (**Jest:** `test-app/tests/e2eIdleTimeoutMs.test.ts`, `tests/send-audio-after-settings-applied-issue560.test.tsx`). **Open:** `USE_REAL_APIS=1` + keys — re-run **test 5** + **`live-mode-openai-proxy.spec.js`** per release qualification. |
 
 ---
 
@@ -76,7 +76,7 @@ Both paths hit the same **settings / connection / sleep** gating inside `sendAud
 | 3 | `test-app/src/App.tsx` — `startServicesAndMicrophone` | `getVoiceAgentStartOptions(proxyEndpoint)` → `await ref.start(opts)` → `await ref.startAudioCapture()`. |
 | 4 | `test-app/src/live-mode/voiceAgentStartOptions.ts` | **Integration contract** (OpenAI proxy vs Deepgram) — covered by `test-app/tests/unit/voiceAgentStartOptions.test.ts`. |
 | 5 | `src/components/DeepgramVoiceInteraction/index.tsx` — `start` | Connects agent (and transcription if requested) WebSockets; **does not** start recording (see comments ~3300). |
-| 6 | Same file — `startAudioCapture` (~3831) | Lazy mic init + meaningful activity; **package** owns capture → uplink. |
+| 6 | Same file — `startAudioCapture` / **`stopAudioCapture`** (~3831 / adjacent) | Lazy mic init + meaningful activity; **`stopAudioCapture`** stops uplink without closing the agent socket (Live E2E + integrators). |
 
 **Round-1 conclusion:** Wrong **flags** or **skipped** `startAudioCapture` in partner code are **outside** the npm package. If the partner matches **test-app’s** sequence and flags and the bug persists, continue in **`DeepgramVoiceInteraction`** (audio pipeline, WS lifecycle).
 
@@ -99,7 +99,7 @@ Both paths hit the same **settings / connection / sleep** gating inside `sendAud
 |----------|-----------|
 | **Text-input `onFocus` auto-`start()`** uses **`getVoiceAgentStartOptions(proxyEndpoint)`** (same as `startServicesAndMicrophone` / Live). | Avoids Deepgram-direct + text-first flows passing **`transcription: false`** (skipping the Listen socket) while mic/Live correctly requested **`transcription: true`**. OpenAI proxy shape unchanged: still **`transcription: false`** at the component API (Realtime carries STT). |
 | **PCM after settings confirmed** | **`settingsSentTimeRef = null`** when **`SettingsApplied` / `session.created`** is handled, so the 500 ms debounce does not keep blocking after the server confirms the session. |
-| **Expired Deepgram key** is **out of scope for the current PR** — track renewal in [#564](https://github.com/Signal-Meaning/dg_react_agent/issues/564). | Unblocks PR while local 401 on Deepgram upstream is env, not code. |
+| **[#564](https://github.com/Signal-Meaning/dg_react_agent/issues/564) Deepgram key renewal** | **Explicitly deferred until #560 is resolved** — finish OpenAI-proxy / Live qualification first; then renew key and re-run Deepgram E2E. |
 
 ---
 
@@ -120,7 +120,8 @@ Both paths hit the same **settings / connection / sleep** gating inside `sendAud
 |-------|-------------------|----------------------------|
 | test-app unit | `cd test-app && npm test -- <file>.test.ts` | Run for touched files; full `npm test` recommended before merge. |
 | Package Jest | `npm test -- conversation-storage-issue406` (root) | Run when `DeepgramVoiceInteraction` / storage changes. |
-| OpenAI proxy E2E | `cd test-app && npm run test:e2e -- openai-proxy-e2e.spec.js` | Requires dev server + backend + keys; **not** run end-to-end in agent session unless user starts servers. |
-| Live mode E2E | `cd test-app && npm run test:e2e -- live-mode-openai-proxy.spec.js` | **`waitForFinalUserTranscriptNormalized`** on last final **`__e2eTranscriptEvents`** (distinctive phrase sample); no fixed post-settings sleep for the old gate. **Re-run** after package **`settingsSentTimeRef`** clear to confirm transcript path. |
+| OpenAI proxy E2E | `cd test-app && npm run test:e2e -- openai-proxy-e2e.spec.js` | Run test 5 and Live as **two** commands if `-g` would otherwise match only one file. Requires dev server + backend. |
+| OpenAI proxy integration (root) | `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` | **2026-04-08:** 19 passed, 1 failed (**Issue #489** real-API AgentAudioDone after FunctionCallResponse timeout); treat as separate from #560 Live E2E until green upstream or extended timeout. |
+| Live mode E2E | `cd test-app && npm run test:e2e -- live-mode-openai-proxy.spec.js` | **`stopAudioCapture`** before **`loadAndSendAudioSample`** (fake mic vs inject); **`e2eIdleTimeoutMs`** on URL via **`setupTestPageWithOpenAIProxy` `extraParams`**; **`waitForFinalUserTranscriptNormalized`**. |
 
 **Honest default:** implementer runs **build + targeted Jest**; **full Playwright OpenAI/Live** is **manual/CI** when servers and `USE_REAL_APIS` match project rules.

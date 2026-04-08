@@ -403,11 +403,13 @@ async function setupTestPageWithDeepgramProxy(page, timeout = 10000) {
  * Uses relative path so baseURL (http/https) from config is applied.
  * @param {import('@playwright/test').Page} page
  * @param {number} timeout - Timeout in ms (default: 10000)
+ * @param {{ extraParams?: Record<string, string> }} [options] - Optional query params merged after OpenAI proxy params (e.g. e2eIdleTimeoutMs for Live specs)
  */
-async function setupTestPageWithOpenAIProxy(page, timeout = 10000) {
+async function setupTestPageWithOpenAIProxy(page, timeout = 10000, options = {}) {
+  const extraParams = options.extraParams && typeof options.extraParams === 'object' ? options.extraParams : {};
   const { getOpenAIProxyParams, BASE_URL } = await import('./test-helpers.mjs');
   const { pathWithQuery } = await import('./app-paths.mjs');
-  const pathPart = pathWithQuery(getOpenAIProxyParams());
+  const pathPart = pathWithQuery({ ...getOpenAIProxyParams(), ...extraParams });
   const url = pathPart.startsWith('http') ? pathPart : BASE_URL + pathPart;
   await page.goto(url);
   await page.waitForSelector(SELECTORS.voiceAgent, { timeout });
@@ -2162,8 +2164,10 @@ export function normalizeOpenAiUserTranscriptForE2e(s) {
 }
 
 /**
- * Wait until the last **final** `__e2eTranscriptEvents` entry normalizes to `expectedNormalized`.
- * Fails if STT returns a different phrase (unlike a loose /hello|hi/ regex).
+ * Wait until user STT in `__e2eTranscriptEvents` normalizes to `expectedNormalized`.
+ * Prefers the last **final** segment when present; otherwise uses the **longest** non-empty
+ * `text` in the log (OpenAI rolling `input_audio_transcription` may omit `is_final` in some paths,
+ * e.g. Live + mic — Issue #561).
  *
  * @param {import('@playwright/test').Page} page
  * @param {string} expectedNormalized - e.g. {@link OPENAI_PROXY_E2E_DISTINCTIVE_TRANSCRIPT_NORMALIZED}
@@ -2176,10 +2180,17 @@ export async function waitForFinalUserTranscriptNormalized(page, expectedNormali
       async () => {
         const raw = await page.evaluate(() => {
           const ev = globalThis.__e2eTranscriptEvents || [];
-          const finals = ev.filter(
-            (e) => e && e.is_final && typeof e.text === 'string' && e.text.trim()
+          const withText = ev.filter(
+            (e) => e && typeof e.text === 'string' && e.text.trim()
           );
-          return finals.length ? finals[finals.length - 1].text : '';
+          if (!withText.length) return '';
+          const finals = withText.filter((e) => e.is_final);
+          if (finals.length) return finals[finals.length - 1].text;
+          let longest = '';
+          for (const e of withText) {
+            if (e.text.length > longest.length) longest = e.text;
+          }
+          return longest;
         });
         return normalizeOpenAiUserTranscriptForE2e(raw);
       },

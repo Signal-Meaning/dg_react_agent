@@ -58,7 +58,10 @@ test.describe('Live mode + OpenAI proxy (Issue #561)', () => {
     test.setTimeout(LIVE_OPENAI_E2E_SPEC_TIMEOUT_MS);
 
     await page.addInitScript(installMicE2eTelemetry);
-    await setupTestPageWithOpenAIProxy(page);
+    // Playwright E2E often sets VITE_IDLE_TIMEOUT_MS=1000; Live + greeting + injected audio needs a longer window (Issue #560).
+    await setupTestPageWithOpenAIProxy(page, 10000, {
+      extraParams: { e2eIdleTimeoutMs: '30000' },
+    });
 
     await page.waitForFunction(
       () => document.querySelector('[data-testid="component-ready-status"]')?.textContent === 'true',
@@ -86,8 +89,13 @@ test.describe('Live mode + OpenAI proxy (Issue #561)', () => {
       timeout: LIVE_OPENAI_E2E_LIVE_ROOT_VISIBLE_TIMEOUT_MS,
     });
 
-    // Settings readiness via DOM (same contract as waitForSettingsApplied elsewhere).
+    // Re-assert after Live starts mic (same socket often; sentinel should stay true).
     await waitForSettingsApplied(page, LIVE_OPENAI_E2E_SETTINGS_DOM_TIMEOUT_MS);
+
+    // Fake mic PCM + injected sample both hit OpenAI input_audio_buffer; stop mic so inject matches test 5 (Issue #560).
+    await page.evaluate(() => {
+      window.deepgramRef?.current?.stopAudioCapture?.();
+    });
 
     const pcmBefore = await page.evaluate(() => globalThis.__e2eWsBinarySendCount ?? 0);
     await loadAndSendAudioSample(page, sampleName, { chunkSize: CHUNK_20MS_16K_MONO });
