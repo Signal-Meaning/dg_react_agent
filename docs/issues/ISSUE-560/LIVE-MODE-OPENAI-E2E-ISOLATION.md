@@ -41,6 +41,8 @@
 
 **Resolved on mock path (post–`settingsSentTimeRef` clear + Live spec update):** Empty **`__e2eTranscriptEvents`** with PCM OK was often **dual uplink** in Playwright Live: fake **`getUserMedia`** plus **`sendAudioData`** inject both feeding **`input_audio_buffer`**. Fix: package ref **`stopAudioCapture()`** + call it in Live spec before inject; optional **`e2eIdleTimeoutMs`** on the app URL. **Re-qualify with real APIs** (`USE_REAL_APIS=1` + keys) per [NEXT-STEP.md](./NEXT-STEP.md).
 
+**2026-04-08 (manual host mic, OpenAI proxy, `LOG_LEVEL=debug`):** Playwright real-API E2E + Live **pass** with injected PCM, but **manual** test-app + **host mic** still fails: proxy log shows **`input_audio_transcription.completed → Transcript (.)`** for a committed buffer; after **`response.done`**, **`input_audio_buffer.append`** continues with **no** further **`commit`** / transcription in the same session. UI showed user lines **"It was."** / **"."** per reporter (**not** spoken). See [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md).
+
 ## E. Test alignment changes (repo)
 
 - **Package:** Clear **`settingsSentTimeRef`** when **`SettingsApplied`** / **`session.created`** arrives — Jest **`tests/send-audio-after-settings-applied-issue560.test.tsx`**. **`stopAudioCapture()`** on ref — symmetry with **`startAudioCapture`**; API validation + **`tests/api-baseline/approved-additions.ts`**.

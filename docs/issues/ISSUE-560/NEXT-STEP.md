@@ -1,6 +1,6 @@
 # Issue #560 — next step
 
-**Last updated:** 2026-04-04 (**OpenAI proxy real-API Playwright qualification done:** **`USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js live-mode-openai-proxy.spec.js`** — 18 passed, 2 skipped; config forces **`workers: 1`** via **`playwright-workers-from-env.cjs`** so Live + OpenAI files do not contend on the shared backend. [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md).)
+**Last updated:** 2026-04-08 (**Manual mic repro documented** with debug log — [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md). Playwright real-API slice remains green from 2026-04-04.)
 
 **GitHub:** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560)
 
@@ -23,7 +23,7 @@ Context: [CURRENT-STATUS.md](./CURRENT-STATUS.md).
 | # | Item | Human-only? |
 |---|------|-------------|
 | ~~1~~ | ~~**Re-qualify OpenAI proxy (real APIs):** (a) Root **`USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`** — done 2026-04-08 (20 passed). (b) **`test-app`**: **`USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js live-mode-openai-proxy.spec.js`** — **done 2026-04-04** (18 passed, 2 skipped; Playwright starts dev + backend unless **`E2E_USE_EXISTING_SERVER=1`**). **`OPENAI_API_KEY`** only in **`packages/voice-agent-backend/.env`**. Optional **`curl http://127.0.0.1:8080/ready`**.~~ | ~~**Partial**~~ |
-| 1 | **If transcript still fails** with PCM delta passing (real API): use isolation doc **§D** and proxy logs (`append` / `commit` / transcription events). | **Partial** |
+| 1 | **Manual host mic + OpenAI proxy:** Investigate **bad user STT** (log: **`input_audio_transcription.completed → Transcript (.)`**) and **append-only** stream after **`response.done`** (no further **`commit`** / transcription in `backend-20260408-111420.log`). Reporter: **"It was."** / **"."** in UI were **not** spoken. Start from [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md) + [LIVE-MODE-OPENAI-E2E-ISOLATION.md](./LIVE-MODE-OPENAI-E2E-ISOLATION.md) **§D**. | **Partial** |
 | 2 | **[#564](https://github.com/Signal-Meaning/dg_react_agent/issues/564) (Deepgram key):** **Deferred** until **#560 is resolved** — do not block #560 on renewal; re-run Deepgram E2E after #560 close + key refresh. | **No** (ops) |
 | ~~4~~ | ~~Text-input focus~~ — **Done:** `getVoiceAgentStartOptions` in `App.tsx`; tests in `voiceAgentStartOptions.test.ts`. | **No** |
 | ~~5~~ | ~~500 ms gate after SettingsApplied~~ — **Done:** `settingsSentTimeRef` cleared on confirmation; Jest `send-audio-after-settings-applied-issue560.test.tsx`. | **No** |
