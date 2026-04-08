@@ -67,6 +67,8 @@
 - [x] **Live OpenAI E2E mock path:** `live-mode-openai-proxy.spec.js` green with **`stopAudioCapture`** + **`e2eIdleTimeoutMs`**; **`test-app/tests/e2eIdleTimeoutMs.test.ts`** for URL idle resolution.
 - [x] **OpenAI proxy mock Issue #487:** `openai-proxy-integration.test.ts` — post-FCR assistant signals may arrive after 2s (e.g. **`AgentAudioDone`**); 10s deadline from FCR; **`AgentStartedSpeaking`**; optional 2s observability log.
 - [x] **Issue #489 real-API (subset):** same file — **`toolChoice: 'required'`** + prompt forcing **`get_current_time`** so the model does not answer conversationally without **`FunctionCallRequest`**; observations in [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md).
+- [x] **E2E skip policy:** OpenAI key not required in Playwright env for **`skipIfNoProxyForBackend`**; **`e2e-skip-env-policy.cjs`** + **`openai-proxy-e2e-skip-policy.test.js`**.
+- [x] **test-app backend:** **`GET /health`** / **`GET /ready`**; **`backend-server-integration.test.js`** + **`backend-server-test-utils.cjs`** (rename from mock-proxy integration).
 
 ---
 

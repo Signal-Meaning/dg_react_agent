@@ -130,7 +130,7 @@ Only **`E2E_USE_EXISTING_SERVER`** controls whether Playwright starts them:
 
 **`USE_PROXY_MODE`** is separate: it only controls whether the Deepgram setup uses the proxy (and, when using existing server, whether globalSetup also checks that the proxy is reachable). It does **not** control whether Playwright starts the servers.
 
-**`USE_REAL_APIS`**: When set to `true`, these tests expect **real** API keys (e.g. `OPENAI_API_KEY` or `VITE_OPENAI_API_KEY` in `test-app/.env`) so the proxy can call real upstreams. Include it in commands for openai-proxy and other proxy E2E that hit real APIs (see examples below).
+**`USE_REAL_APIS`**: When set to `true`, tests exercise **real** upstreams through the **running proxy**. Playwright **does not** need `OPENAI_API_KEY` / `VITE_OPENAI_API_KEY` in `test-app/.env` for skip logic (avoid exposing server keys to the Vite/Node test harness). Put **`OPENAI_API_KEY` in `packages/voice-agent-backend/.env`** (loaded by `npm run backend`). Deepgram E2E may still use `VITE_DEEPGRAM_API_KEY` in `test-app/.env` where the app talks to Deepgram directly. Include `USE_REAL_APIS=1` in commands for openai-proxy and other proxy E2E that hit real APIs (see examples below).
 
 ### Using a pre-started dev server
 
@@ -194,7 +194,7 @@ If the app uses **HTTPS** (e.g. `HTTPS=true` in test-app/.env), set the base URL
 3. **Verify alignment before running E2E:**
    - **Proxy startup log:** Must show `wss://localhost:8080/...` when using HTTPS. If it shows `ws://`, the proxy is not using the same scheme as the app.
    - **E2E scheme test:** Run `HTTPS=true npm run test:e2e -- scheme-config-validation.spec.js` (with `E2E_USE_EXISTING_SERVER=1` if the dev server is already up). It asserts the test helper builds wss URLs when HTTPS=true.
-   - **Proxy integration test:** `npm test -- mock-proxy-server-integration` includes a test that the proxy prints `wss://` when started with `HTTPS=true`.
+   - **Backend integration test:** `npm test -- backend-server-integration` includes a test that the proxy prints `wss://` when started with `HTTPS=true`.
 
 4. **If `page.goto` fails with `net::ERR_CERT_AUTHORITY_INVALID` (app URL https://localhost:5173):**  
    The config sets `ignoreHTTPSErrors: true` and Chromium args `--ignore-certificate-errors` / `--allow-insecure-localhost`. If it still fails, **run E2E over HTTP** so there is no TLS:
@@ -209,7 +209,7 @@ If the app uses **HTTPS** (e.g. `HTTPS=true` in test-app/.env), set the base URL
    - **When using HTTP (HTTPS disabled):** Restart **both** the dev server and the proxy after changing `.env` so they serve `http`/`ws`. Run the test with **`E2E_USE_HTTP=1`** so the test uses `http://localhost:5173` and `ws://localhost:8080/openai`. Check the proxy terminal for errors (e.g. `[Proxy] OpenAI forwarder upstream error`).
    - Confirm the proxy was started with the same HTTPS as the app (check proxy startup log for `wss://` when app is https).
    - Confirm port: app proxy URL must match proxy port (default 8080).
-   - **OpenAI proxy only:** The proxy spawns an OpenAI subprocess (run.ts on port 8081) that connects to api.openai.com. Ensure `OPENAI_API_KEY` (or `VITE_OPENAI_API_KEY`) is set in `test-app/.env` and valid; if the upstream rejects the connection (e.g. 400), the component will never reach "connected". Check the proxy terminal for upstream errors (e.g. `[Proxy] OpenAI forwarder upstream error`).
+   - **OpenAI proxy only:** The proxy spawns an OpenAI subprocess (run.ts on port 8081) that connects to api.openai.com. Ensure **`OPENAI_API_KEY` is set for the backend** (canonical: `packages/voice-agent-backend/.env` when you run `npm run backend` from test-app). It does **not** need to be in `test-app/.env` for the browser. If the upstream rejects the connection (e.g. 400), the component will never reach "connected". Check the proxy terminal for upstream errors (e.g. `[Proxy] OpenAI forwarder upstream error`).
    - Browser may reject self-signed cert for `wss://localhost:8080`; Playwright’s `ignoreHTTPSErrors` applies to the page; if wss still fails, the proxy’s TLS cert may need to be accepted by the browser context.
 
 ### Diagnosing why connection never becomes "connected"
@@ -278,7 +278,7 @@ Use these in order; each gives a LOC (this README) and the exact command(s).
 
 4. **Optional: integration test that proxy accepts a Node WebSocket**  
    Add a test that starts the mock-proxy (with `OPENAI_API_KEY` and `HTTPS=true`), opens a Node WebSocket to `wss://127.0.0.1:8080/openai`, and expects either `open` or error containing `400`. If this passes but E2E fails, the issue is likely browser-specific (e.g. TLS).  
-   **Location:** e.g. `test-app/tests/mock-proxy-server-integration.test.js` or a new integration spec; no one-off command (run via `npm test` or `npm run test:e2e`).
+   **Location:** e.g. `test-app/tests/backend-server-integration.test.js` or a new integration spec; no one-off command (run via `npm test` or `npm run test:e2e`).
 
 5. **Ship despite E2E: minimal run + unit/integration**  
    Use the minimal run (1 test) as the standard proxy/connection check; rely on unit (`npm test -- websocket-proxy-connection` from repo root) and integration tests; document openai-proxy-e2e as environment-dependent and optionally skip in CI.  

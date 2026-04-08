@@ -67,7 +67,7 @@ const FUNCTION_CALL_RESULT_TIMEOUT = 45000;
 
 test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   test.beforeEach(() => {
-    skipIfNoProxyForBackend('Requires proxy for E2E_BACKEND and API key when USE_REAL_APIS=1');
+    skipIfNoProxyForBackend('Requires OpenAI proxy; OPENAI key belongs on backend only (not in Playwright env)');
   });
 
   test('1. Connection – connect through OpenAI proxy and receive settings', async ({ page }) => {

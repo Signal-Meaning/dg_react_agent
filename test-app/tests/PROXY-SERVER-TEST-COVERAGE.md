@@ -22,7 +22,7 @@
 
 | Location | What it tests |
 |----------|----------------|
-| `test-app/tests/mock-proxy-server-integration.test.js` | **API key requirement**: Spawns `backend-server.js` with `SKIP_DOTENV=1` and (1) neither key → exit code 1 and error message; (2) only `DEEPGRAM_API_KEY` → process stays up until SIGTERM; (3) only `OPENAI_API_KEY` → process stays up until SIGTERM. |
+| `test-app/tests/backend-server-integration.test.js` | **API key requirement**: Spawns `backend-server.js` with `SKIP_DOTENV=1` and (1) neither key → exit code 1 and error message; (2) only `DEEPGRAM_API_KEY` → process stays up until SIGTERM; (3) only `OPENAI_API_KEY` → process stays up until SIGTERM. Shared helpers: `tests/helpers/backend-server-test-utils.cjs`. |
 
 ### E2E (test-app + proxy)
 

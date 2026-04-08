@@ -167,7 +167,7 @@ npm test -- backend-server
 
 ### 4.2 Integration tests (proxy process)
 
-**File:** `test-app/tests/mock-proxy-server-integration.test.js`
+**File:** `test-app/tests/backend-server-integration.test.js`
 
 **What they do:**  
 Spawn the real `backend-server.js` with controlled env (using `SKIP_DOTENV=1` so `.env` is not loaded):

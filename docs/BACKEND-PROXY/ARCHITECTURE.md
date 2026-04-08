@@ -7,6 +7,7 @@ This document describes how the **single backend server** for the test-app is st
 The test-app uses **one backend process** that:
 
 - Listens on one HTTP(S) server (default port 8080).
+- Exposes **`GET /health`** (liveness) and **`GET /ready`** (readiness JSON: which proxy services are enabled; no secrets).
 - Hosts **both** proxy endpoints on that server:
   - **Deepgram**: path `/deepgram-proxy` (configurable via `PROXY_PATH`) — pass-through to Deepgram Voice Agent (and optionally transcription) API.
   - **OpenAI**: path `/openai` — translation proxy (component protocol ↔ OpenAI Realtime API).
@@ -19,7 +20,9 @@ cd test-app
 npm run backend
 ```
 
-Environment: load keys from `test-app/.env` (e.g. `DEEPGRAM_API_KEY` or `VITE_DEEPGRAM_API_KEY`, `OPENAI_API_KEY` or `VITE_OPENAI_API_KEY`). At least one must be set. See `test-app/scripts/backend-server.js` (or equivalent) for `PROXY_PORT`, `PROXY_PATH`, and HTTPS.
+Environment: server-side keys load from `packages/voice-agent-backend/.env` when using `npm run backend` from test-app (see `test-app/scripts/backend-server.js`). At least one of Deepgram or OpenAI key must be set. See that script for `PROXY_PORT`, `PROXY_PATH`, and HTTPS.
+
+**Automated checks:** `cd test-app && npm test -- backend-server-integration` — spawns `backend-server.js` with `SKIP_DOTENV`, asserts key requirement, `/health` / `/ready`, and HTTPS startup log. Helpers: `test-app/tests/helpers/backend-server-test-utils.cjs`.
 
 ## DRY: one implementation per proxy
 

@@ -1,6 +1,6 @@
 # Issue #560 — current status
 
-**Last updated:** 2026-04-08 (Root **`USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`**: **20 passed** ~73s; mock-only cases skipped when real APIs on. Issue #489: **`toolChoice: 'required'`** + prompt — [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md). **Open:** Playwright **`openai-proxy-e2e.spec.js`** (≥ test 5) + **`live-mode-openai-proxy.spec.js`** with dev + backend — [NEXT-STEP.md](./NEXT-STEP.md).)
+**Last updated:** 2026-04-09 (E2E hygiene: **`skipIfNoProxyForBackend`** does not require **`OPENAI_API_KEY`** in the Playwright process (key stays in **`packages/voice-agent-backend/.env`**). Shared policy: **`test-app/tests/e2e/helpers/e2e-skip-env-policy.cjs`** + Jest **`openai-proxy-e2e-skip-policy.test.js`**. Backend: **`GET /health`** / **`GET /ready`** on **`test-app/scripts/backend-server.js`**; integration suite renamed to **`backend-server-integration.test.js`** with **`tests/helpers/backend-server-test-utils.cjs`**. Prior: root **`USE_REAL_APIS=1`** **`openai-proxy-integration.test.ts`** 20 passed; Issue #489 — [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md). **Open:** Playwright real-API E2E + Live — [NEXT-STEP.md](./NEXT-STEP.md).)
 
 **GitHub:** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560)
 
@@ -113,6 +113,8 @@ Both paths hit the same **settings / connection / sleep** gating inside `sendAud
 | Agent Response vs greeting (Issue #414) | `test-app/src/utils/agentUtteranceGreetingPolicy.ts` + `test-app/tests/unit/agentUtteranceGreetingPolicy.test.ts` |
 | Instructions env | No `VITE_AGENT_INSTRUCTIONS` in repo — use `VITE_DEFAULT_INSTRUCTIONS` or `VITE_E2E_INSTRUCTIONS` (`instructions-loader.ts`, Instructions Status `data-testid="instructions-source-line"`). |
 | Backend env template | `packages/voice-agent-backend/backend.env.example` |
+| Backend liveness / readiness | **`GET /health`**, **`GET /ready`** on test-app backend (`backend-server.js`); see [ARCHITECTURE.md](../../BACKEND-PROXY/ARCHITECTURE.md) |
+| Backend integration (Jest) | **`cd test-app && npm test -- backend-server-integration`** — `SKIP_DOTENV` spawn, key requirement, `/health` / `/ready`, HTTPS log |
 
 ### Tests run for recent slices (agent should re-run after local edits)
 
@@ -123,5 +125,7 @@ Both paths hit the same **settings / connection / sleep** gating inside `sendAud
 | OpenAI proxy E2E | `cd test-app && npm run test:e2e -- openai-proxy-e2e.spec.js` | Run test 5 and Live as **two** commands if `-g` would otherwise match only one file. Requires dev server + backend. |
 | OpenAI proxy integration (root) | `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` | **Issue #489** subset + proxy debug: `USE_REAL_APIS=1 LOG_LEVEL=debug npm test -- … -t "Issue #489 real-API: after FunctionCallResponse"`. Observations: [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md). |
 | Live mode E2E | `cd test-app && npm run test:e2e -- live-mode-openai-proxy.spec.js` | **`stopAudioCapture`** before **`loadAndSendAudioSample`** (fake mic vs inject); **`e2eIdleTimeoutMs`** on URL via **`setupTestPageWithOpenAIProxy` `extraParams`**; **`waitForFinalUserTranscriptNormalized`**. |
+| E2E skip policy (Jest) | `cd test-app && npm test -- openai-proxy-e2e-skip-policy` | Locks OpenAI-key-in-Playwright policy; uses **`e2e-skip-env-policy.cjs`**. |
+| test-app backend integration | `cd test-app && npm test -- backend-server-integration` | Replaces former **`mock-proxy-server-integration`** name. |
 
 **Honest default:** implementer runs **build + targeted Jest**; **full Playwright OpenAI/Live** is **manual/CI** when servers and `USE_REAL_APIS` match project rules.

@@ -1,11 +1,21 @@
 /**
  * E2E Test Helpers
- * 
+ *
  * Shared utilities for Playwright E2E tests to promote DRY principles
  * and consistent testing patterns across the test suite.
- * Load test-app/.env so skip checks (e.g. USE_REAL_APIS + OPENAI_API_KEY) see keys when run in workers.
+ * Loads test-app/.env for proxy URLs and optional keys (e.g. Deepgram in Vite).
+ *
+ * OpenAI: do **not** require OPENAI_API_KEY / VITE_OPENAI_API_KEY in the Playwright process for
+ * OpenAI-proxy real-API runs — the key belongs in the backend only (`packages/voice-agent-backend/.env`).
+ * USE_REAL_APIS=1 means "exercise real upstream through the running proxy," not "expose secrets to Node/Vite."
  */
 import { expect, test } from '@playwright/test';
+import {
+  hasOpenAIKeyFromEnv,
+  hasOpenAIProxyEndpointFromEnv,
+  hasRealAPIKeyFromEnv,
+  hasRealBackendFromEnv,
+} from './e2e-skip-env-policy.cjs';
 import { OPENAI_PROXY_FC_E2E_VERIFY_TOKEN } from '../../../scripts/function-call-handlers.js';
 import { createRequire } from 'module';
 import dotenv from 'dotenv';
@@ -23,52 +33,37 @@ dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
  * @returns {boolean} True if a valid API key is available
  */
 export function hasRealAPIKey() {
-  const apiKey = process.env.VITE_DEEPGRAM_API_KEY;
-  if (!apiKey) return false;
-  if (apiKey === 'mock') return false;
-  if (apiKey === 'your-deepgram-api-key-here') return false;
-  if (apiKey === 'your_actual_deepgram_api_key_here') return false;
-  if (apiKey.startsWith('test-')) return false;
-  if (apiKey.length < 20) return false;
-  return true;
+  return hasRealAPIKeyFromEnv();
 }
 
 /**
- * Check if OpenAI API key is available (for proxy calling real OpenAI).
- * Used when USE_REAL_APIS=1 or when determining if we have a real OpenAI backend.
+ * True if an OpenAI key is present in **this** process (Playwright / test-app .env).
+ * Optional diagnostics only — skip gating for OpenAI proxy + USE_REAL_APIS must not depend on this;
+ * the proxy uses OPENAI_API_KEY from the backend process.
  * @returns {boolean} True if OPENAI_API_KEY or VITE_OPENAI_API_KEY is set and non-placeholder
  */
 export function hasOpenAIKey() {
-  const key = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
-  if (!key || typeof key !== 'string') return false;
-  const trimmed = key.trim();
-  if (trimmed === '') return false;
-  if (trimmed === 'your-openai-api-key-here' || trimmed.startsWith('sk-test')) return false;
-  return trimmed.length >= 10;
+  return hasOpenAIKeyFromEnv();
 }
 
 /**
  * Check if we have at least one real backend available (Deepgram or OpenAI proxy).
  * DRY: single source of truth for "can run this test against a real API".
- * - Deepgram: VITE_DEEPGRAM_API_KEY (hasRealAPIKey())
- * - OpenAI proxy: hasOpenAIProxyEndpoint() and, when USE_REAL_APIS=1, hasOpenAIKey()
+ * - Deepgram: VITE_DEEPGRAM_API_KEY (hasRealAPIKey()) — browser/Vite path (legacy; prefer server-side keys when possible).
+ * - OpenAI proxy: hasOpenAIProxyEndpoint(); when USE_REAL_APIS=1, still true without a key in **this** process
+ *   (OpenAI key is only required in the backend that runs the proxy).
  * @returns {boolean} True if tests can run against a real backend
  */
 export function hasRealBackend() {
-  if (hasRealAPIKey()) return true;
-  if (!hasOpenAIProxyEndpoint()) return false;
-  if (process.env.USE_REAL_APIS === 'true' || process.env.USE_REAL_APIS === '1') {
-    return hasOpenAIKey();
-  }
-  return true; // proxy endpoint available, mocks may be used
+  return hasRealBackendFromEnv();
 }
 
 /**
- * Skip test if no real backend is available (Deepgram key or OpenAI proxy with key when USE_REAL_APIS).
+ * Skip test if no real backend is available (Deepgram key or OpenAI proxy endpoint when USE_REAL_APIS).
  * Use for backend-agnostic tests that work with either Deepgram or OpenAI proxy.
  * @param {string} reason - Optional reason for skipping
  */
-export function skipIfNoRealBackend(reason = 'Requires real API (VITE_DEEPGRAM_API_KEY or OpenAI proxy with key when USE_REAL_APIS=1)') {
+export function skipIfNoRealBackend(reason = 'Requires real API (VITE_DEEPGRAM_API_KEY or OpenAI proxy; backend holds OpenAI key)') {
   if (!hasRealBackend()) {
     test.skip(true, reason);
   }
@@ -76,7 +71,7 @@ export function skipIfNoRealBackend(reason = 'Requires real API (VITE_DEEPGRAM_A
 
 /**
  * Skip test if real API is not available.
- * Uses hasRealBackend() so tests run when either Deepgram or OpenAI proxy (with key when USE_REAL_APIS) is configured.
+ * Uses hasRealBackend() so tests run when either Deepgram or OpenAI proxy is configured (OpenAI key on backend only).
  * For Deepgram-only tests, also call skipIfOpenAIProxy().
  * @param {string} reason - Optional reason for skipping
  * @example
@@ -85,7 +80,7 @@ export function skipIfNoRealBackend(reason = 'Requires real API (VITE_DEEPGRAM_A
  *   // ... test code
  * });
  */
-export function skipIfNoRealAPI(reason = 'Requires real API (Deepgram key or OpenAI proxy with key when USE_REAL_APIS=1)') {
+export function skipIfNoRealAPI(reason = 'Requires real API (Deepgram key or OpenAI proxy; OpenAI key on backend only)') {
   if (!hasRealBackend()) {
     test.skip(true, reason);
   }
@@ -98,34 +93,18 @@ export function skipIfNoRealAPI(reason = 'Requires real API (Deepgram key or Ope
  * @returns {boolean} True if VITE_OPENAI_PROXY_ENDPOINT is set or default applies
  */
 export function hasOpenAIProxyEndpoint() {
-  const endpoint = process.env.VITE_OPENAI_PROXY_ENDPOINT;
-  if (typeof endpoint === 'string' && endpoint.trim().length > 0) return true;
-  // With USE_PROXY_MODE and default backend (OpenAI), run OpenAI proxy E2E using default endpoint
-  if (process.env.USE_PROXY_MODE === 'true' || process.env.USE_PROXY_MODE === '1') {
-    if (process.env.E2E_BACKEND === 'deepgram') return false;
-    return true;
-  }
-  return false;
+  return hasOpenAIProxyEndpointFromEnv();
 }
 
 /**
  * Skip test if OpenAI proxy endpoint is not configured.
- * When USE_REAL_APIS=true, also requires OPENAI_API_KEY or VITE_OPENAI_API_KEY so the proxy can call real OpenAI.
+ * Does not require OPENAI_API_KEY in the Playwright process — configure the key in the backend `.env` only.
  * @param {string} reason - Optional reason for skipping
  */
 export function skipIfNoOpenAIProxy(reason = 'Requires VITE_OPENAI_PROXY_ENDPOINT for OpenAI proxy E2E tests') {
   if (!hasOpenAIProxyEndpoint()) {
     test.skip(true, reason);
     return;
-  }
-  if (process.env.USE_REAL_APIS === 'true' || process.env.USE_REAL_APIS === '1') {
-    const key = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
-    if (!key || typeof key !== 'string' || key.trim() === '') {
-      test.skip(
-        true,
-        'USE_REAL_APIS=true requires OPENAI_API_KEY or VITE_OPENAI_API_KEY in test-app/.env so the proxy can call real OpenAI'
-      );
-    }
   }
 }
 
@@ -142,22 +121,19 @@ export function skipIfOpenAIProxy(reason = 'Deepgram-only test; skip when using 
 }
 
 /**
- * Skip when the backend selected by E2E_BACKEND has no proxy configured or (when USE_REAL_APIS)
- * no API key. Use with setupTestPageForBackend() so the same test runs against either proxy.
+ * Skip when the backend selected by E2E_BACKEND has no proxy configured.
+ * For USE_REAL_APIS=1 + OpenAI, does **not** require OPENAI_API_KEY in this process (backend holds the key).
+ * For USE_REAL_APIS=1 + Deepgram, still requires VITE_DEEPGRAM_API_KEY (browser/Vite path).
+ * Use with setupTestPageForBackend() so the same test runs against either proxy.
  * E2E_BACKEND=deepgram → Deepgram proxy; unset or openai → OpenAI proxy.
  * @param {string} reason - Optional reason for skipping
  */
-export function skipIfNoProxyForBackend(reason = 'Requires proxy for selected E2E_BACKEND and, when USE_REAL_APIS=1, the corresponding API key') {
+export function skipIfNoProxyForBackend(reason = 'Requires proxy for selected E2E_BACKEND (OpenAI key lives on backend only)') {
   const backend = process.env.E2E_BACKEND === 'deepgram' ? 'deepgram' : 'openai';
   if (backend === 'openai') {
     if (!hasOpenAIProxyEndpoint()) {
       test.skip(true, reason || 'OpenAI proxy not configured (set USE_PROXY_MODE=true or VITE_OPENAI_PROXY_ENDPOINT)');
       return;
-    }
-    if (process.env.USE_REAL_APIS === 'true' || process.env.USE_REAL_APIS === '1') {
-      if (!hasOpenAIKey()) {
-        test.skip(true, 'USE_REAL_APIS=1 requires OPENAI_API_KEY or VITE_OPENAI_API_KEY for OpenAI proxy');
-      }
     }
     return;
   }
@@ -1682,7 +1658,7 @@ async function establishConnectionViaText(page, timeout = 30000) {
     const currentStatus = await readConnectionStatus();
     throw new Error(
       `Connection stayed "closed" after focusing text input. Current connection-status: ${currentStatus}. ` +
-      'Check proxy is running on the same scheme as the app (ws when HTTP, wss when HTTPS), OPENAI_API_KEY in test-app/.env, and proxy terminal for errors.'
+      'Check proxy is running on the same scheme as the app (ws when HTTP, wss when HTTPS), OPENAI_API_KEY in the backend env (e.g. packages/voice-agent-backend/.env when using npm run backend), and proxy terminal for errors.'
     );
   }
 

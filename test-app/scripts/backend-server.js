@@ -4,6 +4,8 @@
  * Single HTTP(S) server that hosts both proxy endpoints and app-backend function execution (Issue #407):
  *   - /deepgram-proxy: pass-through to Deepgram Voice Agent (and optionally transcription) API
  *   - /openai: OpenAI Realtime translation proxy (spawns scripts/openai-proxy/run.ts; no duplicate proxy logic)
+ *   - GET /health: liveness (process serving HTTP)
+ *   - GET /ready: readiness JSON — which proxy services are enabled (no secrets)
  *   - POST /function-call: execute function calls (common handlers; see function-call-handlers.js)
  *
  * One implementation per proxy (DRY). See docs/BACKEND-PROXY/ARCHITECTURE.md.
@@ -167,6 +169,32 @@ const requestHandler = (req, res) => {
   setSecurityHeaders(res);
 
   const pathname = getPathname(req.url);
+
+  // GET /health — liveness (standard probe; no dependency on upstream API keys beyond startup)
+  if (req.method === 'GET' && pathname === '/health') {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.writeHead(200);
+    res.end(JSON.stringify({ status: 'ok' }));
+    return;
+  }
+
+  // GET /ready — readiness: which WebSocket proxy routes are enabled (no secrets in body)
+  if (req.method === 'GET' && pathname === '/ready') {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.writeHead(200);
+    res.end(
+      JSON.stringify({
+        status: 'ready',
+        port: PROXY_PORT,
+        https: useHttps,
+        services: {
+          deepgram: { enabled: hasDeepgram, path: hasDeepgram ? PROXY_PATH : null },
+          openai: { enabled: hasOpenAI, path: hasOpenAI ? '/openai' : null },
+        },
+      })
+    );
+    return;
+  }
 
   // POST /function-call — Issue #407, #423: delegated to voice-agent-backend package (thin wrapper)
   if (req.method === 'POST' && pathname === '/function-call') {
