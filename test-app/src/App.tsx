@@ -18,7 +18,7 @@ import {
   type AgentFunction,
   getLogger,
 } from '@signal-meaning/voice-agent-react';
-import { loadInstructionsFromFile } from '../../src/utils/instructions-loader';
+import { loadInstructionsFromFile, getClientViteDefaultInstructionsOverride } from '../../src/utils/instructions-loader';
 import { ClosureIssueTestPage } from './closure-issue-test-page';
 import { getFunctionDefinitions } from './utils/functionDefinitions';
 import { getContextForSettings } from './utils/context-for-settings';
@@ -31,6 +31,13 @@ import {
 } from './live-mode/liveModePresentation';
 import { shouldClearMicOnAgentDisconnect } from './live-mode/syncMicFromAgentConnection';
 import { getVoiceAgentStartOptions } from './live-mode/voiceAgentStartOptions';
+import { shouldBlockTextSubmitForMissingBrowserDeepgramKey } from './utils/deepgramBrowserKeyPolicy';
+import { shouldSuppressAgentResponseForGreetingAfterUser } from './utils/agentUtteranceGreetingPolicy';
+import {
+  buildVoiceProviderChoices,
+  inferVoiceProviderId,
+  type VoiceProviderId,
+} from './voiceProviderOptions';
 import {
   openAiInputTranscriptImpliesUserSpeaking,
   openAiTranscriptShouldEndMicActivityPulse,
@@ -84,19 +91,20 @@ declare global {
     __appLastKnownConversation?: Array<{ role: string; content: string; timestamp?: number }>;
     /** Issue #561 E2E: `startAudioCapture` completed (`?e2e-mic-assertions=1`). */
     __e2eStartAudioCaptureCompletedAt?: number;
+    /** E2E: last Live Transcript line (updated whenever transcript callback runs). */
+    __e2eLastLiveTranscript?: string;
+    /** E2E: every onTranscriptUpdate (replaces removed transcript-history DOM). */
+    __e2eTranscriptEvents?: Array<{
+      text: string;
+      is_final: boolean;
+      speech_final: boolean;
+      timestamp: number;
+    }>;
   }
 }
 
 // Type alias for convenience
 type TestWindow = Window;
-
-// Type for transcript history entries
-type TranscriptHistoryEntry = {
-  text: string;
-  is_final: boolean;
-  speech_final: boolean;
-  timestamp: number;
-};
 
 /** Issue #406: Storage key for conversation (component persists via conversationStorage). */
 const CONVERSATION_STORAGE_KEY = 'dg_voice_conversation';
@@ -235,9 +243,7 @@ function App() {
   // State for UI
   const [isReady, setIsReady] = useState(false);
   const [lastTranscript, setLastTranscript] = useState('');
-  const [transcriptHistory, setTranscriptHistory] = useState<TranscriptHistoryEntry[]>([]);
   const [agentResponse, setAgentResponse] = useState('');
-  const [userMessage, setUserMessage] = useState('');
   const [agentState, setAgentState] = useState<AgentState>('idle');
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -257,6 +263,10 @@ function App() {
   // Instructions state
   const [loadedInstructions, setLoadedInstructions] = useState<string>('');
   const [instructionsLoading, setInstructionsLoading] = useState(true);
+  type InstructionsLoadSource = 'e2e' | 'vite_default' | 'builtin' | 'error_builtin';
+  const [instructionsLoadSource, setInstructionsLoadSource] = useState<InstructionsLoadSource>('builtin');
+  /** Remount headless component when voice provider changes (new WebSocket session). */
+  const [voiceInteractionMountKey, setVoiceInteractionMountKey] = useState(0);
   
   // Issue #406: Conversation for display and context — synced from component ref (component owns persistence via conversationStorage)
   const [conversationForDisplay, setConversationForDisplay] = useState<Array<{ role: ConversationRole; content: string; timestamp?: number }>>([]);
@@ -348,6 +358,12 @@ function App() {
     };
   }, []);
 
+  // E2E: Live Transcript line while Live mode hides debug layout (Issue #560 / audio specs).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    (window as TestWindow).__e2eLastLiveTranscript = lastTranscript;
+  }, [lastTranscript]);
+
   // Backend proxy mode state (Issue #242)
   // Allow override via URL query params for E2E testing (same pattern as audioConstraints)
   const memoizedProxyConfig = useMemo(() => {
@@ -375,6 +391,9 @@ function App() {
       ? (crypto as { randomUUID: () => string }).randomUUID()
       : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`
   );
+  const voiceProviderChoices = useMemo(() => buildVoiceProviderChoices(), []);
+  const activeVoiceProviderId = inferVoiceProviderId(connectionMode, proxyEndpoint);
+
   const isDebugMode = import.meta.env.VITE_DEBUG === 'true' || new URLSearchParams(window.location.search).get('debug') === 'true' || false;
   const logger = useMemo(() => getLogger({ debug: isDebugMode }), [isDebugMode]);
   const sessionLogger = useMemo(() => logger.child({ traceId: sessionTraceId }), [logger, sessionTraceId]);
@@ -557,6 +576,7 @@ function App() {
         // E2E-only override: when set, use this instruction for "response content reflects instructions" test
         const e2eInstructions = import.meta.env.VITE_E2E_INSTRUCTIONS;
         if (e2eInstructions && typeof e2eInstructions === 'string' && e2eInstructions.trim()) {
+          setInstructionsLoadSource('e2e');
           setLoadedInstructions(e2eInstructions.trim());
           addLog(`Using E2E instruction override (VITE_E2E_INSTRUCTIONS): ${e2eInstructions.substring(0, 50)}...`);
           setInstructionsLoading(false);
@@ -564,10 +584,13 @@ function App() {
           return;
         }
 
-        // Loader: env override (VITE_DEFAULT_INSTRUCTIONS) → file → default
+        // Loader: VITE_DEFAULT_INSTRUCTIONS → built-in default (instructions-loader.ts)
         const instructions = await loadInstructionsFromFile();
 
         setLoadedInstructions(instructions);
+        setInstructionsLoadSource(
+          getClientViteDefaultInstructionsOverride() ? 'vite_default' : 'builtin'
+        );
         addLog(`Loaded instructions via loader: ${instructions.substring(0, 50)}...`);
       } catch (error) {
         sessionLogger.error('Failed to load instructions', { error: error instanceof Error ? error.message : String(error) });
@@ -575,6 +598,7 @@ function App() {
 
         const { getDefaultInstructions } = await import('../../src/utils/instructions-loader');
         const defaultInstructions = getDefaultInstructions();
+        setInstructionsLoadSource('error_builtin');
         setLoadedInstructions(defaultInstructions);
         addLog(`Using default instructions: ${defaultInstructions.substring(0, 50)}...`);
       } finally {
@@ -789,27 +813,34 @@ function App() {
       // Log transcript to event log (and console via addLog)
       const transcriptType = transcript.is_final ? 'final' : 'interim';
       addLog(`[TRANSCRIPT] "${text}" (${transcriptType})`);
-      
-      // Store transcript in history for E2E testing (displayed in DOM)
-      // This replaces window.__testTranscripts with a proper React state + DOM display
-      const transcriptEntry: TranscriptHistoryEntry = {
-        text: text,
+
+      const transcriptEntry = {
+        text,
         is_final: transcript.is_final || false,
         speech_final: 'speech_final' in transcript ? (transcript as { speech_final?: boolean }).speech_final || false : false,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
-      
-      setTranscriptHistory(prev => [...prev, transcriptEntry]);
-      
-      // Debug logging
-      const transcriptTypeLabel = transcriptEntry.is_final 
-        ? (transcriptEntry.speech_final ? 'final (speech_final)' : 'final')
+      if (typeof window !== 'undefined') {
+        const w = window as TestWindow;
+        const cap = 500;
+        const arr = w.__e2eTranscriptEvents ?? [];
+        arr.push(transcriptEntry);
+        w.__e2eTranscriptEvents = arr.length > cap ? arr.slice(-cap) : arr;
+      }
+      const transcriptTypeLabel = transcriptEntry.is_final
+        ? transcriptEntry.speech_final
+          ? 'final (speech_final)'
+          : 'final'
         : 'interim';
-      sessionLogger.debug(`TRANSCRIPT-CAPTURE: Stored ${transcriptTypeLabel} transcript`, { textPreview: text.substring(0, 50), is_final: transcriptEntry.is_final, speech_final: transcriptEntry.speech_final });
+      sessionLogger.debug(`TRANSCRIPT-CAPTURE: ${transcriptTypeLabel}`, {
+        textPreview: text.substring(0, 50),
+        is_final: transcriptEntry.is_final,
+        speech_final: transcriptEntry.speech_final,
+      });
 
       // Issue #561: OpenAI proxy uses turn_detection null — upstream never sends UserStartedSpeaking;
-      // user speech still arrives as input_audio_transcription → onTranscriptUpdate.
       const useOpenAIProxy = (proxyEndpoint ?? '').includes('/openai');
+      // user speech still arrives as input_audio_transcription → onTranscriptUpdate.
       if (useOpenAIProxy && openAiInputTranscriptImpliesUserSpeaking(transcript)) {
         setLiveMicActivityPhase('speaking');
         if (openAiTranscriptShouldEndMicActivityPulse(transcript)) {
@@ -840,9 +871,13 @@ function App() {
       if (typeof window !== 'undefined') (window as TestWindow).__appLastKnownConversation = history;
     }
     const greeting = import.meta.env.VITE_AGENT_GREETING || 'Hello! How can I assist you today?';
-    const isGreeting = utterance.text.trim() === greeting.trim();
-    const prevEntry = history.length >= 2 ? history[history.length - 2] : undefined;
-    if (isGreeting && prevEntry?.role === 'user') {
+    if (
+      shouldSuppressAgentResponseForGreetingAfterUser({
+        utteranceText: utterance.text,
+        greetingText: greeting,
+        history,
+      })
+    ) {
       // New session sent greeting after user message (e.g. after reload). Do not show greeting as the response to the user's message (Issue #414).
       setConversationForDisplay(history);
       return;
@@ -851,13 +886,12 @@ function App() {
     setConversationForDisplay(history);
   }, []);
 
-  const handleUserMessage = useCallback((message: UserMessageResponse, conversationHistory?: Array<{ role: ConversationRole; content: string; timestamp?: number }>) => {
+  const handleUserMessage = useCallback((_message: UserMessageResponse, conversationHistory?: Array<{ role: ConversationRole; content: string; timestamp?: number }>) => {
     const history = conversationHistory ?? deepgramRef.current?.getConversationHistory() ?? [];
     if (history.length > 0) {
       lastKnownConversationRef.current = history;
       if (typeof window !== 'undefined') (window as TestWindow).__appLastKnownConversation = history;
     }
-    setUserMessage(message.text);
     setConversationForDisplay(history);
     // Component logs user message echo; no redundant addLog here
   }, []);
@@ -1101,17 +1135,19 @@ function App() {
     if (!textInput.trim()) return;
     
     try {
-      const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
-      
-      if (!apiKey || apiKey === 'your-deepgram-api-key-here' || apiKey === 'your_actual_deepgram_api_key_here') {
+      if (
+        shouldBlockTextSubmitForMissingBrowserDeepgramKey({
+          connectionMode,
+          viteDeepgramApiKey: import.meta.env.VITE_DEEPGRAM_API_KEY,
+        })
+      ) {
         addLog('❌ Please set VITE_DEEPGRAM_API_KEY environment variable with a valid Deepgram API key');
         return;
       }
       
       // Send text message to agent
       addLog(`Sending text message: ${textInput}`);
-      setUserMessage(textInput);
-      
+
       const messageToSend = textInput;
       if (deepgramRef.current) {
         await deepgramRef.current.injectUserMessage(messageToSend);
@@ -1131,7 +1167,7 @@ function App() {
       addLog(`Error sending text message: ${(error as Error).message}`);
       sessionLogger.error('Text submit error', { error: error instanceof Error ? error.message : String(error) });
     }
-  }, [textInput, addLog]);
+  }, [textInput, addLog, connectionMode, sessionLogger]);
 
 
   const handleAgentAudioChunk = useCallback(() => {
@@ -1176,7 +1212,7 @@ function App() {
     }
   }, [proxyEndpoint, addLog]);
 
-  const stopInteraction = async () => {
+  const stopInteraction = useCallback(async () => {
     try {
       await deepgramRef.current?.stop();
       setIsRecording(false);
@@ -1187,7 +1223,20 @@ function App() {
       addLog(`Error stopping: ${(error as Error).message}`);
       sessionLogger.error('Stop error', { error: error instanceof Error ? error.message : String(error) });
     }
-  };
+  }, [addLog, sessionLogger]);
+
+  const handleVoiceProviderChange = useCallback(
+    async (id: VoiceProviderId) => {
+      const choice = voiceProviderChoices.find((c) => c.id === id);
+      if (!choice || choice.proxyEndpoint === proxyEndpoint) return;
+      await stopInteraction();
+      setProxyEndpoint(choice.proxyEndpoint);
+      setConnectionMode('proxy');
+      setVoiceInteractionMountKey((k) => k + 1);
+      addLog(`Voice provider: ${choice.label} — new session (${choice.proxyEndpoint})`);
+    },
+    [voiceProviderChoices, proxyEndpoint, stopInteraction, addLog]
+  );
 
   /** Issue #561: Start → Live mode with mic on by default (correct start flags, not userInitiated-only on non-proxy). */
   const enterLiveMode = async () => {
@@ -1325,11 +1374,15 @@ function App() {
         fontSize: '14px',
         lineHeight: '1.5'
       }}>
-        <h2 style={{ margin: '0 0 15px 0', color: '#fbb6ce', fontSize: '18px' }}>⚠️ Deepgram API Key Required</h2>
-        <p style={{ margin: '0 0 15px 0' }}><strong>This test app requires a valid Deepgram API key to function:</strong></p>
-        
-        <p style={{ margin: '15px 0 10px 0' }}><strong>To enable Deepgram integration:</strong></p>
-        <p style={{ margin: '0 0 10px 0' }}>Set the following in <code style={{ backgroundColor: '#4a5568', padding: '2px 4px', borderRadius: '3px', fontSize: '13px', color: '#e2e8f0' }}>test-app/.env</code>:</p>
+        <h2 style={{ margin: '0 0 15px 0', color: '#fbb6ce', fontSize: '18px' }}>⚠️ Direct mode: browser Deepgram credentials missing</h2>
+        <p style={{ margin: '0 0 15px 0' }}>
+          <strong>Recommended:</strong> use <strong>Proxy</strong> mode and put{' '}
+          <code style={{ backgroundColor: '#4a5568', padding: '2px 4px', borderRadius: '3px', fontSize: '13px' }}>DEEPGRAM_API_KEY</code>
+          {' / '}
+          <code style={{ backgroundColor: '#4a5568', padding: '2px 4px', borderRadius: '3px', fontSize: '13px' }}>OPENAI_API_KEY</code>
+          {' '}in <code style={{ backgroundColor: '#4a5568', padding: '2px 4px', borderRadius: '3px', fontSize: '13px' }}>packages/voice-agent-backend/.env</code> — no provider keys in the Vite bundle.
+        </p>
+        <p style={{ margin: '0 0 10px 0' }}><strong>If you stay in direct mode (legacy):</strong> set the following in <code style={{ backgroundColor: '#4a5568', padding: '2px 4px', borderRadius: '3px', fontSize: '13px', color: '#e2e8f0' }}>test-app/.env</code>:</p>
         <pre style={{ 
           backgroundColor: '#2d3748', 
           padding: '15px', 
@@ -1344,8 +1397,8 @@ function App() {
 VITE_DEEPGRAM_API_KEY=your-real-deepgram-api-key
 VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         </pre>
-        <p style={{ margin: '15px 0 10px 0' }}>Get a free API key at: <a href="https://deepgram.com" target="_blank" style={{ color: '#63b3ed', textDecoration: 'none' }}>https://deepgram.com</a></p>
-        <p style={{ margin: '0', fontStyle: 'italic', color: '#a0aec0' }}>Text messages will be sent to the Deepgram agent service when a valid API key is provided.</p>
+        <p style={{ margin: '15px 0 10px 0' }}>Deepgram keys: <a href="https://deepgram.com" target="_blank" rel="noreferrer" style={{ color: '#63b3ed', textDecoration: 'none' }}>https://deepgram.com</a></p>
+        <p style={{ margin: '0', fontStyle: 'italic', color: '#a0aec0' }}>Direct mode embeds the Deepgram key in the client; prefer proxy mode for OpenAI or Deepgram agent traffic through the local backend.</p>
       </div>
     );
   }
@@ -1381,6 +1434,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
       </span>
       <div data-testid="deepgram-component">
         <DeepgramVoiceInteraction
+        key={voiceInteractionMountKey}
         ref={deepgramRef}
         {...(connectionMode === 'direct' 
           ? { 
@@ -1478,48 +1532,104 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <span data-testid="agent-error-count" aria-hidden="true">{agentErrorCount}</span>
         <span data-testid="agent-audio-chunks-received" aria-hidden="true">{agentAudioChunkCount}</span>
         
-        {/* API Key Status Indicator */}
-        {(() => {
-          const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
-          const isValidApiKey = apiKey && 
-            apiKey !== 'your-deepgram-api-key-here' && 
-            apiKey !== 'your_actual_deepgram_api_key_here' &&
-            !apiKey.startsWith('test-') && 
-            apiKey.length >= 20; // Deepgram API keys are typically 20+ characters
-          
-          return (
-            <div style={{ 
-              margin: '10px 0', 
-              padding: '8px', 
-              backgroundColor: isValidApiKey ? '#1a4d1a' : '#4a1a1a', 
-              border: `1px solid ${isValidApiKey ? '#48bb78' : '#e53e3e'}`,
+        {/* Credentials hint: proxy = server .env; direct = legacy VITE Deepgram (discouraged) */}
+        {connectionMode === 'proxy' ? (
+          <div
+            data-testid="api-mode-indicator"
+            style={{
+              margin: '10px 0',
+              padding: '10px 12px',
+              backgroundColor: 'rgba(66, 153, 225, 0.15)',
+              border: '1px solid #4299e1',
               borderRadius: '4px',
-              color: isValidApiKey ? '#9ae6b4' : '#feb2b2'
-            }} data-testid="api-mode-indicator">
-              <strong>
-                {isValidApiKey ? '🟢 Valid Deepgram API Key' : '🔴 Invalid/Missing API Key'}
-              </strong>
-              <p style={{ margin: '5px 0 0 0', fontSize: '0.9em', color: isValidApiKey ? '#9ae6b4' : '#feb2b2' }}>
-                {isValidApiKey 
-                  ? 'Text messages will be sent to Deepgram agent service' 
-                  : 'Please set VITE_DEEPGRAM_API_KEY environment variable'
-                }
-              </p>
-            </div>
-          );
-        })()}
+              color: '#bee3f8',
+            }}
+          >
+            <strong>Proxy mode — credentials on the backend</strong>
+            <p style={{ margin: '6px 0 0 0', fontSize: '0.9em', lineHeight: 1.45 }}>
+              Set{' '}
+              <code style={{ backgroundColor: '#2c5282', padding: '2px 5px', borderRadius: '3px', color: '#e2e8f0' }}>DEEPGRAM_API_KEY</code>
+              {' '}and/or{' '}
+              <code style={{ backgroundColor: '#2c5282', padding: '2px 5px', borderRadius: '3px', color: '#e2e8f0' }}>OPENAI_API_KEY</code>
+              {' '}in{' '}
+              <code style={{ backgroundColor: '#2c5282', padding: '2px 5px', borderRadius: '3px', color: '#e2e8f0' }}>packages/voice-agent-backend/.env</code>
+              {' '}and run{' '}
+              <code style={{ backgroundColor: '#2c5282', padding: '2px 5px', borderRadius: '3px', color: '#e2e8f0' }}>npm run start</code>
+              {' '}there. The app uses your proxy URL (OpenAI:{' '}
+              <code style={{ backgroundColor: '#2c5282', padding: '2px 5px', borderRadius: '3px', color: '#e2e8f0' }}>…/openai</code>
+              {' '}or Deepgram:{' '}
+              <code style={{ backgroundColor: '#2c5282', padding: '2px 5px', borderRadius: '3px', color: '#e2e8f0' }}>…/deepgram-proxy</code>
+              ); the browser does not need provider API keys.
+            </p>
+            <p style={{ margin: '8px 0 0 0', fontSize: '0.85em', color: '#a0aec0', lineHeight: 1.45 }}>
+              <strong>Do not</strong> put Deepgram/OpenAI secrets in Vite env for this flow.{' '}
+              <code style={{ backgroundColor: '#2d3748', padding: '1px 4px', borderRadius: '3px' }}>VITE_DEEPGRAM_API_KEY</code>{' '}
+              is only for <strong>legacy direct-mode</strong> compatibility and should be left unset when using the proxy.
+            </p>
+          </div>
+        ) : (
+          (() => {
+            const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
+            const isValidApiKey = Boolean(
+              apiKey &&
+                apiKey !== 'your-deepgram-api-key-here' &&
+                apiKey !== 'your_actual_deepgram_api_key_here' &&
+                !apiKey.startsWith('test-') &&
+                apiKey.length >= 20,
+            );
+            return (
+              <div
+                style={{
+                  margin: '10px 0',
+                  padding: '10px 12px',
+                  backgroundColor: isValidApiKey ? 'rgba(214, 158, 46, 0.18)' : '#4a1a1a',
+                  border: `1px solid ${isValidApiKey ? '#d69e2e' : '#e53e3e'}`,
+                  borderRadius: '4px',
+                  color: isValidApiKey ? '#faf089' : '#feb2b2',
+                }}
+                data-testid="api-mode-indicator"
+              >
+                <strong>
+                  {isValidApiKey
+                    ? 'Direct mode (legacy) — Deepgram key in the browser'
+                    : 'Direct mode (legacy) — missing VITE_DEEPGRAM_*'}
+                </strong>
+                <p style={{ margin: '6px 0 0 0', fontSize: '0.9em', lineHeight: 1.45, color: isValidApiKey ? '#faf089' : '#feb2b2' }}>
+                  {isValidApiKey ? (
+                    <>
+                      A Deepgram key is exposed via Vite (<code style={{ backgroundColor: '#744210', padding: '2px 4px', borderRadius: '3px' }}>VITE_DEEPGRAM_API_KEY</code>
+                      ). <strong>Prefer proxy mode</strong> so{' '}
+                      <code style={{ backgroundColor: '#744210', padding: '2px 4px', borderRadius: '3px' }}>DEEPGRAM_API_KEY</code>
+                      {' '}stays on the server.
+                    </>
+                  ) : (
+                    <>
+                      Set <code style={{ backgroundColor: '#742a2a', padding: '2px 4px', borderRadius: '3px' }}>VITE_DEEPGRAM_API_KEY</code>
+                      {' '}and project id in <code style={{ backgroundColor: '#742a2a', padding: '2px 4px', borderRadius: '3px' }}>test-app/.env</code>, or switch to{' '}
+                      <strong>Proxy</strong> and use backend env only.
+                    </>
+                  )}
+                </p>
+              </div>
+            );
+          })()
+        )}
         
-        {/* Connection Mode Toggle (Issue #242) */}
-        <div style={{ 
-          margin: '15px 0', 
-          padding: '10px', 
-          border: '1px solid #4299e1', 
-          borderRadius: '4px',
-          backgroundColor: '#ebf8ff'
-        }}>
-          <h4 style={{ margin: '0 0 10px 0' }}>Connection Mode (Issue #242)</h4>
-          <div style={{ marginBottom: '10px' }}>
-            <label style={{ marginRight: '15px' }}>
+        {/* Connection Mode Toggle (Issue #242) — explicit dark text on light panel (parent layout uses light text) */}
+        <div
+          style={{
+            margin: '15px 0',
+            padding: '12px 14px',
+            border: '1px solid #4299e1',
+            borderRadius: '6px',
+            backgroundColor: '#ebf8ff',
+            color: '#1a202c',
+          }}
+          data-testid="connection-mode-panel"
+        >
+          <h4 style={{ margin: '0 0 10px 0', color: '#1a202c' }}>Connection Mode (Issue #242)</h4>
+          <div style={{ marginBottom: '10px', color: '#1a202c' }}>
+            <label style={{ marginRight: '15px', color: '#1a202c' }}>
               <input
                 type="radio"
                 name="connectionMode"
@@ -1529,7 +1639,7 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
               />
               Proxy (proxyEndpoint) - Default
             </label>
-            <label>
+            <label style={{ color: '#1a202c' }}>
               <input
                 type="radio"
                 name="connectionMode"
@@ -1542,9 +1652,35 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           </div>
           
           {connectionMode === 'proxy' && (
-            <div style={{ marginTop: '10px' }}>
+            <div style={{ marginTop: '10px', color: '#1a202c' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <span style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', color: '#1a202c' }}>
+                  Voice provider (proxy path)
+                </span>
+                <span style={{ fontSize: '0.8em', color: '#4a5568', display: 'block', marginBottom: '6px' }}>
+                  Switching provider stops the session and remounts the agent client. URLs come from env or defaults (combined backend).
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {voiceProviderChoices.map((c) => (
+                    <label key={c.id} style={{ color: '#1a202c', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="voiceProvider"
+                        checked={activeVoiceProviderId === c.id}
+                        onChange={() => void handleVoiceProviderChange(c.id)}
+                      />{' '}
+                      {c.label} — <code style={{ fontSize: '0.85em' }}>{c.proxyEndpoint}</code>
+                    </label>
+                  ))}
+                </div>
+                <p style={{ margin: '8px 0 0 0', fontSize: '0.8em', color: '#4a5568' }}>
+                  Inferred:{' '}
+                  <strong data-testid="voice-provider">{activeVoiceProviderId ?? 'custom'}</strong>
+                  {activeVoiceProviderId === null && connectionMode === 'proxy' ? ' (edit URL below)' : ''}
+                </p>
+              </div>
               <div style={{ marginBottom: '10px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#1a202c' }}>
                   Proxy Endpoint:
                 </label>
                 <input
@@ -1554,14 +1690,18 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
                   placeholder="ws://localhost:8080/deepgram-proxy"
                   style={{ 
                     width: '100%', 
-                    padding: '5px',
+                    padding: '8px',
                     fontFamily: 'monospace',
-                    fontSize: '0.9em'
+                    fontSize: '0.9em',
+                    color: '#1a202c',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #cbd5e0',
+                    borderRadius: '4px',
                   }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#1a202c' }}>
                   Auth Token (optional):
                 </label>
                 <input
@@ -1571,9 +1711,13 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
                   placeholder="JWT or session token"
                   style={{ 
                     width: '100%', 
-                    padding: '5px',
+                    padding: '8px',
                     fontFamily: 'monospace',
-                    fontSize: '0.9em'
+                    fontSize: '0.9em',
+                    color: '#1a202c',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #cbd5e0',
+                    borderRadius: '4px',
                   }}
                 />
               </div>
@@ -1589,7 +1733,16 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           }}>
             Current mode: <strong data-testid="connection-mode">{connectionMode}</strong>
             {connectionMode === 'proxy' && (
-              <span> → <strong data-testid="connection-proxy-endpoint">{proxyEndpoint || 'Not set'}</strong></span>
+              <span>
+                {' '}
+                → <strong data-testid="connection-proxy-endpoint">{proxyEndpoint || 'Not set'}</strong>
+                {activeVoiceProviderId ? (
+                  <span>
+                    {' '}
+                    (<span data-testid="connection-voice-backend">{activeVoiceProviderId}</span>)
+                  </span>
+                ) : null}
+              </span>
             )}
           </p>
         </div>
@@ -1781,50 +1934,6 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
           <pre data-testid="agent-response">{agentResponse || '(Waiting for agent response...)'}</pre>
         </div>
       </div>
-      
-      {/* Transcript History - displayed in DOM for E2E testing */}
-      <div data-testid="transcript-history" style={{ marginTop: '20px', border: '1px solid #ccc', padding: '10px' }}>
-        <h3>Transcript History (for E2E testing)</h3>
-        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-          {transcriptHistory.length === 0 ? (
-            <p>(No transcripts yet)</p>
-          ) : (
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {transcriptHistory.map((entry, index) => (
-                <li 
-                  key={index}
-                  data-testid={`transcript-entry-${index}`}
-                  data-is-final={entry.is_final}
-                  data-speech-final={entry.speech_final}
-                  data-timestamp={entry.timestamp}
-                  style={{
-                    padding: '8px',
-                    marginBottom: '4px',
-                    backgroundColor: entry.is_final ? (entry.speech_final ? '#1a4d1a' : '#4a3a00') : '#1a3a5c',
-                    border: `1px solid ${entry.is_final ? (entry.speech_final ? '#48bb78' : '#f6ad55') : '#4299e1'}`,
-                    borderRadius: '4px',
-                    fontSize: '0.9em',
-                    color: '#ffffff'
-                  }}
-                >
-                  <span style={{ fontWeight: 'bold', marginRight: '8px', color: entry.is_final ? (entry.speech_final ? '#9ae6b4' : '#fbd38d') : '#90cdf4' }}>
-                    [{entry.is_final ? (entry.speech_final ? 'FINAL' : 'final') : 'interim'}]
-                  </span>
-                  <span data-testid={`transcript-text-${index}`} style={{ color: '#ffffff' }}>{entry.text}</span>
-                  <span style={{ color: '#cbd5e0', fontSize: '0.85em', marginLeft: '8px' }}>
-                    ({new Date(entry.timestamp).toLocaleTimeString()})
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-      
-      <div style={{ marginTop: '20px', border: '1px solid #ccc', padding: '10px' }}>
-        <h3>User Message from Server</h3>
-        <pre data-testid="user-message">{userMessage || '(No user messages from server yet...)'}</pre>
-      </div>
 
       {/* Issue #406: Conversation history (from component conversationStorage + getConversationHistory()) */}
       <div data-testid="conversation-history" style={{ marginTop: '20px', border: '1px solid #ccc', padding: '10px' }}>
@@ -1889,8 +1998,9 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
                 await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms before retry
               }
 
-              // Ensure agent connection is started on user gesture (gate start behind focus)
-              // Per issue #206: text input focus should start only agent service
+              // Ensure agent connection is started on user gesture (gate start behind focus).
+              // Issue #206: prefer minimal sockets where possible. Issue #560: same flags as mic/Live
+              // (getVoiceAgentStartOptions) — OpenAI proxy → agent only; Deepgram direct → agent + transcription.
               const isConnected = connectionStates.agent === 'connected';
               const now = Date.now();
               const recentlyFailed = (now - lastAgentStartFailureRef.current) < AGENT_START_COOLDOWN_MS;
@@ -1906,7 +2016,8 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
               } else {
                 try {
                   addLog('Starting agent connection on text focus gesture');
-                  await deepgramRef.current?.start?.({ agent: true, transcription: false, userInitiated: true });
+                  const textFocusStartOpts = getVoiceAgentStartOptions(proxyEndpoint);
+                  await deepgramRef.current?.start?.(textFocusStartOpts);
                 } catch (e) {
                   lastAgentStartFailureRef.current = now;
                   const msg = e instanceof Error ? e.message : String(e);
@@ -1944,8 +2055,15 @@ VITE_DEEPGRAM_PROJECT_ID=your-real-project-id
         <div style={{ marginBottom: '10px' }}>
           <strong>Status:</strong> {instructionsLoading ? 'Loading...' : 'Loaded'}
         </div>
-        <div style={{ marginBottom: '10px' }}>
-          <strong>Source:</strong> {loadedInstructions ? 'Instructions Loader' : 'Not Available'}
+        <div style={{ marginBottom: '10px' }} data-testid="instructions-source-line">
+          <strong>Source:</strong>{' '}
+          {instructionsLoadSource === 'e2e'
+            ? 'VITE_E2E_INSTRUCTIONS'
+            : instructionsLoadSource === 'vite_default'
+              ? 'VITE_DEFAULT_INSTRUCTIONS (instructions-loader)'
+              : instructionsLoadSource === 'error_builtin'
+                ? 'Built-in default after load error'
+                : 'Built-in default (instructions-loader.ts DEFAULT_INSTRUCTIONS)'}
         </div>
         <div style={{ marginBottom: '10px' }}>
           <strong>Instructions Preview:</strong>

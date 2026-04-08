@@ -6,27 +6,23 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { APP_TEST_MODE } from './helpers/app-paths.mjs';
-import { setupConnectionStateTracking, MicrophoneHelpers, waitForTranscript } from './helpers/test-helpers.js';
+import { pathWithQuery } from './helpers/test-helpers.mjs';
+import {
+  setupConnectionStateTracking,
+  setupAudioSendingPrerequisites,
+  skipIfOpenAIProxy,
+  getE2eTranscriptEvents,
+  SELECTORS,
+} from './helpers/test-helpers.js';
 import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
 import { getVADState } from './fixtures/vad-helpers.js';
 
 test.describe('VAD Transcript Analysis', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto(APP_TEST_MODE);
-    
-    // Set up test environment
-    await page.evaluate(() => {
-      // Mock API key for testing
-      if (typeof window !== 'undefined') {
-        window.import = window.import || {};
-        window.import.meta = window.import.meta || {};
-        window.import.meta.env = {
-          VITE_DEEPGRAM_API_KEY: 'a1b2c3d4e5f6789012345678901234567890abcd',
-          VITE_DEEPGRAM_PROJECT_ID: 'test-project'
-        };
-      }
-    });
+  test.beforeEach(async ({ page, context }) => {
+    // Same matrix as deepgram-interim-transcript-validation: real Deepgram STT + VAD, not OpenAI proxy default
+    skipIfOpenAIProxy('VAD/transcript analysis is Deepgram direct-mode; skip when OpenAI proxy is configured');
+    await context.grantPermissions(['microphone']);
+    await page.goto(pathWithQuery({ 'test-mode': 'true' }));
   });
 
   /**
@@ -41,140 +37,83 @@ test.describe('VAD Transcript Analysis', () => {
    * Unlike the analysis test, this test uses proper assertions that will fail
    * if interim transcripts are not received, making it a true validation test.
    */
-  test('should validate interim and final transcript receipt with recorded audio', async ({ page }) => {
+  test('should validate interim and final transcript receipt with recorded audio', async ({ page, context }) => {
     console.log('🧪 Testing interim and final transcript validation with recorded audio...');
-    
-    // CRITICAL: Set up connection state tracking BEFORE clicking microphone button
-    // This prevents race condition where connection events fire before tracking is set up
-    const stateTracker = await setupConnectionStateTracking(page);
-    
-    // Use proper microphone setup with fixtures (same pattern as passing tests)
-    // This should start both agent and transcription services
-    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
-      skipGreetingWait: true,
-      connectionTimeout: 15000,
-      micEnableTimeout: 10000
+
+    // Same setup as deepgram-interim-transcript-validation (mic + SettingsApplied); required for sendAudioData
+    await setupAudioSendingPrerequisites(page, context, {
+      componentReadyTimeout: 5000,
+      connectionTimeout: 10000,
+      settingsTimeout: 10000,
+      settingsProcessingDelay: 600
     });
-    
-    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
-      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
-    }
-    
-    console.log('✅ Connection established and microphone enabled');
-    
-    // CRITICAL: Wait for transcription service to connect (required for VAD and transcripts)
-    // The microphone button should start both services automatically - just wait for it
-    
-    // Check initial connection states before waiting
-    let connectionStates = await stateTracker.getStates();
-    console.log('📊 Connection states immediately after microphone activation:', JSON.stringify(connectionStates, null, 2));
-    
-    // Wait for transcription service to connect (microphone button should start it)
-    console.log('⏳ Waiting for transcription service to connect (started by microphone button)...');
-    try {
-      await stateTracker.waitForTranscriptionConnected(10000);
-      connectionStates = await stateTracker.getStates();
-      console.log('📊 Connection states after wait:', JSON.stringify(connectionStates, null, 2));
-      
-      // Verify transcription service is connected
-      expect(connectionStates.transcriptionConnected || connectionStates.transcription === 'connected').toBe(true);
-      console.log('✅ Transcription service is connected');
-    } catch (error) {
-      connectionStates = await stateTracker.getStates();
-      console.log('📊 Connection states (timeout):', JSON.stringify(connectionStates, null, 2));
-      throw new Error(`Transcription service did not connect after microphone activation: ${error.message}`);
-    }
-    
-    // Use shopping-concierge-question for more realistic speech patterns
-    // Stream it in chunks to simulate real-time audio (better for interim transcripts)
-    // The helper automatically handles WAV vs JSON format detection
+    console.log('✅ Connection established and settings applied');
+
     const sampleName = 'shopping-concierge-question';
     console.log(`🎤 Loading and streaming pre-recorded audio sample (human speech): ${sampleName}...`);
-    
     await loadAndSendAudioSample(page, sampleName);
-    
     console.log(`✅ Audio sample streamed: ${sampleName}`);
-    
-    // Wait for transcript element to be visible first
-    await page.waitForSelector('[data-testid="transcription"]', { timeout: 5000 });
-    
-    // Wait for transcript to appear in the UI with actual content
-    await page.waitForFunction(() => {
-      const transcriptElement = document.querySelector('[data-testid="transcription"]');
+
+    await page.waitForSelector(SELECTORS.transcription, { timeout: 5000 });
+    await page.waitForFunction((selector) => {
+      const transcriptElement = document.querySelector(selector);
       if (!transcriptElement) return false;
       const text = transcriptElement.textContent?.trim() || '';
       return text.length > 0 && text !== '(Waiting for transcript...)';
-    }, { timeout: 20000 });
-    
-    // Wait for transcript history container to appear in DOM
-    await page.waitForSelector('[data-testid="transcript-history"]', { timeout: 5000 });
-    
-    // Wait for at least one transcript entry to appear in the DOM
+    }, SELECTORS.transcription, { timeout: 20000 });
+
+    console.log('⏳ Waiting for UserStartedSpeaking...');
+    await page.waitForFunction((selector) => {
+      const el = document.querySelector(selector);
+      return el && el.textContent && el.textContent.trim() !== 'Not detected';
+    }, SELECTORS.userStartedSpeaking, { timeout: 15000 });
+    console.log('✅ UserStartedSpeaking detected');
+
+    console.log('⏳ Waiting for UtteranceEnd...');
+    await page.waitForFunction((selector) => {
+      const el = document.querySelector(selector);
+      return el && el.textContent && el.textContent.trim() !== 'Not detected';
+    }, SELECTORS.utteranceEnd, { timeout: 15000 });
+    console.log('✅ UtteranceEnd detected');
+
+    await page.waitForTimeout(2000);
+
     await page.waitForFunction(
-      () => {
-        const entries = document.querySelectorAll('[data-testid^="transcript-entry-"]');
-        return entries.length > 0;
-      },
+      () => (globalThis.__e2eTranscriptEvents ?? []).length > 0,
       { timeout: 10000 }
     );
-    
-    // Wait for final transcript to arrive (if we only got interim so far)
-    await page.waitForFunction(
-      () => {
-        const entries = document.querySelectorAll('[data-testid^="transcript-entry-"]');
-        for (const entry of entries) {
-          const isFinal = entry.getAttribute('data-is-final') === 'true';
-          if (isFinal) return true;
-        }
-        return false;
-      },
-      { timeout: 5000 }
-    ).catch(() => {
-      // If no final transcript arrives within 5s, that's okay - we'll validate what we got
-      console.log('⚠️ No final transcript detected within timeout, will validate what we have');
-    });
-    
-    // Wait for transcript count to stabilize (no new transcripts for 500ms)
+
+    await page
+      .waitForFunction(
+        () => {
+          const ev = globalThis.__e2eTranscriptEvents ?? [];
+          return ev.some((e) => e.is_final === true);
+        },
+        { timeout: 5000 }
+      )
+      .catch(() => {
+        console.log('⚠️ No final transcript in __e2eTranscriptEvents within timeout, will validate what we have');
+      });
+
     let previousCount = 0;
     let stableCount = 0;
     for (let i = 0; i < 10; i++) {
       await page.waitForTimeout(500);
-      const currentCount = await page.evaluate(() => {
-        return document.querySelectorAll('[data-testid^="transcript-entry-"]').length;
-      });
+      const currentCount = await page.evaluate(() => (globalThis.__e2eTranscriptEvents ?? []).length);
       if (currentCount === previousCount) {
         stableCount++;
         if (stableCount >= 2) {
-          console.log(`✅ Transcript count stabilized at ${currentCount} after ${(i + 1) * 500}ms`);
+          console.log(`✅ Transcript event count stabilized at ${currentCount} after ${(i + 1) * 500}ms`);
           break;
         }
       } else {
         stableCount = 0;
-        console.log(`📊 Transcript count changed: ${previousCount} -> ${currentCount}`);
+        console.log(`📊 Transcript events changed: ${previousCount} -> ${currentCount}`);
       }
       previousCount = currentCount;
     }
-    
-    // Capture transcripts from the DOM (replaces callback interception)
-    const transcriptData = await page.evaluate(() => {
-      const entries = Array.from(document.querySelectorAll('[data-testid^="transcript-entry-"]'));
-      const transcripts = entries.map((entry, index) => {
-        const textEl = entry.querySelector(`[data-testid="transcript-text-${index}"]`);
-        const text = textEl?.textContent?.trim() || '';
-        const isFinal = entry.getAttribute('data-is-final') === 'true';
-        const speechFinal = entry.getAttribute('data-speech-final') === 'true';
-        const timestamp = parseInt(entry.getAttribute('data-timestamp') || '0', 10);
-        
-        return {
-          text,
-          is_final: isFinal,
-          speech_final: speechFinal,
-          timestamp
-        };
-      });
-      
-      return transcripts;
-    });
+
+    const transcriptData = await getE2eTranscriptEvents(page);
     
     // Wait for VAD events using working fixture (returns count of detected events)
     const eventsDetected = await waitForVADEvents(page, [
@@ -257,25 +196,37 @@ test.describe('VAD Transcript Analysis', () => {
     expect(hasAnyVADEvent).toBe(true);
     console.log('✅ UserStartedSpeaking detected:', hasUserStartedSpeaking);
     console.log('✅ UtteranceEnd detected:', hasUtteranceEnd);
+
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('[data-testid="conversation-history"] [data-role="user"]').length > 0,
+      { timeout: 20000 }
+    );
+
+    const transcriptText = await page.locator(SELECTORS.transcription).textContent();
+    expect(transcriptText).toBeTruthy();
+    expect(transcriptText?.trim()).not.toBe('');
+    expect(transcriptText).not.toBe('(Waiting for transcript...)');
+
+    const userHistoryText = await page
+      .locator('[data-testid="conversation-history"] [data-role="user"]')
+      .first()
+      .textContent();
+    expect((userHistoryText || '').trim().length).toBeGreaterThan(0);
     
     console.log('\n✅ All transcript validations passed!');
   });
 
-  test('should analyze different audio samples for transcript patterns', async ({ page }) => {
+  test('should analyze different audio samples for transcript patterns', async ({ page, context }) => {
     console.log('🧪 Testing transcript patterns with different audio samples...');
-    
-    // Use proper microphone setup with fixtures (same pattern as passing tests)
-    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
-      skipGreetingWait: true,
-      connectionTimeout: 15000,
-      micEnableTimeout: 10000
+
+    await setupAudioSendingPrerequisites(page, context, {
+      componentReadyTimeout: 5000,
+      connectionTimeout: 10000,
+      settingsTimeout: 10000,
+      settingsProcessingDelay: 600
     });
-    
-    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
-      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
-    }
-    
-    console.log('✅ Connection established and microphone enabled');
+    console.log('✅ Connection established and settings applied');
     
     // Set up transcript capture function once (outside loop to avoid re-registration error)
     const transcriptData = [];
@@ -366,21 +317,16 @@ test.describe('VAD Transcript Analysis', () => {
     console.log('\n✅ Multiple audio samples analyzed successfully');
   });
 
-  test('should test utterance_end_ms configuration impact', async ({ page }) => {
+  test('should test utterance_end_ms configuration impact', async ({ page, context }) => {
     console.log('🧪 Testing utterance_end_ms configuration impact...');
-    
-    // Use proper microphone setup with fixtures (same pattern as passing tests)
-    const activationResult = await MicrophoneHelpers.waitForMicrophoneReady(page, {
-      skipGreetingWait: true,
-      connectionTimeout: 15000,
-      micEnableTimeout: 10000
+
+    await setupAudioSendingPrerequisites(page, context, {
+      componentReadyTimeout: 5000,
+      connectionTimeout: 10000,
+      settingsTimeout: 10000,
+      settingsProcessingDelay: 600
     });
-    
-    if (!activationResult.success || activationResult.micStatus !== 'Enabled') {
-      throw new Error(`Microphone activation failed: ${activationResult.error || 'Unknown error'}`);
-    }
-    
-    console.log('✅ Connection established and microphone enabled');
+    console.log('✅ Connection established and settings applied');
     
     // Check current utterance_end_ms setting
     // Note: Transcription options are not exposed via public API

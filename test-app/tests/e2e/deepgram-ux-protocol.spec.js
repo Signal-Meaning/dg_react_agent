@@ -120,13 +120,11 @@ test.describe.skip('Deepgram Protocol UX Validation', () => {
     await assertConnectionHealthy(page, expect);
     console.log('✅ Connection remained stable throughout interaction');
     
-    // Step 6: Verify user message echo (protocol verification)
-    console.log('\n🔄 Step 6: Verify User Message Display (Protocol Echo)');
-    const userMessage = page.locator(SELECTORS.userMessage);
-    const userMessageText = await userMessage.textContent();
-    
-    expect(userMessageText).not.toBe('(No user messages from server yet...)');
-    console.log(`✅ User message received from server: "${userMessageText?.substring(0, 80)}..."`);
+    // Step 6: User text appears in Conversation History (user-message panel removed; Issue #560)
+    console.log('\n🔄 Step 6: Verify user text in Conversation History');
+    const userRow = page.locator(SELECTORS.conversationUserRow).first();
+    await expect(userRow).toContainText(testMessage.substring(0, 24), { timeout: 15000 });
+    console.log(`✅ User message visible in conversation history`);
     
     // Send another message to verify multi-turn capability
     const secondMessage = 'Second test message';

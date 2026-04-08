@@ -10,12 +10,15 @@
  *
  * At least one of DEEPGRAM_API_KEY or OPENAI_API_KEY must be set.
  *
- * Usage (canonical):
- *   cd test-app && npm run backend
+ * Usage (canonical cwd for secrets):
+ *   cd packages/voice-agent-backend && npm run start
+ *   (aliases: npm run backend)
  *
- * Environment Variables (from test-app/.env):
+ * Same process is also started via `cd test-app && npm run backend` (delegates to the package; does not load test-app/.env).
+ *
+ * Environment variables: put server-side keys in packages/voice-agent-backend/.env (see backend.env.example there).
  *   - DEEPGRAM_API_KEY or VITE_DEEPGRAM_API_KEY: Deepgram API key (optional if OPENAI_API_KEY set); when set, /deepgram-proxy is attached
- *   - OPENAI_API_KEY: OpenAI API key for /openai (optional if Deepgram key set)
+ *   - OPENAI_API_KEY or VITE_OPENAI_API_KEY: OpenAI API key for /openai (optional if Deepgram key set)
  *   - PROXY_PORT: Port to run on (default: 8080)
  *   - PROXY_PATH: Deepgram WebSocket path (default: /deepgram-proxy)
  */
@@ -30,8 +33,8 @@ import dotenv from 'dotenv';
 import { executeFunctionCall } from './function-call-handlers.js';
 import { getLogger, generateTraceId } from './logger.js';
 
-// Load test-app/.env so VITE_DEEPGRAM_API_KEY (and DEEPGRAM_API_KEY) are available when run via npm run backend
-// Skip when SKIP_DOTENV=1 (used by integration tests to assert "at least one key required")
+// Load packages/voice-agent-backend/.env only (not test-app/.env — VITE_* belongs to the frontend).
+// Skip when SKIP_DOTENV=1 (used by integration tests to inject env explicitly).
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Issue #423: use voice-agent-backend package for /function-call (thin wrapper)
@@ -42,7 +45,7 @@ const voiceAgentBackendPkgDir = path.resolve(__dirname, '..', '..', 'packages', 
 const { createFunctionCallHandler, attachVoiceAgentUpgrade } = require(voiceAgentBackendPath);
 const functionCallHandler = createFunctionCallHandler({ execute: executeFunctionCall });
 if (process.env.SKIP_DOTENV !== '1') {
-  dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+  dotenv.config({ path: path.join(voiceAgentBackendPkgDir, '.env') });
 }
 
 // Configuration
@@ -282,7 +285,7 @@ let voiceAgentAttachment = null;
         const spawnEnv = { ...process.env, OPENAI_API_KEY };
         // When LOG_LEVEL=debug, proxy writes function_call_output to a file for inspection. Path default: test-app/test-results (backend cwd when run from test-app).
         if (process.env.LOG_LEVEL === 'debug' && !process.env.E2E_FUNCTION_CALL_DEBUG_LOG) {
-          spawnEnv.E2E_FUNCTION_CALL_DEBUG_LOG = path.resolve(process.cwd(), 'test-results', 'e2e-function-call-output.json');
+          spawnEnv.E2E_FUNCTION_CALL_DEBUG_LOG = path.join(voiceAgentBackendPkgDir, 'test-results', 'e2e-function-call-output.json');
         }
         return {
           path: '/openai',

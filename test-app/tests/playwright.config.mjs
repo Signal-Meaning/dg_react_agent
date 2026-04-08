@@ -38,10 +38,25 @@ console.log('PW_ENABLE_AUDIO:', ENABLE_AUDIO);
 const artifactsOnFailure = process.env.PW_ARTIFACTS_ON_FAILURE === '1' || process.env.PW_ARTIFACTS_ON_FAILURE === 'true';
 
 /**
+ * Playwright `TestConfigWebServer.env` is `Record<string, string>`; Node `process.env` values may be `undefined`.
+ * @returns {Record<string, string>}
+ */
+function envForPlaywrightWebServer() {
+  /** @type {Record<string, string>} */
+  const out = {};
+  for (const key of Object.keys(process.env)) {
+    const v = process.env[key];
+    if (v !== undefined) out[key] = v;
+  }
+  return out;
+}
+
+/**
  * @see https://playwright.dev/docs/test-configuration
  * All E2E specs run against either proxy; backend is selected via E2E_BACKEND (openai | deepgram).
  */
-export default defineConfig({
+/** @type {import('@playwright/test').PlaywrightTestConfig} */
+const config = {
   testDir: './e2e',
   /* Run tests in files in parallel */
   fullyParallel: false,
@@ -117,44 +132,51 @@ export default defineConfig({
    * Only E2E_USE_EXISTING_SERVER controls whether Playwright starts them:
    *   - E2E_USE_EXISTING_SERVER=1: do not start; globalSetup verifies app (and proxy if USE_PROXY_MODE) are reachable.
    *   - Otherwise: start webServer (dev server + proxy) and wait for readiness. */
-  ...(process.env.E2E_USE_EXISTING_SERVER === '1' ||
-    process.env.E2E_USE_EXISTING_SERVER === 'true'
-    ? { globalSetup: './e2e-check-existing-server.mjs' }
-    : {
-        webServer: [
+};
+
+const e2eUseExistingServer =
+  process.env.E2E_USE_EXISTING_SERVER === '1' || process.env.E2E_USE_EXISTING_SERVER === 'true';
+
+if (e2eUseExistingServer) {
+  config.globalSetup = './e2e-check-existing-server.mjs';
+} else {
+  config.webServer = [
+    {
+      command: 'npm run dev',
+      cwd: '.',
+      url: baseURL,
+      // Direct E2E clears VITE_* proxy vars; reusing a Vite instance started in proxy mode leaves wrong env → isReady stays false.
+      reuseExistingServer: !isDirectMode,
+      timeout: 120 * 1000,
+      ...(useHttps && { ignoreHTTPSErrors: true }),
+      stdout: process.env.CI ? /** @type {'pipe'} */ ('pipe') : /** @type {'ignore'} */ ('ignore'),
+      stderr: /** @type {'pipe'} */ ('pipe'), // always show so "Port 5173 is already in use" etc. is visible without CI=1
+      env: {
+        ...envForPlaywrightWebServer(),
+        HTTPS: useHttps ? 'true' : 'false',
+        VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
+        VITE_DEEPGRAM_PROJECT_ID: process.env.VITE_DEEPGRAM_PROJECT_ID || '',
+        VITE_BASE_URL: process.env.VITE_BASE_URL || baseURLRaw,
+        // Direct mode: do not set proxy endpoints so app uses connectionMode=direct (from baseURL query). Proxy mode: set defaults.
+        VITE_DEEPGRAM_PROXY_ENDPOINT: isDirectMode ? '' : (process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || `${proxyBase}/deepgram-proxy`),
+        VITE_OPENAI_PROXY_ENDPOINT: isDirectMode ? '' : (process.env.VITE_OPENAI_PROXY_ENDPOINT || `${proxyBase}/openai`),
+        // E2E default 1s so greeting-idle-timeout tests finish within test timeout; override with VITE_IDLE_TIMEOUT_MS if needed. Test-app default (when run outside E2E) is 10s via component DEFAULT_IDLE_TIMEOUT_MS.
+        VITE_IDLE_TIMEOUT_MS: process.env.VITE_IDLE_TIMEOUT_MS || '1000',
+      },
+    },
+    ...(isDirectMode
+      ? []
+      : [
           {
-            command: 'npm run dev',
-            cwd: '.',
-            url: baseURL,
-            reuseExistingServer: true,
-            timeout: 120 * 1000,
-            ...(useHttps && { ignoreHTTPSErrors: true }),
-            stdout: process.env.CI ? 'pipe' : 'ignore',
-            stderr: 'pipe', // always show so "Port 5173 is already in use" etc. is visible without CI=1
-            env: {
-              ...process.env,
-              HTTPS: useHttps ? 'true' : 'false',
-              VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
-              VITE_DEEPGRAM_PROJECT_ID: process.env.VITE_DEEPGRAM_PROJECT_ID || '',
-              VITE_BASE_URL: process.env.VITE_BASE_URL || baseURLRaw,
-              // Direct mode: do not set proxy endpoints so app uses connectionMode=direct (from baseURL query). Proxy mode: set defaults.
-              VITE_DEEPGRAM_PROXY_ENDPOINT: isDirectMode ? '' : (process.env.VITE_DEEPGRAM_PROXY_ENDPOINT || `${proxyBase}/deepgram-proxy`),
-              VITE_OPENAI_PROXY_ENDPOINT: isDirectMode ? '' : (process.env.VITE_OPENAI_PROXY_ENDPOINT || `${proxyBase}/openai`),
-              // E2E default 1s so greeting-idle-timeout tests finish within test timeout; override with VITE_IDLE_TIMEOUT_MS if needed. Test-app default (when run outside E2E) is 10s via component DEFAULT_IDLE_TIMEOUT_MS.
-              VITE_IDLE_TIMEOUT_MS: process.env.VITE_IDLE_TIMEOUT_MS || '1000',
-            },
-          },
-          // In direct mode only the dev server is needed; backend (proxy) is not used. Start it in proxy mode so tests that assume proxy still run if script is wrong.
-          ...(isDirectMode ? [] : [{
             command: 'npm run backend',
             cwd: '..',
             port: 8080,
             reuseExistingServer: true,
             timeout: 10000,
-            stdout: 'pipe',
-            stderr: 'pipe',
+            stdout: /** @type {'pipe'} */ ('pipe'),
+            stderr: /** @type {'pipe'} */ ('pipe'),
             env: {
-              ...process.env,
+              ...envForPlaywrightWebServer(),
               HTTPS: useHttps ? 'true' : 'false',
               DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || process.env.DEEPGRAM_API_KEY || '',
               VITE_DEEPGRAM_API_KEY: process.env.VITE_DEEPGRAM_API_KEY || '',
@@ -162,29 +184,31 @@ export default defineConfig({
               PROXY_PATH: '/deepgram-proxy',
               LOG_LEVEL: 'debug',
             },
-          }]),
-        ],
-      }),
+          },
+        ]),
+  ];
+}
 
-  /* 
-   * IMPORTANT: E2E Tests Require Real Deepgram API Key
-   * 
-   * These tests use REAL Deepgram WebSocket connections, not mocks.
-   * This provides authentic integration testing but requires a valid API key.
-   * 
-   * Required Environment Variables (in test-app/.env):
-   * - VITE_DEEPGRAM_API_KEY: Your real Deepgram API key
-   * - VITE_DEEPGRAM_PROJECT_ID: Your Deepgram project ID
-   * 
-   * Why Real API Key Instead of Mocks:
-   * - Authentic testing of WebSocket connections
-   * - Real component state management (onReady, connection states)
-   * - No complex mock maintenance (saves 13-19 hours of development)
-   * - Catches actual integration issues
-   * 
-   * If you need to run tests without a real API key, consider:
-   * 1. Using unit tests with mocks instead
-   * 2. Setting up a test Deepgram account with free credits
-   * 3. Using the existing Jest tests in tests/ directory
-   */
-});
+export default defineConfig(config);
+
+/*
+ * IMPORTANT: E2E Tests Require Real Deepgram API Key
+ *
+ * These tests use REAL Deepgram WebSocket connections, not mocks.
+ * This provides authentic integration testing but requires a valid API key.
+ *
+ * Required Environment Variables (in test-app/.env):
+ * - VITE_DEEPGRAM_API_KEY: Your real Deepgram API key
+ * - VITE_DEEPGRAM_PROJECT_ID: Your Deepgram project ID
+ *
+ * Why Real API Key Instead of Mocks:
+ * - Authentic testing of WebSocket connections
+ * - Real component state management (onReady, connection states)
+ * - No complex mock maintenance (saves 13-19 hours of development)
+ * - Catches actual integration issues
+ *
+ * If you need to run tests without a real API key, consider:
+ * 1. Using unit tests with mocks instead
+ * 2. Setting up a test Deepgram account with free credits
+ * 3. Using the existing Jest tests in tests/ directory
+ */

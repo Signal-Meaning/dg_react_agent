@@ -63,6 +63,7 @@ import {
   assertMinAudioBeforeCommit,
   assertAppendChunkSize,
 } from './openai-audio-constants';
+import { Pcm16Mono16kTo24kStreamResampler } from './pcm-resample-16k-to-24k';
 import {
   OPENAI_PROXY_CLIENT_JSON_TYPE,
   getOpenAIProxyAllowedClientJsonTypesDescription,
@@ -180,6 +181,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     /** Issue #489: Prior-session context is no longer sent as conversation items; it is passed in session.update instructions only. */
     /** Issue #414: defer input_audio_buffer.append until after session.updated so session is configured for audio. */
     const pendingAudioQueue: Buffer[] = [];
+    /** Issue #560: dg_react_agent sends 16 kHz PCM; session.update declares 24 kHz — resample before upstream append. */
+    const inputAudioResampler = new Pcm16Mono16kTo24kStreamResampler();
     /** Issue #542 #534: defer InjectUserMessage (full client JSON frame) until after session.updated (same readiness as audio). */
     const pendingInjectTextQueue: Buffer[] = [];
     /** TODO: Not expected to keep. Only forward the first Settings per connection; duplicate Settings (e.g. on reconnect/reload) must not send a second session.update or upstream can error. */
@@ -569,7 +572,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             });
             return;
           }
-          assertAppendChunkSize(raw.length);
+          const resampled = inputAudioResampler.push(raw);
+          if (resampled.length === 0) {
+            return;
+          }
+          assertAppendChunkSize(resampled.length);
           emitLog({
             severityNumber: SeverityNumber.INFO,
             severityText: 'INFO',
@@ -580,9 +587,9 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.append',
             },
           });
-          const appendEvent = binaryToInputAudioBufferAppend(raw);
+          const appendEvent = binaryToInputAudioBufferAppend(resampled);
           upstream.send(JSON.stringify(appendEvent));
-          pendingAudioBytes += raw.length;
+          pendingAudioBytes += resampled.length;
           hasPendingAudio = true;
           scheduleAudioCommit();
         }
@@ -601,7 +608,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       while (pendingAudioQueue.length > 0) {
         const chunk = pendingAudioQueue.shift();
         if (!chunk || upstream.readyState !== WebSocket.OPEN) continue;
-        assertAppendChunkSize(chunk.length);
+        const resampled = inputAudioResampler.push(chunk);
+        if (resampled.length === 0) {
+          continue;
+        }
+        assertAppendChunkSize(resampled.length);
         emitLog({
           severityNumber: SeverityNumber.INFO,
           severityText: 'INFO',
@@ -612,9 +623,9 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.append',
           },
         });
-        const appendEvent = binaryToInputAudioBufferAppend(chunk);
+        const appendEvent = binaryToInputAudioBufferAppend(resampled);
         upstream.send(JSON.stringify(appendEvent));
-        pendingAudioBytes += chunk.length;
+        pendingAudioBytes += resampled.length;
         hasPendingAudio = true;
       }
       if (hasPendingAudio) scheduleAudioCommit();

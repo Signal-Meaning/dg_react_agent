@@ -162,16 +162,20 @@ describe('LiveModeView (Issue #561)', () => {
     );
     const main = screen.getByTestId('live-mode-main');
     const children = Array.from(main.children);
+    const footerIdx = children.findIndex((el) => el.getAttribute('data-testid') === 'live-mode-footer');
     const historyIdx = children.findIndex((el) => el.getAttribute('data-testid') === 'live-conversation-history');
     const statusIdx = children.findIndex((el) => el.getAttribute('data-testid') === 'live-activity-status');
+    expect(footerIdx).toBeGreaterThanOrEqual(0);
     expect(historyIdx).toBeGreaterThanOrEqual(0);
     expect(statusIdx).toBeGreaterThanOrEqual(0);
+    expect(footerIdx).toBeLessThan(historyIdx);
     expect(historyIdx).toBeLessThan(statusIdx);
     const historyEl = screen.getByTestId('live-conversation-history');
     const footerEl = screen.getByTestId('live-mode-footer');
-    expect(historyEl.compareDocumentPosition(footerEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    );
+    // Footer (actions) sits above conversation history
+    expect(
+      (footerEl.compareDocumentPosition(historyEl) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+    ).toBe(true);
   });
 
   it('renders live-agent-visual and toggles animation driver via agentOutputActive', () => {

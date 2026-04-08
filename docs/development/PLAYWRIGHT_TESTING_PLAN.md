@@ -239,8 +239,10 @@ test.describe('Text-Only Conversation', () => {
     await page.fill('[data-testid="text-input"]', 'Hello, I need help with my order');
     await page.click('[data-testid="send-button"]');
     
-    // Verify message was sent
-    await expect(page.locator('[data-testid="user-message"]')).toContainText('Hello, I need help with my order');
+    // Verify message appears in conversation history (user-message panel removed; Issue #560)
+    await expect(
+      page.locator('[data-testid="conversation-history"] [data-role="user"]').first()
+    ).toContainText('Hello, I need help with my order');
     
     // Verify agent response
     await expect(page.locator('[data-testid="agent-response"]')).toBeVisible();

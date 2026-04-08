@@ -49,7 +49,7 @@ export const SELECTORS = {
   textInput: '[data-testid="text-input"]',
   sendButton: '[data-testid="send-button"]',
   agentResponse: '[data-testid="agent-response"]',
-  userMessage: '[data-testid="user-message"]',
+  conversationUserRow: '[data-testid="conversation-history"] [data-role="user"]',
   transcription: '[data-testid="transcription"]',
   greetingSent: '[data-testid="greeting-sent"]',
   agentSpeaking: '[data-testid="agent-speaking"]',

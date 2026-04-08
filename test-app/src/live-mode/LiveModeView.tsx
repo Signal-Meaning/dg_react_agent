@@ -44,8 +44,20 @@ const statusGrid: CSSProperties = {
 
 const muted = 'rgba(226, 232, 240, 0.55)';
 
+const liveActionButton: CSSProperties = {
+  padding: '10px 14px',
+  borderRadius: 8,
+  border: '1px solid rgba(255,255,255,0.22)',
+  backgroundColor: 'rgba(255,255,255,0.1)',
+  color: '#e2e8f0',
+  cursor: 'pointer',
+  fontSize: 14,
+  fontWeight: 500,
+};
+
 /**
  * Glanceable Live / voice-first shell for Issue #561. No WebSocket logic — parent maps component state.
+ * Primary actions sit above conversation history (Issue #560 / manual UX).
  */
 export function LiveModeView({
   agentPresentation,
@@ -91,6 +103,32 @@ export function LiveModeView({
         }}
       >
         <LiveAgentVisual active={agentOutputActive} />
+
+        {(onEndLive || showResumeMic) ? (
+          <div
+            data-testid="live-mode-footer"
+            style={{
+              ...liveContentColumn,
+              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              paddingBottom: 4,
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+            }}
+          >
+            {onEndLive ? (
+              <button type="button" data-testid="live-end-live-button" onClick={onEndLive} style={liveActionButton}>
+                End Live
+              </button>
+            ) : null}
+            {showResumeMic ? (
+              <button type="button" data-testid="live-resume-mic-button" onClick={onResumeMic} style={liveActionButton}>
+                Resume microphone
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         <section
           data-testid="live-conversation-history"
@@ -156,30 +194,8 @@ export function LiveModeView({
         </dl>
       </div>
 
-      <footer
-        data-testid="live-mode-footer"
-        style={{
-          flexShrink: 0,
-          padding: '12px 16px 24px',
-          borderTop: '1px solid rgba(255,255,255,0.12)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'stretch',
-          gap: 10,
-          ...liveContentColumn,
-        }}
-      >
-        {onEndLive ? (
-          <button type="button" data-testid="live-end-live-button" onClick={onEndLive}>
-            End Live
-          </button>
-        ) : null}
-        {showResumeMic ? (
-          <button type="button" data-testid="live-resume-mic-button" onClick={onResumeMic}>
-            Resume microphone
-          </button>
-        ) : null}
-      </footer>
+      {/* Spacer so content clears bottom safe area when actions moved above history */}
+      <div style={{ flexShrink: 0, height: 12 }} aria-hidden />
     </div>
   );
 }

@@ -28,7 +28,7 @@ const SELECTORS = {
   microphoneButton: '[data-testid="microphone-button"]',
   greetingSent: '[data-testid="greeting-sent"]',
   agentResponse: '[data-testid="agent-response"]',
-  userMessage: '[data-testid="user-message"]',
+  conversationUserRow: '[data-testid="conversation-history"] [data-role="user"]',
   textInput: '[data-testid="text-input"]',
   sendButton: '[data-testid="send-button"]',
   micStatus: '[data-testid="mic-status"]',

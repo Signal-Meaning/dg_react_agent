@@ -306,7 +306,8 @@ const SELECTORS = {
   textInput: '[data-testid="text-input"]',
   sendButton: '[data-testid="send-button"]',
   agentResponse: '[data-testid="agent-response"]',
-  userMessage: '[data-testid="user-message"]',
+  /** First user line in Conversation History (replaces removed user-message panel; Issue #560). */
+  conversationUserRow: '[data-testid="conversation-history"] [data-role="user"]',
   transcription: '[data-testid="transcription"]',
   greetingSent: '[data-testid="greeting-sent"]',
   agentSpeaking: '[data-testid="agent-speaking"]',
@@ -315,6 +316,16 @@ const SELECTORS = {
   utteranceEnd: '[data-testid="utterance-end"]',
   userStoppedSpeaking: '[data-testid="user-stopped-speaking"]',
 };
+
+/**
+ * Raw transcript events from test-app handleTranscriptUpdate (globalThis.__e2eTranscriptEvents).
+ * Replaces removed transcript-history DOM (Issue #560).
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<Array<{ text: string; is_final: boolean; speech_final: boolean; timestamp: number }>>}
+ */
+export async function getE2eTranscriptEvents(page) {
+  return page.evaluate(() => globalThis.__e2eTranscriptEvents ?? []);
+}
 
 /**
  * Storage key for conversation history (must match test-app CONVERSATION_STORAGE_KEY).
@@ -2118,6 +2129,95 @@ async function attachIdleTimeoutDiagnostics(page, testInfo, options) {
     contentType: 'application/json',
   });
   return diag;
+}
+
+/**
+ * Bounded, non-placeholder checks for LLM assistant text (Issue #560).
+ * @param {string | null | undefined} text
+ * @param {string} [label]
+ */
+export function assertMinimalAgentReplyShape(text, label = 'agent reply') {
+  const t = (text || '').trim();
+  expect(t.length, `${label}: non-empty`).toBeGreaterThan(0);
+  expect(t.length, `${label}: bounded`).toBeLessThan(12000);
+  expect(t, `${label}: not waiting placeholder`).not.toBe('(Waiting for agent response...)');
+}
+
+/** `sample_${OPENAI_PROXY_E2E_DISTINCTIVE_AUDIO_SAMPLE}.json` — long distinctive phrase for stable STT matching. */
+export const OPENAI_PROXY_E2E_DISTINCTIVE_AUDIO_SAMPLE =
+  'this_is_a_custom_test_phrase_for_dynamic_generation';
+
+/** Expected user transcript after {@link normalizeOpenAiUserTranscriptForE2e} (matches JSON `phrase`). */
+export const OPENAI_PROXY_E2E_DISTINCTIVE_TRANSCRIPT_NORMALIZED =
+  'this is a custom test phrase for dynamic generation';
+
+/** Normalize OpenAI-proxy user transcript for strict E2E equality (case, whitespace, trailing period). */
+export function normalizeOpenAiUserTranscriptForE2e(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\.+$/g, '')
+    .trim();
+}
+
+/**
+ * Wait until the last **final** `__e2eTranscriptEvents` entry normalizes to `expectedNormalized`.
+ * Fails if STT returns a different phrase (unlike a loose /hello|hi/ regex).
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} expectedNormalized - e.g. {@link OPENAI_PROXY_E2E_DISTINCTIVE_TRANSCRIPT_NORMALIZED}
+ * @param {{ timeout?: number }} [options]
+ */
+export async function waitForFinalUserTranscriptNormalized(page, expectedNormalized, options = {}) {
+  const timeout = options.timeout ?? 90000;
+  await expect
+    .poll(
+      async () => {
+        const raw = await page.evaluate(() => {
+          const ev = globalThis.__e2eTranscriptEvents || [];
+          const finals = ev.filter(
+            (e) => e && e.is_final && typeof e.text === 'string' && e.text.trim()
+          );
+          return finals.length ? finals[finals.length - 1].text : '';
+        });
+        return normalizeOpenAiUserTranscriptForE2e(raw);
+      },
+      { timeout }
+    )
+    .toBe(expectedNormalized);
+}
+
+/**
+ * After OpenAI-proxy PCM injection, user speech should surface via test-app hooks:
+ * - `window.__e2eLastLiveTranscript` (mirrors last non-empty Live Transcript state)
+ * - `window.__e2eTranscriptEvents` (every `onTranscriptUpdate`; reliable when Live UI hides debug `<pre>`)
+ * - `[data-testid="transcription"]` when debug layout is mounted
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{ timeout?: number, transcriptPattern?: RegExp }} [options]
+ */
+export async function waitForUserSpeechTranscriptSignal(page, options = {}) {
+  const timeout = options.timeout ?? 90000;
+  const transcriptPattern = options.transcriptPattern ?? /hello|hi|hey/i;
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const w = window;
+          const live = (w.__e2eLastLiveTranscript || '').trim();
+          const el = document.querySelector('[data-testid="transcription"]');
+          const dom = (el?.textContent || '').trim();
+          const domUse = /^\(Waiting for transcript\.\.\.\)$/.test(dom) ? '' : dom;
+          const fromEvents = (w.__e2eTranscriptEvents || [])
+            .map((e) => (e && e.text ? String(e.text) : ''))
+            .join(' ')
+            .trim();
+          return [live, domUse, fromEvents].filter(Boolean).join(' | ') || '';
+        }),
+      { timeout }
+    )
+    .toMatch(transcriptPattern);
 }
 
 export {

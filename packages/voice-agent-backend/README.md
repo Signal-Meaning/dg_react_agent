@@ -23,6 +23,21 @@ npm install @signal-meaning/voice-agent-backend
 
 Or with a specific version: `npm install @signal-meaning/voice-agent-backend@0.1.0`
 
+## Test-app combined backend (Deepgram + OpenAI proxies + POST /function-call)
+
+For local development of this monorepo, the **HTTP(S) server on port 8080** (proxies + function-call handlers) should be run from **this package directory** so secrets load from **`packages/voice-agent-backend/.env`**, not from `test-app/.env` (those `VITE_*` variables are for the Vite frontend only).
+
+```bash
+cd packages/voice-agent-backend
+cp backend.env.example .env   # then edit .env with real keys
+npm run start
+# same as: npm run backend
+```
+
+`test-app` still exposes `npm run backend`; it delegates here, so the effective working directory and dotenv file are the same as above.
+
+The **OpenAI proxy subprocess** (`scripts/openai-proxy/run.ts`) loads the same `.env` search path (this package → parents to repo root) and **does not** read `test-app/.env`.
+
 ## Programmatic API
 
 ```js

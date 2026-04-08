@@ -1750,6 +1750,47 @@ function DeepgramVoiceInteraction(
     };
   };
 
+  /**
+   * Persist one user STT turn to conversation history when the stream marks utterance complete.
+   * - Deepgram: use speech_final (is_final alone can repeat per word).
+   * - OpenAI proxy: completed segments use is_final (and usually speech_final); allow is_final alone so we do not drop turns.
+   */
+  function maybeAppendUserTranscriptFromNormalized(
+    normalized: TranscriptResponse,
+    metadata: unknown
+  ): void {
+    if (!conversationStorage) return;
+    const text = (normalized.transcript ?? '').trim();
+    if (!text.length) return;
+
+    const cfg = configRef.current;
+    const isOpenAIProxy = cfg.connectionMode === 'proxy' && (cfg.proxyEndpoint ?? '').includes('/openai');
+    const utteranceComplete =
+      normalized.speech_final === true || (isOpenAIProxy && normalized.is_final === true);
+    if (!utteranceComplete) return;
+
+    const latest = conversationHistoryRef.current;
+    const last = latest[latest.length - 1];
+    if (last?.role === 'user' && last.content === text) return;
+
+    const timestamp = Date.now();
+    const newEntry: ConversationMessage = { role: 'user', content: text, timestamp };
+    const updatedHistory = [...latest, newEntry];
+    conversationHistoryRef.current = updatedHistory;
+    setConversationHistory((prev) => [...prev, newEntry]);
+    const toStore = updatedHistory.slice(-MAX_CONVERSATION_STORED);
+    lastPersistedHistoryForReconnectRef.current = toStore;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(toStore));
+        lastUsedStorageKeyRef.current = CONVERSATION_STORAGE_KEY;
+      } catch {
+        /* ignore quota / private mode */
+      }
+    }
+    onUserMessage?.({ type: 'user', text, metadata }, updatedHistory);
+  }
+
   // Handle transcription messages - only relevant if transcription is configured
   const handleTranscriptionMessage = (data: unknown) => {
     if (props.debug) {
@@ -1908,7 +1949,10 @@ function DeepgramVoiceInteraction(
         return;
       }
       const normalized = normalizeTranscriptMessageToResponse(data as Parameters<typeof normalizeTranscriptMessageToResponse>[0]);
-      if (normalized) onTranscriptUpdate?.(normalized);
+      if (normalized) {
+        onTranscriptUpdate?.(normalized);
+        maybeAppendUserTranscriptFromNormalized(normalized, data);
+      }
       return;
     }
 
@@ -2362,7 +2406,10 @@ function DeepgramVoiceInteraction(
         return;
       }
       const normalized = normalizeTranscriptMessageToResponse(data as Parameters<typeof normalizeTranscriptMessageToResponse>[0]);
-      if (normalized) onTranscriptUpdate?.(normalized);
+      if (normalized) {
+        onTranscriptUpdate?.(normalized);
+        maybeAppendUserTranscriptFromNormalized(normalized, data);
+      }
       return;
     }
 
@@ -2445,6 +2492,8 @@ function DeepgramVoiceInteraction(
       hasSentSettingsRef.current = true;
       windowWithGlobals.globalSettingsSent = true;
       dispatch({ type: 'SETTINGS_SENT', sent: true });
+      // Server confirmed Settings/session: drop the post-send delay gate so PCM can flow immediately (Issue #560).
+      settingsSentTimeRef.current = null;
       logConsole('debug', `🎯 [${source}] Settings confirmed by agent, audio data can now be processed`);
 
       onSettingsApplied?.();
@@ -3225,11 +3274,12 @@ function DeepgramVoiceInteraction(
         ? (options.agent === true)
         : isAgentConfigured;
 
-      // OpenAI proxy: agent-only; transcript/VAD via agent connection (Issue #439). Do not request transcription.
+      // OpenAI proxy (Realtime): one WebSocket session — user audio + transcripts/VAD flow there (Issue #439).
+      // Do not open the separate Deepgram Listen transcription manager/socket; that is not this protocol.
       const isOpenAIProxy = config.connectionMode === 'proxy' && (config.proxyEndpoint ?? '').includes('/openai');
       if (isOpenAIProxy) {
         shouldStartTranscription = false;
-        log('🔧 [START] OpenAI proxy detected – treating session as agent-only (transcript/VAD via agent)');
+        log('🔧 [START] OpenAI proxy: skipping Deepgram transcription socket (STT/VAD on Realtime session)');
       }
       
       log(`Service start flags: transcription=${shouldStartTranscription}, agent=${shouldStartAgent}`);
@@ -4116,8 +4166,10 @@ function DeepgramVoiceInteraction(
       }
       return audioManagerRef.current?.getAudioContext() || undefined;
     },
-    // Issue #406: Expose conversation history (restored + new messages when conversationStorage provided)
-    getConversationHistory: () => conversationHistory,
+    // Issue #406 / #560: Return ref, not React state — ConversationText updates the ref synchronously before
+    // setState flushes; parents that sync from getConversationHistory() in the same tick (e.g. test-app mount
+    // timeout) otherwise read [] and wipe UI after onAgentUtterance already ran.
+    getConversationHistory: () => conversationHistoryRef.current,
     // Issue #429: Expose agent manager for idle-timeout control (disableIdleTimeoutResets / enableIdleTimeoutResets)
     getAgentManager: () => agentManagerRef.current,
   }));

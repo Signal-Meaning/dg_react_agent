@@ -21,13 +21,26 @@ export const APP_DEBUG = '/?debug=true';
 export const APP_TEST_MODE_DEBUG = '/?test-mode=true&debug=true';
 
 /**
+ * When Playwright runs with USE_PROXY_MODE=false, baseURL includes connectionMode=direct, but
+ * page.goto('/?foo=bar') resolves to a path that replaces the base query — so direct mode was lost.
+ * Merge connectionMode=direct into every relative goto unless the caller sets connectionMode.
+ */
+function defaultQueryForE2E() {
+  if (process.env.USE_PROXY_MODE === 'false') {
+    return { connectionMode: 'direct' };
+  }
+  return {};
+}
+
+/**
  * Build a relative path with query params for page.goto().
  * Playwright resolves it against baseURL (http or https).
  * @param {Record<string, string>} params - Query params
  * @returns {string} Path like '/?key=value'
  */
 export function pathWithQuery(params = {}) {
-  const entries = Object.entries(params).filter(([, v]) => v != null && v !== '');
+  const merged = { ...defaultQueryForE2E(), ...params };
+  const entries = Object.entries(merged).filter(([, v]) => v != null && v !== '');
   if (entries.length === 0) return APP_ROOT;
   return '/' + '?' + new URLSearchParams(entries).toString();
 }

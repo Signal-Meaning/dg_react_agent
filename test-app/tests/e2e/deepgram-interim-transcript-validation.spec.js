@@ -9,13 +9,13 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loadAndSendAudioSample, waitForVADEvents } from './fixtures/audio-helpers.js';
-import { getVADState } from './fixtures/vad-helpers.js';
+import { loadAndSendAudioSample } from './fixtures/audio-helpers.js';
 import { pathWithQuery } from './helpers/test-helpers.mjs';
 import {
   setupAudioSendingPrerequisites,
   skipIfOpenAIProxy,
-  SELECTORS
+  SELECTORS,
+  getE2eTranscriptEvents,
 } from './helpers/test-helpers.js';
 
 test.describe('Interim Transcript Validation', () => {
@@ -126,81 +126,43 @@ test.describe('Interim Transcript Validation', () => {
     // For fake audio sent all at once, we need to wait longer to capture all interim transcripts
     await page.waitForTimeout(2000);
     
-    // Wait for transcript history container to appear in DOM
-    await page.waitForSelector('[data-testid="transcript-history"]', { timeout: 5000 });
-    
-    // Wait for at least one transcript entry to appear in the DOM
+    // Transcript History DOM removed; test-app logs each onTranscriptUpdate to __e2eTranscriptEvents
     await page.waitForFunction(
-      () => {
-        const entries = document.querySelectorAll('[data-testid^="transcript-entry-"]');
-        return entries.length > 0;
-      },
+      () => (globalThis.__e2eTranscriptEvents ?? []).length > 0,
       { timeout: 5000 }
     );
-    
-    // Wait for final transcript to arrive (if we only got interim so far)
-    // This ensures we capture both interim and final transcripts
-    await page.waitForFunction(
-      () => {
-        const entries = document.querySelectorAll('[data-testid^="transcript-entry-"]');
-        for (const entry of entries) {
-          const isFinal = entry.getAttribute('data-is-final') === 'true';
-          if (isFinal) return true;
-        }
-        return false;
-      },
-      { timeout: 3000 }
-    ).catch(() => {
-      // If no final transcript arrives within 3s, that's okay - we'll validate what we got
-      console.log('⚠️ No final transcript detected within timeout, will validate what we have');
-    });
-    
-    // CRITICAL: Wait for any additional interim transcripts that may still be arriving
-    // Interim transcripts can arrive after UtteranceEnd, especially with fake audio
-    // Wait for the transcript count to stabilize (no new transcripts for 500ms)
+
+    await page
+      .waitForFunction(
+        () => {
+          const ev = globalThis.__e2eTranscriptEvents ?? [];
+          return ev.some((e) => e.is_final === true);
+        },
+        { timeout: 3000 }
+      )
+      .catch(() => {
+        console.log('⚠️ No final transcript in __e2eTranscriptEvents within 3s, will validate what we have');
+      });
+
     let previousCount = 0;
     let stableCount = 0;
     for (let i = 0; i < 10; i++) {
       await page.waitForTimeout(500);
-      const currentCount = await page.evaluate(() => {
-        return document.querySelectorAll('[data-testid^="transcript-entry-"]').length;
-      });
+      const currentCount = await page.evaluate(() => (globalThis.__e2eTranscriptEvents ?? []).length);
       if (currentCount === previousCount) {
         stableCount++;
         if (stableCount >= 2) {
-          console.log(`✅ Transcript count stabilized at ${currentCount} after ${(i + 1) * 500}ms`);
+          console.log(`✅ Transcript event count stabilized at ${currentCount} after ${(i + 1) * 500}ms`);
           break;
         }
       } else {
         stableCount = 0;
-        console.log(`📊 Transcript count changed: ${previousCount} -> ${currentCount}`);
+        console.log(`📊 Transcript events changed: ${previousCount} -> ${currentCount}`);
       }
       previousCount = currentCount;
     }
-    
-    // Capture transcripts from the DOM (replaces window.__testTranscripts)
-    const capturedTranscripts = await page.evaluate(() => {
-      const entries = Array.from(document.querySelectorAll('[data-testid^="transcript-entry-"]'));
-      const transcripts = entries.map((entry, index) => {
-        const textEl = entry.querySelector(`[data-testid="transcript-text-${index}"]`);
-        const text = textEl?.textContent?.trim() || '';
-        const isFinal = entry.getAttribute('data-is-final') === 'true';
-        const speechFinal = entry.getAttribute('data-speech-final') === 'true';
-        const timestamp = parseInt(entry.getAttribute('data-timestamp') || '0', 10);
-        
-        return {
-          text,
-          is_final: isFinal,
-          speech_final: speechFinal,
-          timestamp
-        };
-      });
-      
-      // Log for debugging
-      console.log('[TEST] Transcripts from DOM:', JSON.stringify(transcripts, null, 2));
-      
-      return transcripts;
-    });
+
+    const capturedTranscripts = await getE2eTranscriptEvents(page);
     
     console.log('\n📊 === TRANSCRIPT VALIDATION ===');
     console.log('📝 Total transcripts captured:', capturedTranscripts.length);
@@ -310,6 +272,18 @@ test.describe('Interim Transcript Validation', () => {
     expect(transcriptText).toBeTruthy();
     expect(transcriptText?.trim()).not.toBe('');
     expect(transcriptText).not.toBe('(Waiting for transcript...)');
+
+    // Finalized user turn should appear in Conversation History (component speech_final → storage)
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('[data-testid="conversation-history"] [data-role="user"]').length > 0,
+      { timeout: 20000 }
+    );
+    const userHistoryText = await page
+      .locator('[data-testid="conversation-history"] [data-role="user"]')
+      .first()
+      .textContent();
+    expect((userHistoryText || '').trim().length).toBeGreaterThan(0);
     
     console.log('\n✅ All transcript validations passed!');
   });

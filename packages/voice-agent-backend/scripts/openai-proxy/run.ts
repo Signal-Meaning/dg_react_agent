@@ -18,7 +18,8 @@
  * OPENAI_PROXY_CLIENT_JSON_PASSTHROUGH=1 only to forward arbitrary JSON to upstream (not recommended).
  *
  * Run with cwd = this package directory (voice-agent-backend) or repo root.
- * Loads .env from cwd, parent, or repo root so OPENAI_API_KEY works in monorepo or standalone.
+ * Loads .env from cwd, then parent dirs up to repo root — **not** test-app/.env (VITE_* / frontend;
+ * use packages/voice-agent-backend/.env for server keys).
  *
  * Usage (from backend package dir or repo root):
  *   npx tsx scripts/openai-proxy/run.ts
@@ -32,12 +33,10 @@ import https from 'https';
 import dotenv from 'dotenv';
 
 const cwd = process.cwd();
-// Load .env from cwd (package dir or repo root), then common alternate locations (monorepo)
+// Monorepo: package .env, then packages/.env, then repo root .env — do not load test-app/.env here.
 dotenv.config({ path: path.resolve(cwd, '.env') });
-dotenv.config({ path: path.resolve(cwd, 'test-app', '.env') });
 dotenv.config({ path: path.resolve(cwd, '..', '.env') });
 dotenv.config({ path: path.resolve(cwd, '..', '..', '.env') });
-dotenv.config({ path: path.resolve(cwd, '..', '..', 'test-app', '.env') });
 
 import { createOpenAIProxyServer } from './server';
 import { resolveOpenAIProxyListenMode } from './listen-tls';

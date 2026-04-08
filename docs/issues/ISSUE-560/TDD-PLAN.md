@@ -4,6 +4,8 @@
 
 **Principle:** **Red → Green → Refactor.** Tests first where they define behavior; minimal implementation to go green. The headless `@signal-meaning/voice-agent-react` package must stay compatible with the [Voice Agent API](https://developers.deepgram.com/docs/voice-agent). Prefer **npm scripts** from `test-app` per [.cursorrules](../../../.cursorrules).
 
+**Process note (2026-04):** Larger UI refactors (voice provider toggle, removing duplicate panels) should still follow **tests-first for anything an E2E or unit test can lock**—e.g. update `SELECTORS` / specs **before** removing `data-testid` nodes; add or extend Jest **before** changing `getConversationHistory` behavior. Retroactive doc/test alignment is recorded in Phase B/C checkboxes below.
+
 **Recovery (new chat):** Read [CURRENT-STATUS.md](./CURRENT-STATUS.md), [NEXT-STEP.md](./NEXT-STEP.md), this file, [README.md](./README.md). **Repro:** manual steps live under [#561](../ISSUE-561/README.md); **#560** is isolation + fix in the **correct layer**.
 
 ---
@@ -38,6 +40,7 @@
 - [x] **Local manual repro** — satisfied by [#561](../ISSUE-561/README.md) work (Live, proxy, mic paths); keep using that flow while isolating.
 - [x] Run `cd test-app && npm run build` — **green** on `issue-560` (2026-04-05); failures (if any in CI) go in [CURRENT-STATUS.md](./CURRENT-STATUS.md).
 - [x] **Isolation conclusion (round 1)** — call chain + boundary in [CURRENT-STATUS.md](./CURRENT-STATUS.md) §Isolation trace.
+- [x] **Manual backend ergonomics** — `packages/voice-agent-backend`: `npm run start` = combined proxy; secrets in package `.env`; OpenAI `run.ts` dotenv no longer pulls `test-app/.env` (see CURRENT-STATUS §Manual testing).
 
 ---
 
@@ -47,15 +50,20 @@
 
 - [x] **Build:** `npm run build` sufficient when green; no extra Jest guard needed yet.
 - [ ] **Package (`src/`):** add under repo `tests/` **if** partner matches test-app wiring and defect is inside `DeepgramVoiceInteraction`.
-- [x] **test-app integration contract:** `test-app/tests/unit/voiceAgentStartOptions.test.ts` + `voiceAgentStartOptions.ts` (OpenAI proxy vs Deepgram `start()` flags for mic/Live).
+- [x] **test-app integration contract:** `test-app/tests/unit/voiceAgentStartOptions.test.ts` + `voiceAgentStartOptions.ts` (OpenAI proxy vs Deepgram `start()` flags for mic/Live + **text-input focus** on `App.tsx`).
+- [x] **test-app Agent Response / greeting rule:** `test-app/tests/unit/agentUtteranceGreetingPolicy.test.ts` + `agentUtteranceGreetingPolicy.ts` (Issue #414 suppression predicate; avoids mistaking debug readout for uplink bugs).
+- [x] **E2E transcript + assistant shape:** `waitForUserSpeechTranscriptSignal` + `assertMinimalAgentReplyShape` in `test-app/tests/e2e/helpers/test-helpers.js`; used by `openai-proxy-e2e.spec.js` (test 5) and `live-mode-openai-proxy.spec.js`. **`waitForUserSpeechTranscriptSignal`** also aggregates **`window.__e2eTranscriptEvents`** so OpenAI-proxy user STT is visible when Live hides the debug transcript `<pre>` (still requires real upstream transcript).
+- [x] **Remove redundant user-message panel:** `SELECTORS.conversationUserRow` + `deepgram-ux-protocol.spec.js` step 6 (conversation history); dropped `data-testid="user-message"` from test-app layout.
 
 ---
 
 ## 5. Phase C — GREEN: fixes
 
 - [x] **Refactor / lock:** `App.tsx` `startServicesAndMicrophone` uses `getVoiceAgentStartOptions` (tests green).
+- [x] **Text-input focus:** `App.tsx` text `onFocus` `start()` uses `getVoiceAgentStartOptions(proxyEndpoint)` (not hardcoded `transcription: false` for all modes).
 - [ ] **Partner-visible fix** — pending parity check; may be **`src/`** or **docs for integrators** once root cause is confirmed.
 - [x] Ran `test-app` tests + build for this slice (`npm test -- voiceAgentStartOptions.test.ts`, `npm run build`).
+- [x] Ran `npm test -- agentUtteranceGreetingPolicy.test.ts` for greeting / Agent Response policy slice.
 
 ---
 

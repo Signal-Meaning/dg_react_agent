@@ -15,7 +15,7 @@ export const OPENAI_MIN_AUDIO_MS_FOR_COMMIT = 100;
 /**
  * Minimum bytes to have sent via input_audio_buffer.append before we send commit.
  * 100ms at 24kHz, 16-bit mono: 24000 * 0.1 * 2 = 4800.
- * Proxy uses 24kHz so both 16kHz and 24kHz clients work.
+ * Client sends 16 kHz PCM; proxy resamples to 24 kHz before append (Issue #560), so this counts upstream (24 kHz) bytes.
  */
 export const OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT = 4800;
 

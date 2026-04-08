@@ -26,11 +26,19 @@ function getEnvironmentInstructions(): string | null {
     return process.env.DEFAULT_INSTRUCTIONS.trim();
   }
 
+  const v = getClientViteDefaultInstructionsOverride();
+  if (v) return v;
+
+  return null;
+}
+
+/** Exposed for test-app UI (provenance) — same source as `getEnvironmentInstructions` in Vite. */
+export function getClientViteDefaultInstructionsOverride(): string | null {
   const meta = import.meta as unknown as { env?: { VITE_DEFAULT_INSTRUCTIONS?: string } };
   if (typeof import.meta !== 'undefined' && meta.env?.VITE_DEFAULT_INSTRUCTIONS) {
-    return meta.env.VITE_DEFAULT_INSTRUCTIONS.trim();
+    const t = meta.env.VITE_DEFAULT_INSTRUCTIONS.trim();
+    return t || null;
   }
-
   return null;
 }
 

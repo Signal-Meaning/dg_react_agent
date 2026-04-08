@@ -59,20 +59,15 @@ async function captureConversationTranscript(page) {
         // Get conversation history from window (includes both user and assistant messages)
         const conversationHistory = window.__testConversationHistory || [];
         
-        // Get transcript history from DOM (audio transcriptions) - limit to avoid long processing
-        const transcriptEntries = Array.from(document.querySelectorAll('[data-testid^="transcript-entry-"]')).slice(0, 50);
-        const transcripts = transcriptEntries.map((entry, index) => {
-          try {
-            const textEl = entry.querySelector(`[data-testid="transcript-text-${index}"]`);
-            return {
-              text: textEl?.textContent?.trim() || '',
-              is_final: entry.getAttribute('data-is-final') === 'true',
-              timestamp: parseInt(entry.getAttribute('data-timestamp') || '0', 10)
-            };
-          } catch (e) {
-            return null;
-          }
-        }).filter(t => t && t.text && t.is_final); // Only include final transcripts
+        // Audio STT events (test-app __e2eTranscriptEvents); only finals for summary
+        const rawEv = (globalThis.__e2eTranscriptEvents || []).slice(0, 200);
+        const transcripts = rawEv
+          .filter((e) => e && e.text && e.is_final)
+          .map((e) => ({
+            text: String(e.text).trim(),
+            is_final: true,
+            timestamp: typeof e.timestamp === 'number' ? e.timestamp : Date.now(),
+          }));
         
         // Get function call information
         const functionCallRequests = (window.functionCallRequests || []).slice(0, 20); // Limit to 20

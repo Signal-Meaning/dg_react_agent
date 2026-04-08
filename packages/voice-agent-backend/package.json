@@ -7,6 +7,9 @@
   "files": ["src", "scripts", "README.md"],
   "scripts": {
     "serve": "node src/cli.js serve",
+    "start": "node ../../test-app/scripts/backend-server.js",
+    "backend": "node ../../test-app/scripts/backend-server.js",
+    "backend:log": "node ../../test-app/scripts/backend-server.js 2>&1 | tee backend-$(date +%Y%m%d-%H%M%S).log",
     "test": "echo \"Tests run from repo root\" && exit 0"
   },
   "keywords": ["deepgram", "voice-agent", "openai", "proxy", "backend"],

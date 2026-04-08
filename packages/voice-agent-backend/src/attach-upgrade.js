@@ -11,6 +11,18 @@ const DEFAULT_AGENT_URL = 'wss://agent.deepgram.com/v1/agent/converse';
 const DEFAULT_TRANSCRIPTION_URL = 'wss://api.deepgram.com/v1/listen';
 
 function noop() {}
+
+/** Safe attrs for loggers that merge a second argument into an object (strings must not be spread). */
+function errorAttrs(err) {
+  if (err == null) return { message: 'unknown error' };
+  if (err instanceof Error) {
+    const o = { message: err.message };
+    if (err.code != null) o.code = err.code;
+    return o;
+  }
+  return { message: String(err) };
+}
+
 function getLogger(opts) {
   const log = opts?.logger;
   return {
@@ -87,7 +99,7 @@ function createDeepgramWss(options) {
       if (clientWs.readyState === WebSocket.OPEN && deepgramMessageQueue.length > 0) {
         while (deepgramMessageQueue.length > 0) {
           const { data, isBinary } = deepgramMessageQueue.shift();
-          try { clientWs.send(data, { binary: isBinary }); } catch (e) { log.error('[Proxy] send to client failed', e?.message); }
+          try { clientWs.send(data, { binary: isBinary }); } catch (e) { log.error('[Proxy] send to client failed', errorAttrs(e)); }
         }
       }
     };
@@ -144,8 +156,8 @@ function createDeepgramWss(options) {
     });
 
     deepgramWs.on('error', (err) => {
-      log.error('[Proxy] Deepgram error', err?.message);
-      if (clientWs.readyState === WebSocket.OPEN) clientWs.close(1011, err?.message || 'Proxy error');
+      log.error('[Proxy] Deepgram error', errorAttrs(err));
+      if (clientWs.readyState === WebSocket.OPEN) clientWs.close(1011, err instanceof Error ? err.message : String(err || 'Proxy error'));
     });
 
     clientWs.on('close', (code, reason) => {
@@ -185,7 +197,7 @@ function createOpenAIWss(options) {
       upstream.on('error', () => clientWs.close());
     });
     upstream.on('error', (err) => {
-      log.error('[Proxy] OpenAI upstream error', err?.message);
+      log.error('[Proxy] OpenAI upstream error', errorAttrs(err));
       clientWs.close();
     });
   });
@@ -261,7 +273,7 @@ async function attachVoiceAgentUpgrade(server, options = {}) {
     });
     openaiChild.stdout?.on('data', (d) => process.stdout.write(d));
     openaiChild.stderr?.on('data', (d) => process.stderr.write(d));
-    openaiChild.on('error', (err) => log.error('[Proxy] OpenAI subprocess error', err?.message));
+    openaiChild.on('error', (err) => log.error('[Proxy] OpenAI subprocess error', errorAttrs(err)));
     openaiChild.on('exit', (code, sig) => {
       if (code != null && code !== 0) log.error('[Proxy] OpenAI subprocess exited', { code });
       if (sig) log.error('[Proxy] OpenAI subprocess killed', { signal: sig });

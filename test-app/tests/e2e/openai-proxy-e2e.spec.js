@@ -44,6 +44,10 @@ import {
   getAgentState,
   assertNoRecoverableAgentErrors,
   assertAgentErrorsAllowUpstreamTimeouts,
+  assertMinimalAgentReplyShape,
+  OPENAI_PROXY_E2E_DISTINCTIVE_AUDIO_SAMPLE,
+  OPENAI_PROXY_E2E_DISTINCTIVE_TRANSCRIPT_NORMALIZED,
+  waitForFinalUserTranscriptNormalized,
   CONVERSATION_STORAGE_KEY,
   setConversationInLocalStorage,
   getConversationStorageCheck,
@@ -213,31 +217,33 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
   test('5. Basic audio – send recorded audio; assert agent response appears in [data-testid="agent-response"]', async ({ page, context }) => {
     // Proxy translates client binary audio to OpenAI input_audio_buffer.append + commit + response.create.
     // In the test-app the agent response is rendered in the element with data-testid="agent-response".
+    // Audio-only path after Settings applied (no text turn); distinctive sample phrase for strict STT match.
     await context.grantPermissions(['microphone']);
     await setupTestPageForBackend(page);
     await establishConnectionViaText(page, 30000);
     await waitForSettingsApplied(page, 15000);
-    await sendTextMessage(page, 'What is 2 plus 2?');
-    await waitForAgentResponse(page, null, AGENT_RESPONSE_TIMEOUT);
-    const hasSample = await page.evaluate(async () => {
+    const sampleName = OPENAI_PROXY_E2E_DISTINCTIVE_AUDIO_SAMPLE;
+    const hasSample = await page.evaluate(async (name) => {
       try {
-        const wav = await fetch('/audio-samples/hello.wav');
+        const wav = await fetch(`/audio-samples/${name}.wav`);
         if (wav.ok) return true;
-        const json = await fetch('/audio-samples/sample_hello.json');
+        const json = await fetch(`/audio-samples/sample_${name}.json`);
         return json.ok;
       } catch {
         return false;
       }
-    }).catch(() => false);
+    }, sampleName).catch(() => false);
     if (!hasSample) {
-      test.skip(true, 'No audio sample (hello.wav or sample_hello.json) – run with audio fixtures');
+      test.skip(true, `No audio sample (${sampleName}.wav or sample_${sampleName}.json) – run with audio fixtures`);
       return;
     }
-    await loadAndSendAudioSample(page, 'hello', { chunkSize: CHUNK_20MS_16K_MONO });
+    await loadAndSendAudioSample(page, sampleName, { chunkSize: CHUNK_20MS_16K_MONO });
+    await waitForFinalUserTranscriptNormalized(page, OPENAI_PROXY_E2E_DISTINCTIVE_TRANSCRIPT_NORMALIZED, {
+      timeout: 90000,
+    });
     await waitForAgentResponse(page, null, AGENT_RESPONSE_TIMEOUT);
     const response = await page.locator('[data-testid="agent-response"]').textContent();
-    expect(response).toBeTruthy();
-    expect(response).not.toBe('(Waiting for agent response...)');
+    assertMinimalAgentReplyShape(response, 'agent response after distinctive-phrase audio');
     await assertAgentErrorsAllowUpstreamTimeouts(page);
   });
 

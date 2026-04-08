@@ -27,7 +27,9 @@ Use the **GitHub issue** for checkboxes and discussion; use this folder for stab
 | [TDD-PLAN.md](./TDD-PLAN.md) | TDD phases: inventory, RED/GREEN at **correct layer**, `tsc`/build. |
 | [TRACKING.md](./TRACKING.md) | Checklist and status while implementing. |
 
-**Code artifact (integration contract):** `test-app/src/live-mode/voiceAgentStartOptions.ts` — maps `proxyEndpoint` to `start()` options used by mic / Live; unit-tested under `test-app/tests/unit/`.
+**Code artifacts (test-app contracts):** `voiceAgentStartOptions.ts` — maps `proxyEndpoint` to `start()` options for mic / Live (`voiceAgentStartOptions.test.ts`). **`agentUtteranceGreetingPolicy.ts`** — Issue #414 predicate for when the standalone “Agent Response” readout is intentionally not updated (`agentUtteranceGreetingPolicy.test.ts`).
+
+**Local combined proxy (Deepgram + OpenAI + `/function-call`):** from `packages/voice-agent-backend`, run **`npm run start`** (or `npm run backend`); put API keys in **`packages/voice-agent-backend/.env`** — see [CURRENT-STATUS.md](./CURRENT-STATUS.md) §Manual testing / backend env.
 
 ---
 
