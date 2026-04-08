@@ -1,8 +1,12 @@
 // @ts-check
 import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
+import { createRequire } from 'module';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+const require = createRequire(import.meta.url);
+const { getPlaywrightWorkers } = require('./playwright-workers-from-env.cjs');
 
 // Load test-app/.env so HTTPS and proxy settings are available regardless of cwd
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -64,8 +68,8 @@ const config = {
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  /* CI and real-API runs: single worker avoids cross-spec contention on shared backend/OpenAI (Issue #560). */
+  workers: getPlaywrightWorkers(),
   /* Increase timeout for full test runs where API may be slower */
   timeout: 60000, // 60 seconds default timeout (increased from 30s)
   expect: {
