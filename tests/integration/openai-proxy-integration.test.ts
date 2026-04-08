@@ -1872,7 +1872,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         const msg = JSON.parse(data.toString()) as { type?: string };
         if (msg.type === 'SettingsApplied' && !settingsApplied) {
           settingsApplied = true;
-          client.send(Buffer.alloc(8000, 0));
+          // First commit needs ≥ OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT @ 24 kHz (~32k+ bytes 16 kHz in).
+          client.send(Buffer.alloc(40000, 0));
           // After first debounced commit (~400ms), send more PCM during the long output_text delay so a
           // commit timer can fire while responseInProgress and no-op without a later binary to re-arm.
           setTimeout(() => {
@@ -1887,7 +1888,62 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             } catch (e) {
               finish(e instanceof Error ? e : new Error(String(e)));
             }
-          }, 2500);
+          }, 3500);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => finish(err));
+  }, 15000);
+
+  /**
+   * Issue #560 §2c: onResponseEnded must not orphan pending audio when pendingAudioBytes < API min (100 ms).
+   * Proxy pads with silence to OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT then schedules commit.
+   */
+  itMockOnly('Issue #560: commits or schedules pending audio below API min after response ends (orphan tail)', (done) => {
+    mockSendOnlyAudioDoneFirst = true;
+    mockDelayOutputTextDoneAfterAudioMs = 900;
+    mockReceived.length = 0;
+    let settingsApplied = false;
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      mockSendOnlyAudioDoneFirst = false;
+      mockDelayOutputTextDoneAfterAudioMs = 300;
+      try {
+        client.close();
+      } catch {
+        // ignore
+      }
+      if (err) done(err);
+      else done();
+    };
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string };
+        if (msg.type === 'SettingsApplied' && !settingsApplied) {
+          settingsApplied = true;
+          client.send(Buffer.alloc(40000, 0));
+          // Small PCM during delayed output_text.done — stays below 100 ms @ 24 kHz after resample.
+          setTimeout(() => {
+            client.send(Buffer.alloc(1800, 0));
+          }, 550);
+          setTimeout(() => {
+            try {
+              const commits = mockReceived.filter((m) => m.type === 'input_audio_buffer.commit');
+              expect(commits.length).toBeGreaterThanOrEqual(2);
+              finish();
+            } catch (e) {
+              finish(e instanceof Error ? e : new Error(String(e)));
+            }
+          }, 4000);
         }
       } catch {
         // ignore
@@ -1895,6 +1951,63 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     });
     client.on('error', (err) => finish(err));
   }, 12000);
+
+  /**
+   * Issue #560 §2c: First user-audio commit waits for ~1 s @ 24 kHz (OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT),
+   * not the 100 ms bar — avoids garbage STT on tiny first buffers.
+   */
+  itMockOnly('Issue #560: first input_audio_buffer.commit only after first-commit byte threshold (mic-shaped accumulation)', (done) => {
+    mockReceived.length = 0;
+    let settingsApplied = false;
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      try {
+        client.close();
+      } catch {
+        // ignore
+      }
+      if (err) done(err);
+      else done();
+    };
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string };
+        if (msg.type === 'SettingsApplied' && !settingsApplied) {
+          settingsApplied = true;
+          // ~30k bytes @ 16 kHz → < OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT @ 24 kHz after resample.
+          client.send(Buffer.alloc(20000, 0));
+          setTimeout(() => {
+            try {
+              const commitsEarly = mockReceived.filter((m) => m.type === 'input_audio_buffer.commit');
+              expect(commitsEarly.length).toBe(0);
+              client.send(Buffer.alloc(20000, 0));
+            } catch (e) {
+              finish(e instanceof Error ? e : new Error(String(e)));
+            }
+          }, 550);
+          setTimeout(() => {
+            try {
+              const commits = mockReceived.filter((m) => m.type === 'input_audio_buffer.commit');
+              expect(commits.length).toBe(1);
+              finish();
+            } catch (e) {
+              finish(e instanceof Error ? e : new Error(String(e)));
+            }
+          }, 1400);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => finish(err));
+  }, 8000);
 
   /**
    * Issue #414: Proxy must not send input_audio_buffer.append until after session.updated (audio gated).
@@ -2141,7 +2254,8 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
       if (msg.type === 'SettingsApplied') {
-        client.send(Buffer.alloc(4800, 0)); // 100ms at 24kHz 16-bit mono (proxy MIN_AUDIO_BYTES_FOR_COMMIT)
+        // Issue #560: first commit uses OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT (~1 s @ 24 kHz); 16 kHz client needs ~32k+ bytes.
+        client.send(Buffer.alloc(40000, 0));
       }
       if (msg.type === 'ConversationText' && msg.role === 'assistant') {
         const types = mockReceived.map((m) => m.type);
@@ -2153,14 +2267,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('error', done);
-  }, 5000);
+  }, 12000);
 
   /** Issue #414 3.2: Proxy must not send a second response.create while a response is still in progress (avoids "conversation already has an active response"). */
   itMockOnly('sends at most one response.create per turn until response completes (Issue #414 conversation_already_has_active_response)', (done) => {
     mockDelayResponseDoneMs = 600;
     mockReceived.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
-    // Last chunk at 250ms; proxy debounce is 400ms after last append → commit + response.create at 650ms. Wait 750ms so assertion runs after debounce.
+    // Issue #560: first commit needs ~1 s @ 24 kHz after resample; two chunks, last at 250ms; debounce 400ms → commit ~650ms.
     const LAST_CHUNK_MS = 250;
     const DEBOUNCE_MS = 400;
     const ASSERT_AFTER_MS = LAST_CHUNK_MS + DEBOUNCE_MS + 100;
@@ -2171,7 +2285,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       const msg = JSON.parse(data.toString()) as { type?: string };
       if (msg.type === 'SettingsApplied') {
         mockReceived.length = 0;
-        client.send(Buffer.alloc(4800, 0));
+        client.send(Buffer.alloc(40000, 0));
         setTimeout(() => client.send(Buffer.alloc(4800, 0)), LAST_CHUNK_MS);
         setTimeout(() => {
           try {

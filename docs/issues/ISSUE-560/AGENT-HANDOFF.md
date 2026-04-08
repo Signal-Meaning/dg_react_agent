@@ -87,6 +87,6 @@ Related: [#561](../ISSUE-561/README.md) (Live UI), [#462](../ISSUE-462/README.md
 | Field | Value |
 |-------|--------|
 | Last known branch | `issue-560` |
-| Reporter-visible repro | **Still failing** (as of **2026-04-04** — [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md) retest table) |
-| New failing test added? | *— next agent —* |
-| Root cause conclusion | *— next agent —* |
+| Reporter-visible repro | **Re-verify** after **§2c** proxy (first-commit + orphan pad). Last logged pre-fix: **2026-04-04** — [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md) |
+| New tests (mock) | **Yes** — `openai-proxy-integration.test.ts`: *orphan tail*, *first-commit byte threshold*; existing *reschedules audio commit…* updated for larger first payload |
+| Root cause conclusion | **Partial (proxy):** tiny first commit + sub-min orphan tail addressed in **`server.ts`**; **semantic STT** / upstream still need human + real-API runs |

@@ -12,7 +12,8 @@
 
 **Step tags:** Every numbered step must show **`(human)`** if it needs manual work (real mic, browser, vendor console, secrets you paste) or **`(agent)`** if an autonomous agent can do it end-to-end (edit repo, run scripted tests/builds, no live audio). Use **both** inline when one step mixes both (e.g. you renew a key, then the agent runs E2E).
 
-1. **(human)** **Manual host mic (OpenAI proxy):** Follow [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md). Compare logs/UI to [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md). Edit **`AudioWorkletProcessor.js`** only with **`npm run generate:mic-worklet`**.
+1. **(human)** **Manual host mic (OpenAI proxy):** After pulling **§2c** proxy changes, follow [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md). Expect first `input_audio_buffer.commit` with **≥ ~48k** pending bytes @ 24 kHz in debug logs; compare STT to [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md). Update the repro doc **retest** table.
+2. **(agent)** **`USE_REAL_APIS=1`** — `npm test -- tests/integration/openai-proxy-integration.test.ts` (with `OPENAI_API_KEY` in backend `.env`) per [.cursorrules](../../../.cursorrules) when qualifying this proxy slice.
 
 ---
 

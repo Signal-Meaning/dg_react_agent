@@ -60,6 +60,7 @@ import {
 import { parse as parseUrl } from 'url';
 import {
   OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT,
+  OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT,
   assertMinAudioBeforeCommit,
   assertAppendChunkSize,
 } from './openai-audio-constants';
@@ -161,6 +162,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     let hasPendingAudio = false;
     /** Cumulative bytes sent via input_audio_buffer.append this connection; commit only when >= MIN_AUDIO_BYTES_FOR_COMMIT (Issue #414). */
     let pendingAudioBytes = 0;
+    /** Issue #560: after first successful input_audio_buffer.commit, use smaller min-bytes for follow-up turns. */
+    let hasCompletedFirstUserAudioCommit = false;
     /** True after we send response.create until we receive response.output_text.done (Issue #414: avoid "conversation already has an active response"). */
     let responseInProgress = false;
     /** Greeting from Settings; injected after session.updated (Issue #381) */
@@ -259,6 +262,37 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       upstream.send(JSON.stringify({ type: 'response.create' }));
       onResponseStarted();
     };
+    /**
+     * Issue #560: After response ends, re-arm commit for any PCM still pending. If pending is below the API
+     * minimum (100 ms @ 24 kHz), append silence so commit is legal — avoids dropping intentional tail audio.
+     */
+    const rearmPendingAudioCommitAfterResponse = (): void => {
+      if (!hasPendingAudio || pendingAudioBytes <= 0 || upstream.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      if (pendingAudioBytes >= OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT) {
+        scheduleAudioCommit();
+        return;
+      }
+      const padBytes = OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT - pendingAudioBytes;
+      const silence = Buffer.alloc(padBytes, 0);
+      assertAppendChunkSize(silence.length);
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'input_audio_buffer.append (silence pad to meet 100ms min before commit after response; Issue #560)',
+        attributes: {
+          ...connectionAttrs,
+          [ATTR_DIRECTION]: 'client→upstream',
+          [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.append',
+          'audio.pad_bytes': padBytes,
+        },
+      });
+      upstream.send(JSON.stringify(binaryToInputAudioBufferAppend(silence)));
+      pendingAudioBytes += padBytes;
+      scheduleAudioCommit();
+    };
+
     const onResponseEnded = (): void => {
       responseInProgress = false;
       hasSentAgentStartedSpeakingForCurrentResponse = false;
@@ -266,9 +300,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       // Issue #560: scheduleAudioCommit's debounce timer can fire while responseInProgress is true and no-op
       // (commit is gated on !responseInProgress). If no further binary arrives after that fire, nothing
       // re-arms the timer — queued mic PCM never flips to commit (manual host mic: append-only tail in proxy logs).
-      if (hasPendingAudio && pendingAudioBytes >= OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT) {
-        scheduleAudioCommit();
-      }
+      // Also: pending below API min must not be orphaned (rearmPendingAudioCommitAfterResponse pads to 100 ms).
+      rearmPendingAudioCommitAfterResponse();
     };
     /**
      * Send agent-done signals to client once per response so the component can transition to idle and start idle timeout.
@@ -302,9 +335,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       clearAudioCommitDebounce();
       audioCommitTimer = setTimeout(() => {
         audioCommitTimer = null;
+        const minBytesForThisCommit = hasCompletedFirstUserAudioCommit
+          ? OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT
+          : OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT;
         if (
           hasPendingAudio &&
-          pendingAudioBytes >= OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT &&
+          pendingAudioBytes >= minBytesForThisCommit &&
           !responseInProgress &&
           upstream.readyState === WebSocket.OPEN
         ) {
@@ -323,6 +359,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           upstream.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
           upstream.send(JSON.stringify({ type: 'response.create' }));
           onResponseStarted();
+          hasCompletedFirstUserAudioCommit = true;
           hasPendingAudio = false;
           pendingAudioBytes = 0;
         }

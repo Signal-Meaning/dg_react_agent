@@ -20,6 +20,14 @@ export const OPENAI_MIN_AUDIO_MS_FOR_COMMIT = 100;
 export const OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT = 4800;
 
 /**
+ * Issue #560: First user-audio commit uses a larger buffer (~1 s @ 24 kHz mono PCM16) so the first
+ * `input_audio_buffer.commit` is not a ~100–300 ms tail (garbage STT). After the first successful commit,
+ * the proxy uses {@link OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT} for subsequent commits (lower latency).
+ * 1 s at 24 kHz mono int16 = 24000 × 2 = 48000 bytes.
+ */
+export const OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT = 48000;
+
+/**
  * Maximum bytes per single input_audio_buffer.append event.
  * API: "The client may choose how much audio to place in each event up to a maximum of 15 MiB."
  */

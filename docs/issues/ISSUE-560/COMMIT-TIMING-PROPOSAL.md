@@ -2,7 +2,7 @@
 
 **Issue:** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560)  
 **Date:** 2026-04-08  
-**Status:** Proposal (not yet implemented)
+**Status:** **Implemented** on **mock** `openai-proxy-integration` path (Fix B silence pad + Fix A `OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT`). **Re-qualify** with **`USE_REAL_APIS=1`** and **manual host-mic** when possible.
 
 ---
 
@@ -117,6 +117,7 @@ No changes to the client package (`src/`), test-app, worklet, or resampler.
 
 ## Validation
 
-1. **(agent)** Write RED tests, implement fixes, run regression sweep.
-2. **(human)** Manual host-mic repro per [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md) with `LOG_LEVEL=debug`. Confirm first-commit `pending_bytes` is >= 48,000 and transcript is meaningful English.
-3. **(agent)** Update [TDD-PLAN.md](./TDD-PLAN.md) section 2b table and [TRACKING.md](./TRACKING.md).
+1. **(agent)** ~~Write RED tests, implement fixes, run regression sweep.~~ **Done** — mock `openai-proxy-integration.test.ts` full suite + `-t "Issue #560"`.
+2. **(human)** Manual host-mic repro per [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md) with `LOG_LEVEL=debug`. Confirm first-commit `pending_bytes` is **≥ ~48,000** and transcript is meaningful English.
+3. **(agent)** ~~Update [TDD-PLAN.md](./TDD-PLAN.md) section 2b table and [TRACKING.md](./TRACKING.md).~~ **Done** — §2b/§2c, TRACKING, CURRENT-STATUS, AGENT-HANDOFF, NEXT-STEP.
+4. **(agent)** **`USE_REAL_APIS=1`** on `openai-proxy-integration.test.ts` when qualifying with `OPENAI_API_KEY`.
