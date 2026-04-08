@@ -39,6 +39,22 @@
 
 ---
 
+## Follow-up retest — `backend-20260408-142135.log` (same day, after mic pipeline work)
+
+**Local log path (not in git):** `packages/voice-agent-backend/backend-20260408-142135.log`
+
+| Observation | Log / UI read |
+|-------------|----------------|
+| User STT still not faithful | **`input_audio_transcription.completed → Transcript (SHELX.)`** with interim deltas **accumulated length 1 → 4 → 5 → 6** — upstream is still producing **short, garbage text** for the first committed buffer, not the spoken English sentence. |
+| First commit size unchanged | Same pattern as earlier captures: **`audio.pending_bytes`: 12286** at **`input_audio_buffer.commit + response.create`** (~**256 ms** of **24 kHz** mono PCM after proxy resample). If the user starts speaking just before/around that commit, most of the phrase can land **after** the first commit and stay uncommitted until **`response.done`** + reschedule (or never, if pending bytes never reach the proxy min-commit threshold or the backend build is stale). |
+| Single processed user turn | Again **one** **`commit + response.create`** line in this log for the mic-driven path; confirm whether a **second commit** appears after assistant **`response.done`** when using a **current** proxy build with **`onResponseEnded` → `scheduleAudioCommit`** (or if pending bytes stay below the min commit threshold). |
+| Assistant language (e.g. Korean in UI) | The Realtime **model** can answer in a **non-English** locale when **input audio/transcript is nonsensical** or when **session instructions** / **model** skew multilingual. This is **not** evidence of hitting the wrong WebSocket URL by itself; treat as **symptom of bad or ambiguous input** until transcripts are clean. |
+| Test-app status labels | Screenshots showed **Settings Applied: false** and **Session … closed** while conversation text updated — treat as **possible client UI desync** (separate from proxy transcript lines above); prefer **Event Log** + **backend debug** for connection truth. |
+
+**Engineering follow-ups:** (1) **Rebuild / hard-refresh** the test-app after **`src/`** mic changes. (2) **`CLIENT_MIC_PCM_FOR_OPENAI_PROXY_HZ`** + **`prepareMicPcmForAgent`** (`mic-audio-contract.ts`, `AudioUtils.ts`) — single contract for **16 kHz** before the proxy’s **16→24 k** stage. (3) **`npm run generate:mic-worklet`** after editing **`AudioWorkletProcessor.js`** (generated inline for **`AudioManager`**); Jest **`microphone-worklet-inline-sync.test.ts`** guards drift.
+
+---
+
 ## Privacy
 
 Do not commit raw `backend-*.log` files: they may contain **key previews** at `info` startup. This note references **message types and transcript text** only.

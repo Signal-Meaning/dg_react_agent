@@ -19,6 +19,7 @@
     "build:watch": "rollup -c -w",
     "dev": "rollup -c -w",
     "generate-test-audio": "node scripts/generate-test-audio.js",
+    "generate:mic-worklet": "node scripts/inline-microphone-worklet.mjs",
     "test": "jest",
     "test:mock": "jest",
     "test:real": "RUN_REAL_API_TESTS=true jest",

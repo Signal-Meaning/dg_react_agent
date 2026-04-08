@@ -1,6 +1,6 @@
 # Issue #560 — next step
 
-**Last updated:** 2026-04-08 (**Shipped on `issue-560`:** commit **`e9e13f4f`** — proxy reschedule + docs + Jest. **Mock verify:** full **`openai-proxy-integration.test.ts`** 70 passed / 15 skipped. **Manual mic:** still **queue #1** — re-run with **`LOG_LEVEL=debug`** **`backend:log`**. **OTel:** [#565](https://github.com/Signal-Meaning/dg_react_agent/issues/565).)
+**Last updated:** 2026-04-08 (**Package:** mic **16 kHz contract** + **`generate:mic-worklet`** DRY + Jest **`microphone-worklet-inline-sync`** / **`audio-utils-mic-pcm-issue560`**. **Manual mic:** re-run after **rebuilding test-app** + **backend**; compare log to **`backend-20260408-142135`** (**`SHELX.`** / Korean — [manual report follow-up](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md)). **OTel:** [#565](https://github.com/Signal-Meaning/dg_react_agent/issues/565).)
 
 **GitHub:** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560)
 
@@ -23,7 +23,7 @@ Context: [CURRENT-STATUS.md](./CURRENT-STATUS.md).
 | # | Item | Human-only? |
 |---|------|-------------|
 | ~~1~~ | ~~**Re-qualify OpenAI proxy (real APIs):** (a) Root **`USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`** — done 2026-04-08 (20 passed). (b) **`test-app`**: **`USE_REAL_APIS=1 npm run test:e2e -- openai-proxy-e2e.spec.js live-mode-openai-proxy.spec.js`** — **done 2026-04-04** (18 passed, 2 skipped; Playwright starts dev + backend unless **`E2E_USE_EXISTING_SERVER=1`**). **`OPENAI_API_KEY`** only in **`packages/voice-agent-backend/.env`**. Optional **`curl http://127.0.0.1:8080/ready`**.~~ | ~~**Partial**~~ |
-| 1 | **Manual host mic + OpenAI proxy (re-test):** With **`onResponseEnded` → `scheduleAudioCommit`** fix deployed, repeat local session + **`LOG_LEVEL=debug`** **`backend:log`** — confirm **second+** **`input_audio_buffer.commit`** when speaking after assistant reply; still track **bogus STT** (`.` / wrong phrases) vs capture/upstream. [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md). | **Partial** |
+| 1 | **Manual host mic + OpenAI proxy (re-test):** Rebuild **test-app** after **`src/`** mic changes; **`onResponseEnded` → `scheduleAudioCommit`** on backend; **`LOG_LEVEL=debug`** **`backend:log`** — confirm **second+** **`input_audio_buffer.commit`** for a long utterance; compare STT to **`backend-20260408-142135`** baseline (**`SHELX.`**). Edit **`AudioWorkletProcessor.js`** only with **`npm run generate:mic-worklet`** so **`AudioManager`** stays in sync. [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md). | **Partial** |
 | 2 | **[#564](https://github.com/Signal-Meaning/dg_react_agent/issues/564) (Deepgram key):** **Deferred** until **#560 is resolved** — do not block #560 on renewal; re-run Deepgram E2E after #560 close + key refresh. | **No** (ops) |
 | ~~4~~ | ~~Text-input focus~~ — **Done:** `getVoiceAgentStartOptions` in `App.tsx`; tests in `voiceAgentStartOptions.test.ts`. | **No** |
 | ~~5~~ | ~~500 ms gate after SettingsApplied~~ — **Done:** `settingsSentTimeRef` cleared on confirmation; Jest `send-audio-after-settings-applied-issue560.test.tsx`. | **No** |

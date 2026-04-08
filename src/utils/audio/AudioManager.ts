@@ -2,93 +2,15 @@ import { DeepgramError, AudioConstraints } from '../../types';
 import { getLogger } from '../logger';
 import { EchoCancellationDetector, EchoCancellationSupport } from './EchoCancellationDetector';
 import { AudioConstraintValidator } from './AudioConstraintValidator';
-// Remove import/placeholder for worklet code and embed directly
-// Define the worklet code as a template string
-const audioWorkletCode = `/**
- * AudioWorkletProcessor for microphone capture and processing
- * 
- * This processor captures audio from the microphone, resamples it to 16kHz,
- * and converts it to Linear PCM format for sending to Deepgram.
- */
-class MicrophoneProcessor extends AudioWorkletProcessor {
-  constructor() {
-    super();
-    
-    // State
-    this.isRecording = false;
-    this.sampleRate = 16000; // Target sample rate
-    this.bufferSize = 4096;  // Buffer size in samples
-    this.buffer = new Float32Array(this.bufferSize);
-    this.bufferIndex = 0;
-    
-    // Set up message handler
-    this.port.onmessage = (event) => this.onMessage(event.data);
-  }
-  
-  /**
-   * Handles messages from the main thread
-   */
-  onMessage(message) {
-    if (message.type === 'start') {
-      this.isRecording = true;
-      this.port.postMessage({ type: 'started' });
-    } else if (message.type === 'stop') {
-      this.isRecording = false;
-      this.port.postMessage({ type: 'stopped' });
-    }
-  }
-  
-  /**
-   * Processes audio input and sends it to the main thread
-   */
-  process(inputs, outputs, parameters) {
-    if (!this.isRecording || !inputs[0] || !inputs[0][0]) {
-      return true;
-    }
-    
-    const input = inputs[0][0];
-    
-    // Add input samples to our buffer
-    for (let i = 0; i < input.length; i++) {
-      this.buffer[this.bufferIndex++] = input[i];
-      
-      // When buffer is full, send it to the main thread
-      if (this.bufferIndex >= this.bufferSize) {
-        this.sendBufferToMainThread();
-        this.bufferIndex = 0;
-      }
-    }
-    
-    return true;
-  }
-  
-  /**
-   * Converts the buffer to the required format and sends it to the main thread
-   */
-  sendBufferToMainThread() {
-    // Create a copy of the buffer
-    const audioData = this.buffer.slice(0, this.bufferIndex);
-    
-    // Convert to 16-bit PCM
-    const pcmData = new Int16Array(audioData.length);
-    for (let i = 0; i < audioData.length; i++) {
-      // Convert float [-1.0, 1.0] to 16-bit PCM [-32768, 32767]
-      const s = Math.max(-1, Math.min(1, audioData[i]));
-      pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-    }
-    
-    // Send the PCM data to the main thread
-    this.port.postMessage({
-      type: 'audio',
-      data: pcmData.buffer
-    }, [pcmData.buffer]);
-  }
-}
+import { MICROPHONE_WORKLET_INLINE_SOURCE } from './microphone-worklet-inline.generated';
+import { createAudioBuffer, playAudioBuffer, prepareMicPcmForAgent } from './AudioUtils';
+import {
+  CLIENT_MIC_PCM_FOR_OPENAI_PROXY_HZ,
+  OPENAI_REALTIME_OUTPUT_PCM_SAMPLE_RATE_HZ,
+} from './mic-audio-contract';
 
-// Register the processor
-registerProcessor('microphone-processor', MicrophoneProcessor);`;
-
-import { createAudioBuffer, playAudioBuffer } from './AudioUtils';
+/** Inlined from AudioWorkletProcessor.js via `npm run generate:mic-worklet` (see microphone-worklet-inline.generated.ts). */
+const audioWorkletCode = MICROPHONE_WORKLET_INLINE_SOURCE;
 
 /**
  * Event types emitted by the AudioManager
@@ -143,8 +65,8 @@ export interface AudioManagerOptions {
  * Default options for the AudioManager
  */
 const DEFAULT_OPTIONS: Partial<AudioManagerOptions> = {
-  sampleRate: 16000,
-  outputSampleRate: 24000,
+  sampleRate: CLIENT_MIC_PCM_FOR_OPENAI_PROXY_HZ,
+  outputSampleRate: OPENAI_REALTIME_OUTPUT_PCM_SAMPLE_RATE_HZ,
   normalizeVolume: true,
   normalizationFactor: 128,
   debug: false,
@@ -156,7 +78,7 @@ const DEFAULT_OPTIONS: Partial<AudioManagerOptions> = {
 export class AudioManager {
   private options: Omit<AudioManagerOptions, 'processorUrl'>; // processorUrl is no longer needed
   private audioContext: AudioContext | null = null;
-  /** Dedicated playback context at outputSampleRate (default 24000). Per OpenAI Realtime API session.audio.output.format.rate. Main context stays 16 kHz for mic; 24k→16k resampling caused buzzing (Issue #414). */
+  /** Dedicated playback `AudioContext` at `outputSampleRate` (default `OPENAI_REALTIME_OUTPUT_PCM_SAMPLE_RATE_HZ`). Mic capture uses `CLIENT_MIC_PCM_FOR_OPENAI_PROXY_HZ`; 24 kHz TTS on the mic context caused buzzing (Issue #414). */
   private playbackContext: AudioContext | null = null;
   private workletNode: AudioWorkletNode | null = null;
   private microphoneStream: MediaStream | null = null;
@@ -373,7 +295,14 @@ export class AudioManager {
         
         if (message.type === 'audio') {
           this.log('Received audio data from worklet');
-          this.emit({ type: 'data', data: message.data });
+          if (!this.audioContext) {
+            this.log('No AudioContext — dropping worklet audio');
+            return;
+          }
+          const floatMono = new Float32Array(message.data);
+          const targetRate = this.options.sampleRate ?? CLIENT_MIC_PCM_FOR_OPENAI_PROXY_HZ;
+          const pcm = prepareMicPcmForAgent(floatMono, this.audioContext.sampleRate, targetRate);
+          this.emit({ type: 'data', data: pcm });
         } else if (message.type === 'started') {
           this.log('Recording started');
           this.isRecording = true;
@@ -495,7 +424,7 @@ export class AudioManager {
    */
   private getOrCreatePlaybackContext(): AudioContext {
     if (this.playbackContext) return this.playbackContext;
-    const rate = this.options.outputSampleRate ?? 24000;
+    const rate = this.options.outputSampleRate ?? OPENAI_REALTIME_OUTPUT_PCM_SAMPLE_RATE_HZ;
     this.playbackContext = new AudioContext({ sampleRate: rate, latencyHint: 'interactive' });
     this.log(`[queueAudio] Created dedicated playback AudioContext at ${rate} Hz`);
     return this.playbackContext;

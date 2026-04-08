@@ -1,9 +1,11 @@
 /**
  * Linear PCM16 mono: 16 kHz → 24 kHz for OpenAI Realtime input (Issue #560).
- * dg_react_agent AudioManager uses AudioContext at 16 kHz; mapSettingsToSessionUpdate declares input rate 24000.
+ * dg_react_agent AudioManager emits true 16 kHz PCM16 (main thread downsamples from AudioContext rate when needed);
+ * mapSettingsToSessionUpdate declares input rate 24000.
  * Without resampling, upstream misinterprets samples and transcription/VAD fail.
  */
 
+/** Must match `CLIENT_MIC_PCM_FOR_OPENAI_PROXY_HZ` in `src/utils/audio/mic-audio-contract.ts`. */
 const INPUT_RATE = 16000;
 const OUTPUT_RATE = 24000;
 /** Input-sample index advance per emitted output sample (16000/24000 = 2/3). */

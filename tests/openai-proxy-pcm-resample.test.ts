@@ -1,6 +1,6 @@
 /**
  * OpenAI proxy: PCM16 mono 16 kHz → 24 kHz resampling (Issue #560).
- * dg_react_agent AudioManager captures at 16 kHz; Realtime session.input declares rate 24000.
+ * dg_react_agent AudioManager emits 16 kHz PCM16 to the proxy (downsampled from AudioContext rate when needed); Realtime session.input declares rate 24000.
  */
 
 import { Pcm16Mono16kTo24kStreamResampler } from '../packages/voice-agent-backend/scripts/openai-proxy/pcm-resample-16k-to-24k';

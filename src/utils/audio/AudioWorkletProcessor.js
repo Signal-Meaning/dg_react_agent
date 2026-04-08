@@ -1,8 +1,7 @@
 /**
  * AudioWorkletProcessor for microphone capture and processing
- * 
- * This processor captures audio from the microphone, resamples it to 16kHz,
- * and converts it to Linear PCM format for sending to Deepgram.
+ *
+ * Runs at AudioContext sample rate; sends float32 to main thread for resample to agent rate (Issue #560).
  */
 class MicrophoneProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -10,7 +9,6 @@ class MicrophoneProcessor extends AudioWorkletProcessor {
     
     // State
     this.isRecording = false;
-    this.sampleRate = 16000; // Target sample rate
     this.bufferSize = 4096;  // Buffer size in samples
     this.buffer = new Float32Array(this.bufferSize);
     this.bufferIndex = 0;
@@ -56,26 +54,12 @@ class MicrophoneProcessor extends AudioWorkletProcessor {
     return true;
   }
   
-  /**
-   * Converts the buffer to the required format and sends it to the main thread
-   */
   sendBufferToMainThread() {
-    // Create a copy of the buffer
     const audioData = this.buffer.slice(0, this.bufferIndex);
-    
-    // Convert to 16-bit PCM
-    const pcmData = new Int16Array(audioData.length);
-    for (let i = 0; i < audioData.length; i++) {
-      // Convert float [-1.0, 1.0] to 16-bit PCM [-32768, 32767]
-      const s = Math.max(-1, Math.min(1, audioData[i]));
-      pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-    }
-    
-    // Send the PCM data to the main thread
-    this.port.postMessage({
-      type: 'audio',
-      data: pcmData.buffer
-    }, [pcmData.buffer]);
+    this.port.postMessage(
+      { type: 'audio', data: audioData.buffer },
+      [audioData.buffer]
+    );
   }
 }
 

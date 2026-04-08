@@ -62,7 +62,8 @@
 - [x] **Refactor / lock:** `App.tsx` `startServicesAndMicrophone` uses `getVoiceAgentStartOptions` (tests green).
 - [x] **Text-input focus:** `App.tsx` text `onFocus` `start()` uses `getVoiceAgentStartOptions(proxyEndpoint)` (not hardcoded `transcription: false` for all modes).
 - [x] **OpenAI proxy:** **`onResponseEnded`** reschedules **`scheduleAudioCommit`** when pending PCM ≥ min commit bytes (Issue #560 append-only tail / stuck second commit) — Jest **`openai-proxy-integration`** Issue #560 case.
-- [ ] **Partner-visible fix** — **manual mic** needs **re-test** after proxy reschedule fix; bogus STT + capture still possible — [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md); may be **`src/`** or **docs for integrators** once root cause is confirmed.
+- [ ] **Partner-visible fix** — **manual mic** still **bogus STT** after **16 kHz** downsampling + DRY worklet (**`backend-20260408-142135`**: **`SHELX.`**) — [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md) follow-up; next: **first-commit timing** / **second commit** verification / capture.
+- [x] **Mic PCM + worklet tests** — **`audio-utils-mic-pcm-issue560.test.ts`**, **`microphone-worklet-inline-sync.test.ts`**; **`CLIENT_MIC_PCM_FOR_OPENAI_PROXY_HZ`** + **`generate:mic-worklet`**.
 - [x] Ran `test-app` tests + build for this slice (`npm test -- voiceAgentStartOptions.test.ts`, `npm run build`).
 - [x] Ran `npm test -- agentUtteranceGreetingPolicy.test.ts` for greeting / Agent Response policy slice.
 - [x] **Live OpenAI E2E mock path:** `live-mode-openai-proxy.spec.js` green with **`stopAudioCapture`** + **`e2eIdleTimeoutMs`**; **`test-app/tests/e2eIdleTimeoutMs.test.ts`** for URL idle resolution.
@@ -76,6 +77,7 @@
 
 ## 6. Phase D — REFACTOR
 
+- [x] **Mic worklet DRY** — single **`AudioWorkletProcessor.js`**; **`microphone-worklet-inline.generated.ts`** + **`npm run generate:mic-worklet`** (inline sync test).
 - [ ] Dedupe only **within the layer that owns the bug**; keep tests green; avoid moving logic across package/app boundary without a clear API reason.
 
 ---

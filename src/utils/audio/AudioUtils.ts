@@ -1,4 +1,8 @@
 import { getLogger } from '../logger';
+import {
+  CLIENT_MIC_PCM_FOR_OPENAI_PROXY_HZ,
+  OPENAI_REALTIME_OUTPUT_PCM_SAMPLE_RATE_HZ,
+} from './mic-audio-contract';
 
 const log = getLogger();
 
@@ -27,7 +31,7 @@ const log = getLogger();
 export function createAudioBuffer(
   audioContext: AudioContext, 
   data: ArrayBuffer, 
-  sampleRate: number = 24000
+  sampleRate: number = OPENAI_REALTIME_OUTPUT_PCM_SAMPLE_RATE_HZ
 ): AudioBuffer | undefined {
   // PCM16 = 2 bytes per sample. Do NOT drop bytes in the streaming path — AudioManager.queueAudio carries the odd byte
   // into the next chunk; callers in the playback pipeline must pass even-length data. Truncation here is only a last-resort
@@ -144,6 +148,34 @@ export function convertFloat32ToInt16(buffer: Float32Array): ArrayBuffer {
   }
   
   return buf.buffer;
+}
+
+/**
+ * Float32 mono [-1, 1] → PCM16 LE (symmetric clamp; matches microphone worklet semantics).
+ */
+export function float32MonoToPcm16LeSymmetric(samples: Float32Array): ArrayBuffer {
+  const buf = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    buf[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+}
+
+/**
+ * Mic path: worklet runs at {@link AudioContext}.sampleRate (often 48000 Hz). OpenAI proxy expects
+ * true 16 kHz PCM16 before 16→24 kHz resample (Issue #560).
+ */
+export function prepareMicPcmForAgent(
+  floatMono: Float32Array,
+  audioContextSampleRate: number,
+  targetSampleRate: number = CLIENT_MIC_PCM_FOR_OPENAI_PROXY_HZ
+): ArrayBuffer {
+  const prepared =
+    audioContextSampleRate === targetSampleRate
+      ? floatMono
+      : downsample(floatMono, audioContextSampleRate, targetSampleRate);
+  return float32MonoToPcm16LeSymmetric(prepared);
 }
 
 /**

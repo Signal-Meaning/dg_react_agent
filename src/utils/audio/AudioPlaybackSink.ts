@@ -10,9 +10,11 @@
  * https://platform.openai.com/docs/api-reference/realtime-server-events/response/output_audio/delta
  */
 
+import { OPENAI_REALTIME_OUTPUT_PCM_SAMPLE_RATE_HZ } from './mic-audio-contract';
+
 /** PCM format for agent TTS streaming (OpenAI Realtime output: audio/pcm, 24 kHz, 16-bit LE, mono). */
 export const PCM_STREAM_FORMAT = {
-  sampleRate: 24000,
+  sampleRate: OPENAI_REALTIME_OUTPUT_PCM_SAMPLE_RATE_HZ,
   channels: 1,
   bitDepth: 16,
 } as const;
