@@ -6,7 +6,7 @@
 
 **Process note (2026-04):** Larger UI refactors (voice provider toggle, removing duplicate panels) should still follow **tests-first for anything an E2E or unit test can lock**—e.g. update `SELECTORS` / specs **before** removing `data-testid` nodes; add or extend Jest **before** changing `getConversationHistory` behavior. Retroactive doc/test alignment is recorded in Phase B/C checkboxes below.
 
-**Recovery (new chat):** Read [CURRENT-STATUS.md](./CURRENT-STATUS.md), [NEXT-STEP.md](./NEXT-STEP.md), this file, [README.md](./README.md). **Repro:** manual steps live under [#561](../ISSUE-561/README.md); **#560** is isolation + fix in the **correct layer**.
+**Recovery (new chat):** Read [AGENT-HANDOFF.md](./AGENT-HANDOFF.md) (investigator brief), [CURRENT-STATUS.md](./CURRENT-STATUS.md), [NEXT-STEP.md](./NEXT-STEP.md), this file, [README.md](./README.md). **Host mic repro:** [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md). **OpenAI proxy commit policy (next RED slice):** [COMMIT-TIMING-PROPOSAL.md](./COMMIT-TIMING-PROPOSAL.md) + **§2c** below. **Live UI context:** [#561](../ISSUE-561/README.md). **#560** is isolation + fix in the **correct layer**.
 
 ---
 
@@ -49,7 +49,23 @@
 | **Worklet source drift** (two copies of processor) | Rare divergence Blob vs disk | `tests/unit/microphone-worklet-inline-sync.test.ts`; after editing worklet run **`npm run generate:mic-worklet`** |
 | **Proxy resampler** vs declared session input | Append / commit errors | `tests/openai-proxy-pcm-resample.test.ts` |
 
-**Explicit gap (not yet deterministic in Jest):** **First commit** often corresponds to **~256 ms** of 24 kHz audio after resample; long phrases may depend on a **second commit** after `response.done`. Until we add a **proxy integration** (or component) test with a **fixed timeline** for “speak through two commit windows,” manual runs remain **exploratory** for that hypothesis—not a substitute for the rows above.
+---
+
+## 2c. OpenAI proxy commit timing — next slice (**RED first**, then GREEN)
+
+**Design / rationale:** [COMMIT-TIMING-PROPOSAL.md](./COMMIT-TIMING-PROPOSAL.md) (first commit ~256 ms → garbage STT; `onResponseEnded` may skip `scheduleAudioCommit` when pending bytes are **below** min — orphaned tail).
+
+**Mandatory order:** write **failing** `openai-proxy-integration` tests **before** changing `server.ts` / `openai-audio-constants.ts`. No implementation until RED is observed.
+
+| Step | RED test intent (file: `tests/integration/openai-proxy-integration.test.ts`) | GREEN target (after test passes) |
+|------|--------------------------------------------------------------------------------|----------------------------------|
+| **1** | **`Issue #560: commits or reschedules pending audio below min after response ends`** — simulate `response.done` with `0 < pendingAudioBytes < OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT`; assert a commit is scheduled/sent (not dropped silently). | [COMMIT-TIMING-PROPOSAL.md](./COMMIT-TIMING-PROPOSAL.md) **Fix B** (`onResponseEnded` path). |
+| **2** | **`Issue #560: first commit meets minimum audio duration`** — mic-shaped chunk stream (silence then speech per proposal); assert first upstream `input_audio_buffer.commit` carries **≥ agreed byte budget** (e.g. ~1 s @ 24 kHz mono PCM16), or assert **first-commit-only** threshold behavior if implemented. | **Fix A:** prefer **`OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT`** (or equivalent) so **follow-up** turns stay low-latency; avoid raising **global** `OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT` to ~1 s for **every** commit unless product accepts that trade-off. |
+| **3** (optional) | Energy-gated first commit (**Fix C** in proposal) — only if step 2 GREEN still leaves garbage STT in manual repro. | Proxy-side RMS gate; defer until needed. |
+
+**Regression:** after each GREEN, run the §7 sweep plus **full** `openai-proxy-integration` mock suite. For proxy behavior changes, **`USE_REAL_APIS=1`** on `openai-proxy-integration.test.ts` when qualifying per [.cursorrules](../../../.cursorrules).
+
+**Explicit gap (superseded for commit policy):** The old “first commit ~256 ms / second window” gap is **closed by tests in §2c** once RED→GREEN completes; manual host-mic remains **supplemental** confirmation only.
 
 **E2E vs manual “mic sounds wrong” reports:** What you keep seeing manually is **upstream STT fidelity** (garbage transcripts, wrong language, etc.). That is **not** the same as what CI’s Jest rows assert (PCM math, commit scheduling, gating). **Partial E2E lock (OpenAI proxy + Live, fake mic device):** `test-app/tests/e2e/live-mode-openai-proxy-mic-uplink-issue560.spec.js` — after `waitForSettingsApplied`, asserts **GUM resolved**, **`__e2eWsBinarySendCount > 0`**, and the first binary sends have **even** byte lengths in a sane range (int16-ish). **Deepgram proxy equivalent:** `live-mode.spec.js` (Issue #561). **Still not automated:** semantic transcript correctness on **OpenAI** from **host** mic (needs real API + stable phrase / golden text or proxy log hook); keep manual reports labeled exploratory until we add that spec.
 
@@ -81,6 +97,8 @@ npm test -- tests/integration/openai-proxy-integration.test.ts -t "Issue #560"
 
 *(Prefer the smallest contract at the failing layer.)*
 
+- [ ] **Issue #560 — proxy orphan after `response.done`:** RED test in **`openai-proxy-integration.test.ts`** — pending audio **below** `OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT` must not be abandoned when `onResponseEnded` runs (**§2c** step 1, [COMMIT-TIMING-PROPOSAL.md](./COMMIT-TIMING-PROPOSAL.md) Fix B).
+- [ ] **Issue #560 — first commit byte / timing budget:** RED test in **`openai-proxy-integration.test.ts`** — mic-shaped stream; first commit payload meets **§2c** step 2 contract ([COMMIT-TIMING-PROPOSAL.md](./COMMIT-TIMING-PROPOSAL.md) Fix A; prefer first-commit-only threshold).
 - [x] **Build:** `npm run build` sufficient when green; no extra Jest guard needed yet.
 - [x] **Package (`src/`):** **`stopAudioCapture()`** on ref (pairs with **`startAudioCapture`**); Jest in **`voice-agent-api-validation.test.tsx`** + **`approved-additions.ts`** — addresses Live E2E dual-uplink (fake mic + inject), not partner-only.
 - [x] **test-app integration contract:** `test-app/tests/unit/voiceAgentStartOptions.test.ts` + `voiceAgentStartOptions.ts` (OpenAI proxy vs Deepgram `start()` flags for mic/Live + **text-input focus** on `App.tsx`).
@@ -96,7 +114,8 @@ npm test -- tests/integration/openai-proxy-integration.test.ts -t "Issue #560"
 - [x] **Refactor / lock:** `App.tsx` `startServicesAndMicrophone` uses `getVoiceAgentStartOptions` (tests green).
 - [x] **Text-input focus:** `App.tsx` text `onFocus` `start()` uses `getVoiceAgentStartOptions(proxyEndpoint)` (not hardcoded `transcription: false` for all modes).
 - [x] **OpenAI proxy:** **`onResponseEnded`** reschedules **`scheduleAudioCommit`** when pending PCM ≥ min commit bytes (Issue #560 append-only tail / stuck second commit) — Jest **`openai-proxy-integration`** Issue #560 case.
-- [ ] **Partner-visible fix** — **manual mic** may still show **bogus STT** (**`SHELX.`** in [manual report follow-up](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md)) for reasons **outside** the rate-mismatch row in **§2b** (e.g. **first-commit timing**, **second commit**, **model**). **Qualification:** rate/proxy/worklet causes are covered by **§2b** tests; remaining gap needs **new RED tests** when we can simulate multi-commit / long utterance in mock—**not** manual-only sign-off.
+- [ ] **OpenAI proxy — commit timing (§2c):** Implement **Fix B** then **Fix A** (prefer first-commit-only min bytes) only **after** corresponding RED tests in Phase B turn green — see [COMMIT-TIMING-PROPOSAL.md](./COMMIT-TIMING-PROPOSAL.md).
+- [ ] **Partner-visible fix** — **manual mic** may still show **bogus STT** (**`SHELX.`** in [manual report follow-up](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md)) until **§2c** GREEN + optional human repro. Upstream/model-only failures stay out of scope per proposal **“What this does NOT fix.”**
 - [x] **Mic PCM + worklet tests** — **`audio-utils-mic-pcm-issue560.test.ts`**, **`microphone-worklet-inline-sync.test.ts`**; **`CLIENT_MIC_PCM_FOR_OPENAI_PROXY_HZ`** + **`generate:mic-worklet`**.
 - [x] Ran `test-app` tests + build for this slice (`npm test -- voiceAgentStartOptions.test.ts`, `npm run build`).
 - [x] Ran `npm test -- agentUtteranceGreetingPolicy.test.ts` for greeting / Agent Response policy slice.

@@ -22,12 +22,15 @@ Use the **GitHub issue** for checkboxes and discussion; use this folder for stab
 
 | Doc | Purpose |
 |-----|---------|
+| [AGENT-HANDOFF.md](./AGENT-HANDOFF.md) | **Onboarding for the next investigator** — symptom vs automation gap, repro links, investigation order, rules. |
 | [CURRENT-STATUS.md](./CURRENT-STATUS.md) | Short snapshot + pointers. **Update after each slice.** |
 | [NEXT-STEP.md](./NEXT-STEP.md) | Next actions only. **Update after each slice.** |
-| [TDD-PLAN.md](./TDD-PLAN.md) | TDD phases: inventory, RED/GREEN at **correct layer**, `tsc`/build. |
+| [TDD-PLAN.md](./TDD-PLAN.md) | TDD phases: inventory, RED/GREEN at **correct layer**, `tsc`/build; **§2c** commit-timing slice. |
+| [COMMIT-TIMING-PROPOSAL.md](./COMMIT-TIMING-PROPOSAL.md) | OpenAI proxy: first-commit timing + orphaned tail — pairs with **TDD-PLAN §2c** (RED first). |
 | [TRACKING.md](./TRACKING.md) | Checklist and status while implementing. |
 | [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md) | Real-API **`AgentAudioDone`** after function-call integration test + **`LOG_LEVEL=debug`** notes. |
-| [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md) | Host mic manual repro vs Playwright: bogus STT (**`.`**), **append** without further **commit**, UI transcript mismatch. |
+| [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md) | **Canonical manual repro** (host mic + OpenAI proxy + test-app Live). |
+| [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md) | Log analysis: bogus STT, **append** vs **commit**, UI vs proxy. |
 
 **Code artifacts (test-app contracts):** `voiceAgentStartOptions.ts` — maps `proxyEndpoint` to `start()` options for mic / Live (`voiceAgentStartOptions.test.ts`). **`agentUtteranceGreetingPolicy.ts`** — Issue #414 Agent Response readout (`agentUtteranceGreetingPolicy.test.ts`). **`e2eIdleTimeoutMs.ts`** — URL override for agent idle in E2E vs short global `VITE_IDLE_TIMEOUT_MS`. **Package ref `stopAudioCapture()`** — stops mic without closing the agent socket (Live E2E: stop fake mic before **`sendAudioData`** inject). **`e2e-skip-env-policy.cjs`** — single source for “real vs placeholder” API keys in Playwright skip logic (used by **`test-helpers.js`**). **`playwright-workers-from-env.cjs`** — **`workers: 1`** when **`USE_REAL_APIS=1`** or **`CI`** (real-API E2E + Live qualification; Jest **`playwright-workers-from-env.test.js`**). **`backend-server-integration.test.js`** + **`backend-server-test-utils.cjs`** — spawn **`backend-server.js`**, assert **`/health`** / **`/ready`**.
 

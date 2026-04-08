@@ -1,6 +1,8 @@
 # Manual mic + OpenAI proxy — dev repro (2026-04-08)
 
 **Issue:** [#560](./README.md)  
+**Step-by-step repro (rerun this flow):** [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md)
+
 **Context:** Playwright **real-API** OpenAI + Live E2E passed (injected PCM). **Manual** test-app with **host microphone** still shows **invalid user transcripts** and **no meaningful assistant behavior** relative to what the user actually said.
 
 **Reporter note:** The strings **"It was."** and **"."** appeared in **Live Transcript** / **Conversation History** but **do not match spoken audio** (screenshot on file; UI-only evidence).

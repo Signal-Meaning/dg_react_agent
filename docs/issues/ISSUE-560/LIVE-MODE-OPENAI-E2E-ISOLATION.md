@@ -2,6 +2,8 @@
 
 **Purpose:** When user STT does not surface in OpenAI-proxy E2E, decide whether the bug is **client send path**, **proxy/protocol**, or **test shape** — without assuming upstream flakiness first.
 
+**Host microphone (not Playwright inject):** step-by-step repro — [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md).
+
 ## A. Current shape: `openai-proxy-e2e.spec.js` test 5 (audio-only after settings)
 
 1. `setupTestPageForBackend` + **`establishConnectionViaText`** → `start()` via text-input focus.
