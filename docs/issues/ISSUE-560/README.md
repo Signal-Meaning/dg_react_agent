@@ -26,6 +26,7 @@ Use the **GitHub issue** for checkboxes and discussion; use this folder for stab
 | [NEXT-STEP.md](./NEXT-STEP.md) | Queue head: **isolate defect in deliverable** vs test-app; build capture. **Update after each slice.** |
 | [TDD-PLAN.md](./TDD-PLAN.md) | TDD phases: inventory, RED/GREEN at **correct layer**, `tsc`/build. |
 | [TRACKING.md](./TRACKING.md) | Checklist and status while implementing. |
+| [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md) | Real-API **`AgentAudioDone`** after function-call integration test + **`LOG_LEVEL=debug`** notes. |
 
 **Code artifacts (test-app contracts):** `voiceAgentStartOptions.ts` — maps `proxyEndpoint` to `start()` options for mic / Live (`voiceAgentStartOptions.test.ts`). **`agentUtteranceGreetingPolicy.ts`** — Issue #414 Agent Response readout (`agentUtteranceGreetingPolicy.test.ts`). **`e2eIdleTimeoutMs.ts`** — URL override for agent idle in E2E vs short global `VITE_IDLE_TIMEOUT_MS`. **Package ref `stopAudioCapture()`** — stops mic without closing the agent socket (Live E2E: stop fake mic before **`sendAudioData`** inject).
 

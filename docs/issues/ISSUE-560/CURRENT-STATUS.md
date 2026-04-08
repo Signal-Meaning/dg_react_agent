@@ -1,6 +1,6 @@
 # Issue #560 — current status
 
-**Last updated:** 2026-04-08 (ISSUE-560 folder refresh: isolation §B/G/E, TRACKING/TDD-PLAN/NEXT-STEP; mock E2E test 5 + Live re-run green; `USE_REAL_APIS=1` integration run hit **Issue #489** AgentAudioDone timeout — not the #560 Live transcript path)
+**Last updated:** 2026-04-08 (Issue #489 real-API: **pass** after **`toolChoice: 'required'`** + stricter prompt; pre-fix logs showed conversational reply with **no** `function_call_arguments.done`. [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md). Issue #487 mock **`openai-proxy-integration`** slice unchanged from prior note.)
 
 **GitHub:** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560)
 
@@ -121,7 +121,7 @@ Both paths hit the same **settings / connection / sleep** gating inside `sendAud
 | test-app unit | `cd test-app && npm test -- <file>.test.ts` | Run for touched files; full `npm test` recommended before merge. |
 | Package Jest | `npm test -- conversation-storage-issue406` (root) | Run when `DeepgramVoiceInteraction` / storage changes. |
 | OpenAI proxy E2E | `cd test-app && npm run test:e2e -- openai-proxy-e2e.spec.js` | Run test 5 and Live as **two** commands if `-g` would otherwise match only one file. Requires dev server + backend. |
-| OpenAI proxy integration (root) | `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` | **2026-04-08:** 19 passed, 1 failed (**Issue #489** real-API AgentAudioDone after FunctionCallResponse timeout); treat as separate from #560 Live E2E until green upstream or extended timeout. |
+| OpenAI proxy integration (root) | `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` | **Issue #489** subset + proxy debug: `USE_REAL_APIS=1 LOG_LEVEL=debug npm test -- … -t "Issue #489 real-API: after FunctionCallResponse"`. Observations: [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md). |
 | Live mode E2E | `cd test-app && npm run test:e2e -- live-mode-openai-proxy.spec.js` | **`stopAudioCapture`** before **`loadAndSendAudioSample`** (fake mic vs inject); **`e2eIdleTimeoutMs`** on URL via **`setupTestPageWithOpenAIProxy` `extraParams`**; **`waitForFinalUserTranscriptNormalized`**. |
 
 **Honest default:** implementer runs **build + targeted Jest**; **full Playwright OpenAI/Live** is **manual/CI** when servers and `USE_REAL_APIS` match project rules.

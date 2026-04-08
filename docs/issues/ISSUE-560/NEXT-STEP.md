@@ -1,6 +1,6 @@
 # Issue #560 — next step
 
-**Last updated:** 2026-04-08 (isolation §B/G/E synced; mock E2E test 5 + Live green; `USE_REAL_APIS=1` integration: **Issue #489** case still flaky/failing — track separately from #560 qualification)
+**Last updated:** 2026-04-08 (**Issue #489** real-API subset **green** with **`toolChoice: 'required'`**; see [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md). Continue full **`openai-proxy-integration`** + E2E qualification per table below. Issue #487 mock integration note unchanged.)
 
 **GitHub:** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560)
 

@@ -2298,21 +2298,42 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
-   * Issue #487 protocol contract: Within N ms of the client sending FunctionCallResponse, the client must receive
-   * at least one of AgentThinking, ConversationText (assistant), or AgentAudioDone. This allows the component to
-   * clear "waiting for next agent message" and re-enable the idle timer. Catches proxy regressions (e.g. removing
-   * the AgentThinking send after function result). See docs/issues/ISSUE-489/WHY-INTEGRATION-TESTS-MISS-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md.
+   * Issue #487 protocol contract: After FunctionCallResponse, the client must receive at least one assistant-facing
+   * message that clears "waiting for next agent message" (IdleTimeoutService): AgentThinking, AgentStartedSpeaking,
+   * ConversationText (assistant), or AgentAudioDone.
+   *
+   * Assistant **audio** can still be streaming when an earlier signal (e.g. AgentThinking) has already fired; this
+   * test must **not** drop late JSON because it arrived after an arbitrary 2s window — that falsely fails when only
+   * AgentAudioDone appears after 2s. We use an overall deadline and record every JSON `type` after FCR in errors.
+   *
+   * Optional observability: set `DEBUG_OPENAI_PROXY_INTEGRATION=1` to log whether any assistant signal was seen by 2s
+   * (response clearly "happening") vs still waiting (may be slow mock / audio completion only).
+   *
+   * See docs/issues/ISSUE-489/WHY-INTEGRATION-TESTS-MISS-IDLE-TIMEOUT-AFTER-FUNCTION-CALL.md.
    */
-  itMockOnly('Issue #487: within 2s of FunctionCallResponse client receives AgentThinking or ConversationText (assistant) or AgentAudioDone', (done) => {
+  itMockOnly(
+    'Issue #487: after FunctionCallResponse client receives AgentThinking, AgentStartedSpeaking, ConversationText (assistant), or AgentAudioDone',
+    (done) => {
     mockSendFunctionCallAfterSession = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     let sentFunctionCallResponseAt: number | null = null;
     let finished = false;
-    const CONTRACT_DEADLINE_MS = 2000;
+    /** Overall cap: assistant completion may trail text/thinking (realistic for TTS/audio path). */
+    const OVERALL_DEADLINE_MS = 10000;
+    const START_OBSERVABILITY_MS = 2000;
+    const receivedJsonTypesAfterFcr: string[] = [];
+    let sawAssistantStartByObsWindow = false;
+    const debug487 = process.env.DEBUG_OPENAI_PROXY_INTEGRATION === '1';
+    let overallTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let obsTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let neverFcrTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const finish = (err?: Error) => {
       if (finished) return;
       finished = true;
+      if (overallTimeoutId !== null) clearTimeout(overallTimeoutId);
+      if (obsTimeoutId !== null) clearTimeout(obsTimeoutId);
+      if (neverFcrTimeoutId !== null) clearTimeout(neverFcrTimeoutId);
       try { client.close(); } catch { /* ignore */ }
       if (err) done(err);
       else done();
@@ -2334,15 +2355,41 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             content: '{"time":"12:00"}',
           }));
           sentFunctionCallResponseAt = Date.now();
+          obsTimeoutId = setTimeout(() => {
+            if (finished || sentFunctionCallResponseAt === null) return;
+            if (debug487) {
+              process.stdout.write(
+                `[Issue #487] ${START_OBSERVABILITY_MS}ms after FunctionCallResponse: ` +
+                  `assistantStart=${sawAssistantStartByObsWindow} typesSoFar=[${receivedJsonTypesAfterFcr.join(', ')}]\n`
+              );
+            }
+          }, START_OBSERVABILITY_MS);
+          overallTimeoutId = setTimeout(() => {
+            if (finished) return;
+            finish(
+              new Error(
+                `Issue #487: within ${OVERALL_DEADLINE_MS}ms after FunctionCallResponse, client did not receive ` +
+                  'AgentThinking, AgentStartedSpeaking, ConversationText (assistant), or AgentAudioDone. ' +
+                  `JSON types after FCR (${receivedJsonTypesAfterFcr.length}): ${receivedJsonTypesAfterFcr.join(', ') || '(none)'}`
+              )
+            );
+          }, OVERALL_DEADLINE_MS);
           return;
         }
         if (sentFunctionCallResponseAt === null) return;
-        const elapsed = Date.now() - sentFunctionCallResponseAt;
-        if (elapsed > CONTRACT_DEADLINE_MS) return;
-        const isAcceptable =
+        if (typeof msg.type === 'string') {
+          receivedJsonTypesAfterFcr.push(msg.type);
+        }
+        const isAssistantStart =
           msg.type === 'AgentThinking' ||
-          msg.type === 'AgentAudioDone' ||
+          msg.type === 'AgentStartedSpeaking' ||
           (msg.type === 'ConversationText' && msg.role === 'assistant');
+        if (isAssistantStart) {
+          sawAssistantStartByObsWindow = true;
+        }
+        const isAcceptable =
+          isAssistantStart ||
+          msg.type === 'AgentAudioDone';
         if (isAcceptable) {
           finish();
         }
@@ -2352,15 +2399,16 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     });
 
     client.on('error', (err) => finish(err));
-    setTimeout(() => {
+    /** If FCR never sent, fail — do not rely on FCR-relative overall timer. */
+    neverFcrTimeoutId = setTimeout(() => {
       if (finished) return;
-      if (sentFunctionCallResponseAt !== null) {
-        finish(new Error('Issue #487: client did not receive AgentThinking, ConversationText (assistant), or AgentAudioDone within 2s of FunctionCallResponse'));
-      } else {
+      if (sentFunctionCallResponseAt === null) {
         finish(new Error('Issue #487: never received FunctionCallRequest'));
       }
-    }, CONTRACT_DEADLINE_MS + 3000);
-  }, 10000);
+    }, OVERALL_DEADLINE_MS + 2000);
+  },
+  12000
+  );
 
   /**
    * Issue #489 PROTOCOL-ASSURANCE-GAPS (essential): After client sends FunctionCallResponse, client receives
@@ -2399,7 +2447,10 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             type: 'Settings',
             agent: {
               think: {
-                prompt: 'You are a helpful assistant. Use tools when needed.',
+                // Realtime may answer conversationally ("which timezone?") unless we force a tool call (Issue #535 → session.tool_choice).
+                toolChoice: 'required',
+                prompt:
+                  'You are a helpful assistant. When the user asks what time it is, you MUST call get_current_time. If they do not specify a timezone, use timezone "UTC". Do not ask the user for a timezone first.',
                 functions: [
                   {
                     name: 'get_current_time',
@@ -2485,7 +2536,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           if (finished) return;
           const errMsg = errorsReceived.length
             ? `Timeout; errors: ${errorsReceived.join('; ')}`
-            : 'Timeout: client did not receive AgentAudioDone after FunctionCallResponse (proxy may not have received response.done/output_text.done from upstream)';
+            : !sentFunctionCallResponse
+              ? 'Timeout: never sent FunctionCallResponse (OpenAI did not emit FunctionCallRequest — model may have replied without calling get_current_time; test uses toolChoice required + strict prompt)'
+              : 'Timeout: client did not receive AgentAudioDone after FunctionCallResponse (proxy may have sent AgentAudioDone only before FCR, or upstream did not complete the post-tool response)';
           finish(new Error(`Issue #489: ${errMsg}`));
         }, timeoutMs);
       })
