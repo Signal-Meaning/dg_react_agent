@@ -2,7 +2,7 @@
 
 **Issue:** [#560 — Backlog: voice-commerce mic activation regression; test-app build](https://github.com/Signal-Meaning/dg_react_agent/issues/560)
 
-**Principle:** **Red → Green → Refactor.** Tests first where they define behavior; minimal implementation to go green. The headless `@signal-meaning/voice-agent-react` package must stay compatible with the [Voice Agent API](https://developers.deepgram.com/docs/voice-agent). Prefer **npm scripts** from `test-app` per [.cursorrules](../../../.cursorrules).
+**Principle:** **Red → Green → Refactor.** Tests first where they define behavior; minimal implementation to go green. For **#560**, every **documented root cause** must be **locked by Jest** (see **§2b**); manual host-mic is **not** sufficient evidence of a fix on its own. The headless `@signal-meaning/voice-agent-react` package must stay compatible with the [Voice Agent API](https://developers.deepgram.com/docs/voice-agent). Prefer **npm scripts** from `test-app` per [.cursorrules](../../../.cursorrules).
 
 **Process note (2026-04):** Larger UI refactors (voice provider toggle, removing duplicate panels) should still follow **tests-first for anything an E2E or unit test can lock**—e.g. update `SELECTORS` / specs **before** removing `data-testid` nodes; add or extend Jest **before** changing `getConversationHistory` behavior. Retroactive doc/test alignment is recorded in Phase B/C checkboxes below.
 
@@ -22,7 +22,7 @@
 | Goal | Notes |
 |------|--------|
 | **G1** | **Isolate** mic-related failure: **`@signal-meaning/voice-agent-react`** (`src/`) vs **test-app** integration. Manual repro already exists from [#561](../ISSUE-561/README.md). |
-| **G2** | Add or extend **tests** at the **layer that owns the bug** (package `tests/` vs `test-app/tests/`) so the regression cannot return silently. |
+| **G2** | Add or extend **tests** at the **layer that owns the bug** (package `tests/` vs `test-app/tests/`). For #560 mic/proxy work, each **accepted root cause** must map to **automated** tests per **§2b** (manual is supplemental only). |
 | **G3** | Fix **`test-app` `npm run build`** / **`tsc -b`** until clean (may proceed in parallel). |
 
 ---
@@ -35,12 +35,45 @@
 
 ---
 
+## 2b. Root cause → automated tests (closure rule for #560)
+
+**Do not use manual host-mic runs as the only proof that a root cause is fixed.** Each **accepted root cause** below must be covered by **at least one Jest test** that would **fail** if the bug returns. Manual steps ([MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md), [#561](../ISSUE-561/README.md)) are **supplemental**: real device, room audio, and upstream variance are not reproducible in CI.
+
+**When you identify a new root cause:** add or extend a **failing test first** (RED), then fix (GREEN). Record the mapping in this table.
+
+| Root cause (accepted) | Symptom (manual / log) | Automated lock |
+|----------------------|-------------------------|----------------|
+| **PCM rate mismatch:** AudioWorklet runs at **AudioContext** Hz; sending int16 **without** downsampling to **16 kHz** makes the proxy treat time axis incorrectly | Garbage user STT (e.g. `.`, `1`, `SHELX.`) | `tests/unit/audio-utils-mic-pcm-issue560.test.ts`; **`tests/unit/mic-pcm-proxy-chain-issue560.test.ts`** (48 k → 16 k sample count, **3× buggy-path** contrast vs raw float→int16, **16→24 k** chain with `Pcm16Mono16kTo24kStreamResampler`) |
+| **Stuck second commit:** debounced `scheduleAudioCommit` no-ops while `responseInProgress` and was not rescheduled | Many `append` lines, no second `commit` | `tests/integration/openai-proxy-integration.test.ts` — *Issue #560: reschedules audio commit after response ends…* |
+| **`sendAudioData` gated** before settings / 500 ms | No uplink despite “mic on” | `tests/send-audio-after-settings-applied-issue560.test.tsx` |
+| **Worklet source drift** (two copies of processor) | Rare divergence Blob vs disk | `tests/unit/microphone-worklet-inline-sync.test.ts`; after editing worklet run **`npm run generate:mic-worklet`** |
+| **Proxy resampler** vs declared session input | Append / commit errors | `tests/openai-proxy-pcm-resample.test.ts` |
+
+**Explicit gap (not yet deterministic in Jest):** **First commit** often corresponds to **~256 ms** of 24 kHz audio after resample; long phrases may depend on a **second commit** after `response.done`. Until we add a **proxy integration** (or component) test with a **fixed timeline** for “speak through two commit windows,” manual runs remain **exploratory** for that hypothesis—not a substitute for the rows above.
+
+**E2E vs manual “mic sounds wrong” reports:** What you keep seeing manually is **upstream STT fidelity** (garbage transcripts, wrong language, etc.). That is **not** the same as what CI’s Jest rows assert (PCM math, commit scheduling, gating). **Partial E2E lock (OpenAI proxy + Live, fake mic device):** `test-app/tests/e2e/live-mode-openai-proxy-mic-uplink-issue560.spec.js` — after `waitForSettingsApplied`, asserts **GUM resolved**, **`__e2eWsBinarySendCount > 0`**, and the first binary sends have **even** byte lengths in a sane range (int16-ish). **Deepgram proxy equivalent:** `live-mode.spec.js` (Issue #561). **Still not automated:** semantic transcript correctness on **OpenAI** from **host** mic (needs real API + stable phrase / golden text or proxy log hook); keep manual reports labeled exploratory until we add that spec.
+
+**One-shot regression sweep (from repo root):** run **both** lines (Jest `-t` applies to every file on the command line, so keep the proxy integration filter separate).
+
+```bash
+npm test -- \
+  tests/unit/audio-utils-mic-pcm-issue560.test.ts \
+  tests/unit/mic-pcm-proxy-chain-issue560.test.ts \
+  tests/unit/microphone-worklet-inline-sync.test.ts \
+  tests/openai-proxy-pcm-resample.test.ts \
+  tests/send-audio-after-settings-applied-issue560.test.tsx
+
+npm test -- tests/integration/openai-proxy-integration.test.ts -t "Issue #560"
+```
+
+---
+
 ## 3. Phase A — Inventory
 
 - [x] **Local manual repro** — satisfied by [#561](../ISSUE-561/README.md) work (Live, proxy, mic paths); keep using that flow while isolating.
-- [x] Run `cd test-app && npm run build` — **green** on `issue-560` (2026-04-05); failures (if any in CI) go in [CURRENT-STATUS.md](./CURRENT-STATUS.md).
-- [x] **Isolation conclusion (round 1)** — call chain + boundary in [CURRENT-STATUS.md](./CURRENT-STATUS.md) §Isolation trace.
-- [x] **Manual backend ergonomics** — `packages/voice-agent-backend`: `npm run start` = combined proxy; secrets in package `.env`; OpenAI `run.ts` dotenv no longer pulls `test-app/.env` (see CURRENT-STATUS §Manual testing).
+- [x] Run `cd test-app && npm run build` — **green** on `issue-560` (2026-04-05); CI failures → note in [TRACKING.md](./TRACKING.md) or PR.
+- [x] **Isolation conclusion (round 1)** — call chain: [#561](../ISSUE-561/README.md), `App.tsx` / `voiceAgentStartOptions.ts` (see [CURRENT-STATUS.md](./CURRENT-STATUS.md) pointers).
+- [x] **Manual backend ergonomics** — `packages/voice-agent-backend` + `.env`; OpenAI `run.ts` does not load `test-app/.env` — [ARCHITECTURE.md](../../BACKEND-PROXY/ARCHITECTURE.md).
 
 ---
 
@@ -54,6 +87,7 @@
 - [x] **test-app Agent Response / greeting rule:** `test-app/tests/unit/agentUtteranceGreetingPolicy.test.ts` + `agentUtteranceGreetingPolicy.ts` (Issue #414 suppression predicate; avoids mistaking debug readout for uplink bugs).
 - [x] **E2E transcript + assistant shape:** `waitForUserSpeechTranscriptSignal` + `assertMinimalAgentReplyShape` in `test-app/tests/e2e/helpers/test-helpers.js`; used by `openai-proxy-e2e.spec.js` (test 5) and `live-mode-openai-proxy.spec.js`. **`waitForUserSpeechTranscriptSignal`** also aggregates **`window.__e2eTranscriptEvents`** so OpenAI-proxy user STT is visible when Live hides the debug transcript `<pre>` (still requires real upstream transcript).
 - [x] **Remove redundant user-message panel:** `SELECTORS.conversationUserRow` + `deepgram-ux-protocol.spec.js` step 6 (conversation history); dropped `data-testid="user-message"` from test-app layout.
+- [x] **Issue #560 root-cause locks (package + proxy chain):** **`mic-pcm-proxy-chain-issue560.test.ts`** — 48 k → 16 k duration, **no-downsample ≈3×** byte ratio vs correct path, **16→24 k** resampler expansion; see **§2b** table.
 
 ---
 
@@ -62,7 +96,7 @@
 - [x] **Refactor / lock:** `App.tsx` `startServicesAndMicrophone` uses `getVoiceAgentStartOptions` (tests green).
 - [x] **Text-input focus:** `App.tsx` text `onFocus` `start()` uses `getVoiceAgentStartOptions(proxyEndpoint)` (not hardcoded `transcription: false` for all modes).
 - [x] **OpenAI proxy:** **`onResponseEnded`** reschedules **`scheduleAudioCommit`** when pending PCM ≥ min commit bytes (Issue #560 append-only tail / stuck second commit) — Jest **`openai-proxy-integration`** Issue #560 case.
-- [ ] **Partner-visible fix** — **manual mic** still **bogus STT** after **16 kHz** downsampling + DRY worklet (**`backend-20260408-142135`**: **`SHELX.`**) — [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md) follow-up; next: **first-commit timing** / **second commit** verification / capture.
+- [ ] **Partner-visible fix** — **manual mic** may still show **bogus STT** (**`SHELX.`** in [manual report follow-up](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md)) for reasons **outside** the rate-mismatch row in **§2b** (e.g. **first-commit timing**, **second commit**, **model**). **Qualification:** rate/proxy/worklet causes are covered by **§2b** tests; remaining gap needs **new RED tests** when we can simulate multi-commit / long utterance in mock—**not** manual-only sign-off.
 - [x] **Mic PCM + worklet tests** — **`audio-utils-mic-pcm-issue560.test.ts`**, **`microphone-worklet-inline-sync.test.ts`**; **`CLIENT_MIC_PCM_FOR_OPENAI_PROXY_HZ`** + **`generate:mic-worklet`**.
 - [x] Ran `test-app` tests + build for this slice (`npm test -- voiceAgentStartOptions.test.ts`, `npm run build`).
 - [x] Ran `npm test -- agentUtteranceGreetingPolicy.test.ts` for greeting / Agent Response policy slice.

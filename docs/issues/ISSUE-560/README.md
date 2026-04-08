@@ -22,8 +22,8 @@ Use the **GitHub issue** for checkboxes and discussion; use this folder for stab
 
 | Doc | Purpose |
 |-----|---------|
-| [CURRENT-STATUS.md](./CURRENT-STATUS.md) | Phase table (repro → isolation → fix), symptoms, build state, **package vs test-app conclusion**. **Update after each slice.** |
-| [NEXT-STEP.md](./NEXT-STEP.md) | Queue head: **isolate defect in deliverable** vs test-app; build capture. **Update after each slice.** |
+| [CURRENT-STATUS.md](./CURRENT-STATUS.md) | Short snapshot + pointers. **Update after each slice.** |
+| [NEXT-STEP.md](./NEXT-STEP.md) | Next actions only. **Update after each slice.** |
 | [TDD-PLAN.md](./TDD-PLAN.md) | TDD phases: inventory, RED/GREEN at **correct layer**, `tsc`/build. |
 | [TRACKING.md](./TRACKING.md) | Checklist and status while implementing. |
 | [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md) | Real-API **`AgentAudioDone`** after function-call integration test + **`LOG_LEVEL=debug`** notes. |
@@ -31,7 +31,7 @@ Use the **GitHub issue** for checkboxes and discussion; use this folder for stab
 
 **Code artifacts (test-app contracts):** `voiceAgentStartOptions.ts` — maps `proxyEndpoint` to `start()` options for mic / Live (`voiceAgentStartOptions.test.ts`). **`agentUtteranceGreetingPolicy.ts`** — Issue #414 Agent Response readout (`agentUtteranceGreetingPolicy.test.ts`). **`e2eIdleTimeoutMs.ts`** — URL override for agent idle in E2E vs short global `VITE_IDLE_TIMEOUT_MS`. **Package ref `stopAudioCapture()`** — stops mic without closing the agent socket (Live E2E: stop fake mic before **`sendAudioData`** inject). **`e2e-skip-env-policy.cjs`** — single source for “real vs placeholder” API keys in Playwright skip logic (used by **`test-helpers.js`**). **`playwright-workers-from-env.cjs`** — **`workers: 1`** when **`USE_REAL_APIS=1`** or **`CI`** (real-API E2E + Live qualification; Jest **`playwright-workers-from-env.test.js`**). **`backend-server-integration.test.js`** + **`backend-server-test-utils.cjs`** — spawn **`backend-server.js`**, assert **`/health`** / **`/ready`**.
 
-**Local combined proxy (Deepgram + OpenAI + `/function-call`):** from `packages/voice-agent-backend`, run **`npm run start`** (or `npm run backend`); put API keys in **`packages/voice-agent-backend/.env`** — see [CURRENT-STATUS.md](./CURRENT-STATUS.md) §Manual testing / backend env.
+**Local combined proxy (Deepgram + OpenAI + `/function-call`):** from `packages/voice-agent-backend`, run **`npm run start`** (or `npm run backend`); API keys in **`packages/voice-agent-backend/.env`** — [ARCHITECTURE.md](../../BACKEND-PROXY/ARCHITECTURE.md).
 
 ---
 

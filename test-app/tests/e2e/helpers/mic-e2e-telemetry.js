@@ -4,6 +4,7 @@
  * - Wraps `getUserMedia` to record calls and fulfillment (proves API ran successfully).
  * - Wraps `WebSocket.prototype.send` on each socket instance to count non-empty `ArrayBuffer` payloads
  *   (mic PCM uplink from the voice agent client).
+ * - Records the first N `byteLength` values in `__e2eWsBinarySendByteLengths` (int16 PCM should be even).
  *
  * Playwright already launches Chromium with `--use-fake-device-for-media-stream` (see
  * `playwright.config.mjs`); the stream is synthetic but the real code path still runs.
@@ -16,6 +17,9 @@ export function installMicE2eTelemetry() {
   g.__e2eGumResolved = false;
   g.__e2eGumRejected = false;
   g.__e2eWsBinarySendCount = 0;
+  /** @type {number[]} */
+  g.__e2eWsBinarySendByteLengths = [];
+  const MAX_BINARY_LENGTH_SAMPLES = 32;
 
   const md = navigator.mediaDevices;
   if (md && typeof md.getUserMedia === 'function') {
@@ -42,6 +46,9 @@ export function installMicE2eTelemetry() {
     ws.send = function (data) {
       if (data instanceof ArrayBuffer && data.byteLength > 0) {
         g.__e2eWsBinarySendCount++;
+        if (g.__e2eWsBinarySendByteLengths.length < MAX_BINARY_LENGTH_SAMPLES) {
+          g.__e2eWsBinarySendByteLengths.push(data.byteLength);
+        }
       }
       return origSend(data);
     };
