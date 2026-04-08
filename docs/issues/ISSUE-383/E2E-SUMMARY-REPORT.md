@@ -127,10 +127,10 @@ These tests help catch regressions that would otherwise only show up as E2E "con
    - **Catches:** Proxy server bugs (translation, forwarding); does not cover the mock-proxy-server.js forwarder or browser TLS.
 
 4. **Integration: Mock proxy server startup**  
-   **File:** `test-app/tests/mock-proxy-server-integration.test.js`  
+   **File:** `test-app/tests/backend-server-integration.test.js`  
    - Asserts proxy exits when no API key, starts when key set, and prints **wss://** when `HTTPS=true`.  
    - **Catches:** Proxy not starting or wrong scheme in startup log.  
-   - **Run:** `npm test -- mock-proxy-server-integration` (from `test-app`).
+   - **Run:** `npm test -- backend-server-integration` (from `test-app`).
 
 **Optional (not added):** An integration test that starts the full mock-proxy (with OpenAI subprocess), then opens a Node WebSocket to `wss://127.0.0.1:8080/openai`, and expects either `open` or error containing `400`. That would reproduce "Invalid frame header" or connection failure in CI but is heavier (spawn proxy + run.ts, port/timeout handling).
 

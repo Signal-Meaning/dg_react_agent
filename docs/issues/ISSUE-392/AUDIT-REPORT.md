@@ -52,7 +52,7 @@
 | Test | Location | What it covers |
 |------|----------|----------------|
 | Unit (Deepgram routing) | `test-app/tests/unit/backend-server.test.js` | Service type detection, endpoint routing (agent vs transcription), query param forwarding. Does not start server. |
-| Integration | `test-app/tests/mock-proxy-server-integration.test.js` | API key requirement: neither key → exit 1; only Deepgram or only OpenAI → process stays up. |
+| Integration | `test-app/tests/backend-server-integration.test.js` | API key requirement: neither key → exit 1; only Deepgram or only OpenAI → process stays up. |
 | E2E | `deepgram-backend-proxy-mode.spec.js`, `deepgram-backend-proxy-authentication.spec.js`, `api-key-security-proxy-mode.spec.js` | Test-app with proxy; proxy assumed running. |
 
 Documented gaps (PROXY-SERVER-TEST-COVERAGE.md): server process with only OpenAI (subprocess + forwarder), both endpoints on same port, startup message content. These are **optional** for production-ready **code** bar; Deepgram proxy logic (routing, auth, queuing) is covered by unit + integration + E2E.
