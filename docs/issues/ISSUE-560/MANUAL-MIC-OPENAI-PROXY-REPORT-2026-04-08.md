@@ -33,8 +33,9 @@
 ## Interpretation (for #560 queue)
 
 - **§D checklist** ([LIVE-MODE-OPENAI-E2E-ISOLATION.md](./LIVE-MODE-OPENAI-E2E-ISOLATION.md) **§D**): Step 1 (PCM leaving browser) is **consistent** with **`append`** spam; step 2–4 show **OpenAI did emit** transcription — but **content is garbage** (`.`) for this buffer, so the failure is **not** “no STT event” but **bad / empty STT** plus **lack of subsequent commits** for ongoing mic input.
-- **E2E vs manual gap** remains **open**: injected **file PCM** qualifies; **real `getUserMedia`** + **live commit cadence** + **ambient/device audio** may differ enough that upstream STT and turn scheduling misbehave.
-- **Next engineering directions** (non-exhaustive): browser-side **commit / turn-detection** policy vs OpenAI Realtime expectations; **sample rate / format** from host mic; **dual stream** or **silence** dominating buffer; compare with a **known-good WAV** injected on the same session in the same browser tab.
+- **Proxy bug (mitigated in repo):** The debounced **`scheduleAudioCommit`** timer can fire while **`responseInProgress`** and **no-op**; with **no later binary** frame, **no new timer** was scheduled, so queued PCM never produced another **`input_audio_buffer.commit`** (matches this log’s **append-only** tail). **Fix:** **`onResponseEnded`** in **`packages/voice-agent-backend/scripts/openai-proxy/server.ts`** calls **`scheduleAudioCommit()`** when **`hasPendingAudio && pendingAudioBytes >= OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT`**. **Jest:** `tests/integration/openai-proxy-integration.test.ts` — *Issue #560: reschedules audio commit after response ends…*.
+- **E2E vs manual gap** remains **partly open**: bogus STT and UX need **manual re-test** with the proxy fix; upstream/model and **mic capture** are separate from commit scheduling.
+- **Next engineering directions** (non-exhaustive): re-run **manual host mic** + debug log; **OTel log shape** — GitHub **[#565](https://github.com/Signal-Meaning/dg_react_agent/issues/565)**; **sample rate / format** from host mic; compare with a **known-good WAV** in the same browser tab.
 
 ---
 

@@ -1838,6 +1838,65 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 5000);
 
   /**
+   * Issue #560: If the debounced commit timer fires while responseInProgress is true, scheduleAudioCommit no-ops
+   * and does not reschedule. When the user stops sending binary before the response ends, no later append
+   * re-arms the timer — pending PCM must flush after onResponseEnded (manual mic: append-only proxy logs).
+   * Mock delays output_text.done after audio so responseInProgress stays true long enough for a timer skip.
+   */
+  itMockOnly('Issue #560: reschedules audio commit after response ends when debounce fired during active response', (done) => {
+    mockSendOnlyAudioDoneFirst = true;
+    mockDelayOutputTextDoneAfterAudioMs = 600;
+    mockReceived.length = 0;
+    let settingsApplied = false;
+    let finished = false;
+    const finish = (err?: Error) => {
+      if (finished) return;
+      finished = true;
+      mockSendOnlyAudioDoneFirst = false;
+      mockDelayOutputTextDoneAfterAudioMs = 300;
+      try {
+        client.close();
+      } catch {
+        // ignore
+      }
+      if (err) done(err);
+      else done();
+    };
+    const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+    client.on('open', () => {
+      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+    });
+    client.on('message', (data: Buffer) => {
+      if (data.length === 0 || data[0] !== 0x7b) return;
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string };
+        if (msg.type === 'SettingsApplied' && !settingsApplied) {
+          settingsApplied = true;
+          client.send(Buffer.alloc(8000, 0));
+          // After first debounced commit (~400ms), send more PCM during the long output_text delay so a
+          // commit timer can fire while responseInProgress and no-op without a later binary to re-arm.
+          setTimeout(() => {
+            client.send(Buffer.alloc(9600, 0));
+            client.send(Buffer.alloc(9600, 0));
+          }, 500);
+          setTimeout(() => {
+            try {
+              const commits = mockReceived.filter((m) => m.type === 'input_audio_buffer.commit');
+              expect(commits.length).toBeGreaterThanOrEqual(2);
+              finish();
+            } catch (e) {
+              finish(e instanceof Error ? e : new Error(String(e)));
+            }
+          }, 2500);
+        }
+      } catch {
+        // ignore
+      }
+    });
+    client.on('error', (err) => finish(err));
+  }, 12000);
+
+  /**
    * Issue #414: Proxy must not send input_audio_buffer.append until after session.updated (audio gated).
    * When client sends binary before session.updated, proxy queues it and flushes after session.updated.
    * Mock enforces protocol: input_audio_buffer.append before session.updated → protocolErrors.

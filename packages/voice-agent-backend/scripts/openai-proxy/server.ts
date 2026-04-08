@@ -263,6 +263,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       responseInProgress = false;
       hasSentAgentStartedSpeakingForCurrentResponse = false;
       hasSentAgentAudioDoneForCurrentResponse = false;
+      // Issue #560: scheduleAudioCommit's debounce timer can fire while responseInProgress is true and no-op
+      // (commit is gated on !responseInProgress). If no further binary arrives after that fire, nothing
+      // re-arms the timer — queued mic PCM never flips to commit (manual host mic: append-only tail in proxy logs).
+      if (hasPendingAudio && pendingAudioBytes >= OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT) {
+        scheduleAudioCommit();
+      }
     };
     /**
      * Send agent-done signals to client once per response so the component can transition to idle and start idle timeout.

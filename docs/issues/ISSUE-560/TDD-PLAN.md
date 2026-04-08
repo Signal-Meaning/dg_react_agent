@@ -61,7 +61,8 @@
 
 - [x] **Refactor / lock:** `App.tsx` `startServicesAndMicrophone` uses `getVoiceAgentStartOptions` (tests green).
 - [x] **Text-input focus:** `App.tsx` text `onFocus` `start()` uses `getVoiceAgentStartOptions(proxyEndpoint)` (not hardcoded `transcription: false` for all modes).
-- [ ] **Partner-visible fix** — **manual mic still failing** (2026-04-08) despite Playwright real-API green — [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md); pending parity / commit cadence / capture path; may be **`src/`** or **docs for integrators** once root cause is confirmed.
+- [x] **OpenAI proxy:** **`onResponseEnded`** reschedules **`scheduleAudioCommit`** when pending PCM ≥ min commit bytes (Issue #560 append-only tail / stuck second commit) — Jest **`openai-proxy-integration`** Issue #560 case.
+- [ ] **Partner-visible fix** — **manual mic** needs **re-test** after proxy reschedule fix; bogus STT + capture still possible — [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md); may be **`src/`** or **docs for integrators** once root cause is confirmed.
 - [x] Ran `test-app` tests + build for this slice (`npm test -- voiceAgentStartOptions.test.ts`, `npm run build`).
 - [x] Ran `npm test -- agentUtteranceGreetingPolicy.test.ts` for greeting / Agent Response policy slice.
 - [x] **Live OpenAI E2E mock path:** `live-mode-openai-proxy.spec.js` green with **`stopAudioCapture`** + **`e2eIdleTimeoutMs`**; **`test-app/tests/e2eIdleTimeoutMs.test.ts`** for URL idle resolution.
