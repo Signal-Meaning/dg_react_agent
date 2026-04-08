@@ -19,6 +19,8 @@ USE_REAL_APIS=1 LOG_LEVEL=debug npm test -- tests/integration/openai-proxy-integ
 | Result | **Pass** — `Issue #489 real-API: after FunctionCallResponse…` (~1s) after **`toolChoice: 'required'`** + stricter prompt in `openai-proxy-integration.test.ts` |
 | Notes | Prior run (same day, before test change): **fail** — see **Findings: pre-fix run** below. Re-run logs showed **`response.function_call_arguments.done` → FunctionCallRequest** and **`timezone` / `UTC`** in argument deltas. |
 
+**Full file (`USE_REAL_APIS=1`, same command without `-t`):** 2026-04-08 — **20 passed** in ~73s (mock-only tests skipped when real APIs are on).
+
 ---
 
 ## Findings: pre-fix run (2026-04-08) — log review
