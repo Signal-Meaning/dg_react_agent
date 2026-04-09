@@ -30,6 +30,6 @@
 | `USE_REAL_APIS=1` **`openai-proxy-integration.test.ts`** | **Green (2026-04-04, post-§2c)** — 20 passed ~73s (mock-only tests skipped when `USE_REAL_APIS=1`). **Issue #489** path uses **`toolChoice: 'required'`** + prompt; [ISSUE-489-INTEGRATION-OBSERVATIONS.md](./ISSUE-489-INTEGRATION-OBSERVATIONS.md). CI still runs mock-only cases without real APIs. |
 | E2E skip: OpenAI key backend-only + **`e2e-skip-env-policy.cjs`** | **Done** — **`test-helpers.js`** delegates; Jest **`openai-proxy-e2e-skip-policy.test.js`** |
 | Backend **`/health`** + **`/ready`** + integration rename | **Done** — **`backend-server.js`**; **`backend-server-integration.test.js`** + **`tests/helpers/backend-server-test-utils.cjs`** (replaces **`mock-proxy-server-integration`**) |
-| Fix merged / issue closed on GitHub | Not started |
+| Fix merged / issue closed on GitHub | **Done (2026-04-08)** — fixes on `main`; issue [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560) closed |
 
 Notes: After each slice, edit **CURRENT-STATUS**, **NEXT-STEP**, and checkboxes in **TDD-PLAN**.

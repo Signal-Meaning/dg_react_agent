@@ -88,7 +88,8 @@ Related: [#561](../ISSUE-561/README.md) (Live UI), [#462](../ISSUE-462/README.md
 
 | Field | Value |
 |-------|--------|
-| Last known branch | `issue-560` |
-| Reporter-visible repro | **Re-verify** after **§2c** proxy (first-commit + orphan pad). Last logged pre-fix: **2026-04-04** — [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md) |
+| **Issue state** | **Closed on GitHub (2026-04-08)** — deliverables on **`main`** |
+| Last known branch | `main` (historical feature branch: `issue-560`) |
+| Reporter-visible repro | **Optional human re-verify** after §2c + Server VAD default — [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md); last pre-fix narrative **2026-04-04** in [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md) |
 | New tests (mock) | **Yes** — `openai-proxy-integration.test.ts`: *orphan tail*, *first-commit byte threshold*, *Issue #560 / scheduler* (continuous chunks + client-close flush); *Issue #414* ordering test clears shared **`mockReceived`** on **`open`** (stability with close-flush) |
-| Root cause conclusion | **Partial (proxy):** §2c first commit + orphan tail; **Phase 2** scheduler + close flush (manual-commit mocks); **Phase 2b (2026-04-04)** **default `server_vad`** (append-only mic); **`useOpenAIManualAudioCommit`** Jest-only for legacy null-VAD tests; **semantic STT** / upstream still need human + real-API runs; qualify VAD with **`USE_REAL_APIS=1`** when keys available |
+| Root cause conclusion | **Shipped (proxy + client):** §2c first commit + orphan tail; **Phase 2** scheduler + close flush; **Phase 2b** default **`server_vad`** (append-only mic); **`useOpenAIManualAudioCommit`** Jest-only for legacy null-VAD tests; mic PCM contract + worklet DRY; test-app build/type fixes. **Out of scope for “closed”:** semantic STT on real room mic (automation gap); **OTel** → [#565](https://github.com/Signal-Meaning/dg_react_agent/issues/565) |

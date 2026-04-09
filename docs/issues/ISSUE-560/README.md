@@ -1,10 +1,12 @@
 # Issue #560 — Backlog: voice-commerce mic regression + test-app build
 
+**Status:** **Closed (2026-04-08)** — proxy commit timing, scheduler, default Server VAD, mic PCM contract, and test-app build fixes landed on **`main`**. Residual **human** verification: host mic STT per [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md). OTel noise: [#565](https://github.com/Signal-Meaning/dg_react_agent/issues/565).
+
 **GitHub:** [#560 — Backlog: voice-commerce mic activation regression — repro in test-app; test-app build (tsc) failures](https://github.com/Signal-Meaning/dg_react_agent/issues/560)
 
 **Labels:** bug, audio, voice-agent, testing, priority: medium
 
-**Branch:** `issue-560` (work here; merge via PR when ready)
+**Branch:** Historical work on `issue-560`; release line is **`main`**.
 
 ---
 
