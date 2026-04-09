@@ -35,10 +35,11 @@
  */
 
 import path from 'path';
-// Load root .env and test-app/.env so OPENAI_API_KEY is available when running with USE_REAL_APIS=1
+// Load root, test-app, and voice-agent-backend .env so OPENAI_API_KEY is available when running with USE_REAL_APIS=1
 import dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config({ path: path.resolve(process.cwd(), 'test-app', '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), 'packages', 'voice-agent-backend', '.env') });
 
 import http from 'http';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -772,7 +773,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       else done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -806,7 +807,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           sendJson({ type: 'InjectUserMessage', content: 'Say hello in one short sentence.' });
           sendJson({
             type: 'Settings',
-            agent: { think: { prompt: 'You are a helpful assistant. Reply briefly.' } },
+            agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'You are a helpful assistant. Reply briefly.' } },
           });
         },
         onJsonMessage(msg) {
@@ -1099,7 +1100,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('open', () => {
       client.send(JSON.stringify({
         type: 'Settings',
-        agent: { think: { prompt: 'Help.' } },
+        agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } },
       }));
     });
     client.on('message', (data: Buffer) => {
@@ -1140,7 +1141,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     let finished = false;
     let errorReceived: string | null = null;
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -1194,7 +1195,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     let finished = false;
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -1241,7 +1242,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     let finished = false;
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -1292,7 +1293,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const timeoutId = setTimeout(() => done(new Error('Timeout: did not receive UserStartedSpeaking')), 5000);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -1336,7 +1337,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const timeoutId = setTimeout(() => done(new Error('Timeout: did not receive UtteranceEnd')), 5000);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -1382,7 +1383,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     const timeoutId = setTimeout(() => done(new Error('Issue #494: timeout, did not receive UtteranceEnd')), 5000);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -1451,7 +1452,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     });
     setTimeout(() => {
       if (client.readyState !== WebSocket.OPEN) return;
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
     }, 50);
     client.on('error', (err) => {
       mockDelayResponseDoneMs = 0;
@@ -1487,7 +1488,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       let secondSettingsSent = false;
 
       client.on('open', () => {
-        client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+        client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
       });
       client.on('message', (data: Buffer) => {
         if (data.length === 0 || data[0] !== 0x7b) return;
@@ -1506,7 +1507,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             setTimeout(() => {
               if (client.readyState === WebSocket.OPEN && !secondSettingsSent) {
                 secondSettingsSent = true;
-                client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+                client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
               }
             }, 150);
           }
@@ -1545,7 +1546,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         if (msg.type === 'ConversationText' && msg.role === 'user') {
           setTimeout(() => {
             if (client.readyState === WebSocket.OPEN) {
-              client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+              client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
             }
           }, 50);
         }
@@ -1582,7 +1583,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     };
 
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -1600,7 +1601,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           setTimeout(() => {
             if (client.readyState === WebSocket.OPEN && !secondSettingsSent) {
               secondSettingsSent = true;
-              client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+              client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
             }
           }, 150);
         }
@@ -1645,7 +1646,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     };
 
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -1703,7 +1704,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       else done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -1751,14 +1752,14 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     let settingsAppliedCount = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
     });
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string };
       if (msg.type === 'SettingsApplied') {
         settingsAppliedCount++;
         if (settingsAppliedCount === 1) {
-          client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Help.' } } }));
+          client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } } }));
         } else if (settingsAppliedCount === 2) {
           const sessionUpdateCount = mockReceived.filter((m) => m.type === 'session.update').length;
           expect(sessionUpdateCount).toBe(1);
@@ -1781,7 +1782,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       else done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       // Real API can send binary PCM (response.output_audio.delta); skip non-JSON
@@ -1822,7 +1823,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockReceived.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string };
@@ -1867,7 +1868,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     };
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -1925,7 +1926,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     };
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -1976,7 +1977,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     };
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -2054,7 +2055,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       };
 
       client.on('open', () => {
-        client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+        client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
       });
       client.on('message', (data: Buffer) => {
         if (data.length === 0 || data[0] !== 0x7b) return;
@@ -2133,7 +2134,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       let chunkTimer: ReturnType<typeof setInterval> | null = null;
 
       client.on('open', () => {
-        client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+        client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
       });
       client.on('message', (data: Buffer) => {
         if (data.length === 0 || data[0] !== 0x7b) return;
@@ -2188,11 +2189,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   );
 
   /**
-   * Issue #560 Phase 2b: Opt-in Server VAD — proxy must not send input_audio_buffer.commit for mic PCM
+   * Issue #560 Phase 2b: Default Server VAD — proxy must not send input_audio_buffer.commit for mic PCM
    * (upstream commits on VAD). session.update must carry server_vad + create_response.
    */
   itMockOnly(
-    'Issue #560 Phase 2b: useOpenAIServerVad — server_vad in session.update; mic PCM yields no proxy commit',
+    'Issue #560 Phase 2b: default Server VAD — server_vad in session.update; mic PCM yields no proxy commit',
     (done) => {
       mockReceived.length = 0;
       receivedSessionUpdatePayloads.length = 0;
@@ -2231,7 +2232,6 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             type: 'Settings',
             agent: {
               think: { prompt: 'Hi' },
-              useOpenAIServerVad: true,
               idleTimeoutMs: 10000,
             },
           }),
@@ -2302,7 +2302,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockEnforceSessionBeforeContext = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
       setImmediate(() => client.send(Buffer.alloc(960, 0)));
     });
     setTimeout(() => {
@@ -2350,7 +2350,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       // indexOf ordering reflects only this upstream leg.
       mockReceived.length = 0;
       protocolErrors.length = 0;
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -2388,7 +2388,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -2441,7 +2441,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     let receivedSettingsApplied = false;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -2490,7 +2490,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const speechLikePcm = AudioFileLoader.loadSpeechLikePcm24kFromFixture('hello', PCM_100MS_24K_BYTES);
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -2532,7 +2532,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockReceived.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
@@ -2562,7 +2562,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const DEBOUNCE_MS = 400;
     const ASSERT_AFTER_MS = LAST_CHUNK_MS + DEBOUNCE_MS + 100;
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string };
@@ -2595,7 +2595,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const receivedFrames: Array<{ isBinary: boolean; type?: string; binaryData?: Buffer }> = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer | string) => {
       const buf = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
@@ -2653,7 +2653,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const receivedPcmChunks: Buffer[] = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       const str = data.toString('utf8');
@@ -2686,7 +2686,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     let gotFunctionCallRequest = false;
     let sentFunctionCallResponse = false;
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }>; role?: string; content?: string };
@@ -2727,7 +2727,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const resultPayload = { time: '14:32:15', timezone: 'UTC' };
     let sentFunctionCallResponse = false;
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }>; role?: string; content?: string };
@@ -2796,7 +2796,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     };
 
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
 
     client.on('message', (data: Buffer) => {
@@ -2902,6 +2902,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           client.send(JSON.stringify({
             type: 'Settings',
             agent: {
+              useOpenAIManualAudioCommit: true,
               think: {
                 // Realtime may answer conversationally ("which timezone?") unless we force a tool call (Issue #535 → session.tool_choice).
                 toolChoice: 'required',
@@ -3027,7 +3028,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
       if (debug) process.stdout.write('[client] open, sent Settings\n');
     });
     client.on('message', (data: Buffer) => {
@@ -3075,7 +3076,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
       if (debug) process.stdout.write('[client] open, sent Settings (transcriptOnly test)\n');
     });
     client.on('message', (data: Buffer) => {
@@ -3124,7 +3125,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     }, 4000);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -3177,7 +3178,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       finish(new Error('Issue #496: timeout, did not receive Transcript with actuals'));
     }, 5000);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -3232,7 +3233,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       finish(new Error('Issue #499: timeout, did not receive ConversationText (assistant) for function_call-only item'));
     }, 5000);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -3302,7 +3303,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
       if (debug) process.stdout.write('[client] open, sent Settings (outputTextOnly test)\n');
     });
     client.on('message', (data: Buffer) => {
@@ -3354,7 +3355,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
     });
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
       if (debug) process.stdout.write('[client] open, sent Settings (transcriptThenFCR test)\n');
     });
     client.on('message', (data: Buffer) => {
@@ -3386,7 +3387,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     };
     const userContent = 'My favorite color is blue';
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -3424,7 +3425,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockDelayItemAddedForInjectUserMessageMs = 100;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string; role?: string };
@@ -3469,6 +3470,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       client.send(JSON.stringify({
         type: 'Settings',
         agent: {
+          useOpenAIManualAudioCommit: true,
           think: { prompt: 'Help.' },
           context: {
             messages: [
@@ -3620,7 +3622,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('open', () => {
       client.send(JSON.stringify({
         type: 'Settings',
-        agent: { think: { prompt: 'Hi' }, greeting },
+        agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' }, greeting },
       }));
     });
     client.on('message', (data: Buffer) => {
@@ -3673,7 +3675,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('open', () => {
       client.send(JSON.stringify({
         type: 'Settings',
-        agent: { think: { prompt: 'Hi' }, greeting },
+        agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' }, greeting },
       }));
     });
     client.on('message', (data: Buffer) => {
@@ -3727,7 +3729,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('open', () => {
       client.send(JSON.stringify({
         type: 'Settings',
-        agent: { think: { prompt: 'Be helpful.' }, greeting },
+        agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Be helpful.' }, greeting },
       }));
     });
     client.on('message', (data: Buffer) => {
@@ -3786,7 +3788,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('open', () => {
       client.send(JSON.stringify({
         type: 'Settings',
-        agent: { think: { prompt: 'Greet.' }, greeting },
+        agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Greet.' }, greeting },
       }));
     });
     client.on('message', (data: Buffer) => {
@@ -3840,7 +3842,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('open', () => {
       client.send(JSON.stringify({
         type: 'Settings',
-        agent: { think: { prompt: 'Greet.' }, greeting },
+        agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Greet.' }, greeting },
       }));
     });
     client.on('message', (data: Buffer) => {
@@ -3897,6 +3899,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       client.send(JSON.stringify({
         type: 'Settings',
         agent: {
+          useOpenAIManualAudioCommit: true,
           think: { prompt: 'Help.' },
           greeting,
           context: {
@@ -3979,6 +3982,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       client.send(JSON.stringify({
         type: 'Settings',
         agent: {
+          useOpenAIManualAudioCommit: true,
           think: { prompt: 'You are a helpful voice assistant. Keep your responses concise and informative.' },
           greeting,
         },
@@ -4088,17 +4092,16 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 15000);
 
   /**
-   * Issue #414: session.update uses GA path (session.audio.input). turn_detection comes from
-   * Settings.agent.idleTimeoutMs (shared with component); when present and > 0 we send
-   * { type: 'server_vad', idle_timeout_ms, create_response: false }. Format: { type: 'audio/pcm', rate: 24000 }.
+   * Issue #414: session.update uses GA path (session.audio.input). PCM format on input.
+   * This mock uses `useOpenAIManualAudioCommit` so `turn_detection` is null (legacy proxy commit path in Jest).
    */
-  itMockOnly('Issue #414: session.update uses GA audio.input (turn_detection from Settings.idleTimeoutMs + format)', (done) => {
+  itMockOnly('Issue #414: session.update uses GA audio.input (PCM format + transcription; manual commit → null turn_detection)', (done) => {
     receivedSessionUpdatePayloads.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
       client.send(JSON.stringify({
         type: 'Settings',
-        agent: { think: { prompt: 'Help.' } },
+        agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Help.' } },
       }));
     });
     client.on('message', (data: Buffer) => {
@@ -4110,8 +4113,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           const sessionUpdate = receivedSessionUpdatePayloads[0];
           expect(sessionUpdate.session).toBeDefined();
           const sess = sessionUpdate.session as { audio?: { input?: { turn_detection?: unknown; format?: { type?: string; rate?: number } } }; turn_detection?: unknown };
-          const td = sess.audio?.input?.turn_detection;
-          expect(td === null || (typeof td === 'object' && td !== null && (td as { type?: string; create_response?: boolean }).type === 'server_vad' && (td as { create_response?: boolean }).create_response === false)).toBe(true);
+          expect(sess.audio?.input?.turn_detection).toBeNull();
           expect(sess.audio?.input?.format?.type).toBe('audio/pcm');
           expect(sess.audio?.input?.format?.rate).toBe(24000);
           expect(sess.turn_detection).toBeUndefined();
@@ -4138,6 +4140,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         JSON.stringify({
           type: 'Settings',
           agent: {
+            useOpenAIManualAudioCommit: true,
             think: { prompt: 'Help.' },
             sessionAudioOutput: { voice: 'marin', speed: 1 },
           },
@@ -4188,7 +4191,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('open', () => {
       client.send(JSON.stringify({
         type: 'Settings',
-        agent: { think: { prompt: 'Greet.' }, greeting },
+        agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Greet.' }, greeting },
       }));
     });
     client.on('message', (data: Buffer) => {
@@ -4238,7 +4241,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const textTypes: string[] = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       const str = data.toString('utf8');
@@ -4298,7 +4301,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       else done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (finished) return;
@@ -4345,7 +4348,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
       client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Before settings' }));
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -4393,6 +4396,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const settingsWithTools = {
       type: 'Settings' as const,
       agent: {
+        useOpenAIManualAudioCommit: true as const,
         think: {
           prompt: 'Use example_echo when the user asks.',
           functions: [exampleEchoTool],
@@ -4480,7 +4484,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockEnforceSessionBeforeContext = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
       client.send(JSON.stringify({ type: 'InjectUserMessage', content: 'Hello' }));
     });
     client.on('message', (data: Buffer) => {
@@ -4516,7 +4520,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockSendItemDoneAfterAdded = true;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -4549,7 +4553,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockReceived.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -4579,7 +4583,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     mockReceived.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -4697,7 +4701,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         setTimeout(tick, 0);
       };
       client.on('open', () => {
-        client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+        client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
       });
       client.on('message', (data: Buffer) => {
         if (data.length === 0 || data[0] !== 0x7b) return;
@@ -4726,7 +4730,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       mockReceived.length = 0;
       const client = new WebSocket(`ws://127.0.0.1:${passthroughProxyPort}${PROXY_PATH}`);
       client.on('open', () => {
-        client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+        client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
       });
       client.on('message', (data: Buffer) => {
         if (data.length === 0 || data[0] !== 0x7b) return;
@@ -4758,7 +4762,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const functionCallRequestCount: number[] = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as { type?: string; functions?: Array<{ id: string; name: string }>; role?: string; content?: string };
@@ -4795,7 +4799,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       done();
     });
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -4837,7 +4841,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     const receivedTextTypes: string[] = [];
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length > 0 && data[0] === 0x7b) {
@@ -4897,7 +4901,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       else done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -4952,7 +4956,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       else done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -5007,7 +5011,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     client.on('open', () => {
       client.send(JSON.stringify({
         type: 'Settings',
-        agent: { think: { prompt: 'Say hi briefly.' }, idleTimeoutMs: 15000 },
+        agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Say hi briefly.' }, idleTimeoutMs: 15000 },
       }));
     });
     client.on('message', (data: Buffer) => {
@@ -5085,7 +5089,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       else done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Reply in one short sentence.' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Reply in one short sentence.' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (!looksLikeJsonObject(data)) return; // Do not parse binary (PCM); PROTOCOL-SPECIFICATION §5
@@ -5149,7 +5153,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       else done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -5223,7 +5227,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -5268,7 +5272,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -5349,7 +5353,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
         done();
       };
       client.on('open', () => {
-        client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+        client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
       });
       client.on('message', (data: Buffer) => {
         if (data.length === 0 || data[0] !== 0x7b) return;
@@ -5406,7 +5410,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -5474,7 +5478,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -5539,7 +5543,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -5613,7 +5617,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (data.length === 0 || data[0] !== 0x7b) return;
@@ -5674,7 +5678,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       done();
     };
     client.on('open', () => {
-      client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      client.send(JSON.stringify({ type: 'Settings', agent: { useOpenAIManualAudioCommit: true, think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
       if (finished) return;

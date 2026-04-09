@@ -385,19 +385,26 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       };
       const out = mapSettingsToSessionUpdate(settings);
       expect(out.session.audio?.input).toEqual({
-        turn_detection: null,
+        turn_detection: {
+          type: 'server_vad',
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 200,
+          idle_timeout_ms: null,
+          create_response: true,
+          interrupt_response: true,
+        },
         format: { type: 'audio/pcm', rate: 24000 },
         transcription: { model: 'gpt-4o-transcribe', language: 'en', prompt: '' },
       });
       expect(out.session.audio?.output).toEqual({ voice: 'marin', speed: 1.1 });
     });
 
-    it('maps useOpenAIServerVad to server_vad turn_detection with idle_timeout_ms from agent.idleTimeoutMs (Issue #560 Phase 2b)', () => {
+    it('maps default Server VAD to server_vad turn_detection with idle_timeout_ms from agent.idleTimeoutMs (Issue #560 Phase 2b)', () => {
       const out = mapSettingsToSessionUpdate({
         type: 'Settings' as const,
         agent: {
           think: { prompt: 'Hi' },
-          useOpenAIServerVad: true,
           idleTimeoutMs: 10000,
         },
       });
@@ -413,10 +420,10 @@ describe('OpenAI proxy translator (Issue #381)', () => {
       expect(sessionUpdateUsesOpenAIServerVad(out)).toBe(true);
     });
 
-    it('useOpenAIServerVad with idleTimeoutMs -1 omits numeric server idle (idle_timeout_ms null) (Issue #560 Phase 2b)', () => {
+    it('default Server VAD with idleTimeoutMs -1 omits numeric server idle (idle_timeout_ms null) (Issue #560 Phase 2b)', () => {
       const out = mapSettingsToSessionUpdate({
         type: 'Settings' as const,
-        agent: { think: { prompt: 'Hi' }, useOpenAIServerVad: true, idleTimeoutMs: -1 },
+        agent: { think: { prompt: 'Hi' }, idleTimeoutMs: -1 },
       });
       const td = out.session.audio?.input?.turn_detection as { idle_timeout_ms?: unknown } | null;
       expect(td?.type).toBe('server_vad');
@@ -426,22 +433,25 @@ describe('OpenAI proxy translator (Issue #381)', () => {
     it('clamps agent.idleTimeoutMs into OpenAI server_vad idle band (Issue #560 Phase 2b)', () => {
       const low = mapSettingsToSessionUpdate({
         type: 'Settings' as const,
-        agent: { think: { prompt: 'Hi' }, useOpenAIServerVad: true, idleTimeoutMs: 1000 },
+        agent: { think: { prompt: 'Hi' }, idleTimeoutMs: 1000 },
       });
       expect((low.session.audio?.input?.turn_detection as { idle_timeout_ms: number }).idle_timeout_ms).toBe(
         OPENAI_REALTIME_SERVER_VAD_IDLE_TIMEOUT_MS_MIN,
       );
       const high = mapSettingsToSessionUpdate({
         type: 'Settings' as const,
-        agent: { think: { prompt: 'Hi' }, useOpenAIServerVad: true, idleTimeoutMs: 120000 },
+        agent: { think: { prompt: 'Hi' }, idleTimeoutMs: 120000 },
       });
       expect((high.session.audio?.input?.turn_detection as { idle_timeout_ms: number }).idle_timeout_ms).toBe(
         OPENAI_REALTIME_SERVER_VAD_IDLE_TIMEOUT_MS_MAX,
       );
     });
 
-    it('sessionUpdateUsesOpenAIServerVad is false when turn_detection is null (Issue #560 Phase 2b)', () => {
-      const manual = mapSettingsToSessionUpdate({ type: 'Settings' as const, agent: { think: { prompt: 'x' } } });
+    it('sessionUpdateUsesOpenAIServerVad is false when useOpenAIManualAudioCommit (turn_detection null) (Issue #560 Phase 2b)', () => {
+      const manual = mapSettingsToSessionUpdate({
+        type: 'Settings' as const,
+        agent: { think: { prompt: 'x' }, useOpenAIManualAudioCommit: true },
+      });
       expect(sessionUpdateUsesOpenAIServerVad(manual)).toBe(false);
     });
 

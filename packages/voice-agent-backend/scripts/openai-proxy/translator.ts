@@ -153,11 +153,11 @@ export interface ComponentSettings {
     /** Issue #540: maps to Realtime `session.audio.output` when valid after normalization. */
     sessionAudioOutput?: OpenAIRealtimeSessionAudioOutput;
     /**
-     * Issue #560 Phase 2b: When true, map `session.audio.input.turn_detection` to OpenAI **Server VAD**; the proxy
-     * sends `input_audio_buffer.append` only (no `input_audio_buffer.commit` / `response.create` for mic audio).
-     * Default false keeps `turn_detection: null` and manual commit (existing behavior).
+     * **Internal / tests only** — not sent by production `buildSettingsMessage`. When **`true`**, use legacy
+     * `turn_detection: null` and proxy-driven `input_audio_buffer.commit` (mock Jest that assert commit ordering).
+     * **Omitted in production:** OpenAI **Server VAD** is the default (`server_vad` + append-only mic).
      */
-    useOpenAIServerVad?: boolean;
+    useOpenAIManualAudioCommit?: boolean;
   };
 }
 
@@ -403,18 +403,18 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
     const functionInstruction = '\n\nWhen you receive results from tool calls, use them in your reply to the user.';
     instructions = instructions ? instructions + functionInstruction : functionInstruction.trim();
   }
-  const useOpenAIServerVad = settings.agent?.useOpenAIServerVad === true;
+  /** Production default: Server VAD. Set `useOpenAIManualAudioCommit: true` only in tests that assert proxy commits. */
+  const useServerVad = settings.agent?.useOpenAIManualAudioCommit !== true;
   const session: OpenAISessionUpdate['session'] = {
     type: 'realtime',
     model: settings.agent?.think?.provider?.model ?? 'gpt-realtime',
     instructions,
     // Do not send voice in session.update; current Realtime API returns "Unknown parameter: 'session.voice'".
     // GA API: turn_detection is under session.audio.input (REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2).
-    // Default: turn_detection null — proxy sends input_audio_buffer.commit + response.create (PROTOCOL §3.6).
-    // Optional useOpenAIServerVad: Server VAD commits the buffer; proxy sends append only (Issue #560 Phase 2b).
+    // Default: Server VAD (append-only mic; PROTOCOL §3.6). Legacy null + manual commit: tests set useOpenAIManualAudioCommit.
     audio: {
       input: {
-        turn_detection: useOpenAIServerVad
+        turn_detection: useServerVad
           ? buildOpenAIServerVadTurnDetection(settings.agent?.idleTimeoutMs)
           : null,
         format: { type: 'audio/pcm', rate: 24000 },

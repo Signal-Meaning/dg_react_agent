@@ -77,9 +77,9 @@ Walk-through: `translator.ts`, `server.ts`, `PROTOCOL-AND-MESSAGE-ORDERING.md`, 
 
 ---
 
-## 6b. Phase 2b — Server VAD enable (strategic) — **opt-in shipped (2026-04-04)**
+## 6b. Phase 2b — Server VAD (strategic) — **default shipped (2026-04-04); product default Server VAD (2026-04)**
 
-1. **`mapSettingsToSessionUpdate`:** when **`agent.useOpenAIServerVad === true`**, set **`turn_detection`** via **`buildOpenAIServerVadTurnDetection(agent.idleTimeoutMs)`** (threshold / prefix / silence / **`create_response`:** true / **`interrupt_response`:** true). Default unset → **`turn_detection: null`** (unchanged).
+1. **`mapSettingsToSessionUpdate`:** **default** **`turn_detection`** via **`buildOpenAIServerVadTurnDetection(agent.idleTimeoutMs)`** (threshold / prefix / silence / **`create_response`:** true / **`interrupt_response`:** true). **Internal / Jest-only:** **`agent.useOpenAIManualAudioCommit === true`** → **`turn_detection: null`** (legacy proxy `commit` path in mocks). Production **`buildSettingsMessage`** does not emit manual-commit.
 2. **`server.ts`:** **`sessionUpdateUsesOpenAIServerVad`** after first **`session.update`**; mic path: append only (no **`commit`**, no coalesce timers, no close-flush **`commit`**). **`response.created`:** **`onResponseStarted()`** only if **`micInputUsesOpenAIServerVad && !responseInProgress`** (server-started turn vs our **`response.create`**).
 3. **Tests:** mock Jest (unit + *Issue #560 Phase 2b* integration). **`USE_REAL_APIS=1`** VAD path = P1 qualification.
 4. **Docs:** [REALTIME-SESSION-UPDATE-FIELD-MAP.md](../../../packages/voice-agent-backend/scripts/openai-proxy/REALTIME-SESSION-UPDATE-FIELD-MAP.md), package [README.md](../../../packages/voice-agent-backend/scripts/openai-proxy/README.md), this file **§9**.
@@ -114,9 +114,9 @@ Extend [`test-app/src/mic-timing-debug.ts`](../../../test-app/src/mic-timing-deb
 
 - `[x]` **Phase 1 RED** — `openai-proxy-integration.test.ts` — *Issue #560 / scheduler:* (1) continuous ~250 ms 16 kHz chunks → **≥ 1** `input_audio_buffer.commit` within bounded wait; (2) client **close** with pending audio → **≥ 1** commit (no silent drop).
 - `[x]` **Phase 2 GREEN** — null-VAD bridge: **`INPUT_AUDIO_COMMIT_MAX_COALESCE_MS`** + **`flushPendingAudioCommitOnClientClose`** in **`server.ts`**; full mock **`openai-proxy-integration.test.ts`** green (`--runInBand --forceExit`); `-t "Issue #560 / scheduler"` green. **2026-04-04.**
-- `[x]` **Phase 2b** — `mapSettingsToSessionUpdate`: opt-in **`agent.useOpenAIServerVad`** → **`turn_detection.type: server_vad`** + VAD defaults + **`idle_timeout_ms`** from **`agent.idleTimeoutMs`** (clamped 5s–30s; `-1`/omit → `null`). **2026-04-04.**
+- `[x]` **Phase 2b** — `mapSettingsToSessionUpdate`: **default** **`turn_detection.type: server_vad`** + VAD defaults + **`idle_timeout_ms`** from **`agent.idleTimeoutMs`** (clamped 5s–30s; `-1`/omit → `null` on idle field). **`useOpenAIManualAudioCommit`** (Jest-only) → null **`turn_detection`**. **2026-04-04** + product default **2026-04.**
 - `[x]` **Phase 2b** — `server.ts`: when Server VAD (above), **no** proxy **`input_audio_buffer.commit`** / coalesce / close-flush for mic; **`response.created`** from upstream calls **`onResponseStarted`** only when **`!responseInProgress`** (avoids double-invoke with our **`response.create`**). **2026-04-04.**
-- `[x]` **Phase 2b** — Jest: `openai-proxy.test.ts` (map + `sessionUpdateUsesOpenAIServerVad`); `openai-proxy-integration.test.ts` *Issue #560 Phase 2b* (no proxy commit under VAD). Default **`useOpenAIServerVad` unset** → existing null-VAD tests unchanged.
+- `[x]` **Phase 2b** — Jest: `openai-proxy.test.ts` (map + `sessionUpdateUsesOpenAIServerVad`); `openai-proxy-integration.test.ts` *Issue #560 Phase 2b* (no proxy commit under VAD). Mock tests that need proxy **`commit`** set **`useOpenAIManualAudioCommit: true`** on Settings.
 
 ### P1 — Qualification, observability, doc closure
 
@@ -138,7 +138,7 @@ Extend [`test-app/src/mic-timing-debug.ts`](../../../test-app/src/mic-timing-deb
 
 | Priority | Open items (unchecked until closed) |
 |----------|----------------------------------------|
-| **P0** | *(none — Phase 2b opt-in landed 2026-04-04; making Server VAD the default is a product/compat follow-up.)* |
+| **P0** | *(none — Phase 2b + default Server VAD landed; P1 is real-API qualification.)* |
 | **P1** | Real API qualification (post-2b), §8 telemetry, Phase 3 docs |
 | **P2** | **`clear`** resolution, 15 MiB split or waiver |
 
