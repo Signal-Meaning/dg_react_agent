@@ -25,7 +25,13 @@
 
 ### Progress
 
-- **Pre-publish (in progress):** Full Jest (`npm test`), upstream event coverage, and **real-API** `openai-proxy-integration` (20 ran, 70 skipped) passed **2026-04-09**; first full real-API run hit transient upstream **504** on one test — immediate retry + full re-run green. `npm run clean && npm run build && npm run validate` passed; **`issue-570`** and **`release/v0.11.0`** pushed to `origin`. **Outstanding before publish:** proxy **E2E** — full suite was started without `test-app` backend running and failed with connection closed / timeouts; re-run **`cd test-app && npm run backend`**, then from repo root **`USE_PROXY_MODE=true npm run test:e2e`**. Then GitHub Release → CI publish → tag → merge PR.
+- **Pre-publish (in progress):** Full Jest (`npm test`), upstream event coverage, and **real-API** `openai-proxy-integration` (20 ran, 70 skipped) passed **2026-04-09**; first full real-API run hit transient upstream **504** on one test — immediate retry + full re-run green. `npm run clean && npm run build && npm run validate` passed; **`issue-570`** and **`release/v0.11.0`** pushed to `origin`.
+- **E2E (2026-04-09, user-hosted backend + Vite):**
+  - **Full suite from repo root:** `USE_PROXY_MODE=true npm run test:e2e` → **110 passed, 93 failed, 46 skipped** (~12.5m). Most failures are **Deepgram-direct** specs (`deepgram-*.spec.js`, VAD, idle-timeout against real Deepgram) and collateral flakes (`Target page, context or browser has been closed`) when upstream or connection setup does not match spec expectations. **Not all-green** without a valid **`VITE_DEEPGRAM_API_KEY`** (and stable Deepgram) for those paths — see [E2E-BACKEND-MATRIX.md](../../../test-app/tests/e2e/E2E-BACKEND-MATRIX.md).
+  - **OpenAI proxy slice (recommended for this release):** from **`test-app`**, with backend + dev server already running:  
+    `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true E2E_USE_HTTP=1 USE_REAL_APIS=1 npm run test:e2e:openai`  
+    → **25 passed, 3 failed, 2 skipped** (~5m). **Failed:** `callback-test.spec.js` (×2 — page closed during mic reconnect helper after connection), `openai-proxy-e2e.spec.js` **3b** Multi-turn after disconnect (assertion). **Re-run or debug** these three before treating OpenAI proxy E2E as fully qualified; optionally retry with `workers: 1` / headed trace per [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md).
+- **Outstanding before publish:** Green **E2E** per your bar (full root suite vs OpenAI slice only); then GitHub Release → CI publish → tag → merge PR.
 - **Publish:** _not started_
 - **Post-release:** _not started_
 
@@ -37,7 +43,8 @@
 - [ ] **Tests passing** _(E2E below still required)_
   - [x] **Run what CI runs:** `npm run lint` then `npm run test:mock`
   - [x] **Full Jest suite (required):** `npm test` — **2026-04-09:** 142 suites passed, 1 skipped; 1291 tests passed
-  - [ ] **E2E (proxy):** Start backend first: `cd test-app && npm run backend`; from repo root `USE_PROXY_MODE=true npm run test:e2e` — **not green in automation** (run without backend → mass connection failures); **re-run locally with backend before publish**
+  - [ ] **E2E (proxy):** With **Vite + backend** running: (1) **Full:** repo root `USE_PROXY_MODE=true npm run test:e2e` — **2026-04-09 run: 93 failures** (mostly Deepgram-direct; see Progress). (2) **OpenAI-focused:** `cd test-app` then  
+    `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true E2E_USE_HTTP=1 USE_REAL_APIS=1 npm run test:e2e:openai` — **2026-04-09: 3 failures** (callback ×2, openai-proxy **3b**); fix or flake-retry before checking this box.
   - [x] **Real-API integration:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — **2026-04-09:** 20 passed (see Progress for transient 504 note)
   - [x] **Function-call path:** Covered by **Issue #470** real-API test in that file (backend HTTP contract per project tests)
   - [x] **Upstream event coverage:** `npm test -- tests/openai-proxy-event-coverage.test.ts`
@@ -50,14 +57,15 @@
 
 ### Focused E2E (proxy)
 
-Run from **test-app** with backend (and dev server if the spec requires it):
+Start **`npm run dev`** (test-app) and **`npm run backend`** (or `backend:log` from `packages/voice-agent-backend`) first. Prefer **`E2E_USE_EXISTING_SERVER=1`** so Playwright does not spawn a second Vite/backend.
 
 | Scenario | Command |
 |----------|---------|
-| Full proxy E2E | `USE_PROXY_MODE=true npm run test:e2e` |
-| OpenAI proxy spec | `npm run test:e2e -- openai-proxy-e2e.spec.js` |
+| Full proxy E2E (repo root) | `USE_PROXY_MODE=true npm run test:e2e` |
+| OpenAI proxy slice + real API (test-app cwd) | `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true E2E_USE_HTTP=1 USE_REAL_APIS=1 npm run test:e2e:openai` |
+| Single OpenAI spec | `npm run test:e2e -- openai-proxy-e2e.spec.js` (from repo root; see README) |
 
-See [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md).
+See [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md) and [E2E-BACKEND-MATRIX.md](../../../test-app/tests/e2e/E2E-BACKEND-MATRIX.md).
 
 ---
 
