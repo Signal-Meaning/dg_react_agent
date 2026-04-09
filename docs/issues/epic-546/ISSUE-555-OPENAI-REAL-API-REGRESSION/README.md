@@ -1,5 +1,7 @@
 # ISSUE-555 — OpenAI proxy real-API integration regression
 
+**Resolved 2026-04-09** — tracking: [TRACKING.md](./TRACKING.md); merge: [#557](https://github.com/Signal-Meaning/dg_react_agent/pull/557).
+
 **GitHub:** [#555](https://github.com/Signal-Meaning/dg_react_agent/issues/555)  
 **Epic (parent):** [#546](https://github.com/Signal-Meaning/dg_react_agent/issues/546)
 
