@@ -4,15 +4,20 @@
 
 ---
 
-## First implementation slice (TDD)
+## Done (this slice)
 
-1. **RED:** Add a focused unit or integration test that captures exported log record shape from the proxy logger path (or a thin test harness around the same `LoggerProvider` / exporter setup) — assert stable `service.name` and either populated trace context aligned with `trace_id` or absence of misleading `undefined` trace keys, per the acceptance criteria on the issue.
-2. **GREEN:** In `packages/voice-agent-backend/scripts/openai-proxy/logger.ts`, attach an explicit `Resource` (`@opentelemetry/resources` + semantic conventions) and implement the chosen trace-context strategy (non-recording span / context binding vs documented attribute-only correlation + compact export).
-3. **REFACTOR:** Keep `emitLog` attribute contract unchanged; dedupe resource setup if shared with other backend OTel later.
+TDD: tests in `tests/logging-standard-proxy.test.ts` and implementation in `packages/voice-agent-backend/scripts/openai-proxy/logger.ts` — resource, trace context from `trace_id`, compact console exporter, `voice-agent-backend` dependency declarations.
+
+---
+
+## Recommended follow-ups
+
+1. **PR** — Open or update PR from `issue-565`, link #565, note `package-lock.json` under `packages/voice-agent-backend` if reviewers care about publish installs.
+2. **Optional spot-check** — Run combined backend with `LOG_LEVEL=debug`, confirm `console.dir` lines show `dg-openai-proxy` and trace fields only when `trace_id` is present on that log line.
+3. **Close issue** — After merge, close #565 on GitHub and set this folder’s README status to **Closed** in a small doc commit if you keep issue folders in sync with GitHub.
 
 ---
 
 ## References
 
-- [README.md](./README.md) — scope and related issues.
-- [OpenTelemetry Logs specification](https://opentelemetry.io/docs/specs/otel/logs/) — log record and trace context fields.
+- [README.md](./README.md) — behavior table and file pointers.
