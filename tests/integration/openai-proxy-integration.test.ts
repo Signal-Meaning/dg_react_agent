@@ -2010,6 +2010,168 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   }, 8000);
 
   /**
+   * Issue #560 commit-scheduler (COMMIT-SCHEDULER-TDD-PLAN §5 Phase 1 RED): live mic sends ~256 ms cadence;
+   * proxy debounce is INPUT_AUDIO_COMMIT_DEBOUNCE_MS (400). Each append resets the timer, so continuous
+   * speech never reaches a quiet window and no commit fires — expect at least one commit within a bounded
+   * wait once enough 24 kHz-equivalent bytes are pending. **Fails until Phase 2** (max-coalesce / policy).
+   */
+  itMockOnly(
+    'Issue #560 / scheduler: continuous ~250ms 16kHz chunks yield input_audio_buffer.commit within bounded wait',
+    (done) => {
+      mockReceived.length = 0;
+      let settingsApplied = false;
+      let finished = false;
+      const MIC_CHUNK_INTERVAL_MS = 250;
+      /** Matches packages/voice-agent-backend/scripts/openai-proxy/server.ts INPUT_AUDIO_COMMIT_DEBOUNCE_MS */
+      const PROXY_COMMIT_DEBOUNCE_MS = 400;
+      /** 250 ms @ 16 kHz mono int16 */
+      const CHUNK_BYTES_16K_250MS = 16000 * 0.25 * 2;
+      /** Upper bound: many chunk periods + debounce + slack (no ≥400ms gap between chunks). */
+      const firstCommitMaxWaitMs = 4500;
+
+      const finish = (err?: Error) => {
+        if (finished) return;
+        finished = true;
+        try {
+          client.close();
+        } catch {
+          // ignore
+        }
+        if (err) done(err);
+        else done();
+      };
+
+      const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+      let chunkTimer: ReturnType<typeof setInterval> | null = null;
+      const clearChunkTimer = () => {
+        if (chunkTimer != null) {
+          clearInterval(chunkTimer);
+          chunkTimer = null;
+        }
+      };
+
+      client.on('open', () => {
+        client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      });
+      client.on('message', (data: Buffer) => {
+        if (data.length === 0 || data[0] !== 0x7b) return;
+        try {
+          const msg = JSON.parse(data.toString()) as { type?: string };
+          if (msg.type === 'SettingsApplied' && !settingsApplied) {
+            settingsApplied = true;
+            expect(MIC_CHUNK_INTERVAL_MS).toBeLessThan(PROXY_COMMIT_DEBOUNCE_MS);
+            chunkTimer = setInterval(() => {
+              try {
+                client.send(Buffer.alloc(CHUNK_BYTES_16K_250MS, 0));
+              } catch (e) {
+                clearChunkTimer();
+                finish(e instanceof Error ? e : new Error(String(e)));
+              }
+            }, MIC_CHUNK_INTERVAL_MS);
+            setTimeout(() => {
+              try {
+                clearChunkTimer();
+                const commits = mockReceived.filter((m) => m.type === 'input_audio_buffer.commit');
+                expect(commits.length).toBeGreaterThanOrEqual(1);
+                finish();
+              } catch (e) {
+                finish(e instanceof Error ? e : new Error(String(e)));
+              }
+            }, firstCommitMaxWaitMs);
+          }
+        } catch {
+          // ignore
+        }
+      });
+      client.on('error', (err) => {
+        clearChunkTimer();
+        finish(err);
+      });
+    },
+    8000,
+  );
+
+  /**
+   * Issue #560 commit-scheduler (COMMIT-SCHEDULER-TDD-PLAN §5 Phase 1 RED): user stops speaking and disconnects
+   * without a trailing ≥400ms silence; debounced commit never fired. Pending audio must not be dropped silently —
+   * expect upstream commit (or explicit clear/error contract). **Fails until Phase 2** (commit-on-close / flush).
+   */
+  itMockOnly(
+    'Issue #560 / scheduler: client close with pending mic audio must not drop commit silently',
+    (done) => {
+      mockReceived.length = 0;
+      let settingsApplied = false;
+      let finished = false;
+      const MIC_CHUNK_INTERVAL_MS = 250;
+      const CHUNK_BYTES_16K_250MS = 16000 * 0.25 * 2;
+      /** Enough 250ms chunks to exceed first-commit byte threshold @ 24 kHz after resample (~4 chunks). */
+      const STREAM_MS = 2000;
+
+      const finish = (err?: Error) => {
+        if (finished) return;
+        finished = true;
+        try {
+          client.close();
+        } catch {
+          // ignore
+        }
+        if (err) done(err);
+        else done();
+      };
+
+      const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+      let chunkTimer: ReturnType<typeof setInterval> | null = null;
+
+      client.on('open', () => {
+        client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
+      });
+      client.on('message', (data: Buffer) => {
+        if (data.length === 0 || data[0] !== 0x7b) return;
+        try {
+          const msg = JSON.parse(data.toString()) as { type?: string };
+          if (msg.type === 'SettingsApplied' && !settingsApplied) {
+            settingsApplied = true;
+            chunkTimer = setInterval(() => {
+              try {
+                client.send(Buffer.alloc(CHUNK_BYTES_16K_250MS, 0));
+              } catch (e) {
+                if (chunkTimer) clearInterval(chunkTimer);
+                finish(e instanceof Error ? e : new Error(String(e)));
+              }
+            }, MIC_CHUNK_INTERVAL_MS);
+            setTimeout(() => {
+              try {
+                if (chunkTimer) clearInterval(chunkTimer);
+                chunkTimer = null;
+                const appends = mockReceived.filter((m) => m.type === 'input_audio_buffer.append');
+                expect(appends.length).toBeGreaterThan(0);
+                const commitsBeforeClose = mockReceived.filter((m) => m.type === 'input_audio_buffer.commit');
+                expect(commitsBeforeClose.length).toBe(0);
+                client.close();
+                setImmediate(() => {
+                  try {
+                    const commits = mockReceived.filter((m) => m.type === 'input_audio_buffer.commit');
+                    expect(commits.length).toBeGreaterThanOrEqual(1);
+                    finish();
+                  } catch (e) {
+                    finish(e instanceof Error ? e : new Error(String(e)));
+                  }
+                });
+              } catch (e) {
+                finish(e instanceof Error ? e : new Error(String(e)));
+              }
+            }, STREAM_MS);
+          }
+        } catch {
+          // ignore
+        }
+      });
+      client.on('error', (err) => finish(err));
+    },
+    12000,
+  );
+
+  /**
    * Issue #414: Proxy must not send input_audio_buffer.append until after session.updated (audio gated).
    * When client sends binary before session.updated, proxy queues it and flushes after session.updated.
    * Mock enforces protocol: input_audio_buffer.append before session.updated → protocolErrors.

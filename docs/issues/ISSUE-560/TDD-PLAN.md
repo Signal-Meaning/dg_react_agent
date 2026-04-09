@@ -77,9 +77,8 @@
 
 ### P0 — Null-VAD bridge + Server VAD migration
 
-- `[ ]` **Phase 1 RED** — `openai-proxy-integration.test.ts`: continuous chunks (~250 ms cadence); first commit or documented contract.
-- `[ ]` **Phase 1 RED** — same: client **close** with pending **≥ min** bytes; no silent drop.
-- `[ ]` **Phase 2 GREEN** — null-VAD scheduler / **commit-on-close**; full mock suite green.
+- `[x]` **Phase 1 RED** — *Issue #560 / scheduler* in `openai-proxy-integration.test.ts` (continuous ~250 ms chunks; close with pending). **Failing** until Phase 2 (`-t "Issue #560 / scheduler"`).
+- `[ ]` **Phase 2 GREEN** — null-VAD scheduler / **commit-on-close**; full mock suite green (scheduler tests pass).
 - `[ ]` **Phase 2b** — `mapSettingsToSessionUpdate`: **`server_vad`** + **`idle_timeout_ms`** / silence params from **`Settings`**.
 - `[ ]` **Phase 2b** — `server.ts`: no proxy **`commit`** on Server VAD path; **`response.create`** per PROTOCOL §3.6.
 - `[ ]` **Phase 2b** — Jest mocks for VAD path + regression guard for existing cases.
@@ -109,6 +108,9 @@ npm test -- \
   tests/send-audio-after-settings-applied-issue560.test.tsx
 
 npm test -- tests/integration/openai-proxy-integration.test.ts -t "Issue #560"
+
+# Commit-scheduler gap (Phase 1 RED; fails until Phase 2):
+npm test -- tests/integration/openai-proxy-integration.test.ts -t "Issue #560 / scheduler"
 ```
 
 ---

@@ -112,9 +112,8 @@ Extend [`test-app/src/mic-timing-debug.ts`](../../../test-app/src/mic-timing-deb
 
 *Maps to audit rows: ordering/gating tests, audio disconnect, lifecycle close, session `server_vad` fields, idle/timeout mapping.*
 
-- `[ ]` **Phase 1 RED** — `openai-proxy-integration.test.ts`: continuous binary chunks (~250 ms cadence, no ≥400 ms gap until past first-commit threshold); expect commit or documented contract.
-- `[ ]` **Phase 1 RED** — same file: client **close** with **≥ min** pending bytes; expect commit / **clear** / visible **Error**, not silent drop.
-- `[ ]` **Phase 2 GREEN** — null-VAD bridge: scheduler (e.g. max coalesce) and/or **commit-on-close**; full mock **`openai-proxy-integration.test.ts`** green.
+- `[x]` **Phase 1 RED** — `openai-proxy-integration.test.ts` — *Issue #560 / scheduler:* (1) continuous ~250 ms 16 kHz chunks → **≥ 1** `input_audio_buffer.commit` within bounded wait; (2) client **close** with pending audio → **≥ 1** commit (no silent drop). **Landed; currently failing** until **Phase 2 GREEN**.
+- `[ ]` **Phase 2 GREEN** — null-VAD bridge: scheduler (e.g. max coalesce) and/or **commit-on-close**; full mock **`openai-proxy-integration.test.ts`** green (includes `-t "Issue #560 / scheduler"`).
 - `[ ]` **Phase 2b** — `mapSettingsToSessionUpdate`: **`turn_detection: { type: 'server_vad', … }`** + **`idle_timeout_ms`** / silence params from **`Settings`** (and API-valid defaults).
 - `[ ]` **Phase 2b** — `server.ts`: **no** proxy **`input_audio_buffer.commit`** on Server VAD mic path; **`response.create`** aligned with PROTOCOL §3.6 (no double-invoke).
 - `[ ]` **Phase 2b** — Jest mock coverage for VAD path + regressions on existing null-VAD tests (until null-VAD removed or flagged).
@@ -137,9 +136,9 @@ Extend [`test-app/src/mic-timing-debug.ts`](../../../test-app/src/mic-timing-deb
 
 ### Summary table (rollup)
 
-| Priority | Open items (all start unchecked until closed) |
-|----------|-----------------------------------------------|
-| **P0** | Phase 1 (×2), Phase 2, Phase 2b (×3) |
+| Priority | Open items (unchecked until closed) |
+|----------|----------------------------------------|
+| **P0** | Phase 2, Phase 2b (×3) — Phase 1 RED tests **in repo** (fail until Phase 2) |
 | **P1** | Real API qualification, §8 telemetry, Phase 3 docs, TDD-PLAN §2b |
 | **P2** | **`clear`** resolution, 15 MiB split or waiver |
 
