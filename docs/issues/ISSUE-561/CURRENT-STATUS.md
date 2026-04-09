@@ -1,6 +1,6 @@
 # Issue #561 — current status
 
-**Last updated:** 2026-04-04 (Live + OpenAI proxy E2E; `has-sent-settings` always in DOM for Live)
+**Last updated:** 2026-04-08 — **`main` merged into `issue-561`** (fast-forward); includes **closed** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560) proxy/mic/build deliverables and doc closure in `docs/issues/ISSUE-560/`.
 
 **GitHub:** [#561](https://github.com/Signal-Meaning/dg_react_agent/issues/561)
 
@@ -10,7 +10,7 @@
 
 | ID | Report | Status in tree |
 |----|--------|----------------|
-| **Bug 1** | OpenAI **proxy** path: after granting mic and entering Live (or using mic), session/Settings look healthy and idle timeout behaves, but **no clear evidence of voice → assistant → visible replies**. Expect assistant responses. | **Fixed / qualified (wire path):** `data-testid="has-sent-settings"` lived only under **`debug-main-layout`**, which **unmounts in Live**, so tooling and mental model could not rely on “Settings applied” while Live was open. **Change:** a single **visually hidden** `has-sent-settings` sentinel stays on **`voice-agent`** always. **E2E:** `live-mode-openai-proxy.spec.js` enters **Live**, waits for the sentinel, **injects** the same PCM path as `openai-proxy-e2e` test 5, and asserts an **assistant** row in **`live-conversation-history`** — **green** against real proxy in CI/local when keys/backend match. **Still human-only to confirm:** real **microphone + room speech** (browser fake stream / silence / gain) if your symptom was mic-specific rather than UI/observability. |
+| **Bug 1** | OpenAI **proxy** path: after granting mic and entering Live (or using mic), session/Settings look healthy and idle timeout behaves, but **no clear evidence of voice → assistant → visible replies**. Expect assistant responses. | **Fixed / qualified (wire path):** `data-testid="has-sent-settings"` lived only under **`debug-main-layout`**, which **unmounts in Live**, so tooling and mental model could not rely on “Settings applied” while Live was open. **Change:** a single **visually hidden** `has-sent-settings` sentinel stays on **`voice-agent`** always. **E2E:** `live-mode-openai-proxy.spec.js` enters **Live**, waits for the sentinel, **injects** the same PCM path as `openai-proxy-e2e` test 5, and asserts an **assistant** row in **`live-conversation-history`** — **green** against real proxy in CI/local when keys/backend match. **Proxy/mic pipeline (#560, on `main`):** commit timing (first commit + orphan tail), scheduler, default **Server VAD**, PCM contract — see [ISSUE-560](../ISSUE-560/README.md). **Still human-only to confirm:** real **microphone + room speech** if the symptom was acoustic / STT-specific rather than UI/observability. |
 | **Bug 2** | After **idle timeout** disconnect, the **microphone** control did not reflect that the session was gone (still looked “enabled”). **Resume microphone** in Live should align the same way. | **Addressed:** On agent `connectionState` **`closed`** or **`error`**, the app clears **`micEnabled`**, **`declarativeStartAudioCapture`**, and **`isRecording`** so debug **Enable Mic** and Live **Resume microphone** semantics match a dead session. Policy helper: `shouldClearMicOnAgentDisconnect` + unit tests. |
 | **Bug 3** | Status showed **`idle` / `idle` / `disconnected`** with controls **mid-screen**; why twice **idle**? Should layout be bottom/centered? | **Addressed:** The two **idle** values were **mic (voice) phase** vs **agent presentation** without labels — now **Mic activity**, **Assistant activity**, **Session**. Layout: **full-screen** `live-mode-screen`; stack **mouth visual → conversation history → activity rows → footer** (buttons directly under that output block). |
 
@@ -25,7 +25,7 @@
 | **C** — GREEN (App + `LiveModeView`) | **In progress** | Full-screen Live, **`agentOutputActive`**, conversation feed, mic sync on disconnect, **`LiveAgentVisual`** placeholder. |
 | **D** — REFACTOR | **Not started** | — |
 
-**Branch:** `issue-561` (or release branch per your workflow) — push when ready.
+**Branch:** `issue-561` — **includes `main` through 2026-04-08** (#560 closure docs + all proxy/mic merges).
 
 ---
 
@@ -70,4 +70,4 @@
 
 - **Real mic vs injected PCM:** If Live still fails **only** with a physical mic, compare **`PW_ENABLE_AUDIO`**, OS input level, and proxy logs for `input_audio_buffer.append` while speaking; injected-audio E2E proves **component + proxy + history** for the same session shape.
 
-**Build hygiene (2026-04-05, unblocks test-app `npm run build`):** `DeepgramVoiceInteractionHandle.start` now includes optional `userInitiated` in `src/types/index.ts` (matches implementation, Issue #544). Test-app: `vite.config.ts` `https` spread + `ViteDevServer` plugin typing; `session-manager-integration.test.tsx` strict types. See also [#560](../ISSUE-560/README.md).
+**Build hygiene (on `main`, Issue #544 / #560):** `DeepgramVoiceInteractionHandle.start` includes optional `userInitiated` in `src/types/index.ts`. Test-app: `vite.config.ts` `https` spread + `ViteDevServer` plugin typing; `session-manager-integration.test.tsx` strict types. **#560 closed 2026-04-08** — full notes in [ISSUE-560](../ISSUE-560/README.md).

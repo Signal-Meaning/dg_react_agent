@@ -26,4 +26,4 @@ Repo-local notes, mockups, and TDD plans live in this folder as work proceeds.
 
 ## Related
 
-- [Issue #560](../ISSUE-560/README.md) — Start/mic semantics and test-app build backlog.
+- [Issue #560](../ISSUE-560/README.md) — **Closed (2026-04-08).** Mic/proxy/build work shipped on **`main`**; optional human host-mic STT repro remains in that folder.

@@ -1,6 +1,6 @@
 # Issue #561 — next step
 
-**Last updated:** 2026-04-04
+**Last updated:** 2026-04-08 (`issue-561` fast-forwarded to **`main`**, including **closed** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560))
 
 **GitHub:** [#561](https://github.com/Signal-Meaning/dg_react_agent/issues/561)
 
