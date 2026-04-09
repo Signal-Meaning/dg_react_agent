@@ -43,6 +43,12 @@ import {
   openAiTranscriptShouldEndMicActivityPulse,
 } from './live-mode/liveMicActivityOpenAI';
 import { resolveE2eIdleTimeoutMs } from './utils/e2eIdleTimeoutMs';
+import {
+  recordUserMicIntent,
+  recordStartAudioCaptureEntered,
+  recordStartAudioCaptureCompleted,
+  logMicTimingDebugProgress,
+} from './mic-timing-debug';
 
 // Type declaration for E2E test support
 // Only used in test-app for E2E testing, not part of the component's public API
@@ -1198,7 +1204,10 @@ function App() {
     }
     await deepgramRef.current.start(startOpts);
     if (typeof deepgramRef.current.startAudioCapture === 'function') {
+      recordStartAudioCaptureEntered();
       await deepgramRef.current.startAudioCapture();
+      recordStartAudioCaptureCompleted();
+      logMicTimingDebugProgress(addLog);
       addLog('Audio capture started successfully');
       setMicEnabled(true);
       if (typeof window !== 'undefined') {
@@ -1246,6 +1255,7 @@ function App() {
   /** Issue #561: Start → Live mode with mic on by default (correct start flags, not userInitiated-only on non-proxy). */
   const enterLiveMode = async () => {
     try {
+      recordUserMicIntent();
       setLiveMode(true);
       setMicLoading(true);
       await startServicesAndMicrophone();
@@ -1262,6 +1272,7 @@ function App() {
 
   const resumeMicrophoneInLive = async () => {
     try {
+      recordUserMicIntent();
       setMicLoading(true);
       await startServicesAndMicrophone();
       addLog('Microphone resumed in Live mode');
@@ -1336,6 +1347,7 @@ function App() {
     try {
       sessionLogger.debug('toggleMicrophone called', { micEnabled, hasRef: !!deepgramRef.current });
       if (!micEnabled) {
+        recordUserMicIntent();
         setMicLoading(true);
         addLog('Starting audio capture (lazy initialization)');
         sessionLogger.debug('About to call startServicesAndMicrophone()');

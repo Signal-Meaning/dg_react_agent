@@ -41,6 +41,8 @@ export const ATTR_UPSTREAM_CLOSE_REASON = 'upstream.close_reason';
 /** Issue #532: client leg WebSocket close (integrator-visible code vs upstream 1000). */
 export const ATTR_CLIENT_CLOSE_CODE = 'client.close_code';
 export const ATTR_CLIENT_CLOSE_REASON = 'client.close_reason';
+/** Same-machine correlation with browser `Date.now()` (ms since Unix epoch). Issue #560 manual repro. */
+export const ATTR_WALL_CLOCK_MS = 'debug.wall_clock_ms';
 
 export type ProxyLogAttributes = Record<string, string | number | boolean | undefined>;
 

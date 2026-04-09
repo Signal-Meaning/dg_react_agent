@@ -56,6 +56,7 @@ import {
   ATTR_UPSTREAM_CLOSE_REASON,
   ATTR_CLIENT_CLOSE_CODE,
   ATTR_CLIENT_CLOSE_REASON,
+  ATTR_WALL_CLOCK_MS,
 } from './logger';
 import { parse as parseUrl } from 'url';
 import {
@@ -354,6 +355,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
               ...connectionAttrs,
               [ATTR_DIRECTION]: 'client→upstream',
               'audio.pending_bytes': bytesAtCommit,
+              [ATTR_WALL_CLOCK_MS]: Date.now(),
             },
           });
           upstream.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
