@@ -1,6 +1,6 @@
 # Issue #570 — Release v0.11.0 (checklist)
 
-**Status:** **Released** — **`v0.11.0`** merged to **`main`** **2026-04-09** (`574823f1`). Close **[#570](https://github.com/Signal-Meaning/dg_react_agent/issues/570)** on GitHub when the issue checklist there is complete.
+**Status:** **Closed** — **`v0.11.0`** released and merged to **`main`** **2026-04-09**; GitHub **[#570](https://github.com/Signal-Meaning/dg_react_agent/issues/570)** closed **2026-04-09** with resolution summary.
 
 **GitHub:** [#570 — Release v0.11.0: Complete Release Process and Documentation](https://github.com/Signal-Meaning/dg_react_agent/issues/570)
 

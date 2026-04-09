@@ -25,5 +25,5 @@ Preferred scripted path (when versions match): `npm run release:issue 0.11.0 min
 
 ## After publish
 
-- [x] [README.md](./README.md) **Status** set to **Released** **2026-04-09**; flip to **Closed** when GitHub **#570** is closed, if you keep wording aligned.
+- [x] [README.md](./README.md) **Status** **Closed** **2026-04-09**; GitHub **#570** closed same day with resolution comment.
 - Optional: record publish run notes under `docs/releases/v0.11.0/` if the project convention includes that.

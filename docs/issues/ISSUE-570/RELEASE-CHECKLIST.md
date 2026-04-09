@@ -118,7 +118,7 @@ npm dist-tag add @signal-meaning/voice-agent-react@0.11.0 latest --registry http
 ### Post-Release
 
 - [x] Merge **`release/v0.11.0` → `main`** — **2026-04-09** fast-forward to `574823f1` (PR optional when branch protection allows direct merge)
-- [ ] Close **GitHub Issue #570** when complete; update [README.md](./README.md) status if you sync folder with GitHub
+- [x] Close **GitHub Issue #570** — **2026-04-09** (resolution comment on GitHub); [README.md](./README.md) status synced **Closed**
 
 ---
 
@@ -130,7 +130,7 @@ npm dist-tag add @signal-meaning/voice-agent-react@0.11.0 latest --registry http
 - [x] Packages published from **`release/v0.11.0`** / tag **`v0.11.0`** — **2026-04-09**
 - [x] **`latest` dist-tags** — **2026-04-09** per workflow / registry (verify manually if unsure)
 - [x] **`release/v0.11.0` merged to `main`** — **2026-04-09** (`574823f1`)
-- [ ] Issue #570 closed on GitHub (and [README.md](./README.md) status → Closed if you keep docs in sync)
+- [x] Issue #570 closed on GitHub **2026-04-09**; [README.md](./README.md) status **Closed**
 
 ---
 
