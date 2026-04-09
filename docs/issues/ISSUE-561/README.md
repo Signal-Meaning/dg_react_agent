@@ -1,5 +1,7 @@
 # Issue #561 — Refactor: Start → Live mode (voice-first UI)
 
+**Status:** **Closed (2026-04-09)** — Live entry, full-screen Live UX, conversation history, mic/session semantics, and reported proxy/UI bugs addressed on **`main`**. Optional polish (agent visual Phase 2, idle+resume E2E hardening, Phase D dedupe) can be new issues if needed.
+
 **GitHub:** [#561 — Refactor: Start → Live mode (voice-first, simplified UI for on-the-go / hands-free)](https://github.com/Signal-Meaning/dg_react_agent/issues/561)
 
 **Labels:** refactor, enhancement, ui-component, voice-agent, priority: medium
@@ -10,7 +12,7 @@
 
 Rewire the test-app **Live** entry control so it enters **Live** mode (ChatGPT **Voice mode**–style): simplified, glanceable UI for **on-the-go / mostly hands-free** use (e.g. vehicle). Test-app scope: visualize **voice activity** and **agent activity** (including **thinking / tool-calling** when signals exist), optional **agent visual**, and **conversation history** in Live.
 
-Repo-local notes, mockups, and TDD plans live in this folder as work proceeds.
+This folder remains the **history** of decisions, tests, and artifacts for that rollout.
 
 ## Local docs
 

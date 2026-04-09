@@ -1,8 +1,16 @@
 # Issue #561 — current status
 
-**Last updated:** 2026-04-08 — **`main` merged into `issue-561`** (fast-forward); includes **closed** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560) proxy/mic/build deliverables and doc closure in `docs/issues/ISSUE-560/`.
+**Last updated:** 2026-04-09 — **Issue closed on GitHub**; **`issue-561` merged into `main`** (fast-forward). Includes **closed** [#560](https://github.com/Signal-Meaning/dg_react_agent/issues/560) proxy/mic/build work.
 
-**GitHub:** [#561](https://github.com/Signal-Meaning/dg_react_agent/issues/561)
+**GitHub:** [#561](https://github.com/Signal-Meaning/dg_react_agent/issues/561) — **closed 2026-04-09**
+
+---
+
+## Closure (scope met)
+
+**Shipped for #561:** **Live** entry (`live-entry-button`), full-screen **`live-mode-screen`**, labeled mic/agent/session activity, **`live-conversation-history`**, tool-calling row when in flight, **`LiveAgentVisual`** placeholder + [DESIGN-LIVE-AGENT-VISUAL.md](./DESIGN-LIVE-AGENT-VISUAL.md), mic clear on agent **`closed`/`error`**, OpenAI Live + injected-audio E2E. Partner bugs 1–3 in the table below are **addressed or qualified** in-tree; **real host-mic** acoustic/STT remains optional human follow-up (with **#560** proxy path on `main`).
+
+**Not required to close:** Phase **D** refactor; **SVG** agent visual Phase 2; extended **idle disconnect + resume** E2E — track as follow-up work if desired.
 
 ---
 
@@ -22,10 +30,10 @@
 |-------|--------|--------|
 | **A** — Unit (`test-app/tests/unit/`) | **Extended** | Added `syncMicFromAgentConnection.test.ts`; `LiveModeView` tests for labels, `live-agent-visual`, `live-conversation-history`, `live-mode-footer`. |
 | **B** — E2E | **Smoke + OpenAI Live** | `live-mode.spec.js` (**live-entry-button**, mic telemetry). **`live-mode-openai-proxy.spec.js`** — OpenAI proxy + Live + injected audio → assistant in history (Bug 1 path). |
-| **C** — GREEN (App + `LiveModeView`) | **In progress** | Full-screen Live, **`agentOutputActive`**, conversation feed, mic sync on disconnect, **`LiveAgentVisual`** placeholder. |
-| **D** — REFACTOR | **Not started** | — |
+| **C** — GREEN (App + `LiveModeView`) | **Done (issue scope)** | Full-screen Live, **`agentOutputActive`**, conversation feed, mic sync on disconnect, **`LiveAgentVisual`** placeholder. |
+| **D** — REFACTOR | **Optional follow-up** | Dedupe start+mic — not blocking closure. |
 
-**Branch:** `issue-561` — **includes `main` through 2026-04-08** (#560 closure docs + all proxy/mic merges).
+**Branch:** Work landed on **`main`**; historical branch **`issue-561`** was fast-forwarded and merged.
 
 ---
 

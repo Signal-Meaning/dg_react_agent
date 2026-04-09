@@ -157,7 +157,7 @@ For OpenAI-proxy–specific agent states, follow project guidance: run with real
 ## 8. References
 
 - [DESIGN-LIVE-AGENT-VISUAL.md](./DESIGN-LIVE-AGENT-VISUAL.md) — waveform / mouth visual, phased approach
-- [Issue #561 README](./README.md)
+- [Issue #561 README](./README.md) — **Closed (2026-04-09)**; optional polish in [NEXT-STEP.md](./NEXT-STEP.md)
 - [Issue #560](../ISSUE-560/README.md) — **Closed (2026-04-08)** — mic/proxy/build; optional host-mic repro in that folder
 - [Issue #544](../ISSUE-544/README.md) — `userInitiated`, idle timeout
 - `test-app/src/App.tsx` — current `startInteraction`, `toggleMicrophone`, callbacks
