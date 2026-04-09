@@ -33,7 +33,7 @@
 
 ### Pre-Release Preparation
 
-- [ ] **Code review complete:** Intended commits on `release/v0.11.0`; no stray changes.
+- [x] **Code review complete:** Intended commits on `release/v0.11.0`; no stray changes.
 - [ ] **Tests passing**
   - [x] **Run what CI runs:** `npm run lint` then `npm run test:mock`
   - [ ] Optional: `npm test` (full suite)
