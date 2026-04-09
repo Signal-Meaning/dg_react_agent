@@ -17,13 +17,13 @@ Preferred scripted path (when versions match): `npm run release:issue 0.11.0 min
 
 ## While working
 
-- [ ] Pre-release: `npm run lint`, `npm run test:mock`; full proxy E2E and real-API steps as in #570 when applicable.
-- [ ] `docs/releases/v0.11.0/` + `npm run validate:release-docs v0.11.0` (minor → full doc set per template).
-- [ ] Bump root (and backend if needed), commit on **`release/v0.11.0`**, then GitHub Release → CI publish → tag → merge to `main` via PR.
+- [x] Pre-release: `npm run lint`, `npm run test:mock`; real-API + OpenAI proxy E2E slice per [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md) **2026-04-09**.
+- [x] `docs/releases/v0.11.0/` + `npm run validate:release-docs v0.11.0` (minor doc set).
+- [x] Bump root (and backend), commit on **`release/v0.11.0`**, GitHub Release **`v0.11.0`**, CI publish, merge **`release/v0.11.0` → `main`** **2026-04-09**.
 
 ---
 
 ## After publish
 
-- Update this README [README.md](./README.md) **Status** to **Closed** if you keep folders in sync with GitHub.
-- Record publish run / notes under `docs/releases/v0.11.0/` if the project convention includes that.
+- [x] [README.md](./README.md) **Status** set to **Released** **2026-04-09**; flip to **Closed** when GitHub **#570** is closed, if you keep wording aligned.
+- Optional: record publish run notes under `docs/releases/v0.11.0/` if the project convention includes that.
