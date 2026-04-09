@@ -25,7 +25,7 @@
 
 ### Progress
 
-- **Pre-publish (in progress):** `docs/releases/v0.11.0/` added; root **0.11.0** and backend **0.2.12** bumped; `npm run validate:release-docs 0.11.0`, `npm run lint`, `npm run test:mock`, and `npm audit --audit-level=high` passed locally; [API-REFERENCE.md](../../API-REFERENCE.md) evolution updated for v0.11.0. **Still required before publish:** full/proxy E2E, real-API integration when qualifying, upstream event coverage, Git operations / `release/v0.11.0` push, GitHub Release + CI publish.
+- **Pre-publish (in progress):** `docs/releases/v0.11.0/` added; root **0.11.0** and backend **0.2.12** bumped; `npm run validate:release-docs 0.11.0`, `npm run lint`, `npm run test:mock`, and `npm audit --audit-level=high` passed locally; [API-REFERENCE.md](../../API-REFERENCE.md) evolution updated for v0.11.0. **Still required before publish:** `npm test` (full Jest suite), full/proxy E2E, real-API integration when qualifying, upstream event coverage, Git operations / `release/v0.11.0` push, GitHub Release + CI publish.
 - **Publish:** _not started_
 - **Post-release:** _not started_
 
@@ -36,7 +36,7 @@
 - [x] **Code review complete:** Intended commits on `release/v0.11.0`; no stray changes.
 - [ ] **Tests passing**
   - [x] **Run what CI runs:** `npm run lint` then `npm run test:mock`
-  - [ ] Optional: `npm test` (full suite)
+  - [ ] **Full Jest suite (required):** `npm test` — all suites; required for this release in addition to `test:mock`
   - [ ] **E2E (proxy):** `cd test-app && npm run backend`; from repo root `USE_PROXY_MODE=true npm run test:e2e` (or targeted specs per [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md))
   - [ ] **Real-API integration** (required for proxy/audio qualification when keys available): `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
   - [ ] **Function-call path:** Real backend HTTP per [.cursorrules](../../../../.cursorrules) / [ISSUE-462](../ISSUE-462/VOICE-COMMERCE-FUNCTION-CALL-REPORT.md)
@@ -117,7 +117,7 @@ npm dist-tag add @signal-meaning/voice-agent-react@0.11.0 latest --registry http
 
 ### Completion Criteria
 
-- [ ] Lint, `test:mock` green; CI test + publish jobs green
+- [ ] Lint, `test:mock`, and **full `npm test`** green; CI test + publish jobs green
 - [ ] Real-API integration (and E2E as required) documented on #570 when applicable
 - [ ] `docs/releases/v0.11.0/` validated
 - [ ] Packages published from **`release/v0.11.0`**
