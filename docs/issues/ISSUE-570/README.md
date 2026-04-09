@@ -6,7 +6,7 @@
 
 **Labels:** `release`, `documentation`, `priority:high`
 
-**Branch:** `issue-570` — docs and (later) version bump / `docs/releases/v0.11.0/` should land on **`release/v0.11.0`** per the checklist, not only this branch. Use this branch for issue-local notes and PRs that link #570.
+**Branch:** `issue-570` — for **v0.11.0**, version bump and `docs/releases/v0.11.0/` landed on **`release/v0.11.0`** before merge to **`main`** **2026-04-09**; `issue-570` is now level with **`main`** for follow-up doc edits linked to #570.
 
 ---
 
