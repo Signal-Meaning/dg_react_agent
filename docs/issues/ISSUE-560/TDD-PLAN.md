@@ -6,7 +6,7 @@
 
 **Process note (2026-04):** Larger UI refactors (voice provider toggle, removing duplicate panels) should still follow **tests-first for anything an E2E or unit test can lock**—e.g. update `SELECTORS` / specs **before** removing `data-testid` nodes; add or extend Jest **before** changing `getConversationHistory` behavior. Retroactive doc/test alignment is recorded in Phase B/C checkboxes below.
 
-**Recovery (new chat):** Read [AGENT-HANDOFF.md](./AGENT-HANDOFF.md) (investigator brief), [CURRENT-STATUS.md](./CURRENT-STATUS.md), [NEXT-STEP.md](./NEXT-STEP.md), this file, [README.md](./README.md). **Host mic repro:** [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md). **OpenAI proxy commit timing:** [COMMIT-TIMING-PROPOSAL.md](./COMMIT-TIMING-PROPOSAL.md) + **§2c** (implemented on mock path — re-qualify **`USE_REAL_APIS=1`** when keys available). **Live UI context:** [#561](../ISSUE-561/README.md). **#560** is isolation + fix in the **correct layer**.
+**Recovery (new chat):** Read [AGENT-HANDOFF.md](./AGENT-HANDOFF.md) (investigator brief), [CURRENT-STATUS.md](./CURRENT-STATUS.md), [NEXT-STEP.md](./NEXT-STEP.md), this file, [README.md](./README.md). **Host mic repro:** [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md). **OpenAI proxy commit timing:** [COMMIT-TIMING-PROPOSAL.md](./COMMIT-TIMING-PROPOSAL.md) + **§2c** (implemented on mock path — re-qualify **`USE_REAL_APIS=1`** when keys available). **Commit scheduler gap (continuous mic / disconnect):** [COMMIT-SCHEDULER-TDD-PLAN.md](./COMMIT-SCHEDULER-TDD-PLAN.md) — tests first, proxy audit, client chunk telemetry (**§4**). **Live UI context:** [#561](../ISSUE-561/README.md). **#560** is isolation + fix in the **correct layer**.
 
 ---
 
