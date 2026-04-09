@@ -8,7 +8,7 @@
 
 ---
 
-## Release v0.11.0 (component) — backend TBD
+## Release v0.11.0 (component + backend **0.2.12**)
 
 ### Overview
 
@@ -25,7 +25,7 @@
 
 ### Progress
 
-- **Pre-publish (in progress):** `docs/releases/v0.11.0/` added; root **0.11.0** and backend **0.2.12** bumped; `npm run validate:release-docs 0.11.0`, `npm run lint`, `npm run test:mock`, and `npm audit --audit-level=high` passed locally; [API-REFERENCE.md](../../API-REFERENCE.md) evolution updated for v0.11.0. **Still required before publish:** `npm test` (full Jest suite), full/proxy E2E, real-API integration when qualifying, upstream event coverage, Git operations / `release/v0.11.0` push, GitHub Release + CI publish.
+- **Pre-publish (in progress):** Full Jest (`npm test`), upstream event coverage, and **real-API** `openai-proxy-integration` (20 ran, 70 skipped) passed **2026-04-09**; first full real-API run hit transient upstream **504** on one test — immediate retry + full re-run green. `npm run clean && npm run build && npm run validate` passed; **`issue-570`** and **`release/v0.11.0`** pushed to `origin`. **Outstanding before publish:** proxy **E2E** — full suite was started without `test-app` backend running and failed with connection closed / timeouts; re-run **`cd test-app && npm run backend`**, then from repo root **`USE_PROXY_MODE=true npm run test:e2e`**. Then GitHub Release → CI publish → tag → merge PR.
 - **Publish:** _not started_
 - **Post-release:** _not started_
 
@@ -34,17 +34,17 @@
 ### Pre-Release Preparation
 
 - [x] **Code review complete:** Intended commits on `release/v0.11.0`; no stray changes.
-- [ ] **Tests passing**
+- [ ] **Tests passing** _(E2E below still required)_
   - [x] **Run what CI runs:** `npm run lint` then `npm run test:mock`
-  - [ ] **Full Jest suite (required):** `npm test` — all suites; required for this release in addition to `test:mock`
-  - [ ] **E2E (proxy):** `cd test-app && npm run backend`; from repo root `USE_PROXY_MODE=true npm run test:e2e` (or targeted specs per [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md))
-  - [ ] **Real-API integration** (required for proxy/audio qualification when keys available): `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
-  - [ ] **Function-call path:** Real backend HTTP per [.cursorrules](../../../../.cursorrules) / [ISSUE-462](../ISSUE-462/VOICE-COMMERCE-FUNCTION-CALL-REPORT.md)
-  - [ ] **Upstream event coverage:** `npm test -- tests/openai-proxy-event-coverage.test.ts`
+  - [x] **Full Jest suite (required):** `npm test` — **2026-04-09:** 142 suites passed, 1 skipped; 1291 tests passed
+  - [ ] **E2E (proxy):** Start backend first: `cd test-app && npm run backend`; from repo root `USE_PROXY_MODE=true npm run test:e2e` — **not green in automation** (run without backend → mass connection failures); **re-run locally with backend before publish**
+  - [x] **Real-API integration:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — **2026-04-09:** 20 passed (see Progress for transient 504 note)
+  - [x] **Function-call path:** Covered by **Issue #470** real-API test in that file (backend HTTP contract per project tests)
+  - [x] **Upstream event coverage:** `npm test -- tests/openai-proxy-event-coverage.test.ts`
 - [x] **Linting clean:** `npm run lint`
 - [x] **npm audit:** `npm audit --audit-level=high` — exit 0
 - [x] **Documentation:** `docs/releases/v0.11.0/` created and validated; API evolution updated for v0.11.0
-- [ ] **Breaking changes:** None expected; if any, `MIGRATION.md` + issue #570
+- [x] **Breaking changes:** **None** for component public API; no `MIGRATION.md` for this release
 
 ---
 
@@ -71,8 +71,8 @@ See [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md).
 
 ### Build and Package
 
-- [ ] Rely on **CI** for publish builds; do not commit `dist/` or `.tgz`
-- [ ] Optional local: `npm run clean && npm run build && npm run validate`
+- [x] Rely on **CI** for publish builds; do not commit `dist/` or `.tgz` (`dist/` gitignored)
+- [x] Optional local: `npm run clean && npm run build && npm run validate` — **2026-04-09** pass
 
 ---
 
@@ -87,15 +87,15 @@ See [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md).
 
 ### Git Operations
 
-- [ ] Commit version bump and release docs, e.g. `chore: prepare release v0.11.0 (Issue #570)`
-- [ ] Branch **`release/v0.11.0`**, push `git push origin release/v0.11.0`
-- [ ] Preferred when versions match: `npm run release:issue 0.11.0 minor`
+- [x] Commit version bump and release docs — `chore: prepare release v0.11.0 (Issue #570)` (`e0c3152e`) + follow-up checklist commits on **`release/v0.11.0`**
+- [x] Branch **`release/v0.11.0`**, push — `git push origin issue-570 release/v0.11.0` **2026-04-09**
+- [ ] `npm run release:issue 0.11.0 minor` — **skipped** (GitHub issue #570 already exists)
 
 ---
 
 ### Package Publishing
 
-- [ ] **Bump committed on `release/v0.11.0`** before creating the GitHub Release
+- [x] **Bump committed on `release/v0.11.0`** before creating the GitHub Release
 - [ ] GitHub Release **tag `v0.11.0`**, target **`release/v0.11.0`** (not `main` until merged)
 - [ ] CI **Test and Publish** workflow success; both packages at intended versions in GitHub Packages
 - [ ] **`latest` dist-tag** on each package actually published (see template / workflow; manual fallback if needed)
@@ -117,9 +117,9 @@ npm dist-tag add @signal-meaning/voice-agent-react@0.11.0 latest --registry http
 
 ### Completion Criteria
 
-- [ ] Lint, `test:mock`, and **full `npm test`** green; CI test + publish jobs green
-- [ ] Real-API integration (and E2E as required) documented on #570 when applicable
-- [ ] `docs/releases/v0.11.0/` validated
+- [ ] Lint, `test:mock`, **full `npm test`**, and **proxy E2E** green; **CI** test + publish jobs green _(local Jest + real-API done; E2E + CI pending)_
+- [x] Real-API integration documented here and on **#570** when applicable _(E2E: re-run with backend, then note on issue)_
+- [x] `docs/releases/v0.11.0/` validated (`npm run validate:release-docs 0.11.0`)
 - [ ] Packages published from **`release/v0.11.0`**
 - [ ] **`latest` dist-tags** correct for published packages
 - [ ] **`release/v0.11.0` merged to `main`**
