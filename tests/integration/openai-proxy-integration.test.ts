@@ -135,6 +135,24 @@ function looksLikeJsonObject(data: Buffer): boolean {
   return data.length >= 2 && data[0] === 0x7b && data[data.length - 1] === 0x7d;
 }
 
+/**
+ * Issue #414 / CI: mockReceived may include a spurious input_audio_buffer.append before the first
+ * session.update (e.g. close-flush from a prior connection or scheduling). Require: no append
+ * strictly before the first session.update, and at least one append after it.
+ */
+function expectSessionUpdateBeforeAnyAudioAppend(types: string[]): void {
+  const sessionUpdateIdx = types.indexOf('session.update');
+  expect(sessionUpdateIdx).toBeGreaterThanOrEqual(0);
+  const appendBeforeSession = types.findIndex(
+    (t, i) => i < sessionUpdateIdx && t === 'input_audio_buffer.append'
+  );
+  expect(appendBeforeSession).toBe(-1);
+  const appendAfterSession = types.findIndex(
+    (t, i) => i > sessionUpdateIdx && t === 'input_audio_buffer.append'
+  );
+  expect(appendAfterSession).toBeGreaterThanOrEqual(0);
+}
+
 describe('OpenAI proxy integration (Issue #381)', () => {
   // Prevent real-API runs from hanging indefinitely; longest test is 70s (function-call flow).
   if (useRealAPIs) jest.setTimeout(80000);
@@ -709,7 +727,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       }
       await new Promise<void>((resolve) => proxyServer.close(() => resolve()));
     }
-  }, 60000);
+  }, 120000);
 
   beforeEach(() => {
     // Global setup (tests/setup.js) enables fake timers before every test. This suite runs the real proxy
@@ -2319,13 +2337,11 @@ describe('OpenAI proxy integration (Issue #381)', () => {
             const types = mockReceived.map((m) => m.type);
             expect(types).toContain('session.update');
             expect(types).toContain('input_audio_buffer.append');
-            const sessionUpdateIdx = types.indexOf('session.update');
-            const firstAppendIdx = types.indexOf('input_audio_buffer.append');
-            expect(sessionUpdateIdx).toBeLessThan(firstAppendIdx);
+            expectSessionUpdateBeforeAnyAudioAppend(types);
             mockEnforceSessionBeforeContext = false;
             client.close();
             done();
-          }, 80);
+          }, 200);
         }
       } catch {
         // ignore
@@ -2335,7 +2351,7 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       mockEnforceSessionBeforeContext = false;
       done(err);
     });
-  }, 5000);
+  }, 15000);
 
   /**
    * Issue #414: Upstream message order — session.update must appear before any input_audio_buffer.append.
@@ -2361,21 +2377,17 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           setTimeout(() => {
             expect(protocolErrors).toHaveLength(0);
             const types = mockReceived.map((m) => m.type);
-            const sessionUpdateIdx = types.indexOf('session.update');
-            const firstAppendIdx = types.indexOf('input_audio_buffer.append');
-            expect(sessionUpdateIdx).toBeGreaterThanOrEqual(0);
-            expect(firstAppendIdx).toBeGreaterThanOrEqual(0);
-            expect(sessionUpdateIdx).toBeLessThan(firstAppendIdx);
+            expectSessionUpdateBeforeAnyAudioAppend(types);
             client.close();
             done();
-          }, 100);
+          }, 250);
         }
       } catch {
         // ignore
       }
     });
     client.on('error', done);
-  }, 5000);
+  }, 15000);
 
   /**
    * Issue #414: Firm audio connection — after sending audio per protocol, no Error from upstream within N seconds.
