@@ -13,10 +13,11 @@ import {
   getLoggerForTesting,
   SeverityNumber,
   ATTR_TRACE_ID,
+  w3cTraceIdFromCorrelation,
+  w3cSpanIdForProxyCorrelation,
 } from '../packages/voice-agent-backend/scripts/openai-proxy/logger';
 import { createOpenAIProxyServer } from '../packages/voice-agent-backend/scripts/openai-proxy/server';
 import { InMemoryLogRecordExporter } from '@opentelemetry/sdk-logs';
-import { createHash } from 'crypto';
 
 /** InMemoryLogRecordExporter.reset() runs on shutdown; flush export then snapshot before shutdown. */
 async function flushOtelLogExport(): Promise<void> {
@@ -269,12 +270,6 @@ describe('OpenAI proxy logging standard (Issue #437)', () => {
   });
 
   describe('Issue #565: OTel resource, trace context, compact console', () => {
-    const expectedW3CTraceFromShortId = (correlation: string): string =>
-      createHash('sha256').update(correlation, 'utf8').digest('hex').slice(0, 32);
-
-    const expectedSpanIdFromCorrelation = (correlation: string): string =>
-      createHash('sha256').update(`openai-proxy|${correlation}`, 'utf8').digest('hex').slice(0, 16);
-
     it('attaches service.name dg-openai-proxy on exported log resource', async () => {
       const memory = new InMemoryLogRecordExporter();
       initProxyLogger({ logLevel: 'info', logRecordExporter: memory });
@@ -305,8 +300,8 @@ describe('OpenAI proxy logging standard (Issue #437)', () => {
       const rec = memory.getFinishedLogRecords()[0];
       await shutdownProxyLogger();
       expect(rec.spanContext).toBeDefined();
-      expect(rec.spanContext!.traceId).toBe(expectedW3CTraceFromShortId('c1'));
-      expect(rec.spanContext!.spanId).toBe(expectedSpanIdFromCorrelation('c1'));
+      expect(rec.spanContext!.traceId).toBe(w3cTraceIdFromCorrelation('c1'));
+      expect(rec.spanContext!.spanId).toBe(w3cSpanIdForProxyCorrelation('c1'));
     });
 
     it('uses stripped UUID as traceId when trace_id is a standard UUID string', async () => {
@@ -371,8 +366,8 @@ describe('OpenAI proxy logging standard (Issue #437)', () => {
       });
       expect(dirSpy).toHaveBeenCalledTimes(1);
       const payload = dirSpy.mock.calls[0][0] as Record<string, unknown>;
-      expect(payload.traceId).toBe(expectedW3CTraceFromShortId('c1'));
-      expect(payload.spanId).toBe(expectedSpanIdFromCorrelation('c1'));
+      expect(payload.traceId).toBe(w3cTraceIdFromCorrelation('c1'));
+      expect(payload.spanId).toBe(w3cSpanIdForProxyCorrelation('c1'));
       expect(typeof payload.traceFlags).toBe('number');
       dirSpy.mockRestore();
     });

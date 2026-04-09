@@ -38,6 +38,7 @@ Log records from the proxy used the SDK default resource (`unknown_service:…`)
 |-----|---------|
 | [CURRENT-STATUS.md](./CURRENT-STATUS.md) | Snapshot and acceptance checklist. |
 | [NEXT-STEP.md](./NEXT-STEP.md) | Merge / qualification / optional follow-ups. |
+| [REFACTOR-PR-TDD.md](./REFACTOR-PR-TDD.md) | Pre-PR refactor TDD (W3C spec tests + cleanup checklist). |
 
 ---
 

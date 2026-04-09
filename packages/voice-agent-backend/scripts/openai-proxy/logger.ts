@@ -9,7 +9,14 @@
  */
 
 import { createHash } from 'crypto';
-import { context, trace, TraceFlags, isValidTraceId, type Context } from '@opentelemetry/api';
+import {
+  context,
+  trace,
+  TraceFlags,
+  isValidTraceId,
+  type AttributeValue,
+  type Context,
+} from '@opentelemetry/api';
 import { SeverityNumber } from '@opentelemetry/api-logs';
 import type { ExportResult } from '@opentelemetry/core';
 import { ExportResultCode, hrTimeToMicroseconds } from '@opentelemetry/core';
@@ -55,6 +62,10 @@ export const ATTR_WALL_CLOCK_MS = 'debug.wall_clock_ms';
 
 export type ProxyLogAttributes = Record<string, string | number | boolean | undefined>;
 
+function sha256Utf8Hex(input: string): string {
+  return createHash('sha256').update(input, 'utf8').digest('hex');
+}
+
 /** Map level string to OTel SeverityNumber (emit when severity >= this). Issue #437. */
 function severityNumberFromLevel(level: string): number {
   const normalized = (level || '').toLowerCase();
@@ -81,12 +92,31 @@ export function w3cTraceIdFromCorrelation(correlationId: string): string {
   if (compact.length === 32 && isValidTraceId(compact)) {
     return compact;
   }
-  return createHash('sha256').update(correlationId, 'utf8').digest('hex').slice(0, 32);
+  return sha256Utf8Hex(correlationId).slice(0, 32);
 }
 
 /** Deterministic 64-bit span id for proxy logs tied to the same correlation id. */
 export function w3cSpanIdForProxyCorrelation(correlationId: string): string {
-  return createHash('sha256').update(`openai-proxy|${correlationId}`, 'utf8').digest('hex').slice(0, 16);
+  return sha256Utf8Hex(`openai-proxy|${correlationId}`).slice(0, 16);
+}
+
+/** Shape written by {@link CompactProxyConsoleLogRecordExporter} (Issue #565). */
+function buildCompactConsoleLogPayload(logRecord: ReadableLogRecord): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    resource: { attributes: logRecord.resource.attributes },
+    timestamp: hrTimeToMicroseconds(logRecord.hrTime),
+    severityText: logRecord.severityText,
+    severityNumber: logRecord.severityNumber,
+    body: logRecord.body,
+    attributes: logRecord.attributes,
+  };
+  const sc = logRecord.spanContext;
+  if (sc) {
+    base.traceId = sc.traceId;
+    base.spanId = sc.spanId;
+    base.traceFlags = sc.traceFlags;
+  }
+  return base;
 }
 
 /**
@@ -96,20 +126,7 @@ export function w3cSpanIdForProxyCorrelation(correlationId: string): string {
 class CompactProxyConsoleLogRecordExporter implements LogRecordExporter {
   export(logs: ReadableLogRecord[], resultCallback: (result: ExportResult) => void): void {
     for (const logRecord of logs) {
-      const base: Record<string, unknown> = {
-        resource: { attributes: logRecord.resource.attributes },
-        timestamp: hrTimeToMicroseconds(logRecord.hrTime),
-        severityText: logRecord.severityText,
-        severityNumber: logRecord.severityNumber,
-        body: logRecord.body,
-        attributes: logRecord.attributes,
-      };
-      const sc = logRecord.spanContext;
-      if (sc) {
-        base.traceId = sc.traceId;
-        base.spanId = sc.spanId;
-        base.traceFlags = sc.traceFlags;
-      }
+      const base = buildCompactConsoleLogPayload(logRecord);
       // eslint-disable-next-line no-console -- intentional diagnostic sink for proxy
       console.dir(base, { depth: 3 });
     }
@@ -126,7 +143,10 @@ export interface InitProxyLoggerOptions {
   logLevel?: string;
   /**
    * When set, log records are exported here instead of the compact console exporter.
-   * Intended for tests (Issue #565).
+   * Intended for tests (Issue #565). **Only honored on the first successful `initProxyLogger` call**
+   * in the process — if the `LoggerProvider` already exists, subsequent calls return early and
+   * ignore this option. The **severity floor** (`logLevel` / `LOG_LEVEL`) is still recomputed on
+   * every call (existing behavior).
    */
   logRecordExporter?: LogRecordExporter;
 }
@@ -144,6 +164,9 @@ function buildProxyLoggerResource(): Resource {
  * Initialize OpenTelemetry logging for the proxy. Call once with desired log level.
  * Reads options.logLevel or process.env.LOG_LEVEL. If neither is set, uses minimum **error**
  * so ERROR logs (e.g. upstream Realtime failures) always emit (Issue #531).
+ *
+ * If already initialized, returns immediately: **`logRecordExporter` is not swapped**; severity
+ * floor may still be updated from `options` / env on every call (existing behavior).
  */
 export function initProxyLogger(options?: InitProxyLoggerOptions): void {
   const level = options?.logLevel ?? process.env.LOG_LEVEL;
@@ -193,7 +216,7 @@ export function emitLog(params: {
     attrs &&
     (Object.fromEntries(
       Object.entries(attrs).filter(([, v]) => v !== undefined)
-    ) as Record<string, import('@opentelemetry/api').AttributeValue>);
+    ) as Record<string, AttributeValue>);
   const rawTrace = attrs?.[ATTR_TRACE_ID];
   const correlation =
     typeof rawTrace === 'string' && rawTrace.trim() !== '' ? rawTrace.trim() : undefined;
