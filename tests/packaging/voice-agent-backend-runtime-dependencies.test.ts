@@ -31,4 +31,16 @@ describe('voice-agent-backend packaging: runtime dependencies (EPIC-546)', () =>
   it('declares @opentelemetry/sdk-logs in dependencies (logger.ts imports it on every proxy load)', () => {
     expect(pkg.dependencies).toHaveProperty('@opentelemetry/sdk-logs');
   });
+
+  it('declares @opentelemetry/resources in dependencies (logger.ts Resource for service.name)', () => {
+    expect(pkg.dependencies).toHaveProperty('@opentelemetry/resources');
+  });
+
+  it('declares @opentelemetry/api in dependencies (logger.ts trace context for LogRecord)', () => {
+    expect(pkg.dependencies).toHaveProperty('@opentelemetry/api');
+  });
+
+  it('declares @opentelemetry/core in dependencies (logger.ts compact console exporter)', () => {
+    expect(pkg.dependencies).toHaveProperty('@opentelemetry/core');
+  });
 });

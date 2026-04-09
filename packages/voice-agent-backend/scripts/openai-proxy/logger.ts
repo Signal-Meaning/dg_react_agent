@@ -1,5 +1,5 @@
 /**
- * OpenAI proxy – OpenTelemetry logging (Issue #381, #437, #531)
+ * OpenAI proxy – OpenTelemetry logging (Issue #381, #437, #531, #565)
  *
  * Reads LOG_LEVEL (debug | info | warn | error) and only emits logs at or above that level.
  * OPENAI_PROXY_DEBUG=1 is treated as LOG_LEVEL=debug for backward compatibility.
@@ -8,15 +8,31 @@
  * See https://opentelemetry.io/docs/specs/otel/logs/
  */
 
+import { createHash } from 'crypto';
+import {
+  context,
+  trace,
+  TraceFlags,
+  isValidTraceId,
+  type AttributeValue,
+  type Context,
+} from '@opentelemetry/api';
 import { SeverityNumber } from '@opentelemetry/api-logs';
+import type { ExportResult } from '@opentelemetry/core';
+import { ExportResultCode, hrTimeToMicroseconds } from '@opentelemetry/core';
+import { Resource } from '@opentelemetry/resources';
 import {
   LoggerProvider,
   SimpleLogRecordProcessor,
-  ConsoleLogRecordExporter,
+  type LogRecordExporter,
+  type ReadableLogRecord,
 } from '@opentelemetry/sdk-logs';
 
 const LOGGER_NAME = 'openai-proxy';
 const LOGGER_VERSION = '1.0.0';
+
+/** Stable resource identity for aggregators (Issue #565); merged over default Resource so it wins on collision. */
+export const PROXY_OTEL_SERVICE_NAME = 'dg-openai-proxy';
 
 /** OTel SeverityNumber: DEBUG=5, INFO=9, WARN=13, ERROR=17. Emit when severity >= min. */
 const SEVERITY_DEBUG = 5;
@@ -46,6 +62,10 @@ export const ATTR_WALL_CLOCK_MS = 'debug.wall_clock_ms';
 
 export type ProxyLogAttributes = Record<string, string | number | boolean | undefined>;
 
+function sha256Utf8Hex(input: string): string {
+  return createHash('sha256').update(input, 'utf8').digest('hex');
+}
+
 /** Map level string to OTel SeverityNumber (emit when severity >= this). Issue #437. */
 function severityNumberFromLevel(level: string): number {
   const normalized = (level || '').toLowerCase();
@@ -63,15 +83,90 @@ function severityNumberFromLevel(level: string): number {
   }
 }
 
+/**
+ * Derive a W3C 128-bit trace id (32 lowercase hex) from the proxy correlation string.
+ * Valid 32-hex ids (e.g. UUID without dashes) are reused; otherwise SHA-256 truncated.
+ */
+export function w3cTraceIdFromCorrelation(correlationId: string): string {
+  const compact = correlationId.replace(/-/g, '').toLowerCase();
+  if (compact.length === 32 && isValidTraceId(compact)) {
+    return compact;
+  }
+  return sha256Utf8Hex(correlationId).slice(0, 32);
+}
+
+/** Deterministic 64-bit span id for proxy logs tied to the same correlation id. */
+export function w3cSpanIdForProxyCorrelation(correlationId: string): string {
+  return sha256Utf8Hex(`openai-proxy|${correlationId}`).slice(0, 16);
+}
+
+/** Shape written by {@link CompactProxyConsoleLogRecordExporter} (Issue #565). */
+function buildCompactConsoleLogPayload(logRecord: ReadableLogRecord): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    resource: { attributes: logRecord.resource.attributes },
+    timestamp: hrTimeToMicroseconds(logRecord.hrTime),
+    severityText: logRecord.severityText,
+    severityNumber: logRecord.severityNumber,
+    body: logRecord.body,
+    attributes: logRecord.attributes,
+  };
+  const sc = logRecord.spanContext;
+  if (sc) {
+    base.traceId = sc.traceId;
+    base.spanId = sc.spanId;
+    base.traceFlags = sc.traceFlags;
+  }
+  return base;
+}
+
+/**
+ * Console exporter that mirrors SDK behavior but omits traceId/spanId/traceFlags when there is
+ * no span context, so debug JSON lines are not cluttered with `undefined` (Issue #565).
+ */
+class CompactProxyConsoleLogRecordExporter implements LogRecordExporter {
+  export(logs: ReadableLogRecord[], resultCallback: (result: ExportResult) => void): void {
+    for (const logRecord of logs) {
+      const base = buildCompactConsoleLogPayload(logRecord);
+      // eslint-disable-next-line no-console -- intentional diagnostic sink for proxy
+      console.dir(base, { depth: 3 });
+    }
+    resultCallback?.({ code: ExportResultCode.SUCCESS });
+  }
+
+  shutdown(): Promise<void> {
+    return Promise.resolve();
+  }
+}
+
 export interface InitProxyLoggerOptions {
   /** Log level (debug | info | warn | error). Overrides process.env.LOG_LEVEL. */
   logLevel?: string;
+  /**
+   * When set, log records are exported here instead of the compact console exporter.
+   * Intended for tests (Issue #565). **Only honored on the first successful `initProxyLogger` call**
+   * in the process — if the `LoggerProvider` already exists, subsequent calls return early and
+   * ignore this option. The **severity floor** (`logLevel` / `LOG_LEVEL`) is still recomputed on
+   * every call (existing behavior).
+   */
+  logRecordExporter?: LogRecordExporter;
+}
+
+function buildProxyLoggerResource(): Resource {
+  return Resource.default().merge(
+    new Resource({
+      'service.name': PROXY_OTEL_SERVICE_NAME,
+      'service.version': LOGGER_VERSION,
+    })
+  );
 }
 
 /**
  * Initialize OpenTelemetry logging for the proxy. Call once with desired log level.
  * Reads options.logLevel or process.env.LOG_LEVEL. If neither is set, uses minimum **error**
  * so ERROR logs (e.g. upstream Realtime failures) always emit (Issue #531).
+ *
+ * If already initialized, returns immediately: **`logRecordExporter` is not swapped**; severity
+ * floor may still be updated from `options` / env on every call (existing behavior).
  */
 export function initProxyLogger(options?: InitProxyLoggerOptions): void {
   const level = options?.logLevel ?? process.env.LOG_LEVEL;
@@ -81,10 +176,11 @@ export function initProxyLogger(options?: InitProxyLoggerOptions): void {
     minSeverityNumber = SEVERITY_ERROR;
   }
   if (loggerProvider) return;
-  loggerProvider = new LoggerProvider();
-  loggerProvider.addLogRecordProcessor(
-    new SimpleLogRecordProcessor(new ConsoleLogRecordExporter())
-  );
+  const exporter = options?.logRecordExporter ?? new CompactProxyConsoleLogRecordExporter();
+  loggerProvider = new LoggerProvider({
+    resource: buildProxyLoggerResource(),
+  });
+  loggerProvider.addLogRecordProcessor(new SimpleLogRecordProcessor(exporter));
   logger = loggerProvider.getLogger(LOGGER_NAME, LOGGER_VERSION);
 }
 
@@ -120,12 +216,26 @@ export function emitLog(params: {
     attrs &&
     (Object.fromEntries(
       Object.entries(attrs).filter(([, v]) => v !== undefined)
-    ) as Record<string, import('@opentelemetry/api').AttributeValue>);
+    ) as Record<string, AttributeValue>);
+  const rawTrace = attrs?.[ATTR_TRACE_ID];
+  const correlation =
+    typeof rawTrace === 'string' && rawTrace.trim() !== '' ? rawTrace.trim() : undefined;
+  let emitContext: Context | undefined;
+  if (correlation) {
+    const traceId = w3cTraceIdFromCorrelation(correlation);
+    const spanId = w3cSpanIdForProxyCorrelation(correlation);
+    emitContext = trace.setSpanContext(context.active(), {
+      traceId,
+      spanId,
+      traceFlags: TraceFlags.NONE,
+    });
+  }
   l.emit({
     severityNumber: params.severityNumber,
     severityText: params.severityText,
     body: params.body,
     attributes: filtered,
+    context: emitContext,
   });
 }
 

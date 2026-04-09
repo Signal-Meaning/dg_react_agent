@@ -13,12 +13,25 @@ import {
   getLoggerForTesting,
   SeverityNumber,
   ATTR_TRACE_ID,
+  w3cTraceIdFromCorrelation,
+  w3cSpanIdForProxyCorrelation,
 } from '../packages/voice-agent-backend/scripts/openai-proxy/logger';
 import { createOpenAIProxyServer } from '../packages/voice-agent-backend/scripts/openai-proxy/server';
+import { InMemoryLogRecordExporter } from '@opentelemetry/sdk-logs';
+
+/** InMemoryLogRecordExporter.reset() runs on shutdown; flush export then snapshot before shutdown. */
+async function flushOtelLogExport(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve));
+}
 
 describe('OpenAI proxy logging standard (Issue #437)', () => {
   beforeEach(async () => {
     await shutdownProxyLogger();
+    jest.spyOn(console, 'dir').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   afterAll(async () => {
@@ -253,6 +266,110 @@ describe('OpenAI proxy logging standard (Issue #437)', () => {
         })
       );
       emitSpy.mockRestore();
+    });
+  });
+
+  describe('Issue #565: OTel resource, trace context, compact console', () => {
+    it('attaches service.name dg-openai-proxy on exported log resource', async () => {
+      const memory = new InMemoryLogRecordExporter();
+      initProxyLogger({ logLevel: 'info', logRecordExporter: memory });
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'hello',
+        attributes: {},
+      });
+      await flushOtelLogExport();
+      const finished = memory.getFinishedLogRecords().slice();
+      await shutdownProxyLogger();
+      expect(finished.length).toBe(1);
+      expect(finished[0].resource.attributes['service.name']).toBe('dg-openai-proxy');
+      expect(finished[0].resource.attributes['service.version']).toBe('1.0.0');
+    });
+
+    it('maps attributes.trace_id to W3C trace/span on LogRecord when trace_id is not 32 hex', async () => {
+      const memory = new InMemoryLogRecordExporter();
+      initProxyLogger({ logLevel: 'info', logRecordExporter: memory });
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'client connected',
+        attributes: { [ATTR_TRACE_ID]: 'c1' },
+      });
+      await flushOtelLogExport();
+      const rec = memory.getFinishedLogRecords()[0];
+      await shutdownProxyLogger();
+      expect(rec.spanContext).toBeDefined();
+      expect(rec.spanContext!.traceId).toBe(w3cTraceIdFromCorrelation('c1'));
+      expect(rec.spanContext!.spanId).toBe(w3cSpanIdForProxyCorrelation('c1'));
+    });
+
+    it('uses stripped UUID as traceId when trace_id is a standard UUID string', async () => {
+      const memory = new InMemoryLogRecordExporter();
+      initProxyLogger({ logLevel: 'info', logRecordExporter: memory });
+      const uuid = '550e8400-e29b-41d4-a716-446655440000';
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'x',
+        attributes: { [ATTR_TRACE_ID]: uuid },
+      });
+      await flushOtelLogExport();
+      const rec = memory.getFinishedLogRecords()[0];
+      await shutdownProxyLogger();
+      expect(rec.spanContext!.traceId).toBe(uuid.replace(/-/g, '').toLowerCase());
+    });
+
+    it('does not set spanContext when trace_id attribute is absent', async () => {
+      const memory = new InMemoryLogRecordExporter();
+      initProxyLogger({ logLevel: 'info', logRecordExporter: memory });
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'no correlation',
+        attributes: {},
+      });
+      await flushOtelLogExport();
+      const rec = memory.getFinishedLogRecords()[0];
+      await shutdownProxyLogger();
+      expect(rec.spanContext).toBeUndefined();
+    });
+
+    it('compact console export omits traceId when there is no span context', () => {
+      initProxyLogger({ logLevel: 'info' });
+      const dirSpy = jest.spyOn(console, 'dir').mockImplementation(() => {});
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'plain',
+        attributes: {},
+      });
+      expect(dirSpy).toHaveBeenCalledTimes(1);
+      const payload = dirSpy.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload).not.toHaveProperty('traceId');
+      expect(payload).not.toHaveProperty('spanId');
+      expect(payload).not.toHaveProperty('traceFlags');
+      expect((payload.resource as { attributes: Record<string, unknown> }).attributes['service.name']).toBe(
+        'dg-openai-proxy'
+      );
+      dirSpy.mockRestore();
+    });
+
+    it('compact console export includes traceId/spanId/traceFlags when trace_id attribute is set', () => {
+      initProxyLogger({ logLevel: 'info' });
+      const dirSpy = jest.spyOn(console, 'dir').mockImplementation(() => {});
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'with trace',
+        attributes: { [ATTR_TRACE_ID]: 'c1' },
+      });
+      expect(dirSpy).toHaveBeenCalledTimes(1);
+      const payload = dirSpy.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload.traceId).toBe(w3cTraceIdFromCorrelation('c1'));
+      expect(payload.spanId).toBe(w3cSpanIdForProxyCorrelation('c1'));
+      expect(typeof payload.traceFlags).toBe('number');
+      dirSpy.mockRestore();
     });
   });
 });
