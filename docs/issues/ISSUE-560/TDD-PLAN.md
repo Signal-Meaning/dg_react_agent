@@ -6,7 +6,7 @@
 
 **Process note (2026-04):** Larger UI refactors (voice provider toggle, removing duplicate panels) should still follow **tests-first for anything an E2E or unit test can lock**—e.g. update `SELECTORS` / specs **before** removing `data-testid` nodes; add or extend Jest **before** changing `getConversationHistory` behavior. Retroactive doc/test alignment is recorded in Phase B/C checkboxes below.
 
-**Recovery (new chat):** Read [AGENT-HANDOFF.md](./AGENT-HANDOFF.md) (investigator brief), [CURRENT-STATUS.md](./CURRENT-STATUS.md), [NEXT-STEP.md](./NEXT-STEP.md), this file, [README.md](./README.md). **Host mic repro:** [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md). **OpenAI proxy commit timing:** [COMMIT-TIMING-PROPOSAL.md](./COMMIT-TIMING-PROPOSAL.md) + **§2c** (implemented on mock path — re-qualify **`USE_REAL_APIS=1`** when keys available). **Commit scheduler gap + Server VAD direction:** [COMMIT-SCHEDULER-TDD-PLAN.md](./COMMIT-SCHEDULER-TDD-PLAN.md) — **Phase 0 audit done** (2026-04-08); **§4** audit table uses **P0 / P1 / P2**; **§9** is the **source of truth** for line-item checkboxes. **Rollup:** [§2d](#2d-commit-scheduler--server-vad-backlog-issue-560) (keep in sync when closing work). **Live UI context:** [#561](../ISSUE-561/README.md). **#560** is isolation + fix in the **correct layer**.
+**Recovery (new chat):** Read [AGENT-HANDOFF.md](./AGENT-HANDOFF.md) (investigator brief), [CURRENT-STATUS.md](./CURRENT-STATUS.md), [NEXT-STEP.md](./NEXT-STEP.md), this file, [README.md](./README.md). **Host mic repro:** [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md). **OpenAI proxy commit timing:** [COMMIT-TIMING-PROPOSAL.md](./COMMIT-TIMING-PROPOSAL.md) + **§2c** (implemented on mock path — re-qualify **`USE_REAL_APIS=1`** when keys available). **Commit scheduler gap + Server VAD direction:** [COMMIT-SCHEDULER-TDD-PLAN.md](./COMMIT-SCHEDULER-TDD-PLAN.md) — **Phase 0 audit done** (2026-04-08); **Phase 2 null-VAD bridge done** (2026-04-04, max coalesce + commit-on-close); **§9** is the **source of truth** for line-item checkboxes. **Rollup:** [§2d](#2d-commit-scheduler--server-vad-backlog-issue-560) (keep in sync when closing work). **Live UI context:** [#561](../ISSUE-561/README.md). **#560** is isolation + fix in the **correct layer**.
 
 ---
 
@@ -50,6 +50,8 @@
 | **Proxy resampler** vs declared session input | Append / commit errors | `tests/openai-proxy-pcm-resample.test.ts` |
 | **Orphan tail below API min (100 ms @ 24 kHz)** | Pending audio never committed after `response.output_text.done` / `response.done` when `pendingAudioBytes < OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT` | `openai-proxy-integration.test.ts` — *Issue #560: commits or schedules pending audio below API min after response ends (orphan tail)* |
 | **First user commit too small (~256 ms)** | Garbage first STT (`.`, `SHELX.`) | `OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT` + `openai-proxy-integration.test.ts` — *Issue #560: first input_audio_buffer.commit only after first-commit byte threshold*; **`server.ts`** `scheduleAudioCommit` uses first vs subsequent threshold |
+| **Continuous mic chunks, debounce never completes** | Median inter-append **&lt; 400 ms** → `input_audio_buffer.commit` never fires during steady speech (`turn_detection: null`) | `openai-proxy-integration.test.ts` — *Issue #560 / scheduler: continuous ~250ms 16kHz chunks yield … commit within bounded wait*; **`server.ts`** `INPUT_AUDIO_COMMIT_MAX_COALESCE_MS` + `armAudioCommitMaxCoalesceIfNeeded` |
+| **Client disconnect with pending PCM** | `clearProxyConnectionTimers` dropped buffered audio with no commit | `openai-proxy-integration.test.ts` — *Issue #560 / scheduler: client close with pending mic audio must not drop commit silently*; **`server.ts`** `flushPendingAudioCommitOnClientClose` |
 
 ---
 
@@ -77,8 +79,8 @@
 
 ### P0 — Null-VAD bridge + Server VAD migration
 
-- `[x]` **Phase 1 RED** — *Issue #560 / scheduler* in `openai-proxy-integration.test.ts` (continuous ~250 ms chunks; close with pending). **Failing** until Phase 2 (`-t "Issue #560 / scheduler"`).
-- `[ ]` **Phase 2 GREEN** — null-VAD scheduler / **commit-on-close**; full mock suite green (scheduler tests pass).
+- `[x]` **Phase 1 RED** — *Issue #560 / scheduler* in `openai-proxy-integration.test.ts` (continuous ~250 ms chunks; close with pending).
+- `[x]` **Phase 2 GREEN** — null-VAD bridge: **`INPUT_AUDIO_COMMIT_MAX_COALESCE_MS`** + **`flushPendingAudioCommitOnClientClose`** in **`server.ts`**; full mock **`openai-proxy-integration.test.ts`** green (`--runInBand --forceExit`). **2026-04-04.**
 - `[ ]` **Phase 2b** — `mapSettingsToSessionUpdate`: **`server_vad`** + **`idle_timeout_ms`** / silence params from **`Settings`**.
 - `[ ]` **Phase 2b** — `server.ts`: no proxy **`commit`** on Server VAD path; **`response.create`** per PROTOCOL §3.6.
 - `[ ]` **Phase 2b** — Jest mocks for VAD path + regression guard for existing cases.
@@ -88,7 +90,7 @@
 - `[ ]` **`USE_REAL_APIS=1`** — `openai-proxy-integration.test.ts` after **Phase 2b** (transcript / event order vs null-VAD).
 - `[ ]` **§8** — Client chunk-period telemetry + manual repro doc ([COMMIT-SCHEDULER-TDD-PLAN.md](./COMMIT-SCHEDULER-TDD-PLAN.md) §8).
 - `[ ]` **Phase 3** — COMMIT-TIMING, PROTOCOL / REALTIME map, manual repro, handoff docs ([COMMIT-SCHEDULER-TDD-PLAN.md](./COMMIT-SCHEDULER-TDD-PLAN.md) §7).
-- `[ ]` **§2b rows** — Add or extend root-cause → test mapping in **this file** for scheduler, close flush, Server VAD.
+- `[x]` **§2b rows** — Continuous-stream scheduler + client-close flush (**§2b** table); Server VAD mapping remains **Phase 2b**.
 
 ### P2 — Spec alignment + edge cases
 
@@ -109,8 +111,8 @@ npm test -- \
 
 npm test -- tests/integration/openai-proxy-integration.test.ts -t "Issue #560"
 
-# Commit-scheduler gap (Phase 1 RED; fails until Phase 2):
-npm test -- tests/integration/openai-proxy-integration.test.ts -t "Issue #560 / scheduler"
+# Commit-scheduler (Phase 2 GREEN — targeted):
+npm test -- tests/integration/openai-proxy-integration.test.ts --runInBand -t "Issue #560 / scheduler"
 ```
 
 ---

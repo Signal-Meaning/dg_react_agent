@@ -25,6 +25,7 @@ The codebase already has **passing** tests for:
 |--------|----------------|------------------------------|
 | PCM rate | 48 kHz context → **16 kHz** int16 before proxy; wrong path ~3× byte ratio | `tests/unit/audio-utils-mic-pcm-issue560.test.ts`, `tests/unit/mic-pcm-proxy-chain-issue560.test.ts` |
 | Proxy commit scheduling | Second commit rescheduled after response ends | `tests/integration/openai-proxy-integration.test.ts` — *Issue #560: reschedules audio commit…* |
+| Null-VAD continuous stream + disconnect | Debounce never completes on steady mic; pending PCM dropped on client close | Same file — *Issue #560 / scheduler: continuous … bounded wait*; *… client close with pending mic audio …*; **`server.ts`** max coalesce + `flushPendingAudioCommitOnClientClose` (Phase 2, 2026-04-04) |
 | Client gating | Audio not sent before settings / 500 ms debounce correctly cleared | `tests/send-audio-after-settings-applied-issue560.test.tsx` |
 | Worklet drift | Single generated inline worklet matches source | `tests/unit/microphone-worklet-inline-sync.test.ts` + `npm run generate:mic-worklet` |
 | Resampler | Proxy 16→24 k expectations | `tests/openai-proxy-pcm-resample.test.ts` |
@@ -89,5 +90,5 @@ Related: [#561](../ISSUE-561/README.md) (Live UI), [#462](../ISSUE-462/README.md
 |-------|--------|
 | Last known branch | `issue-560` |
 | Reporter-visible repro | **Re-verify** after **§2c** proxy (first-commit + orphan pad). Last logged pre-fix: **2026-04-04** — [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md) |
-| New tests (mock) | **Yes** — `openai-proxy-integration.test.ts`: *orphan tail*, *first-commit byte threshold*; existing *reschedules audio commit…* updated for larger first payload |
-| Root cause conclusion | **Partial (proxy):** tiny first commit + sub-min orphan tail addressed in **`server.ts`**; **semantic STT** / upstream still need human + real-API runs |
+| New tests (mock) | **Yes** — `openai-proxy-integration.test.ts`: *orphan tail*, *first-commit byte threshold*, *Issue #560 / scheduler* (continuous chunks + client-close flush); *Issue #414* ordering test clears shared **`mockReceived`** on **`open`** (stability with close-flush) |
+| Root cause conclusion | **Partial (proxy):** §2c first commit + orphan tail; **Phase 2 (2026-04-04)** max coalesce + commit-on-close for **`turn_detection: null`** continuous mic + disconnect; **semantic STT** / upstream still need human + real-API runs; **Server VAD** (Phase 2b) still open |

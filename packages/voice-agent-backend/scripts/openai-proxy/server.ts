@@ -75,6 +75,14 @@ import {
 const INPUT_AUDIO_COMMIT_DEBOUNCE_MS = 400;
 
 /**
+ * Issue #560 Phase 2: If the client sends PCM more often than the debounce window (e.g. live mic ~250 ms),
+ * the debounce timer is reset forever and no commit runs. This cap is armed once per "burst" when pending
+ * audio first meets the byte threshold; it is not reset on every append. Must be > INPUT_AUDIO_COMMIT_DEBOUNCE_MS (400)
+ * so the normal "pause then commit" path still prefers debounce when the user stops speaking.
+ */
+const INPUT_AUDIO_COMMIT_MAX_COALESCE_MS = 600;
+
+/**
  * Required upstream contract (REQUIRED-UPSTREAM-CONTRACT.md): After we send function_call_output, the API MUST
  * send response.done or response.output_text.done so we can send the deferred response.create. If the API does
  * not within this window, we log a contract violation and send response.create anyway to unstick the flow.
@@ -160,6 +168,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         : new WebSocket(options.upstreamUrl);
     const clientMessageQueue: Buffer[] = [];
     let audioCommitTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Issue #560 Phase 2: upper-bound timer so continuous sub-debounce cadence still commits (not reset per append). */
+    let audioCommitMaxCoalesceTimer: ReturnType<typeof setTimeout> | null = null;
     let hasPendingAudio = false;
     /** Cumulative bytes sent via input_audio_buffer.append this connection; commit only when >= MIN_AUDIO_BYTES_FOR_COMMIT (Issue #414). */
     let pendingAudioBytes = 0;
@@ -245,6 +255,16 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         audioCommitTimer = null;
       }
     };
+    const clearAudioCommitMaxCoalesce = (): void => {
+      if (audioCommitMaxCoalesceTimer != null) {
+        clearTimeout(audioCommitMaxCoalesceTimer);
+        audioCommitMaxCoalesceTimer = null;
+      }
+    };
+    const clearAllAudioCommitTimers = (): void => {
+      clearAudioCommitDebounce();
+      clearAudioCommitMaxCoalesce();
+    };
     const clearDeferredResponseCreateTimer = (): void => {
       if (deferredResponseCreateTimeoutId != null) {
         clearTimeout(deferredResponseCreateTimeoutId);
@@ -252,7 +272,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       }
     };
     const clearProxyConnectionTimers = (): void => {
-      clearAudioCommitDebounce();
+      clearAllAudioCommitTimers();
       clearDeferredResponseCreateTimer();
     };
 
@@ -332,40 +352,108 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
       }
     };
 
+    /** Shared gate + send for debounce, max-coalesce, and client-close flush (Issue #560 Phase 2). */
+    const performAudioCommitIfEligible = (): boolean => {
+      const minBytesForThisCommit = hasCompletedFirstUserAudioCommit
+        ? OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT
+        : OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT;
+      if (
+        !hasPendingAudio ||
+        pendingAudioBytes < minBytesForThisCommit ||
+        responseInProgress ||
+        upstream.readyState !== WebSocket.OPEN
+      ) {
+        return false;
+      }
+      assertMinAudioBeforeCommit(pendingAudioBytes);
+      const bytesAtCommit = pendingAudioBytes;
+      emitLog({
+        severityNumber: SeverityNumber.INFO,
+        severityText: 'INFO',
+        body: 'input_audio_buffer.commit + response.create',
+        attributes: {
+          ...connectionAttrs,
+          [ATTR_DIRECTION]: 'client→upstream',
+          'audio.pending_bytes': bytesAtCommit,
+          [ATTR_WALL_CLOCK_MS]: Date.now(),
+        },
+      });
+      upstream.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+      upstream.send(JSON.stringify({ type: 'response.create' }));
+      onResponseStarted();
+      hasCompletedFirstUserAudioCommit = true;
+      hasPendingAudio = false;
+      pendingAudioBytes = 0;
+      clearAllAudioCommitTimers();
+      return true;
+    };
+
+    /**
+     * Issue #560 Phase 2: arm a one-shot timer when we first have enough pending bytes for a commit.
+     * Not cleared on each append (unlike debounce), so continuous mic chunks still commit within ~debounce+coalesce.
+     */
+    const armAudioCommitMaxCoalesceIfNeeded = (): void => {
+      if (audioCommitMaxCoalesceTimer != null) return;
+      const minBytesForThisCommit = hasCompletedFirstUserAudioCommit
+        ? OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT
+        : OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT;
+      if (
+        !hasPendingAudio ||
+        pendingAudioBytes < minBytesForThisCommit ||
+        responseInProgress ||
+        upstream.readyState !== WebSocket.OPEN
+      ) {
+        return;
+      }
+      audioCommitMaxCoalesceTimer = setTimeout(() => {
+        audioCommitMaxCoalesceTimer = null;
+        performAudioCommitIfEligible();
+      }, INPUT_AUDIO_COMMIT_MAX_COALESCE_MS);
+    };
+
     const scheduleAudioCommit = () => {
       clearAudioCommitDebounce();
       audioCommitTimer = setTimeout(() => {
         audioCommitTimer = null;
-        const minBytesForThisCommit = hasCompletedFirstUserAudioCommit
-          ? OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT
-          : OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT;
-        if (
-          hasPendingAudio &&
-          pendingAudioBytes >= minBytesForThisCommit &&
-          !responseInProgress &&
-          upstream.readyState === WebSocket.OPEN
-        ) {
-          assertMinAudioBeforeCommit(pendingAudioBytes);
-          const bytesAtCommit = pendingAudioBytes;
-          emitLog({
-            severityNumber: SeverityNumber.INFO,
-            severityText: 'INFO',
-            body: 'input_audio_buffer.commit + response.create',
-            attributes: {
-              ...connectionAttrs,
-              [ATTR_DIRECTION]: 'client→upstream',
-              'audio.pending_bytes': bytesAtCommit,
-              [ATTR_WALL_CLOCK_MS]: Date.now(),
-            },
-          });
-          upstream.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-          upstream.send(JSON.stringify({ type: 'response.create' }));
-          onResponseStarted();
-          hasCompletedFirstUserAudioCommit = true;
-          hasPendingAudio = false;
-          pendingAudioBytes = 0;
-        }
+        performAudioCommitIfEligible();
       }, INPUT_AUDIO_COMMIT_DEBOUNCE_MS);
+      armAudioCommitMaxCoalesceIfNeeded();
+    };
+
+    /**
+     * Issue #560 Phase 2: user disconnected while debounce never fired (continuous chunks) or mid-wait.
+     * Flush commit (+ response.create) when safe so upstream does not lose the buffered user audio.
+     */
+    const flushPendingAudioCommitOnClientClose = (): void => {
+      if (!hasPendingAudio || pendingAudioBytes <= 0 || upstream.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      if (responseInProgress) {
+        return;
+      }
+      clearAllAudioCommitTimers();
+      const minBytesForThisCommit = hasCompletedFirstUserAudioCommit
+        ? OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT
+        : OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT;
+      if (pendingAudioBytes < minBytesForThisCommit) {
+        const padBytes = minBytesForThisCommit - pendingAudioBytes;
+        const silence = Buffer.alloc(padBytes, 0);
+        assertAppendChunkSize(silence.length);
+        emitLog({
+          severityNumber: SeverityNumber.INFO,
+          severityText: 'INFO',
+          body: 'input_audio_buffer.append (silence pad before commit on client disconnect; Issue #560)',
+          attributes: {
+            ...connectionAttrs,
+            [ATTR_DIRECTION]: 'client→upstream',
+            [ATTR_MESSAGE_TYPE]: 'input_audio_buffer.append',
+            'audio.pad_bytes': padBytes,
+          },
+        });
+        upstream.send(JSON.stringify(binaryToInputAudioBufferAppend(silence)));
+        pendingAudioBytes += padBytes;
+      }
+      performAudioCommitIfEligible();
     };
 
     /** `ws` emits this when upstream socket is closed before `open` (often client leg closed first). */
@@ -1314,6 +1402,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           [ATTR_CLIENT_CLOSE_REASON]: reasonStr,
         },
       });
+      flushPendingAudioCommitOnClientClose();
       clearProxyConnectionTimers();
       upstream.close();
     });

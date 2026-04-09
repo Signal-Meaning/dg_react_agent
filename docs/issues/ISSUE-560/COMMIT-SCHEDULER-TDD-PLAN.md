@@ -34,7 +34,7 @@ With **`session.audio.input.turn_detection: null`**, OpenAI does **not** auto-co
 
 **`openai-proxy-integration.test.ts`** uses **one** large binary or **two** chunks with a **designed** post-last-chunk pause **≥ 400 ms**. It does **not** hold **steady** **&lt; 400 ms** cadence **after** crossing **`OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT`**.
 
-**Closure rule:** Phase 1 adds **RED** tests for that shape, then GREEN.
+**Closure rule:** Phase 1 adds **RED** tests for that shape, then GREEN (**Phase 2**, 2026-04-04).
 
 ---
 
@@ -47,17 +47,17 @@ Walk-through: `translator.ts`, `server.ts`, `PROTOCOL-AND-MESSAGE-ORDERING.md`, 
 | Pri | Area | Reference | Status | Notes |
 |-----|------|-----------|--------|-------|
 | **P0** | **Session shape → Server VAD** | [REALTIME-SESSION-UPDATE-FIELD-MAP.md](../../../packages/voice-agent-backend/scripts/openai-proxy/REALTIME-SESSION-UPDATE-FIELD-MAP.md), `mapSettingsToSessionUpdate` | **Pass** + **Gap** | Today: `session.audio.input` proxy-owned (`turn_detection: null`, PCM 24k, transcription). **Gap:** no mapping for **`server_vad`** fields (`idle_timeout_ms`, `silence_duration_ms`, …) from **`Settings`** — **Phase 2b** (§9 **P0**). |
-| **P0** | **Ordering / gating (tests)** | [PROTOCOL-AND-MESSAGE-ORDERING.md](../../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) §2–4 | **Pass** + **Gap** | **Pass:** append after `session.updated`, inject queue, `responseInProgress` through `output_text.done`, deferred `response.create` after function output — **well tested**. **Gap:** **continuous-stream commit** and **client-close flush** **not** in tests — **Phase 1 RED** then **Phase 2 GREEN**. |
-| **P0** | **Audio path (disconnect)** | `forwardClientMessage`, `Pcm16Mono16kTo24kStreamResampler`, `assertAppendChunkSize` | **Pass** + **Gap** | **Pass:** pre-`session.updated` queue + flush; min bytes before commit; max append size constant. **Gap:** **disconnect** does not flush pending commit (same root as lifecycle row) — **Phase 2** + Phase 1 tests. |
+| **P0** | **Ordering / gating (tests)** | [PROTOCOL-AND-MESSAGE-ORDERING.md](../../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) §2–4 | **Pass** | **Pass:** append after `session.updated`, inject queue, `responseInProgress` through `output_text.done`, deferred `response.create` after function output — **well tested**. **Continuous-stream commit** + **client-close flush** locked in Jest (**Phase 1–2**, 2026-04-04). |
+| **P0** | **Audio path (disconnect)** | `forwardClientMessage`, `Pcm16Mono16kTo24kStreamResampler`, `assertAppendChunkSize` | **Pass** | **Pass:** pre-`session.updated` queue + flush; min bytes before commit; max append size constant. **Client disconnect:** pending audio flushed when safe (**Phase 2** `flushPendingAudioCommitOnClientClose`). |
 | **P2** | **Audio path (huge frame)** | same | **Risk** | Single client frame **> 15 MiB:** split not verified (likely **N/A** for mic). Resolve with test + split or **documented waiver** (§9 **P2**). |
-| **P0** | **Lifecycle (client close)** | `client` / `upstream` `close` / `error` in `server.ts` | **Pass** + **Gap** | **Pass:** upstream-before-ready error to client; `client.close_code` logging (#532). **Gap:** **`clearProxyConnectionTimers()`** on client close **without** flushing **≥ min** pending bytes — **null-VAD data loss** — **Phase 2**. |
+| **P0** | **Lifecycle (client close)** | `client` / `upstream` `close` / `error` in `server.ts` | **Pass** | **Pass:** upstream-before-ready error to client; `client.close_code` logging (#532). **Client close** flushes pending commit when `!responseInProgress` (pad to API min if needed) before timer teardown — **Phase 2** (2026-04-04). |
 | **P1** | **Transcript → component (post-VAD)** | `input_audio_transcription.*` mappers, #497 / #496 | **Pass** + **Risk** | **Pass:** delta + completed mapping covered in mock integration tests. **Risk:** **Server VAD** may change **event order** vs null-VAD — **`USE_REAL_APIS=1`** after **Phase 2b** (§9 **P1**). |
 | **P0** | **Idle / timeout (migration)** | `turn_detection: null`, component `idleTimeoutMs` | **Pass** + **Gap** | **Pass:** documented: no server `idle_timeout_ms` on null path; tests use `NO_SERVER_TIMEOUT_MS` where relevant. **Gap:** after **Server VAD**, map **`idle_timeout_ms`** and document interaction with component idle manager — **Phase 2b** + **Phase 3**. |
 | **P2** | **`input_audio_buffer.clear`** | OpenAI doc (new user input) | **Gap** | Doc: **`clear`** before a new user item when VAD off. Proxy may not emit **`clear`** on every turn boundary — **verify**; add tests + behavior or **documented waiver** (§9 **P2**). |
 
-**Phase 0 conclusion:** **No third hidden P0** beyond **(A)** null-VAD **scheduler + close flush** (ordering / audio disconnect / lifecycle gaps) and **(B)** **Server VAD migration** (session + idle fields, **`commit` removal**, **`response.create`** alignment). Remaining audit items are **P1** (qualification / telemetry / docs) or **P2** (**`clear`**, 15 MiB). **Execution list:** **§9** below — work remaining is **`[ ]`** until closed.
+**Phase 0 conclusion:** **No third hidden P0** beyond **(A)** null-VAD **scheduler + close flush** (**Phase 2 done** 2026-04-04) and **(B)** **Server VAD migration** (session + idle fields, **`commit` removal**, **`response.create`** alignment — **Phase 2b**). Remaining audit items are **P1** (qualification / telemetry / docs) or **P2** (**`clear`**, 15 MiB). **Execution list:** **§9** below — follow unchecked **`[ ]`** items.
 
-**Exit criterion met:** findings + priorities recorded; add rows to [TDD-PLAN.md §2b](./TDD-PLAN.md) when Phase 1/2b land (check off **§9**).
+**Exit criterion met:** findings + priorities recorded; [TDD-PLAN.md §2b](./TDD-PLAN.md) updated for Phase 2 scheduler + close flush (§9 **P0** Phase 2).
 
 ---
 
@@ -65,15 +65,15 @@ Walk-through: `translator.ts`, `server.ts`, `PROTOCOL-AND-MESSAGE-ORDERING.md`, 
 
 **File:** `tests/integration/openai-proxy-integration.test.ts`.
 
-1. **`Issue #560 / scheduler: continuous binary chunks` (mock)** — After `SettingsApplied`, send PCM chunks **every ~250 ms** until `pending` would exceed first-commit threshold **without** any inter-chunk gap **≥ 400 ms**. **Expect:** within **`firstCommitMaxWaitMs`**, mock receives **≥ 1** `input_audio_buffer.commit` **or** documented new contract. **Today:** RED.
+1. **`Issue #560 / scheduler: continuous binary chunks` (mock)** — After `SettingsApplied`, send PCM chunks **every ~250 ms** until `pending` would exceed first-commit threshold **without** any inter-chunk gap **≥ 400 ms**. **Expect:** within **`firstCommitMaxWaitMs`**, mock receives **≥ 1** `input_audio_buffer.commit` **or** documented new contract. **Status:** **GREEN** with Phase 2 (`INPUT_AUDIO_COMMIT_MAX_COALESCE_MS` one-shot coalesce alongside debounce).
 
-2. **`Issue #560 / scheduler: client close with pending audio` (mock)** — Stream or buffer **≥ min** bytes, close client **without** trailing silence. **Expect:** commit or **clear** + visible **Error**, not silent drop. **Today:** RED if asserting commit-on-close.
+2. **`Issue #560 / scheduler: client close with pending audio` (mock)** — Stream or buffer **≥ min** bytes, close client **without** trailing silence. **Expect:** commit (or visible error), not silent drop. **Status:** **GREEN** with Phase 2 (`flushPendingAudioCommitOnClientClose`).
 
 ---
 
-## 6. Phase 2 — GREEN: null-VAD bridge (short term)
+## 6. Phase 2 — GREEN: null-VAD bridge (short term) — **done (2026-04-04)**
 
-Candidates: **max coalesce timer**, **commit-on-close**, or both — minimal change satisfying Phase 1. Full mock suite + **`USE_REAL_APIS=1`** when qualifying.
+**Shipped:** **`INPUT_AUDIO_COMMIT_MAX_COALESCE_MS`** (600 ms, **>** 400 ms debounce) — one-shot max-coalesce timer armed when pending first meets min bytes for the burst (not cleared on every append), so continuous **&lt; 400 ms** cadence can still commit. **`flushPendingAudioCommitOnClientClose`** — on client `close`, when `!responseInProgress`, pad to min bytes if needed, then commit + `response.create` via shared **`performAudioCommitIfEligible`**. **Tests:** full mock **`openai-proxy-integration.test.ts`** green (`--runInBand`); **Issue #414** ordering test clears **`mockReceived`** on **`open`** so shared mock state is not polluted by a prior leg’s late append (close-flush). **Qualification:** **`USE_REAL_APIS=1`** after Phase **2b** (per §9 P1), not required to close this P0 slice on mocks alone.
 
 ---
 
@@ -112,8 +112,8 @@ Extend [`test-app/src/mic-timing-debug.ts`](../../../test-app/src/mic-timing-deb
 
 *Maps to audit rows: ordering/gating tests, audio disconnect, lifecycle close, session `server_vad` fields, idle/timeout mapping.*
 
-- `[x]` **Phase 1 RED** — `openai-proxy-integration.test.ts` — *Issue #560 / scheduler:* (1) continuous ~250 ms 16 kHz chunks → **≥ 1** `input_audio_buffer.commit` within bounded wait; (2) client **close** with pending audio → **≥ 1** commit (no silent drop). **Landed; currently failing** until **Phase 2 GREEN**.
-- `[ ]` **Phase 2 GREEN** — null-VAD bridge: scheduler (e.g. max coalesce) and/or **commit-on-close**; full mock **`openai-proxy-integration.test.ts`** green (includes `-t "Issue #560 / scheduler"`).
+- `[x]` **Phase 1 RED** — `openai-proxy-integration.test.ts` — *Issue #560 / scheduler:* (1) continuous ~250 ms 16 kHz chunks → **≥ 1** `input_audio_buffer.commit` within bounded wait; (2) client **close** with pending audio → **≥ 1** commit (no silent drop).
+- `[x]` **Phase 2 GREEN** — null-VAD bridge: **`INPUT_AUDIO_COMMIT_MAX_COALESCE_MS`** + **`flushPendingAudioCommitOnClientClose`** in **`server.ts`**; full mock **`openai-proxy-integration.test.ts`** green (`--runInBand --forceExit`); `-t "Issue #560 / scheduler"` green. **2026-04-04.**
 - `[ ]` **Phase 2b** — `mapSettingsToSessionUpdate`: **`turn_detection: { type: 'server_vad', … }`** + **`idle_timeout_ms`** / silence params from **`Settings`** (and API-valid defaults).
 - `[ ]` **Phase 2b** — `server.ts`: **no** proxy **`input_audio_buffer.commit`** on Server VAD mic path; **`response.create`** aligned with PROTOCOL §3.6 (no double-invoke).
 - `[ ]` **Phase 2b** — Jest mock coverage for VAD path + regressions on existing null-VAD tests (until null-VAD removed or flagged).
@@ -125,7 +125,7 @@ Extend [`test-app/src/mic-timing-debug.ts`](../../../test-app/src/mic-timing-deb
 - `[ ]` **`USE_REAL_APIS=1`** — `npm test -- tests/integration/openai-proxy-integration.test.ts` with `OPENAI_API_KEY` after **Phase 2b** (event order / transcription path vs null-VAD).
 - `[ ]` **§8** — Client chunk-period telemetry (`mic-timing-debug.ts` / `AudioManager`) + manual repro doc; unit test if non-trivial.
 - `[ ]` **Phase 3** — [COMMIT-TIMING-PROPOSAL.md](./COMMIT-TIMING-PROPOSAL.md), [PROTOCOL-AND-MESSAGE-ORDERING.md](../../../packages/voice-agent-backend/scripts/openai-proxy/PROTOCOL-AND-MESSAGE-ORDERING.md) / REALTIME field map as needed, [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md), [AGENT-HANDOFF.md](./AGENT-HANDOFF.md) / [CURRENT-STATUS.md](./CURRENT-STATUS.md) / [NEXT-STEP.md](./NEXT-STEP.md).
-- `[ ]` **TDD-PLAN §2b** — New or updated root-cause → test rows for continuous-stream scheduler, close flush, Server VAD path.
+- `[x]` **TDD-PLAN §2b** — Rows for **continuous-stream scheduler** + **client-close flush** (Phase 2); Server VAD path rows remain for **Phase 2b**.
 
 ### P2 — Spec alignment and rare edge cases
 
@@ -138,8 +138,8 @@ Extend [`test-app/src/mic-timing-debug.ts`](../../../test-app/src/mic-timing-deb
 
 | Priority | Open items (unchecked until closed) |
 |----------|----------------------------------------|
-| **P0** | Phase 2, Phase 2b (×3) — Phase 1 RED tests **in repo** (fail until Phase 2) |
-| **P1** | Real API qualification, §8 telemetry, Phase 3 docs, TDD-PLAN §2b |
+| **P0** | Phase **2b** (×3) — Server VAD migration (**null-VAD bridge Phase 2 done** 2026-04-04) |
+| **P1** | Real API qualification (post-2b), §8 telemetry, Phase 3 docs |
 | **P2** | **`clear`** resolution, 15 MiB split or waiver |
 
 ---

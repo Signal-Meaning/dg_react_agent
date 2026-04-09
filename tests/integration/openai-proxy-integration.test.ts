@@ -716,6 +716,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
     // timers. With fake timers those never fire and mock round-trips hang. We must use real timers for every
     // test in this suite (both mock and real-API runs)—a constraint of the code under test.
     jest.useRealTimers();
+    // Issue #560: mock upstream records all connections in one array; a commit may be logged with Date.now()
+    // slightly after the next test starts. Clear so scheduler tests are not order-dependent.
+    mockReceived.length = 0;
     if (useRealAPIs) {
       // Stream test name so real-API runs show progress (Jest default reporter does not print names until test completes).
       const name = (typeof expect.getState === 'function' && expect.getState().currentTestName) || 'unknown';
@@ -2092,9 +2095,9 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   );
 
   /**
-   * Issue #560 commit-scheduler (COMMIT-SCHEDULER-TDD-PLAN §5 Phase 1 RED): user stops speaking and disconnects
-   * without a trailing ≥400ms silence; debounced commit never fired. Pending audio must not be dropped silently —
-   * expect upstream commit (or explicit clear/error contract). **Fails until Phase 2** (commit-on-close / flush).
+   * Issue #560 commit-scheduler (Phase 2: commit-on-close): user disconnects without ≥400ms trailing silence.
+   * Debounce never fires; pending must flush to upstream. Chunk size × count stays **below** first-commit
+   * threshold so **max-coalesce** does not commit mid-stream (else we would not isolate close-flush).
    */
   itMockOnly(
     'Issue #560 / scheduler: client close with pending mic audio must not drop commit silently',
@@ -2102,10 +2105,17 @@ describe('OpenAI proxy integration (Issue #381)', () => {
       mockReceived.length = 0;
       let settingsApplied = false;
       let finished = false;
+      /** Mock logs all upstream sockets into `mockReceived`; timestamp-filter commits to this connection's mic stream. */
+      let audioEpochMs = 0;
+      const commitsForThisAudio = () =>
+        mockReceived.filter(
+          (m) => m.type === 'input_audio_buffer.commit' && (m.at ?? 0) >= audioEpochMs,
+        );
       const MIC_CHUNK_INTERVAL_MS = 250;
-      const CHUNK_BYTES_16K_250MS = 16000 * 0.25 * 2;
-      /** Enough 250ms chunks to exceed first-commit byte threshold @ 24 kHz after resample (~4 chunks). */
-      const STREAM_MS = 2000;
+      /** ~6000 bytes @ 24 kHz after 16→24k resample (4000 bytes @ 16 kHz). */
+      const CHUNK_BYTES_16K_SMALL = 4000;
+      /** Six chunks (~36k B @ 24 kHz) — under first-commit threshold; close flush pads to 48k. */
+      const CHUNKS_BEFORE_CLOSE = 6;
 
       const finish = (err?: Error) => {
         if (finished) return;
@@ -2131,36 +2141,42 @@ describe('OpenAI proxy integration (Issue #381)', () => {
           const msg = JSON.parse(data.toString()) as { type?: string };
           if (msg.type === 'SettingsApplied' && !settingsApplied) {
             settingsApplied = true;
+            let chunksSent = 0;
             chunkTimer = setInterval(() => {
               try {
-                client.send(Buffer.alloc(CHUNK_BYTES_16K_250MS, 0));
+                if (chunksSent === 0) {
+                  audioEpochMs = Date.now();
+                }
+                chunksSent += 1;
+                client.send(Buffer.alloc(CHUNK_BYTES_16K_SMALL, 0));
+                if (chunksSent >= CHUNKS_BEFORE_CLOSE) {
+                  if (chunkTimer) clearInterval(chunkTimer);
+                  chunkTimer = null;
+                  // Let the last binary frame reach the proxy before close (otherwise flush sees stale pending).
+                  setTimeout(() => {
+                    try {
+                      const appends = mockReceived.filter((m) => m.type === 'input_audio_buffer.append');
+                      expect(appends.length).toBeGreaterThan(0);
+                      expect(commitsForThisAudio().length).toBe(0);
+                      client.close();
+                      setTimeout(() => {
+                        try {
+                          expect(commitsForThisAudio().length).toBeGreaterThanOrEqual(1);
+                          finish();
+                        } catch (e) {
+                          finish(e instanceof Error ? e : new Error(String(e)));
+                        }
+                      }, 80);
+                    } catch (e) {
+                      finish(e instanceof Error ? e : new Error(String(e)));
+                    }
+                  }, 150);
+                }
               } catch (e) {
                 if (chunkTimer) clearInterval(chunkTimer);
                 finish(e instanceof Error ? e : new Error(String(e)));
               }
             }, MIC_CHUNK_INTERVAL_MS);
-            setTimeout(() => {
-              try {
-                if (chunkTimer) clearInterval(chunkTimer);
-                chunkTimer = null;
-                const appends = mockReceived.filter((m) => m.type === 'input_audio_buffer.append');
-                expect(appends.length).toBeGreaterThan(0);
-                const commitsBeforeClose = mockReceived.filter((m) => m.type === 'input_audio_buffer.commit');
-                expect(commitsBeforeClose.length).toBe(0);
-                client.close();
-                setImmediate(() => {
-                  try {
-                    const commits = mockReceived.filter((m) => m.type === 'input_audio_buffer.commit');
-                    expect(commits.length).toBeGreaterThanOrEqual(1);
-                    finish();
-                  } catch (e) {
-                    finish(e instanceof Error ? e : new Error(String(e)));
-                  }
-                });
-              } catch (e) {
-                finish(e instanceof Error ? e : new Error(String(e)));
-              }
-            }, STREAM_MS);
           }
         } catch {
           // ignore
@@ -2225,10 +2241,13 @@ describe('OpenAI proxy integration (Issue #381)', () => {
    * Mock enforces protocol: append before session.updated → protocolErrors; we assert none.
    */
   itMockOnly('Issue #414: session.update before input_audio_buffer.append in upstream order', (done) => {
-    mockReceived.length = 0;
-    protocolErrors.length = 0;
     const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
     client.on('open', () => {
+      // Shared mockReceived: a prior connection can still emit append (e.g. Issue #560 close-flush)
+      // after beforeEach cleared the array but before this socket opens — clear again here so
+      // indexOf ordering reflects only this upstream leg.
+      mockReceived.length = 0;
+      protocolErrors.length = 0;
       client.send(JSON.stringify({ type: 'Settings', agent: { think: { prompt: 'Hi' } } }));
     });
     client.on('message', (data: Buffer) => {
