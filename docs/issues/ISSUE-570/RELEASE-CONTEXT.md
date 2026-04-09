@@ -9,8 +9,8 @@ Captured when **`issue-570`** and this folder were created. Refresh if `main` mo
 | Item | Value |
 |------|--------|
 | **Last published git tag** | `v0.10.6` |
-| **Root `package.json` (`@signal-meaning/voice-agent-react`)** | `0.10.6` → target **`0.11.0`** (minor) |
-| **Backend `packages/voice-agent-backend/package.json`** | `0.2.11` → bump if publishing backend (often patch, e.g. `0.2.12`) |
+| **Root `package.json` (`@signal-meaning/voice-agent-react`)** | **`0.11.0`** (release prep on branch) |
+| **Backend `packages/voice-agent-backend/package.json`** | **`0.2.12`** |
 
 ---
 

@@ -1277,6 +1277,10 @@ function ServiceSpecificControlApp() {
 
 This section documents changes made to the API since the original fork (commit `7191eb4a062f35344896e873f02eba69c9c46a2d`).
 
+### v0.11.0 (Release #570)
+
+- **No new component props or ref method signatures.** Behavior improvements for microphone capture, PCM timing, and `stopAudioCapture()` pairing in proxy/OpenAI paths (Issues [#559](issues/ISSUE-559/README.md)–[#560](issues/ISSUE-560/README.md)); **@signal-meaning/voice-agent-backend** **0.2.12** includes OpenAI proxy commit scheduling, Server VAD defaults, and OTel-style logging ([#565](issues/ISSUE-565/README.md)). See [API-CHANGES for v0.11.0](releases/v0.11.0/API-CHANGES.md).
+
 ### v0.9.1 (Release #461)
 
 - **No component API changes.** Patch release: voice-agent-backend 0.2.1 fixes session.update race (Issue #459) so the proxy does not send `session.update` while a response is active, avoiding `conversation_already_has_active_response`. See [Release checklist #461](issues/ISSUE-461/RELEASE-CHECKLIST.md).

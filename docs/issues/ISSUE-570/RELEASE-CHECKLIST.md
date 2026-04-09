@@ -19,15 +19,13 @@
 | Package | Location | Version for this release |
 |---------|----------|--------------------------|
 | **@signal-meaning/voice-agent-react** | Root `package.json` | **0.11.0** (tag **v0.11.0**) |
-| **@signal-meaning/voice-agent-backend** | `packages/voice-agent-backend/package.json` | **TBD** _(e.g. **0.2.12** patch if publishing with this release; was **0.2.11** at folder creation)_ |
+| **@signal-meaning/voice-agent-backend** | `packages/voice-agent-backend/package.json` | **0.2.12** |
 
 **Minor documentation set:** Per template, create **`docs/releases/v0.11.0/`** with `CHANGELOG.md`, `PACKAGE-STRUCTURE.md`, plus **NEW-FEATURES.md**, **API-CHANGES.md**, **EXAMPLES.md**; add **MIGRATION.md** only if breaking changes exist.
 
 ### Progress
 
-_Update this section as you work the release._
-
-- **Pre-publish:** _not started_
+- **Pre-publish (in progress):** `docs/releases/v0.11.0/` added; root **0.11.0** and backend **0.2.12** bumped; `npm run validate:release-docs 0.11.0`, `npm run lint`, `npm run test:mock`, and `npm audit --audit-level=high` passed locally; [API-REFERENCE.md](../../API-REFERENCE.md) evolution updated for v0.11.0. **Still required before publish:** full/proxy E2E, real-API integration when qualifying, upstream event coverage, Git operations / `release/v0.11.0` push, GitHub Release + CI publish.
 - **Publish:** _not started_
 - **Post-release:** _not started_
 
@@ -37,15 +35,15 @@ _Update this section as you work the release._
 
 - [ ] **Code review complete:** Intended commits on `release/v0.11.0`; no stray changes.
 - [ ] **Tests passing**
-  - [ ] **Run what CI runs:** `npm run lint` then `npm run test:mock`
+  - [x] **Run what CI runs:** `npm run lint` then `npm run test:mock`
   - [ ] Optional: `npm test` (full suite)
   - [ ] **E2E (proxy):** `cd test-app && npm run backend`; from repo root `USE_PROXY_MODE=true npm run test:e2e` (or targeted specs per [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md))
   - [ ] **Real-API integration** (required for proxy/audio qualification when keys available): `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`
   - [ ] **Function-call path:** Real backend HTTP per [.cursorrules](../../../../.cursorrules) / [ISSUE-462](../ISSUE-462/VOICE-COMMERCE-FUNCTION-CALL-REPORT.md)
   - [ ] **Upstream event coverage:** `npm test -- tests/openai-proxy-event-coverage.test.ts`
-- [ ] **Linting clean:** `npm run lint`
-- [ ] **npm audit:** `npm audit --audit-level=high` — exit 0
-- [ ] **Documentation:** `docs/releases/v0.11.0/` created and validated; API/breaking changes reflected in main docs if any
+- [x] **Linting clean:** `npm run lint`
+- [x] **npm audit:** `npm audit --audit-level=high` — exit 0
+- [x] **Documentation:** `docs/releases/v0.11.0/` created and validated; API evolution updated for v0.11.0
 - [ ] **Breaking changes:** None expected; if any, `MIGRATION.md` + issue #570
 
 ---
@@ -65,8 +63,8 @@ See [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md).
 
 ### Version Management
 
-- [ ] Root `package.json` version **0.11.0** (`npm version minor` on release branch when ready, or manual bump)
-- [ ] `packages/voice-agent-backend/package.json` — bump if publishing backend
+- [x] Root `package.json` version **0.11.0**
+- [x] `packages/voice-agent-backend/package.json` version **0.2.12**
 - [ ] Optional: `npm update` per release policy
 
 ---
@@ -80,10 +78,10 @@ See [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md).
 
 ### Documentation (`docs/releases/v0.11.0/`)
 
-- [ ] `CHANGELOG.md` — Keep a Changelog; link #570 and merged PRs/issues
-- [ ] `PACKAGE-STRUCTURE.md` — from `docs/releases/PACKAGE-STRUCTURE.template.md`
-- [ ] **Minor:** `NEW-FEATURES.md`, `API-CHANGES.md`, `EXAMPLES.md`; `MIGRATION.md` if needed
-- [ ] Validate: `npm run validate:release-docs v0.11.0`
+- [x] `CHANGELOG.md` — Keep a Changelog; link #570 and merged PRs/issues
+- [x] `PACKAGE-STRUCTURE.md` — aligned with v0.10.6 layout + minor doc set
+- [x] **Minor:** `NEW-FEATURES.md`, `API-CHANGES.md`, `EXAMPLES.md`; no `MIGRATION.md` (no breaking API)
+- [x] Validate: `npm run validate:release-docs 0.11.0`
 
 ---
 
