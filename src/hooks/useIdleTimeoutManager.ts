@@ -57,7 +57,7 @@ export function useIdleTimeoutManager(
     });
 
     serviceRef.current.onTimeout(() => {
-      logger.info('Idle timeout reached - closing agent connection');
+      logger.debug('Idle timeout reached - closing agent connection');
       if (typeof window !== 'undefined') {
         (window as unknown as { __idleTimeoutFired__?: boolean }).__idleTimeoutFired__ = true;
       }

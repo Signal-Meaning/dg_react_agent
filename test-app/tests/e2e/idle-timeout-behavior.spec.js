@@ -527,13 +527,14 @@ test.describe('Idle Timeout Behavior', () => {
     await page.waitForTimeout(2000);
 
     // Playwright webServer sets VITE_IDLE_TIMEOUT_MS=1000 by default — a fixed 9s wait always misses the window.
-    // Anchor on the real countdown start (info log from IdleTimeoutService) then pause until just before fire.
-    const idleCountdownPromise = page.waitForEvent('console', {
-      predicate: (msg) => msg.text().includes('Started idle timeout'),
-      timeout: 25000,
-    });
+    // Anchor on countdown start: IdleTimeoutService sets window.__idleTimeoutStarted__ (#489); log is debug (#559).
+    const idleCountdownPromise = page.waitForFunction(
+      () => typeof window !== 'undefined' && window.__idleTimeoutStarted__ === true,
+      null,
+      { timeout: 25000 }
+    );
     await idleCountdownPromise.catch(() => {
-      console.log('⚠️ No "Started idle timeout" log within 25s; continuing (timing may be flaky)');
+      console.log('⚠️ No __idleTimeoutStarted__ within 25s; continuing (timing may be flaky)');
     });
     // Leave enough slack for startAudioCapture() (~2–3s of awaits); a 9s pause on a 10s timer fires mid-call.
     const slackMs = Math.max(3500, Math.min(5000, Math.floor(idleMs * 0.45)));

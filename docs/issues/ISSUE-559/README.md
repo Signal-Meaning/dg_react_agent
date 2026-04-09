@@ -1,6 +1,6 @@
 # Issue #559 — Cleanup idle timeout logging (level + debounce resets)
 
-**Status:** **Open** — implementation tracked on branch `559-cleanup-idle-timeout-logging-level-+-debounce-resets` (or successor).
+**Status:** **Implemented (pending merge)** — logging + 100ms debounce in `IdleTimeoutService`; disconnect line at debug in `useIdleTimeoutManager`; Issue #222 E2E anchors on `__idleTimeoutStarted__`.
 
 **GitHub:** [#559 — Cleanup idle timeout logging (level + debounce resets)](https://github.com/Signal-Meaning/dg_react_agent/issues/559)
 
@@ -27,10 +27,10 @@ The issue asks for:
 
 | Area | Path | Notes |
 |------|------|--------|
-| Idle timer start / reset | [`src/utils/IdleTimeoutService.ts`](../../../src/utils/IdleTimeoutService.ts) | `startTimeout()` uses `this.logger.info` for `Started idle timeout` (line ~685); `private log()` already routes most service lines through **`debug`**. |
-| User-visible “closing” line | [`src/hooks/useIdleTimeoutManager.ts`](../../../src/hooks/useIdleTimeoutManager.ts) | `logger.info('Idle timeout reached - closing agent connection')` (~60) — align with issue if “these messages” includes the disconnect line (see [TDD-PLAN](./TDD-PLAN.md)). |
+| Idle timer start / reset | [`src/utils/IdleTimeoutService.ts`](../../../src/utils/IdleTimeoutService.ts) | `startTimeout()` emits `Started idle timeout` at **`debug`**, debounced **100ms** (`IDLE_TIMEOUT_START_LOG_DEBOUNCE_MS`). |
+| User-visible “closing” line | [`src/hooks/useIdleTimeoutManager.ts`](../../../src/hooks/useIdleTimeoutManager.ts) | `logger.debug('Idle timeout reached - closing agent connection')` when the countdown fires. |
 | Logger levels | [`src/utils/logger.ts`](../../../src/utils/logger.ts) | Default effective level is **`info`** unless `debug: true` or `level: 'debug'`. |
-| E2E anchor on console | [`test-app/tests/e2e/idle-timeout-behavior.spec.js`](../../../test-app/tests/e2e/idle-timeout-behavior.spec.js) | Issue #222 test waits for console text **`Started idle timeout`** (info today). Must change when the line becomes debug-only (see TDD plan). |
+| E2E anchor | [`test-app/tests/e2e/idle-timeout-behavior.spec.js`](../../../test-app/tests/e2e/idle-timeout-behavior.spec.js) | Issue #222 test waits for **`window.__idleTimeoutStarted__`** (stable when the start line is debug-only). |
 
 ---
 

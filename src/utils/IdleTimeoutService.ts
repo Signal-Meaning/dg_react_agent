@@ -52,6 +52,8 @@ export type IdleTimeoutEvent =
 
 export class IdleTimeoutService {
   private static readonly POLLING_INTERVAL_MS = 200;
+  /** Issue #559: coalesce identical "Started idle timeout" logs during rapid resets (e.g. key bursts). */
+  private static readonly IDLE_TIMEOUT_START_LOG_DEBOUNCE_MS = 100;
   
   private config: IdleTimeoutConfig;
   private timeoutId: number | null = null;
@@ -85,6 +87,8 @@ export class IdleTimeoutService {
   private logger: Logger;
   /** Pause timeout until first user activity (speaking, typing/sending text, etc.). After any such event, timeout is allowed to run when conditions are idle. */
   private hasSeenUserActivityThisSession = false;
+  /** Issue #559: last time we emitted the user-facing "Started idle timeout" debug line (ms since epoch). */
+  private lastIdleTimeoutStartLogAtMs: number | null = null;
 
   constructor(config: IdleTimeoutConfig) {
     this.config = config;
@@ -681,8 +685,15 @@ export class IdleTimeoutService {
       this.stopPolling();
       this.onTimeoutCallback?.();
     }, this.config.timeoutMs);
-    // Info so browser E2E (Playwright console) reliably observes timeout start; other service lines stay debug.
-    this.logger.info(`[IDLE_TIMEOUT_SERVICE] Started idle timeout (${this.config.timeoutMs}ms)`);
+    // Debug by default (#559); debounce repeats within IDLE_TIMEOUT_START_LOG_DEBOUNCE_MS. E2E can use __idleTimeoutStarted__.
+    const now = Date.now();
+    if (
+      this.lastIdleTimeoutStartLogAtMs === null ||
+      now - this.lastIdleTimeoutStartLogAtMs >= IdleTimeoutService.IDLE_TIMEOUT_START_LOG_DEBOUNCE_MS
+    ) {
+      this.lastIdleTimeoutStartLogAtMs = now;
+      this.logger.debug(`[IDLE_TIMEOUT_SERVICE] Started idle timeout (${this.config.timeoutMs}ms)`);
+    }
     // E2E diagnostic (Issue #489): expose so tests can assert timeout was started
     if (typeof window !== 'undefined') {
       (window as unknown as { __idleTimeoutStarted__?: boolean }).__idleTimeoutStarted__ = true;
@@ -759,6 +770,7 @@ export class IdleTimeoutService {
   public destroy(): void {
     this.stopTimeout();
     this.stopMaxWaitForAgentReplyTimer();
+    this.lastIdleTimeoutStartLogAtMs = null;
     this.onTimeoutCallback = undefined;
     this.onStateChangeCallback = undefined;
   }

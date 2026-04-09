@@ -4,13 +4,13 @@
 
 ---
 
-## Queue (do in order)
+## Queue (done for this branch)
 
-1. **Add failing Jest tests** per [TDD-PLAN.md](./TDD-PLAN.md) (log level + 100 ms coalesce). Confirm **RED**.
-2. **Implement** in `IdleTimeoutService` (and `useIdleTimeoutManager` if disconnect `info` line is in scope).
-3. **Update E2E** `idle-timeout-behavior.spec.js` so Issue #222 no longer depends on **`info`** console text for `Started idle timeout` unless the test app forces debug.
-4. **GREEN** — `npm test` and `cd test-app && npm run test:e2e -- idle-timeout-behavior.spec.js`.
-5. **REFACTOR** — simplify debounce state; keep tests green.
+1. ~~Jest: `tests/IdleTimeoutService.issue-559-logging-debounce.test.ts`~~
+2. ~~`IdleTimeoutService`: debug + 100ms debounce for `Started idle timeout`~~
+3. ~~`useIdleTimeoutManager`: disconnect line at `debug`~~
+4. ~~E2E Issue #222: `__idleTimeoutStarted__` anchor~~
+5. **You:** `cd test-app && npm run test:e2e -- idle-timeout-behavior.spec.js` with backend/API env as in CI or local `.env`.
 
 ---
 
