@@ -45,7 +45,7 @@ Use this table for **at-a-glance** status. Detail lives in each `TRACKING-*.md`.
 - [x] **#552** — Integrator-facing docs published; packaging rule stated (see [TRACKING-552.md](./TRACKING-552.md))
 - [ ] **#554** — Patch release executed per [ISSUE-554/TRACKING.md](./ISSUE-554/TRACKING.md) and GitHub [#554](https://github.com/Signal-Meaning/dg_react_agent/issues/554)
 - [ ] **Release qualification** — [RELEASE-AND-QUALIFICATION.md](./RELEASE-AND-QUALIFICATION.md) completed for the shipping version(s)
-- [ ] **#555** — Real-API / protocol regression: **TDD → PR** checklist (RED/GREEN/REFACTOR/merge) in [ISSUE-555/TRACKING.md](./ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md). Covers proxy **`output_text.done` → `ConversationText`** after tools, test-app **E2E 6/6b** + **`e2eVerify`** token; **pre-release** `USE_REAL_APIS` burn-in is tracked there separately from merge.
+- [x] **#555** — Real-API / protocol regression **resolved** — [#557](https://github.com/Signal-Meaning/dg_react_agent/pull/557); GitHub [#555](https://github.com/Signal-Meaning/dg_react_agent/issues/555) closed **2026-04-09**. Detail: [ISSUE-555/TRACKING.md](./ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md).
 - [ ] **GitHub** — Epic #546 and sub-issues closed with pointers to this folder
 
 ## Suggested implementation order

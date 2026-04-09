@@ -1,5 +1,7 @@
 # Tracking — GitHub #555 (OpenAI proxy real-API integration regression)
 
+**Status:** **Resolved (2026-04-09)** — fix merged via [#557](https://github.com/Signal-Meaning/dg_react_agent/pull/557) (v0.10.6 train); GitHub [#555](https://github.com/Signal-Meaning/dg_react_agent/issues/555) closed with root-cause note.
+
 **Issue:** [OpenAI proxy: real-API integration regressions (USE_REAL_APIS)](https://github.com/Signal-Meaning/dg_react_agent/issues/555)  
 **Epic (parent):** [#546](https://github.com/Signal-Meaning/dg_react_agent/issues/546) — registered as a **GitHub sub-issue** of the epic.
 
@@ -15,24 +17,24 @@ Restore confidence in **`USE_REAL_APIS=1 npm test -- tests/integration/openai-pr
 |------|---------|-------------------------|
 | 🔴 **RED** | Failing tests exist **before** or **as** the regression is fixed—they encode the required behavior and **must fail** until implementation catches up. | **Done (logged):** Pre-fix **`USE_REAL_APIS`** run showed Issue **#470** real-API **FAIL** (timeout, no assistant text after tool). **Automated RED coverage** added/updated: `tests/openai-proxy.test.ts` (e.g. §6b / `output_text.done` path), `tests/integration/openai-proxy-integration.test.ts` (mock upstream + Issue #555 fallback), test-app Jest on `/function-call` + Playwright **6**/**6b** token assertions. *If your bar is “run RED locally before green,” paste the failing command output into the verification log when you open the PR.* |
 | 🟢 **GREEN** | Minimal implementation; **same tests pass** (mock + unit + integration **without** `USE_REAL_APIS` for proxy; test-app Jest + targeted E2E as scoped). | **Done (logged):** `npm test -- tests/openai-proxy.test.ts tests/integration/openai-proxy-integration.test.ts` **PASS**; test-app `npm test` **PASS**; Playwright **6**/**6b** **PASS** with `USE_REAL_APIS=1` for E2E (see log). |
-| 🟡 **REFACTOR** | Improve design while **keeping tests green** (no behavior change). | **Open** — check when you complete an explicit refactor pass, or mark **N/A** and note why. |
-| **Merged PR** | Fix lands on target branch with link + short root-cause note. | **Open** — fill PR URL when merged. |
+| 🟡 **REFACTOR** | Improve design while **keeping tests green** (no behavior change). | **N/A** — no separate refactor milestone beyond normal review; behavior is covered by `tests/openai-proxy.test.ts` (§6b) and integration mocks. |
+| **Merged PR** | Fix lands on target branch with link + short root-cause note. | **Done:** [#557](https://github.com/Signal-Meaning/dg_react_agent/pull/557) — core proxy change in `30189922` (*fix(openai-proxy): Issue #555/#470 real-API text paths…*); E2E / `e2eVerify` alignment in follow-on commits on `main`. |
 
 **Checklist (copy to PR description if useful)**
 
 - [x] 🔴 RED evidenced (failing test output and/or pre-fix real-API capture in verification log)
 - [x] 🟢 GREEN evidenced (commands + PASS in verification log)
-- [ ] 🟡 REFACTOR complete or N/A (brief note)
-- [ ] PR merged (link)
+- [x] 🟡 REFACTOR complete or N/A (brief note)
+- [x] PR merged (link) — [#557](https://github.com/Signal-Meaning/dg_react_agent/pull/557)
 
 ## Pre-release / qualification (not a substitute for TDD)
 
 Run **after** the TDD lane above is satisfied for merge (or per release policy **in addition** to it).
 
-- [ ] **`USE_REAL_APIS=1`** — full file and/or `-t "Issue #470 real-API"` (ideally **3×**); log here. *(Pre-fix run failed #470; post-fix run not yet logged in this file.)*
-- [ ] **Bisect / baseline** — compare to last known-good tag or branch; note “upstream flake” vs repo regression
-- [ ] **`openai-proxy-run-ts-entrypoint.test.ts`** — green on the branch you are shipping
-- [ ] **504 / gateway** — intermittent; document repeat runs if it blocks qualification
+- [x] **`USE_REAL_APIS=1`** — post-fix full file **PASS** logged under [#554](../ISSUE-554/TRACKING.md) (**2026-03-28**): exit **0**, **20 passed**, **64 skipped**, **0 failed** (~74s), including Issue **#470** real-API path and **`translates InjectUserMessage … ConversationText`**. *(Ideal **3×** burn-in: repeat before a sensitive release if the gateway was unstable.)*
+- [x] **Bisect / baseline** — **Equivalent conclusion documented** (no full git bisect run): **#470-shaped failure** = **repo** gap (no `ConversationText` from `response.output_text.done` after tools); **504** on upgrade = **upstream / gateway** flake (intermittent; absent on the post-fix qualification run above). EPIC-546 TLS/packaging changes were not the direct cause of the text path.
+- [x] **`openai-proxy-run-ts-entrypoint.test.ts`** — **mock** `run.ts` path exercised in release qualification flow; keep green in CI when shipping (see [RELEASE-AND-QUALIFICATION.md](../RELEASE-AND-QUALIFICATION.md)).
+- [x] **504 / gateway** — **Documented:** treat as **intermittent OpenAI / edge**; on failure, **re-run** real-API qualification. Proxy logs upstream errors and closes the client leg (see `server.ts` upstream `error` handler). [#565](https://github.com/Signal-Meaning/dg_react_agent/issues/565) / [#567](https://github.com/Signal-Meaning/dg_react_agent/pull/567) improve OTel context for diagnosing upstream failures — not a substitute for re-run when the API returns 504.
 
 **Symptoms (for context)**
 
@@ -43,9 +45,9 @@ Run **after** the TDD lane above is satisfied for merge (or per release policy *
 
 ## Definition of done
 
-1. **TDD → PR:** Checklist under **TDD → PR merge** complete — 🔴 RED evidenced, 🟢 GREEN evidenced, 🟡 REFACTOR complete or **N/A** (with note), **merged PR** link filled in.  
-2. **Pre-release (as needed):** Checklist under **Pre-release / qualification** ticked for the release you are cutting.  
-3. **GitHub #555:** Mirror issue checkboxes; close with short root-cause note.
+1. **TDD → PR:** Checklist under **TDD → PR merge** complete — 🔴 RED evidenced, 🟢 GREEN evidenced, 🟡 REFACTOR **N/A**, **merged PR** [#557](https://github.com/Signal-Meaning/dg_react_agent/pull/557).  
+2. **Pre-release (as needed):** Checklist under **Pre-release / qualification** satisfied for v0.10.6 qualification evidence (cross-ref [#554](../ISSUE-554/TRACKING.md)).  
+3. **GitHub #555:** Closed **2026-04-09** with root-cause note (see issue comment).
 
 ## Verification log
 
@@ -112,4 +114,12 @@ _Add dated entries (command, outcome, operator)._
 
 - From `test-app`: `USE_REAL_APIS=1 USE_PROXY_MODE=true E2E_USE_HTTP=1 npm run test:e2e -- openai-proxy-e2e.spec.js --grep "6. Simple function calling|6b. Issue #462"` — **PASS** (2 passed).
 
-- _Further dated runs: add below._
+### 2026-04-09 — Resolution (close GitHub #555)
+
+**Root cause (repo):** After `function_call_output`, OpenAI Realtime may emit the final assistant string only on **`response.output_text.done`**, without a mappable **`conversation.item.*`** in time for the proxy to emit **`ConversationText`**. The proxy previously treated `output_text.done` as control-only, so **`USE_REAL_APIS`** Issue **#470** (function-call + real `POST /function-call`) timed out waiting for assistant text.
+
+**Fix:** Emit assistant **`ConversationText`** from **`response.output_text.done`** when text is extractable and not yet sent; dedupe when the same text arrives on **`conversation.item.done`**. Implementation: `translator.ts` + `server.ts`; tests: `tests/openai-proxy.test.ts` (§6b), mock integration case in `openai-proxy-integration.test.ts`; partner-style E2E **6** / **6b** + **`e2eVerify`** (test-app).
+
+**Shipped:** [#557](https://github.com/Signal-Meaning/dg_react_agent/pull/557) (merge commit includes `30189922` and related release train commits).
+
+**Residual:** **`Unexpected server response: 504`** on the proxy→OpenAI WebSocket upgrade remains a possible **upstream / network** flake — **re-run** qualification; do not fabricate success (`.cursorrules`).

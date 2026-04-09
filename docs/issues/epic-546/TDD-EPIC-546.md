@@ -19,7 +19,7 @@ Statuses follow each **TRACKING*.md** / **ISSUE-*/TRACKING.md** (update this tab
 | #551 Dev TLS opt-in + production guard | **Done in tree** — **close #551** on merge | [TRACKING-551.md](./TRACKING-551.md) | Behavior |
 | #552 Integrator docs | **Done in tree** — close **GitHub #552** on merge | [TRACKING-552.md](./TRACKING-552.md) | Docs + doc tests |
 | #554 **Release execution** (publish) | **Pre-release in progress** — checklist started 2026-03-28 on `release/v0.10.6`; publish / GitHub Release not done | [ISSUE-554/TRACKING.md](./ISSUE-554/TRACKING.md) | Pre-release / ship (not a substitute for TDD) |
-| #555 **Real-API regression + protocol** | **In progress** — TDD 🔴/🟢 evidenced; 🟡 REFACTOR, merged PR, and pre-release `USE_REAL_APIS` logs **open** | [ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md](./ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md) | `USE_REAL_APIS`, Issue #470 path, TDD checklist + verification log |
+| #555 **Real-API regression + protocol** | **Done** — merged [#557](https://github.com/Signal-Meaning/dg_react_agent/pull/557); GitHub [#555](https://github.com/Signal-Meaning/dg_react_agent/issues/555) closed **2026-04-09**; see [ISSUE-555/TRACKING.md](./ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md) | [ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md](./ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md) | `USE_REAL_APIS`, Issue #470 path, `output_text.done` → `ConversationText` |
 
 Sub-issues **#547–#551** use per-file **TDD — RED / GREEN / REFACTOR** sections. **#555** adds a rollup table + PR checklist; **#554** separates **TDD → PR** from **release execution**.
 

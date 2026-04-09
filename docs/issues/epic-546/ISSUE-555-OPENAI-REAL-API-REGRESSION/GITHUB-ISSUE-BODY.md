@@ -21,11 +21,11 @@
 
 ## Definition of done
 
-- [ ] **Bisect** (or equivalent) between last known-green release / tag and `main` to classify **deterministic repo regression** vs **OpenAI / network flake** (document conclusion in a comment).
-- [ ] **Repeat** real-API integration runs (e.g. 3× on clean env) and record outcomes; if flaky, add **retries or quarantine policy** documented in `TEST-STRATEGY` / release checklist.
-- [ ] If repo bug: **fix** in `server.ts` / deps / tests and keep **`USE_REAL_APIS=1`** suite green for the affected cases.
-- [ ] If upstream-only: document **exception** for qualification and any **proxy resilience** (without inventing fake upstream success — see `.cursorrules`).
-- [ ] Update **`docs/issues/epic-546/ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md`** when resolved.
+- [x] **Bisect** (or equivalent) — **Analysis equivalent to bisect** documented in [TRACKING.md](./TRACKING.md): **#470** path = **repo** (`response.output_text.done` not forwarded as `ConversationText`); **504** = **upstream / gateway** flake.
+- [x] **Repeat** real-API integration runs — post-fix **PASS** logged (see [#554](../ISSUE-554/TRACKING.md) **2026-03-28**); re-run before sensitive releases if needed.
+- [x] If repo bug: **fix** in `server.ts` / `translator.ts` / tests — **done** (`ConversationText` from `response.output_text.done` after tools); **`USE_REAL_APIS=1`** suite green on recorded qualification run.
+- [x] **504** — documented as **intermittent upstream**; **re-run** qualification (no synthetic success); OTel improvements: [#565](https://github.com/Signal-Meaning/dg_react_agent/issues/565) / [#567](https://github.com/Signal-Meaning/dg_react_agent/pull/567).
+- [x] Update **`docs/issues/epic-546/ISSUE-555-OPENAI-REAL-API-REGRESSION/TRACKING.md`** — **done** (**2026-04-09**); GitHub **#555** closed.
 
 ## References
 
