@@ -72,7 +72,7 @@ See [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md) and [E
 
 - [x] Root `package.json` version **0.11.0**
 - [x] `packages/voice-agent-backend/package.json` version **0.2.12**
-- [ ] Optional: `npm update` per release policy
+- [x] Optional: `npm update` per release policy — **2026-04-09** (maintainer run)
 
 ---
 
