@@ -7,11 +7,21 @@ This script can be run in the browser console to diagnose why idle timeout isn't
 1. Open your voice-commerce app in the browser
 2. Open browser DevTools (F12)
 3. Go to Console tab
-4. Enable debug mode (if not already): Add `?debug=true` to URL or set component `debug={true}`
+4. **Enable debug mode** (required to see idle-timeout service lines): add `?debug=true` to the URL or set component `debug={true}`. The "Started idle timeout" line is emitted at **debug** level and may be **debounced** when the countdown re-arms in quick succession (default 100ms — Issue #559).
 5. Copy and paste this entire script into the console
 6. Trigger an agent response (send a message or speak)
 7. Wait for agent to finish speaking
 8. Watch the console output
+
+## Stable signal (recommended)
+
+Whether or not a matching console line appears, the component sets `window.__idleTimeoutStarted__ === true` when the idle **countdown is actually armed** (every `setTimeout` start). Prefer this for automation:
+
+```javascript
+window.__idleTimeoutStarted__ === true
+```
+
+Playwright / E2E in this repo waits on that flag where the idle line is no longer guaranteed at **info** level.
 
 ## Diagnostic Script
 
@@ -26,7 +36,7 @@ This script can be run in the browser console to diagnose why idle timeout isn't
   const logs = [];
   const originalLog = console.log;
   
-  // Capture all IdleTimeoutService logs
+  // Capture IdleTimeoutService-related console output (debug mode must be on for most lines)
   console.log = function(...args) {
     const text = args.join(' ');
     if (text.includes('[IDLE_TIMEOUT_SERVICE]') || 
@@ -89,7 +99,9 @@ This script can be run in the browser console to diagnose why idle timeout isn't
       console.log('🔍 DIAGNOSTIC RESULTS');
       console.log('==========================================\n');
       
-      // Analyze captured logs
+      const countdownArmed = typeof window !== 'undefined' && window.__idleTimeoutStarted__ === true;
+
+      // Analyze captured logs (optional when debug on)
       const startedTimeoutLog = logs.find(log => 
         log.text.includes('Started idle timeout') || 
         log.text.includes('startTimeout')
@@ -105,18 +117,19 @@ This script can be run in the browser console to diagnose why idle timeout isn't
       
       console.log(`📊 Summary:`);
       console.log(`  Total IdleTimeoutService logs: ${logs.length}`);
-      console.log(`  "Started idle timeout" log: ${startedTimeoutLog ? '✅ FOUND' : '❌ MISSING'}`);
+      console.log(`  window.__idleTimeoutStarted__: ${countdownArmed ? '✅ true' : '❌ false'}`);
+      console.log(`  "Started idle timeout" console line: ${startedTimeoutLog ? '✅ FOUND' : '⚠️  MISSING (may be OK if flag is true — debounce or log level)'}`);
       console.log(`  "Idle timeout reached" log: ${timeoutReachedLog ? '✅ FOUND' : '❌ MISSING'}`);
       console.log(`  handleEvent calls: ${handleEventLogs.length}`);
       
-      if (startedTimeoutLog) {
-        console.log(`\n✅ Timeout started correctly`);
-        console.log(`   Log: "${startedTimeoutLog.text}"`);
+      if (countdownArmed) {
+        console.log(`\n✅ Idle countdown was armed (__idleTimeoutStarted__)`);
+        if (startedTimeoutLog) {
+          console.log(`   Matching console line: "${startedTimeoutLog.text}"`);
+        }
       } else {
-        console.log(`\n❌ BUG CONFIRMED: Timeout never started!`);
+        console.log(`\n❌ BUG CONFIRMED: Countdown does not appear to have started (__idleTimeoutStarted__ is false)`);
         console.log(`   This matches Issue #262`);
-        console.log(`   Expected: "Started idle timeout (10000ms)"`);
-        console.log(`   Actual: Log not found`);
         
         if (handleEventLogs.length > 0) {
           console.log(`\n   Events received by IdleTimeoutService:`);
@@ -132,9 +145,9 @@ This script can be run in the browser console to diagnose why idle timeout isn't
       if (timeoutReachedLog) {
         console.log(`\n✅ Timeout fired correctly`);
         console.log(`   Log: "${timeoutReachedLog.text}"`);
-      } else if (startedTimeoutLog) {
-        console.log(`\n⚠️  Timeout started but never fired`);
-        console.log(`   This suggests timeout callback isn't working`);
+      } else if (countdownArmed) {
+        console.log(`\n⚠️  Countdown armed but close log not seen yet`);
+        console.log(`   Check connection state and idle duration.`);
       }
       
       console.log(`\n📋 All IdleTimeoutService logs:`);
@@ -144,7 +157,7 @@ This script can be run in the browser console to diagnose why idle timeout isn't
         });
       } else {
         console.log(`  ⚠️  No logs captured!`);
-        console.log(`  Make sure debug mode is enabled (add ?debug=true to URL)`);
+        console.log(`  Enable debug (?debug=true) to capture [IDLE_TIMEOUT_SERVICE] lines.`);
       }
       
       console.log('\n==========================================');
@@ -163,13 +176,14 @@ This script can be run in the browser console to diagnose why idle timeout isn't
 After running the script and waiting:
 
 ### ✅ If Working Correctly:
-- You'll see: `"Started idle timeout (10000ms)"`
-- You'll see: `"Idle timeout reached (10000ms) - firing callback"`
-- Connection closes after ~10 seconds
+- `window.__idleTimeoutStarted__` is **true** after the agent is idle and playback has stopped
+- With **debug** on, you may see a **debug**-level line containing `"Started idle timeout (10000ms)"` (exact ms depends on config; line can be **debounced** on rapid re-arms)
+- You'll see: `"Idle timeout reached (10000ms) - firing callback"` (service debug) and/or the hook's **debug** line about closing the connection
+- Connection closes after the configured idle period
 
 ### ❌ If Bug Exists:
-- You'll see: `"Started idle timeout"` log is MISSING
-- Connection stays open until Deepgram timeout (~60 seconds)
+- `window.__idleTimeoutStarted__` stays **false** after idle conditions are met
+- Connection stays open until some other timeout
 - You'll see which events (if any) were received by IdleTimeoutService
 
 ## Alternative: Minimal Test Code
@@ -186,20 +200,17 @@ test('idle timeout should start after agent finishes speaking', async ({ page })
   // Wait for agent to finish
   await waitForAgentIdle(page);
   
-  // Check for timeout log
-  const logs = await page.evaluate(() => {
-    // Get logs from console (if accessible)
-    // Or check DOM for timeout active state
-    return document.querySelector('[data-testid="idle-timeout-active"]')?.textContent;
-  });
+  await page.waitForFunction(
+    () => typeof window !== 'undefined' && window.__idleTimeoutStarted__ === true,
+    null,
+    { timeout: 20000 }
+  );
   
   // Wait for connection to close
   await page.waitForFunction(() => {
     return document.querySelector('[data-testid="connection-status"]')?.textContent === 'closed';
   }, { timeout: 20000 });
   
-  // Verify timeout started
-  expect(logs).toContain('Started idle timeout');
+  expect(await page.evaluate(() => window.__idleTimeoutStarted__)).toBe(true);
 });
 ```
-

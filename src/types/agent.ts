@@ -495,6 +495,11 @@ export interface AgentOptions {
    * uses it in session.update). When omitted, component default is used.
    */
   idleTimeoutMs?: number;
+  /**
+   * Client-only (Issue #559): minimum ms between duplicate "Started idle timeout" debug log lines when the
+   * idle countdown re-arms. Omit for the default (100ms) in `IdleTimeoutService`.
+   */
+  idleTimeoutStartLogDebounceMs?: number;
 }
 
 /**

@@ -28,7 +28,8 @@ export function useIdleTimeoutManager(
   agentManagerRef: React.RefObject<WebSocketManager | null>,
   debug: boolean = false,
   onIdleTimeoutActiveChange?: (isActive: boolean) => void,
-  timeoutMs: number = DEFAULT_IDLE_TIMEOUT_MS
+  timeoutMs: number = DEFAULT_IDLE_TIMEOUT_MS,
+  idleTimeoutStartLogDebounceMs?: number
 ) {
   const logger = getLogger({ debug });
   const serviceRef = useRef<IdleTimeoutService | null>(null);
@@ -54,6 +55,9 @@ export function useIdleTimeoutManager(
     serviceRef.current = new IdleTimeoutService({
       timeoutMs,
       debug,
+      ...(typeof idleTimeoutStartLogDebounceMs === 'number'
+        ? { idleTimeoutStartLogDebounceMs }
+        : {}),
     });
 
     serviceRef.current.onTimeout(() => {
@@ -80,7 +84,7 @@ export function useIdleTimeoutManager(
         serviceRef.current = null;
       }
     };
-  }, [debug, timeoutMs]);
+  }, [debug, timeoutMs, idleTimeoutStartLogDebounceMs]);
 
   // After service exists; re-attach when service instance is recreated (timeoutMs / debug).
   useEffect(() => {
@@ -90,7 +94,7 @@ export function useIdleTimeoutManager(
       isPlaying: currentStateRef.current.isPlaying,
       isUserSpeaking: currentStateRef.current.isUserSpeaking,
     }));
-  }, [debug, timeoutMs]);
+  }, [debug, timeoutMs, idleTimeoutStartLogDebounceMs]);
 
   // Single post-commit path: after React applies state, push one snapshot into IdleTimeoutService
   // (merge + semantic transitions) before paint. Avoids useEffect ordering vs idle countdown.

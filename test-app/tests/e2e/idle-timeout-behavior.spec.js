@@ -826,6 +826,13 @@ test.describe('Idle Timeout Behavior', () => {
     
     // Give a moment for events to propagate and timeout to potentially start
     await page.waitForTimeout(500);
+
+    // Stable signal: countdown arms before we wait for close (Started line is debug + debounced — #559).
+    await page.waitForFunction(
+      () => typeof window !== 'undefined' && window.__idleTimeoutStarted__ === true,
+      null,
+      { timeout: 20000 }
+    );
     
     // Use app's idle so test works with 1s or 10s; allow tolerance for "start of wait" vs "start of timeout"
     const idleMs = await page.evaluate(() => (typeof window !== 'undefined' && window.__idleTimeoutMs) ? window.__idleTimeoutMs : 10000);
@@ -845,8 +852,8 @@ test.describe('Idle Timeout Behavior', () => {
     console.log(`  Actual timeout: ${timeoutResult.actualTimeout || 'N/A'}ms`);
     console.log(`  Elapsed time: ${timeoutResult.elapsed}ms`);
     
-    // CRITICAL: Check if IdleTimeoutService logged "Started idle timeout"
-    // Check AFTER waiting, as logs are captured throughout the test
+    // Diagnostics: optional console line is debug-level "Started idle timeout" when ?debug=true (may be debounced).
+    // Assertion below uses __idleTimeoutStarted__ (already waited above).
     console.log('\n🔍 ANALYZING IDLE_TIMEOUT_SERVICE LOGS:');
     console.log(`  Total logs captured: ${idleTimeoutServiceLogs.length}`);
     
@@ -888,12 +895,9 @@ test.describe('Idle Timeout Behavior', () => {
     }
     
     // THE KEY ASSERTIONS:
-    // 1. IdleTimeoutService should have logged "Started idle timeout"
+    // 1. Idle countdown armed (__idleTimeoutStarted__); debug console line is optional (debounced).
     if (!startedTimeoutLog) {
-      console.log('\n❌ BUG REPRODUCED: IdleTimeoutService never started the timeout!');
-      console.log('   This matches the voice-commerce team\'s issue.');
-      console.log('   Expected log: "Started idle timeout (10000ms)"');
-      console.log('   Actual: Log not found');
+      console.log('\n⚠️  No matching "Started idle timeout" console line (OK if __idleTimeoutStarted__ is true — debug/debounce).');
       
       // Print what events were received
       if (handleEventLogs.length > 0) {
@@ -911,18 +915,19 @@ test.describe('Idle Timeout Behavior', () => {
         });
       }
     } else {
-      console.log('\n✅ IdleTimeoutService started the timeout correctly');
+      console.log('\n✅ IdleTimeoutService debug line captured (optional)');
       console.log(`   Log found: "${startedTimeoutLog.text}"`);
     }
     
     // 2. Connection should close if timeout started
-    if (startedTimeoutLog && !timeoutResult.closed) {
-      console.log('\n⚠️  Timeout started but connection didn\'t close');
+    const countdownArmed = await page.evaluate(() => window.__idleTimeoutStarted__ === true);
+    if (countdownArmed && !timeoutResult.closed) {
+      console.log('\n⚠️  Countdown was armed but connection didn\'t close');
       console.log('   This suggests timeout callback isn\'t firing');
     }
     
     // Assertions
-    expect(startedTimeoutLog).toBeTruthy();
+    expect(countdownArmed).toBe(true);
     expect(timeoutReachedLog).toBeTruthy();
     expect(timeoutResult.closed).toBe(true);
     expect(timeoutResult.actualTimeout, `actualTimeout should be >= ${minActualMs}ms (idle ${idleMs}ms minus tolerance)`).toBeGreaterThanOrEqual(minActualMs);
@@ -986,13 +991,17 @@ test.describe('Idle Timeout Behavior', () => {
     
     // Give time for timeout to start
     await page.waitForTimeout(1000);
-    
-    // Verify timeout started (should have "Started idle timeout" log)
-    const initialTimeoutLog = idleTimeoutServiceLogs.find(log => 
-      log.text.includes('Started idle timeout')
+
+    await page.waitForFunction(
+      () => typeof window !== 'undefined' && window.__idleTimeoutStarted__ === true,
+      null,
+      { timeout: 20000 }
     );
-    expect(initialTimeoutLog).toBeTruthy();
-    console.log('✅ Initial timeout started');
+    const idleCountdownMarkerTs = Date.now();
+    const initialTimeoutLog = idleTimeoutServiceLogs.find(log =>
+      log.text.includes('Started idle timeout') && log.timestamp >= idleCountdownMarkerTs - 5000
+    );
+    console.log('✅ Initial idle countdown armed (__idleTimeoutStarted__)');
     
     // Step 3: Simulate user starting to speak (this should stop the timeout)
     // Use the same fixture that works in other passing tests (callback-test.spec.js, vad-events-core.spec.js)
@@ -1018,7 +1027,7 @@ test.describe('Idle Timeout Behavior', () => {
       await page.waitForTimeout(300); // Wait 300ms between checks
       stoppedTimeoutLog = idleTimeoutServiceLogs.find(log => 
         log.text.includes('Stopped idle timeout') && 
-        log.timestamp > (initialTimeoutLog?.timestamp || 0)
+        log.timestamp > idleCountdownMarkerTs
       );
       if (stoppedTimeoutLog) {
         break;
@@ -1041,6 +1050,7 @@ test.describe('Idle Timeout Behavior', () => {
     // so timeout never restarts even though all conditions are idle
     console.log('Step 5: Checking if timeout restarted after USER_STOPPED_SPEAKING...');
     
+    // After stop, a restart emits a debug "Started idle timeout" line if outside debounce window (?debug=true).
     const restartedTimeoutLog = idleTimeoutServiceLogs.find(log => 
       log.text.includes('Started idle timeout') && 
       log.timestamp > (stoppedTimeoutLog?.timestamp || 0)
@@ -1049,8 +1059,8 @@ test.describe('Idle Timeout Behavior', () => {
     if (!restartedTimeoutLog) {
       console.log('\n❌ BUG REPRODUCED: Timeout did NOT restart after USER_STOPPED_SPEAKING!');
       console.log('   This matches Issue #262/#430');
-      console.log('   Expected: "Started idle timeout (10000ms)" log after USER_STOPPED_SPEAKING');
-      console.log('   Actual: Log not found');
+      console.log('   Expected: debug "Started idle timeout …" after USER_STOPPED_SPEAKING (or stable restart signal)');
+      console.log('   Actual: matching console line not found');
       
       // Print relevant logs (capped to avoid flooding)
       const MAX_LOGS_DUMP_262 = 40;

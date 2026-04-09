@@ -484,12 +484,14 @@ function DeepgramVoiceInteraction(
   
   // Initialize idle timeout manager
   const effectiveIdleTimeoutMs = agentOptions?.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+  const idleTimeoutStartLogDebounceMs = agentOptions?.idleTimeoutStartLogDebounceMs;
   const { handleMeaningfulActivity, handleUtteranceEnd, handleFunctionCallStarted, handleFunctionCallCompleted, notifyAgentMessageReceived, pushIdleStateToIdleTimeoutService } = useIdleTimeoutManager(
     state,
     agentManagerRef,
     props.debug,
     props.onIdleTimeoutActiveChange,
-    effectiveIdleTimeoutMs
+    effectiveIdleTimeoutMs,
+    idleTimeoutStartLogDebounceMs
   );
   const notifyIdleTimeoutUtteranceEnd = useCallback(() => {
     handleUtteranceEnd();

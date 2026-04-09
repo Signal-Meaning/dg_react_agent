@@ -15,6 +15,21 @@ export interface IdleTimeoutConfig {
    * sends a function result. When not set, defaults to 500. Capped at timeoutMs. Set to 0 to disable (wait indefinitely).
    */
   maxWaitForAgentReplyMs?: number;
+  /**
+   * Issue #559: minimum ms between duplicate "Started idle timeout" debug lines when the countdown re-arms.
+   * Default {@link DEFAULT_IDLE_TIMEOUT_START_LOG_DEBOUNCE_MS}.
+   */
+  idleTimeoutStartLogDebounceMs?: number;
+}
+
+/** Default for {@link IdleTimeoutConfig.idleTimeoutStartLogDebounceMs}. */
+export const DEFAULT_IDLE_TIMEOUT_START_LOG_DEBOUNCE_MS = 100;
+
+/** Substring in the debounced "countdown started" debug line (tests / console diagnostics). */
+export const IDLE_TIMEOUT_STARTED_LOG_MARKER = 'Started idle timeout';
+
+function formatIdleTimeoutStartedDebugLine(timeoutMs: number): string {
+  return `[IDLE_TIMEOUT_SERVICE] ${IDLE_TIMEOUT_STARTED_LOG_MARKER} (${timeoutMs}ms)`;
 }
 
 export interface IdleTimeoutState {
@@ -52,10 +67,9 @@ export type IdleTimeoutEvent =
 
 export class IdleTimeoutService {
   private static readonly POLLING_INTERVAL_MS = 200;
-  /** Issue #559: coalesce identical "Started idle timeout" logs during rapid resets (e.g. key bursts). */
-  private static readonly IDLE_TIMEOUT_START_LOG_DEBOUNCE_MS = 100;
-  
+
   private config: IdleTimeoutConfig;
+  private readonly idleTimeoutStartLogDebounceMs: number;
   private timeoutId: number | null = null;
   private isDisabled = false;
   private currentState: IdleTimeoutState;
@@ -92,6 +106,8 @@ export class IdleTimeoutService {
 
   constructor(config: IdleTimeoutConfig) {
     this.config = config;
+    this.idleTimeoutStartLogDebounceMs =
+      config.idleTimeoutStartLogDebounceMs ?? DEFAULT_IDLE_TIMEOUT_START_LOG_DEBOUNCE_MS;
     this.logger = getLogger({ debug: !!this.config.debug });
     this.log('IdleTimeoutService constructor - debug: ' + String(this.config.debug));
     this.currentState = {
@@ -661,6 +677,19 @@ export class IdleTimeoutService {
   }
 
   /**
+   * Issue #559: emit the user-visible "countdown started" line at debug, throttled by `idleTimeoutStartLogDebounceMs`.
+   */
+  private emitStartedIdleTimeoutDebugLineIfDue(nowMs: number): void {
+    if (
+      this.lastIdleTimeoutStartLogAtMs === null ||
+      nowMs - this.lastIdleTimeoutStartLogAtMs >= this.idleTimeoutStartLogDebounceMs
+    ) {
+      this.lastIdleTimeoutStartLogAtMs = nowMs;
+      this.logger.debug(formatIdleTimeoutStartedDebugLine(this.config.timeoutMs));
+    }
+  }
+
+  /**
    * Start the idle timeout
    */
   private startTimeout(): void {
@@ -685,16 +714,8 @@ export class IdleTimeoutService {
       this.stopPolling();
       this.onTimeoutCallback?.();
     }, this.config.timeoutMs);
-    // Debug by default (#559); debounce repeats within IDLE_TIMEOUT_START_LOG_DEBOUNCE_MS. E2E can use __idleTimeoutStarted__.
-    const now = Date.now();
-    if (
-      this.lastIdleTimeoutStartLogAtMs === null ||
-      now - this.lastIdleTimeoutStartLogAtMs >= IdleTimeoutService.IDLE_TIMEOUT_START_LOG_DEBOUNCE_MS
-    ) {
-      this.lastIdleTimeoutStartLogAtMs = now;
-      this.logger.debug(`[IDLE_TIMEOUT_SERVICE] Started idle timeout (${this.config.timeoutMs}ms)`);
-    }
-    // E2E diagnostic (Issue #489): expose so tests can assert timeout was started
+    this.emitStartedIdleTimeoutDebugLineIfDue(Date.now());
+    // E2E diagnostic (Issue #489): set on every real timer arm; the debug line above may be omitted when debounced (#559).
     if (typeof window !== 'undefined') {
       (window as unknown as { __idleTimeoutStarted__?: boolean }).__idleTimeoutStarted__ = true;
     }
