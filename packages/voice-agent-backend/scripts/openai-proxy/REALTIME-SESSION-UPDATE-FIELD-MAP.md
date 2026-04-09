@@ -15,7 +15,8 @@
 | `type` | always `"realtime"` | Required discriminator. |
 | `model` | `agent.think.provider.model` | Default `gpt-realtime` when omitted. |
 | `instructions` | `agent.think.prompt` + serialized `agent.context.messages` + tool hint when `functions` present | `buildInstructionsWithContext`. |
-| `audio` | **Input:** fixed GA shape (`turn_detection: null`, PCM 24kHz, transcription). **Output:** merged from `agent.sessionAudioOutput` when set. | Input is proxy-owned for Issues #414 / #451; output is Issue #540. |
+| `audio` | **Input:** GA shape (PCM 24kHz, transcription). Default **`turn_detection: null`** (proxy sends `input_audio_buffer.commit`). If **`agent.useOpenAIServerVad`** is true → **`turn_detection.type: server_vad`** with VAD defaults + **`idle_timeout_ms`** from **`agent.idleTimeoutMs`** (clamped 5s–30s; `-1`/omit → `null`). **Output:** merged from `agent.sessionAudioOutput` when set. | Issue #560 Phase 2b (Server VAD opt-in); #414 / #451 manual path; #540 output. |
+| `agent.useOpenAIServerVad` | When `true`, enables row above (`server_vad`); proxy sends **`append` only** for mic (no proxy `commit`). | Issue #560 Phase 2b; default unset/false. |
 | `tools` | `agent.think.functions` | OpenAI `{ type: 'function', name, description, parameters }[]`. |
 | `tool_choice` | `agent.think.toolChoice` | Issue #535. |
 | `output_modalities` | `agent.think.outputModalities` | Filtered to `text` \| `audio` only; omit if empty after filter. **Not both** modalities in one array per API. Issue #536. |
@@ -33,7 +34,7 @@
 |-----------------|--------|
 | `agent.think.provider.temperature` | **Issue #538:** Not part of WebSocket `RealtimeSessionCreateRequest`. Sending `session.temperature` causes `unknown_parameter` from upstream. Value may still appear on **Settings** JSON from `buildSettingsMessage` / `AgentOptions.thinkTemperature` for UI or future API support. |
 | `agent.speak.provider.voice` (and top-level `session.voice`) | **Intentionally omitted:** Realtime returns **Unknown parameter: `session.voice`** when set on WebSocket `session.update` in current GA behavior; voice/output is set via `session.audio.output` (Issue #540) instead. |
-| `agent.idleTimeoutMs` | **Client-side only** in the component (WebSocketManager / idle manager). `mapSettingsToSessionUpdate` does **not** put it on `session`. With `turn_detection: null`, OpenAI has no server `idle_timeout_ms` on this path; see [PROTOCOL-AND-MESSAGE-ORDERING.md §3.9](./PROTOCOL-AND-MESSAGE-ORDERING.md#39-idle-timeout-expected-closure-not-an-error). |
+| `agent.idleTimeoutMs` | **Client idle** (WebSocketManager / idle manager). On **`session.update`:** forwarded only when **`agent.useOpenAIServerVad`** — as **`session.audio.input.turn_detection.idle_timeout_ms`** (clamped). Otherwise **not** a top-level `session` field; with `turn_detection: null` OpenAI has no server idle on that path — [PROTOCOL-AND-MESSAGE-ORDERING.md §3.9](./PROTOCOL-AND-MESSAGE-ORDERING.md#39-idle-timeout-expected-closure-not-an-error). |
 | `Settings.audio` (component encoding / sample_rate) | Used for component audio pipeline metadata; **input** shape on `session.audio` is **proxy-owned** (PCM 24kHz, `turn_detection: null`, transcription) — not a direct copy of Settings.audio. |
 | `agent.context.messages` | Folded into **`instructions`** only (Issue #489); not sent as separate session fields or as items in `session.update`. |
 | `agent.greeting` | Injected after `session.updated` as **`conversation.item.create`** (assistant), not in `session.update`. |

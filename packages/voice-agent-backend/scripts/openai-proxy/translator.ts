@@ -5,6 +5,11 @@
  * See docs/issues/ISSUE-381/API-DISCONTINUITIES.md.
  */
 
+import {
+  OPENAI_REALTIME_SERVER_VAD_IDLE_TIMEOUT_MS_MAX,
+  OPENAI_REALTIME_SERVER_VAD_IDLE_TIMEOUT_MS_MIN,
+} from './openai-audio-constants';
+
 /**
  * OpenAI Realtime `session.tool_choice` (Issue #535).
  * @see https://platform.openai.com/docs/api-reference/realtime-client-events/session/update
@@ -147,7 +152,54 @@ export interface ComponentSettings {
     greeting?: string;
     /** Issue #540: maps to Realtime `session.audio.output` when valid after normalization. */
     sessionAudioOutput?: OpenAIRealtimeSessionAudioOutput;
+    /**
+     * Issue #560 Phase 2b: When true, map `session.audio.input.turn_detection` to OpenAI **Server VAD**; the proxy
+     * sends `input_audio_buffer.append` only (no `input_audio_buffer.commit` / `response.create` for mic audio).
+     * Default false keeps `turn_detection: null` and manual commit (existing behavior).
+     */
+    useOpenAIServerVad?: boolean;
   };
+}
+
+/** OpenAI Realtime `session.audio.input.turn_detection` when `type` is `server_vad` (Issue #560 Phase 2b). */
+export interface OpenAIRealtimeServerVadTurnDetection {
+  type: 'server_vad';
+  threshold?: number;
+  prefix_padding_ms?: number;
+  silence_duration_ms?: number;
+  /** Milliseconds; `null` when client idle is unset or sentinel -1 (no numeric server idle). Clamped to API range when set. */
+  idle_timeout_ms?: number | null;
+  create_response?: boolean;
+  interrupt_response?: boolean;
+}
+
+/**
+ * Build `turn_detection` for Server VAD from component idle timeout. Aligns with Realtime VAD guide defaults
+ * (threshold, prefix/silence); `create_response: true` so the server starts the model turn after commit.
+ */
+export function buildOpenAIServerVadTurnDetection(idleTimeoutMs: number | undefined): OpenAIRealtimeServerVadTurnDetection {
+  let idle: number | null = null;
+  if (typeof idleTimeoutMs === 'number' && Number.isFinite(idleTimeoutMs) && idleTimeoutMs >= 0 && idleTimeoutMs !== -1) {
+    idle = Math.min(
+      OPENAI_REALTIME_SERVER_VAD_IDLE_TIMEOUT_MS_MAX,
+      Math.max(OPENAI_REALTIME_SERVER_VAD_IDLE_TIMEOUT_MS_MIN, Math.round(idleTimeoutMs)),
+    );
+  }
+  return {
+    type: 'server_vad',
+    threshold: 0.5,
+    prefix_padding_ms: 300,
+    silence_duration_ms: 200,
+    idle_timeout_ms: idle,
+    create_response: true,
+    interrupt_response: true,
+  };
+}
+
+/** True when `session.update` maps mic input to OpenAI Server VAD (proxy must not send manual `input_audio_buffer.commit`). */
+export function sessionUpdateUsesOpenAIServerVad(update: OpenAISessionUpdate): boolean {
+  const td = update.session.audio?.input?.turn_detection;
+  return td !== null && td !== undefined && typeof td === 'object' && (td as { type?: string }).type === 'server_vad';
 }
 
 /** OpenAI client event: session.update payload */
@@ -161,7 +213,7 @@ export interface OpenAISessionUpdate {
     /** GA API: audio config under session.audio.input (see REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2). */
     audio?: {
       input?: {
-        turn_detection?: { type: 'server_vad'; create_response?: boolean; interrupt_response?: boolean; idle_timeout_ms?: number } | null;
+        turn_detection?: OpenAIRealtimeServerVadTurnDetection | null;
         /** Tell API we send PCM 24kHz 16-bit mono (avoids format mismatch). */
         format?: { type: string; rate?: number };
         /** Enable input audio transcription for conversation.item.input_audio_transcription.* (Issue #414). */
@@ -351,20 +403,20 @@ export function mapSettingsToSessionUpdate(settings: ComponentSettings): OpenAIS
     const functionInstruction = '\n\nWhen you receive results from tool calls, use them in your reply to the user.';
     instructions = instructions ? instructions + functionInstruction : functionInstruction.trim();
   }
+  const useOpenAIServerVad = settings.agent?.useOpenAIServerVad === true;
   const session: OpenAISessionUpdate['session'] = {
     type: 'realtime',
     model: settings.agent?.think?.provider?.model ?? 'gpt-realtime',
     instructions,
     // Do not send voice in session.update; current Realtime API returns "Unknown parameter: 'session.voice'".
     // GA API: turn_detection is under session.audio.input (REGRESSION-SERVER-ERROR-INVESTIGATION.md Cycle 2).
-    // Use turn_detection: null so the server does NOT auto-commit the audio buffer; only the proxy sends
-    // input_audio_buffer.commit + response.create. With server_vad enabled the server commits on VAD and
-    // our commit then sees "buffer too small ... 0.00ms" (Issue #414, PROTOCOL §3.6). See Issue #451 Phase 2.
-    // With turn_detection: null the OpenAI server has no server idle timeout (idle_timeout_ms only under server_vad).
-    // We convey "no server timeout" as -1 (NO_SERVER_TIMEOUT_MS). See PROTOCOL-AND-MESSAGE-ORDERING.md §3.9.
+    // Default: turn_detection null — proxy sends input_audio_buffer.commit + response.create (PROTOCOL §3.6).
+    // Optional useOpenAIServerVad: Server VAD commits the buffer; proxy sends append only (Issue #560 Phase 2b).
     audio: {
       input: {
-        turn_detection: null,
+        turn_detection: useOpenAIServerVad
+          ? buildOpenAIServerVadTurnDetection(settings.agent?.idleTimeoutMs)
+          : null,
         format: { type: 'audio/pcm', rate: 24000 },
         // Enable input audio transcription so we get conversation.item.input_audio_transcription.* (Issue #414).
         transcription: { model: 'gpt-4o-transcribe', language: 'en', prompt: '' },

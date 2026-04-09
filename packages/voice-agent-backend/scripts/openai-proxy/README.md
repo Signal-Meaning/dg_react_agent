@@ -37,7 +37,7 @@
 
 | `session.audio` | Who sets it | Purpose |
 |-----------------|-------------|---------|
-| **`input`** | Proxy (`mapSettingsToSessionUpdate`) | `turn_detection: null`, PCM `format`, input `transcription` — required for client commit + `response.create` and Issue #414 transcripts; do not change without VAD/commit review. |
+| **`input`** | Proxy (`mapSettingsToSessionUpdate`) | Default: `turn_detection: null`, PCM `format`, input `transcription` — proxy `commit` + `response.create` for mic (Issue #414). Optional **`Settings.agent.useOpenAIServerVad`** → **`server_vad`** + append-only mic path (Issue #560 Phase 2b); see [REALTIME-SESSION-UPDATE-FIELD-MAP.md](./REALTIME-SESSION-UPDATE-FIELD-MAP.md). |
 | **`output`** | Integrator via **`Settings.agent.sessionAudioOutput`** (optional) | OpenAI **RealtimeAudioConfigOutput**: `format` (`audio/pcm` with optional 24k rate, `audio/pcmu`, `audio/pcma`), `speed` (0.25–1.5), `voice` (built-in name or `{ id }`). Omitted when unset or all fields invalid (Issue #540). |
 
 ## Server

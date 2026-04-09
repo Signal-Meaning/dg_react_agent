@@ -25,6 +25,7 @@ const WebSocketServer = (WebSocket.Server && typeof WebSocket.Server === 'functi
   : require(path.join(path.dirname(require.resolve('ws')), 'lib', 'websocket-server.js'));
 import {
   mapSettingsToSessionUpdate,
+  sessionUpdateUsesOpenAIServerVad,
   mapInjectUserMessageToConversationItemCreate,
   mapSessionUpdatedToSettingsApplied,
   mapFunctionCallArgumentsDoneToFunctionCallRequest,
@@ -195,6 +196,8 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
     /** Issue #489: Prior-session context is no longer sent as conversation items; it is passed in session.update instructions only. */
     /** Issue #414: defer input_audio_buffer.append until after session.updated so session is configured for audio. */
     const pendingAudioQueue: Buffer[] = [];
+    /** Issue #560 Phase 2b: Server VAD — no proxy `input_audio_buffer.commit` for mic; set from first `session.update`. */
+    let micInputUsesOpenAIServerVad = false;
     /** Issue #560: dg_react_agent sends 16 kHz PCM; session.update declares 24 kHz — resample before upstream append. */
     const inputAudioResampler = new Pcm16Mono16kTo24kStreamResampler();
     /** Issue #542 #534: defer InjectUserMessage (full client JSON frame) until after session.updated (same readiness as audio). */
@@ -288,6 +291,9 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
      * minimum (100 ms @ 24 kHz), append silence so commit is legal — avoids dropping intentional tail audio.
      */
     const rearmPendingAudioCommitAfterResponse = (): void => {
+      if (micInputUsesOpenAIServerVad) {
+        return;
+      }
       if (!hasPendingAudio || pendingAudioBytes <= 0 || upstream.readyState !== WebSocket.OPEN) {
         return;
       }
@@ -354,6 +360,9 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
 
     /** Shared gate + send for debounce, max-coalesce, and client-close flush (Issue #560 Phase 2). */
     const performAudioCommitIfEligible = (): boolean => {
+      if (micInputUsesOpenAIServerVad) {
+        return false;
+      }
       const minBytesForThisCommit = hasCompletedFirstUserAudioCommit
         ? OPENAI_MIN_AUDIO_BYTES_FOR_COMMIT
         : OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT;
@@ -425,6 +434,9 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
      * Flush commit (+ response.create) when safe so upstream does not lose the buffered user audio.
      */
     const flushPendingAudioCommitOnClientClose = (): void => {
+      if (micInputUsesOpenAIServerVad) {
+        return;
+      }
       if (!hasPendingAudio || pendingAudioBytes <= 0 || upstream.readyState !== WebSocket.OPEN) {
         return;
       }
@@ -528,6 +540,7 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           hasForwardedSessionUpdate = true;
           const settings = msg as Parameters<typeof mapSettingsToSessionUpdate>[0];
           const sessionUpdate = mapSettingsToSessionUpdate(settings);
+          micInputUsesOpenAIServerVad = sessionUpdateUsesOpenAIServerVad(sessionUpdate);
           upstream.send(JSON.stringify(sessionUpdate));
           const toolsCount = (sessionUpdate.session as { tools?: unknown[] })?.tools?.length ?? 0;
           emitLog({
@@ -722,9 +735,11 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
           });
           const appendEvent = binaryToInputAudioBufferAppend(resampled);
           upstream.send(JSON.stringify(appendEvent));
-          pendingAudioBytes += resampled.length;
-          hasPendingAudio = true;
-          scheduleAudioCommit();
+          if (!micInputUsesOpenAIServerVad) {
+            pendingAudioBytes += resampled.length;
+            hasPendingAudio = true;
+            scheduleAudioCommit();
+          }
         }
       }
     };
@@ -758,10 +773,12 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
         });
         const appendEvent = binaryToInputAudioBufferAppend(resampled);
         upstream.send(JSON.stringify(appendEvent));
-        pendingAudioBytes += resampled.length;
-        hasPendingAudio = true;
+        if (!micInputUsesOpenAIServerVad) {
+          pendingAudioBytes += resampled.length;
+          hasPendingAudio = true;
+        }
       }
-      if (hasPendingAudio) scheduleAudioCommit();
+      if (hasPendingAudio && !micInputUsesOpenAIServerVad) scheduleAudioCommit();
     };
 
     (clientWs as unknown as WsLike).on('message', (data: Buffer | ArrayBuffer | Buffer[]) => {
@@ -1124,6 +1141,10 @@ export function createOpenAIProxyServer(options: OpenAIProxyServerOptions): {
             sendDeferredResponseCreate();
           }
         } else if (msg.type === 'response.created') {
+          // Server VAD + create_response: upstream may start a response without our response.create (Issue #560 Phase 2b).
+          if (micInputUsesOpenAIServerVad && !responseInProgress) {
+            onResponseStarted();
+          }
           // Real API sends response.created when a response is created (e.g. after our response.create). Control event only; no component message (Epic #493).
           emitLog({
             severityNumber: SeverityNumber.DEBUG,

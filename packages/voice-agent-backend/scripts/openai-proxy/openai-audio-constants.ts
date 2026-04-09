@@ -34,6 +34,21 @@ export const OPENAI_MIN_AUDIO_BYTES_FOR_FIRST_COMMIT = 48000;
 export const OPENAI_MAX_AUDIO_BYTES_PER_APPEND = 15 * 1024 * 1024;
 
 /**
+ * OpenAI Realtime **`session.audio.input.turn_detection`** when **`type: "server_vad"`** — documented bounds for
+ * **`idle_timeout_ms`** (optional). Values outside this range are rejected or clamped by the API.
+ *
+ * **Not** the same as `DEFAULT_SERVER_TIMEOUT_MS` (60_000) in `src/constants/voice-agent.ts`: that constant is the
+ * Deepgram Voice Agent (and similar) **WebSocket inactivity** window for keepalives — a different product and
+ * semantic. OpenAI’s field is “after the last model response’s audio finished, auto-prompt the user if quiet”
+ * (see API: `input_audio_buffer.timeout_triggered`).
+ *
+ * @see https://platform.openai.com/docs/api-reference/realtime-client-events/session/update
+ */
+export const OPENAI_REALTIME_SERVER_VAD_IDLE_TIMEOUT_MS_MIN = 5000;
+/** @see {@link OPENAI_REALTIME_SERVER_VAD_IDLE_TIMEOUT_MS_MIN} */
+export const OPENAI_REALTIME_SERVER_VAD_IDLE_TIMEOUT_MS_MAX = 30000;
+
+/**
  * Assert we never send commit with fewer than the API-required minimum bytes.
  * Call immediately before sending input_audio_buffer.commit.
  */

@@ -2188,6 +2188,108 @@ describe('OpenAI proxy integration (Issue #381)', () => {
   );
 
   /**
+   * Issue #560 Phase 2b: Opt-in Server VAD — proxy must not send input_audio_buffer.commit for mic PCM
+   * (upstream commits on VAD). session.update must carry server_vad + create_response.
+   */
+  itMockOnly(
+    'Issue #560 Phase 2b: useOpenAIServerVad — server_vad in session.update; mic PCM yields no proxy commit',
+    (done) => {
+      mockReceived.length = 0;
+      receivedSessionUpdatePayloads.length = 0;
+      let settingsApplied = false;
+      let finished = false;
+      let audioEpochMs = 0;
+      const commitsAfterEpoch = () =>
+        mockReceived.filter(
+          (m) => m.type === 'input_audio_buffer.commit' && (m.at ?? 0) >= audioEpochMs,
+        );
+      const MIC_CHUNK_INTERVAL_MS = 250;
+      const CHUNK_BYTES_16K_250MS = 16000 * 0.25 * 2;
+      /** Long enough that null-VAD + Phase 2 max-coalesce would have committed; VAD path must stay at 0. */
+      const NO_COMMIT_WINDOW_MS = 3500;
+
+      const finish = (err?: Error) => {
+        if (finished) return;
+        finished = true;
+        try {
+          client.close();
+        } catch {
+          // ignore
+        }
+        if (err) done(err);
+        else done();
+      };
+
+      const client = new WebSocket(`ws://localhost:${proxyPort}${PROXY_PATH}`);
+      let chunkTimer: ReturnType<typeof setInterval> | null = null;
+
+      client.on('open', () => {
+        mockReceived.length = 0;
+        receivedSessionUpdatePayloads.length = 0;
+        client.send(
+          JSON.stringify({
+            type: 'Settings',
+            agent: {
+              think: { prompt: 'Hi' },
+              useOpenAIServerVad: true,
+              idleTimeoutMs: 10000,
+            },
+          }),
+        );
+      });
+      client.on('message', (data: Buffer) => {
+        if (data.length === 0 || data[0] !== 0x7b) return;
+        try {
+          const msg = JSON.parse(data.toString()) as { type?: string };
+          if (msg.type === 'SettingsApplied' && !settingsApplied) {
+            settingsApplied = true;
+            expect(receivedSessionUpdatePayloads.length).toBeGreaterThanOrEqual(1);
+            const sessionUpdate = receivedSessionUpdatePayloads[0] as {
+              session?: { audio?: { input?: { turn_detection?: Record<string, unknown> | null } } };
+            };
+            const td = sessionUpdate.session?.audio?.input?.turn_detection ?? null;
+            expect(td?.type).toBe('server_vad');
+            expect(td?.create_response).toBe(true);
+            expect(td?.interrupt_response).toBe(true);
+            expect(td?.idle_timeout_ms).toBe(10000);
+            audioEpochMs = Date.now();
+            chunkTimer = setInterval(() => {
+              try {
+                client.send(Buffer.alloc(CHUNK_BYTES_16K_250MS, 0));
+              } catch (e) {
+                if (chunkTimer) clearInterval(chunkTimer);
+                chunkTimer = null;
+                finish(e instanceof Error ? e : new Error(String(e)));
+              }
+            }, MIC_CHUNK_INTERVAL_MS);
+            setTimeout(() => {
+              try {
+                if (chunkTimer) clearInterval(chunkTimer);
+                chunkTimer = null;
+                const appends = mockReceived.filter(
+                  (m) => m.type === 'input_audio_buffer.append' && (m.at ?? 0) >= audioEpochMs,
+                );
+                expect(appends.length).toBeGreaterThan(0);
+                expect(commitsAfterEpoch().length).toBe(0);
+                finish();
+              } catch (e) {
+                finish(e instanceof Error ? e : new Error(String(e)));
+              }
+            }, NO_COMMIT_WINDOW_MS);
+          }
+        } catch {
+          // ignore
+        }
+      });
+      client.on('error', (err) => {
+        if (chunkTimer) clearInterval(chunkTimer);
+        finish(err);
+      });
+    },
+    12000,
+  );
+
+  /**
    * Issue #414: Proxy must not send input_audio_buffer.append until after session.updated (audio gated).
    * When client sends binary before session.updated, proxy queues it and flushes after session.updated.
    * Mock enforces protocol: input_audio_buffer.append before session.updated → protocolErrors.
