@@ -12,7 +12,7 @@
 
 **Step tags:** Every numbered step must show **`(human)`** if it needs manual work (real mic, browser, vendor console, secrets you paste) or **`(agent)`** if an autonomous agent can do it end-to-end (edit repo, run scripted tests/builds, no live audio). Use **both** inline when one step mixes both (e.g. you renew a key, then the agent runs E2E).
 
-0. **(agent)** **Commit scheduler + proxy audit:** Follow [COMMIT-SCHEDULER-TDD-PLAN.md](./COMMIT-SCHEDULER-TDD-PLAN.md) — Phase 0 completeness audit, Phase 1 **RED** tests (continuous chunk cadence + client close), then scheduler fix; **§4** client chunk-period telemetry. Do **not** assume the proxy is otherwise complete until the audit checklist is done.
+0. **(agent)** **Commit scheduler + Server VAD migration:** [COMMIT-SCHEDULER-TDD-PLAN.md](./COMMIT-SCHEDULER-TDD-PLAN.md) — **Phase 0 `[x]`**; **§4** priorities **P0–P2**; **§9** is the checklist (mirror [TDD-PLAN.md](./TDD-PLAN.md) **§2d**). Next unchecked: Phase 1 **RED** (×2), Phase 2 **GREEN**, **Phase 2b**, then **P1** / **P2** per §9. Hybrid `create_response: false` **discounted** (plan §2).
 1. **(human)** **Manual host mic (OpenAI proxy):** After pulling **§2c** proxy changes, follow [MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md](./MANUAL-REPRO-HOST-MIC-OPENAI-PROXY.md). Expect first `input_audio_buffer.commit` with **≥ ~48k** pending bytes @ 24 kHz in debug logs; compare STT to [MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md](./MANUAL-MIC-OPENAI-PROXY-REPORT-2026-04-08.md). Update the repro doc **retest** table.
 2. ~~**(agent)** **`USE_REAL_APIS=1`** — `npm test -- tests/integration/openai-proxy-integration.test.ts` (with `OPENAI_API_KEY`)~~ **Done (2026-04-04):** 20 passed; Issue #560 cases remain mock-only (skipped under real API).
 

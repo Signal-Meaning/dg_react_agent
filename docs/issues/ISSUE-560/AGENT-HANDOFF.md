@@ -75,6 +75,7 @@ Use these when parsing **what failed**; an agent should **treat them as specific
 | [CURRENT-STATUS.md](./CURRENT-STATUS.md) | Short snapshot |
 | [NEXT-STEP.md](./NEXT-STEP.md) | Queued steps (tagged human vs agent) |
 | [TDD-PLAN.md](./TDD-PLAN.md) | Phases, §2b test matrix, commands |
+| [COMMIT-SCHEDULER-TDD-PLAN.md](./COMMIT-SCHEDULER-TDD-PLAN.md) | **§4** audit (**P0–P2**), **§9** execution checklist; null-VAD (1–2), **Server VAD** (2b); hybrid **discounted** §2 |
 | [TRACKING.md](./TRACKING.md) | Checklist |
 | [README.md](./README.md) | Issue scope |
 
