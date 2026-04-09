@@ -165,11 +165,16 @@ async function setupAudioMocks(page) {
 async function setupTestPage(page) {
   await setupAudioMocks(page);
   
-  const { getProxyConfig } = await import('./test-helpers.mjs');
+  const { getBackendProxyParams } = await import('./test-helpers.mjs');
   const { pathWithQuery } = await import('./app-paths.mjs');
-  
+
+  // Must match dual-backend specs (e.g. callback-test beforeEach): getProxyConfig() defaulted to
+  // Deepgram (/deepgram-proxy) whenever VITE_* OpenAI vars were unset, rewiring the app away from
+  // OpenAI proxy mid-test → connection closed / "page closed" after mic click (Issue #570 E2E).
+  const useProxy =
+    process.env.USE_PROXY_MODE === 'true' || process.env.USE_PROXY_MODE === '1';
   const params = {
-    ...getProxyConfig(),
+    ...(useProxy ? getBackendProxyParams() : {}),
     'test-mode': 'true',
     debug: 'true'
   };

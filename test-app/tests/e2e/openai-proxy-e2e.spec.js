@@ -59,8 +59,11 @@ import { loadAndSendAudioSample, loadAndSendAudioSampleAt24k, waitForVADEvents, 
 import path from 'path';
 import fs from 'fs';
 import { OPENAI_PROXY_FC_E2E_VERIFY_TOKEN } from '../../scripts/function-call-handlers.js';
+import { waitForIdleConditions } from './fixtures/idle-timeout-helpers.js';
 
 const AGENT_RESPONSE_TIMEOUT = 20000;
+/** Buffer after configured client idle timeout so close is observable (CI / proxy / event ordering). */
+const E2E_IDLE_CLOSE_BUFFER_MS = 5000;
 /** Issue #478: function-call round-trip (backend + model reply) can exceed 20s; use longer wait for result content. */
 const FUNCTION_CALL_RESULT_TIMEOUT = 45000;
 /** Tests 6 and 6b use setupFunctionCallingTest(page, { useBackend: true }), fc-e2e-verify (app appends instruction to echo e2eVerify), POST /function-call JSON includes e2eVerify; assert that token in agent-response (same contract as Issue #470 integration). See test-app/scripts/function-call-handlers.js. */
@@ -198,8 +201,15 @@ test.describe('OpenAI Proxy E2E (Issue #381)', () => {
     expect(r1StillInHistory, 'Conversation history must still contain r1 after reconnect (session history requirement)').toBe(true);
     await assertNoRecoverableAgentErrors(page);
 
-    // Wait for idle timeout to close connection (default 10s; wait up to 12s) – proves component idle timeout with proxy WS
-    await expect(page.locator('[data-testid="connection-status"]')).toHaveText('closed', { timeout: 12000 });
+    // Client idle disconnect runs only after agent UI is idle. sendMessageAndWaitForResponse returns when
+    // agent-response updates, which can precede AgentDone / text-only deferred idle (Issue #570 / 3b).
+    await waitForIdleConditions(page, 20000);
+    const idleMs = await page.evaluate(() =>
+      typeof window !== 'undefined' && window.__idleTimeoutMs ? window.__idleTimeoutMs : 10000
+    );
+    await expect(page.locator('[data-testid="connection-status"]')).toHaveText('closed', {
+      timeout: idleMs + E2E_IDLE_CLOSE_BUFFER_MS,
+    });
   });
 
   test('4. Reconnection – disconnect then send, app reconnects and user receives response', async ({ page }) => {

@@ -27,11 +27,11 @@
 
 - **Pre-publish (in progress):** Full Jest (`npm test`), upstream event coverage, and **real-API** `openai-proxy-integration` (20 ran, 70 skipped) passed **2026-04-09**; first full real-API run hit transient upstream **504** on one test — immediate retry + full re-run green. `npm run clean && npm run build && npm run validate` passed; **`issue-570`** and **`release/v0.11.0`** pushed to `origin`.
 - **E2E (2026-04-09, user-hosted backend + Vite):**
-  - **Full suite from repo root:** `USE_PROXY_MODE=true npm run test:e2e` → **110 passed, 93 failed, 46 skipped** (~12.5m). Most failures are **Deepgram-direct** specs (`deepgram-*.spec.js`, VAD, idle-timeout against real Deepgram) and collateral flakes (`Target page, context or browser has been closed`) when upstream or connection setup does not match spec expectations. **Not all-green** without a valid **`VITE_DEEPGRAM_API_KEY`** (and stable Deepgram) for those paths — see [E2E-BACKEND-MATRIX.md](../../../test-app/tests/e2e/E2E-BACKEND-MATRIX.md).
+  - **Full suite from repo root:** `USE_PROXY_MODE=true npm run test:e2e` → **110 passed, 93 failed, 46 skipped** (~12.5m). Most failures are **Deepgram-direct** specs (`deepgram-*.spec.js`, VAD, idle-timeout against real Deepgram) and collateral flakes (`Target page, context or browser has been closed`) when upstream or connection setup does not match spec expectations. **Not all-green** without a valid **`VITE_DEEPGRAM_API_KEY`** (and stable Deepgram) for those paths — see [E2E-BACKEND-MATRIX.md](../../../test-app/tests/e2e/E2E-BACKEND-MATRIX.md). _Re-run after OpenAI fixes if you need a fresh baseline._
   - **OpenAI proxy slice (recommended for this release):** from **`test-app`**, with backend + dev server already running:  
     `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true E2E_USE_HTTP=1 USE_REAL_APIS=1 npm run test:e2e:openai`  
-    → **25 passed, 3 failed, 2 skipped** (~5m). **Failed:** `callback-test.spec.js` (×2 — page closed during mic reconnect helper after connection), `openai-proxy-e2e.spec.js` **3b** Multi-turn after disconnect (assertion). Track fixes in [E2E-OPENAI-FAILURES-TRACKING.md](./E2E-OPENAI-FAILURES-TRACKING.md). **Re-run or debug** these three before treating OpenAI proxy E2E as fully qualified; optionally retry with `workers: 1` / headed trace per [test-app/tests/e2e/README.md](../../../test-app/tests/e2e/README.md).
-- **Outstanding before publish:** Green **E2E** per your bar (full root suite vs OpenAI slice only); then GitHub Release → CI publish → tag → merge PR.
+    → **green** after fixes (**2026-04-09**): `test-app/tests/e2e/helpers/audio-mocks.js` (`setupTestPage` uses `getBackendProxyParams()` in proxy mode so mic helpers do not rewire the app to the Deepgram proxy mid-test), and `openai-proxy-e2e.spec.js` test **3b** (`waitForIdleConditions` + `window.__idleTimeoutMs` + buffer before expecting `connection-status` **closed**). Details: [E2E-OPENAI-FAILURES-TRACKING.md](./E2E-OPENAI-FAILURES-TRACKING.md). `USE_REAL_APIS=1` keeps **workers: 1** per Playwright config.
+- **Outstanding before publish:** Confirm **OpenAI slice** with your live run if needed; optional full root proxy E2E per bar; then GitHub Release → CI publish → tag → merge PR.
 - **Publish:** _not started_
 - **Post-release:** _not started_
 
@@ -40,11 +40,11 @@
 ### Pre-Release Preparation
 
 - [x] **Code review complete:** Intended commits on `release/v0.11.0`; no stray changes.
-- [ ] **Tests passing** _(E2E below still required)_
+- [ ] **Tests passing** _(optional: full root proxy E2E; OpenAI slice done — see below)_
   - [x] **Run what CI runs:** `npm run lint` then `npm run test:mock`
   - [x] **Full Jest suite (required):** `npm test` — **2026-04-09:** 142 suites passed, 1 skipped; 1291 tests passed
-  - [ ] **E2E (proxy):** With **Vite + backend** running: (1) **Full:** repo root `USE_PROXY_MODE=true npm run test:e2e` — **2026-04-09 run: 93 failures** (mostly Deepgram-direct; see Progress). (2) **OpenAI-focused:** `cd test-app` then  
-    `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true E2E_USE_HTTP=1 USE_REAL_APIS=1 npm run test:e2e:openai` — **2026-04-09: 3 failures** (callback ×2, openai-proxy **3b**); fix or flake-retry before checking this box.
+  - [ ] **E2E (proxy):** With **Vite + backend** running: (1) **Full:** repo root `USE_PROXY_MODE=true npm run test:e2e` — **2026-04-09 run: 93 failures** (mostly Deepgram-direct; see Progress). _(Skip or re-run per release bar.)_ (2) **OpenAI-focused:** `cd test-app` then  
+    `E2E_USE_EXISTING_SERVER=1 USE_PROXY_MODE=true E2E_USE_HTTP=1 USE_REAL_APIS=1 npm run test:e2e:openai` — **2026-04-09 (post-fix):** slice **green**; previously failing callback ×2 + **3b** resolved (see Progress + [E2E-OPENAI-FAILURES-TRACKING.md](./E2E-OPENAI-FAILURES-TRACKING.md)). _Parent item stays open until you either accept OpenAI-only qualification or run full root proxy E2E green._
   - [x] **Real-API integration:** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts` — **2026-04-09:** 20 passed (see Progress for transient 504 note)
   - [x] **Function-call path:** Covered by **Issue #470** real-API test in that file (backend HTTP contract per project tests)
   - [x] **Upstream event coverage:** `npm test -- tests/openai-proxy-event-coverage.test.ts`
@@ -125,8 +125,8 @@ npm dist-tag add @signal-meaning/voice-agent-react@0.11.0 latest --registry http
 
 ### Completion Criteria
 
-- [ ] Lint, `test:mock`, **full `npm test`**, and **proxy E2E** green; **CI** test + publish jobs green _(local Jest + real-API done; E2E + CI pending)_
-- [x] Real-API integration documented here and on **#570** when applicable _(E2E: re-run with backend, then note on issue)_
+- [ ] Lint, `test:mock`, **full `npm test`**, and **proxy E2E** green per bar (**OpenAI slice** green **2026-04-09**; full root proxy suite still environment-dependent); **CI** test + publish jobs green _(local Jest + real-API + OpenAI E2E slice done; full root E2E + CI pending if required)_
+- [x] Real-API integration documented here and on **#570** when applicable _(OpenAI proxy E2E slice re-qualified post-fix — note on #570 when publishing)_
 - [x] `docs/releases/v0.11.0/` validated (`npm run validate:release-docs 0.11.0`)
 - [ ] Packages published from **`release/v0.11.0`**
 - [ ] **`latest` dist-tags** correct for published packages
