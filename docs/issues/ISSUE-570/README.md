@@ -20,6 +20,7 @@ A **minor** release is recommended for `@signal-meaning/voice-agent-react` (**`v
 
 | Doc | Purpose |
 |-----|---------|
+| [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md) | Repo-local checklist (versions, commands); mirrors GitHub #570 + [release template](../../../.github/ISSUE_TEMPLATE/release-checklist.md). |
 | [RELEASE-CONTEXT.md](./RELEASE-CONTEXT.md) | Baseline tag, semver note, package versions on branch creation. |
 | [TRACKING.md](./TRACKING.md) | Maintainer notes and pointers while working the checklist. |
 

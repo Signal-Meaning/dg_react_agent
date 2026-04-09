@@ -2,7 +2,7 @@
 
 **GitHub checklist:** [#570](https://github.com/Signal-Meaning/dg_react_agent/issues/570)
 
-Use the **issue body on GitHub** for the authoritative checkbox list ([release checklist template](../../../.github/ISSUE_TEMPLATE/release-checklist.md)). This file is for short local notes only.
+Use the **issue body on GitHub** for the authoritative checkbox list ([release checklist template](../../../.github/ISSUE_TEMPLATE/release-checklist.md)). **Repo copy:** [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md) (fixed versions and commands — keep in sync as you work). This file is for short local notes only.
 
 ---
 
