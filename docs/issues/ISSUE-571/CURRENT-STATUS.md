@@ -2,9 +2,9 @@
 
 **Last updated:** 2026-04-10
 
-**GitHub:** [#571](https://github.com/Signal-Meaning/dg_react_agent/issues/571) — **open** (close after fix merged and tests green)
+**GitHub:** [#571](https://github.com/Signal-Meaning/dg_react_agent/issues/571) — **closed** (merged with [#572](https://github.com/Signal-Meaning/dg_react_agent/pull/572))
 
-**Branch:** `issue-571`
+**Branches:** **`main`** — fix + test; **`release/v0.11.1`** — **0.11.1** / **0.2.13** + `docs/releases/v0.11.1/` for npm publish
 
 ---
 
@@ -15,7 +15,7 @@
 | **Bug (historical)** | `createOpenAIWss` used to register `clientWs.on('message')` only inside `upstream.on('open')`; frames sent before upstream was open were **dropped**. |
 | **Impact** | Early **Settings** could be lost → translator never applies session → audio stuck in `pendingAudioQueue`; no agent response. |
 | **Reference implementation** | `createDeepgramWss` in the same file (`attach-upgrade.js`) queues client → upstream until upstream is `OPEN`. |
-| **Fix** | **On `issue-571`:** client→upstream `messageQueue`, immediate `clientWs.on('message')`, flush on `upstream.on('open')`; early `clientWs` close/error tears down upstream (`CONNECTING` \| `OPEN`). |
+| **Fix** | **On `main` (PR #572):** client→upstream `messageQueue`, immediate `clientWs.on('message')`, flush on `upstream.on('open')`; early `clientWs` close/error tears down upstream (`CONNECTING` \| `OPEN`). |
 | **Tests** | `tests/voice-agent-backend-issue-571-createOpenAIWss-queue.test.js` — delayed upstream `verifyClient` so client sends while relay→upstream is still held. |
 
 ---
