@@ -31,7 +31,7 @@
 
 - **PR (fix + docs):** [#572](https://github.com/Signal-Meaning/dg_react_agent/pull/572) — merged to **`main`** **2026-04-10** (**Closes #571**).
 - **Release branch prep (2026-04-10):** Branch **`release/v0.11.1`** from **`main`** with version bumps (**0.11.1** / **0.2.13**) and **`docs/releases/v0.11.1/`**; `npm run validate:release-docs 0.11.1`; `npm audit --audit-level=high`; `npm run lint`; `npm run test:mock`; targeted Jest (`#571` test, attach-upgrade, `openai-proxy-event-coverage`).
-- **Pre-publish:** _Push **`release/v0.11.1`**, then GitHub **Release** tag **`v0.11.1`** → CI **Test and Publish**_
+- **Pre-publish:** **`release/v0.11.1`** pushed **2026-04-10** — next: GitHub **Release** tag **`v0.11.1`** → CI **Test and Publish**
 - **Qualification (optional before publish):** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`; OpenAI E2E slice from `test-app` when keys and servers available
 - **Publish:** _GitHub Release ref, workflow run URL_
 - **Post-release:** _PR merge **`release/v0.11.1` → `main`**_
@@ -91,7 +91,7 @@
 ### Git Operations
 
 - [x] Branch **`release/v0.11.1`** from **`main`** including version bumps + `docs/releases/v0.11.1/` + doc updates under `docs/issues/ISSUE-571/`
-- [ ] Push: `git push -u origin release/v0.11.1`
+- [x] Push: `git push -u origin release/v0.11.1` — **2026-04-10**
 - [ ] **Do not delete** `release/v0.11.1` after merge (per project policy)
 
 ---

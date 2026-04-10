@@ -14,7 +14,7 @@
 
 ## Recommended follow-ups (publish)
 
-1. **Push** `git push -u origin release/v0.11.1`
+1. **Push** — completed **2026-04-10** (`origin/release/v0.11.1`).
 2. **GitHub Release** — Tag **`v0.11.1`**, target branch **`release/v0.11.1`** (not `main` until versions exist on that branch). See [docs/PUBLISHING-AND-RELEASING.md](../../PUBLISHING-AND-RELEASING.md).
 3. **CI** — Confirm **Test and Publish** green; **`latest`** on GitHub Packages if you verify manually.
 4. **Optional qualification** — With `OPENAI_API_KEY`: `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`; from `test-app`, OpenAI E2E slice per checklist.
