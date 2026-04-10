@@ -1,10 +1,10 @@
 # Issue #571 — OpenAI relay drops pre-upstream-open client messages
 
-**Status:** GitHub [#571](https://github.com/Signal-Meaning/dg_react_agent/issues/571) **closed** (**2026-04-10**); fix merged via [#572](https://github.com/Signal-Meaning/dg_react_agent/pull/572). Patch **v0.11.1** / **@signal-meaning/voice-agent-backend@0.2.13** — version + `docs/releases/v0.11.1/` on branch **`release/v0.11.1`** (push, GitHub Release, CI publish, then mergeback per [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)).
+**Status:** **Released** — GitHub [#571](https://github.com/Signal-Meaning/dg_react_agent/issues/571) **closed**; fix [#572](https://github.com/Signal-Meaning/dg_react_agent/pull/572); patch **[v0.11.1](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.11.1)** / **@signal-meaning/voice-agent-backend@0.2.13** published **2026-04-10**; mergeback [#573](https://github.com/Signal-Meaning/dg_react_agent/pull/573). See [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md).
 
 **GitHub:** [#571 — OpenAI relay (createOpenAIWss) drops client messages until upstream opens — queue like Deepgram path](https://github.com/Signal-Meaning/dg_react_agent/issues/571)
 
-**Branches:** **`main`** has the code fix; **`release/v0.11.1`** carries semver + release docs for publish.
+**Branches:** **`main`** at **0.11.1** / **0.2.13** with `docs/releases/v0.11.1/`; **`release/v0.11.1`** retained (do not delete).
 
 ---
 

@@ -1,5 +1,7 @@
 # Issue #571: Release checklist — patch (backend relay fix)
 
+**Status:** **Complete** — **v0.11.1** / backend **0.2.13** published **2026-04-10**; **`main`** updated via [#573](https://github.com/Signal-Meaning/dg_react_agent/pull/573).
+
 **GitHub:** [#571](https://github.com/Signal-Meaning/dg_react_agent/issues/571) — **closed** when [#572](https://github.com/Signal-Meaning/dg_react_agent/pull/572) merged (**2026-04-10**).
 
 **Scope:** Patch shipping **Issue #571** — `createOpenAIWss` queues client→upstream WebSocket frames until the upstream socket is `OPEN` (matches `createDeepgramWss`). Fixes lost **Settings** when the browser connects through the Express relay before the translator handshake completes.
@@ -30,11 +32,10 @@
 ### Progress
 
 - **PR (fix + docs):** [#572](https://github.com/Signal-Meaning/dg_react_agent/pull/572) — merged to **`main`** **2026-04-10** (**Closes #571**).
-- **Release branch prep (2026-04-10):** Branch **`release/v0.11.1`** from **`main`** with version bumps (**0.11.1** / **0.2.13**) and **`docs/releases/v0.11.1/`**; `npm run validate:release-docs 0.11.1`; `npm audit --audit-level=high`; `npm run lint`; `npm run test:mock`; targeted Jest (`#571` test, attach-upgrade, `openai-proxy-event-coverage`).
-- **Pre-publish:** **`release/v0.11.1`** pushed **2026-04-10** — next: GitHub **Release** tag **`v0.11.1`** → CI **Test and Publish**
-- **Qualification (optional before publish):** `USE_REAL_APIS=1 npm test -- tests/integration/openai-proxy-integration.test.ts`; OpenAI E2E slice from `test-app` when keys and servers available
-- **Publish:** _GitHub Release ref, workflow run URL_
-- **Post-release:** _PR merge **`release/v0.11.1` → `main`**_
+- **Release branch prep (2026-04-10):** Branch **`release/v0.11.1`** with version bumps (**0.11.1** / **0.2.13**) and **`docs/releases/v0.11.1/`**; local validation (`validate:release-docs`, audit, lint, `test:mock`, targeted Jest).
+- **Publish (2026-04-10):** GitHub **[Release v0.11.1](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.11.1)** from **`release/v0.11.1`**. CI **[Test and Publish Package](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/24249265463)** — **success** (Jest + publish + **`latest`** dist-tags per workflow).
+- **Mergeback (2026-04-10):** [#573](https://github.com/Signal-Meaning/dg_react_agent/pull/573) **`release/v0.11.1` → `main`** merged — **`main`** at **0.11.1** / **0.2.13** with `docs/releases/v0.11.1/`.
+- **Optional follow-up:** Real-API integration / OpenAI E2E slice when you want extra qualification beyond CI (document if skipped).
 
 ---
 
@@ -83,7 +84,7 @@
 
 ### Build and Package
 
-- [ ] Rely on **CI** for publish builds; do not commit `dist/` or `.tgz`
+- [x] **CI** publish builds — **Test and Publish** on tag **v0.11.1**; do not commit `dist/` or `.tgz`
 - [ ] Optional local: `npm run clean && npm run build && npm run validate`
 
 ---
@@ -92,15 +93,15 @@
 
 - [x] Branch **`release/v0.11.1`** from **`main`** including version bumps + `docs/releases/v0.11.1/` + doc updates under `docs/issues/ISSUE-571/`
 - [x] Push: `git push -u origin release/v0.11.1` — **2026-04-10**
-- [ ] **Do not delete** `release/v0.11.1` after merge (per project policy)
+- [x] **Do not delete** `release/v0.11.1` after merge (per project policy) — branch retained on `origin`
 
 ---
 
 ### Package Publishing
 
-- [ ] GitHub **Release** with tag **`v0.11.1`** targeting **`release/v0.11.1`**
-- [ ] CI **Test and Publish** workflow green; both packages at **0.11.1** / **0.2.13**
-- [ ] Confirm **`latest`** dist-tags on GitHub Packages if policy requires a manual check
+- [x] GitHub **Release** with tag **`v0.11.1`** targeting **`release/v0.11.1`** — [releases/tag/v0.11.1](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.11.1)
+- [x] CI **Test and Publish** workflow green; both packages **0.11.1** / **0.2.13** — [run 24249265463](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/24249265463)
+- [x] **`latest`** dist-tags applied in workflow (verify on registry if policy requires a manual spot-check)
 
 ```bash
 # Example after publish — use exact versions from the Overview table
@@ -112,7 +113,7 @@ npm dist-tag add @signal-meaning/voice-agent-backend@0.2.13 latest --registry ht
 
 ### Post-Release
 
-- [ ] PR **merge `release/v0.11.1` → `main`** (brings version bumps + `docs/releases/` onto `main` after publish)
+- [x] PR **merge `release/v0.11.1` → `main`** — [#573](https://github.com/Signal-Meaning/dg_react_agent/pull/573) merged **2026-04-10**
 - [x] **GitHub #571** — **closed** on #572 merge (no further action)
 
 ---
@@ -120,10 +121,10 @@ npm dist-tag add @signal-meaning/voice-agent-backend@0.2.13 latest --registry ht
 ### Completion Criteria
 
 - [x] Lint + `test:mock` + targeted proxy tests green on release branch _(full `npm test` optional)_
-- [ ] Real-API integration and/or OpenAI E2E slice _(document exception on release issue if skipped)_
+- [ ] Real-API integration and/or OpenAI E2E slice _(optional extra qualification; CI used mocks)_
 - [x] `docs/releases/v0.11.1/` validated
-- [ ] Packages published from **`release/v0.11.1`** / tag **`v0.11.1`**
-- [ ] **`release/v0.11.1`** merged to **`main`**
+- [x] Packages published from **`release/v0.11.1`** / tag **`v0.11.1`**
+- [x] **`release/v0.11.1`** merged to **`main`** via [#573](https://github.com/Signal-Meaning/dg_react_agent/pull/573)
 
 ---
 

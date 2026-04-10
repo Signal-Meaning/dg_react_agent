@@ -12,5 +12,5 @@ Use this checklist while working [GitHub #571](https://github.com/Signal-Meaning
 ## Review / close-out
 
 - [x] PR [#572](https://github.com/Signal-Meaning/dg_react_agent/pull/572) merged; **#571** closed.
-- [ ] **Publish:** `release/v0.11.1` → GitHub Release **v0.11.1** → CI → mergeback to `main` ([RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)).
+- [x] **Publish:** GitHub Release **[v0.11.1](https://github.com/Signal-Meaning/dg_react_agent/releases/tag/v0.11.1)** → CI [24249265463](https://github.com/Signal-Meaning/dg_react_agent/actions/runs/24249265463) → mergeback [#573](https://github.com/Signal-Meaning/dg_react_agent/pull/573) to **`main`** ([RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)).
 - [ ] Optional: real-API integration / OpenAI E2E slice before or after publish per policy.

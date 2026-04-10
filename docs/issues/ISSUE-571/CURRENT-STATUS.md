@@ -4,7 +4,7 @@
 
 **GitHub:** [#571](https://github.com/Signal-Meaning/dg_react_agent/issues/571) — **closed** (merged with [#572](https://github.com/Signal-Meaning/dg_react_agent/pull/572))
 
-**Branches:** **`main`** — fix + test; **`release/v0.11.1`** — **0.11.1** / **0.2.13** + `docs/releases/v0.11.1/` for npm publish
+**Branches:** **`main`** — **0.11.1** / **0.2.13**, fix + release docs (mergeback **#573**); **`release/v0.11.1`** — retained on `origin` (do not delete)
 
 ---
 
