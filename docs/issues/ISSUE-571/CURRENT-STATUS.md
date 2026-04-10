@@ -29,4 +29,4 @@
 
 ## Next
 
-See [NEXT-STEP.md](./NEXT-STEP.md).
+See [NEXT-STEP.md](./NEXT-STEP.md). For the **0.11.1 / 0.2.13** patch, use [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md).

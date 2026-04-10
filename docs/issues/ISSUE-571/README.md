@@ -48,7 +48,7 @@ Also consider registering **close / error** handlers in a way that does not depe
 
 ## Release / qualification
 
-If the fix ships in a release that touches proxy relay behavior, follow [.github/ISSUE_TEMPLATE/release-checklist.md](../../../.github/ISSUE_TEMPLATE/release-checklist.md) and project rules: run relevant integration/E2E with mocks in CI; use real APIs where the change affects ordering or timing.
+Patch release (**0.11.1** / **0.2.13**) checklist: [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md). Authoritative template: [.github/ISSUE_TEMPLATE/release-checklist.md](../../../.github/ISSUE_TEMPLATE/release-checklist.md). Use real APIs where the change affects proxy relay ordering or timing (see [.cursorrules](../../../.cursorrules)).
 
 ---
 
@@ -56,6 +56,7 @@ If the fix ships in a release that touches proxy relay behavior, follow [.github
 
 | Doc | Purpose |
 |-----|---------|
+| [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md) | Patch release steps: **v0.11.1** + **voice-agent-backend 0.2.13**. |
 | [CURRENT-STATUS.md](./CURRENT-STATUS.md) | Snapshot and acceptance checkboxes. |
 | [NEXT-STEP.md](./NEXT-STEP.md) | Ordered follow-ups (TDD, PR, close-out). |
 | [TRACKING.md](./TRACKING.md) | Checklist while implementing #571. |

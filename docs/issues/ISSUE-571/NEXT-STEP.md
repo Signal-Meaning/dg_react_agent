@@ -15,8 +15,9 @@
 ## Recommended follow-ups
 
 1. **PR** — Open PR from `issue-571`, link #571 (`Fixes` / `Closes` as appropriate).
-2. **Qualification** — If the release touches relay timing: proxy-mode E2E and/or integration per [.cursorrules](../../../.cursorrules) and the release checklist.
-3. **Close issue** — After merge, close #571 on GitHub and set [README.md](./README.md) / [CURRENT-STATUS.md](./CURRENT-STATUS.md) to **Closed** in a small doc commit if you keep issue folders in sync with GitHub.
+2. **Patch release** — Follow [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md): **v0.11.1** + **@signal-meaning/voice-agent-backend 0.2.13** (or document a backend-only exception on #571 per [PUBLISHING-AND-RELEASING.md](../../PUBLISHING-AND-RELEASING.md)).
+3. **Qualification** — Real-API integration and/or OpenAI proxy E2E slice when qualifying relay timing (see checklist and [.cursorrules](../../../.cursorrules)).
+4. **Close issue** — After merge and publish, close #571 on GitHub and set [README.md](./README.md) / [CURRENT-STATUS.md](./CURRENT-STATUS.md) to **Closed** in a small doc commit if you keep issue folders in sync with GitHub.
 
 ---
 
