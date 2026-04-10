@@ -11,5 +11,6 @@ Use this checklist while working [GitHub #571](https://github.com/Signal-Meaning
 
 ## Review / close-out
 
-- [ ] PR links **#571** (closes or fixes).
-- [ ] If release-worthy: version/changelog per package maintainer process; run any required real-API qualification for proxy changes.
+- [x] PR [#572](https://github.com/Signal-Meaning/dg_react_agent/pull/572) merged; **#571** closed.
+- [ ] **Publish:** `release/v0.11.1` → GitHub Release **v0.11.1** → CI → mergeback to `main` ([RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)).
+- [ ] Optional: real-API integration / OpenAI E2E slice before or after publish per policy.

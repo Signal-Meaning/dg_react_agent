@@ -1,10 +1,10 @@
 # Issue #571 — OpenAI relay drops pre-upstream-open client messages
 
-**Status:** Open on GitHub — **fix + tests on branch `issue-571`** (queue in `createOpenAIWss`); pending PR / merge / close.
+**Status:** GitHub [#571](https://github.com/Signal-Meaning/dg_react_agent/issues/571) **closed** (**2026-04-10**); fix merged via [#572](https://github.com/Signal-Meaning/dg_react_agent/pull/572). Patch **v0.11.1** / **@signal-meaning/voice-agent-backend@0.2.13** — version + `docs/releases/v0.11.1/` on branch **`release/v0.11.1`** (push, GitHub Release, CI publish, then mergeback per [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)).
 
 **GitHub:** [#571 — OpenAI relay (createOpenAIWss) drops client messages until upstream opens — queue like Deepgram path](https://github.com/Signal-Meaning/dg_react_agent/issues/571)
 
-**Branch:** `issue-571`
+**Branches:** **`main`** has the code fix; **`release/v0.11.1`** carries semver + release docs for publish.
 
 ---
 
@@ -23,9 +23,9 @@ The translator (`scripts/openai-proxy/server.ts`) expects Settings to drive `ses
 
 Direct test-app → translator connections avoid the relay race; **browser → backend forwarder → translator** does not.
 
-## Proposed fix
+## Proposed fix (delivered)
 
-Mirror the Deepgram pattern in `createOpenAIWss`:
+Mirror the Deepgram pattern in `createOpenAIWss` (**shipped in backend 0.2.13**, PR **#572**):
 
 1. Register `clientWs.on('message')` as soon as the client connection is accepted.
 2. If `upstream.readyState !== WebSocket.OPEN`, push `{ data, isBinary }` to a queue.
