@@ -12,18 +12,18 @@
 
 | Area | State |
 |------|--------|
-| **Bug** | `createOpenAIWss` registers `clientWs.on('message')` only inside `upstream.on('open')`; frames sent before upstream is open are **dropped** (no queue). |
-| **Impact** | Early **Settings** can be lost → translator never applies session → audio stuck in `pendingAudioQueue`; no agent response. |
+| **Bug (historical)** | `createOpenAIWss` used to register `clientWs.on('message')` only inside `upstream.on('open')`; frames sent before upstream was open were **dropped**. |
+| **Impact** | Early **Settings** could be lost → translator never applies session → audio stuck in `pendingAudioQueue`; no agent response. |
 | **Reference implementation** | `createDeepgramWss` in the same file (`attach-upgrade.js`) queues client → upstream until upstream is `OPEN`. |
-| **Fix** | Not implemented yet — docs + branch only. |
-| **Tests** | No failing/regression test for this relay race yet (add per TDD). |
+| **Fix** | **On `issue-571`:** client→upstream `messageQueue`, immediate `clientWs.on('message')`, flush on `upstream.on('open')`; early `clientWs` close/error tears down upstream (`CONNECTING` \| `OPEN`). |
+| **Tests** | `tests/voice-agent-backend-issue-571-createOpenAIWss-queue.test.js` — delayed upstream `verifyClient` so client sends while relay→upstream is still held. |
 
 ---
 
 ## Acceptance criteria (from GitHub)
 
-- [ ] Client → upstream messages sent before upstream `OPEN` are forwarded after upstream opens.
-- [ ] Automated tests cover the relay path (extend `tests/voice-agent-backend-attach-upgrade-upstream.test.ts` or add focused tests).
+- [x] Client → upstream messages sent before upstream `OPEN` are forwarded after upstream opens.
+- [x] Automated tests cover the relay path (new `tests/voice-agent-backend-issue-571-createOpenAIWss-queue.test.js`).
 
 ---
 

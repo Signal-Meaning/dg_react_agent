@@ -6,18 +6,17 @@
 
 ## Done (this slice)
 
-Branch **`issue-571`** and in-repo docs under `docs/issues/ISSUE-571/` (README, TRACKING, CURRENT-STATUS, NEXT-STEP).
+- Branch **`issue-571`** and docs under `docs/issues/ISSUE-571/`.
+- **TDD:** `tests/voice-agent-backend-issue-571-createOpenAIWss-queue.test.js` (delayed upstream `verifyClient` + `upstreamVerifyInvoked` so the client send races ahead of `cb(true)`).
+- **Implementation:** `packages/voice-agent-backend/src/attach-upgrade.js` — `createOpenAIWss` queues client→upstream until `upstream` is `OPEN`, mirrors Deepgram pattern; teardown if client disconnects while upstream is still connecting.
 
 ---
 
 ## Recommended follow-ups
 
-1. **RED** — Add a Jest test that simulates `createOpenAIWss`: client sends a message while the upstream `WebSocket` is still connecting, then upstream fires `open`; assert the upstream received the payload after open (binary and text cases if both matter).
-2. **GREEN** — In `packages/voice-agent-backend/src/attach-upgrade.js`, implement a client→upstream `messageQueue` + flush on `upstream.on('open')`, mirroring `createDeepgramWss`; register `clientWs.on('message')` immediately on connection. Revisit `close` / `error` handler attachment so a client disconnect during upstream connect is still handled cleanly.
-3. **REFACTOR** — Keep duplication minimal vs Deepgram path; run `npm test` for affected packages / root.
-4. **PR** — Open PR from `issue-571`, link #571 (`Fixes` or `Closes` as appropriate).
-5. **Qualification** — If reviewers or release notes require it: proxy-mode E2E and/or integration per [.cursorrules](../../../.cursorrules) and release checklist for timing-sensitive relay changes.
-6. **Close issue** — After merge, close #571 on GitHub and set [README.md](./README.md) status to **Closed** in a small doc commit if you keep issue folders in sync with GitHub.
+1. **PR** — Open PR from `issue-571`, link #571 (`Fixes` / `Closes` as appropriate).
+2. **Qualification** — If the release touches relay timing: proxy-mode E2E and/or integration per [.cursorrules](../../../.cursorrules) and the release checklist.
+3. **Close issue** — After merge, close #571 on GitHub and set [README.md](./README.md) / [CURRENT-STATUS.md](./CURRENT-STATUS.md) to **Closed** in a small doc commit if you keep issue folders in sync with GitHub.
 
 ---
 

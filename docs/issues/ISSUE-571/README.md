@@ -1,6 +1,6 @@
 # Issue #571 — OpenAI relay drops pre-upstream-open client messages
 
-**Status:** Open — implementation on branch **`issue-571`**.
+**Status:** Open on GitHub — **fix + tests on branch `issue-571`** (queue in `createOpenAIWss`); pending PR / merge / close.
 
 **GitHub:** [#571 — OpenAI relay (createOpenAIWss) drops client messages until upstream opens — queue like Deepgram path](https://github.com/Signal-Meaning/dg_react_agent/issues/571)
 

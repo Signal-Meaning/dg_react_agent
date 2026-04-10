@@ -4,10 +4,10 @@ Use this checklist while working [GitHub #571](https://github.com/Signal-Meaning
 
 ## TDD / implementation
 
-- [ ] **RED:** Failing test that sends a client message before upstream `open` and expects it on the upstream side after connect (attach-upgrade / `createOpenAIWss`).
-- [ ] **GREEN:** Queue + flush in `createOpenAIWss` (`packages/voice-agent-backend/src/attach-upgrade.js`), matching `createDeepgramWss` semantics (`data`, `isBinary`).
-- [ ] **REFACTOR:** Share small helper or keep duplication minimal per existing style; ensure `close`/`error` paths remain correct if handlers move outside `upstream.on('open')`.
-- [ ] All relevant **`npm test`** (voice-agent-backend / root Jest) green locally.
+- [x] **RED:** Failing test that sends a client message before upstream `open` and expects it on the upstream side after connect (attach-upgrade / `createOpenAIWss`).
+- [x] **GREEN:** Queue + flush in `createOpenAIWss` (`packages/voice-agent-backend/src/attach-upgrade.js`), matching `createDeepgramWss` semantics (`data`, `isBinary`).
+- [x] **REFACTOR:** Minimal change; `clientWs` close/error registered before upstream `open`; single `upstream.on('error')` for log + `clientWs.close()`.
+- [x] **`npm test`** — `tests/voice-agent-backend-issue-571-createOpenAIWss-queue.test.js` and `tests/voice-agent-backend-attach-upgrade-upstream.test.ts` green.
 
 ## Review / close-out
 

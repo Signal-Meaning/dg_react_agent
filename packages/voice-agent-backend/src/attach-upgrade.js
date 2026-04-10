@@ -188,13 +188,35 @@ function createOpenAIWss(options) {
   wss.on('connection', (clientWs, req) => {
     const query = req?.url?.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
     const upstream = new WebSocket(proxyUrl + query, upstreamOptions);
+    /** Issue #571: client may send Settings (or audio) before upstream is OPEN; queue like createDeepgramWss. */
+    const messageQueue = [];
+
+    clientWs.on('message', (data, isBinary) => {
+      if (upstream.readyState === WebSocket.OPEN) {
+        upstream.send(data, { binary: isBinary });
+      } else {
+        messageQueue.push({ data, isBinary });
+      }
+    });
+
+    clientWs.on('close', () => {
+      if (upstream.readyState === WebSocket.CONNECTING || upstream.readyState === WebSocket.OPEN) {
+        upstream.close();
+      }
+    });
+    clientWs.on('error', () => {
+      if (upstream.readyState === WebSocket.CONNECTING || upstream.readyState === WebSocket.OPEN) {
+        upstream.close();
+      }
+    });
+
     upstream.on('open', () => {
-      clientWs.on('message', (data, isBinary) => upstream.send(data, { binary: isBinary }));
+      while (messageQueue.length > 0) {
+        const { data, isBinary } = messageQueue.shift();
+        upstream.send(data, { binary: isBinary });
+      }
       upstream.on('message', (data, isBinary) => clientWs.send(data, { binary: isBinary }));
-      clientWs.on('close', () => upstream.close());
       upstream.on('close', () => clientWs.close());
-      clientWs.on('error', () => upstream.close());
-      upstream.on('error', () => clientWs.close());
     });
     upstream.on('error', (err) => {
       log.error('[Proxy] OpenAI upstream error', errorAttrs(err));
