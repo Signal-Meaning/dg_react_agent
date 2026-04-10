@@ -31,7 +31,8 @@
 
 _(Fill in as you execute the release.)_
 
-- **Pre-publish:** _dates / PR / branch_
+- **PR (fix + docs):** [#572](https://github.com/Signal-Meaning/dg_react_agent/pull/572) — **issue-571** → **main**, **Closes #571** (opened **2026-04-10**).
+- **Pre-publish:** _after merge: version bump + `docs/releases/v0.11.1/` on **release/v0.11.1**_
 - **Qualification:** _OpenAI proxy integration / E2E slice if run_
 - **Publish:** _GitHub Release ref, workflow run URL_
 - **Post-release:** _merge `release/v0.11.1` → `main`, close #571, sync issue docs_

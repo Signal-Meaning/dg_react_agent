@@ -14,8 +14,8 @@
 
 ## Recommended follow-ups
 
-1. **PR** — Open PR from `issue-571`, link #571 (`Fixes` / `Closes` as appropriate).
-2. **Patch release** — Follow [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md): **v0.11.1** + **@signal-meaning/voice-agent-backend 0.2.13** (or document a backend-only exception on #571 per [PUBLISHING-AND-RELEASING.md](../../PUBLISHING-AND-RELEASING.md)).
+1. **PR** — **[#572](https://github.com/Signal-Meaning/dg_react_agent/pull/572)** (`issue-571` → `main`, **Closes #571**). Review and merge.
+2. **Patch release** — After merge, follow [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md): **v0.11.1** + **@signal-meaning/voice-agent-backend 0.2.13** (or document a backend-only exception on #571 per [PUBLISHING-AND-RELEASING.md](../../PUBLISHING-AND-RELEASING.md)).
 3. **Qualification** — Real-API integration and/or OpenAI proxy E2E slice when qualifying relay timing (see checklist and [.cursorrules](../../../.cursorrules)).
 4. **Close issue** — After merge and publish, close #571 on GitHub and set [README.md](./README.md) / [CURRENT-STATUS.md](./CURRENT-STATUS.md) to **Closed** in a small doc commit if you keep issue folders in sync with GitHub.
 
