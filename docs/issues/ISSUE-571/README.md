@@ -56,4 +56,6 @@ If the fix ships in a release that touches proxy relay behavior, follow [.github
 
 | Doc | Purpose |
 |-----|---------|
+| [CURRENT-STATUS.md](./CURRENT-STATUS.md) | Snapshot and acceptance checkboxes. |
+| [NEXT-STEP.md](./NEXT-STEP.md) | Ordered follow-ups (TDD, PR, close-out). |
 | [TRACKING.md](./TRACKING.md) | Checklist while implementing #571. |
